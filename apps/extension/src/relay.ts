@@ -27,12 +27,18 @@ export const FEEDBACK_PATH = '/feedback';
 export type RelaySeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
+  /**
+   * A new access token, because the worker refused `refused` with `401` (FRU-238): `Sessions.renewAccess`.
+   * A session that ended is refused its refresh too, and forgotten there: the popup then offers to
+   * sign in again. A token that was only old is renewed, and the call is sent once more.
+   */
+  renewAccess?: (endpoint: string, refused: string) => Promise<AccessResult>;
   send: (request: RelayRequest) => Promise<RelayResponse>;
 };
 
 export type Relay = (request: RelayRequest, origin: string | undefined) => Promise<RelayResponse>;
 
-export function createRelay({ readSite, ensureAccess, send }: RelaySeams): Relay {
+export function createRelay({ readSite, ensureAccess, renewAccess, send }: RelaySeams): Relay {
   /**
    * Never rejects, whatever any of the three seams does.
    *
@@ -74,21 +80,38 @@ export function createRelay({ readSite, ensureAccess, send }: RelaySeams): Relay
     // permission for the URL below, and the fetch is privileged rather than an ordinary CORS
     // request. **Relaxing the check above breaks that**, and the break is invisible from here.
     const access = await ensureAccess(site.endpoint);
-    if (!access.ok) return relayRefusal(access.reason);
+    if (!access.ok) {
+      // No session, or one that ended: `401`, as the worker says it, so the widget keeps the text and
+      // says to sign in again rather than « try again » (FRU-238). A worker that did not answer is
+      // the moment, and stays a refusal.
+      const signedOut = access.reason === 'not-paired' || access.reason === 'session-revoked-or-expired';
+
+      return signedOut ? { ...relayRefusal(access.reason), status: 401 } : relayRefusal(access.reason);
+    }
 
     // Built name by name, never spread from the request. The page may name `Content-Type` and
     // nothing else; `Authorization` is written here, from a token the page has no way to see.
-    const headers: Record<string, string> = { Authorization: `Bearer ${access.grant.accessToken}` };
     const contentType = request.headers['Content-Type'];
-    if (contentType !== undefined) headers['Content-Type'] = contentType;
-
-    try {
-      return await send({
+    const sent = (token: string): Promise<RelayResponse> =>
+      send({
         url: request.url,
         method: request.method,
-        headers,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(contentType === undefined ? {} : { 'Content-Type': contentType }),
+        },
         ...(request.body !== undefined ? { body: request.body } : {}),
       });
+
+    try {
+      const answer = await sent(access.grant.accessToken);
+      // Refused for its session: renewed once. Ended, the renewal fails and forgets the session, and
+      // the widget is given the refusal (it keeps the text, and says to sign in again). Only old, the
+      // call goes once more. Never a second renewal: a worker that refuses every token is answered.
+      if (answer.status !== 401 || renewAccess === undefined) return answer;
+      const renewed = await renewAccess(site.endpoint, access.grant.accessToken);
+
+      return renewed.ok ? await sent(renewed.grant.accessToken) : answer;
     } catch (error) {
       // The background aborts a call that runs past `RELAY_CALL_TIMEOUT_MS`. Said apart from an
       // unreachable worker because it is the only refusal a reviewer can act on by waiting.

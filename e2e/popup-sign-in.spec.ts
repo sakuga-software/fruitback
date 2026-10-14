@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page, type Route, expect } from '@playwright/test';
-import { type LoadedExtension, addRule, openBareSite, openPopup, test } from './extension.ts';
+import { type LoadedExtension, PLAYGROUND_ORIGIN, addRule, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -108,7 +108,11 @@ async function signInRoutes(
 declare const chrome: {
   storage: Record<
     'local' | 'session' | 'sync',
-    { get(keys: null): Promise<Record<string, unknown>>; remove(keys: string[]): Promise<void> }
+    {
+      get(keys: null): Promise<Record<string, unknown>>;
+      remove(keys: string[]): Promise<void>;
+      set(items: Record<string, unknown>): Promise<void>;
+    }
   >;
 };
 
@@ -413,6 +417,51 @@ test('a session of the account that ended draws no person in the head, on a site
   await expect(after.getByText(`Rule: ${'http://localhost:5177'}`)).toBeVisible();
   await expect(after.getByRole('img', { name: /^Signed in as/ })).toHaveCount(0);
   await expect(after.getByRole('link', { name: 'Open the console' })).toHaveCount(0);
+});
+
+test('a session that ended keeps the note, and the popup offers to sign in again (FRU-238)', async ({ extension }) => {
+  // Signed in with a session the worker of the suite does not know: it refuses its token and its
+  // refresh, as a worker refuses a session ended in « My account » (`401` with `session-ended`).
+  const { claim } = await signInRoutes(extension.context, requestOf('ended-write'));
+  claim.answer = 'approved';
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-session-ended-write');
+  const popup = await openPopup(extension, page);
+  const opened = extension.context.waitForEvent('page');
+  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await opened;
+  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
+  await popup.close();
+
+  // The site of the workspace, turned on as the one click of 06 stores it.
+  await extension.worker.evaluate(
+    async ({ origin, endpoint }) => {
+      await chrome.storage.local.set({
+        sites: {
+          [origin]: { endpoint, enabled: true, mode: 'team', mount: { clientId: 'playground', workspace: 'Acme' } },
+        },
+      });
+    },
+    { origin: PLAYGROUND_ORIGIN, endpoint: CLOUD },
+  );
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+
+  // The reads of the widget are refused for that session; the background renews it once, and the
+  // refresh is refused too: the session is forgotten. A note then: refused, and its text kept.
+  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('What should change?').fill('Une note après la fin de la session');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByText('Your session has ended. Your text is kept: sign in again, then send it.')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une note après la fin de la session');
+  // The session is forgotten here: the refresh token is gone.
+  await expect.poll(() => stored(extension, 'local')).not.toContain('e2e-refresh-1');
+
+  // The popup offers the one thing that makes the site work again.
+  const after = await openPopup(extension, page);
+  await expect(after.getByRole('heading', { level: 1, name: 'Sign in to see and leave notes here' })).toBeVisible();
+  await expect(after.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
 });
 
 test('the popup signed out speaks French, and keeps to its 360 px', async ({ extension }) => {

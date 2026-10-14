@@ -181,7 +181,12 @@ export default defineBackground(() => {
    * script's input is written by the page, and this is the context the page cannot reach. Everything
    * else it decides lives in `src/relay.ts`.
    */
-  const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
+  const relay = createRelay({
+    readSite,
+    ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+    send,
+  });
 
   /** The picture of a note (FRU-44): see `src/capture.ts`. */
   const capture = (area: CaptureArea, origin: string | undefined, windowId: number) =>

@@ -171,6 +171,16 @@ describe('the relay refuses before it sends', () => {
     }
   });
 
+  it('answers 401 when there is no session, so the widget says to sign in again (FRU-238)', async () => {
+    for (const reason of ['not-paired', 'session-revoked-or-expired'] as const) {
+      const { relay } = harness({ ensureAccess: async () => ({ ok: false, reason }) });
+      assert.equal((await relay(WRITE, 'https://acme.dev')).status, 401, reason);
+    }
+    // The control: a worker that does not answer is not a session that ended.
+    const { relay } = harness({ ensureAccess: async () => ({ ok: false, reason: 'unavailable' }) });
+    assert.equal((await relay(WRITE, 'https://acme.dev')).status, 0);
+  });
+
   it('answers a refusal when the worker cannot be reached', async () => {
     const { relay } = harness({
       send: async () => {
@@ -298,5 +308,70 @@ describe('what the widget sends is what the relay allows', () => {
       ['Authorization', 'Content-Type'],
       'embed.ts sends a header the relay does not carry: add it to ALLOWED_HEADERS or stop sending it',
     );
+  });
+});
+
+describe('a call the worker refused for its session (FRU-238)', () => {
+  const ENDED: RelayResponse = {
+    ok: false,
+    status: 401,
+    body: JSON.stringify({ error: 'invalid-identity', reason: 'session-ended' }),
+  };
+
+  it('renews the access once and sends again when the token was only old', async () => {
+    const tokens: string[] = [];
+    const renewed: string[] = [];
+    const { relay } = harness({
+      renewAccess: async (_endpoint, refused) => {
+        renewed.push(refused);
+
+        return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
+      },
+      send: async (request) => {
+        tokens.push(request.headers.Authorization ?? '');
+
+        return request.headers.Authorization === 'Bearer access.1' ? ENDED : ANSWER;
+      },
+    });
+
+    assert.deepEqual(await relay(WRITE, 'https://acme.dev'), ANSWER);
+    assert.deepEqual(tokens, ['Bearer access.1', 'Bearer access.2']);
+    assert.deepEqual(renewed, ['access.1']);
+  });
+
+  it('gives the refusal back when the session ended: the renewal forgets it, and nothing is sent again', async () => {
+    let sends = 0;
+    const { relay } = harness({
+      renewAccess: async () => ({ ok: false, reason: 'session-revoked-or-expired' }),
+      send: async () => {
+        sends += 1;
+
+        return ENDED;
+      },
+    });
+
+    assert.deepEqual(await relay(WRITE, 'https://acme.dev'), ENDED);
+    assert.equal(sends, 1);
+  });
+
+  it('tries once: a second refusal is given back, and no other status renews anything', async () => {
+    let renewals = 0;
+    const renewAccess: RelaySeams['renewAccess'] = async () => {
+      renewals += 1;
+
+      return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
+    };
+    const always = harness({ renewAccess, send: async () => ENDED });
+    assert.deepEqual(await always.relay(WRITE, 'https://acme.dev'), ENDED);
+    assert.equal(renewals, 1);
+
+    for (const answer of [
+      { ok: false, status: 403, body: '{"error":"forbidden"}' },
+      { ok: false, status: 502, body: '{}' },
+    ]) {
+      const other = harness({ renewAccess, send: async () => answer });
+      assert.deepEqual(await other.relay(READ, 'https://acme.dev'), answer);
+    }
+    assert.equal(renewals, 1);
   });
 });

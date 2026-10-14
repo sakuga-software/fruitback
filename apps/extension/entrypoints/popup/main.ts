@@ -175,6 +175,7 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
     canSignIn: CLOUD !== undefined,
     connect: stillWaiting && pendingNow === undefined ? 'none' : claimed,
     rule: found !== undefined,
+    ruleWantsSession: found !== undefined && (await wantsSession(found.site)),
     offer: offer !== undefined,
     account: accountState,
     sessions: Object.keys(held).length,
@@ -283,6 +284,17 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       return frame(...body);
     }
   }
+}
+
+/**
+ * A site of the workspace of this build's Fruitback, mounted by the extension, whose session is gone
+ * now: it ended in the console, or a refresh was refused (FRU-238). Read after `accountOf`, which may
+ * have forgotten it this very time.
+ */
+async function wantsSession(site: SiteConfig): Promise<boolean> {
+  if (CLOUD === undefined || site.mode !== 'team' || site.mount === undefined || site.endpoint !== CLOUD) return false;
+
+  return (await sessions.list())[CLOUD] === undefined;
 }
 
 /** The title of a screen about a site: its host, as the mock-up writes it (06, 07, 08). */
