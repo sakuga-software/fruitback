@@ -636,4 +636,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'L’extension Fruitback de {browser} attend. Connectez-vous, puis vérifiez le mot et connectez-la.',
   'Open it in this browser: this page comes back to the word to check. The link works once, for fifteen minutes.':
     'Ouvrez-le dans ce navigateur : cette page revient au mot à vérifier. Le lien fonctionne une fois, pendant quinze minutes.',
+  // Members, « Last seen » (FRU-247, FRU-249).
+  'Last seen': 'Vu pour la dernière fois',
+  Today: 'Aujourd’hui',
+  'Not seen yet': 'Pas encore vu',
 };

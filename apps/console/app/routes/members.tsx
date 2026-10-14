@@ -52,6 +52,23 @@ function dayOf(iso: string | undefined, year: boolean): string | undefined {
   });
 }
 
+/**
+ * « Last seen » (FRU-249, Q7): the worker keeps a day of UTC and no hour, so that a colleague does not
+ * learn when somebody works. « Today », « Yesterday », « 3 days ago » for the week, then the day.
+ */
+export function seenOn(day: string | undefined, now: number = Date.now()): string {
+  if (day === undefined) return t('Not seen yet');
+  const at = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(at)) return day;
+  const today = Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00Z`);
+  const days = Math.max(0, Math.round((today - at) / 86_400_000));
+  if (days === 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 7) return t('{count} days ago', { count: days });
+
+  return new Date(at).toLocaleDateString(DAYS[locale()], { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 /** What a list is while it is read again: itself when it is shown, « loading » when it is not. */
 function whileRead<T>(current: Listed<T>): Listed<T> {
   return typeof current === 'string' ? 'loading' : current;
@@ -65,9 +82,11 @@ function whileRead<T>(current: Listed<T>): Listed<T> {
  * The lists come from the organization plugin of better-auth, through the worker. A guest reads only
  * their own row: the worker refuses them the list (FRU-149).
  *
- * Not here, because the worker of today cannot say them: when somebody was last seen (the last
- * column is the day they joined), and the one site of a guest (an invitation is for a member or an
- * admin, and « Sites » says every site, or the shared ones for a guest).
+ * The last column is « Last seen » for an owner or an admin, who alone read it (FRU-249), and the
+ * day somebody joined for the others. It is read beside the members, and the table does not wait
+ * for it: its place in a row is kept, so a day that arrives moves nothing under a press.
+ *
+ * Not here: the one site of a guest (Q3, after the rest).
  */
 export default function Members() {
   useLocale();
@@ -76,6 +95,12 @@ export default function Members() {
   const reads = workspace.role !== 'guest';
   const [mailed, setMailed] = useState(false);
   const [members, setMembers] = useState<Listed<Member>>('loading');
+  // The day each account was last seen, by its id. `asking`: on its way. `undefined`: not for this
+  // role, or refused; the column is then the day somebody joined.
+  const seenAsked = useRef(0);
+  const [seen, setSeen] = useState<Readonly<Record<string, string>> | 'asking' | undefined>(
+    manages ? 'asking' : undefined,
+  );
   const [invitations, setInvitations] = useState<Listed<Invitation>>('loading');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitedRole>('member');
@@ -93,13 +118,27 @@ export default function Members() {
     // table away for the time of the read: what is under it went up, then down again, and an
     // action of a row was not there to press. Only a list that is not shown says that it is read.
     setMembers(whileRead);
+    // The days come on their own: the table does not wait for them. Their place in a row is kept
+    // (`min-w` of the cell), so a day that arrives moves nothing of the row.
+    // An answer to a read that is no longer the last one, or of another workspace, is dropped: its
+    // days are of another list. The days shown are taken away while the next ones are read.
+    const asked = (seenAsked.current += 1);
+    if (manages) {
+      setSeen('asking');
+      void call<{ seen: Record<string, string> }>('GET', `/console/workspaces/${workspace.id}/members/seen`).then(
+        (days) => {
+          if (asked !== seenAsked.current) return;
+          setSeen(days.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined);
+        },
+      );
+    }
     const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);
     setMembers(listedOf(listed, (data) => data.members));
     if (!manages) return;
     setInvitations(whileRead);
     const waiting = await call<Invitation[]>('GET', `${base}/list-invitations?${query}`);
     setInvitations(listedOf(waiting, (data) => data.filter((each) => each.status === 'pending')));
-  }, [base, query, reads, manages]);
+  }, [base, query, reads, manages, workspace.id]);
 
   useEffect(() => void read(), [read]);
 
@@ -262,13 +301,20 @@ export default function Members() {
               {/* A guest reads their own row, which the worker gives no day: no column for one. */}
               {reads ? (
                 <th scope="col" data-align="end">
-                  {t('Joined')}
+                  {seen === undefined ? t('Joined') : t('Last seen')}
                 </th>
               ) : null}
             </tr>
           </thead>
           <tbody>
             {people.map((member) => {
+              // « Last seen » for who reads it, else the day somebody joined.
+              const lastOf = (one: Member) => {
+                if (seen === 'asking') return '';
+                if (seen === undefined) return dayOf(one.createdAt, true) ?? '';
+
+                return seenOn(seen[one.userId]);
+              };
               const name = nameOf(member);
               const removes = manages && member.userId !== me.account.id;
 
@@ -279,7 +325,7 @@ export default function Members() {
                   name={member.userId === me.account.id ? t('{name} (you)', { name }) : name}
                   detail={member.user.email}
                   role={member.role}
-                  when={reads ? (dayOf(member.createdAt, true) ?? '') : undefined}
+                  when={reads ? lastOf(member) : undefined}
                   problem={stuck?.row === member.id ? stuck.problem : undefined}
                   {...(removes
                     ? {
@@ -429,7 +475,8 @@ function Row({ initial, pending = false, name, detail, role, when, until, onRese
     when === undefined ? null : (
       <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">
         <span ref={actions} className="inline-flex items-center gap-[16px]">
-          <span>
+          {/* As wide as « Not seen yet » at the least: a day that arrives after the row moves nothing. */}
+          <span className="min-w-[96px]">
             <span className="block">{when}</span>
             {until === undefined ? null : <span className="block text-hint leading-[inherit]">{until}</span>}
           </span>

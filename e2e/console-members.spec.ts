@@ -19,9 +19,9 @@ import {
  *
  * The values are read in the code of the mockup (`12-console-members.html`), and the boxes in its
  * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
- * screen has what the worker of today gives: no list « Site » and no « Guest, one site » in the form,
- * and the last column is the day somebody joined, not when they were last seen. The worker is
- * answered by stubs.
+ * screen has no list « Site » and no « Guest, one site » in the form (Q3). The last column is
+ * « Last seen » for an owner or an admin, read from `…/members/seen` (FRU-249), and the day somebody
+ * joined for the others, or when that read gives nothing. The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -59,6 +59,8 @@ const PAUL = {
 
 type Sent = { call: string; body: Record<string, unknown> };
 type Worker = {
+  /** Releases a held `…/members/seen`. */
+  release: () => void;
   /** What the console sent that changes something. */
   sent: Sent[];
   /** What the console read. */
@@ -79,11 +81,28 @@ type World = {
   locale?: 'en' | 'fr';
   members?: readonly unknown[];
   invitations?: readonly unknown[];
+  /** The answer of `…/members/seen`: the day of each account, refused, or held. Absent: no route. */
+  seen?: Record<string, string> | 'refused' | 'waits';
+  /** The days that a held answer gives when it is released. */
+  released?: Record<string, string>;
+  /** The days that a read made again gets, while the first one is still held. */
+  later?: Record<string, string>;
 };
 
 /** A workspace with the people above, for a role. The stub keeps what the console sent. */
 async function workerWith(page: Page, world: World = {}): Promise<Worker> {
-  const worker: Worker = { sent: [], read: [], members: 'list', mails: true, held: false, slow: false };
+  const held: (() => void)[] = [];
+  const worker: Worker = {
+    release: () => {
+      for (const each of held.splice(0)) each();
+    },
+    sent: [],
+    read: [],
+    members: 'list',
+    mails: true,
+    held: false,
+    slow: false,
+  };
   const members = [...(world.members ?? MEMBERS)];
   const invitations = [...(world.invitations ?? [PAUL])] as (typeof PAUL)[];
   const answer = (pathname: string, route: Route) => {
@@ -98,6 +117,23 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
       if (worker.members === 'fails') return json({ error: 'unknown' }, 500);
 
       return json({ members });
+    }
+    if (pathname === '/console/workspaces/w1/members/seen' && world.seen !== undefined) {
+      worker.read.push('seen');
+      // A read made again while the first is held gets its answer at once, when the test gives one.
+      // The first read is sent twice by the development server (the effects of React run twice):
+      // it is the read after an action, counted from the invitations, that is the second one.
+      if (world.seen === 'waits' && world.later !== undefined && worker.sent.length > 0) {
+        return json({ seen: world.later });
+      }
+      if (world.seen === 'waits') {
+        return new Promise<void>((resolve) => {
+          held.push(() => void json({ seen: world.released ?? {} }).then(resolve));
+        });
+      }
+      if (world.seen === 'refused') return json({ error: 'forbidden' }, 403);
+
+      return json({ seen: world.seen });
     }
     if (call === 'list-invitations') {
       worker.read.push(call);
@@ -856,4 +892,81 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
   expect
     .soft(contrast(await painted(asked.locator('p'), 'color'), rgb(SUBTLE)), 'what a gesture costs')
     .toBeGreaterThanOrEqual(4.5);
+});
+
+/** Noon of UTC: « Today » is the day of UTC the worker writes. */
+const NOON_UTC = new Date('2026-10-13T12:00:00.000Z');
+const SEEN = { a1: '2026-10-13', a2: '2026-10-12', a3: '2026-10-10' };
+
+test('an owner reads « Last seen »: a day, never an hour, and « Not seen yet »', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  const worker = await workerWith(page, { seen: SEEN });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Last seen']);
+  const last = (name: string) => table.locator('tbody tr').filter({ hasText: name }).first().locator('td').last();
+  await expect(last('ana@acme.dev')).toContainText('Today');
+  await expect(last('tom@acme.dev')).toContainText('Yesterday');
+  await expect(last('nora@acme.dev')).toContainText('3 days ago');
+  // Nobody saw this one since « Last seen » came: the screen says so, and not a date.
+  await expect(last('ines@client.fr')).toContainText('Not seen yet');
+  // An invitation still says when it was sent.
+  await expect(last('paul@client.fr')).toContainText('Sent 3 Oct');
+  expect(worker.read).toContain('seen');
+});
+
+test('the table does not wait for « Last seen », and nothing of a row moves when the days arrive', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  const worker = await workerWith(page, { seen: 'waits', released: SEEN });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  // The members are there while the days are on their way.
+  await expect(table.locator('tbody tr')).toHaveCount(5);
+  await expect(table.locator('thead th').last()).toHaveText('Last seen');
+  const remove = table.locator('tbody tr').filter({ hasText: 'nora@acme.dev' }).getByRole('button', { name: 'Remove' });
+  const cancel = table
+    .locator('tbody tr')
+    .filter({ hasText: 'paul@client.fr' })
+    .getByRole('button', { name: 'Cancel' });
+  const before = [await box(remove), await box(cancel)];
+
+  worker.release();
+  await expect(table.locator('tbody tr').filter({ hasText: 'nora@acme.dev' })).toContainText('3 days ago');
+  await expect(table.locator('tbody tr').filter({ hasText: 'ines@client.fr' })).toContainText('Not seen yet');
+  expect([await box(remove), await box(cancel)]).toEqual(before);
+});
+
+test('a member reads the day somebody joined, and does not ask « Last seen »', async ({ page }) => {
+  const worker = await workerWith(page, { role: 'member', seen: SEEN });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Joined']);
+  await expect(page.getByText('Today')).toHaveCount(0);
+  expect(worker.read).not.toContain('seen');
+});
+
+test('a « Last seen » the worker refuses leaves the day somebody joined', async ({ page }) => {
+  await workerWith(page, { seen: 'refused' });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Joined']);
+});
+
+test('the days of a read made before, late, do not replace those of the read made after', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  // The first days are held; the members are read again (an invitation whose message did not
+  // leave), and the second days come at once: Nora was seen two days ago.
+  const worker = await workerWith(page, { seen: 'waits', released: SEEN, later: { a3: '2026-10-11' } });
+  await open(page);
+  worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await page.getByRole('textbox', { name: 'Email' }).fill('zoe@client.fr');
+  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  const nora = page.getByRole('region', { name: 'Members' }).locator('tbody tr').filter({ hasText: 'nora@acme.dev' });
+  await expect(nora).toContainText('2 days ago');
+
+  // The first answer lands now: it is of a read that is no longer the last one.
+  worker.release();
+  await page.waitForTimeout(300);
+  await expect(nora).toContainText('2 days ago');
+  await expect(nora).not.toContainText('3 days ago');
 });
