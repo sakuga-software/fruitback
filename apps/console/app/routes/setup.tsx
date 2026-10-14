@@ -1,14 +1,23 @@
-import { useEffect, useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
 import { PreviewScene } from '../preview-scene';
-import { type SetupCalls, type Stage, firstWorkspace, leaveFor, resolveStage, siteStage } from '../setup-stage';
+import {
+  type SetupCalls,
+  type Stage,
+  firstWorkspace,
+  leaveFor,
+  noted,
+  resolveStage,
+  siteNow,
+  siteStage,
+} from '../setup-stage';
 import { BrowserFrame, Button, EntryPage, Lead, Step, type StepState, Steps, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
-import { PutOnSite } from './setup-install';
+import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 
 /**
@@ -60,6 +69,51 @@ function resolveOnce(): Promise<Stage> {
   return resolving;
 }
 
+/** How often the site is read again while the setup waits for its first note (FRU-242). */
+export const FIRST_NOTE_EVERY_MS = 5_000;
+
+/**
+ * Reads the site again every five seconds while the tab is shown, until its first note came: the
+ * step then is done, by itself. A hidden tab asks nothing, and asks again when it is shown. A read
+ * that fails changes nothing, and the next one is made at its time.
+ */
+function useFirstNote(stage: Stage, setStage: Dispatch<SetStateAction<Stage>>): void {
+  const waiting = stage.kind === 'install' && !noted(stage.site) ? stage : undefined;
+  useEffect(() => {
+    if (waiting === undefined) return;
+    const { workspace, site } = waiting;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let asking = false;
+    let stopped = false;
+    const schedule = () => {
+      if (stopped || asking || timer !== undefined || document.visibilityState !== 'visible') return;
+      timer = setTimeout(() => void ask(), FIRST_NOTE_EVERY_MS);
+    };
+    const ask = async () => {
+      timer = undefined;
+      if (document.visibilityState !== 'visible') return;
+      asking = true;
+      const now = await siteNow(CALLS, workspace, site);
+      asking = false;
+      if (stopped) return;
+      if (now !== undefined && noted(now)) {
+        return setStage((current) =>
+          current.kind === 'install' && current.site.id === now.id ? { ...current, site: now } : current,
+        );
+      }
+      schedule();
+    };
+    document.addEventListener('visibilitychange', schedule);
+    schedule();
+
+    return () => {
+      stopped = true;
+      if (timer !== undefined) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', schedule);
+    };
+  }, [waiting, setStage]);
+}
+
 export default function Setup() {
   useLocale();
   const navigate = useNavigate();
@@ -77,6 +131,8 @@ export default function Setup() {
       live = false;
     };
   }, []);
+
+  useFirstNote(stage, setStage);
 
   useEffect(() => {
     const away = leaveFor(stage);
@@ -102,7 +158,10 @@ export default function Setup() {
   const installing = stage.kind === 'install';
   const first: StepState = signedIn ? 'done' : 'current';
   const second: StepState = installing ? 'done' : stepAfter(first);
-  const third: StepState = installing ? 'current' : 'pending';
+  // The setup ends at the first note on the site: the last step is done then, by itself.
+  const finished = stage.kind === 'install' && noted(stage.site);
+  let third: StepState = installing ? 'current' : 'pending';
+  if (finished) third = 'done';
   const prefix = t('Current step:');
 
   return (
@@ -211,13 +270,35 @@ export default function Setup() {
           </Step>
 
           <Step state={third} number={3} title={t('Put it on the site')} currentPrefix={prefix}>
-            {stage.kind === 'install' ? (
-              <PutOnSite workspace={stage.workspace} site={stage.site} />
-            ) : (
+            {stage.kind === 'install' && finished ? <PutDone site={stage.site} /> : null}
+            {stage.kind === 'install' && !finished ? <PutOnSite workspace={stage.workspace} site={stage.site} /> : null}
+            {stage.kind === 'install' ? null : (
               <p className="mt-0.5 text-small text-muted">{t('The extension, or a script tag.')}</p>
             )}
           </Step>
         </Steps>
+        {stage.kind === 'install' && finished ? (
+          // Said once it appears, with no move of the focus: the person may be on the site, in another tab.
+          <div role="status" className="mt-9 flex flex-col gap-2.5 border-t border-line pt-7">
+            <h2 className="text-conclusion font-bold tracking-[-0.01em]">{t('Your first note is in')}</h2>
+            <p className="text-body leading-[1.55] text-muted">
+              {t(
+                'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.',
+                {
+                  workspace: stage.workspace.name,
+                },
+              )}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2.5">
+              <Button inset={22} to={`/w/${stage.workspace.id}/sites`}>
+                {t('Open the console')}
+              </Button>
+              <Button tone="outline" size="page" inset={18} to={`/w/${stage.workspace.id}/connectors`}>
+                {t('Connect a tracker')}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
@@ -227,7 +308,21 @@ export default function Setup() {
             // A picture of an example page, not the site of the person: the caption says so.
             caption={t('An example page. Pins show the same way on your site.')}
           >
-            <PreviewScene launch={t('Leave feedback')} hint={t('Click Leave feedback, then any part of the page.')} />
+            <PreviewScene
+              launch={t('Leave feedback')}
+              hint={t('Click Leave feedback, then any part of the page.')}
+              {...(finished
+                ? {
+                    note: {
+                      status: t('New'),
+                      text: 'The headline runs to three lines on a phone. Could it be shorter?',
+                      by: t('{name} · just now', {
+                        name: stage.account.name ?? stage.account.email.split('@')[0] ?? '',
+                      }),
+                    },
+                  }
+                : {})}
+            />
           </BrowserFrame>
         ) : (
           <BrowserFrame

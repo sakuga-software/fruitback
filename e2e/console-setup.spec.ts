@@ -286,6 +286,17 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
   });
 });
 
+/**
+ * Lets `periods` reads of five seconds go by, each with the real time a request takes to reach the
+ * stub: a read made in one of them is counted after it, not lost in a jump of the clock.
+ */
+async function quietFor(page: Page, periods: number): Promise<void> {
+  for (let period = 0; period < periods; period += 1) {
+    await page.clock.runFor(5_000);
+    await page.waitForTimeout(150);
+  }
+}
+
 type Stub = {
   /** Nobody signed in, somebody with a workspace, or somebody with a workspace and a site. */
   as: 'nobody' | 'named' | 'sited';
@@ -295,6 +306,10 @@ type Stub = {
   locale?: 'en' | 'fr';
   /** Who sees the notes of the site of « sited ». */
   audience?: 'members' | 'everyone';
+  /** From this read of the sites on, the site of « sited » has its first note (FRU-242). */
+  notedFrom?: number;
+  /** The worker counts the note and gives no day of the last one. */
+  noDay?: boolean;
 };
 
 const LONG_HOST = 'preview-branch-feature-very-long-name-1234.staging.acme.dev';
@@ -339,8 +354,17 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
     if (pathname === '/console/workspaces/w1/sites') {
       if (request.method() === 'GET') {
         if (stub.refuses?.sites === true) return json({ error: 'unavailable' }, 503);
+        const reads = asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+        const first =
+          stub.notedFrom !== undefined && reads >= stub.notedFrom
+            ? {
+                notes: { seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
+                ...(stub.noDay === true ? {} : { lastNoteAt: new Date().toISOString() }),
+                via: ['extension'],
+              }
+            : {};
 
-        return json({ sites: stub.as === 'sited' ? [site] : [] });
+        return json({ sites: stub.as === 'sited' ? [{ ...site, ...first }] : [] });
       }
       if (stub.refuses?.site !== undefined) return json({ error: 'forbidden' }, stub.refuses.site);
       const { url, visibility } = request.postDataJSON() as { url: string; visibility: string };
@@ -595,9 +619,10 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       'href',
       'https://fruitback.com/reviewing.html#1-install-it',
     );
-    // The step says what to do on the site, and does not say that it waits: nothing would tell it.
-    await expect(page.getByText('Open the site, click Leave feedback, then any part of the page.')).toBeVisible();
-    await expect(page.getByText(/Waiting for your first note/)).toHaveCount(0);
+    // The step says that it waits for the first note, and what to do on the site (FRU-237 tells it).
+    await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
+      'Waiting for your first note. Open the site, click Leave feedback, then any part of the page.',
+    );
     await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
       'href',
       'https://staging.acme.dev',
@@ -626,6 +651,104 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     expect(await scene.evaluate((element) => (element as HTMLElement).inert)).toBe(true);
     await expect(scene.locator('button, a, input, [tabindex]')).toHaveCount(0);
     expect(await violations(page)).toEqual([]);
+  });
+
+  test('the setup ends by itself at the first note: the step, the conclusion and the pin', async ({ page }) => {
+    await page.clock.install();
+    const asked = await stubWorker(page, { as: 'sited', notedFrom: 3 });
+    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    const preview = page.getByRole('region', { name: 'Preview of your site' });
+    await expect(preview.locator('.scene__pin')).toHaveCount(0);
+
+    // Every five seconds while the tab is shown; the third read has the note.
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(2);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(3);
+
+    // The last step is done, by itself, and says how the note came.
+    await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
+    // The worker does not say which browser sent the note: none is named.
+    await expect(page.getByText('Extension on', { exact: true })).toBeVisible();
+    await expect(page.getByText('First note received just now')).toBeVisible();
+    await expect(page.getByText('Waiting for your first note.')).toHaveCount(0);
+    // The conclusion is said, and takes no focus: the person may be on their site, in another tab.
+    const conclusion = page
+      .getByRole('status')
+      .filter({ has: page.getByRole('heading', { name: 'Your first note is in' }) });
+    await expect(conclusion).toContainText(
+      'It waits in the Havane workspace. Send your notes to Linear or your own API whenever you like.',
+    );
+    await expect(conclusion.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
+    await expect(conclusion.getByRole('link', { name: 'Connect a tracker' })).toHaveAttribute(
+      'href',
+      '/w/w1/connectors',
+    );
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    // The picture has its pin and its card, and no more hint.
+    await expect(preview.locator('.scene__pin')).toHaveText('1');
+    await expect(preview.locator('.scene__note')).toContainText('New');
+    await expect(preview.locator('.scene__note')).toContainText('Marianne · just now');
+    await expect(preview.locator('.scene__hint')).toHaveCount(0);
+    expect(await violations(page)).toEqual([]);
+
+    // Nothing is read again once the note came.
+    await quietFor(page, 6);
+    expect(reads()).toBe(3);
+  });
+
+  test('a hidden tab reads nothing, and reads again once it is shown', async ({ page }) => {
+    await page.clock.install();
+    const asked = await stubWorker(page, { as: 'sited' });
+    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    const show = (state: 'hidden' | 'visible') =>
+      page.evaluate((value) => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+        document.dispatchEvent(new Event('visibilitychange'));
+      }, state);
+
+    await show('hidden');
+    await quietFor(page, 6);
+    expect(reads()).toBe(1);
+    // The control: shown again, the reads go on at their pace.
+    await show('visible');
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(2);
+  });
+
+  test('a read that fails changes nothing on the screen, and the next one finds the note', async ({ page }) => {
+    await page.clock.install();
+    const stub: Stub = { as: 'sited', notedFrom: 2 };
+    await stubWorker(page, stub);
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    stub.refuses = { sites: true };
+    await page.clock.runFor(10_000);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    stub.refuses = undefined;
+    await page.clock.runFor(5_000);
+    await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
+  });
+
+  test('a count with no day of the last note says no moment', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1, noDay: true });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('First note received', { exact: true })).toBeVisible();
+    await expect(page.getByText('First note received just now')).toHaveCount(0);
+  });
+
+  test('a site that has its first note already: the setup opens on its end', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1 });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
   });
 
   test('the script card says who sees the pins of a site that everyone sees', async ({ page }) => {
