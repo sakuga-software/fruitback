@@ -23,6 +23,7 @@ export default [
   route('invitations', 'routes/invitations.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),
+    route('w/:workspace/notes', 'routes/notes.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),
     route('w/:workspace/account', 'routes/account.tsx'),

@@ -437,6 +437,61 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
+  it('counts the notes the page shows by stage, from the last read, and nothing before one (FRU-254)', async () => {
+    const page = mountWithCta();
+    const closed = seedIssueFixture({ ...onCta(), id: 'closed', identifier: 'FB-2', stage: 'composted' });
+    const fresh = seedIssueFixture({ ...onCta(), id: 'fresh', identifier: 'FB-3', stage: 'seeded' });
+    const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1', stage: 'ripening' }, closed, fresh]));
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme', locale: 'en' });
+
+    assert.equal(widget.pageCounts(), undefined, 'a count before any read says there is no note');
+    await widget.refresh();
+    const before = reads.length;
+    assert.deepEqual(widget.pageCounts(), { seeded: 1, green: 0, ripening: 1, ripe: 0, composted: 1 });
+
+    // A stage the reporter hid is not on the page, so it is not counted.
+    (shadowOf(page).querySelector('[name="stage-composted"]') as HTMLInputElement).click();
+    assert.deepEqual(widget.pageCounts(), { seeded: 1, green: 0, ripening: 1, ripe: 0, composted: 0 });
+    assert.equal(reads.length, before, 'a count cost a request');
+
+    widget.destroy();
+  });
+
+  it('starts choosing an element, and opens the list, when the host asks (FRU-254)', async () => {
+    const page = mountWithCta();
+    stubReads(() => ok([onCta()]));
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme', locale: 'en' });
+    await widget.refresh();
+    const list = () => shadowOf(page).querySelector('[data-fruitback-sidebar]') as HTMLElement | null;
+
+    widget.showEveryNote();
+    assert.equal(list()?.hidden, false, 'the list did not open');
+
+    // Choosing an element closes the list: the dock and the frame are what the page shows then.
+    assert.equal(widget.leaveFeedback(), true);
+    assert.equal(list()?.hidden ?? true, true, 'the list stayed open over the choice');
+    // Asked again while choosing: the choice is on, so it is done, and nothing starts over. Only a
+    // note being written makes the widget say no (raised in review).
+    assert.equal(widget.leaveFeedback(), true);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-capturing]').length, 1);
+
+    // Somebody writes: nothing takes the place of the note.
+    // (A composer that only says « sent » closes instead: `popup-workspace.spec.ts` sends one.)
+    // The launch button stops the choice it started.
+    (shadowOf(page).querySelector('button[aria-pressed="true"]') as HTMLElement).click();
+    assert.equal(
+      page.document.querySelector('[data-fruitback-capturing]'),
+      null,
+      'the launch button did not stop the choice',
+    );
+    const composer = shadowOf(page).querySelector('[data-fruitback-composer]') as HTMLElement;
+    composer.hidden = false;
+    assert.equal(widget.leaveFeedback(), false);
+    assert.equal(composer.hidden, false);
+
+    widget.destroy();
+  });
+
   it('ignores the answer of a read that a newer read replaced', async () => {
     // Two reads can be in flight, and nothing makes them answer in the order they were sent.
     const page = mountWithCta();

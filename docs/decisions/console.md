@@ -235,6 +235,25 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   they widen the page at 390 px. The card and the alert are sized by their content (`box-content`),
   as the mockup sizes them: 640 px and 760 px inside their padding. `e2e/console-sites.spec.ts` holds
   the three states, the counts, the form, the menu, the roles, 390 px and axe.
+- **The Notes page lists the index of the notes, never their text** (FRU-245, `routes/notes.tsx`,
+  read from the route of FRU-244). A note is its first 64 characters (Q6: all that Fruitback keeps
+  of the text), cut to two lines, with its page and « Show on the page » (`<page>#fruitback-note=<id>`,
+  the link of the widget, FRU-253). The chips are every note and each place that has notes, in the order
+  of the sources of the workspace. **No chip « Not delivered »**, which the mockup draws: the route
+  counts those notes and does not filter them, and a chip that chooses nothing is not drawn; each of
+  them says « Not delivered yet » on its row. The search says what the index searches (the 64
+  characters, the page, the reference), and not « the author » of the mockup. A guest
+  gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
+  filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
+  keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
+  page. The route pages by a cursor: the screen keeps the cursors of the pages before for
+  « Previous », and a reload starts that list again. **A read again keeps the rows on the screen**
+  until its answer replaces them: only the first read says « Loading… », and nothing a pointer can
+  reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with
+  « Clear the filters », and a read that failed is the alert of the Sites screen, never « No note
+  yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
+  action. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
+  states, the roles, 390 px and axe.
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
   `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they

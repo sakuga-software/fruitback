@@ -27,7 +27,7 @@ export type Section = { path: string; label: string; width: string; built: boole
  */
 export const SECTIONS: readonly Section[] = [
   { path: 'sites', label: msg('Sites'), width: 'max-w-[1120px]', built: true },
-  { path: 'notes', label: msg('Notes'), width: 'max-w-[1240px]', built: false },
+  { path: 'notes', label: msg('Notes'), width: 'max-w-[1240px]', built: true },
   { path: 'connectors', label: msg('Connectors'), width: 'max-w-[1180px]', built: true },
   { path: 'members', label: msg('Members'), width: 'max-w-[1120px]', built: true },
   { path: 'account', label: msg('My account'), width: 'max-w-[820px]', built: true },
