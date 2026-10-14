@@ -36,7 +36,9 @@ import { StoreError } from './store.ts';
 /**
  * The day a member was last seen in a workspace (FRU-249), made when it is first asked for and not by
  * a migration: the files of this store are the ones the copy of FRU-145 reads, at their last version,
- * and a worker never wrote this table in one. It goes with the membership.
+ * and a worker never wrote this table in one, so the copy never reads it. It goes with the membership.
+ * Its key is the workspace and the account, and not a member id as in PostgreSQL: a member of this
+ * store has no id of its own (its key is the same pair).
  */
 function withLastSeen<T extends { exec(sql: string): unknown }>(database: T): T {
   database.exec(`

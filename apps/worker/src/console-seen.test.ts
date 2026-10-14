@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import type { AccountStore } from './accounts.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
@@ -115,6 +116,34 @@ describe('« Last seen » of the members of a workspace (FRU-249)', () => {
     assert.deepEqual(days, [{ day: dayOf(Date.now()) }]);
     const { seen } = (await (await seenBy(people.admin?.token)).json()) as { seen: Record<string, string> };
     assert.equal(seen[people.owner?.id ?? ''], dayOf(Date.now()));
+  });
+
+  it('writes the day again at the next call when a write failed, and fails no call for it', async () => {
+    const env = await world();
+    const { id, people } = await acme(env);
+    forgetSeen();
+    const failing: AccountStore = {
+      ...(env.context.accounts as AccountStore),
+      markSeen: async () => {
+        throw new Error('the database did not answer');
+      },
+    };
+
+    // The write fails: the call of the member is answered all the same, and nothing is kept.
+    const call = await callOn(
+      env,
+      'GET',
+      `/console/workspaces/${id}/sites`,
+      { token: people.member?.token },
+      {
+        accounts: failing,
+      },
+    );
+    assert.equal(call.status, 200);
+    assert.deepEqual(await rowsOf(env.database, 'SELECT day FROM last_seen'), []);
+    // The next call of the same day writes it: the failure was not remembered as a day written.
+    await callOn(env, 'GET', `/console/workspaces/${id}/sites`, { token: people.member?.token });
+    assert.deepEqual(await rowsOf(env.database, 'SELECT day FROM last_seen'), [{ day: dayOf(Date.now()) }]);
   });
 
   it('writes once a day for a person in a workspace, and forgets the day when they leave', async () => {
