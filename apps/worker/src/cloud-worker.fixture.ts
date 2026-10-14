@@ -107,6 +107,12 @@ if (process.argv[1] === import.meta.filename) {
     if (cookies.length > 0) out['set-cookie'] = cookies;
     outgoing.writeHead(answer.status, out).end(Buffer.from(await answer.arrayBuffer()));
   });
+  // WARNING: the server never closes a connection that waits (FRU-275). Node closes one after five
+  // seconds of silence; `route.fetch` of a spec keeps it to send the next request on it, and a request
+  // sent as the server closes it ends on ECONNRESET. The route of `served` then fails, and the page
+  // waits for an answer that never comes. A browser idle for five seconds is common in a spec that
+  // signs in three browsers in turn. The process stops with its spec, and its connections with it.
+  server.keepAliveTimeout = 0;
   server.listen(0, '127.0.0.1', () => {
     const address = server.address();
     console.log(`cloud-worker listening on ${typeof address === 'object' && address !== null ? address.port : ''}`);
