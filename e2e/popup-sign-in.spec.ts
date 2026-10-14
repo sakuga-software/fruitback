@@ -61,6 +61,10 @@ async function signInRoutes(
 ): Promise<{ claim: { answer: 'pending' | 'approved' | 'refused' | 'expired' }; bodies: unknown[] }> {
   const state = { answer: 'pending' as 'pending' | 'approved' | 'refused' | 'expired' };
   const bodies: unknown[] = [];
+  // What an account of no workspace reads (FRU-238): the worker of the suite does not know the token.
+  await context.route(`${CLOUD}/session/sites`, (route) =>
+    route.fulfill({ json: { account: true, workspaces: [], sites: [] } }),
+  );
   await context.route(`${CLOUD}/session/connect`, async (route) => {
     bodies.push(route.request().postDataJSON());
     if (options.start !== undefined) return options.start(route);

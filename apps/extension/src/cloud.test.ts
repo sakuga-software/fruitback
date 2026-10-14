@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApply } from './bridge.ts';
-import { accountLanguage, cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
+import { accountLanguage, addSite, addableWorkspaces, cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
 import { type LanguageArea, storedLanguage } from './language.ts';
 import { rememberLanguage } from './language-sync.ts';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from './protocol.ts';
@@ -415,6 +415,93 @@ describe('the language of the account (FRU-131)', () => {
     assert.equal(
       await storedLanguage({ ...area(), get: async () => Promise.reject(new Error('no storage')) }),
       undefined,
+    );
+  });
+});
+
+describe('adding the site of the tab to a workspace (FRU-255)', () => {
+  const SAKUGA = { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true };
+  const NORTHWIND = { id: 'ws_2', name: 'Northwind', role: 'guest' };
+  const seamsWith = (fetcher: typeof fetch) => ({
+    endpoints: async () => ['https://api.fruitback.test'],
+    ensureAccess: async () => GRANTED,
+    fetcher,
+  });
+
+  it('offers the workspaces where the account may add a site, and none to a pairing', async () => {
+    const { fetcher } = worker({ ...ACCOUNT, workspaces: [SAKUGA, NORTHWIND] });
+    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(fetcher)), [SAKUGA]);
+    assert.deepEqual(await addableWorkspaces('https://api.fruitback.test', seamsWith(worker().fetcher)), []);
+    assert.equal(await addableWorkspaces('https://api.fruitback.test', seamsWith(worker({}, 503).fetcher)), undefined);
+  });
+
+  it('posts the workspace and the origin, with the token, and gives the site back as an offer', async () => {
+    const sent: { url: string; init?: RequestInit }[] = [];
+    const fetcher = (async (url: string, init?: RequestInit) => {
+      sent.push({ url, ...(init === undefined ? {} : { init }) });
+
+      return new Response(
+        JSON.stringify({
+          site: { id: 'site_9', origin: 'https://preview.client.fr', visibility: 'members', workspace: 'ws_1' },
+        }),
+        { status: 201 },
+      );
+    }) as typeof fetch;
+
+    const added = await addSite('https://api.fruitback.test', SAKUGA, 'https://preview.client.fr', seamsWith(fetcher));
+
+    assert.deepEqual(added, {
+      ok: true,
+      offer: {
+        endpoint: 'https://api.fruitback.test',
+        workspace: SAKUGA,
+        site: { id: 'site_9', origin: 'https://preview.client.fr', visibility: 'members', workspace: SAKUGA },
+        pattern: 'https://preview.client.fr',
+      },
+    });
+    assert.equal(sent[0]?.url, 'https://api.fruitback.test/session/sites');
+    assert.equal(sent[0]?.init?.method, 'POST');
+    assert.equal(new Headers(sent[0]?.init?.headers).get('Authorization'), 'Bearer tok');
+    assert.deepEqual(JSON.parse(String(sent[0]?.init?.body)), {
+      workspace: 'ws_1',
+      origin: 'https://preview.client.fr',
+    });
+  });
+
+  it('says why it added nothing, and believes no site of another address', async () => {
+    for (const [status, body, reason] of [
+      [403, { error: 'forbidden', role: 'member' }, 'forbidden'],
+      [404, { error: 'not-found' }, 'forbidden'],
+      [429, { error: 'rate-limited' }, 'rate-limited'],
+      [401, { error: 'identity-required' }, 'signed-out'],
+      [502, {}, 'unavailable'],
+      [
+        201,
+        { site: { id: 's', origin: 'https://elsewhere.fr', visibility: 'members', workspace: 'ws_1' } },
+        'unavailable',
+      ],
+      [
+        201,
+        { site: { id: 's', origin: 'https://preview.client.fr', visibility: 'members', workspace: 'ws_9' } },
+        'unavailable',
+      ],
+    ] as const) {
+      const fetcher = (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+      assert.deepEqual(
+        await addSite('https://api.fruitback.test', SAKUGA, 'https://preview.client.fr', seamsWith(fetcher)),
+        { ok: false, reason },
+        `${status} ${JSON.stringify(body)}`,
+      );
+    }
+    const down = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as unknown as typeof fetch;
+    assert.deepEqual(
+      await addSite('https://api.fruitback.test', SAKUGA, 'https://preview.client.fr', seamsWith(down)),
+      {
+        ok: false,
+        reason: 'unavailable',
+      },
     );
   });
 });

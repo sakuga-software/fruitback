@@ -18,8 +18,11 @@ export type StageCounts = { seeded: number; green: number; ripening: number; rip
 
 export const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 
-/** A workspace of the session, and the role the person holds there (an account's session only). */
-export type Workspace = { id: string; name: string; role?: string };
+/**
+ * A workspace of the session, and the role the person holds there (an account's session only).
+ * `canAddSite`: the role may add a site there from the popup (FRU-255), as the worker read it now.
+ */
+export type Workspace = { id: string; name: string; role?: string; canAddSite?: boolean };
 
 /**
  * `previews`: the wildcards the workspace proved for this site (FRU-103), as the worker lists them now.
@@ -116,13 +119,14 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
 
 function workspaceOf(value: unknown): Workspace | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
-  const { id, name, role } = value as Record<string, unknown>;
+  const { id, name, role, canAddSite } = value as Record<string, unknown>;
   if (typeof id !== 'string' || id === '') return undefined;
 
   return {
     id,
     name: typeof name === 'string' ? name : '',
     ...(typeof role === 'string' && role !== '' ? { role } : {}),
+    ...(canAddSite === true ? { canAddSite: true } : {}),
   };
 }
 
@@ -270,6 +274,63 @@ export async function accountLanguage({
   }
 
   return silent ? 'no-answer' : {};
+}
+
+/**
+ * The workspaces of the account behind `endpoint` where it may add a site (FRU-255), or `undefined`
+ * when the worker said nothing. A session of a pairing adds none: it names one workspace, and stays a
+ * reader.
+ */
+export async function addableWorkspaces(endpoint: string, seams: CloudSeams): Promise<Workspace[] | undefined> {
+  const listed = await listedBy(endpoint, seams);
+  if (listed === undefined) return undefined;
+
+  return listed.account ? listed.workspaces.filter((workspace) => workspace.canAddSite === true) : [];
+}
+
+export type AddFailure = 'forbidden' | 'rate-limited' | 'signed-out' | 'unavailable';
+export type AddResult = { ok: true; offer: Offer } | { ok: false; reason: AddFailure };
+
+/**
+ * `POST /session/sites`: the site of the tab, added to a workspace of the account (FRU-255). The
+ * answer is an offer like the one of a site already listed, so the same click turns it on.
+ */
+export async function addSite(
+  endpoint: string,
+  workspace: Workspace,
+  origin: string,
+  seams: Pick<CloudSeams, 'ensureAccess' | 'fetcher'>,
+): Promise<AddResult> {
+  const access = await seams.ensureAccess(endpoint).catch(() => undefined);
+  if (access === undefined || (!access.ok && access.reason === 'unavailable'))
+    return { ok: false, reason: 'unavailable' };
+  if (!access.ok) return { ok: false, reason: 'signed-out' };
+
+  let response: Response;
+  try {
+    response = await (seams.fetcher ?? fetch)(`${endpoint}/session/sites`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${access.grant.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace: workspace.id, origin }),
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (response.status === 403 || response.status === 404) return { ok: false, reason: 'forbidden' };
+  if (response.status === 429) return { ok: false, reason: 'rate-limited' };
+  if (response.status === 401) return { ok: false, reason: 'signed-out' };
+  if (response.status !== 200 && response.status !== 201) return { ok: false, reason: 'unavailable' };
+
+  const body: unknown = await response.json().catch(() => undefined);
+  const site = typeof body === 'object' && body !== null ? (body as { site?: unknown }).site : undefined;
+  const parsed = parseWorkspaceSites({ account: true, workspaces: [workspace], sites: [site] })?.sites[0];
+  // The worker added the site of this tab, in this workspace, or the answer is not believed.
+  if (parsed === undefined || parsed.origin !== origin || parsed.workspace.id !== workspace.id) {
+    return { ok: false, reason: 'unavailable' };
+  }
+
+  return { ok: true, offer: { endpoint, workspace, site: parsed, pattern: origin } };
 }
 
 /** The entry the one click stores. */

@@ -15,7 +15,16 @@ import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
 import { createBrowserPending } from '../../src/pending-site-browser.ts';
-import { type CloudSeams, type Offer, cloudEntry, offerFor } from '../../src/cloud.ts';
+import {
+  type AddFailure,
+  type CloudSeams,
+  type Offer,
+  type Workspace,
+  addSite,
+  addableWorkspaces,
+  cloudEntry,
+  offerFor,
+} from '../../src/cloud.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { rememberLanguage } from '../../src/language-sync.ts';
@@ -34,6 +43,7 @@ import { type TabCommand } from '../../src/protocol.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
+  newSite,
   showPageCounts,
   siteInWorkspace,
   siteOn,
@@ -245,6 +255,9 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
     case 'offer':
       return offered(origin, facts.offer as Offer, account);
 
+    case 'new-site':
+      return siteOfNoWorkspace(origin, account);
+
     case 'rule':
     case 'form': {
       const found = facts.found;
@@ -422,6 +435,100 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
 
   return screen;
 }
+
+/**
+ * 08 (FRU-255): a site of no workspace of the account. The workspaces where it may add one are read
+ * now; none, and the popup says who can.
+ */
+async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
+  const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
+  // Fruitback said nothing: that is an outage, not « ask an admin ».
+  if (listed === undefined) {
+    return signInProblem(document, {
+      origin,
+      problem: 'unavailable',
+      onSignIn: () => void render(),
+      onSettings: openSettings,
+    });
+  }
+  const workspaces = listed;
+  const problem = element('p', '', 'problem');
+  const add = (id: string): void => {
+    const workspace = workspaces.find((each) => each.id === id);
+    if (workspace !== undefined) addAndTurnOn(origin, workspace, problem);
+  };
+  const screen = newSite(document, {
+    origin,
+    workspaces,
+    browserName: browserName(navigator.userAgent),
+    ...(account === undefined ? {} : { account }),
+    onAdd: add,
+    onSettings: openSettings,
+  });
+  screen.querySelector('.action-block')?.append(problem);
+
+  return screen;
+}
+
+/**
+ * « Add to {workspace} and turn on ». **The access to the site is asked for first**, in the click:
+ * the site is created after, so a refusal creates nothing, and « Grant access » asks again. Then the
+ * site, then the rule, as the one click of 06 stores it.
+ */
+function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement): void {
+  if (CLOUD === undefined) return;
+  const endpoint = CLOUD;
+  const again = (): void => addAndTurnOn(origin, workspace, problem);
+  for (const button of app?.querySelectorAll('button') ?? []) button.disabled = true;
+  const done = (): void => {
+    for (const button of app?.querySelectorAll('button') ?? []) button.disabled = false;
+  };
+
+  void (async () => {
+    const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] }).catch(() => false);
+    if (!granted) {
+      done();
+      showProblem(problem, NO_ACCESS_PROBLEM, { grant: again });
+
+      return;
+    }
+    const added = await addSite(endpoint, workspace, origin, cloudSeams());
+    if (!added.ok) {
+      // Drawn again, with the buttons off until then: on, a second click would add once more while the
+      // popup reads the session (raised in review).
+      if (added.reason === 'signed-out') {
+        await render();
+
+        return;
+      }
+      done();
+      showProblem(problem, t(ADD_PROBLEM[added.reason]));
+
+      return;
+    }
+    try {
+      await writeSite(origin, cloudEntry(added.offer));
+      await activateOpenTabs(origin);
+    } catch (error) {
+      // The site is in the workspace now, and the rule is not here: drawn again, the popup shows
+      // what is true, the site of the workspace and its « Turn on here » (raised in review).
+      console.error('[fruitback] the site was added, and its rule was not stored', error);
+      await render();
+
+      return;
+    }
+    await render();
+  })().catch((error: unknown) => {
+    done();
+    failed(problem)(error);
+  });
+}
+
+const ADD_PROBLEM: Record<Exclude<AddFailure, 'signed-out'>, string> = {
+  forbidden: msg('Your role in this workspace does not let you add a site.'),
+  'rate-limited': msg('Too many sites were added in the last hour. Try again later.'),
+  unavailable: msg('Fruitback did not answer. Try again.'),
+};
 
 /** « Chrome asks for access… »: the browser of this popup, by the name its person knows. */
 function browserName(userAgent: string): string {

@@ -468,3 +468,92 @@ function pageSection(document: Document, counts: Counts): HTMLElement {
 
   return section;
 }
+
+export type NewSiteOptions = {
+  origin: string;
+  /** The workspaces where the account may add a site. None: the popup says who can. */
+  workspaces: { id: string; name: string }[];
+  browserName: string;
+  account?: Account;
+  onAdd: (workspace: string) => void;
+  onSettings: () => void;
+};
+
+/** 08 (FRU-255): a site of no workspace of the account. Add it to one, and turn it on. */
+export function newSite(document: Document, options: NewSiteOptions): HTMLElement {
+  const heading = element(document, 'div', '', 'site-heading');
+  heading.append(
+    element(document, 'h1', hostOf(options.origin)),
+    element(document, 'p', t('Not in a workspace yet'), 'subtitle'),
+  );
+
+  const [only] = options.workspaces;
+  if (only === undefined) {
+    return shell(
+      document,
+      { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
+      heading,
+      element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+    );
+  }
+
+  const form = element(document, 'form', '', 'site-form');
+  form.noValidate = true;
+  let chosen = only;
+  const fields: Node[] = [];
+  // One workspace: no list, its name is in the button.
+  if (options.workspaces.length > 1) {
+    const label = element(document, 'label', t('Workspace'), 'field');
+    const select = element(document, 'select', '');
+    select.name = 'workspace';
+    for (const workspace of options.workspaces) {
+      const option = element(document, 'option', workspace.name);
+      option.value = workspace.id;
+      select.append(option);
+    }
+    label.append(select);
+    fields.push(label);
+    select.addEventListener('change', () => {
+      chosen = options.workspaces.find((workspace) => workspace.id === select.value) ?? only;
+      submit.textContent = addLabel(chosen.name);
+    });
+  }
+
+  const submit = element(document, 'button', addLabel(only.name), 'action');
+  submit.type = 'submit';
+  const act = element(document, 'div', '', 'action-block');
+  act.append(
+    submit,
+    element(document, 'p', t('{browser} asks for access to this site only.', { browser: options.browserName }), 'note'),
+  );
+  form.append(
+    element(
+      document,
+      'p',
+      t(
+        'Add it to review it. Nothing goes on the site: members with the extension see the notes, visitors see nothing.',
+      ),
+      'lead',
+    ),
+    ...fields,
+    act,
+  );
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    options.onAdd(chosen.id);
+  });
+
+  const root = shell(
+    document,
+    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
+    heading,
+    form,
+  );
+  root.classList.add('popup-new-site');
+
+  return root;
+}
+
+function addLabel(workspace: string): string {
+  return t('Add to {workspace} and turn on', { workspace });
+}

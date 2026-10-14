@@ -476,6 +476,22 @@ person signed in on a site of no rule gets the fields of before.
 - **A page can post the command into the main world too, and gains nothing**: the widget's Shadow
   root is open, so a page can already press every one of its buttons, and the answer is five numbers.
 
+## A site of no workspace, added from the popup (FRU-255)
+
+### The rules, in short
+
+- **08, signed in on a site no workspace of the account lists**: « Not in a workspace yet », the
+  workspaces where the account may add a site (`canAddSite`, read now by the worker), and « Add to
+  {workspace} and turn on ». One such workspace: no list, its name in the button. None: « Ask an admin
+  of your workspace to add this site. », and no button. No « Every preview build too »: no preview
+  without the proof of FRU-103 (Q4).
+- **The access to the site is asked for first, in the click**, then the site is added
+  (`POST /session/sites`, the worker half), then the rule is stored as the one click of 06 stores it.
+  A refusal of the browser adds nothing, and « Grant access » asks again. The site the worker answers
+  must be the origin of the tab, in the workspace chosen, or nothing is stored.
+- A refused add says why: the role does not allow it, too many sites in the hour, Fruitback did not
+  answer; a session that ended draws the screen of a sign-in that ended.
+
 ## A pairing code that arrives as a link (FRU-92)
 
 ### The rules, in short
