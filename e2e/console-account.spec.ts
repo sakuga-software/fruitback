@@ -62,6 +62,8 @@ type Stubbed = {
   nameRefuses?: string;
   /** The answer to a name is held until `release` is called. */
   nameWaits?: boolean;
+  /** A held answer refuses the name: the worker says `invalid-name` when it is released. */
+  nameWaitsRefused?: boolean;
   release?: () => void;
   sent: string[];
   /** The bodies the console sent, by path. */
@@ -107,9 +109,11 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       if (worker.nameWaits) {
         return new Promise<void>((resolve) => {
           worker.release = () =>
-            void route
-              .fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } })
-              .then(resolve);
+            void (
+              worker.nameWaitsRefused
+                ? route.fulfill({ status: 400, json: { error: 'invalid-name' } })
+                : route.fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } })
+            ).then(resolve);
         });
       }
 
@@ -986,4 +990,25 @@ test('what is typed while a name is on its way stays in the field, and leaves af
   await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(2);
   expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
   await expect(name).toHaveValue('Ana López');
+});
+
+test('what is typed while a refused name is on its way is sent after the refusal', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.nameWaits = true;
+  worker.nameWaitsRefused = true;
+  await open(page);
+  const name = section(page, 'Profile').getByRole('textbox', { name: 'Name shown on notes' });
+  await name.fill('Ana Lopez');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(1);
+  // Typed, and the field left, while the worker has not answered.
+  await name.fill('Ana López');
+  await page.keyboard.press('Tab');
+  worker.nameWaits = false;
+  worker.release?.();
+  // The first is refused; the newer text leaves in its turn, and the worker keeps it.
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(2);
+  expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
+  await expect(name).toHaveValue('Ana López');
+  await expect(section(page, 'Profile').getByRole('alert')).toHaveCount(0);
 });

@@ -149,7 +149,12 @@ export default function Account() {
     setNameProblem(undefined);
     const saved = await renameMe(sent);
     saving.current = false;
-    if (!saved.ok) return setNameProblem(problemOf(saved, NAME_PROBLEMS, NAME_NOT_KEPT));
+    if (!saved.ok) {
+      // A newer text typed while this one was on its way is sent in its turn: the refusal was of the
+      // name before it.
+      if (typed.current.trim() !== sent) return void saveName();
+      return setNameProblem(problemOf(saved, NAME_PROBLEMS, NAME_NOT_KEPT));
+    }
     kept.current = saved.data.account.name ?? sent;
     // What was typed while the name was on its way stays in the field, and leaves in its turn: the
     // answer never writes over it.
