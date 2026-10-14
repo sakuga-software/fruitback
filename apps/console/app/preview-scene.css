@@ -188,3 +188,80 @@
   width: 12px;
   height: 14px;
 }
+
+/* The first note (FRU-242): its pin on the headline, and its card. Fruitback's, so in tokens. */
+.scene__frame {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+}
+
+.scene__pin {
+  position: absolute;
+  right: 100%;
+  bottom: 100%;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--accent);
+  box-shadow: var(--shadow-pin);
+  transform: rotate(-90deg);
+}
+
+.scene__pin span {
+  color: var(--accent-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-hint);
+  font-weight: 600;
+  line-height: 1;
+  transform: rotate(90deg);
+}
+
+.scene__note {
+  position: absolute;
+  top: 150px;
+  left: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 264px;
+  padding: 14px 16px;
+  border-radius: var(--radius-frame);
+  background: var(--surface);
+  color: var(--color-ink);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-sans);
+}
+
+.scene__note-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-hint);
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: var(--tracking-button);
+}
+
+.scene__note-drop {
+  width: 9px;
+  height: 9px;
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-status-new);
+  transform: rotate(-90deg);
+}
+
+.scene__note-text {
+  font-size: var(--text-small);
+  line-height: 1.5;
+}
+
+.scene__note-by {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

@@ -12,7 +12,20 @@ import './preview-scene.css';
  * The words of the shop are the picture's, in English as on the mockup. The two sentences that are
  * Fruitback's come from the screen, in the language of the person.
  */
-export function PreviewScene({ launch, hint }: { launch: string; hint: string }) {
+type FirstNote = {
+  /** « New », in the language of the person. */
+  status: string;
+  /** The words of the example note: a picture's, as the shop's. */
+  text: string;
+  /** « {name} · just now », in the language of the person. */
+  by: string;
+};
+
+/**
+ * `note`: the first note came (FRU-242). The picture then has its pin on the headline and its card,
+ * as the mockup draws the state `first-note`, and no more hint.
+ */
+export function PreviewScene({ launch, hint, note }: { launch: string; hint: string; note?: FirstNote }) {
   return (
     <div className="scene" aria-hidden="true" inert>
       <div className="scene__nav">
@@ -24,9 +37,28 @@ export function PreviewScene({ launch, hint }: { launch: string; hint: string })
         </span>
       </div>
       <div className="scene__hero">
-        <p className="scene__headline">Pack light, walk far.</p>
+        <p className="scene__headline">
+          Pack light, walk far.
+          {note === undefined ? null : (
+            <span className="scene__frame">
+              <span className="scene__pin">
+                <span>1</span>
+              </span>
+            </span>
+          )}
+        </p>
         <p className="scene__tagline">The spring range is in the shops.</p>
         <span className="scene__action">Shop the range</span>
+        {note === undefined ? null : (
+          <div className="scene__note">
+            <span className="scene__note-status">
+              <span className="scene__note-drop" />
+              {note.status}
+            </span>
+            <span className="scene__note-text">{note.text}</span>
+            <span className="scene__note-by">{note.by}</span>
+          </div>
+        )}
       </div>
       <div className="scene__products">
         <div>
@@ -49,7 +81,7 @@ export function PreviewScene({ launch, hint }: { launch: string; hint: string })
         </div>
       </div>
 
-      <div className="scene__hint">{hint}</div>
+      {note === undefined ? <div className="scene__hint">{hint}</div> : null}
       <div className="scene__dock">
         <span className="scene__settings">
           <svg viewBox="0 0 24 24">

@@ -46,6 +46,12 @@ export async function cloudWorker(): Promise<Worker> {
     child.once('exit', (code) => reject(new Error(`the worker of the test stopped with ${code}: ${said}`)));
   });
   const origin = `http://127.0.0.1:${port}`;
+  // A worker that stops while its spec runs leaves every request of its pages without an answer: say
+  // it, so the log of a failed run has the cause, not only « Loading… » (FRU-275).
+  let closing = false;
+  child.once('exit', (code, signal) => {
+    if (!closing) console.error(`[e2e] the worker of the test at ${origin} stopped: code ${code}, signal ${signal}`);
+  });
   const read = async <T>(path: string): Promise<T> => (await (await fetch(`${origin}${path}`)).json()) as T;
 
   return {
@@ -56,6 +62,7 @@ export async function cloudWorker(): Promise<Worker> {
     close: () =>
       new Promise<void>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) return resolve();
+        closing = true;
         child.once('exit', () => resolve());
         child.kill();
       }),
