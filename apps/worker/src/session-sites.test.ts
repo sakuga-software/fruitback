@@ -102,11 +102,13 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal((await ask(env, token)).status, 401);
   });
 
-  it('takes GET only, and does not exist on a worker with no accounts', async () => {
+  it('takes a GET, a POST of an account only (FRU-255), and does not exist on a worker with no accounts', async () => {
     const env = await envWith();
     const { token } = await setUp(env);
 
-    assert.equal((await ask(env, token, 'POST')).status, 405);
+    // A POST adds a site, and a session of a pairing adds none: see `session-site-add.test.ts`.
+    assert.equal((await ask(env, token, 'POST')).status, 403);
+    assert.equal((await ask(env, token, 'PUT')).status, 405);
     const without = await handleRequest(
       new Request('https://api.fruitback.test/session/sites', {
         headers: { Origin: EXTENSION, Authorization: `Bearer ${token}` },

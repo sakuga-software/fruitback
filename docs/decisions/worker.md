@@ -901,6 +901,12 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   ended writes nothing, while a route that reads keeps the 10 minutes of its token (decided on
   2026-10-14, for FRU-255). Every access token names its chain in `sid` (`chainOf` of the store after
   a refresh, the digest of the first token otherwise); a token with no `sid` is refused there.
+- **`POST /session/sites {workspace, origin}` adds a site from the popup** (FRU-255,
+  `session-site-add.ts`): `sessionStillValid` first (a session that ended writes nothing, `401`), a
+  session of an account, an extension's `Origin` or none, `manage-sites` read now, an https or loopback
+  origin, always `members`, a site already there given back untouched (`200`), ten an hour per account
+  in the `Kv` (`fruitback:add-site:<account>`). `GET /session/sites` says, for each workspace of an
+  account, whether it may add a site there (`canAddSite`).
 - **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
   `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
   more, at the next call.

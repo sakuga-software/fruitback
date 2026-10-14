@@ -652,7 +652,19 @@ async function routed(
     try {
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers, undefined, noteIndex);
+        // FRU-255: the write reads the session again in the store, through `sessionWrites`, the
+        // check of every route that writes for an extension.
+        const writes = { kv, session: () => sessionWrites(request, served, context) };
+
+        return await handleSessionSites(
+          request,
+          accounts,
+          served.identitySecret,
+          cors.headers,
+          undefined,
+          noteIndex,
+          writes,
+        );
       }
 
       // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
@@ -898,22 +910,25 @@ async function memberOf(request: Request, config: Served, workspace: string): Pr
 }
 
 /**
- * Whether the session of the token of this request is still valid in the store (FRU-238): the check of
- * every route that writes for an extension. See `session-check.ts`.
+ * The person of the session of the token of this request, while that session is still valid in the
+ * store (FRU-238), or `undefined`: the check of every route that writes for an extension, which then
+ * answers `401`. See `session-check.ts`. A route that needs who writes (FRU-255) reads it here.
  */
-export async function sessionWrites(request: Request, config: Served, context: RequestContext): Promise<boolean> {
+export async function sessionWrites(
+  request: Request,
+  config: Served,
+  context: RequestContext,
+): Promise<SessionIdentity | undefined> {
   const token = readBearerToken(request.headers.get('Authorization'));
   const sessions = context.sessionStore ?? sessionStoreFor(config);
-  if (token === undefined || sessions === undefined || config.identitySecret === undefined) return false;
+  if (token === undefined || sessions === undefined || config.identitySecret === undefined) return undefined;
 
-  return (
-    (await sessionStillValid(token, {
-      sessions,
-      secret: config.identitySecret,
-      ...(config.roleIn === undefined ? {} : { roleIn: config.roleIn }),
-      ...(config.accountExists === undefined ? {} : { accountExists: config.accountExists }),
-    })) !== undefined
-  );
+  return sessionStillValid(token, {
+    sessions,
+    secret: config.identitySecret,
+    ...(config.roleIn === undefined ? {} : { roleIn: config.roleIn }),
+    ...(config.accountExists === undefined ? {} : { accountExists: config.accountExists }),
+  });
 }
 
 /**
