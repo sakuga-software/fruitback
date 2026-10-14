@@ -34,6 +34,7 @@ import { type TabCommand } from '../../src/protocol.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
+  showPageCounts,
   siteInWorkspace,
   siteOn,
   connecting,
@@ -448,15 +449,11 @@ async function siteOfWorkspaceOn(
   // A session of a pairing with that worker is the person here too: the head names them.
   const paired = account === undefined ? (await sessions.list())[site.endpoint] : undefined;
   const person = account ?? (paired === undefined ? undefined : { name: describeIdentity(paired.identity) });
-  // What the widget of the tab shows now. Nothing when it is not there yet or did not answer: the
-  // section is left out rather than drawn with zeros.
-  const counts = site.enabled ? (await askTab(tab, 'counts')).counts : undefined;
   const problem = element('p', '', 'problem');
   const screen = siteOn(document, {
     origin,
     workspace,
     on: site.enabled,
-    ...(counts === undefined ? {} : { pageCounts: counts }),
     ...(person === undefined ? {} : { account: person }),
     onToggle: (on) => {
       if (!on) {
@@ -483,6 +480,15 @@ async function siteOfWorkspaceOn(
   screen.querySelector('.popup-body')?.append(problem);
   // A session of a pairing is not in the head as an account is: its row, and its log out, stay here.
   if (paired !== undefined) screen.querySelector('.popup-body')?.append(...(await session(site)));
+  // What the widget of the tab shows now, added when it answers: the screen does not wait for it, and
+  // a page that does not answer leaves the section out rather than zeros. Not for a screen that is
+  // gone by then.
+  if (site.enabled) {
+    const screenNow = drawn;
+    void askTab(tab, 'counts').then(({ counts }) => {
+      if (counts !== undefined && screenNow === drawn) showPageCounts(screen, counts);
+    });
+  }
 
   return screen;
 }
