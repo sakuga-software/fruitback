@@ -494,12 +494,14 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
     }
     const added = await addSite(endpoint, workspace, origin, cloudSeams());
     if (!added.ok) {
-      done();
+      // Drawn again, with the buttons off until then: on, a second click would add once more while the
+      // popup reads the session (raised in review).
       if (added.reason === 'signed-out') {
         await render();
 
         return;
       }
+      done();
       showProblem(problem, t(ADD_PROBLEM[added.reason]));
 
       return;
@@ -511,7 +513,6 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
       // The site is in the workspace now, and the rule is not here: drawn again, the popup shows
       // what is true, the site of the workspace and its « Turn on here » (raised in review).
       console.error('[fruitback] the site was added, and its rule was not stored', error);
-      done();
       await render();
 
       return;

@@ -112,6 +112,29 @@ async function sitesRoute(
   return { sites, posted };
 }
 
+/**
+ * How many buttons of the popup were turned back on, from now. An add turns them off; one that ends
+ * by drawing the popup again leaves them off until then, or a second click adds once more.
+ */
+async function reEnabled(popup: Page): Promise<() => Promise<number>> {
+  await popup.evaluate(() => {
+    const seen = { count: 0 };
+    (globalThis as unknown as { reEnabled: typeof seen }).reEnabled = seen;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        if (record.oldValue !== null && !(record.target as HTMLButtonElement).disabled) seen.count += 1;
+      }
+    }).observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['disabled'],
+      attributeOldValue: true,
+    });
+  });
+
+  return () => popup.evaluate(() => (globalThis as unknown as { reEnabled: { count: number } }).reEnabled.count);
+}
+
 test('a site of no workspace: added to one and turned on, in one click (08)', async ({ extension }) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site');
@@ -193,6 +216,33 @@ test('a site added, whose rule is not stored, is drawn as it is: a site of the w
 
   await expect(popup.getByRole('button', { name: 'Turn on here' })).toBeVisible();
   await expect(popup.getByText('In Sakuga · members see the notes')).toBeVisible();
+});
+
+test('an add refused for its session keeps the buttons off until the popup is drawn again', async ({ extension }) => {
+  // Raised in review: the buttons were turned on before the popup was drawn again, and a second click
+  // asked for the access and posted the add once more while it was.
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-new-site-refused');
+  const { posted } = await sitesRoute(extension.context, [
+    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true },
+  ]);
+  await signedIn(extension, page, 'req_add_6');
+  await extension.context.route(`${CLOUD}/session/sites`, (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 401, json: { error: 'invalid-identity', reason: 'session-ended' } })
+      : route.fallback(),
+  );
+
+  const popup = await openPopup(extension, page);
+  const add = popup.getByRole('button', { name: 'Add to Sakuga and turn on' });
+  await expect(add).toBeEnabled();
+  const turnedOn = await reEnabled(popup);
+  const redrawn = popup.waitForFunction((button) => button !== null && !button.isConnected, await add.elementHandle());
+  await add.click();
+  await redrawn;
+
+  expect(await turnedOn()).toBe(0);
+  expect(posted).toEqual([]);
 });
 
 test('a site of no workspace, for an account that may add none: who can, and no button', async ({ extension }) => {
