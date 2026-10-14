@@ -279,7 +279,9 @@ export function createComposer(options: ComposerOptions): Composer {
     if (mine !== session) return;
 
     setState(action === 'keep' ? 'kept' : 'sent');
-    if (withoutPicture) status.textContent = t.text('composer.sentWithoutPicture');
+    if (withoutPicture) {
+      status.textContent = t.text(action === 'keep' ? 'composer.keptWithoutPicture' : 'composer.sentWithoutPicture');
+    }
     closing = view?.setTimeout(close, SENT_MS) ?? 0;
   }
 

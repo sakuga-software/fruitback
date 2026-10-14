@@ -178,6 +178,20 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(statusText(), 'sent');
   });
 
+  it('says when a note kept for later has no picture, and not that it was sent (FRU-238)', async () => {
+    mount(async () => true, {
+      keep: { offered: () => true, onKeep: async () => ({ picture: 'missed' as const }) },
+    });
+    composer?.open(ANCHOR);
+    field().value = 'Une note';
+
+    (composer?.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement | null)?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(composer?.state(), 'kept');
+    assert.equal(statusText(), 'kept for later, without the picture');
+  });
+
   it('says when the note went without the picture it asked for (FRU-238)', async () => {
     mount(async () => ({ picture: 'missed' as const }));
     composer?.open(ANCHOR);
