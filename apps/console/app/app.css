@@ -517,6 +517,42 @@ textarea {
   line-height: var(--text-hint--line-height);
 }
 
+/* A box to tick: 16 px, the border of a control, ink when ticked; its words at 14 px, 8 px after. */
+.kit-checkbox {
+  display: inline-flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--spacing-control-panel);
+  cursor: pointer;
+}
+
+.kit-checkbox .checkbox__control {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--field-border);
+  border-radius: 3px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.kit-checkbox[data-selected='true'] .checkbox__control {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--surface);
+}
+
+.kit-checkbox .checkbox__content {
+  margin: 0;
+}
+
+.kit-checkbox .label {
+  color: var(--color-ink);
+  white-space: nowrap;
+  font-size: var(--text-small);
+  font-weight: 400;
+}
+
 /* The switch: ink when on, the border of a control when off, and one movement of 220 ms. */
 .kit-toggle .switch__control {
   position: relative;
