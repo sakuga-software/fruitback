@@ -22,6 +22,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{PRODUCT}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        {/* The address of the worker of this instance, before the bundle reads it (FRU-222): `instance.ts`. */}
+        <script src="/config.js"></script>
         <Meta />
         <Links />
       </head>
@@ -154,7 +156,10 @@ function Unreachable() {
   if (reachable) return null;
 
   return (
-    <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-white"
+    >
       <span>{t('Fruitback cannot reach its server. Check your connection.')}</span>
       <Button
         tone="outline"
@@ -188,7 +193,10 @@ function SignedOut() {
   }
 
   return (
-    <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-center gap-3 border-b border-rail-active bg-ink px-4 py-2 text-sm text-white"
+    >
       <span>
         {still
           ? t('You are still signed out. Sign in in the other tab, then continue.')

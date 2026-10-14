@@ -10,22 +10,53 @@ import { WORKER_ORIGIN } from './pin.ts';
  * the worker: no stub decides an answer. The link is read where the worker was asked to send it, in the
  * mail, and never in the database.
  */
-/** From the sign-in screen to the list of the sites, by a link. */
-async function signInByLink(page: Page, worker: Worker, email: string): Promise<void> {
+/**
+ * From the setup to the list of the sites, by a link. Answers the id of the workspace.
+ *
+ * The workspace takes its name from the address (FRU-239): « Acme » for `…@acme.dev`. A workspace
+ * with no site goes back to the setup from the front door, so the Sites screen is opened by its
+ * address.
+ */
+async function signInByLink(page: Page, worker: Worker, email: string): Promise<string> {
   await page.goto(`${CONSOLE}/setup`);
   await page.getByRole('textbox', { name: 'Work email' }).fill(email);
-  await page.getByRole('textbox', { name: 'Workspace name' }).fill('Acme');
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Email me a link' }).click();
   await expect.poll(async () => (await worker.sent()).length).toBe(1);
 
   await page.goto(await linkIn(worker));
-  // The link signs in, the name typed before makes the workspace, and the front door leads to its sites.
-  await expect(page.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
-  await page.goto(CONSOLE);
-  await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
+  // The link signs in, the workspace is made, and the setup is at its second step.
+  await expect(page.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+  const workspace = await workspaceOf(worker);
+  await page.goto(`${CONSOLE}/w/${workspace}/sites`);
   await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
   // The list was read: the title is there before the answer, and a test starts from a screen at rest.
   await expect(page.getByRole('heading', { name: 'No site yet' })).toBeVisible();
+
+  return workspace;
+}
+
+/**
+ * My account, at rest: the list of the browsers is read.
+ *
+ * WARNING: the list arrives after the screen is drawn, and « Sign out » is under it: the button goes
+ * down 53 px when it does. A press that starts before and ends after is lost: the button has focus,
+ * nothing is sent, and the page stays. Measured on `main` at 30c62f8, where this spec failed for it.
+ */
+async function openAccount(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'My account' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Where you are signed in' }).getByText('Console · this browser'),
+  ).toBeVisible();
+}
+
+/** The id of the workspace the console last read the sites of, as the worker received it. */
+async function workspaceOf(worker: Worker): Promise<string> {
+  const read = (await worker.received())
+    .map((each) => /^\/console\/workspaces\/(ws_[0-9a-f]{20})\/sites$/.exec(each.path)?.[1])
+    .filter((id) => id !== undefined);
+  expect(read.length, 'the console read the sites of no workspace').toBeGreaterThan(0);
+
+  return read.at(-1) as string;
 }
 
 test.describe('the console, signed in by the cookie of better-auth (FRU-148)', () => {
@@ -95,7 +126,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     // A link that works, held while the worker answers: the token is gone before the answer.
     await page.goto(`${CONSOLE}/setup`);
     await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Email me a link' }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(1);
     const link = await linkIn(worker);
     const token = link.split('#')[1] as string;
@@ -168,7 +199,8 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await tab.getByRole('button', { name: 'Email me a link' }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(2);
     await tab.goto(await linkIn(worker));
-    await expect(tab).toHaveURL(/\/sites$/);
+    // Signed in again. The workspace has no site yet, so the front door leads to the setup.
+    await expect(tab).toHaveURL(/\/setup$|\/sites$/);
 
     await page.getByRole('alert').getByRole('button', { name: 'Continue', exact: true }).click();
     // The notice goes. The sentence of the screen, « the site was not added », stays until the next try.
@@ -185,9 +217,9 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     );
     expect(before).toHaveLength(1);
 
-    await page.getByRole('link', { name: 'My account' }).click();
+    await openAccount(page);
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
 
     expect((await worker.received()).map((each) => each.path)).toContain('/console/auth/sign-out');
     // The cookie the browser held is refused by the worker, whoever presents it.
@@ -207,7 +239,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       fetch(`${worker.origin}/console/me`, {
         headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${session?.value}` },
       });
-    await page.getByRole('link', { name: 'My account' }).click();
+    await openAccount(page);
 
     // better-auth does not answer: what the worker says then (`auth-unavailable`), as the console reads it.
     const refused = `${WORKER_ORIGIN}/console/auth/sign-out`;
@@ -228,7 +260,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
 
     await page.unroute(refused);
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
     expect((await me()).status).toBe(401);
   });
 
@@ -237,11 +269,10 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     const tab = await context.newPage();
     await tab.goto(`${CONSOLE}/setup`);
     await tab.getByRole('textbox', { name: 'Work email' }).fill(email);
-    await tab.getByRole('textbox', { name: 'Workspace name' }).fill('Other');
-    await tab.getByRole('button', { name: 'Continue', exact: true }).click();
+    await tab.getByRole('button', { name: 'Email me a link' }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(mails);
     await tab.goto(await linkIn(worker));
-    await expect(tab.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
+    await expect(tab.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
 
     return tab;
   }
@@ -284,15 +315,17 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     const written = await sitesWritten(worker);
 
     // Bob signs in in another tab, and somebody presses « Continue » on the screen of Ana.
-    const other = await signInElsewhere(context, worker, 'bob@acme.dev', 2);
+    const other = await signInElsewhere(context, worker, 'bob@client.fr', 2);
     await notice.getByRole('button', { name: 'Continue', exact: true }).click();
 
     await expectStopped(page, 'Another account is signed in in this browser');
     expect(await sitesWritten(worker)).toBe(written);
     // The one way on loads the console for whoever is signed in now.
     await page.getByRole('button', { name: 'Load the console again', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
-    await expect(page.getByText('Other', { exact: true })).toBeVisible();
+    // The workspace of Bob, named after his address, has no site yet: the front door leads to the
+    // setup, at its second step.
+    await expect(page.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+    await expect(page.getByText('Client', { exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveValue('');
     await other.close();
   });
@@ -301,7 +334,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     page,
     context,
   }) => {
-    await signInByLink(page, worker, 'ana@acme.dev');
+    const workspace = await signInByLink(page, worker, 'ana@acme.dev');
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     /** The tab is shown again: what a browser tells a page when somebody comes back to it. */
     const comesBack = (tab: Page) => tab.evaluate(() => void window.dispatchEvent(new Event('focus')));
@@ -313,12 +346,12 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
 
     // In a second tab Ana signs out, and Bob signs in.
     const second = await context.newPage();
-    await second.goto(CONSOLE);
-    await second.getByRole('link', { name: 'My account' }).click();
+    await second.goto(`${CONSOLE}/w/${workspace}/sites`);
+    await openAccount(second);
     await second.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(second.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await expect(second.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
     await second.close();
-    const other = await signInElsewhere(context, worker, 'bob@acme.dev', 2);
+    const other = await signInElsewhere(context, worker, 'bob@client.fr', 2);
 
     await comesBack(page);
     await expectStopped(page, 'Another account is signed in in this browser');
@@ -330,13 +363,13 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     page,
     context,
   }) => {
-    await signInByLink(page, worker, 'ana@acme.dev');
+    const workspace = await signInByLink(page, worker, 'ana@acme.dev');
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     const second = await context.newPage();
-    await second.goto(CONSOLE);
-    await second.getByRole('link', { name: 'My account' }).click();
+    await second.goto(`${CONSOLE}/w/${workspace}/sites`);
+    await openAccount(second);
     await second.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(second.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await expect(second.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
     await second.close();
 
     await page.evaluate(() => void window.dispatchEvent(new Event('focus')));

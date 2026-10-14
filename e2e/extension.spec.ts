@@ -354,7 +354,7 @@ test('team mode: paired from the popup, the site reads and writes through the re
   await expect(nameField).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-  await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
+  await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
 
   // The page is not told of a pairing, so its widget learns it at its next read: the send below
   // makes one.
@@ -397,7 +397,7 @@ test('a session held with the worker of a private-mode site stays on the popup, 
   await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private-held-session');
-  await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
+  await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
 
   // The same rule, moved to private mode from the popup. The session stays in storage.
   const popup = await openPopup(extension, page);
@@ -447,7 +447,7 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
     if (refused++ === 0) await route.abort('connectionrefused');
     else await route.continue();
   });
-  await popup.getByLabel('Pairing code').fill(mintPairingCode(REVIEWER));
+  await popup.getByLabel('Pairing code').fill(await mintPairingCode(REVIEWER));
   await popup.getByRole('button', { name: 'Pair with this worker' }).click();
   await expect(popup.getByText('The worker did not answer. Try again.')).toBeVisible();
   await shot('worker-down');
@@ -466,7 +466,7 @@ test('a pairing link pairs with one click, and the site then works through that 
   await mountTheSiteWidget(site, AUTHENTICATED_WORKER_ORIGIN);
 
   // The link an operator sends, opened like any link.
-  const { link, code } = mintPairing(REVIEWER);
+  const { link, code } = await mintPairing(REVIEWER);
   expect(link).toBe(`${AUTHENTICATED_WORKER_ORIGIN}/pair#${code}`);
   const linkPage = await extension.context.newPage();
   const requests: string[] = [];
@@ -515,7 +515,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-language');
   // The control: English, in the popup and then on the page.
-  await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
+  await pairFromPopup(extension, page, await mintPairingCode(REVIEWER), REVIEWER);
   const setUp = await openPopup(extension, page);
   await setUp.getByRole('button', { name: 'Change' }).click();
   await setUp.getByLabel(/^Mode/).selectOption('private');

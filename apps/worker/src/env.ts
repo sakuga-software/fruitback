@@ -4,7 +4,13 @@ import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
-import { DEFAULT_DATABASE_SCHEMA, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
+import {
+  DEFAULT_DATABASE_SCHEMA,
+  DEV_DATABASE,
+  asksForDevDatabase,
+  databaseUrlOf,
+  readDatabaseSchema,
+} from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
@@ -45,6 +51,8 @@ export type WorkerEnv = {
    */
   FRUITBACK_FAKE_LINEAR?: string;
   NODE_ENV?: string;
+  /** For `dev-worker.fixture.ts` alone: `members` makes the site of the playground one that only a session reads. */
+  FRUITBACK_DEV_VISIBILITY?: string;
   /**
    * Multi-tenant routing as JSON, e.g.
    * `{"acme":{"teamId":"team_1","projectId":"proj_1","origins":["https://acme.test"]}}`.
@@ -87,6 +95,12 @@ export type WorkerEnv = {
    * password**, so no diagnostic quotes it.
    */
   FRUITBACK_DATABASE_URL?: string;
+  /**
+   * `pglite`: the database is a PGlite in the process, which `dev-worker.fixture.ts` makes (FRU-223). For
+   * `pnpm dev` and the E2E suite. Refused under `NODE_ENV=production`, and beside
+   * `FRUITBACK_DATABASE_URL`. See `DEV_DATABASE` in `postgres.ts`.
+   */
+  FRUITBACK_DEV_DATABASE?: string;
   /**
    * The schema of that database the worker keeps its tables and its journal of migrations in
    * (FRU-219), for a database that another application uses too. A plain name, `fruitback` for
@@ -295,6 +309,27 @@ function sameSecret(one: string | undefined, other: string | undefined): boolean
   return one !== undefined && other !== undefined && one.replaceAll(/\s/g, '') === other.replaceAll(/\s/g, '');
 }
 
+/**
+ * Why the switch of the database of development is refused, if it is (FRU-223).
+ *
+ * In production it is refused and never ignored, as `FRUITBACK_STORE=memory` is: a worker that
+ * ignored it would start with no database, or on another one than its operator thinks.
+ */
+function devDatabaseRefusals(env: WorkerEnv): string[] {
+  if (!asksForDevDatabase(env)) return [];
+  if (env.NODE_ENV === 'production') {
+    return ['FRUITBACK_DEV_DATABASE (a database in the process is dev-only and NODE_ENV is production)'];
+  }
+  if (env.FRUITBACK_DEV_DATABASE?.trim() !== DEV_DATABASE) {
+    return [`FRUITBACK_DEV_DATABASE (« ${DEV_DATABASE} » is its one value)`];
+  }
+  if (env.FRUITBACK_DATABASE_URL) {
+    return ['FRUITBACK_DATABASE_URL (FRUITBACK_DEV_DATABASE is set, and the database is in the process)'];
+  }
+
+  return [];
+}
+
 /** Why a value of `FRUITBACK_DATABASE_SCHEMA` stops the worker (FRU-219). The value is not quoted. */
 export const DATABASE_SCHEMA_REFUSED =
   'FRUITBACK_DATABASE_SCHEMA (the name of a schema: a lower-case letter or « _ », then lower-case letters, digits and « _ », 63 characters at most, not a schema of PostgreSQL itself, and not a key word of SQL such as « user »)';
@@ -329,7 +364,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
-    databaseUrl: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
+    databaseUrl: databaseUrlOf(env),
     // A name that is refused is reported below, with its reason. `public` only lets the rest be read.
     databaseSchema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) ?? DEFAULT_DATABASE_SCHEMA,
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
@@ -355,6 +390,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
     // start with no workspace at all, and an operator would read it as the accounts lost. Said with
     // the rest (FRU-217): each one alone cost the operator one more start to read the next.
+    ...devDatabaseRefusals(env),
     ...(env.FRUITBACK_ACCOUNTS_PATH ? [ACCOUNTS_FILE_REFUSED] : []),
     ...(env.FRUITBACK_GITHUB_OAUTH ? [GITHUB_APP_REFUSED] : []),
     ...SECRETS.filter((name) => edged(env[name])).map((name) => `${name} (${EDGED})`),

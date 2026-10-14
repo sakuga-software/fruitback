@@ -5,7 +5,7 @@
   "description": "Visual feedback that plants annotations on a live page and grows them into issues in the tracker you already run — embedded in the site, or brought to it by a browser extension.",
   "license": "MIT",
   "scripts": {
-    "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:fake & pnpm --filter @fruitback/playground dev; wait'",
+    "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:pglite & pnpm --filter @fruitback/playground dev; wait'",
     "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/element build && pnpm --filter @fruitback/extension build && playwright test",
     "e2e:ui": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/extension build && playwright test --ui",
     "lint": "nx run-many -t lint",

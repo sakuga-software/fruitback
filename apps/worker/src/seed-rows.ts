@@ -138,6 +138,13 @@ export function noteOf(text: string): string {
   return typeof note === 'string' ? note : '';
 }
 
+/** The id the widget gave the note of a row (FRU-237: the index of the notes is keyed on it). */
+export function seedIdOf(text: string): string {
+  const id = (readJson(text) as { id?: unknown } | undefined)?.id;
+
+  return typeof id === 'string' ? id : '';
+}
+
 function readJson(text: string): unknown {
   try {
     return JSON.parse(text);

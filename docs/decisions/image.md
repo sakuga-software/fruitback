@@ -10,6 +10,25 @@ immutable.
 
 - **`ghcr.io/<owner>/fruitback-worker`** (FRU-47), for `linux/amd64` and `linux/arm64`. A Raspberry
   Pi and an ARM VPS are ordinary self-hosting.
+- **`ghcr.io/<owner>/fruitback-console` is a second image** (FRU-222), and not the console inside
+  the image of the worker: the worker holds the keys of the trackers, and a web application served
+  from it is one more surface beside them. `release-image.yml` publishes it with its own two jobs,
+  `check-console` and `publish-console`, behind the same gates and with the same tags; the two
+  images do not wait for each other.
+- **The image of the console holds the address of no worker.** `FRUITBACK_API` is read when the
+  container starts: `entrypoint.sh` writes it in `/tmp/fruitback/config.js`, which the page loads
+  before its bundle (`app/instance.ts`), and its origin in the `connect-src` of the policy. **The
+  value is held to the letters of an address before either file is written**: it goes into a header
+  and into a script, and a quote, a space or a semicolon would add a source or a statement. No
+  address, or what is not one, stops the container with a sentence. The job `docker image` starts
+  it for two workers, and with seven values that are not addresses.
+- **The build argument `VITE_FRUITBACK_API` is still taken**, for the Cloud: Dokploy builds the
+  console from the repository with it and gives the container no variable. It is then the address
+  of a container that is given none. The job builds that image too and starts it with no variable.
+- **The console runs as user `101`, and writes under `/tmp` only.** Its own `nginx.conf` has no
+  `user` line, a pid and temporary paths under `/tmp`, and the entry scripts of the base image are
+  removed: they write under `/etc`. It listens on `80` by default, which Docker lets any user open;
+  `FRUITBACK_CONSOLE_LISTEN` is for a runtime that does not, and the compose file sets `8080`.
 - **The build stage is pinned to `--platform=$BUILDPLATFORM`.** It produces one bundled JavaScript
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
   nothing. Only the runtime stage is emulated.
@@ -33,6 +52,10 @@ immutable.
   `packages: write`.
   `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
   `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
+- **No step negates a command with `!`** (FRU-222). GitHub runs a step with `bash -e`, and bash does
+  not stop on a command that `!` inverts: `! grep -q unsafe-inline` left the step green with
+  `unsafe-inline` in the policy of the console. A check of an absence is written
+  `if grep …; then exit 1; fi`, and `workflows.test.ts` fails on the other form.
 - **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
   into `.git/config`, where any later step reads it.
 - **Only the `publish` job holds the write permissions** (FRU-70). The workflow grants
@@ -94,6 +117,13 @@ immutable.
   It matches the `503` and the **variable name**, never the prose beside it — the diagnostic has to
   name the variable and has its own tests, while the wording is free to change, and a check reading
   the wording would go green on a broken image.
+- **The job `docker image` of `ci.yml` asserts that the image refuses `FRUITBACK_DEV_DATABASE`**
+  (FRU-223), the same way: the `503` and the name of the variable. That switch gives `pnpm dev` and
+  the E2E suite a PostgreSQL in the process (PGlite). The step also lists the files of the image and
+  fails on a name that holds `pglite` or `dev-worker`: the refusal is a line of `env.ts`, and the
+  absence of the files is what makes it true whatever that line says. PGlite is a development
+  dependency, and the bundle starts at `main.ts`, which imports no `*.fixture.ts`
+  (test:`is in no file that the bundle of the image starts from`).
 - **`ci.yml`'s `image` job stays, and it is not the same job.** It is the only one that runs on a
   **pull request**, which is where a broken Dockerfile has to be caught; this workflow runs after the
   merge. They use different gha cache scopes, so neither evicts the other.

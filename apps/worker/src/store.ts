@@ -113,4 +113,5 @@ export type SeedStore = {
 export type ForgetSelector = { email: string } | { name: string } | { identifiers: readonly string[] };
 
 /** One seed that `forget` found, as the operator reads it before it goes. */
-export type ForgottenSeed = { identifier: string; createdAt: string; pageUrl: string; note: string };
+/** A note `forget` found. `seed` is the id the widget gave it, which the index of the notes is keyed on. */
+export type ForgottenSeed = { identifier: string; seed: string; createdAt: string; pageUrl: string; note: string };

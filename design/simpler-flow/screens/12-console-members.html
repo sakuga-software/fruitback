@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Members, Sakuga</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+::placeholder{color:#6b6b74;opacity:1}
+input{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+.rail :focus-visible{outline-color:#ec5b57}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button,select{cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.b-accent:hover{background:#b91c1c !important}
+.b-link:hover{color:#b91c1c !important}
+.nav-link:hover{background:#27272a !important;color:#ffffff !important}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+@media (max-width: 900px){.rail-nav{flex-direction:row;overflow-x:auto}.rail-foot{display:none !important}}
+.scroll{scrollbar-width:thin;scrollbar-color:#8a8a93 transparent}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <aside class="rail" style="flex: 1 1 248px; box-sizing: border-box; padding: 16px 12px; background: #18181b; color: #ffffff; display: flex; flex-direction: column; gap: 20px">
+    <button type="button" aria-haspopup="menu" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: #ffffff; text-align: left; font: inherit">
+      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 8px; background: #ffffff; color: #18181b; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700">S</span>
+      <span style="flex: 1; min-width: 0">
+        <span style="display: block; font-size: 15px; font-weight: 600">Sakuga</span>
+        <span style="display: block; font-size: 12px; color: #a1a1aa">Cloud workspace</span>
+      </span>
+      <svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 16px; height: 16px; color: #a1a1aa"><path d="M8 10l4-4 4 4M8 14l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </button>
+    <nav aria-label="Workspace" class="rail-nav">
+      <a href="Sites.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Sites</a>
+      <a href="Notes.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Notes</a>
+      <a href="Connectors.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Connectors</a>
+      <a href="Members.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: #27272a; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ec5b57"></span>Members</a>
+      <a href="Account.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">My account</a>
+    </nav>
+    <div class="rail-foot" style="margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 14px">
+      <a href="https://fruitback.com" style="color: #d4d4d8; font-size: 14px">Help and docs</a>
+      <img src="../assets/7878e337d78a3a6d.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block">
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0">
+    <main style="max-width: 1120px; box-sizing: border-box; padding: 40px clamp(16px, 4vw, 48px) 72px">
+      <header style="margin-bottom: 24px">
+        <h1 style="margin: 0 0 6px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">Members</h1>
+        <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #6b6b74">Who sees and leaves notes, and who changes the workspace.</p>
+      </header>
+
+      <form aria-label="Invite someone" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 24px">
+        <label style="flex: 999 1 260px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Email
+          <input type="email" placeholder="name@company.com" style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+        </label>
+        <label style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Role
+          <sc-raw-select style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+            <option>Guest, one site</option>
+            <option>Member</option>
+            <option>Admin</option>
+          </sc-raw-select>
+        </label>
+        <label style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Site
+          <sc-raw-select style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+            <option>staging.acme.dev</option>
+            <option>*.preview.acme.dev</option>
+            <option>acme.dev</option>
+          </sc-raw-select>
+        </label>
+        <button type="submit" class="b-accent" style="height: 44px; padding: 0 24px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Invite</button>
+      </form>
+
+      <div class="scroll" style="border: 1px solid #e4e4e7; border-radius: 14px; overflow-x: auto">
+        <sc-raw-table style="width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px; line-height: 1.45">
+          <sc-raw-thead>
+            <sc-raw-tr style="text-align: left; font-size: 13px; color: #6b6b74">
+              <sc-raw-th scope="col" style="padding: 12px 20px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Person</sc-raw-th>
+              <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Role</sc-raw-th>
+              <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Sites</sc-raw-th>
+              <sc-raw-th scope="col" style="padding: 12px 20px; font-weight: 600; border-bottom: 1px solid #e4e4e7; text-align: right">Last seen</sc-raw-th>
+            </sc-raw-tr>
+          </sc-raw-thead>
+          <sc-raw-tbody>
+            <sc-for list="{{ people }}" as="p" hint-placeholder-count="5">
+              <sc-raw-tr>
+                <sc-raw-td style="padding: 12px 20px; border-bottom: 1px solid #e4e4e7">
+                  <span style="display: flex; align-items: center; gap: 12px">
+                    <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: {{ p.avatarBg }}; color: {{ p.avatarFg }}; border: 1px solid #e4e4e7; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">{{ p.initial }}</span>
+                    <span style="min-width: 0"><span style="display: block; font-weight: 600">{{ p.name }}</span><span style="display: block; font-size: 13px; color: #6b6b74">{{ p.email }}</span></span>
+                  </span>
+                </sc-raw-td>
+                <sc-raw-td style="padding: 12px 16px; border-bottom: 1px solid #e4e4e7">{{ p.role }}</sc-raw-td>
+                <sc-raw-td style="padding: 12px 16px; border-bottom: 1px solid #e4e4e7">{{ p.sites }}</sc-raw-td>
+                <sc-raw-td class="num" style="padding: 12px 20px; border-bottom: 1px solid #e4e4e7; text-align: right; color: #6b6b74; white-space: nowrap">
+                  <sc-if value="{{ p.invited }}" hint-placeholder-val="{{ false }}">
+                    <span style="display: inline-flex; gap: 16px; align-items: center">
+                      <span>Sent 3 Oct</span>
+                      <button type="button" class="b-link" style="border: 0; background: none; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Resend</button>
+                      <button type="button" class="b-link" style="border: 0; background: none; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Cancel</button>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ p.member }}" hint-placeholder-val="{{ true }}">{{ p.seen }}</sc-if>
+                </sc-raw-td>
+              </sc-raw-tr>
+            </sc-for>
+          </sc-raw-tbody>
+        </sc-raw-table>
+      </div>
+
+      <dl style="margin: 28px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px 32px; font-size: 14px; line-height: 1.5">
+        <div><dt style="font-weight: 600">Admin</dt><dd style="margin: 2px 0 0; color: #6b6b74">Sites, connectors and members.</dd></div>
+        <div><dt style="font-weight: 600">Member</dt><dd style="margin: 2px 0 0; color: #6b6b74">Every site. Sees the links to the tracker.</dd></div>
+        <div><dt style="font-weight: 600">Guest</dt><dd style="margin: 2px 0 0; color: #6b6b74">Only the sites shared with them. Free, and never sees the tracker.</dd></div>
+      </dl>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      { name: 'Mathieu', email: 'mathieu@sakuga.dev', role: 'Owner', sites: 'Every site', seen: 'Now', invited: false },
+      { name: 'Marc', email: 'marc@sakuga.dev', role: 'Admin', sites: 'Every site', seen: '1 h ago', invited: false },
+      { name: 'Léa', email: 'lea@sakuga.dev', role: 'Member', sites: 'Every site', seen: 'Yesterday', invited: false },
+      { name: 'Camille Durand', email: 'camille@acme.dev', role: 'Guest', sites: 'staging.acme.dev', seen: '2 days ago', invited: false },
+      { name: 'paul@lumen.studio', email: 'Invitation sent', role: 'Guest', sites: 'preview.lumen.studio', seen: '', invited: true }
+    ];
+    const people = raw.map((p) => ({
+      ...p,
+      initial: p.name.charAt(0).toUpperCase(),
+      member: !p.invited,
+      avatarBg: p.invited ? '#ffffff' : '#3f3f46',
+      avatarFg: p.invited ? '#6b6b74' : '#ffffff'
+    }));
+    return { people: people };
+  }
+}
+</script>
+
+
+</body></html>

@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
-import { createPairingCommand } from './app.ts';
+import { createPairingCommand, noteIndexFor } from './app.ts';
+import type { NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
 import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
@@ -283,6 +284,11 @@ export async function runForget(
   env: WorkerEnv,
   /** The store a test opened. Absent, the one of the environment. */
   held?: SeedStore,
+  /**
+   * The index a test opened (FRU-237). Absent, the one of the environment when the store is the one
+   * of the environment too: a test that hands a store hands its index, or none.
+   */
+  heldIndex?: NoteIndex,
 ): Promise<ForgetOutcome> {
   const parsed = parseForgetArgs(argv);
   if (!parsed.ok) return { ok: false, lines: [parsed.error] };
@@ -317,7 +323,14 @@ export async function runForget(
     if (missing.length > 0) {
       return { ok: false, lines: [`no note is ${missing.join(', ')}. Nothing was deleted.`] };
     }
-    if (!dryRun && found.length > 0) found = await store.forget(which, { dryRun: false });
+    if (!dryRun && found.length > 0) {
+      // FRU-237: the index of these notes goes first, its excerpt of their text included. An index
+      // that does not answer stops the command before a note is deleted: run it again, and nothing
+      // of a note is left behind in the index.
+      const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
+      await index?.forget({ notes: found.map(({ identifier, seed }) => ({ identifier, seed })) });
+      found = await store.forget(which, { dryRun: false });
+    }
   } catch (error) {
     return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
   }

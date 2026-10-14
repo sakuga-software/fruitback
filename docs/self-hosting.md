@@ -254,13 +254,15 @@ empty value counts as absent.
 
 ### The image and the port
 
-| Variable          | Default                                         | What it does                                                                                                     | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FRUITBACK_IMAGE` | `ghcr.io/sakuga-software/fruitback-worker:edge` | Compose only. The image, as a tag or a digest.                                                                   | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`.                                                                                                                                                                                                                                                                             |
-| `FRUITBACK_PORT`  | `8080`                                          | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet.                             | An `.env` from before FRU-48 says `PORT`, which the file ignores: the port falls back to 8080.                                                                                                                                                                                                                                                                                                     |
-| `PORT`            | `8080`                                          | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
-| `HOST`            | `0.0.0.0`                                       | The interface the process listens on. Compose does not pass it.                                                  | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured).                                                                                                                                                                                                                                                                             |
-| `NODE_ENV`        | `production`, set by the image                  | What refuses the in-memory store. Compose does not pass it.                                                      | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container.                                                                                                                                                                                                                                                                                                       |
+| Variable                  | Default                                          | What it does                                                                                                     | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRUITBACK_IMAGE`         | `ghcr.io/sakuga-software/fruitback-worker:edge`  | Compose only. The image, as a tag or a digest.                                                                   | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`.                                                                                                                                                                                                                                                                             |
+| `FRUITBACK_PORT`          | `8080`                                           | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet.                             | An `.env` from before FRU-48 says `PORT`, which the file ignores: the port falls back to 8080.                                                                                                                                                                                                                                                                                                     |
+| `FRUITBACK_CONSOLE_IMAGE` | `ghcr.io/sakuga-software/fruitback-console:edge` | Compose only. The image of the console, as a tag or a digest. See [The console](#the-console).                   | A tag that does not exist fails the pull of the `console` profile, and of no other service.                                                                                                                                                                                                                                                                                                        |
+| `FRUITBACK_CONSOLE_PORT`  | `8081`                                           | Compose only. The port of the console on the host, or `127.0.0.1:8081` to keep it off the internet.              | The same port as `FRUITBACK_PORT`: the second container does not start.                                                                                                                                                                                                                                                                                                                            |
+| `PORT`                    | `8080`                                           | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
+| `HOST`                    | `0.0.0.0`                                        | The interface the process listens on. Compose does not pass it.                                                  | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured).                                                                                                                                                                                                                                                                             |
+| `NODE_ENV`                | `production`, set by the image                   | What refuses the in-memory store. Compose does not pass it.                                                      | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container.                                                                                                                                                                                                                                                                                                       |
 
 ### Who may call the worker
 
@@ -320,6 +322,8 @@ empty value counts as absent.
 | `FRUITBACK_AUTH_GITHUB_OAUTH` | none: no sign-in with GitHub                                                  | A GitHub OAuth App, as `<client id>:<client secret>`. Its callback is `<FRUITBACK_PUBLIC_URL>/console/auth/callback/github`.                                                                                                                                                                                                                                                                                                                                                                                                                                                          | No colon: refused. Without `FRUITBACK_AUTH_SECRET`: refused.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `FRUITBACK_AUTH_TRACK_IP`     | none: no address and no user agent kept                                       | `1`: better-auth keeps the address and the user agent of each session of the console, and limits by address too, with the address the worker read behind its trusted proxies.                                                                                                                                                                                                                                                                                                                                                                                                         | Any value but `1`: refused. Without `FRUITBACK_AUTH_SECRET`: refused.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `FRUITBACK_FAKE_LINEAR`       | none                                                                          | The old spelling of `FRUITBACK_STORE=memory`. Deprecated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | In the image it is ignored, and the boot log says so. Delete the line.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `FRUITBACK_DEV_DATABASE`      | none                                                                          | Development only: `pglite` gives the worker of `pnpm dev` a PostgreSQL in its process. Compose does not pass it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | In the image: refused, `/health` answers `503` and names it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `FRUITBACK_DEV_VISIBILITY`    | none                                                                          | Development only: read by the worker of `pnpm dev`, for the site it makes. Compose does not pass it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | The image does not read it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## When something is wrong
 
@@ -514,6 +518,9 @@ that schema alone, so a search path in the address, on the role or on the databa
   `PUBLIC`. The worker names no other schema; a person with the password of the role can. Take from
   the role what it does not need: `REVOKE ALL ON SCHEMA public FROM fruitback` does nothing while
   `PUBLIC` still has the right, so that one is revoked from `PUBLIC`, by whoever owns the database.
+  **While the role may use `public`, the worker says so in its log** when it migrates, once for each
+  start: « the role of FRUITBACK_DATABASE_URL may use the schema « public » … ». It starts all the
+  same: a database may be shared on purpose.
 - **A pooler must keep a session.** The search path and the lock of the migrations are the state of
   a session: PgBouncer in transaction mode loses both, and the worker then refuses to migrate.
 - **Two workers can share one database**, each in its schema: they do not see each other.
@@ -563,6 +570,58 @@ Measured on 2026-10-11, with this compose file: a pairing code made after the ba
 the restore, the worker answered, and the server held `fruitback` and `fruitback_before`. A second
 restore needs the name `fruitback_before` free. Remove that database with `dropdb` when you are sure
 you do not need it: that last step was not run in the trial.
+
+## The console
+
+The console is where a person signs in, makes a workspace, adds its sites and reads its members. It
+is a second image, `ghcr.io/sakuga-software/fruitback-console`: static files behind nginx, with no
+secret in them. It needs a worker with accounts, so read
+[Keeping the accounts in PostgreSQL](#keeping-the-accounts-in-postgresql) first. This section is
+short on purpose: the whole installation is to be written again (FRU-227).
+
+**One image serves every instance.** The address of the worker is not built in: the container reads
+`FRUITBACK_API` when it starts, writes it in the page and in its `Content-Security-Policy`, and
+stops with a sentence when the variable is absent or is not an address. Nothing is built again to
+change it.
+
+The compose file has a `console` service that starts only with its profile. In `.env`:
+
+```
+FRUITBACK_PUBLIC_URL=http://localhost:8080
+FRUITBACK_CONSOLE_URL=http://localhost:8081
+```
+
+```bash
+docker compose --profile postgres --profile console up -d --wait
+```
+
+`FRUITBACK_PUBLIC_URL` is where **a browser** reaches the worker, and the console is given that
+value as its `FRUITBACK_API`: never write the name of the service there. `FRUITBACK_CONSOLE_URL` is
+where a browser reaches the console; the worker answers that origin and no other.
+
+**Two addresses, and that is the default on purpose.** The console calls the worker as another
+origin, with the cookie of the session, which is the worker's. Behind a proxy, give them two names
+of one domain, as `api.example.com` and `app.example.com`: a browser then sends the cookie, which is
+`SameSite=Strict`, from one to the other. That is what the Cloud runs. One name with two paths is
+not offered: the proxy would have to know every path of the worker, and nobody measured it. Two
+names of two different domains do not work: the cookie is not sent.
+
+Outside the compose file:
+
+```bash
+docker run -d --name fruitback-console -p 8081:80 \
+  -e FRUITBACK_API=https://api.example.com \
+  ghcr.io/sakuga-software/fruitback-console:edge
+```
+
+| Variable                   | Default | What it does                                                                                              |
+| -------------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `FRUITBACK_API`            | none    | The address a browser calls the worker at: `https://host`, with a port or a path if it has one. Required. |
+| `FRUITBACK_CONSOLE_LISTEN` | `80`    | The port nginx listens on inside the container. The compose file sets `8080`.                             |
+
+The image runs as a user that is not root (`101`), writes under `/tmp` only, and starts with a
+read-only root and no capability: the compose file runs it that way. It serves the script of the
+widget too, at `/fruitback.iife.js`, which is the address the snippet of the console gives.
 
 ## Storing the seeds in GitHub Issues
 
@@ -952,7 +1011,7 @@ the Linear quota, and a failed call is never cached.
 From the sources, with no container and no `.env`. The command keeps running:
 
 ```bash
-pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store
+pnpm --filter @fruitback/worker dev:pglite      # node --watch on the TypeScript, a database in the process
 ```
 
 The image, under the name the compose file pulls. The compose file needs `.env`, and refuses to start

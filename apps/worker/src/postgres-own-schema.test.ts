@@ -26,7 +26,7 @@ import {
   rowsOf,
 } from './postgres.fixture.ts';
 import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
-import { APPLIED, inSchema, migrate, migrationsFolder } from './postgres-migrate.ts';
+import { APPLIED, PUBLIC_IS_OPEN, inSchema, migrate, migrationsFolder } from './postgres-migrate.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { StoreError } from './store.ts';
 
@@ -336,6 +336,66 @@ describe('a database that the tool of before left in another schema (FRU-219)', 
       await before.close();
       await admin.close();
       await own.drop();
+    }
+  });
+});
+
+describe('a role that may still use public, beside its schema (FRU-266)', { skip: NO_REAL_POSTGRES }, () => {
+  it('is said once in the log, and not refused; nothing is said once it may not, nor for a worker in public', async (t) => {
+    const own = await ownDatabase();
+    const admin = createPgDatabase(own.url, 'public', { max: 1 });
+    const role = `w_${new URL(own.url).pathname.slice(1)}`;
+    const lesser = new URL(own.url);
+    lesser.username = role;
+    lesser.password = 'not-a-secret-of-a-test';
+    const said: string[] = [];
+    t.mock.method(console, 'warn', (line: unknown) => void said.push(String(line)));
+    const migrateAs = async (schema: string): Promise<void> => {
+      const database = createPgDatabase(lesser.href, schema, { max: 1 });
+      try {
+        await migrate(database);
+      } finally {
+        await database.close();
+      }
+    };
+    try {
+      for (const statement of [
+        `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`,
+        `CREATE SCHEMA a AUTHORIZATION ${role}`,
+        `CREATE SCHEMA b AUTHORIZATION ${role}`,
+      ]) {
+        await rowsOf(admin, statement);
+      }
+      // PostgreSQL 17 gives every role USAGE on public: the control of what follows.
+      assert.deepEqual(await rowsOf(admin, `SELECT has_schema_privilege('${role}', 'public', 'USAGE') AS open`), [
+        { open: true },
+      ]);
+
+      await migrateAs('a');
+      assert.deepEqual(said.filter((line) => line.includes(PUBLIC_IS_OPEN)).length, 1);
+
+      await rowsOf(admin, 'REVOKE ALL ON SCHEMA public FROM PUBLIC');
+      said.length = 0;
+      await migrateAs('b');
+      assert.deepEqual(
+        said.filter((line) => line.includes('« public »')),
+        [],
+      );
+
+      // A worker in public says nothing of public, whatever its rights there.
+      await rowsOf(admin, `GRANT USAGE, CREATE ON SCHEMA public TO ${role}`);
+      said.length = 0;
+      await migrateAs('public');
+      assert.deepEqual(
+        said.filter((line) => line.includes('« public »')),
+        [],
+      );
+    } finally {
+      await admin.close();
+      await own.drop();
+      const server = createPgDatabase(TEST_DATABASE_URL ?? '', 'public', { max: 1 });
+      await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
+      await server.close();
     }
   });
 });

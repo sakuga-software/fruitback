@@ -4,9 +4,7 @@
  * A name of a product is a key too when a screen shows it through `t`, and it reads the same.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
-  Fruitback: 'Fruitback',
   Linear: 'Linear',
-  'Fruitback Cloud': 'Fruitback Cloud',
 
   'Fruitback cannot reach its server. Check your connection.':
     'Fruitback ne joint pas son serveur. Vérifiez votre connexion.',
@@ -102,8 +100,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Google n’a pas d’adresse vérifiée pour ce compte. Utilisez un lien par e-mail.',
   'The sign-in with Google did not finish. Try again, or use an email link.':
     'La connexion avec Google n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
-  'Google sign-in is not set up on this Fruitback': 'La connexion Google n’est pas configurée sur ce Fruitback',
-  'GitHub sign-in is not set up on this Fruitback': 'La connexion GitHub n’est pas configurée sur ce Fruitback',
   'Not set up': 'Non configuré',
   'Could not check': 'Vérification impossible',
   'Where you are signed in': 'Où vous êtes connecté',
@@ -195,6 +191,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
   'Invitation sent': 'Invitation envoyée',
+  'Until {date}': 'Jusqu’au {date}',
   'Invitation kept': 'Invitation gardée',
   'Sent {date}': 'Envoyée le {date}',
   Joined: 'Arrivée',
@@ -233,8 +230,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No invitation waits for {email}. An invitation sent to another address shows to that address only.':
     'Aucune invitation n’attend {email}. Une invitation envoyée à une autre adresse ne s’affiche qu’à cette adresse.',
   'Go to the console': 'Aller à la console',
-  'For {email}.': 'Pour {email}.',
-  'Until {date}': 'Jusqu’au {date}',
   Decline: 'Refuser',
   'Joining…': 'Arrivée…',
   'Join {workspace}': 'Rejoindre {workspace}',
@@ -248,20 +243,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Seulement les sites partagés avec lui. Gratuit, et ne voit jamais le tracker.',
 
   Workspace: 'Workspace',
-  'Sign in, name it': 'Se connecter, le nommer',
-  Source: 'Source',
-  Sources: 'Sources',
-  'Where feedback goes': 'Où vont les retours',
-  Site: 'Site',
-  'The address you review': 'L’adresse que vous relisez',
   Install: 'Installer',
-  'Script or extension': 'Script ou extension',
-  'Set up': 'Mise en place',
-  'How to run Fruitback': 'Comment faire tourner Fruitback',
-  'Self-hosted': 'Auto-hébergé',
-  Steps: 'Étapes',
-  'Step {step} of {total}': 'Étape {step} sur {total}',
-  'Create your workspace': 'Créez votre workspace',
   'That is not an e-mail address. Check it and send again.':
     'Ce n’est pas une adresse e-mail. Vérifiez-la et renvoyez.',
   'Several links went to this address already. Use the last one, or wait fifteen minutes.':
@@ -286,46 +268,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
     "La connexion n'a pas abouti. Réessayez, ou utilisez un lien par e-mail.",
   'The link could not be sent just now. Try again in a minute.':
     'Le lien n’a pas pu être envoyé. Réessayez dans une minute.',
-  'One workspace for your team, your sites and your sources. Hosted in Europe.':
-    'Un workspace pour votre équipe, vos sites et vos sources. Hébergé en Europe.',
   'Sending…': 'Envoi…',
   Continue: 'Continuer',
   'Continue with Google': 'Continuer avec Google',
   'Continue with GitHub': 'Continuer avec GitHub',
-  'or with an email link': 'ou avec un lien par e-mail',
   'Work email': 'E-mail professionnel',
   'Workspace name': 'Nom du workspace',
   'Check your inbox': 'Regardez votre boîte de réception',
-  'A sign-in link is on its way to {email}. It works once, for fifteen minutes.':
-    'Un lien de connexion est en route vers {email}. Il fonctionne une fois, pendant quinze minutes.',
   'Use another address': 'Utiliser une autre adresse',
-  'Open it in this browser. Nothing in it asks for a password, and ignoring it is safe.':
-    'Ouvrez-le dans ce navigateur. Rien n’y demande un mot de passe, et l’ignorer est sans risque.',
   'A workspace needs a name of one line, up to 80 characters.':
     'Un workspace a besoin d’un nom d’une ligne, de 80 caractères au plus.',
-  'Name your workspace': 'Nommez votre workspace',
-  'You are signed in. One more word, and the workspace exists.':
-    'Vous êtes connecté. Encore un mot, et le workspace existe.',
-  'Notes stay in this workspace. Nothing to connect.': 'Les notes restent dans ce workspace. Rien à connecter.',
-  'Where should feedback go?': 'Où doivent aller les retours ?',
-  Selected: 'Sélectionné',
-  'In Connectors, after the set-up': 'Dans Connecteurs, après la mise en place',
-  'For now the notes stay in this workspace. Linear and a REST API connect after the set-up, in Connectors.':
-    'Pour l’instant, les notes restent dans ce workspace. Linear et une API REST se connectent après la mise en place, dans Connecteurs.',
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
-  'Which site do you review?': 'Quel site relisez-vous ?',
-  'Paste its address. Any page of it will do.': 'Collez son adresse. N’importe laquelle de ses pages convient.',
   'Site address': 'Adresse du site',
-  'Who sees the feedback?': 'Qui voit les retours ?',
-  'The members of {workspace}': 'Les membres de {workspace}',
-  'Visitors of the site see no note.': 'Les visiteurs du site ne voient aucune note.',
-  'Everyone who visits the site': 'Tous ceux qui visitent le site',
-  'For a public « report a problem ».': 'Pour un « signaler un problème » public.',
-  'Install it': 'Installez-le',
-  'Two ways to put Fruitback on {site}. Use one, or both.':
-    'Deux façons de mettre Fruitback sur {site}. Utilisez l’une, ou les deux.',
-  Finish: 'Terminer',
   Script: 'Script',
   'Paste it before the closing body tag of the site.': 'Collez-le avant la balise body fermante du site.',
   Copied: 'Copié',
@@ -501,4 +456,114 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A link works once, for fifteen minutes. This one was already used or ran out of time.':
     'Un lien fonctionne une fois, pendant quinze minutes. Celui-ci a déjà servi, ou son délai est passé.',
   'Send me a new link': 'M’envoyer un nouveau lien',
+  // The setup on one screen (FRU-239).
+  'Set up Fruitback': 'Mettre en place Fruitback',
+  'Current step:': 'Étape en cours :',
+  'Running your own server?': 'Vous hébergez votre propre serveur ?',
+  'Self-hosting guide': 'Guide d’auto-hébergement',
+  'Three steps to your first note on a live page. Hosted in Europe.':
+    'Trois étapes jusqu’à votre première note sur une page en ligne. Hébergé en Europe.',
+  'Your account': 'Votre compte',
+  'Your site': 'Votre site',
+  'The address you review.': 'L’adresse que vous relisez.',
+  'Put it on the site': 'Le mettre sur le site',
+  'The extension, or a script tag.': 'L’extension, ou une balise de script.',
+  'Preview of your site': 'Aperçu de votre site',
+  'your site': 'votre site',
+  'Your site shows here once you add it, with its pins.': 'Votre site s’affiche ici une fois ajouté, avec ses pins.',
+  'A preview of your site. Pins show the same way on the real page.':
+    'Un aperçu de votre site. Les pins s’affichent de la même façon sur la vraie page.',
+  'We send you a sign-in link. No password to make up.':
+    'Nous vous envoyons un lien de connexion. Aucun mot de passe à inventer.',
+  'Your workspace takes the name of your domain. Rename it whenever you like.':
+    'Votre workspace prend le nom de votre domaine. Renommez-le quand vous voulez.',
+  'A sign-in link is on its way to {email}. Open it in this browser: this page carries on by itself.':
+    'Un lien de connexion est en route vers {email}. Ouvrez-le dans ce navigateur : cette page continue toute seule.',
+  'The link works once, for fifteen minutes. Nothing in it asks for a password.':
+    'Le lien fonctionne une fois, pendant quinze minutes. Rien n’y demande un mot de passe.',
+  'Signed in as {email}': 'Connecté en tant que {email}',
+  'The workspace was not renamed. Try again.': 'Le workspace n’a pas été renommé. Réessayez.',
+  'Only an owner or an admin of the workspace renames it.': 'Seul un propriétaire ou un admin du workspace le renomme.',
+  Save: 'Enregistrer',
+  Rename: 'Renommer',
+  'Any page of it will do.': 'N’importe laquelle de ses pages convient.',
+  'Members of {workspace} see the notes': 'Les membres de {workspace} voient les notes',
+  'Everyone who visits sees the notes': 'Tous les visiteurs voient les notes',
+  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
+  Site: 'Site',
+  Change: 'Modifier',
+  '{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.':
+    '{site} est toujours dans vos sites, avec ses notes. Retirez-le dans Sites si vous ne le relisez plus.',
+  // The screen of an invitation (FRU-241).
+  '{workspace} invited you': '{workspace} vous a invité',
+  'Join {workspace} on Fruitback': 'Rejoignez {workspace} sur Fruitback',
+  'You join as an admin: you manage the sites, the connectors and the members of {workspace}.':
+    'Vous rejoignez en tant qu’admin : vous gérez les sites, les connecteurs et les membres de {workspace}.',
+  'You join as a member: you see and leave notes on every site of {workspace}.':
+    'Vous rejoignez en tant que membre : vous voyez et laissez des notes sur tous les sites de {workspace}.',
+  'Signed in as': 'Connecté en tant que',
+  'Not {email}?': 'Vous n’êtes pas {email} ?',
+  'One more invitation': 'Une autre invitation',
+  '{count} more invitations': '{count} autres invitations',
+  'You are in': 'Vous y êtes',
+  'One more thing: the extension shows the notes on the sites of {workspace} and lets you leave yours.':
+    'Une dernière chose : l’extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
+  'One more thing: the extension shows the notes on {site} and lets you leave yours.':
+    'Une dernière chose : l’extension affiche les notes sur {site} et vous permet de laisser les vôtres.',
+  'Add to Chrome': 'Ajouter à Chrome',
+  'Open {site}': 'Ouvrir {site}',
+  'Using Firefox?': 'Vous utilisez Firefox ?',
+  'Get the Firefox add-on': 'Obtenir le module pour Firefox',
+  // The last step of the setup, and the example page of its preview (FRU-242).
+  'An example page. Pins show the same way on your site.':
+    'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
+  'Leave feedback': 'Laisser un feedback',
+  'Click Leave feedback, then any part of the page.':
+    'Cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Use one, or both.': 'Utilisez l’un, ou les deux.',
+  'Browser extension': 'Extension de navigateur',
+  "Nothing to deploy. Right for a client's site you cannot touch.":
+    'Rien à déployer. Convient au site d’un client auquel vous ne pouvez pas toucher.',
+  'Add it, then connect this browser: a page opens, and you click the Fruitback icon there.':
+    'Ajoutez-la, puis connectez ce navigateur : une page s’ouvre, et vous y cliquez sur l’icône Fruitback.',
+  'Script tag': 'Balise de script',
+  'Before the closing body tag. Members see their pins on every visit.':
+    'Avant la balise body fermante. Les membres voient leurs pins à chaque visite.',
+  'Before the closing body tag. Every visitor sees the pins.':
+    'Avant la balise body fermante. Chaque visiteur voit les pins.',
+  'Copy script': 'Copier le script',
+  'Open the site, click Leave feedback, then any part of the page.':
+    'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Open the console': 'Ouvrir la console',
+  // The first note of the setup (FRU-242).
+  'Waiting for your first note.': 'En attente de votre première note.',
+  'Extension on': 'Extension activée',
+  'Script on the site': 'Script sur le site',
+  'Fruitback on the site': 'Fruitback sur le site',
+  'First note received': 'Première note reçue',
+  'First note received just now': 'Première note reçue à l’instant',
+  'First note received {when}': 'Première note reçue {when}',
+  'Your first note is in': 'Votre première note est arrivée',
+  'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.':
+    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers Linear ou votre propre API quand vous voulez.',
+  '{name} · just now': '{name} · à l’instant',
+  // How long ago (ago.ts).
+  'Just now': 'À l’instant',
+  '{count} min ago': 'il y a {count} min',
+  '{count} h ago': 'il y a {count} h',
+  Yesterday: 'Hier',
+  '{count} days ago': 'il y a {count} jours',
+  // Sites, second time (FRU-270).
+  'On the page with': 'Sur la page avec',
+  'Last note': 'Dernière note',
+  Statuses: 'Statuts',
+  'None yet': 'Aucune pour l’instant',
+  'Extension, script': 'Extension, script',
+  'Waiting for the first note': 'En attente de la première note',
+  '1 not delivered yet': '1 pas encore livrée',
+  '{count} not delivered yet': '{count} pas encore livrées',
+  '1 note: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '1 note : {new} nouvelle, {todo} à faire, {progress} en cours, {done} terminée, {closed} fermée',
+  '{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '{count} notes : {new} nouvelles, {todo} à faire, {progress} en cours, {done} terminées, {closed} fermées',
 };

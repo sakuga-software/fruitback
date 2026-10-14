@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Fruitback popup, on</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#dd2c27}
+button{cursor:pointer}
+.b-ext:hover{background:#b91c1c !important}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-icon:hover{background:#f4f4f5 !important}
+.num{font-variant-numeric:tabular-nums}
+.switch{appearance:none;-webkit-appearance:none;width:40px;height:24px;border-radius:999px;background:#8a8a93;position:relative;margin:0;cursor:pointer;flex:none;transition:background .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.16,1,.3,1)}
+.switch:checked{background:#18181b}
+.switch:checked::after{transform:translateX(16px)}
+</style>
+</helmet>
+<div style="width: 360px; height: 540px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff; color: #18181b; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased">
+  <div style="display: flex; align-items: center; gap: 4px; padding: 10px 10px 10px 16px; border-bottom: 1px solid #e4e4e7">
+    <img src="../assets/3e4b1a38775a5dbf.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block; margin-right: auto">
+    <span aria-label="Signed in as Mathieu" role="img" style="width: 28px; height: 28px; border-radius: 999px; background: #3f3f46; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">M</span>
+    <button type="button" class="b-icon" aria-label="Settings and every site" style="width: 36px; height: 36px; border: 0; border-radius: 10px; background: #ffffff; color: #6b6b74; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 16px; height: 16px"><path fill="currentColor" fill-rule="evenodd" d="M19.62 10.33 L22.10 10.60 L22.10 13.40 L19.62 13.67 L18.57 16.21 L20.13 18.16 L18.16 20.13 L16.21 18.57 L13.67 19.62 L13.40 22.10 L10.60 22.10 L10.33 19.62 L7.79 18.57 L5.84 20.13 L3.87 18.16 L5.43 16.21 L4.38 13.67 L1.90 13.40 L1.90 10.60 L4.38 10.33 L5.43 7.79 L3.87 5.84 L5.84 3.87 L7.79 5.43 L10.33 4.38 L10.60 1.90 L13.40 1.90 L13.67 4.38 L16.21 5.43 L18.16 3.87 L20.13 5.84 L18.57 7.79 Z M15.10 12 A3.1 3.1 0 1 0 8.90 12 A3.1 3.1 0 1 0 15.10 12 Z"></path></svg></button>
+  </div>
+
+  <div style="flex: 1 1 auto; padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 18px">
+    <label style="display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer">
+      <span>
+        <span style="display: block; font-size: 18px; line-height: 1.3; font-weight: 700; letter-spacing: -0.01em">staging.acme.dev</span>
+        <span style="display: block; margin-top: 2px; font-size: 13px; color: #6b6b74">On · Sakuga</span>
+      </span>
+      <input type="checkbox" role="switch" checked="" class="switch" aria-label="Fruitback on staging.acme.dev">
+    </label>
+
+    <section aria-labelledby="page-notes">
+      <h2 id="page-notes" style="margin: 0 0 6px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 600"><span>On this page</span><span class="num" style="color: #6b6b74; font-weight: 400">8 notes</span></h2>
+      <ul style="list-style: none; margin: 0; padding: 0">
+        <li style="display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #e4e4e7"><span aria-hidden="true" style="width: 11px; height: 11px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #dd2c27"></span><span style="flex: 1; font-size: 13px">New</span><span class="num" style="font-size: 13px; font-weight: 600">2</span></li>
+        <li style="display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #e4e4e7"><span aria-hidden="true" style="width: 11px; height: 11px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #2563eb"></span><span style="flex: 1; font-size: 13px">To do</span><span class="num" style="font-size: 13px; font-weight: 600">1</span></li>
+        <li style="display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #e4e4e7"><span aria-hidden="true" style="width: 11px; height: 11px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #f59e0b"></span><span style="flex: 1; font-size: 13px">In progress</span><span class="num" style="font-size: 13px; font-weight: 600">3</span></li>
+        <li style="display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #e4e4e7"><span aria-hidden="true" style="width: 11px; height: 11px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d"></span><span style="flex: 1; font-size: 13px">Done</span><span class="num" style="font-size: 13px; font-weight: 600">2</span></li>
+        <li style="display: flex; align-items: center; gap: 10px; padding: 7px 0"><span aria-hidden="true" style="width: 11px; height: 11px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #64748b"></span><span style="flex: 1; font-size: 13px">Closed</span><span class="num" style="font-size: 13px; font-weight: 600; color: #6b6b74">0</span></li>
+      </ul>
+    </section>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: auto">
+      <button type="button" class="b-ext" style="height: 44px; border: 0; border-radius: 10px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Leave feedback</button>
+      <button type="button" class="b-wide" style="height: 40px; border: 1px solid #8a8a93; border-radius: 10px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Show every note of the page</button>
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid #e4e4e7; font-size: 13px; color: #6b6b74">
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">mathieu@sakuga.dev</span>
+    <a href="Sites.dc.html" style="font-weight: 600; white-space: nowrap">Open the console</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:360,&quot;height&quot;:540}}">
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>

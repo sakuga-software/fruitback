@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page, type Route, expect, test } from '@playwright/test';
+import { WORKER_ORIGIN } from './pin.ts';
 import {
   CONSOLE as WORKER_CONSOLE,
   SESSION_COOKIE,
@@ -335,6 +336,43 @@ test('a list of browsers that was not read is no list: it says so, and reads aga
   await expect(where.getByRole('button')).toHaveCount(0);
 });
 
+for (const state of ['read', 'not read'] as const) {
+  test(`« Sign out » keeps its place when the list of the browsers is ${state}, and a press across it is heard`, async ({
+    page,
+  }) => {
+    const worker = await workerWith(page);
+    worker.sessions = state === 'read' ? SESSIONS.slice(0, 1) : undefined;
+    // The list is held: the screen is drawn without it, as on a slow line.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(`${WORKER_ORIGIN}/console/sessions`, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    await page.goto(`${CONSOLE}/w/w1/account`);
+    const out = page.getByRole('button', { name: 'Sign out', exact: true });
+    const everywhere = page.getByRole('button', { name: 'Sign out everywhere', exact: true });
+    await expect(out).toBeVisible();
+    await expect(section(page, 'Where you are signed in').getByText('Loading…')).toBeVisible();
+    const before = { out: await out.boundingBox(), everywhere: await everywhere.boundingBox() };
+
+    // The press starts before the list arrives, and ends after.
+    await page.mouse.move(before.out!.x + before.out!.width / 2, before.out!.y + before.out!.height / 2);
+    await page.mouse.down();
+    release();
+    await expect(
+      state === 'read'
+        ? page.getByText('Console · this browser')
+        : section(page, 'Where you are signed in').getByRole('alert'),
+    ).toBeVisible();
+    expect({ out: await out.boundingBox(), everywhere: await everywhere.boundingBox() }).toEqual(before);
+    await page.mouse.up();
+
+    await expect.poll(() => worker.sent).toContain('POST /console/auth/sign-out');
+    await expect(page).toHaveURL(`${CONSOLE}/setup`);
+  });
+}
+
 test('« Sign out everywhere » asks twice, and a sign-out that the worker did not confirm says so', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
@@ -442,11 +480,13 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     return answer.status;
   }
 
-  /** A browser of its own, signed in as `email` by the link of the mail, on the sites of the workspace. */
+  /**
+   * A browser of its own, signed in as `email` by the link of the mail, on the sites of the workspace.
+   * The first one makes the workspace, named after the domain of the address (FRU-239).
+   */
   async function browserOf(
     browser: import('@playwright/test').Browser,
     email: string,
-    workspace?: string,
   ): Promise<{ page: Page; context: BrowserContext }> {
     const context = await browser.newContext();
     contexts.push(context);
@@ -455,19 +495,19 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     const before = (await worker.sent()).length;
     await page.goto(`${WORKER_CONSOLE}/setup`);
     await page.getByRole('textbox', { name: 'Work email' }).fill(email);
-    if (workspace !== undefined) await page.getByRole('textbox', { name: 'Workspace name' }).fill(workspace);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Email me a link', exact: true }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(before + 1);
     const link = /http:\/\/\S+\/sign-in#\S+/.exec((await worker.sent()).at(-1) ?? '')?.[0];
     expect(link, 'no sign-in link in the message').toBeDefined();
     await page.goto(link as string);
     // The link is spent when the worker takes the cookie of this browser: the front door is asked after.
     await expect.poll(() => accepted(context)).toBe(200);
-    // The name typed before makes the workspace, after the sign-in: the next step of the setup says it is made.
-    if (workspace !== undefined)
-      await expect(page.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
-    await page.goto(WORKER_CONSOLE);
-    await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
+    // The setup is at its second step: the workspace is there, with no site yet.
+    await expect(page.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+    const read = (await worker.received())
+      .map((each) => /^\/console\/workspaces\/(ws_[0-9a-f]{20})\/sites$/.exec(each.path)?.[1])
+      .filter((id) => id !== undefined);
+    await page.goto(`${WORKER_CONSOLE}/w/${read.at(-1) as string}/sites`);
     await expect(page.getByRole('heading', { name: 'No site yet' })).toBeVisible();
 
     return { page, context };
@@ -504,7 +544,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
   test('the extension stays connected when My account disconnects a browser, and when it signs out everywhere', async ({
     browser,
   }) => {
-    const first = await browserOf(browser, 'ana@acme.dev', 'Acme');
+    const first = await browserOf(browser, 'ana@acme.dev');
     const second = await browserOf(browser, 'ana@acme.dev');
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(first.page.url())?.[1];
     expect(workspace).toBeDefined();
@@ -554,7 +594,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
   test('one browser disconnects the other, which learns it at its next call; « Sign out everywhere » ends both', async ({
     browser,
   }) => {
-    const first = await browserOf(browser, 'ana@acme.dev', 'Acme');
+    const first = await browserOf(browser, 'ana@acme.dev');
     const second = await browserOf(browser, 'ana@acme.dev');
     expect(await accepted(first.context)).toBe(200);
     expect(await accepted(second.context)).toBe(200);

@@ -19,9 +19,9 @@ import {
  * adds a site, and the menu of a row.
  *
  * The values are read in the code of the mockup (`09-console-sites.html`), and the boxes in its
- * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The table has the columns that the worker of today fills: the
- * count of notes, the way on the page and the last note wait for FRU-237. The worker is answered by
- * stubs.
+ * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
+ * table has the six columns of the mockup: the notes by status, the way on the page and the last note
+ * are the summary of the sites (FRU-237, FRU-270). The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -36,14 +36,44 @@ const WHITE = '#ffffff';
 
 const LINEAR = { connector: 'c1', teamId: 't1', label: 'Linear · Acme web' };
 const ADDRESS = { connector: 'c2', label: 'REST API · hooks.acme.dev/feedback' };
+const MINUTE = 60_000;
+/**
+ * The moments are counted back from noon of a fixed day, and every test that reads a moment sets the
+ * clock of the browser there: counted from the clock of the machine, « 2 h ago » read « Yesterday »
+ * between midnight and two in the morning.
+ */
+const NOON = new Date(2026, 9, 13, 12, 0, 0);
+const since = (minutes: number, from: Date = NOON) => new Date(from.getTime() - minutes * MINUTE).toISOString();
+const counts = (seeded: number, green: number, ripening: number, ripe: number, composted: number) => ({
+  seeded,
+  green,
+  ripening,
+  ripe,
+  composted,
+});
+/** The summary of the sites (FRU-237): the counts of the mockup, its ways on the page, its last notes. */
 const SITES = [
-  { id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destination: LINEAR, destinations: [LINEAR] },
+  {
+    id: 's1',
+    origin: 'https://staging.acme.dev',
+    visibility: 'members',
+    destination: LINEAR,
+    destinations: [LINEAR],
+    notes: counts(3, 2, 4, 2, 1),
+    via: ['script', 'extension'],
+    lastNoteAt: since(125),
+    undelivered: 0,
+  },
   {
     id: 's2',
     origin: 'https://acme.dev',
     visibility: 'everyone',
     destination: LINEAR,
     destinations: [LINEAR, ADDRESS],
+    notes: counts(6, 4, 5, 7, 1),
+    via: ['script'],
+    lastNoteAt: since(12),
+    undelivered: 0,
   },
   {
     id: 's3',
@@ -51,16 +81,28 @@ const SITES = [
     visibility: 'everyone',
     destination: ADDRESS,
     destinations: [ADDRESS],
+    notes: counts(2, 1, 0, 1, 0),
+    via: ['script'],
+    lastNoteAt: since(40),
+    undelivered: 2,
   },
-  { id: 's4', origin: 'https://preview.lumen.studio', visibility: 'members' },
+  {
+    id: 's4',
+    origin: 'https://preview.lumen.studio',
+    visibility: 'members',
+    notes: counts(0, 0, 0, 0, 0),
+    via: [],
+    undelivered: 0,
+  },
 ];
 
 type Sent = { method: string; pathname: string; body: unknown };
 type Worker = {
   /** What the console sent that changes something. */
   sent: Sent[];
-  /** How the worker answers the read of the sites. */
+  /** How the worker answers the read of the sites. `waits` holds it until `release` is called. */
   read: 'list' | 'fails' | 'waits';
+  release: () => void;
   /** What the worker answers to a site that is added, and to one that is removed. */
   refuses?: { status: number; error: string };
 };
@@ -72,7 +114,11 @@ async function workerWith(
   sites: readonly unknown[] = SITES,
   locale: 'en' | 'fr' = 'en',
 ): Promise<Worker> {
-  const worker: Worker = { sent: [], read: 'list' };
+  let released: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    released = resolve;
+  });
+  const worker: Worker = { sent: [], read: 'list', release: () => released() };
   const kept = [...sites];
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
@@ -80,7 +126,7 @@ async function workerWith(
     const one = /^\/console\/workspaces\/w1\/sites(?:\/(\w+))?$/.exec(pathname);
     if (one === null) return undefined;
     if (method === 'GET') {
-      if (worker.read === 'waits') return new Promise<void>(() => {});
+      if (worker.read === 'waits') return held.then(() => route.fulfill({ json: { sites: kept } }));
       if (worker.read === 'fails') return route.fulfill({ status: 500, json: { error: 'unknown' } });
 
       return route.fulfill({ json: { sites: kept } });
@@ -124,7 +170,8 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
-test('the list is the table of the mockup, with the columns the worker of today fills', async ({ page }) => {
+test('the list is the table of the mockup, with its six columns and the legend of the statuses', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
   await workerWith(page);
   await open(page);
 
@@ -135,15 +182,33 @@ test('the list is the table of the mockup, with the columns the worker of today 
   expectBox(await box(add), { x: 1211, y: 58, width: 110, height: 44 }, 2, '« Add a site »');
   expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '28px' });
 
-  // Three columns, each a column header. « Actions » is said and not shown.
+  // Six columns, each a column header. « Actions » is said and not shown.
   const headers = table(page).locator('thead th');
-  await expect(headers).toHaveText(['Site', 'Notes go to', 'Actions']);
+  await expect(headers).toHaveText(['Site', 'Notes', 'On the page with', 'Notes go to', 'Last note', 'Actions']);
   for (const header of await headers.all()) await expect(header).toHaveAttribute('scope', 'col');
   const hidden = await box(headers.last().locator('span'));
   expect.soft({ width: hidden.width, height: hidden.height }).toEqual({ width: 1, height: 1 });
-  // The count of notes, the way on the page and the last note wait for the summary of the sites
-  // (FRU-237), and the legend of the statuses comes with them.
-  await expect(page.getByRole('list', { name: 'Statuses' })).toHaveCount(0);
+
+  // The legend of the statuses, above the table: the five words, each after its drop.
+  const legend = page.getByRole('list', { name: 'Statuses' });
+  await expect(legend.getByRole('listitem')).toHaveText(['New', 'To do', 'In progress', 'Done', 'Closed']);
+  expect.soft(await styles(legend, ['font-size', 'column-gap', 'row-gap', 'margin-bottom'])).toEqual({
+    'font-size': '13px',
+    'column-gap': '18px',
+    'row-gap': '6px',
+    'margin-bottom': '12px',
+  });
+  expect.soft(await painted(legend, 'color')).toEqual(rgb(MUTED));
+  const drops = legend.locator('[aria-hidden="true"]');
+  await expect(drops).toHaveCount(5);
+  const colours = ['#dd2c27', '#2563eb', '#f59e0b', '#15803d', '#64748b'];
+  for (const [index, colour] of colours.entries())
+    expect.soft(await painted(drops.nth(index), 'backgroundColor'), `drop ${index}`).toEqual(rgb(colour));
+  expect.soft(await styles(legend.getByRole('listitem').first(), ['column-gap'])).toEqual({ 'column-gap': '7px' });
+  const drop = await box(drops.first());
+  expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 9, height: 9 });
+  // The table starts where the mockup draws it, under the legend.
+  expectBox(await box(table(page).locator('table')), { x: 298, y: 159, width: 1022 }, 2, 'the table');
 
   // The frame and the cells, as the mockup writes them.
   expect.soft(await styles(table(page), ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
@@ -196,11 +261,63 @@ test('the list is the table of the mockup, with the columns the worker of today 
   expect.soft(await painted(audience, 'color')).toEqual(rgb(MUTED));
   await expect(row(page, 'support.acme.dev').getByText('Everyone who visits', { exact: true })).toBeVisible();
 
-  // Where the notes go: the tracker, and the place in it.
-  await expect(first.locator('td').nth(1)).toHaveText('LinearTeam Acme web');
-  await expect(row(page, 'acme.dev').locator('td').nth(1)).toContainText('Team Acme web and 1 more');
-  await expect(row(page, 'support.acme.dev').locator('td').nth(1)).toHaveText('REST APIhooks.acme.dev/feedback');
-  await expect(row(page, 'preview.lumen.studio').locator('td').nth(1)).toHaveText('Kept in FruitbackNo tracker yet');
+  // The notes: how many, at 600 in 22 px, and a bar of 128 × 8 px whose name says the counts again.
+  const bar = first.getByRole('img', {
+    name: '12 notes: 3 new, 2 to do, 4 in progress, 2 done, 1 closed',
+    exact: true,
+  });
+  // The bar is 48 px into its column (16 of padding, 22 of count, 10 of gap). The column itself is
+  // where the hosts and the name of the workspace put it: « Members of Acme » is shorter than the
+  // name of the mockup.
+  const column = await box(headers.nth(1));
+  expectBox(await box(bar), { x: column.x + 48, width: 128, height: 8 }, 0.5, 'the bar of a site');
+  expect.soft(await styles(bar, ['border-top-left-radius', 'column-gap'])).toEqual({
+    'border-top-left-radius': '999px',
+    'column-gap': '2px',
+  });
+  // A status with no note takes no room in the bar.
+  await expect(bar.locator('span')).toHaveCount(5);
+  await expect(
+    row(page, 'support.acme.dev')
+      .getByRole('img', { name: '4 notes: 2 new, 1 to do, 0 in progress, 1 done, 0 closed', exact: true })
+      .locator('span'),
+  ).toHaveCount(3);
+  const total = first.locator('td').nth(1).getByText('12', { exact: true });
+  expect.soft(await styles(total, ['width', 'text-align', 'font-weight', 'font-variant-numeric'])).toEqual({
+    width: '22px',
+    'text-align': 'right',
+    'font-weight': '600',
+    'font-variant-numeric': 'tabular-nums',
+  });
+  const waiting = row(page, 'preview.lumen.studio').locator('td').nth(1);
+  await expect(waiting).toHaveText('Waiting for the first note');
+  expect.soft(await styles(waiting.locator('span'), ['font-size'])).toEqual({ 'font-size': '13px' });
+  expect.soft(await painted(waiting.locator('span'), 'color')).toEqual(rgb(MUTED));
+
+  // How the notes came, and the last one.
+  await expect(first.locator('td').nth(2)).toHaveText('Extension, script');
+  await expect(row(page, 'acme.dev').locator('td').nth(2)).toHaveText('Script');
+  await expect(first.locator('td').nth(4)).toHaveText('2 h ago');
+  await expect(row(page, 'acme.dev').locator('td').nth(4)).toHaveText('12 min ago');
+  const last = row(page, 'support.acme.dev').locator('td').nth(4);
+  await expect(last).toHaveText('40 min ago');
+  expect.soft(await styles(last, ['white-space', 'font-variant-numeric'])).toEqual({
+    'white-space': 'nowrap',
+    'font-variant-numeric': 'tabular-nums',
+  });
+  expect.soft(await painted(last, 'color')).toEqual(rgb(MUTED));
+  // A site with no note yet: a dot for the eye, and words for a screen reader.
+  const lumen = row(page, 'preview.lumen.studio');
+  for (const index of [2, 4]) {
+    await expect(lumen.locator('td').nth(index).locator('[aria-hidden="true"]')).toHaveText('·');
+    await expect(lumen.locator('td').nth(index).locator('.sr-only')).toHaveText('None yet');
+  }
+
+  // Where the notes go: the tracker, and the place in it, or the notes an address did not take.
+  await expect(first.locator('td').nth(3)).toHaveText('LinearTeam Acme web');
+  await expect(row(page, 'acme.dev').locator('td').nth(3)).toContainText('Team Acme web and 1 more');
+  await expect(row(page, 'support.acme.dev').locator('td').nth(3)).toHaveText('REST API2 not delivered yet');
+  await expect(lumen.locator('td').nth(3)).toHaveText('Kept in FruitbackNo tracker yet');
 
   // The button of a row: 36 px, named after its site, and it opens a menu.
   const button = more(page, 'staging.acme.dev');
@@ -232,6 +349,23 @@ test('the list is the table of the mockup, with the columns the worker of today 
   await expect(page.getByText('see where every note went')).toHaveCount(0);
 
   await expectNoViolation(page, 'the list');
+});
+
+test('the last note is counted in hours for a whole day, across midnight, then by the calendar', async ({ page }) => {
+  // Half past midnight: a note of 22:30 is « 2 h ago », not « Yesterday »; one of midnight the day
+  // before is « Yesterday »; one of 23:30 two days before is « 2 days ago ».
+  const halfPastMidnight = new Date(2026, 9, 13, 0, 30, 0);
+  await page.clock.setFixedTime(halfPastMidnight);
+  const at = (minutes: number) => since(minutes, halfPastMidnight);
+  await workerWith(page, 'owner', [
+    { ...SITES[0], lastNoteAt: at(120) },
+    { ...SITES[1], lastNoteAt: at(24 * 60 + 30) },
+    { ...SITES[2], lastNoteAt: at(25 * 60) },
+  ]);
+  await open(page);
+  await expect(row(page, 'staging.acme.dev').locator('td').nth(4)).toHaveText('2 h ago');
+  await expect(row(page, 'acme.dev').locator('td').nth(4)).toHaveText('Yesterday');
+  await expect(row(page, 'support.acme.dev').locator('td').nth(4)).toHaveText('2 days ago');
 });
 
 test('a workspace with no site shows the card of the mockup, and its form adds the first site', async ({ page }) => {
@@ -366,6 +500,38 @@ test('while the sites are read, the screen says so and shows neither state', asy
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
 });
 
+test('the counts come with the list: nothing that a pointer can reach moves when the list arrives', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.read = 'waits';
+  await open(page);
+  await expect(page.locator('main').getByText('Loading…')).toBeVisible();
+  const reachable = [
+    page.getByRole('link', { name: 'Connectors', exact: true }),
+    page.getByRole('link', { name: 'My account', exact: true }),
+    page.locator('main h1'),
+  ];
+  const before = await Promise.all(reachable.map(box));
+
+  worker.release();
+  // The rows and their counts are drawn in the same paint: when the table is there, so are the bars.
+  await page.waitForFunction(() => document.querySelector('main table') !== null);
+  expect(await table(page).getByRole('img').count()).toBe(3);
+  const button = more(page, 'support.acme.dev');
+  const first = await box(button);
+  await expect(row(page, 'support.acme.dev').getByRole('img', { name: /^4 notes/ })).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await box(button)).toEqual(first);
+  expect(await Promise.all(reachable.map(box))).toEqual(before);
+  expectBox(
+    await box(page.getByRole('button', { name: 'Add a site', exact: true })),
+    { x: 1211, y: 58 },
+    2,
+    '« Add a site »',
+  );
+});
+
 test('« Add a site » opens the form above the table, and a refusal keeps what was typed', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
@@ -485,7 +651,10 @@ test('a destination with no words of the worker reads as a tracker, and not as n
     },
   ]);
   await open(page);
-  await expect(row(page, 'staging.acme.dev').locator('td').nth(1)).toHaveText('A tracker');
+  await expect(row(page, 'staging.acme.dev').locator('td').nth(3)).toHaveText('A tracker');
+  // Nor does it send the summary of the sites: the cells say that nothing is known, and draw no bar.
+  await expect(row(page, 'staging.acme.dev').locator('td').nth(1)).toHaveText('·None yet');
+  await expect(row(page, 'staging.acme.dev').getByRole('img')).toHaveCount(0);
 });
 
 test('removing a site asks twice, and a site that is still there says so on its row', async ({ page }) => {
@@ -540,7 +709,14 @@ test('a member installs and changes nothing; a guest does not read where the not
   await workerWith(page, 'member');
   await open(page);
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
-  await expect(table(page).locator('thead th')).toHaveText(['Site', 'Notes go to', 'Actions']);
+  await expect(table(page).locator('thead th')).toHaveText([
+    'Site',
+    'Notes',
+    'On the page with',
+    'Notes go to',
+    'Last note',
+    'Actions',
+  ]);
   await more(page, 'staging.acme.dev').click();
   await expect(page.getByRole('menuitem')).toHaveText(['Install']);
   await page.keyboard.press('Escape');
@@ -550,10 +726,25 @@ test('a member installs and changes nothing; a guest does not read where the not
   await workerWith(
     page,
     'guest',
-    SITES.map(({ id, origin, visibility }) => ({ id, origin, visibility })),
+    SITES.map(({ id, origin, visibility, notes, via, lastNoteAt }) => ({
+      id,
+      origin,
+      visibility,
+      notes,
+      via,
+      lastNoteAt,
+    })),
   );
   await open(page);
-  await expect(table(page).locator('thead th')).toHaveText(['Site', 'Actions']);
+  // The notes of the sites shared with a guest are theirs to count; where they go is not.
+  await expect(table(page).locator('thead th')).toHaveText([
+    'Site',
+    'Notes',
+    'On the page with',
+    'Last note',
+    'Actions',
+  ]);
+  await expect(row(page, 'staging.acme.dev').getByRole('img', { name: /^12 notes/ })).toBeVisible();
   await expect(page.getByText('Kept in Fruitback')).toHaveCount(0);
   await expect(page.getByText('A site with no tracker keeps its notes in Fruitback.')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
@@ -576,22 +767,35 @@ for (const locale of ['en', 'fr'] as const) {
         ? { more: 'More for', install: 'Install', previews: 'Preview builds', add: 'Add a site' }
         : { more: 'Plus pour', install: 'Installer', previews: 'Previews', add: 'Ajouter un site' };
     expect.soft(await sideScroll(page), 'the list').toBe(0);
-    // The table fits: nothing of a row is past the edge, so what opens under a row is on screen.
-    expect.soft(await table(page).evaluate((frame) => frame.scrollWidth - frame.clientWidth), 'the table').toBe(0);
+    // The six columns need 860 px: the table scrolls in its frame, and the page does not.
+    const frame = table(page);
+    const wider = () => frame.evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect.soft(await wider(), 'the table').toBe(860 - (await frame.evaluate((element) => element.clientWidth)));
 
+    // What opens under a row stays in what is seen of the frame, wherever the table is scrolled.
+    const seen = async (what: Locator, name: string) => {
+      const inside = await box(what);
+      const around = await box(frame);
+      expect.soft(inside.x, `${name}: left`).toBeGreaterThanOrEqual(around.x);
+      expect.soft(inside.x + inside.width, `${name}: right`).toBeLessThanOrEqual(around.x + around.width);
+    };
     const button = page.getByRole('button', { name: `${words.more} staging.acme.dev`, exact: true });
     await button.click();
     await page.getByRole('menuitem', { name: words.install, exact: true }).click();
     expect.soft(await sideScroll(page), 'the installation').toBe(0);
-    // The script is one long line: it scrolls in its own block, and the table stays as wide as its frame.
-    const fits = () => table(page).evaluate((frame) => frame.scrollWidth - frame.clientWidth);
-    expect.soft(await fits(), 'the table, with the installation under a row').toBe(0);
+    const under = frame.locator('tbody tr').nth(1).locator('td > div');
+    await seen(under, 'the installation');
+    await frame.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
+    await seen(under, 'the installation, the table scrolled to its end');
+    // The script is one long line: it scrolls in its own block, and does not widen the table.
     expect.soft(await page.locator('pre').evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
+    expect.soft(await frame.evaluate((element) => element.scrollWidth), 'the table, with the script').toBe(860);
+    await frame.evaluate((element) => element.scrollTo({ left: 0 }));
     await button.click();
     await page.getByRole('menuitem', { name: words.previews, exact: true }).click();
     await expect(page.getByRole('textbox').first()).toBeVisible();
     expect.soft(await sideScroll(page), 'the proof of a domain').toBe(0);
-    expect.soft(await fits(), 'the table, with the proof of a domain under a row').toBe(0);
+    await seen(under, 'the proof of a domain');
     await page.getByRole('button', { name: words.add, exact: true }).click();
     expect.soft(await sideScroll(page), 'the form').toBe(0);
 

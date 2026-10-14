@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './e2e/worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './e2e/worker-sessions.ts';
 
 /**
  * The E2E suite (FRU-19).
@@ -22,8 +22,10 @@ export default defineConfig({
   // Runs after the servers are up and before the first spec: see `warm-up.ts` for what it absorbs.
   globalSetup: './e2e/warm-up.ts',
   // The worker's fake Linear is one process-wide store, so the specs share state. They stay apart by
-  // capturing on a different page URL each — the seed's page identity — rather than by locking.
-  workers: 1,
+  // capturing on a different page URL each — the seed's page identity — rather than by locking. So
+  // files run side by side on CI (FRU-268); the tests of one file still run in order, in one worker.
+  // Locally, one: the machine runs other work too.
+  workers: process.env.CI ? 4 : 1,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -39,39 +41,36 @@ export default defineConfig({
   },
   webServer: [
     {
-      // Not the `--watch` variants: Playwright kills the process it spawned, and a watcher would
+      // Not the `--watch` variant: Playwright kills the process it spawned, and a watcher would
       // leave its child behind on CI.
-      command: 'pnpm --filter @fruitback/worker serve:fake',
+      command: 'pnpm --filter @fruitback/worker serve:pglite',
       url: `${WORKER}/health`,
-      // Never reused. A worker already on this port was started without the env below: it holds no
-      // session store, or not the one the `pair` command writes to, and its rate limit trips mid-suite.
+      // Never reused. A worker already on this port holds the notes and the sessions of whoever
+      // started it, and maybe not the rate limit below.
       reuseExistingServer: false,
       env: {
-        ALLOWED_ORIGINS: PLAYGROUND,
         // Every request comes from the same loopback address, so the production ceiling of 20/min
         // would be hit mid-suite and report itself as a mystery 429.
         RATE_LIMIT_PER_MINUTE: '2000',
         TRUSTED_PROXY_HOPS: '0',
-        // The team-mode spec pairs the extension, and the `pair` command reads the same two values.
-        ...WORKER_SESSION_ENV,
       },
     },
     {
-      // The team mode's worker. On `read: 'public'` a pin read back proves nothing about the relay,
-      // because the page could read it with no credential. It shares the session file, so one
-      // pairing code works on both workers.
-      command: 'node src/main.ts',
-      cwd: 'apps/worker',
+      // The team mode's worker. On a site that everyone reads, a pin read back proves nothing about
+      // the relay, because the page could read it with no credential: the site of this worker is
+      // read by a session of its workspace only. It has a database of its own, so a spec pairs with
+      // the worker it is about to ask.
+      command: 'pnpm --filter @fruitback/worker serve:pglite',
       url: `${AUTHENTICATED_WORKER_ORIGIN}/health`,
       reuseExistingServer: false,
       env: {
-        FRUITBACK_STORE: 'memory',
         PORT: new URL(AUTHENTICATED_WORKER_ORIGIN).port,
-        FRUITBACK_READ: 'authenticated',
-        ALLOWED_ORIGINS: PLAYGROUND,
+        FRUITBACK_DEV_VISIBILITY: 'members',
+        // The notes of this worker are in its database, where the first one keeps them on the Linear
+        // in memory: the specs of the widget read the states and the replies that only it gives.
+        FRUITBACK_STORE: 'postgres',
         RATE_LIMIT_PER_MINUTE: '2000',
         TRUSTED_PROXY_HOPS: '0',
-        ...WORKER_SESSION_ENV,
       },
     },
     {
