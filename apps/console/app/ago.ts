@@ -9,7 +9,8 @@ function dayOf(at: Date): number {
 }
 
 /**
- * How long ago something happened, in the words of the mockup: « 12 min ago », « 2 h ago »,
+ * How long ago something happened, in the words of the mockup: « 12 min ago », « 2 h ago » for the
+ * 24 hours before, then by the day of the calendar:
  * « Yesterday », « 3 days ago » for a week, then the day (« Oct 3 », with its year when it is not this
  * year).
  *
@@ -22,10 +23,11 @@ export function ago(iso: string, now: number = Date.now()): string {
   const past = Math.max(0, now - at.getTime());
   if (past < MINUTE) return t('Just now');
   if (past < HOUR) return t('{count} min ago', { count: Math.floor(past / MINUTE) });
+  // Hours for a whole day: a note of 22:30 read at 00:30 is « 2 h ago », not « Yesterday ».
+  if (past < 24 * HOUR) return t('{count} h ago', { count: Math.floor(past / HOUR) });
   const today = new Date(now);
   const days = Math.round((dayOf(today) - dayOf(at)) / (24 * HOUR));
-  if (days === 0) return t('{count} h ago', { count: Math.floor(past / HOUR) });
-  if (days === 1) return t('Yesterday');
+  if (days <= 1) return t('Yesterday');
   if (days < 7) return t('{count} days ago', { count: days });
 
   return at.toLocaleDateString(locale(), {

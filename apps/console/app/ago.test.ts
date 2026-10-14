@@ -20,9 +20,18 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago(before(2 * 60 * MIN + 59 * MIN), NOW), '2 h ago');
   });
 
-  it('says « Yesterday » for the day before, even less than 24 h ago', () => {
-    // 11 pm the day before, at noon: 13 hours, and another day.
-    assert.equal(ago(new Date(2026, 9, 12, 23, 0).toISOString(), NOW), 'Yesterday');
+  it('says hours for the 24 hours before, whatever the day: 22:30 read at 00:30 is « 2 h ago »', () => {
+    const halfPastMidnight = new Date(2026, 9, 13, 0, 30).getTime();
+    assert.equal(ago(new Date(2026, 9, 12, 22, 30).toISOString(), halfPastMidnight), '2 h ago');
+    assert.equal(ago(new Date(2026, 9, 12, 1, 0).toISOString(), halfPastMidnight), '23 h ago');
+    // 11 pm the day before, at noon: 13 hours.
+    assert.equal(ago(new Date(2026, 9, 12, 23, 0).toISOString(), NOW), '13 h ago');
+  });
+
+  it('says « Yesterday » past 24 hours, for the day before in the calendar', () => {
+    const halfPastMidnight = new Date(2026, 9, 13, 0, 30).getTime();
+    assert.equal(ago(new Date(2026, 9, 12, 0, 0).toISOString(), halfPastMidnight), 'Yesterday');
+    assert.equal(ago(new Date(2026, 9, 11, 23, 30).toISOString(), halfPastMidnight), '2 days ago');
     assert.equal(ago(new Date(2026, 9, 12, 0, 30).toISOString(), NOW), 'Yesterday');
   });
 
@@ -43,7 +52,7 @@ describe('how long ago something happened, in the words of the mockup', () => {
     setLocale('fr', false);
     assert.equal(ago(before(12 * MIN), NOW), 'il y a 12 min');
     assert.equal(ago(before(2 * 60 * MIN), NOW), 'il y a 2 h');
-    assert.equal(ago(new Date(2026, 9, 12, 23, 0).toISOString(), NOW), 'Hier');
+    assert.equal(ago(new Date(2026, 9, 12, 9, 0).toISOString(), NOW), 'Hier');
     assert.equal(ago(before(10_000), NOW), 'À l’instant');
     assert.equal(ago(new Date(2026, 9, 10, 9, 0).toISOString(), NOW), 'il y a 3 jours');
     assert.equal(ago(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), '3 oct.');
