@@ -919,12 +919,23 @@ the cookie from another origin, or from none, and takes it from the console`. **
   of the person before but the text they were typing, and sends nothing until it is loaded again.
   **The condition: the browser tells the page that the tab is shown again** (`focus`,
   `visibilitychange`); the worker does not check which account a tab believes it is.
+- **« Connect this browser » connects nothing without a press on « Connect »** (FRU-240). The page
+  shows the word, the browser and the account that the worker answers for the request, never what
+  the address of the page says, and sends the word and the account it showed: the worker refuses an
+  answer for another word, or from an account that changed since. A sign-in on that page, by a link
+  or a provider, leads back to the question. One answer per press: a second press while the first
+  is on its way sends nothing, and a request answered in another tab is read again, not answered
+  twice. **The condition: the person compares the word with the popup**; the page cannot know which
+  browser opened it. `e2e/console-connect.spec.ts` holds each of these, with planted violations.
 - **« Sign out » ends the session, or says that it did not** (FRU-204). The console stays on « My
   account » with « You are still signed in » when the worker did not confirm. The refresh cookie
   of the path of before, which a browser could hold for 30 days, opens nothing since FRU-150: no
   route reads it.
-- **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
-  or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
+- **The console holds no token** (FRU-148): no access token in its memory, no token in `localStorage`
+  or `sessionStorage`, and a cookie that `document.cookie` does not show. `sessionStorage` holds one
+  thing, for fifteen minutes at most: the id of a request of the extension, while a sign-in with a
+  provider started on « Connect this browser » (FRU-240). That id is public: it is in the address
+  the extension opened, and it signs nothing in without a session and a press. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.
   **With no condition since FRU-150**: the console has one path. Until then a worker that answered
   `GET /auth/providers` with no `betterAuth` was a worker of before, and the console held its

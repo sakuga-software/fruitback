@@ -606,4 +606,34 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No note matches.': 'Aucune note ne correspond.',
   'Clear the filters': 'Effacer les filtres',
   'see where every note went': 'voir où est partie chaque note',
+  // Connect this browser (FRU-240).
+  'This browser is not connected': 'Ce navigateur n’est pas connecté',
+  'The extension stays signed out. To connect it later, open its popup and sign in from there.':
+    'L’extension reste déconnectée. Pour la connecter plus tard, ouvrez sa fenêtre et connectez-vous depuis celle-ci.',
+  'This request no longer works': 'Cette demande ne fonctionne plus',
+  'A request works for fifteen minutes, and is answered once. Open the popup again, and sign in from there.':
+    'Une demande fonctionne quinze minutes, et reçoit une seule réponse. Rouvrez la fenêtre de l’extension, et connectez-vous depuis celle-ci.',
+  'The Fruitback extension asks to sign in as you. It reads and leaves notes on the sites of your workspaces, and nothing else.':
+    'L’extension Fruitback demande à se connecter en votre nom. Elle lit et laisse des notes sur les sites de vos workspaces, et rien d’autre.',
+  'Check that the popup shows the same word': 'Vérifiez que la fenêtre de l’extension affiche le même mot',
+  Account: 'Compte',
+  Browser: 'Navigateur',
+  Workspaces: 'Workspaces',
+  'No workspace yet': 'Aucun pour l’instant',
+  'Connecting…': 'Connexion…',
+  'Connect {browser}': 'Connecter {browser}',
+  'Not now': 'Pas maintenant',
+  'You can disconnect it at any time from My account.': 'Vous pouvez le déconnecter à tout moment depuis Mon compte.',
+  '{browser} is connected': '{browser} est connecté',
+  'It reads the sites of your workspaces, and you have none yet. Set one up, and the popup finds its site.':
+    'Elle lit les sites de vos workspaces, et vous n’en avez encore aucun. Créez-en un, et la fenêtre de l’extension trouvera son site.',
+  'Open the popup on any site of {workspaces}. You can close this tab.':
+    'Ouvrez la fenêtre de l’extension sur n’importe quel site de {workspaces}. Vous pouvez fermer cet onglet.',
+  'Sign in to connect this browser': 'Connectez-vous pour connecter ce navigateur',
+  'The Fruitback extension is waiting. Sign in, then check the word and connect it.':
+    'L’extension Fruitback attend. Connectez-vous, puis vérifiez le mot et connectez-la.',
+  'The Fruitback extension in {browser} is waiting. Sign in, then check the word and connect it.':
+    'L’extension Fruitback de {browser} attend. Connectez-vous, puis vérifiez le mot et connectez-la.',
+  'Open it in this browser: this page comes back to the word to check. The link works once, for fifteen minutes.':
+    'Ouvrez-le dans ce navigateur : cette page revient au mot à vérifier. Le lien fonctionne une fois, pendant quinze minutes.',
 };

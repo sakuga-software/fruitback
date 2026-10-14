@@ -235,6 +235,11 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   macOS »), which the console shows to the person who approves. It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read
   which language their account is set to.
+- The console keeps one thing in `sessionStorage`, under `fruitback:connect`, for fifteen minutes at
+  most: the id of a request of the extension, while a person signs in with a provider from
+  « Connect this browser » (FRU-240), so the console goes back to that request after the provider.
+  It is read once and forgotten, and the tab forgets it when it closes. No name, no address, no
+  token.
 - The widget sets no cookie.
 
 ## How long a note is kept
