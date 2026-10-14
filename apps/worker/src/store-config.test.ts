@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { envWith } from './auth-worker.fixture.ts';
-import { readConfig, type WorkerEnv } from './env.ts';
+import { REFUSED_SINCE_POSTGRES, readConfig, type WorkerEnv } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason, storeProviderFor } from './store-config.ts';
 
 /**
@@ -43,7 +43,10 @@ describe('FRUITBACK_STORE, as an operator writes it', () => {
     assert.equal(storeProviderFor({}), 'postgres');
     // The flag of before still decides then, as with no variable at all.
     assert.equal(storeProviderFor({ FRUITBACK_STORE: '   ', FRUITBACK_FAKE_LINEAR: '1' }), 'memory');
-    assert.equal(providerOf({ ...linearEnv, FRUITBACK_STORE: '   ' }), 'postgres');
+    // A blank store beside the key of Linear is refused, and not moved to the default (FRU-225).
+    assert.equal(providerOf({ ...deployed, FRUITBACK_STORE: '   ' }), 'postgres');
+    const blank = readConfig({ ...linearEnv, FRUITBACK_STORE: '   ' });
+    assert.deepEqual(blank.ok ? [] : blank.missing, [REFUSED_SINCE_POSTGRES.unnamedStore]);
   });
 
   it('is named without its spaces in what the boot says about the flag of before', () => {

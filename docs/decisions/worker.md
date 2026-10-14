@@ -74,8 +74,11 @@ peut créer un compte quoiqu'il arrive aussi pour la partie admin ». FRU-184 is
   `FRUITBACK_FIRST_REVIEWER` (`REFUSED_SINCE_POSTGRES`). Each names what to do, and the ones that held
   data name `migrate-to-postgres` and « Upgrading » of `docs/self-hosting.md`. Empty is absent: the
   compose file hands each one over empty, so that a `.env` of before that still sets one is refused.
-- **The default store is `postgres`**, in the worker and in the compose file. `linear` and `github`
-  stay, by name, as the store of the sites that have no tracker of their own.
+- **The default store is `postgres`**, and the compose file hands `FRUITBACK_STORE` over as `.env`
+  says, even empty. `linear` and `github` stay, by name, as the store of the sites that have no
+  tracker of their own. **A store left unnamed beside the variables of a tracker is refused**
+  (raised by the heavy review of #336): before, that worker ran on Linear, and the new default would
+  have moved its notes to the database with no word, its pins gone from the widget.
 - **A refused worker still listens**: `/health` answers `503` with the list, every other route `500`,
   and the healthcheck of the image marks the container unhealthy (measured in the CI job `image`).
 - **The code of before is still there, and no process reaches it.** `WITHOUT_DATABASE` in `env.ts`

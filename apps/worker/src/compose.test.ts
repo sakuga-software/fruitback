@@ -133,8 +133,9 @@ describe('the PostgreSQL of docker-compose.yml (FRU-143)', () => {
     // The user and the database of the address are the ones the service makes.
     assert.match(composePostgres(), /^ {6}POSTGRES_USER: fruitback$/m);
     assert.match(composePostgres(), /^ {6}POSTGRES_DB: fruitback$/m);
-    // The default store is the one of that database.
-    assert.equal(composeEnvironment().get('FRUITBACK_STORE'), '${FRUITBACK_STORE:-postgres}');
+    // The store is handed over as .env says, even empty: the worker's default is the database, and it
+    // refuses an unnamed store beside the key of a tracker. A default here would move those notes.
+    assert.equal(composeEnvironment().get('FRUITBACK_STORE'), '${FRUITBACK_STORE:-}');
   });
 
   it('publishes no port of the database', () => {

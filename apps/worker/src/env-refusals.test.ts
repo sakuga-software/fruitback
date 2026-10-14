@@ -171,10 +171,37 @@ describe('PostgreSQL is required, with what an administrator signs in with (FRU-
       FRUITBACK_SESSION_PATH: '/data/sessions.db',
       FRUITBACK_FIRST_REVIEWER: 'Alice Martin',
     });
-    for (const said of [DATABASE_REQUIRED, ...Object.values(REFUSED_SINCE_POSTGRES)]) {
+    // Every sentence but the one of a store left unnamed: this store is named, `sqlite`.
+    const { unnamedStore: _unnamed, ...named } = REFUSED_SINCE_POSTGRES;
+    for (const said of [DATABASE_REQUIRED, ...Object.values(named)]) {
       assert.ok(all.includes(said), `not said: ${said}`);
     }
-    assert.equal(all.length, 5 + Object.keys(REFUSED_SINCE_POSTGRES).length, all.join('\n'));
+    assert.equal(all.length, 5 + Object.keys(named).length, all.join('\n'));
+  });
+
+  it('refuses a store left unnamed beside the variables of a tracker, which ran on Linear before', () => {
+    for (const tracker of [
+      { LINEAR_API_KEY: 'lin_api_key', LINEAR_TEAM_ID: 'team_1' },
+      { LINEAR_API_KEY: 'lin_api_key' },
+      { FRUITBACK_GITHUB_REPOSITORY: 'acme/feedback' } as WorkerEnv,
+    ]) {
+      for (const store of [undefined, '', '  ']) {
+        assert.deepEqual(
+          missing(envWith({ ...tracker, FRUITBACK_STORE: store })),
+          [REFUSED_SINCE_POSTGRES.unnamedStore],
+          JSON.stringify({ tracker, store }),
+        );
+      }
+    }
+    // The controls: a named store takes the same variables, and no tracker variable leaves the default.
+    assert.deepEqual(
+      missing(envWith({ LINEAR_API_KEY: 'lin_api_key', LINEAR_TEAM_ID: 'team_1', FRUITBACK_STORE: 'linear' })),
+      [],
+    );
+    assert.deepEqual(missing(envWith({ LINEAR_API_KEY: 'lin_api_key', FRUITBACK_STORE: 'postgres' })), []);
+    const unnamed = readConfig({ ...envWith(), FRUITBACK_STORE: undefined, LINEAR_API_KEY: '' });
+    assert.ok(unnamed.ok && unnamed.config.store.provider === 'postgres');
+    assert.match(REFUSED_SINCE_POSTGRES.unnamedStore, /FRUITBACK_STORE=linear/);
   });
 
   it('reads an empty variable of before as absent: the compose file hands each one over empty', () => {

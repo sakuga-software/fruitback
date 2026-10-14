@@ -57,7 +57,9 @@ services:
       # caller in one bucket.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-}
-      FRUITBACK_STORE: ${FRUITBACK_STORE:-postgres}
+      # Empty: the worker's default, `postgres`. Not written here: a `.env` of before with a key of
+      # Linear and no FRUITBACK_STORE is then refused with a sentence, and never moved in silence.
+      FRUITBACK_STORE: ${FRUITBACK_STORE:-}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-}
       LINEAR_PROJECT_ID: ${LINEAR_PROJECT_ID:-}
@@ -95,7 +97,9 @@ services:
   # PostgreSQL (FRU-143), which every worker needs since FRU-225. Set FRUITBACK_POSTGRES_PASSWORD in
   # .env: this file refuses to start without it. The worker gets the same password in the address
   # above. To keep the worker in a database you already run instead, set FRUITBACK_DATABASE_URL (and
-  # FRUITBACK_DATABASE_SCHEMA for a schema of its own) and leave this service running, or remove it.
+  # FRUITBACK_DATABASE_SCHEMA for a schema of its own). Then either leave this service running, with
+  # its password still required, or remove it together with the `depends_on` block of the worker:
+  # without that block removed too, Compose refuses a service that waits for one that is not there.
   # No port is published: the worker reaches the database on the network of this file, and nothing
   # else does. Back it up with pg_dump, never with a copy of its volume: see docs/self-hosting.md.
   postgres:

@@ -13,7 +13,7 @@ import {
   readDatabaseSchema,
 } from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
-import { type StoreConfig, storeProviderFor } from './store-config.ts';
+import { DEFAULT_STORE_PROVIDER, type StoreConfig, storeProviderFor } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
 
 /**
@@ -356,7 +356,18 @@ export const REFUSED_SINCE_POSTGRES = {
     'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --seeds <file>`, as « Upgrading » of docs/self-hosting.md says)',
   FRUITBACK_FIRST_REVIEWER:
     'FRUITBACK_FIRST_REVIEWER (it names no workspace, and every worker has workspaces since FRU-225: the first administrator is FRUITBACK_FIRST_ADMIN, and a reviewer pairs from the console; remove this variable)',
+  unnamedStore:
+    'FRUITBACK_STORE (unset, and the variables of a tracker are set: before FRU-225 a worker with no FRUITBACK_STORE kept its notes in Linear, and the default is « postgres » since. Write FRUITBACK_STORE=linear, or github, to keep the notes there, or postgres to keep them in the database)',
 } as const;
+
+/** The variables of the trackers a store of before was configured with. */
+const TRACKER_VARIABLES = [
+  'LINEAR_API_KEY',
+  'LINEAR_TEAM_ID',
+  'FRUITBACK_GITHUB_APP_ID',
+  'FRUITBACK_GITHUB_PRIVATE_KEY',
+  'FRUITBACK_GITHUB_REPOSITORY',
+] as const;
 
 /**
  * What a worker with no `WITHOUT_DATABASE` is refused for (FRU-225), in one start (FRU-217): no
@@ -379,6 +390,15 @@ function postgresRefusals(env: WorkerEnv): string[] {
       .filter((name) => !set(name))
       .map((name) => REQUIRED_WITH_DATABASE[name]),
     ...(storeProviderFor(env) === 'sqlite' ? [REFUSED_SINCE_POSTGRES.sqlite] : []),
+    // Raised in review: the default moved from `linear` to `postgres`. A worker of before that named no
+    // store and had a key of Linear would start on the database, and its pins would vanish from the
+    // widget with no word. It is asked to name its store.
+    ...((env.FRUITBACK_STORE ?? '').trim() === '' &&
+    storeProviderFor(env) === DEFAULT_STORE_PROVIDER &&
+    // The variables of GitHub are its store's own (`envNames`), so `WorkerEnv` does not name them.
+    TRACKER_VARIABLES.some((name) => ((env as Record<string, string | undefined>)[name] ?? '') !== '')
+      ? [REFUSED_SINCE_POSTGRES.unnamedStore]
+      : []),
     ...before,
   ];
 }
