@@ -56,6 +56,9 @@ type Stubbed = {
   /** What the worker answers to « Unlink », and to a name, when it refuses. */
   unlinkRefuses?: string;
   nameRefuses?: string;
+  /** The answer to a name is held until `release` is called. */
+  nameWaits?: boolean;
+  release?: () => void;
   sent: string[];
   /** The bodies the console sent, by path. */
   bodies: Record<string, unknown>;
@@ -95,6 +98,14 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       worker.sent.push(`${method} ${pathname}`);
       worker.bodies[pathname] = body;
       if (worker.nameRefuses !== undefined) return route.fulfill({ status: 400, json: { error: worker.nameRefuses } });
+      if (worker.nameWaits) {
+        return new Promise<void>((resolve) => {
+          worker.release = () =>
+            void route
+              .fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } })
+              .then(resolve);
+        });
+      }
 
       return route.fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } });
     }
@@ -776,4 +787,20 @@ test('a browser is named as the worker names it', async ({ page }) => {
   await expect(browsers.nth(1)).toContainText('Console · Chrome on Windows');
   // One the worker could not name reads as before.
   await expect(browsers.nth(2)).toContainText('Console · another browser');
+});
+
+test('a name on its way is sent once, though the field is left before the answer', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.nameWaits = true;
+  await open(page);
+  const name = section(page, 'Profile').getByRole('textbox', { name: 'Name shown on notes' });
+  await name.fill('Ana Lopez');
+  await page.keyboard.press('Enter');
+  // Left while the worker has not answered: nothing more is sent.
+  await page.keyboard.press('Tab');
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(1);
+  await page.waitForTimeout(300);
+  expect(worker.sent.filter((each) => each.endsWith('/me/name'))).toHaveLength(1);
+  worker.release?.();
+  await expect(name).toHaveValue('Ana Lopez');
 });

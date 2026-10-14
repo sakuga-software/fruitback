@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   type ConsoleSession,
@@ -121,11 +121,15 @@ export default function Account() {
   const [name, setName] = useState(me.account.name ?? '');
   const [kept, setKept] = useState(me.account.name ?? '');
   const [nameProblem, setNameProblem] = useState<string | undefined>();
+  // One name on its way at a time: Enter, then leaving the field before the answer, sent it twice.
+  const saving = useRef(false);
   async function saveName(event?: FormEvent) {
     event?.preventDefault();
-    if (name.trim() === kept.trim()) return;
+    if (saving.current || name.trim() === kept.trim()) return;
+    saving.current = true;
     setNameProblem(undefined);
     const saved = await renameMe(name.trim());
+    saving.current = false;
     if (!saved.ok) return setNameProblem(problemOf(saved, NAME_PROBLEMS, NAME_NOT_KEPT));
     setKept(saved.data.account.name ?? name.trim());
     setName(saved.data.account.name ?? name.trim());
