@@ -1,9 +1,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import {
   WORKER as API,
@@ -18,35 +15,34 @@ import { type WorkerEnv, readConfig } from './env.ts';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { open } from './secrets.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
-const directories: string[] = [];
 
 afterEach(() => {
   mock.restoreAll();
   mock.timers.reset();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
 const worldWith = worlds();
 
-/** A worker with accounts and the application of Linear, that keeps its notes in a file of its own. */
-function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-linear-oauth-'));
-  directories.push(directory);
-
-  return worldWith({
+/**
+ * A worker with accounts and the application of Linear. Its notes are in the database of the case
+ * (FRU-225: they were in a SQLite file of the case).
+ */
+async function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
+  const world = await worldWith({
     env: {
-      FRUITBACK_STORE: 'sqlite',
-      FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
+      FRUITBACK_STORE: 'postgres',
       FRUITBACK_SECRETS_KEY: SECRETS_KEY,
       FRUITBACK_LINEAR_OAUTH: 'linear-client:the-linear-client-secret',
       ...overrides,
-      // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-    } as WorkerEnv,
+    },
   });
+
+  return { ...world, context: { ...world.context, store: createPostgresSeedStore(world.database) } };
 }
 
 /**

@@ -1,13 +1,16 @@
-# The Fruitback worker, from its published image (FRU-48), with its database and its console behind
-# two profiles. Nothing here needs a clone of this repository:
+# The Fruitback worker, from its published image (FRU-48), with its PostgreSQL and its console. Every
+# worker keeps its notes, its sites, its accounts and its sessions in PostgreSQL (FRU-225), so the
+# three always start together. Nothing here needs a clone of this repository:
 #
 #   curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
 #   curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
-#   (set ALLOWED_ORIGINS in .env)
+#   (in .env: ALLOWED_ORIGINS, FRUITBACK_FIRST_ADMIN, and the three secrets, each with its command)
 #   docker compose up -d --wait
+#   docker compose logs worker      (the sign-in link of the first administrator)
 #
 # While the repository is private, the downloads and the image need a GitHub login: see the README.
-# If your .env comes from before FRU-48, change three values first: see docs/self-hosting.md.
+# If your .env comes from before FRU-225 (no FRUITBACK_DATABASE_URL), the worker refuses to start and
+# says why: read « Upgrading » in docs/self-hosting.md first.
 # Compose does not pull an image tag that is already on the machine. To update, run this first:
 #   docker compose pull
 #
@@ -19,13 +22,18 @@ services:
   worker:
     image: ${FRUITBACK_IMAGE:-ghcr.io/sakuga-software/fruitback-worker:edge}
     restart: unless-stopped
+    # The worker applies its migrations at its first request that needs the database: it waits for
+    # the database to answer, so that its first requests do not answer 502.
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       # If a reverse proxy is in front, remove this mapping. See the Traefik block below.
       - '${FRUITBACK_PORT:-8080}:8080'
     volumes:
-      # The SQLite seeds and the extension's sessions. A live database keeps recent writes in a log
-      # beside the file, so back it up through the running container and never with cp:
-      #   docker compose exec worker sqlite3 /data/fruitback.db ".backup '/data/backup.db'"
+      # The SQLite files of a worker of before FRU-225, if this stack had them: `migrate-to-postgres`
+      # reads them here, once, as « Upgrading » in docs/self-hosting.md says. The worker writes
+      # nothing here any more.
       - fruitback-data:/data
     # To put Traefik in front instead of publishing the port:
     #   1. Remove the ports mapping above.
@@ -49,23 +57,21 @@ services:
       # caller in one bucket.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-}
-      FRUITBACK_STORE: ${FRUITBACK_STORE:-sqlite}
-      FRUITBACK_SQLITE_PATH: ${FRUITBACK_SQLITE_PATH:-/data/fruitback.db}
+      FRUITBACK_STORE: ${FRUITBACK_STORE:-postgres}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:-}
       LINEAR_PROJECT_ID: ${LINEAR_PROJECT_ID:-}
       FRUITBACK_GITHUB_APP_ID: ${FRUITBACK_GITHUB_APP_ID:-}
       FRUITBACK_GITHUB_PRIVATE_KEY: ${FRUITBACK_GITHUB_PRIVATE_KEY:-}
       FRUITBACK_GITHUB_REPOSITORY: ${FRUITBACK_GITHUB_REPOSITORY:-}
-      FRUITBACK_CLIENTS: ${FRUITBACK_CLIENTS:-}
       FRUITBACK_IDENTITY_SECRET: ${FRUITBACK_IDENTITY_SECRET:-}
       FRUITBACK_READ: ${FRUITBACK_READ:-}
       FRUITBACK_HIDE_COMMENTS: ${FRUITBACK_HIDE_COMMENTS:-}
       FRUITBACK_TEAM_LOCALE: ${FRUITBACK_TEAM_LOCALE:-}
-      FRUITBACK_SESSION_PATH: ${FRUITBACK_SESSION_PATH:-}
-      FRUITBACK_FIRST_REVIEWER: ${FRUITBACK_FIRST_REVIEWER:-}
       FRUITBACK_FIRST_ADMIN: ${FRUITBACK_FIRST_ADMIN:-}
-      FRUITBACK_DATABASE_URL: ${FRUITBACK_DATABASE_URL:-}
+      # The database of this file, unless .env names another one. The password is the one the
+      # `postgres` service makes its database with.
+      FRUITBACK_DATABASE_URL: ${FRUITBACK_DATABASE_URL:-postgres://fruitback:${FRUITBACK_POSTGRES_PASSWORD}@postgres:5432/fruitback}
       FRUITBACK_DATABASE_SCHEMA: ${FRUITBACK_DATABASE_SCHEMA:-}
       FRUITBACK_CONSOLE_URL: ${FRUITBACK_CONSOLE_URL:-}
       FRUITBACK_MAIL_FROM: ${FRUITBACK_MAIL_FROM:-}
@@ -77,28 +83,30 @@ services:
       FRUITBACK_AUTH_SECRET: ${FRUITBACK_AUTH_SECRET:-}
       FRUITBACK_AUTH_GITHUB_OAUTH: ${FRUITBACK_AUTH_GITHUB_OAUTH:-}
       FRUITBACK_AUTH_TRACK_IP: ${FRUITBACK_AUTH_TRACK_IP:-}
-      # Two variables of before FRU-150, which the worker no longer takes. They are handed over so
-      # that a `.env` that still sets one stops the worker with a sentence, and is not ignored.
+      # The variables of before FRU-150 and FRU-225, which the worker no longer takes. They are handed
+      # over so that a `.env` that still sets one stops the worker with a sentence, and is not ignored.
       FRUITBACK_ACCOUNTS_PATH: ${FRUITBACK_ACCOUNTS_PATH:-}
       FRUITBACK_GITHUB_OAUTH: ${FRUITBACK_GITHUB_OAUTH:-}
+      FRUITBACK_CLIENTS: ${FRUITBACK_CLIENTS:-}
+      FRUITBACK_SESSION_PATH: ${FRUITBACK_SESSION_PATH:-}
+      FRUITBACK_SQLITE_PATH: ${FRUITBACK_SQLITE_PATH:-}
+      FRUITBACK_FIRST_REVIEWER: ${FRUITBACK_FIRST_REVIEWER:-}
 
-  # PostgreSQL, for a worker that has accounts (FRU-143). It starts only with its profile:
-  #   docker compose --profile postgres up -d --wait
-  # A worker with no accounts needs no database: `docker compose up` starts one container, as before.
-  # Set FRUITBACK_POSTGRES_PASSWORD in .env, and give the worker the same password in its address:
-  #   FRUITBACK_DATABASE_URL=postgres://fruitback:<that password>@postgres:5432/fruitback
+  # PostgreSQL (FRU-143), which every worker needs since FRU-225. Set FRUITBACK_POSTGRES_PASSWORD in
+  # .env: this file refuses to start without it. The worker gets the same password in the address
+  # above. To keep the worker in a database you already run instead, set FRUITBACK_DATABASE_URL (and
+  # FRUITBACK_DATABASE_SCHEMA for a schema of its own) and leave this service running, or remove it.
   # No port is published: the worker reaches the database on the network of this file, and nothing
   # else does. Back it up with pg_dump, never with a copy of its volume: see docs/self-hosting.md.
   postgres:
-    profiles: [postgres]
     # The image CI tests the worker against. compose.test.ts compares the two.
     image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
     environment:
       POSTGRES_USER: fruitback
       POSTGRES_DB: fruitback
-      # There is no default: with no password the image refuses to make the database.
-      POSTGRES_PASSWORD: ${FRUITBACK_POSTGRES_PASSWORD:-}
+      # There is no default: with no password this file stops before it starts anything.
+      POSTGRES_PASSWORD: ${FRUITBACK_POSTGRES_PASSWORD:?set FRUITBACK_POSTGRES_PASSWORD in .env, for example with openssl rand -hex 32}
     volumes:
       - fruitback-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -109,9 +117,7 @@ services:
       retries: 12
 
   # The console (FRU-222): the screens where a person signs in, makes a workspace and adds its sites.
-  # Static files and nothing else: it holds no secret, and it calls the worker from the browser. It
-  # needs a worker with accounts, so it starts only with its profile, beside the database:
-  #   docker compose --profile postgres --profile console up -d --wait
+  # Static files and nothing else: it holds no secret, and it calls the worker from the browser.
   # Two values of .env say where the two answer, as a browser reaches them:
   #   FRUITBACK_PUBLIC_URL    the worker   (on this machine: http://localhost:8080)
   #   FRUITBACK_CONSOLE_URL   the console  (on this machine: http://localhost:8081)
@@ -119,7 +125,6 @@ services:
   # session is the worker's. Behind a proxy, give them two names of one domain (api. and app.).
   # A console with no FRUITBACK_PUBLIC_URL stops when it starts, and says so in its log.
   console:
-    profiles: [console]
     image: ${FRUITBACK_CONSOLE_IMAGE:-ghcr.io/sakuga-software/fruitback-console:edge}
     restart: unless-stopped
     ports:
@@ -146,7 +151,7 @@ volumes:
   # and `docker compose down -v` in one stack cannot delete the other's. It is therefore not the
   # volume that `docker run -v fruitback-data:/data` opens.
   fruitback-data:
-  # The database of the `postgres` service. Compose makes it only when that service starts.
+  # The database of the `postgres` service.
   fruitback-postgres:
 
 # networks:

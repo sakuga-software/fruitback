@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { readConfig, type WorkerEnv } from './env.ts';
+import { envWith } from './auth-worker.fixture.ts';
+import { DATABASE_REQUIRED, REFUSED_SINCE_POSTGRES, readConfig, type WorkerEnv } from './env.ts';
 import { STORE_SPECS, isDevOnlyProvider, readStoreConfig, storeProviders } from './stores.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 
@@ -17,9 +18,16 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-co
 
 const origins = { ALLOWED_ORIGINS: 'https://acme.test' };
 
-/** A Linear worker with everything it needs — the shape every deployment had before this ticket. */
+/**
+ * A worker with its database and its console, as every worker has since FRU-225, and nothing said of
+ * its store. The database is never opened here: `readConfig` reads an address.
+ */
+const deployed: WorkerEnv = { ...envWith(), FRUITBACK_STORE: undefined, ...origins };
+
+/** A Linear worker with everything it needs: the shape every deployment had before FRU-33, and a database. */
 const linearEnv: WorkerEnv = {
-  ALLOWED_ORIGINS: 'https://acme.test',
+  ...deployed,
+  FRUITBACK_STORE: 'linear',
   LINEAR_API_KEY: 'lin_api_key',
   LINEAR_TEAM_ID: 'team_1',
 };
@@ -38,14 +46,15 @@ function providerOf(env: WorkerEnv): string {
 }
 
 describe('selecting the store', () => {
-  it('runs on Linear when nothing says otherwise', () => {
-    // The default is compatibility, not preference: every worker deployed before FRU-33 sets none
-    // of these variables and must keep booting onto exactly the store it had.
-    assert.equal(providerOf(linearEnv), 'linear');
+  it('runs on its database when nothing says otherwise (FRU-225)', () => {
+    // It was Linear, for compatibility with every worker deployed before FRU-33. Every worker has a
+    // database since FRU-225, and the notes go there unless the operator names a tracker.
+    assert.equal(providerOf(deployed), 'postgres');
   });
 
   it('runs on the named store', () => {
-    assert.equal(providerOf({ ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_STORE: 'memory' }), 'memory');
+    assert.equal(providerOf(linearEnv), 'linear');
+    assert.equal(providerOf({ ...deployed, FRUITBACK_STORE: 'memory' }), 'memory');
   });
 
   it('refuses a store it does not have, rather than falling back to the default', () => {
@@ -68,7 +77,7 @@ describe('selecting the store', () => {
     // The point of the ticket. Before it, `readConfig` validated LINEAR_API_KEY and LINEAR_TEAM_ID
     // for every deployment, and the dev loop was handed stand-in credentials to satisfy them — which
     // is why a SQLite worker (FRU-31) would have been refused at boot for a missing Linear key.
-    const result = readConfig({ ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_STORE: 'memory' });
+    const result = readConfig({ ...deployed, FRUITBACK_STORE: 'memory' });
 
     assert.ok(result.ok, `expected no Linear credentials to be required, missing: ${result.ok ? '' : result.missing}`);
   });
@@ -77,7 +86,7 @@ describe('selecting the store', () => {
     // `apiKey` is what the schema calls it and nobody can act on that. The whole reason `envNames`
     // is required per field is that this diagnostic used to come from the worker's own config, and
     // moving the fields into the connector is exactly where the names could have been lost.
-    const missing = missingOf({ ALLOWED_ORIGINS: 'https://acme.test' });
+    const missing = missingOf({ ...deployed, FRUITBACK_STORE: 'linear' });
 
     assert.deepEqual(missing, ['LINEAR_API_KEY', 'LINEAR_TEAM_ID']);
   });
@@ -133,7 +142,7 @@ describe('a dev-only store cannot be deployed', () => {
 });
 
 describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
-  const sugar: WorkerEnv = { ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_FAKE_LINEAR: '1' };
+  const sugar: WorkerEnv = { ...deployed, FRUITBACK_FAKE_LINEAR: '1' };
 
   it('still selects the in-memory store', () => {
     // It is in the `.env` files and compose stacks of everyone who ran this loop before the rename —
@@ -148,7 +157,8 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
     // The asymmetry with FRUITBACK_STORE=memory is deliberate, and this is the assertion that pins
     // it: a flag *inherited* by a container meant to serve production must not stop it serving. A
     // provider someone deliberately named is refused instead.
-    assert.equal(providerOf({ ...linearEnv, FRUITBACK_FAKE_LINEAR: '1', NODE_ENV: 'production' }), 'linear');
+    // The real store is the default, `postgres` since FRU-225.
+    assert.equal(providerOf({ ...sugar, NODE_ENV: 'production' }), 'postgres');
   });
 
   it('loses to an explicit FRUITBACK_STORE', () => {
@@ -269,7 +279,9 @@ describe('the boot diagnostic', () => {
   /** Every way of making the config invalid, and the variable an operator would have to go and fix. */
   const BROKEN: ReadonlyArray<{ label: string; env: WorkerEnv; names: string }> = [
     { label: 'no origins', env: {}, names: 'ALLOWED_ORIGINS' },
-    { label: 'no Linear key', env: { ALLOWED_ORIGINS: 'https://acme.test' }, names: 'LINEAR_API_KEY' },
+    { label: 'no Linear key', env: { ...deployed, FRUITBACK_STORE: 'linear' }, names: 'LINEAR_API_KEY' },
+    // FRU-225: the one line that says what to do, and the store of before is refused by its sentence.
+    { label: 'no database', env: origins, names: DATABASE_REQUIRED },
     { label: 'unknown store', env: { ...linearEnv, FRUITBACK_STORE: 'no-such-store' }, names: 'FRUITBACK_STORE' },
     {
       label: 'postgres with no database',
@@ -281,7 +293,11 @@ describe('the boot diagnostic', () => {
       env: { FRUITBACK_STORE: 'postgres', FRUITBACK_DATABASE_URL: 'mysql://db/fruitback', ...origins },
       names: 'FRUITBACK_DATABASE_URL',
     },
-    { label: 'sqlite with no path', env: { FRUITBACK_STORE: 'sqlite', ...origins }, names: 'FRUITBACK_SQLITE_PATH' },
+    {
+      label: 'sqlite, the store of before',
+      env: { ...deployed, FRUITBACK_STORE: 'sqlite' },
+      names: REFUSED_SINCE_POSTGRES.sqlite,
+    },
     {
       label: 'dev-only store in production',
       env: { ...linearEnv, FRUITBACK_STORE: 'memory', NODE_ENV: 'production' },

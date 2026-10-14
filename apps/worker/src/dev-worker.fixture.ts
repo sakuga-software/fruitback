@@ -41,6 +41,8 @@ export const DEV_OWNER = 'dev@fruitback.test';
 
 /** What the environment of a developer need not say. A variable that is set wins. */
 export function devEnvironment(given: WorkerEnv): WorkerEnv {
+  const port = given.PORT ?? '8788';
+
   return {
     // The notes of a site with no destination go to the store of the worker. In development that
     // is the Linear in memory, which gives a note a state, replies and a link, so the playground
@@ -54,6 +56,11 @@ export function devEnvironment(given: WorkerEnv): WorkerEnv {
     FRUITBACK_CONSOLE_URL: DEV_CONSOLE,
     // A value of development, in a public repository: it signs nothing outside this machine.
     FRUITBACK_IDENTITY_SECRET: 'dev-only-identity-secret-never-deployed',
+    // FRU-225: a worker with a database has its console and its sign-in, in development too. A value
+    // of development as well, and not the identity secret: the worker refuses one secret for two jobs.
+    FRUITBACK_AUTH_SECRET: 'dev-only-sign-in-secret-never-deployed',
+    // The address the console and a sign-in link call this worker at: its own port, on this machine.
+    FRUITBACK_PUBLIC_URL: `http://localhost:${port}`,
     ...given,
     FRUITBACK_DEV_DATABASE: DEV_DATABASE,
   };

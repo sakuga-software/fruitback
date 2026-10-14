@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import { handleRequest } from './app.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
 import { IDENTITY_SECRET, envWith } from './auth-worker.fixture.ts';
-import { ACCOUNTS_FILE_REFUSED, GITHUB_APP_REFUSED, type WorkerEnv, readConfig } from './env.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
+import {
+  ACCOUNTS_FILE_REFUSED,
+  DATABASE_REQUIRED,
+  GITHUB_APP_REFUSED,
+  REFUSED_SINCE_POSTGRES,
+  REQUIRED_WITH_DATABASE,
+  type WorkerEnv,
+  readConfig,
+} from './env.ts';
 
 /**
  * What `readConfig` refuses, and how it says it (FRU-217).
@@ -27,8 +38,10 @@ describe('the two variables of before are refused with the rest, in one start (F
       [...three].sort(),
       ['FRUITBACK_IDENTITY_SECRET', ACCOUNTS_FILE_REFUSED, GITHUB_APP_REFUSED].sort(),
     );
-    // On a worker with no accounts too.
+    // On a worker with no database too, beside what that worker lacks (FRU-225).
     assert.deepEqual(missing({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', ...BEFORE }), [
+      DATABASE_REQUIRED,
+      ...Object.values(REQUIRED_WITH_DATABASE),
       ACCOUNTS_FILE_REFUSED,
       GITHUB_APP_REFUSED,
     ]);
@@ -90,5 +103,139 @@ describe('a secret is not white space, and white space does not tell two secrets
     );
     // The control: a space inside a secret is not refused by itself.
     assert.deepEqual(missing(all({ FRUITBACK_AUTH_SECRET: spaced(AUTH_SECRET) })), []);
+  });
+});
+
+describe('PostgreSQL is required, with what an administrator signs in with (FRU-225)', () => {
+  /** Each variable of a worker of before, as an `.env` of before sets it. */
+  const BEFORE: ReadonlyArray<[env: WorkerEnv, said: string]> = [
+    [{ FRUITBACK_CLIENTS: '{"acme":{"teamId":"team_1"}}' }, REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS],
+    // A map that is not JSON is refused for being there, and not for its JSON.
+    [{ FRUITBACK_CLIENTS: '{ not json' }, REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS],
+    [{ FRUITBACK_SESSION_PATH: '/data/sessions.db' }, REFUSED_SINCE_POSTGRES.FRUITBACK_SESSION_PATH],
+    [{ FRUITBACK_SQLITE_PATH: '/data/fruitback.db' }, REFUSED_SINCE_POSTGRES.FRUITBACK_SQLITE_PATH],
+    [{ FRUITBACK_STORE: 'sqlite' }, REFUSED_SINCE_POSTGRES.sqlite],
+    [{ FRUITBACK_STORE: ' sqlite ' }, REFUSED_SINCE_POSTGRES.sqlite],
+    [{ FRUITBACK_FIRST_REVIEWER: 'Alice Martin' }, REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER],
+  ];
+
+  it('refuses a worker with no database, and says in one start all that it needs', () => {
+    assert.deepEqual(missing({ ALLOWED_ORIGINS: 'https://a.test' }), [
+      DATABASE_REQUIRED,
+      REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET,
+      REQUIRED_WITH_DATABASE.FRUITBACK_PUBLIC_URL,
+      REQUIRED_WITH_DATABASE.FRUITBACK_CONSOLE_URL,
+      REQUIRED_WITH_DATABASE.FRUITBACK_IDENTITY_SECRET,
+    ]);
+    // The control: a worker that has all of it starts, on the store of its database by default.
+    const started = readConfig({ ...envWith(), FRUITBACK_STORE: undefined });
+    assert.ok(started.ok, started.ok ? '' : started.missing.join(' | '));
+    assert.equal(started.config.store.provider, 'postgres');
+  });
+
+  it('asks for each variable of the console beside a database, alone, and takes none of them as made', () => {
+    for (const name of Object.keys(REQUIRED_WITH_DATABASE) as (keyof typeof REQUIRED_WITH_DATABASE)[]) {
+      for (const absent of [undefined, '']) {
+        assert.deepEqual(missing(envWith({ [name]: absent })), [REQUIRED_WITH_DATABASE[name]], name);
+      }
+    }
+  });
+
+  it('says what to do: the database, the command that copies a file, and the page that says how', () => {
+    for (const said of [
+      DATABASE_REQUIRED,
+      REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS,
+      REFUSED_SINCE_POSTGRES.FRUITBACK_SQLITE_PATH,
+      REFUSED_SINCE_POSTGRES.sqlite,
+    ]) {
+      for (const named of ['migrate-to-postgres', '« Upgrading » of docs/self-hosting.md']) {
+        assert.ok(said.includes(named), `${said} does not name ${named}`);
+      }
+    }
+    assert.match(DATABASE_REQUIRED, /^FRUITBACK_DATABASE_URL \(/);
+    // The page and its section exist: a sentence that sends an operator nowhere is worse than none.
+    const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
+    assert.match(guide, /^## Upgrading\b/m);
+  });
+
+  it('refuses each variable of before by its sentence, and never ignores it', () => {
+    for (const [before, said] of BEFORE) {
+      assert.deepEqual(missing(envWith(before)), [said], JSON.stringify(before));
+    }
+    // All of them, with no database, in one start (FRU-217).
+    const all = missing({
+      ALLOWED_ORIGINS: 'https://a.test',
+      FRUITBACK_STORE: 'sqlite',
+      FRUITBACK_SQLITE_PATH: '/data/fruitback.db',
+      FRUITBACK_CLIENTS: '{"acme":{"teamId":"team_1"}}',
+      FRUITBACK_SESSION_PATH: '/data/sessions.db',
+      FRUITBACK_FIRST_REVIEWER: 'Alice Martin',
+    });
+    for (const said of [DATABASE_REQUIRED, ...Object.values(REFUSED_SINCE_POSTGRES)]) {
+      assert.ok(all.includes(said), `not said: ${said}`);
+    }
+    assert.equal(all.length, 5 + Object.keys(REFUSED_SINCE_POSTGRES).length, all.join('\n'));
+  });
+
+  it('reads an empty variable of before as absent: the compose file hands each one over empty', () => {
+    assert.deepEqual(
+      missing(
+        envWith({
+          FRUITBACK_CLIENTS: '',
+          FRUITBACK_SESSION_PATH: '',
+          FRUITBACK_SQLITE_PATH: '',
+          FRUITBACK_FIRST_REVIEWER: '',
+          FRUITBACK_STORE: '',
+        }),
+      ),
+      [],
+    );
+  });
+
+  it('answers 503 on /health with the variable and the page, and 500 on every other route', async () => {
+    const env = { ALLOWED_ORIGINS: 'https://a.test' };
+    const ask = (path: string, method = 'GET') =>
+      handleRequest(new Request(`https://worker.test${path}`, { method, headers: { Origin: 'https://a.test' } }), env, {
+        clientIp: '192.0.2.40',
+      });
+
+    const health = await ask('/health');
+    assert.equal(health.status, 503);
+    const body = (await health.json()) as { error: string; missing: string[] };
+    assert.equal(body.error, 'misconfigured');
+    assert.equal(body.missing[0], DATABASE_REQUIRED);
+    for (const [path, method] of [
+      ['/feedback?url=https%3A%2F%2Fa.test%2F', 'GET'],
+      ['/feedback', 'POST'],
+      ['/session/sites', 'GET'],
+      ['/console/me', 'GET'],
+      ['/console/auth/ok', 'GET'],
+    ] as const) {
+      const answer = await ask(path, method);
+      assert.equal(answer.status, 500, `${method} ${path}`);
+      assert.equal(((await answer.json()) as { missing: string[] }).missing[0], DATABASE_REQUIRED, path);
+    }
+  });
+
+  /**
+   * The worker of before stays in the code for its tests until FRU-226, behind `WITHOUT_DATABASE`.
+   * What keeps it out of a deployed worker: no environment of a process can hold a symbol, and no
+   * file of the bundle names it but `env.ts`.
+   */
+  it('keeps the worker of before out of any environment a process can be given', () => {
+    const before = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test' });
+    assert.ok(readConfig(before).ok);
+    // What a process gets: strings, as JSON and as `process.env` carry them.
+    const carried = JSON.parse(JSON.stringify(before)) as WorkerEnv;
+    assert.equal(missing(carried)[0], DATABASE_REQUIRED);
+    assert.equal(missing({ ...carried, WITHOUT_DATABASE: 'true' } as WorkerEnv)[0], DATABASE_REQUIRED);
+
+    const directory = new URL('./', import.meta.url);
+    const naming = readdirSync(directory)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.endsWith('.fixture.ts'))
+      .filter((file) => readFileSync(new URL(file, directory), 'utf8').includes('WITHOUT_DATABASE'));
+    assert.deepEqual(naming, ['env.ts']);
+    // The control: the scan reads the file that sets it, so an empty answer above is not a blind one.
+    assert.ok(readFileSync(new URL('before-postgres.fixture.ts', directory), 'utf8').includes('WITHOUT_DATABASE'));
   });
 });

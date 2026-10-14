@@ -9,7 +9,7 @@ import { handleRequest } from './app.ts';
 import { envWith } from './auth-worker.fixture.ts';
 import { DEV_PLAYGROUND, DEV_SITE, devEnvironment, seedDevWorkspace } from './dev-worker.fixture.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
-import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
+import { DATABASE_REQUIRED, type WorkerEnv, hasAccounts, hasAuth, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { DEV_DATABASE_URL, databaseFor } from './postgres.ts';
 import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
@@ -44,6 +44,11 @@ describe('the switch of the database of development (FRU-223)', () => {
     const inDatabase = readConfig(devEnvironment({ FRUITBACK_STORE: 'postgres' }));
     assert.ok(inDatabase.ok && inDatabase.config.store.provider === 'postgres');
     assert.ok(hasAccounts(config.config));
+    // FRU-225: its console signs a person in, as every worker with a database does, at its own address.
+    assert.ok(hasAuth(config.config));
+    assert.equal(config.config.publicUrl, 'http://localhost:8788');
+    const second = readConfig(devEnvironment({ PORT: '8790' }));
+    assert.ok(second.ok && second.config.publicUrl === 'http://localhost:8790');
   });
 
   it('is refused in production, by its name, whatever else is set', () => {
@@ -70,11 +75,15 @@ describe('the switch of the database of development (FRU-223)', () => {
     // A schema of its own is taken too (FRU-219): the database of the process is made in it.
     const named = readConfig(devEnvironment({ FRUITBACK_DATABASE_SCHEMA: 'fruitback' }));
     assert.ok(named.ok && named.config.databaseSchema === 'fruitback');
-    // Empty is absent, as for every variable of the worker.
-    assert.deepEqual(
-      missing({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', FRUITBACK_DEV_DATABASE: ' ' }),
-      [],
-    );
+    // Empty is absent, as for every variable of the worker: the worker has no database then, and is
+    // refused for that (FRU-225), never for the switch.
+    const blank = missing({
+      FRUITBACK_STORE: 'memory',
+      ALLOWED_ORIGINS: 'https://a.test',
+      FRUITBACK_DEV_DATABASE: ' ',
+    });
+    assert.ok(blank.includes(DATABASE_REQUIRED), blank.join(' | '));
+    assert.ok(!blank.some((name) => name.startsWith('FRUITBACK_DEV_DATABASE')), blank.join(' | '));
   });
 
   it('opens no connection in a process that has the switch and no database', () => {

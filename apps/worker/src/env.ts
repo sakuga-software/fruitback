@@ -13,8 +13,19 @@ import {
   readDatabaseSchema,
 } from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
-import type { StoreConfig } from './store-config.ts';
+import { type StoreConfig, storeProviderFor } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
+
+/**
+ * The worker of before FRU-225, for the tests of its code alone: no database, and the variables of
+ * before (`FRUITBACK_CLIENTS`, `FRUITBACK_SESSION_PATH`, `FRUITBACK_STORE=sqlite`).
+ *
+ * **No environment can set it**: it is a symbol, and `process.env` holds strings. `server.ts`,
+ * `main.ts` and `cli.ts` hand `process.env` to `readConfig`, so a deployed worker always has the
+ * refusals below. `before-postgres.fixture.ts` sets it, and a test that holds the code of before
+ * reads it through that file. It goes with that code (FRU-226).
+ */
+export const WITHOUT_DATABASE: unique symbol = Symbol('fruitback: the worker of before, for its tests');
 
 /**
  * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
@@ -177,6 +188,13 @@ export type WorkerEnv = {
    * locale at all is refused at boot.
    */
   FRUITBACK_TEAM_LOCALE?: string;
+  /**
+   * The SQLite file of the notes, until FRU-225. **Refused at boot**: the notes are in PostgreSQL,
+   * and `migrate-to-postgres --seeds` copies a file there. `sqlite.ts` reads it for the tests of before.
+   */
+  FRUITBACK_SQLITE_PATH?: string;
+  /** See `WITHOUT_DATABASE`. Never in `process.env`. */
+  [WITHOUT_DATABASE]?: true;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -295,6 +313,76 @@ export const ACCOUNTS_FILE_REFUSED =
 export const GITHUB_APP_REFUSED =
   'FRUITBACK_GITHUB_OAUTH (the sign-in of before is gone since FRU-150: better-auth signs in with FRUITBACK_AUTH_GITHUB_OAUTH; remove this variable, and its GitHub App)';
 
+/**
+ * Why a worker with no database stops (FRU-225). PostgreSQL is required, on a database of its own or
+ * in a schema of one that exists (decision of 2026-10-13). Nothing falls back to a file.
+ */
+export const DATABASE_REQUIRED =
+  'FRUITBACK_DATABASE_URL (Fruitback keeps its notes, its sites, its accounts and its sessions in PostgreSQL since FRU-225: a postgres:// address, of a database of its own or of one that exists, with FRUITBACK_DATABASE_SCHEMA. An instance of before copies its files there with `migrate-to-postgres`, as « Upgrading » of docs/self-hosting.md says)';
+
+/**
+ * What a worker with a database needs for its console (FRU-225): an administrator can always sign
+ * in. Each is asked for and none is made by the worker: a secret it made would change at each start,
+ * or end in a backup.
+ */
+export const REQUIRED_WITH_DATABASE: Readonly<
+  Record<
+    'FRUITBACK_AUTH_SECRET' | 'FRUITBACK_PUBLIC_URL' | 'FRUITBACK_CONSOLE_URL' | 'FRUITBACK_IDENTITY_SECRET',
+    string
+  >
+> = {
+  FRUITBACK_AUTH_SECRET:
+    'FRUITBACK_AUTH_SECRET (the console signs its administrators in with it: 32 random characters or more, which the worker does not make: openssl rand -base64 32)',
+  FRUITBACK_PUBLIC_URL:
+    'FRUITBACK_PUBLIC_URL (the address of this worker as a browser reaches it, with no path: the console calls it, and a sign-in comes back to it)',
+  FRUITBACK_CONSOLE_URL: 'FRUITBACK_CONSOLE_URL (the address of the console: a sign-in link opens it)',
+  FRUITBACK_IDENTITY_SECRET:
+    'FRUITBACK_IDENTITY_SECRET (a session of the extension signs its access token with it: 32 random characters or more, which the worker does not make: openssl rand -base64 32)',
+};
+
+/**
+ * The variables of a worker of before FRU-225, each refused with what to do, and never ignored: a
+ * worker that ignored one would start with no site, or with notes that nothing reads, and an operator
+ * would read it as data lost.
+ */
+export const REFUSED_SINCE_POSTGRES = {
+  FRUITBACK_CLIENTS:
+    'FRUITBACK_CLIENTS (the sites are in the database since FRU-225, and the console makes them: make each site there, then copy its notes with `migrate-to-postgres --seeds <file> --client <id>=<id of the site>`, as « Upgrading » of docs/self-hosting.md says; then remove this variable)',
+  FRUITBACK_SESSION_PATH:
+    'FRUITBACK_SESSION_PATH (the sessions of the extension are in the database since FRU-225: each reviewer pairs again, once, from the console; remove this variable)',
+  FRUITBACK_SQLITE_PATH:
+    'FRUITBACK_SQLITE_PATH (the notes are in the database since FRU-225: copy the file with `migrate-to-postgres --seeds <file>`, as « Upgrading » of docs/self-hosting.md says; then remove this variable)',
+  sqlite:
+    'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --seeds <file>`, as « Upgrading » of docs/self-hosting.md says)',
+  FRUITBACK_FIRST_REVIEWER:
+    'FRUITBACK_FIRST_REVIEWER (it names no workspace, and every worker has workspaces since FRU-225: the first administrator is FRUITBACK_FIRST_ADMIN, and a reviewer pairs from the console; remove this variable)',
+} as const;
+
+/**
+ * What a worker with no `WITHOUT_DATABASE` is refused for (FRU-225), in one start (FRU-217): no
+ * database, what the console needs, and each variable of before that is set.
+ */
+function postgresRefusals(env: WorkerEnv): string[] {
+  if (env[WITHOUT_DATABASE] === true) return [];
+  // Empty is absent, as everywhere in this file. A value of spaces is set, and refused as one (FRU-217).
+  const set = (name: keyof WorkerEnv & string): boolean => (env[name] ?? '') !== '';
+  const before = (
+    ['FRUITBACK_CLIENTS', 'FRUITBACK_SESSION_PATH', 'FRUITBACK_SQLITE_PATH', 'FRUITBACK_FIRST_REVIEWER'] as const
+  )
+    .filter(set)
+    .map((name) => REFUSED_SINCE_POSTGRES[name]);
+
+  return [
+    // A malformed address is said below, with its own reason.
+    ...(databaseUrlOf(env) === undefined && !set('FRUITBACK_DATABASE_URL') ? [DATABASE_REQUIRED] : []),
+    ...(Object.keys(REQUIRED_WITH_DATABASE) as (keyof typeof REQUIRED_WITH_DATABASE)[])
+      .filter((name) => !set(name))
+      .map((name) => REQUIRED_WITH_DATABASE[name]),
+    ...(storeProviderFor(env) === 'sqlite' ? [REFUSED_SINCE_POSTGRES.sqlite] : []),
+    ...before,
+  ];
+}
+
 /** The three secrets of the worker, each a value of the environment that nothing else reads. */
 const SECRETS = ['FRUITBACK_IDENTITY_SECRET', 'FRUITBACK_SECRETS_KEY', 'FRUITBACK_AUTH_SECRET'] as const;
 
@@ -392,11 +480,24 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // with the rest (raised in review), and once: the store `postgres` reads the same variable, and
   // names it without the rule.
   const schemaRefused = readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) === undefined;
+  // FRU-225. The store of before says what it lacks with no word of why it is refused, and the map of
+  // before is refused whatever it holds: each says its sentence alone.
+  const postgres = postgresRefusals(env);
+  const refusedStore = postgres.includes(REFUSED_SINCE_POSTGRES.sqlite);
+  const refusedClients = postgres.includes(REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS);
   const missing = [
     ...missingFrom(result),
-    ...(store.ok ? [] : store.missing.filter((name) => !(schemaRefused && name === 'FRUITBACK_DATABASE_SCHEMA'))),
+    ...postgres,
+    ...(store.ok || refusedStore
+      ? []
+      : store.missing.filter(
+          (name) =>
+            !(schemaRefused && name === 'FRUITBACK_DATABASE_SCHEMA') &&
+            // The store `postgres` names the address the line above already asks for.
+            !(postgres.includes(DATABASE_REQUIRED) && name === 'FRUITBACK_DATABASE_URL'),
+        )),
     ...(schemaRefused ? [DATABASE_SCHEMA_REFUSED] : []),
-    ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
+    ...(clients.ok || refusedClients ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
     // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
     // start with no workspace at all, and an operator would read it as the accounts lost. Said with
     // the rest (FRU-217): each one alone cost the operator one more start to read the next.

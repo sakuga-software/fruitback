@@ -8,6 +8,7 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * What every `SeedStore` promises, whatever holds the seeds (FRU-34).
@@ -72,11 +73,12 @@ const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, re
 const QUIET: ClientPolicy = { ...POLICY, showComments: false };
 
 const ORIGIN = 'https://preview.acme.test';
-const ENV: WorkerEnv = {
+/** A worker of one client, as before FRU-225: the store is what these cases are about, not the sites. */
+const ENV: WorkerEnv = beforePostgres({
   LINEAR_API_KEY: 'lin_api_test',
   LINEAR_TEAM_ID: 'team_1',
   ALLOWED_ORIGINS: ORIGIN,
-};
+});
 
 const PAGE = canonicalizePageUrl('https://preview.acme.test/pricing');
 const PAGE_WITH_QUERY = canonicalizePageUrl('https://preview.acme.test/pricing?tab=annual');

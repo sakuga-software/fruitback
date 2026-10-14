@@ -6,7 +6,8 @@ import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { AUTH_BASE_PATH, SERVED_PATHS } from './auth.ts';
 import { parseAdminLinkArgs, runAdminLink } from './cli.ts';
 import { CONSOLE, type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
-import { readConfig } from './env.ts';
+import { DATABASE_REQUIRED, REFUSED_SINCE_POSTGRES, REQUIRED_WITH_DATABASE, readConfig } from './env.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 import {
   ADMIN_LINK_TTL_SECONDS,
   type AdminLinks,
@@ -464,23 +465,30 @@ describe('FRUITBACK_FIRST_ADMIN in the configuration (FRU-221)', () => {
       );
     }
     const { FRUITBACK_AUTH_SECRET: _secret, ...withoutSecret } = env;
+    // FRU-225: the secret is asked for beside any database, with or without this variable.
+    assert.deepEqual(missing({ ...withoutSecret, FRUITBACK_FIRST_ADMIN: ADMIN }), [
+      REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET,
+    ]);
+    assert.match(REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET, /which the worker does not make/);
+    const alone = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', FRUITBACK_FIRST_ADMIN: ADMIN };
+    assert.equal(missing(alone)[0], DATABASE_REQUIRED);
+    // The worker of before, which started with no database or no secret, said it of this variable.
     assert.match(
-      missing({ ...withoutSecret, FRUITBACK_FIRST_ADMIN: ADMIN }).join(' | '),
+      missing(beforePostgres({ ...withoutSecret, FRUITBACK_FIRST_ADMIN: ADMIN })).join(' | '),
       /FRUITBACK_AUTH_SECRET \(FRUITBACK_FIRST_ADMIN is set.*which the worker does not make\)/,
     );
-    assert.match(
-      missing({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', FRUITBACK_FIRST_ADMIN: ADMIN }).join(
-        ' | ',
-      ),
-      /FRUITBACK_DATABASE_URL \(FRUITBACK_FIRST_ADMIN is set/,
-    );
+    assert.match(missing(beforePostgres(alone)).join(' | '), /FRUITBACK_DATABASE_URL \(FRUITBACK_FIRST_ADMIN is set/);
   });
 
   it('leaves FRUITBACK_FIRST_REVIEWER refused on a worker with workspaces, with what to do', async () => {
     const world = await envOf();
 
+    const env = { ...(world.env as Record<string, string>), FRUITBACK_FIRST_REVIEWER: 'Ana <ana@acme.dev>' };
+    // FRU-225: every worker has workspaces, so the variable is refused by its own sentence.
+    assert.deepEqual(missing(env), [REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER]);
+    assert.match(REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER, /FRUITBACK_FIRST_ADMIN/);
     assert.match(
-      missing({ ...(world.env as Record<string, string>), FRUITBACK_FIRST_REVIEWER: 'Ana <ana@acme.dev>' }).join(' | '),
+      missing(beforePostgres(env)).join(' | '),
       /FRUITBACK_FIRST_REVIEWER \(it names no workspace: on a worker with workspaces, pair with `pair --workspace`, or from the console\)/,
     );
   });

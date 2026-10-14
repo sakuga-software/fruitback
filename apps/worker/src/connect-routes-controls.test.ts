@@ -358,6 +358,8 @@ describe('the membership that lets a session of an account read a site, taken ou
     FRUITBACK_DATABASE_URL: 'postgres://fruitback:not-a-password@127.0.0.1:1/fruitback',
     FRUITBACK_CONSOLE_URL: CONSOLE,
     ALLOWED_ORIGINS: CONSOLE,
+    FRUITBACK_PUBLIC_URL: 'https://api.fruitback.test',
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-that-signs-nothing-here',
   };
 
   async function reads(handle: (request: Request, env: object, context: object) => Promise<Response>, who: string) {

@@ -231,7 +231,7 @@ for (const { label, open, skip } of DATABASES) {
 describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
   const envOf = worlds();
 
-  it('needs the address of the database, and is not the store of a worker that names none', () => {
+  it('needs the address of the database, and is the store of a worker that names none (FRU-225)', () => {
     const selected = readConfig(envWith({ FRUITBACK_STORE: 'postgres' }));
     assert.ok(selected.ok, selected.ok ? '' : selected.missing.join(', '));
     assert.equal(selected.config.store.provider, 'postgres');
@@ -240,8 +240,11 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
       ok: false,
       missing: ['FRUITBACK_DATABASE_URL'],
     });
-    // Not the default: a worker that names no store is on Linear, as before.
-    assert.deepEqual(readStoreConfig({}), { ok: false, missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'] });
+    // The default since FRU-225: a worker that names no store keeps its notes in its database.
+    assert.deepEqual(readStoreConfig({}), { ok: false, missing: ['FRUITBACK_DATABASE_URL'] });
+    const unnamed = readConfig(envWith({ FRUITBACK_STORE: undefined }));
+    assert.ok(unnamed.ok, unnamed.ok ? '' : unnamed.missing.join(', '));
+    assert.equal(unnamed.config.store.provider, 'postgres');
   });
 
   it('says its name and its scope before any call, as the store it loads says them', async () => {

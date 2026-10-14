@@ -11,17 +11,18 @@ import { installLinearStub } from './linear-stub.ts';
 import { batchParent } from './linear.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { type SeedStore, StoreError } from './store.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /** Several notes in one request (FRU-124): `POST /feedback` with an array of seeds. */
 
 const ORIGIN = 'https://preview.acme.test';
 const PAGE = `${ORIGIN}/pricing`;
-const MEMORY: WorkerEnv = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: ORIGIN } as WorkerEnv;
-const LINEAR: WorkerEnv = {
+const MEMORY: WorkerEnv = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: ORIGIN });
+const LINEAR: WorkerEnv = beforePostgres({
   LINEAR_API_KEY: 'lin_api_test',
   LINEAR_TEAM_ID: 'team_1',
   ALLOWED_ORIGINS: ORIGIN,
-} as WorkerEnv;
+});
 
 beforeEach(async () => {
   await resetSharedKv();

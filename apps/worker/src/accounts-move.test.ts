@@ -154,6 +154,8 @@ function env(): WorkerEnv {
     // Port 1 of this machine: nothing listens there. The store of the case is given to the request.
     FRUITBACK_DATABASE_URL: 'postgres://fruitback:not-a-password@127.0.0.1:1/fruitback',
     FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
+    FRUITBACK_PUBLIC_URL: 'https://api.fruitback.test',
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-that-signs-nothing-here',
   };
 }
 

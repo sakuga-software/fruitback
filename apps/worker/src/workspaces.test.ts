@@ -10,6 +10,7 @@ import { type SessionIdentity, createPairing, redeemPairing, refreshSession } fr
 import { handleRequest } from './app.ts';
 import { signIdentityToken, verifyIdentityToken } from './identity.ts';
 import { checkWorkspace, runPair } from './cli.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * One worker, several workspaces, and a session that reaches the sites of its own (FRU-95).
@@ -37,13 +38,13 @@ function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-workspaces-'));
   directories.push(directory);
 
-  return {
+  return beforePostgres({
     FRUITBACK_STORE: 'memory',
     FRUITBACK_IDENTITY_SECRET: SECRET,
     FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
     FRUITBACK_CLIENTS: JSON.stringify(CLIENTS),
     ...overrides,
-  };
+  });
 }
 
 /** A session of one workspace, opened through the store and the real redemption. */

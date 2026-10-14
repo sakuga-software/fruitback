@@ -29,6 +29,7 @@ import {
 } from './connect.ts';
 import { readConfig } from './env.ts';
 import { handleRequest } from './app.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * `SECURITY.md` states numbers, and a security document that drifts from the code is worse than none
@@ -310,7 +311,7 @@ describe('the preflight lets through what the widget actually sends', () => {
           'Access-Control-Request-Headers': 'authorization',
         },
       }),
-      { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.test' },
+      beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.test' }),
       { clientIp: '198.51.100.41' },
     );
 

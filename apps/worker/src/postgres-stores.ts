@@ -13,12 +13,10 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  * The stores of a worker on a database, loaded at their first call (FRU-180).
  *
  * `accounts-postgres.ts` and `session-postgres.ts` import Drizzle, and `app.ts` is loaded by every
- * worker. So `app.ts` imports this file, which imports them only when a store is called: **a worker
- * without `FRUITBACK_DATABASE_URL` loads nothing of Drizzle and nothing of the driver.**
- * test:`loads no file of Drizzle and no file of the driver for a worker without the variable` holds
- * it, in a process of its own.
- *
- * Do not import one of the two files from a file that every worker loads.
+ * worker. So `app.ts` imports this file, which imports them only when a store is called. It kept
+ * Drizzle and the driver out of a worker with no database. **Every worker has one since FRU-225**, so
+ * that worker is gone, and the test that held it went with it. What is left: `/health` and a refused
+ * configuration load neither, and the bundle evaluates them at the first call that needs the database.
  */
 
 /**

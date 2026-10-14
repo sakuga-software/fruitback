@@ -44,7 +44,16 @@ import {
 } from './auth.fixture.ts';
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
-import { ACCOUNTS_FILE_REFUSED, GITHUB_APP_REFUSED, type WorkerEnv, hasAuth, readConfig } from './env.ts';
+import {
+  ACCOUNTS_FILE_REFUSED,
+  DATABASE_REQUIRED,
+  GITHUB_APP_REFUSED,
+  REQUIRED_WITH_DATABASE,
+  type WorkerEnv,
+  hasAuth,
+  readConfig,
+} from './env.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, appliedDates, createPgliteDatabase, journalDates, ownDatabase } from './postgres.fixture.ts';
@@ -87,18 +96,23 @@ function envWith(overrides: Record<string, string | undefined> = {}): WorkerEnv 
   };
 }
 
-/** A worker whose accounts and sessions are in files: what a worker with no database runs on. */
+/**
+ * A worker whose sessions are in a file: what a worker with no database ran on, until FRU-225. Every
+ * environment a process can be given refuses it since: see `beforePostgres`.
+ */
 function filesOnly(overrides: Record<string, string | undefined> = {}): WorkerEnv {
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
   directories.push(directory);
 
-  return envWith({
-    // A worker with no accounts: its sessions are in a file, and it has no console.
-    FRUITBACK_DATABASE_URL: undefined,
-    FRUITBACK_CONSOLE_URL: undefined,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    ...overrides,
-  });
+  return beforePostgres(
+    envWith({
+      // A worker with no accounts: its sessions are in a file, and it has no console.
+      FRUITBACK_DATABASE_URL: undefined,
+      FRUITBACK_CONSOLE_URL: undefined,
+      FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
+      ...overrides,
+    }),
+  );
 }
 
 function configOf(env: WorkerEnv) {
@@ -122,16 +136,21 @@ afterEach(async () => {
 });
 
 describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
-  it('switches better-auth on with its secret and a database, and leaves it off without the secret', () => {
+  it('switches better-auth on with its secret and a database, and refuses a database without the secret (FRU-225)', () => {
     const on = configOf(envWith());
     assert.equal(hasAuth(on), true);
     assert.deepEqual(authConfigOf(on), AUTH_CONFIG);
 
-    const off = configOf(envWith({ FRUITBACK_AUTH_SECRET: undefined }));
+    // An administrator can always sign in (FRU-225): the secret is asked for, and never made. An
+    // empty value is an absent one, as for every variable of the compose file.
+    for (const secret of [undefined, '']) {
+      assert.equal(refusal(envWith({ FRUITBACK_AUTH_SECRET: secret })), REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET);
+    }
+
+    // The worker of before started with better-auth off (FRU-217), and its code is still there.
+    const off = configOf(beforePostgres(envWith({ FRUITBACK_AUTH_SECRET: undefined })));
     assert.equal(hasAuth(off), false);
     assert.equal(authConfigOf(off), undefined);
-    // An empty value is an absent one, as for every variable of the compose file.
-    assert.equal(hasAuth(configOf(envWith({ FRUITBACK_AUTH_SECRET: '' }))), false);
   });
 
   it('refuses a secret of better-auth under 32 characters, and names the variable', () => {
@@ -160,7 +179,15 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
   });
 
   it('refuses the secret of better-auth without a database: a worker with no accounts has no better-auth', () => {
-    for (const env of [envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined }), filesOnly()]) {
+    // Since FRU-225, the one line that says the database is required, with the console it needs.
+    assert.equal(
+      refusal(envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined })),
+      [DATABASE_REQUIRED, REQUIRED_WITH_DATABASE.FRUITBACK_CONSOLE_URL].join(' | '),
+    );
+    for (const env of [
+      beforePostgres(envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined })),
+      filesOnly(),
+    ]) {
       assert.equal(
         refusal(env),
         'FRUITBACK_DATABASE_URL (FRUITBACK_AUTH_SECRET is set, and better-auth keeps its tables there)',
@@ -172,7 +199,9 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
     const needed =
       'FRUITBACK_PUBLIC_URL (FRUITBACK_AUTH_SECRET is set, and better-auth needs the address of this worker, with no path)';
 
-    assert.equal(refusal(envWith({ FRUITBACK_PUBLIC_URL: undefined })), needed);
+    // FRU-225: absent, it is asked for with the rest, whatever else is set.
+    assert.equal(refusal(envWith({ FRUITBACK_PUBLIC_URL: undefined })), REQUIRED_WITH_DATABASE.FRUITBACK_PUBLIC_URL);
+    assert.equal(refusal(beforePostgres(envWith({ FRUITBACK_PUBLIC_URL: undefined }))), needed);
     assert.equal(refusal(envWith({ FRUITBACK_PUBLIC_URL: `${PUBLIC_URL}/worker` })), needed);
     assert.ok(readConfig(envWith({ FRUITBACK_PUBLIC_URL: `${PUBLIC_URL}/` })).ok);
   });
@@ -206,9 +235,18 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
   });
 
   it('refuses the accounts file of before, and says what to set and where to read how (FRU-150)', () => {
-    for (const more of [{}, { FRUITBACK_DATABASE_URL: undefined, FRUITBACK_AUTH_SECRET: undefined }]) {
-      assert.equal(refusal(envWith({ FRUITBACK_ACCOUNTS_PATH: '/data/accounts.db', ...more })), ACCOUNTS_FILE_REFUSED);
-    }
+    assert.equal(refusal(envWith({ FRUITBACK_ACCOUNTS_PATH: '/data/accounts.db' })), ACCOUNTS_FILE_REFUSED);
+    // Said with the rest (FRU-217): with no database, beside the line that asks for one (FRU-225).
+    assert.deepEqual(
+      refusal(
+        envWith({
+          FRUITBACK_ACCOUNTS_PATH: '/data/accounts.db',
+          FRUITBACK_DATABASE_URL: undefined,
+          FRUITBACK_AUTH_SECRET: undefined,
+        }),
+      ).split(' | '),
+      [DATABASE_REQUIRED, REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET, ACCOUNTS_FILE_REFUSED],
+    );
     assert.match(ACCOUNTS_FILE_REFUSED, /^FRUITBACK_ACCOUNTS_PATH \(/);
     for (const named of ['FRUITBACK_DATABASE_URL', 'migrate-to-postgres', 'docs/self-hosting.md']) {
       assert.ok(ACCOUNTS_FILE_REFUSED.includes(named), `the refusal does not name ${named}`);
@@ -229,9 +267,10 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
     );
     assert.equal(said.includes(leaked), false);
     assert.match(refusal(envWith({ BETTER_AUTH_TELEMETRY: '1' })), /^BETTER_AUTH_TELEMETRY \(/);
-    // An empty value is an absent one. And a worker that has better-auth off reads none of them.
+    // An empty value is an absent one. And a worker that has better-auth off reads none of them: the
+    // worker of before (FRU-225).
     assert.ok(readConfig(envWith({ BETTER_AUTH_TELEMETRY: '' })).ok);
-    assert.ok(readConfig(envWith({ FRUITBACK_AUTH_SECRET: undefined, BETTER_AUTH_TELEMETRY: '1' })).ok);
+    assert.ok(readConfig(beforePostgres(envWith({ FRUITBACK_AUTH_SECRET: undefined, BETTER_AUTH_TELEMETRY: '1' }))).ok);
   });
 
   it('never quotes a secret in a diagnostic, at boot or on /health', async () => {
@@ -262,7 +301,7 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     const refuses = (): never => assert.fail('a worker with better-auth off asked for a database');
 
     for (const env of [
-      { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL },
+      beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }),
       filesOnly({ FRUITBACK_AUTH_SECRET: undefined }),
     ]) {
       const config = configOf(env);
@@ -274,7 +313,8 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
 
     // FRU-217: accounts and no secret. It starts, nobody signs in, and it says so in one line that
     // names the variable to set. The line does not name better-auth: nothing of it was loaded.
-    const config = configOf(envWith({ FRUITBACK_AUTH_SECRET: undefined }));
+    // The worker of before: since FRU-225 the secret is required beside a database.
+    const config = configOf(beforePostgres(envWith({ FRUITBACK_AUTH_SECRET: undefined })));
     assert.equal(authFor(config, refuses), undefined);
     assert.equal(await announceAuth(config, log, refuses), 'off');
     assert.equal(lines.length, 1);
@@ -319,21 +359,28 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     return JSON.parse(stdout) as Answered;
   };
 
-  it('loads no file of better-auth for a worker that has it off, and answers 404 under /console/auth', async () => {
-    const memory = await worker({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL });
+  /**
+   * A worker of a process has better-auth on since FRU-225, or does not start: the one that loads
+   * nothing of it is the worker that is refused. It answers 503 on `/health` and 500 on every route.
+   * The worker of before, which had it off, cannot be given to a process: its environment holds a
+   * symbol, and this one goes through JSON.
+   */
+  it('loads no file of better-auth for a worker that is refused, and answers 500 under /console/auth', async () => {
+    const refused = await worker({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL });
 
     assert.deepEqual(
-      { ...memory, modules: 0 },
-      { statuses: [200, 404, 404], announced: 'off', library: 0, modules: 0 },
+      { ...refused, announced: '', modules: 0 },
+      { statuses: [503, 500, 500], announced: '', library: 0, modules: 0 },
     );
-    assert.ok(memory.modules > 50, 'the hook saw almost no module, so a count of zero proves nothing');
+    assert.ok(refused.announced.startsWith(DATABASE_REQUIRED), refused.announced);
+    assert.ok(refused.modules > 50, 'the hook saw almost no module, so a count of zero proves nothing');
   });
 
   // The control of the test above: the same count is not zero the moment the options are built.
   it('loads better-auth when its options are built, which the count of the test above must see', async () => {
     const built = await worker({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }, { BUILD_OPTIONS: '1' });
 
-    assert.equal(built.announced, 'off');
+    assert.ok(built.announced.startsWith(DATABASE_REQUIRED), built.announced);
     assert.ok(built.library > 0, 'the count of the files of better-auth found none, so a zero proves nothing');
   });
 
@@ -479,8 +526,13 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
   it('answers 404 on every route of better-auth when it is off, with or without a database', async () => {
     const database = await opening(createPgliteDatabase);
     const workers: [label: string, env: WorkerEnv, database?: Database][] = [
-      ['no accounts', { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }],
-      ['a database, and no secret of better-auth', envWith({ FRUITBACK_AUTH_SECRET: undefined }), database],
+      // The worker of before (FRU-225): every process has better-auth on since.
+      ['no accounts', beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL })],
+      [
+        'a database, and no secret of better-auth',
+        beforePostgres(envWith({ FRUITBACK_AUTH_SECRET: undefined })),
+        database,
+      ],
     ];
 
     for (const [label, env, accounts] of workers) {
@@ -498,7 +550,8 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
   // FRU-217: what the sign-in screen of the console reads to say that nobody can sign in.
   it('answers no way to sign in on /auth/providers, and 401 on the console, with a database and no secret', async () => {
     const database = await opening(createPgliteDatabase);
-    const env = envWith({ FRUITBACK_AUTH_SECRET: undefined });
+    // The worker of before (FRU-225): every process has the secret since.
+    const env = beforePostgres(envWith({ FRUITBACK_AUTH_SECRET: undefined }));
     const ask = (path: string): Promise<Response> =>
       handleRequest(new Request(`https://worker.test${path}`, { headers: { Origin: CONSOLE_URL } }), env, {
         clientIp: '192.0.2.210',

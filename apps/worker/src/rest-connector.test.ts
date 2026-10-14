@@ -1,18 +1,17 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
 import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { deliverPending, handleRequest } from './app.ts';
 import { CONSOLE, type World as Env, callOn as call, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import { createPostgresSeedStore } from './seeds-postgres.ts';
 import {
   ABANDONED_KEPT_DAYS,
   DELIVERY_HEADER,
@@ -39,11 +38,9 @@ const SITE = 'https://staging.acme.dev';
 const TARGET = 'https://hooks.acme.dev/fruitback?team=design';
 /** A moment after any day these tests run on: a delivery is due from the moment its note is written. */
 const LATER_MS = 4_000_000_000_000;
-const directories: string[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
   await Promise.all(
     servers.splice(0).map((server) => new Promise((done) => (server.closeAllConnections(), server.close(done)))),
   );
@@ -52,19 +49,17 @@ afterEach(async () => {
 const worldWith = worlds();
 
 /** A worker with accounts, that keeps its notes in a file of its own and can seal a connector. */
-function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-rest-'));
-  directories.push(directory);
-
-  return worldWith({
+/** The notes in the database of the case (FRU-225: they were in a SQLite file of the case). */
+async function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
+  const world = await worldWith({
     env: {
-      FRUITBACK_STORE: 'sqlite',
-      FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
+      FRUITBACK_STORE: 'postgres',
       FRUITBACK_SECRETS_KEY: SECRETS_KEY,
       ...overrides,
-      // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-    } as WorkerEnv,
+    },
   });
+
+  return { ...world, context: { ...world.context, store: createPostgresSeedStore(world.database) } };
 }
 
 /** One pass of the loop that sends, on the accounts of this worker: its database is on PGlite. */

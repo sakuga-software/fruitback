@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { GOOGLE, envWith } from './auth-worker.fixture.ts';
-import { type WorkerEnv, readConfig } from './env.ts';
+import { REQUIRED_WITH_DATABASE, type WorkerEnv, readConfig } from './env.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * Three rules of `readConfig` about the console that no test held (FRU-216). Two of them were held
@@ -29,8 +30,14 @@ describe('the rules of the configuration about the console (FRU-216)', () => {
   it('refuses Google with no secret of better-auth: nothing would sign the person in', () => {
     const google = `${GOOGLE.clientId}:${GOOGLE.clientSecret}`;
 
+    // Since FRU-225 the secret is asked for beside any database, before Google is read.
+    assert.equal(
+      refusal(envWith({ FRUITBACK_GOOGLE_OAUTH: google, FRUITBACK_AUTH_SECRET: undefined })),
+      REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET,
+    );
+    // The worker of before, which started with no secret, said it of Google.
     assert.match(
-      refusal(envWith({ FRUITBACK_GOOGLE_OAUTH: google, FRUITBACK_AUTH_SECRET: undefined })) ?? '',
+      refusal(beforePostgres(envWith({ FRUITBACK_GOOGLE_OAUTH: google, FRUITBACK_AUTH_SECRET: undefined }))) ?? '',
       /^FRUITBACK_AUTH_SECRET \(FRUITBACK_GOOGLE_OAUTH signs a person in with better-auth\)$/,
     );
     // The controls: the same client with the secret starts, and a value that is not a client says so.
@@ -102,8 +109,10 @@ describe('the rules of the configuration about the console (FRU-216)', () => {
   });
 
   it('refuses accounts with no console: a sign-in would have nowhere to send a person', () => {
+    assert.equal(refusal(envWith({ FRUITBACK_CONSOLE_URL: undefined })), REQUIRED_WITH_DATABASE.FRUITBACK_CONSOLE_URL);
+    // The worker of before (FRU-225) said it this way.
     assert.match(
-      refusal(envWith({ FRUITBACK_CONSOLE_URL: undefined })) ?? '',
+      refusal(beforePostgres(envWith({ FRUITBACK_CONSOLE_URL: undefined }))) ?? '',
       /^FRUITBACK_CONSOLE_URL \(FRUITBACK_DATABASE_URL is set, and a sign-in opens the console\)$/,
     );
     assert.match(refusal(envWith({ FRUITBACK_CONSOLE_URL: '   ' })) ?? '', /FRUITBACK_CONSOLE_URL/);

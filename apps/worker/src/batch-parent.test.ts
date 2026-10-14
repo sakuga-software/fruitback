@@ -6,6 +6,7 @@ import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
 import type { WorkerEnv } from './env.ts';
 import { type Kv, createMemoryKv, resetSharedKv } from './kv.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * The parent of a batch when Linear takes it and then refuses its sub-issues (FRU-195).
@@ -17,11 +18,11 @@ import { type Kv, createMemoryKv, resetSharedKv } from './kv.ts';
 
 const ORIGIN = 'https://preview.acme.test';
 const PAGE = `${ORIGIN}/pricing`;
-const LINEAR: WorkerEnv = {
+const LINEAR: WorkerEnv = beforePostgres({
   LINEAR_API_KEY: 'lin_api_test',
   LINEAR_TEAM_ID: 'team_1',
   ALLOWED_ORIGINS: ORIGIN,
-} as WorkerEnv;
+});
 
 beforeEach(async () => {
   await resetSharedKv();
