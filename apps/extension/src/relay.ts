@@ -34,11 +34,16 @@ export type RelaySeams = {
    */
   renewAccess?: (endpoint: string, refused: string) => Promise<AccessResult>;
   send: (request: RelayRequest) => Promise<RelayResponse>;
+  /**
+   * Why a call got `401` with no session (FRU-238). The background logs a refusal of status 0, and
+   * this one is a `401` so the widget says to sign in again: without it, the console says nothing.
+   */
+  warn?: (reason: string) => void;
 };
 
 export type Relay = (request: RelayRequest, origin: string | undefined) => Promise<RelayResponse>;
 
-export function createRelay({ readSite, ensureAccess, renewAccess, send }: RelaySeams): Relay {
+export function createRelay({ readSite, ensureAccess, renewAccess, send, warn }: RelaySeams): Relay {
   /**
    * Never rejects, whatever any of the three seams does.
    *
@@ -86,7 +91,10 @@ export function createRelay({ readSite, ensureAccess, renewAccess, send }: Relay
       // the moment, and stays a refusal.
       const signedOut = access.reason === 'not-paired' || access.reason === 'session-revoked-or-expired';
 
-      return signedOut ? { ...relayRefusal(access.reason), status: 401 } : relayRefusal(access.reason);
+      if (!signedOut) return relayRefusal(access.reason);
+      warn?.(access.reason);
+
+      return { ...relayRefusal(access.reason), status: 401 };
     }
 
     // Built name by name, never spread from the request. The page may name `Content-Type` and

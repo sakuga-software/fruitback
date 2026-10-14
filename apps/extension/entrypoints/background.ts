@@ -186,6 +186,7 @@ export default defineBackground(() => {
     ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
     renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
     send,
+    warn: (reason) => console.warn('[fruitback] the relay answered 401, with no session:', reason),
   });
 
   /** The picture of a note (FRU-44): see `src/capture.ts`. */
