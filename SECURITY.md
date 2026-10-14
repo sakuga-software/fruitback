@@ -399,6 +399,18 @@ the answer.
 Pairing asks for a host permission on the **worker's** origin, which is not the site's. It is optional
 and granted per worker at the moment somebody pairs, never at install.
 
+**Signing in from the popup** (FRU-251) gives the same session by another door: the extension asks
+the worker for a request, the person approves it in the console, and the extension spends a
+**claim** for the session. The claim is a secret worth a session of thirty days once approved, so it
+is kept in `chrome.storage.session` only, with the access token: never in an address, in a page or in
+`chrome.storage.local`, and it goes to the worker in the body of one route. What goes in the address
+of the console is the request, which takes nothing by itself. A word shown in the popup and in the
+console lets the person check that the tab they approve is their browser's. The address of the
+console comes from the worker, and the extension opens it only when it is of the worker's site, over
+https (loopback excepted), and the page of that request; any other address opens nothing. A request
+lives 30 minutes at most here, whatever the worker says, and the click asks for the same optional
+access to the worker's origin as a pairing.
+
 ### What the extension relays, and what it refuses to
 
 In team mode (FRU-57) the site embeds its own widget and leaves it dormant. The extension puts a

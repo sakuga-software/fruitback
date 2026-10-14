@@ -55,6 +55,12 @@ export type StoredSession = {
    * Optional, on the same rule as `generation`: absent on both sides compares equal.
    */
   epoch?: string;
+  /**
+   * A session of a Fruitback account, from « Sign in to Fruitback » (FRU-251), rather than one an
+   * operator's pairing code gave. The popup draws the person of an account; a pairing keeps its
+   * « Paired as » row. Kept by every refresh of the session.
+   */
+  account?: true;
 };
 
 /** What must not survive it. `expiresAt` is a moment in milliseconds, from the worker's `expiresIn`. */
@@ -172,6 +178,13 @@ export type PairFailure = 'code-spent-or-expired' | 'unavailable' | 'insecure-en
 export type AccessFailure = 'not-paired' | 'session-revoked-or-expired' | 'unavailable' | 'insecure-endpoint';
 
 export type PairResult = { ok: true; identity: SessionIdentity } | { ok: false; reason: PairFailure };
+
+/**
+ * What a claim of a sign-in answered (FRU-251). `waiting`: nobody approved it in the console yet.
+ * `refused` and `expired` end the request; `unavailable` is the moment, and the next claim may work.
+ */
+export type ClaimFailure = 'waiting' | 'refused' | 'expired' | 'unavailable' | 'insecure-endpoint';
+export type ClaimResult = { ok: true; identity: SessionIdentity } | { ok: false; reason: ClaimFailure };
 export type AccessResult = { ok: true; grant: AccessGrant } | { ok: false; reason: AccessFailure };
 
 export type Sessions = {
@@ -179,6 +192,11 @@ export type Sessions = {
   /** When the next access token has to be replaced, for whoever owns the timer. */
   dueAt(): Promise<number | undefined>;
   pair(endpoint: string, code: string): Promise<PairResult>;
+  /**
+   * Take the session a sign-in approved in the console, with the secret only this extension holds
+   * (FRU-251). The worker gives it once; it is kept exactly as a pairing is.
+   */
+  claim(endpoint: string, claim: string): Promise<ClaimResult>;
   ensureAccess(endpoint: string): Promise<AccessResult>;
   refreshDue(): Promise<void>;
   logout(endpoint: string): Promise<void>;
@@ -249,6 +267,7 @@ export function createSessions({
     await sessions.put(endpoint, {
       ...session,
       ...(held.epoch === undefined ? {} : { epoch: held.epoch }),
+      ...(held.account === true ? { account: true as const } : {}),
       generation,
     });
 
@@ -398,6 +417,32 @@ export function createSessions({
    * decides, so two callers can both find the grant stale, and this map is the only thing between
    * them.
    */
+  /**
+   * Keep a session the worker just issued, by a pairing or by an approved sign-in.
+   *
+   * The epoch is minted here too, and written before the session it stamps. A pairing is the start
+   * of a run of this session, the way a logout is the end of one, and the two are the only things
+   * that mint one. An endpoint paired again after a logout would otherwise carry the epoch of the
+   * logout and read as signed out for ever.
+   */
+  async function adopt(endpoint: string, refreshToken: string, issued: Issued, account = false): Promise<void> {
+    const epoch = newEpoch();
+    await epochs.put(endpoint, epoch);
+
+    const generation = newGeneration();
+    // The grant first, then the session it belongs to. The background reads both the moment the
+    // session lands (`touchesARefreshToken`); with the grant not there yet, it refreshed at once and
+    // spent the refresh token this context had just stored. Measured in `popup-sign-in.spec.ts`.
+    await writeGrant(endpoint, issued, generation);
+    await sessions.put(endpoint, {
+      refreshToken,
+      identity: issued.identity,
+      epoch,
+      generation,
+      ...(account ? { account: true as const } : {}),
+    });
+  }
+
   function refreshOnce(endpoint: string): Promise<AccessResult> {
     const running = refreshing.get(endpoint);
     if (running !== undefined) return running;
@@ -451,23 +496,33 @@ export function createSessions({
         return { ok: false, reason: refused ? 'code-spent-or-expired' : 'unavailable' };
       }
 
-      // The epoch is minted here too, and written before the session it stamps. A pairing is the
-      // start of a run of this session, the way a logout is the end of one, and the two are the only
-      // things that mint one. An endpoint paired again after a logout would otherwise carry the
-      // epoch of the logout and read as signed out for ever.
-      const epoch = newEpoch();
-      await epochs.put(endpoint, epoch);
-
-      const generation = newGeneration();
-      await sessions.put(endpoint, {
-        refreshToken: issued.refreshToken,
-        identity: issued.identity,
-        epoch,
-        generation,
-      });
-      await writeGrant(endpoint, issued, generation);
+      await adopt(endpoint, issued.refreshToken, issued);
 
       return { ok: true, identity: issued.identity };
+    },
+
+    async claim(endpoint, claim) {
+      // The same rule as `pair`: what this answers is a refresh token worth thirty days.
+      if (!isSecureWorkerEndpoint(endpoint)) return { ok: false, reason: 'insecure-endpoint' };
+
+      const answer = await ask(`${endpoint}/session/connect/claim`, { claim });
+      if (answer === undefined) return { ok: false, reason: 'unavailable' };
+      // 202: nobody answered yet. 429: asked too soon (`slow-down`), which says nothing of the request.
+      if (answer.status === 202 || answer.status === 429) return { ok: false, reason: 'waiting' };
+
+      const issued = parseIssued(answer.body);
+      if (answer.status === 200 && issued?.refreshToken !== undefined) {
+        await adopt(endpoint, issued.refreshToken, issued, true);
+
+        return { ok: true, identity: issued.identity };
+      }
+
+      // A refusal is the worker's word about this request, and only a refusal ends it. A busy worker,
+      // a proxy that answered for it, a body cut short: the request may still be approved.
+      const refusal = refusalOf(answer);
+      if (refusal !== undefined) return { ok: false, reason: refusal };
+
+      return { ok: false, reason: 'unavailable' };
     },
 
     ensureAccess,
@@ -585,6 +640,7 @@ export function parseStoredSession(value: unknown): StoredSession | undefined {
     // Dropped here and the entry reads as belonging to no run at all, so `stillOpen` refuses every
     // session on an endpoint that has an epoch — every endpoint, one logout in.
     ...(isNonEmptyString(value.epoch) ? { epoch: value.epoch } : {}),
+    ...(value.account === true ? { account: true as const } : {}),
   };
 }
 
@@ -602,6 +658,20 @@ export function parseAccessGrant(value: unknown): AccessGrant | undefined {
     identity,
     ...(isNonEmptyString(value.generation) ? { generation: value.generation } : {}),
   };
+}
+
+/**
+ * What a claim the worker turned down says about the request: `refused` when somebody refused it in
+ * the console, `expired` when it ran out or was spent (a request gives its session once). A status
+ * that is not a refusal answers nothing, and the claim is tried again.
+ */
+function refusalOf(answer: SessionResponse): 'refused' | 'expired' | undefined {
+  // FRU-238: 410 `connect-refused`, 410 `connect-expired` (also spent, or a claim it does not know),
+  // 400 `invalid-body`. A 404 is an instance that has no sign-in at all: nothing to wait for either.
+  if (![400, 404, 410].includes(answer.status)) return undefined;
+  const error = isRecord(answer.body) && typeof answer.body.error === 'string' ? answer.body.error : '';
+
+  return answer.status === 410 && error === 'connect-refused' ? 'refused' : 'expired';
 }
 
 /** Whoever a session belongs to, as a person reads it. */

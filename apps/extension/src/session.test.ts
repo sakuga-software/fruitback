@@ -12,6 +12,7 @@ import {
   createSessions,
   nextWakeAt,
   parseIssued,
+  parseStoredSession,
 } from './session.ts';
 import {
   type StorageArea,
@@ -194,6 +195,107 @@ describe('pairing', () => {
 
     assert.deepEqual(await subject.pair(ENDPOINT, 'ABCD'), { ok: false, reason: 'unavailable' });
     assert.deepEqual(await sessions.read(), {});
+  });
+});
+
+describe('claiming a sign-in the console approved (FRU-251)', () => {
+  it('keeps the session as a pairing keeps it: two areas, and a new run', async () => {
+    const { subject, sessions, grants, epochs, remote } = setup({
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.1' }) }],
+    });
+
+    assert.deepEqual(await subject.claim(ENDPOINT, 'claim-secret'), { ok: true, identity: IDENTITY });
+    assert.deepEqual(remote.calls, [{ url: `${ENDPOINT}/session/connect/claim`, body: { claim: 'claim-secret' } }]);
+    assert.deepEqual(await sessions.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY, epoch: 'epo.1', generation: 'gen.1', account: true },
+    });
+    assert.deepEqual(await epochs.read(), { [ENDPOINT]: 'epo.1' });
+    assert.deepEqual(await grants.read(), {
+      [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY, generation: 'gen.1' },
+    });
+  });
+
+  it('waits on a 202, and on a 429 that says it asked too soon, and stores nothing', async () => {
+    for (const answer of [
+      { status: 202, body: { state: 'pending', interval: 5 } },
+      { status: 429, body: { error: 'slow-down', interval: 10 } },
+    ]) {
+      const { subject, sessions } = setup({ answers: [answer] });
+
+      assert.deepEqual(await subject.claim(ENDPOINT, 'c'), { ok: false, reason: 'waiting' }, JSON.stringify(answer));
+      assert.deepEqual(await sessions.read(), {});
+    }
+  });
+
+  it('says refused when somebody refused it, expired when it ran out or was spent', async () => {
+    for (const [answer, reason] of [
+      [{ status: 410, body: { error: 'connect-refused' } }, 'refused'],
+      [{ status: 410, body: { error: 'connect-expired' } }, 'expired'],
+      [{ status: 404, body: { error: 'not-found' } }, 'expired'],
+      [{ status: 400, body: { error: 'invalid-body' } }, 'expired'],
+      // Only the worker's code says refused: a word somewhere in another error does not.
+      [{ status: 400, body: { error: 'connect-refused' } }, 'expired'],
+      [{ status: 410, body: { error: 'not-refused-at-all' } }, 'expired'],
+    ] as const) {
+      const { subject, sessions } = setup({ answers: [answer] });
+
+      assert.deepEqual(await subject.claim(ENDPOINT, 'c'), { ok: false, reason }, JSON.stringify(answer));
+      assert.deepEqual(await sessions.read(), {});
+    }
+  });
+
+  it('does not end a request when the worker is the problem', async () => {
+    for (const answer of [
+      { status: 502, body: {} },
+      { status: 403, body: {} },
+      { status: 200, body: issued() },
+      new Error('offline'),
+    ]) {
+      const { subject, sessions } = setup({ answers: [answer] });
+
+      assert.deepEqual(await subject.claim(ENDPOINT, 'c'), { ok: false, reason: 'unavailable' });
+      assert.deepEqual(await sessions.read(), {});
+    }
+  });
+
+  it('does not send the claim over plain http', async () => {
+    const { subject, remote } = setup({});
+
+    assert.deepEqual(await subject.claim('http://worker.test', 'c'), { ok: false, reason: 'insecure-endpoint' });
+    assert.deepEqual(remote.calls, []);
+  });
+
+  it('starts a new run, so a refresh of the session of before cannot write over it (FRU-64)', async () => {
+    const { subject, sessions } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.0', identity: IDENTITY, epoch: 'epo.0', generation: 'g0' } },
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.1' }) }],
+    });
+
+    await subject.claim(ENDPOINT, 'c');
+
+    assert.partialDeepStrictEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.1', epoch: 'epo.1' } });
+  });
+});
+
+describe('a session of an account (FRU-251)', () => {
+  it('stays one through a refresh, and a pairing is never one', async () => {
+    const { subject, sessions } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY, epoch: 'e', account: true } },
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.2' }) }],
+    });
+    assert.ok((await subject.ensureAccess(ENDPOINT)).ok);
+    assert.partialDeepStrictEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.2', account: true } });
+
+    const paired = setup({ answers: [{ status: 200, body: issued({ refreshToken: 'refresh.p' }) }] });
+    assert.ok((await paired.subject.pair(ENDPOINT, 'ABCD-EFGH')).ok);
+    assert.equal((await paired.sessions.read())[ENDPOINT]?.account, undefined);
+  });
+
+  it('is read back from storage only when it says so exactly', () => {
+    const stored = { refreshToken: 'r', identity: IDENTITY };
+    assert.equal(parseStoredSession({ ...stored, account: true })?.account, true);
+    for (const account of ['true', 1, false, {}])
+      assert.equal(parseStoredSession({ ...stored, account })?.account, undefined);
   });
 });
 

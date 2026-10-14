@@ -209,7 +209,10 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   removed while it is on. That vendor is a recipient you did not have before: say so to a reviewer
   whose staging addresses are confidential.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
-  It also keeps the language of the reviewer's account there. That language goes to a page where
+  While a sign-in from the popup waits for the console (FRU-251), it keeps that request there too,
+  until it ends or the browser closes; then the address of the console, for « Open the console ». To
+  start a sign-in it sends the worker the name of the browser and of its system (« Chrome on
+  macOS »), which the console shows to the person who approves. It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read
   which language their account is set to.
 - The widget sets no cookie.

@@ -22,12 +22,21 @@ import {
 import { createRelay } from '../src/relay.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
 import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
+import { pollConnect } from '../src/connect.ts';
+import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
 
 /** The alarm that asks the workers again which previews they proved (FRU-103). */
 const PREVIEWS_ALARM = 'fruitback-previews-refresh';
+
+/**
+ * The alarm that claims a sign-in the console may have approved (FRU-251), while the popup is closed.
+ * Opening the tab of the console closes the popup: without it, the person would approve and come
+ * back to a popup that asks them to sign in.
+ */
+const CONNECT_ALARM = 'fruitback-connect';
 
 /**
  * How soon the earliest alarm may be.
@@ -141,6 +150,22 @@ export default defineBackground(() => {
     }
     // Also when nothing was written: an answer that aged out since the last sync must stop its rule.
     await sync();
+  });
+
+  /**
+   * Claims the sign-in that waits, once (FRU-251). The alarm stops when the request is settled:
+   * signed in, refused or expired. The popup claims too while it is open; `pollConnect` says why the
+   * two cannot take the session twice. Guarded like the three above.
+   */
+  const connect = createBrowserConnect(sessions);
+  const claimSignIn = serialize(async (): Promise<void> => {
+    try {
+      // Kept: how it ended is for the popup to say.
+      const state = await pollConnect(connect, { keep: true });
+      if (state !== 'waiting' && state !== 'unavailable') await browser.alarms.clear(CONNECT_ALARM);
+    } catch (error) {
+      console.error('[fruitback] could not claim the sign-in', error);
+    }
   });
 
   const sessionPreviews = createSessionPreviews({
@@ -287,6 +312,15 @@ export default defineBackground(() => {
 
       return;
     }
+    if (area === 'session' && changes[PENDING_CONNECT_KEY] !== undefined) {
+      // A sign-in started, or ended: claim it every minute while it waits, and stop after.
+      const waiting = changes[PENDING_CONNECT_KEY].newValue !== undefined;
+      void (
+        waiting
+          ? browser.alarms.create(CONNECT_ALARM, { delayInMinutes: MIN_ALARM_DELAY_MS / 60_000, periodInMinutes: 1 })
+          : browser.alarms.clear(CONNECT_ALARM)
+      ).catch((error: unknown) => console.error('[fruitback] could not set the alarm of the sign-in', error));
+    }
     if (area !== 'local') return;
     // The reviewer just turned the copy on: each side takes the rules it does not have.
     if (changes[SYNC_SETTING]?.newValue === true) mergeRules();
@@ -319,6 +353,7 @@ export default defineBackground(() => {
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
     if (alarm.name === PREVIEWS_ALARM) void refreshProven();
+    if (alarm.name === CONNECT_ALARM) void claimSignIn();
   });
   // Created at each start of the service worker: `create` replaces the alarm of the same name.
   void browser.alarms
