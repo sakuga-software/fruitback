@@ -83,6 +83,8 @@ docker run -d --name "$P-worker" --network "$P" -v "$P-data:/data" \
   -e LINEAR_TEAM_ID=drill-team \
   -e FRUITBACK_IDENTITY_SECRET=drill-not-a-real-secret-of-32-characters \
   -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+  -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+  -e FRUITBACK_AUTH_SECRET=drill-not-a-real-secret-of-better-auth-0123 \
   -e "FRUITBACK_DATABASE_URL=postgres://fruitback:$PASSWORD@$P-source:5432/fruitback" \
   "$WORKER_IMAGE" >/dev/null
 # The worker makes its tables at the first call that needs the database. `pair` is one.
@@ -137,6 +139,8 @@ docker run -d --name "$P-worker-shared" --network "$P" -v "$P-data-shared:/data"
   -e LINEAR_TEAM_ID=drill-team \
   -e FRUITBACK_IDENTITY_SECRET=drill-not-a-real-secret-of-32-characters \
   -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+  -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+  -e FRUITBACK_AUTH_SECRET=drill-not-a-real-secret-of-better-auth-0123 \
   -e "FRUITBACK_DATABASE_URL=postgres://fruitback:$PASSWORD@$P-source:5432/shared" \
   -e "FRUITBACK_DATABASE_SCHEMA=$SCHEMA" \
   "$WORKER_IMAGE" >/dev/null

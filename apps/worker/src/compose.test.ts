@@ -117,10 +117,24 @@ function composePostgres(): string {
 }
 
 describe('the PostgreSQL of docker-compose.yml (FRU-143)', () => {
-  it('starts only with its profile, so a worker with no accounts stays one container', () => {
-    assert.match(composePostgres(), /^ {4}profiles: \[postgres\]$/m);
-    // The worker waits for no other service: it opens the database at the first request that needs it.
-    assert.doesNotMatch(COMPOSE, /^ {4}depends_on:/m);
+  it('starts with every `docker compose up`, and the worker waits for it to answer (FRU-225)', () => {
+    assert.ok(composePostgres().includes('healthcheck:'), 'the service was not found');
+    assert.doesNotMatch(COMPOSE, /^ {4}profiles:/m);
+    assert.match(COMPOSE, /^ {4}depends_on:\n {6}postgres:\n {8}condition: service_healthy$/m);
+    // One service waits for another: the worker for its database, and nothing else.
+    assert.equal(COMPOSE.match(/^ {4}depends_on:/gm)?.length, 1);
+  });
+
+  it('gives the worker the address of that database, unless .env names another one', () => {
+    assert.equal(
+      composeEnvironment().get('FRUITBACK_DATABASE_URL'),
+      '${FRUITBACK_DATABASE_URL:-postgres://fruitback:${FRUITBACK_POSTGRES_PASSWORD}@postgres:5432/fruitback}',
+    );
+    // The user and the database of the address are the ones the service makes.
+    assert.match(composePostgres(), /^ {6}POSTGRES_USER: fruitback$/m);
+    assert.match(composePostgres(), /^ {6}POSTGRES_DB: fruitback$/m);
+    // The default store is the one of that database.
+    assert.equal(composeEnvironment().get('FRUITBACK_STORE'), '${FRUITBACK_STORE:-postgres}');
   });
 
   it('publishes no port of the database', () => {
@@ -128,8 +142,11 @@ describe('the PostgreSQL of docker-compose.yml (FRU-143)', () => {
     assert.doesNotMatch(composePostgres(), /^ {4}(ports|network_mode):/m);
   });
 
-  it('has no password of its own: the value comes from .env, and an empty one starts nothing', () => {
-    assert.match(composePostgres(), /^ {6}POSTGRES_PASSWORD: \$\{FRUITBACK_POSTGRES_PASSWORD:-\}$/m);
+  it('has no password of its own: the value comes from .env, and without one the file starts nothing', () => {
+    assert.match(
+      composePostgres(),
+      /^ {6}POSTGRES_PASSWORD: \$\{FRUITBACK_POSTGRES_PASSWORD:\?set FRUITBACK_POSTGRES_PASSWORD in \.env/m,
+    );
     assert.doesNotMatch(composePostgres(), /POSTGRES_HOST_AUTH_METHOD/);
   });
 
@@ -155,8 +172,9 @@ function composeConsole(): string {
 }
 
 describe('the console of docker-compose.yml (FRU-222)', () => {
-  it('starts only with its profile, so `docker compose up` stays one container', () => {
-    assert.match(composeConsole(), /^ {4}profiles: \[console\]$/m);
+  it('starts with every `docker compose up`, beside the worker and its database (FRU-225)', () => {
+    assert.ok(composeConsole().includes('image:'), 'the service was not found');
+    assert.doesNotMatch(composeConsole(), /^ {4}profiles:/m);
   });
 
   it('pulls the published image of the console, as a complete reference, and builds nothing', () => {

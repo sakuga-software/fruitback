@@ -27,7 +27,8 @@ import {
   createClaim,
   createRequestId,
 } from './connect.ts';
-import { readConfig } from './env.ts';
+import { DATABASE_REQUIRED, readConfig } from './env.ts';
+import { clientOf } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -260,15 +261,33 @@ describe('SECURITY.md states what the code does', () => {
   /**
    * The claim this file exists to make, and the one that would be worst to get wrong.
    *
-   * Asserted against `readConfig` rather than against a constant: what a self-hoster is promised is
-   * the behaviour of a worker configured with nothing, which is what this builds.
+   * Asserted against `readConfig` and the store of the sites rather than against a constant: what a
+   * self-hoster is promised is the behaviour of a worker configured with nothing, which serves nothing
+   * since FRU-225, and of a site added with no visibility, which members alone read.
    */
-  it('is right that a worker configured with nothing serves reads to anyone', () => {
-    const result = readConfig({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+  it('is right that a worker configured with nothing serves nothing, and that a site is members-only unless it says so', async () => {
+    const result = readConfig({ ALLOWED_ORIGINS: '*' });
+    assert.ok(!result.ok && result.missing[0] === DATABASE_REQUIRED);
+    assert.ok(SECURITY.includes('### Who reads the pins: the visibility of each site'));
+    assert.ok(
+      SECURITY.includes('A site\n  added through the API with no visibility is `members`.'),
+      'SECURITY.md no longer names the default',
+    );
 
-    assert.ok(result.ok);
-    assert.equal(result.config.read, 'public');
-    assert.ok(SECURITY.includes('The read path is public by default'));
+    const api = readFileSync(fileURLToPath(new URL('./console-api.ts', import.meta.url)), 'utf8');
+    assert.match(
+      api,
+      /visibilityOf\(body\?\.visibility \?\? 'members'\)/,
+      'the API no longer makes a site members-only by default',
+    );
+    assert.equal(
+      clientOf({ id: 's', workspaceId: 'w', origin: 'https://a.test', visibility: 'members', destinations: [] }).read,
+      'authenticated',
+    );
+    assert.equal(
+      clientOf({ id: 's', workspaceId: 'w', origin: 'https://a.test', visibility: 'everyone', destinations: [] }).read,
+      'public',
+    );
   });
 
   /**

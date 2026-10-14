@@ -55,6 +55,55 @@ connector's environment, and what a second connector with no markdown body actua
   bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
   never a vendor — `linear-unavailable` became `store-unavailable` with FRU-29 for that reason.
 
+## PostgreSQL is required (FRU-225)
+
+Decision of Mathieu, 2026-10-13: « il faut toujours un postgres quoiqu'il arrive pour faire tourner
+fruitback même en self-hosted, sur une nouvelle db ou sur une db existante dans un schema dédié / et on
+peut créer un compte quoiqu'il arrive aussi pour la partie admin ». FRU-184 is the epic.
+
+### The rules, in short
+
+- **`readConfig` refuses a worker with no database**, and says in one start all that it needs
+  (FRU-217): `FRUITBACK_DATABASE_URL`, then `FRUITBACK_AUTH_SECRET`, `FRUITBACK_PUBLIC_URL`,
+  `FRUITBACK_CONSOLE_URL` and `FRUITBACK_IDENTITY_SECRET`, which make an administrator able to sign
+  in. `DATABASE_REQUIRED` and `REQUIRED_WITH_DATABASE` in `env.ts` are the sentences. Nothing is
+  guessed: no SQLite to fall back on, and no secret made by the worker, which would change at each
+  start or end in a backup.
+- **The variables of a worker of before are refused by their sentence, never ignored**:
+  `FRUITBACK_CLIENTS`, `FRUITBACK_SESSION_PATH`, `FRUITBACK_SQLITE_PATH`, `FRUITBACK_STORE=sqlite` and
+  `FRUITBACK_FIRST_REVIEWER` (`REFUSED_SINCE_POSTGRES`). Each names what to do, and the ones that held
+  data name `migrate-to-postgres` and « Upgrading » of `docs/self-hosting.md`. Empty is absent: the
+  compose file hands each one over empty, so that a `.env` of before that still sets one is refused.
+- **The default store is `postgres`**, in the worker and in the compose file. `linear` and `github`
+  stay, by name, as the store of the sites that have no tracker of their own.
+- **A refused worker still listens**: `/health` answers `503` with the list, every other route `500`,
+  and the healthcheck of the image marks the container unhealthy (measured in the CI job `image`).
+- **The code of before is still there, and no process reaches it.** `WITHOUT_DATABASE` in `env.ts`
+  turns the refusals above off. It is a symbol, and `process.env` holds strings: only a test can set
+  it, through `before-postgres.fixture.ts`. test:`keeps the worker of before out of any environment a
+process can be given` holds it, with the scan that finds no file of the bundle but `env.ts` naming
+  it. The SQLite code goes with FRU-226, and the symbol with it.
+- **`pnpm dev` and the E2E suite have their sign-in on**: `devEnvironment` gives the worker of
+  development a secret of development and its own address (`http://localhost:<PORT>`).
+
+### The reasons, and the measurements
+
+- **It stops a production that is not switched over.** A worker with no `FRUITBACK_DATABASE_URL`
+  answers `503` and nothing else, so this change enters a digest of production only after the switch
+  of FRU-183 and the copy of `fb.db` (FRU-220). `apps/worker/cloud/README.md` says the order.
+- **The test that held « a worker with no database loads nothing of Drizzle » went with that worker**
+  (`loads no file of Drizzle and no file of the driver for a worker without the variable`, FRU-141,
+  FRU-180). `postgres-stores.ts` still loads the stores at their first call, which keeps them out of
+  `/health` and out of a refused worker.
+- **Measured on the image built from this change**: with no database, `/health` answers `503` and
+  names `FRUITBACK_DATABASE_URL`, `migrate-to-postgres` and the page; `/feedback`, `/session/sites`
+  and `/console/me` answer `500`; Docker reports `unhealthy` after three probes. Each variable of
+  before, alone beside a complete configuration, answers `503` with its own sentence. From a directory
+  that holds only `docker-compose.yml` and a filled `.env.example`, `docker compose up -d --wait`
+  brings the worker, its PostgreSQL and the console up healthy in 17 s; the sign-in link of the first
+  administrator is in the log; the link, a workspace, a site and a visitor's note through the API of
+  the console, then `--force-recreate`, and the note is still read.
+
 ## The rate limit and the cache, behind a Kv (FRU-49)
 
 `cache.ts` and `rate-limit.ts` each kept a `Map` of their own, reached directly. The ticket asked for
@@ -702,9 +751,8 @@ same database since FRU-142: see the section after this one.
 - **`FRUITBACK_DATABASE_URL` puts the accounts in PostgreSQL**, and since FRU-150 nowhere else:
   `FRUITBACK_ACCOUNTS_PATH` is refused at boot. Ask `hasAccounts(config)`, and never the field.
 - **`postgres.ts` is the one file that names the driver**, as types, and it loads `pg` at the first
-  call. A lint rule holds the import, and test:`loads no file of Drizzle and no file of the driver
-for a worker without the variable` holds the rest in a process of its own. `/health` opens no
-  database.
+  call. A lint rule holds the import. A test held the rest in a process of its own, for a worker with
+  no database, until FRU-225 made that worker refuse to start. `/health` opens no database.
 - **`Database` is the seam**: `run`, `transaction`, `alone` and `close`. It hands a store the `Db` of
   Drizzle (FRU-180: see _The database in Drizzle_). `createPgDatabase` is the one implementation
   that ships. The tests have a second one on PGlite, in `postgres.fixture.ts`.
@@ -972,7 +1020,7 @@ or without a database`. On, it serves the paths of `SERVED_PATHS` and no other (
   on every route: the accounts are read before the dispatch.
 - **`auth.ts` is the one file that names better-auth**, as types, and it loads the library when the
   instance is built, as `postgres.ts` does for its driver. A lint rule holds the import, for `kysely`
-  too. test:`loads no file of better-auth for a worker that has it off, and answers 404 under
+  too. test:`loads no file of better-auth for a worker that is refused, and answers 500 under
 /console/auth` holds the rest in a process of its own, and test:`keeps better-auth and the driver
 behind a dynamic import, so the image runs none of them at boot` holds it on the graph of the bundle.
 - **It does not take the place of the session of the extension.** `session.ts` stays as it is: a
@@ -1241,8 +1289,8 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `screenshots-postgres.ts` and `seeds-postgres.ts`,
   and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
-  holds both, and test:`loads no file of Drizzle and no file of the driver for a worker without the
-variable` holds the rest.
+  holds both. (A test held the rest for a worker with no database, which refuses to start since
+  FRU-225.)
 - **The worker applies the migrations at its first call to the database**, with `migrate` of
   `postgres-migrate.ts`. No command applies them, and `drizzle-kit migrate` is never run on a
   database of the worker: the image has no `npx` and no `drizzle-kit`.

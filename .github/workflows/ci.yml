@@ -293,20 +293,82 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Boot it and check readiness
+      - name: Boot it with no database, and find it refused
+        # FRU-225. A worker keeps everything in PostgreSQL, so the image with no FRUITBACK_DATABASE_URL
+        # serves nothing: /health answers 503 and names the variable and the page to read, every other
+        # route answers 500, and Docker marks the container unhealthy. The environment is the one of a
+        # worker of before, on Linear: what an upgrade that reads nothing looks like.
         run: |
+          set -euo pipefail
           docker run -d --name worker -p 8080:8080 \
             -e ALLOWED_ORIGINS=http://localhost:5173 \
             -e LINEAR_API_KEY=ci-not-a-real-key \
             -e LINEAR_TEAM_ID=ci-team \
+            -e FRUITBACK_STORE=linear \
             fruitback-worker:ci
+          code=000
           for attempt in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/health; then exit 0; fi
+            code=$(curl -s -o /tmp/refused-body -w '%{http_code}' http://127.0.0.1:8080/health || true)
+            if [ "$code" != "000" ]; then break; fi
             sleep 1
           done
-          echo "the container never became ready:"
-          docker logs worker
-          exit 1
+          body=$(cat /tmp/refused-body)
+          echo "$code: $body"
+          test "$code" = 503
+          echo "$body" | grep -q 'FRUITBACK_DATABASE_URL'
+          echo "$body" | grep -q 'docs/self-hosting.md'
+          echo "$body" | grep -q 'migrate-to-postgres'
+          for path in '/feedback?url=http%3A%2F%2Flocalhost%3A5173%2F' /session/sites /console/me; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: http://localhost:5173' "http://127.0.0.1:8080$path")
+            echo "$path $status"
+            test "$status" = 500
+          done
+          docker logs worker 2>&1 | grep -q 'misconfigured, missing: FRUITBACK_DATABASE_URL'
+          # The healthcheck of the image: 15 s apart, three failures. Unhealthy within a minute and a half.
+          health=starting
+          for attempt in $(seq 1 18); do
+            health=$(docker inspect --format '{{.State.Health.Status}}' worker)
+            if [ "$health" = unhealthy ]; then break; fi
+            sleep 5
+          done
+          echo "docker says: $health"
+          test "$health" = unhealthy
+          docker rm -f worker
+
+      - name: Boot it with each variable of before, one at a time, and find each refused by its sentence
+        # FRU-225. A worker with its database and its console, plus one variable of a worker of
+        # before: refused, never ignored, and the answer names that variable.
+        run: |
+          set -euo pipefail
+          port=8090
+          for variable in \
+            'FRUITBACK_CLIENTS={"acme":{"teamId":"t"}}' \
+            FRUITBACK_SESSION_PATH=/data/sessions.db \
+            FRUITBACK_SQLITE_PATH=/data/fruitback.db \
+            FRUITBACK_STORE=sqlite \
+            'FRUITBACK_FIRST_REVIEWER=Alice Martin'; do
+            name=${variable%%=*}
+            port=$((port + 1))
+            docker run -d --name "before-$port" -p "$port:8080" \
+              -e ALLOWED_ORIGINS=http://localhost:5173 \
+              -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
+              -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789 \
+              -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+              -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+              -e FRUITBACK_DATABASE_URL=postgres://nobody:ci-not-a-real-password@127.0.0.1:1/nothing \
+              -e "$variable" fruitback-worker:ci
+            code=000
+            for attempt in $(seq 1 30); do
+              code=$(curl -s -o /tmp/before-body -w '%{http_code}' "http://127.0.0.1:$port/health" || true)
+              if [ "$code" != "000" ]; then break; fi
+              sleep 1
+            done
+            body=$(cat /tmp/before-body)
+            echo "$name: $code $body"
+            test "$code" = 503
+            echo "$body" | grep -q "\"$name ("
+            docker rm -f "before-$port"
+          done
 
       - name: Boot it with the switch of the database of development, and find it refused
         # FRU-223. `pnpm dev` and the E2E suite run on a PostgreSQL in the process, behind
@@ -369,6 +431,8 @@ jobs:
             -e LINEAR_TEAM_ID=ci-team \
             -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
             -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+            -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+            -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789 \
             -e FRUITBACK_DATABASE_URL=postgres://postgres:ci-not-a-real-password@accounts-db:5432/postgres \
             fruitback-worker:ci
           for attempt in $(seq 1 30); do
@@ -389,13 +453,13 @@ jobs:
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM pairings')" = 1
           docker rm -f worker-db accounts-db
 
-      - name: Boot it with better-auth on, and find it built and serving no route
+      - name: Boot it with better-auth on, and find it built and serving its routes alone
         # FRU-144. better-auth is in the bundle behind a dynamic import, and no route reads it, so
         # /health is green on a bundle that cannot load it. With its secret and a database the worker
-        # builds it at boot and says so in its log: that line is what proves the bundle. The same
-        # image without the secret must say nothing of it. FRU-147: the one with the secret serves /ok, and
-        # answers 404 on a route it does not serve (/get-session since FRU-206, and a route of the
-        # organization plugin); the other answers 404 on all three.
+        # builds it at boot and says so in its log: that line is what proves the bundle. FRU-147: it
+        # serves /ok, and answers 404 on a route it does not serve (/get-session since FRU-206, and a
+        # route of the organization plugin). FRU-225: a worker without the secret does not start,
+        # so the worker of before that had better-auth off is gone from this step.
         run: |
           docker network create auth
           docker run -d --name auth-db --network auth \
@@ -416,6 +480,7 @@ jobs:
               -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
               -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
               -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+              -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789 \
               -e FRUITBACK_DATABASE_URL=postgres://postgres:ci-not-a-real-password@auth-db:5432/postgres \
               "$@" fruitback-worker:ci
             for attempt in $(seq 1 30); do
@@ -423,36 +488,26 @@ jobs:
               sleep 1
             done
           }
-          start worker-auth-off 8084
-          start worker-auth-on 8085 -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789
+          start worker-auth-on 8085
           for attempt in $(seq 1 30); do
             if docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'; then break; fi
             sleep 1
           done
           docker logs worker-auth-on
-          docker logs worker-auth-off
           docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'
-          for port in 8084 8085; do
-            for route in ok get-session organization/list; do
-              status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://app.fruitback.example' \
-                "http://127.0.0.1:$port/console/auth/$route")
-              echo "$port /console/auth/$route $status"
-              expected=404
-              if [ "$port" = 8085 ] && [ "$route" = ok ]; then expected=200; fi
-              test "$status" = "$expected"
-            done
+          for route in ok get-session organization/list; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://app.fruitback.example' \
+              "http://127.0.0.1:8085/console/auth/$route")
+            echo "/console/auth/$route $status"
+            expected=404
+            if [ "$route" = ok ]; then expected=200; fi
+            test "$status" = "$expected"
           done
-          # After the requests above: a line of better-auth in the log of the worker that has it off
-          # would say that something loaded it.
-          if docker logs worker-auth-off 2>&1 | grep -q 'better-auth'; then
-            echo "the worker without FRUITBACK_AUTH_SECRET said something of better-auth"
-            exit 1
-          fi
           # FRU-180. The seven tables of better-auth are in the migrations of Drizzle, and the journal has
           # one row for each entry of the folder.
           test "$(docker exec auth-db psql -U postgres -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('user', 'session', 'account', 'verification', 'organization', 'member', 'invitation')")" = 7
           test "$(docker exec auth-db psql -U postgres -Atc 'SELECT count(*) FROM public.__drizzle_migrations')" = "$(jq '.entries | length' apps/worker/drizzle/meta/_journal.json)"
-          docker rm -f worker-auth-on worker-auth-off auth-db
+          docker rm -f worker-auth-on auth-db
 
       - name: Take a snapshot of the database, restore it on another server, and count the rows
         # FRU-143. The backup of the Cloud is the dump that snapshot-pg.sh takes, and a backup that
@@ -609,50 +664,68 @@ jobs:
           node-version-file: .nvmrc
 
       - name: From docker-compose.yml alone to a planted pin
-        # FRU-48. The directory holds only the compose file and a .env copied from .env.example, like
-        # the machine of somebody who never cloned this repository. The compose file pulls the
-        # published image. The tag below puts the image of this commit in the local daemon under that
-        # exact name, so compose finds it, pulls nothing, and needs no registry login.
-        # FRUITBACK_IMAGE is set here so that the tag and the reference cannot differ. The container of
-        # the step above still holds port 8080, so this run must use another port.
+        # FRU-48, FRU-225. The directory holds only the compose file and a .env copied from
+        # .env.example, like the machine of somebody who never cloned this repository. The five lines
+        # the example asks to fill are filled, each secret with the command the example gives. The
+        # compose file pulls the published images. The tags below put the images of this commit in the
+        # local daemon under those exact names, so compose finds them, pulls nothing, and needs no
+        # registry login. One `up` starts the worker, its PostgreSQL and the console, healthy.
+        # Then what a person does: the sign-in link of the first administrator from the log, a
+        # workspace and a site, and a note from a visitor with no account, read back.
         env:
           FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
-          FRUITBACK_PORT: '8081'
+          FRUITBACK_CONSOLE_IMAGE: ghcr.io/sakuga-software/fruitback-console:edge
         run: |
+          set -euo pipefail
           docker tag fruitback-worker:ci "$FRUITBACK_IMAGE"
+          docker tag fruitback-console:ci "$FRUITBACK_CONSOLE_IMAGE"
           mkdir -p "$RUNNER_TEMP/compose"
           cp docker-compose.yml "$RUNNER_TEMP/compose/"
           cp .env.example "$RUNNER_TEMP/compose/.env"
           cd "$RUNNER_TEMP/compose"
-          docker compose up -d --wait
-          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT"
-          # Recreated, not restarted: the pin must outlive the container, so it must be on the volume.
-          docker compose up -d --wait --force-recreate
-          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT" --read
-
-      - name: The console of docker-compose.yml, in the same directory
-        # FRU-222. The `console` profile, with the image of this commit under the name the file pulls.
-        # The worker of the step above keeps running: only the console is started here.
-        env:
-          FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
-          FRUITBACK_PORT: '8081'
-          FRUITBACK_CONSOLE_IMAGE: ghcr.io/sakuga-software/fruitback-console:edge
-          FRUITBACK_CONSOLE_PORT: '8084'
-        run: |
-          set -euo pipefail
-          docker tag fruitback-console:ci "$FRUITBACK_CONSOLE_IMAGE"
-          cd "$RUNNER_TEMP/compose"
-          # The `.env` of the example names no address of the worker: the console stops, and says why.
-          if docker compose --profile console up -d --wait --wait-timeout 60 console; then
-            echo "the console started with no address of a worker"
+          # Without the password, the file refuses to start anything, and says which variable.
+          if said=$(docker compose config 2>&1); then
+            echo "docker compose started with no FRUITBACK_POSTGRES_PASSWORD"
             exit 1
           fi
-          docker compose --profile console logs --no-color console | grep -q 'FRUITBACK_API is not set'
-          docker compose --profile console rm -fsv console
-          FRUITBACK_PUBLIC_URL=http://127.0.0.1:8081 docker compose --profile console up -d --wait --wait-timeout 60 console
-          curl -s -D - -o /dev/null http://127.0.0.1:8084/sign-in | tr -d '\r' | grep -i '^content-security-policy:' | tee /tmp/composed
-          grep -q "connect-src 'self' http://127.0.0.1:8081;" /tmp/composed
-          test "$(docker compose --profile console exec -T console id -u)" = 101
+          echo "$said" | grep -q 'FRUITBACK_POSTGRES_PASSWORD'
+          set_value() { sed -i "s|^$1=.*|$1=$2|" .env; grep -q "^$1=$2\$" .env; }
+          set_value ALLOWED_ORIGINS https://staging.example.com
+          set_value FRUITBACK_POSTGRES_PASSWORD "$(openssl rand -hex 32)"
+          set_value FRUITBACK_AUTH_SECRET "$(openssl rand -base64 32)"
+          set_value FRUITBACK_IDENTITY_SECRET "$(openssl rand -base64 32)"
+          set_value FRUITBACK_FIRST_ADMIN ana@example.com
+          # `--wait` fails unless the three are running, and healthy where the image has a healthcheck.
+          docker compose up -d --wait --wait-timeout 120
+          docker compose ps
+          curl -sf -o /dev/null http://127.0.0.1:8081/sign-in
+          link=
+          for attempt in $(seq 1 30); do
+            link=$(docker compose logs --no-color worker | grep -o 'http://localhost:8081/sign-in#[^ ]*' | tail -n 1 || true)
+            if [ -n "$link" ]; then break; fi
+            sleep 1
+          done
+          test -n "$link"
+          site=$(node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" http://127.0.0.1:8080 --first-admin "$link")
+          echo "$site" >"$RUNNER_TEMP/compose-site"
+          # Recreated, not restarted: the pin must outlive the containers, so it must be in the database.
+          docker compose up -d --wait --wait-timeout 120 --force-recreate
+          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" http://127.0.0.1:8080 --read "$site"
+          # An owner exists now: the recreated worker writes no link when it starts.
+          test "$(docker compose logs --no-color worker | grep -c '/sign-in#' || true)" = 0
+
+      - name: The console of docker-compose.yml, in the same directory
+        # FRU-222. The console that the step above started: the image of this commit, under the name
+        # the file pulls, with the address of the worker of the .env in its policy.
+        env:
+          FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
+          FRUITBACK_CONSOLE_IMAGE: ghcr.io/sakuga-software/fruitback-console:edge
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/compose"
+          curl -s -D - -o /dev/null http://127.0.0.1:8081/sign-in | tr -d '\r' | grep -i '^content-security-policy:' | tee /tmp/composed
+          grep -q "connect-src 'self' http://localhost:8080;" /tmp/composed
+          test "$(docker compose exec -T console id -u)" = 101
 
       - name: Worker logs, if the compose run failed
         if: failure()

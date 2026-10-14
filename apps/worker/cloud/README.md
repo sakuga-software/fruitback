@@ -640,6 +640,39 @@ to run. Delete them when the dump of step 3 of « Before » was restored once so
 
 **Not tried:** any of this on the host.
 
+## Switch 4: the worker refuses to start without PostgreSQL (FRU-225)
+
+For the operator. **No agent ran any of it on the host, and no agent merges this change.** The image
+of FRU-225 refuses to start with no `FRUITBACK_DATABASE_URL`, with no `FRUITBACK_AUTH_SECRET`,
+`FRUITBACK_PUBLIC_URL`, `FRUITBACK_CONSOLE_URL` or `FRUITBACK_IDENTITY_SECRET`, and with any of
+`FRUITBACK_CLIENTS`, `FRUITBACK_SESSION_PATH`, `FRUITBACK_SQLITE_PATH`, `FRUITBACK_STORE=sqlite` and
+`FRUITBACK_FIRST_REVIEWER`. Refused, it answers `503` on `/health` and `500` everywhere else.
+**If Dokploy deploys `main` by itself, merging this change stops `api.fruitback.com`** unless the
+« Before » below is true first.
+
+**Before. All of it true on the host, or this image must not be built for it:**
+
+1. Switch 1 and switch 1 bis are done: the worker has `FRUITBACK_DATABASE_URL`, its notes are in
+   the database (`FRUITBACK_STORE=postgres`), and `fb.db` was copied (FRU-220).
+2. Switches 2 and 3 are done: the worker has `FRUITBACK_AUTH_SECRET`, `FRUITBACK_PUBLIC_URL`,
+   `FRUITBACK_CONSOLE_URL` and `FRUITBACK_IDENTITY_SECRET`.
+3. None of the variables of before is set in the environment of the worker: leave each one
+   out. `saveEnvironment` replaces the whole environment: build it again from the Keychain entries.
+4. **The demonstration** (`demo.fruitback.com`) has its PostgreSQL and its secrets (decision of
+   2026-10-13: « base vidée chaque nuit »). Its next build of this image refuses to start otherwise.
+5. A dump with the data (`snapshot-pg.sh`), copied apart, and the digest of the image that runs
+   written down.
+
+**The order.** « Deploy » the worker of FRU-225. Check: `/health` answers `200` and says
+`"store":"postgres"`; the log says « better-auth is ready, under /console/auth »; a page read and a
+note sent from a site answer as before; an extension paired before sends a note.
+
+**The way back** is the image of before, by its digest, and « Deploy »: the database is the same, and
+nothing was written in another place.
+
+**Not tried:** any of this on the host. Measured on the image of the change, on a laptop: the refusals
+above, and `docker compose up` from an empty directory to a pin of a visitor.
+
 ## The OAuth applications
 
 Each sends a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.

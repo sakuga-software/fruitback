@@ -85,12 +85,14 @@ says who can read each store. **On a public GitHub repository, that is everyone.
 ### Who can read a note back
 
 The widget reads the notes of a page to draw their pins, and the answer carries **the whole seed**,
-name and e-mail included, and the replies of your team with their authors' names. By default the
-read path is public (`FRUITBACK_READ=public`): anybody who knows a page address and its client id
-can read them, with or without the widget.
+name and e-mail included, and the replies of your team with their authors' names. Who can read
+them is the visibility of the site, chosen in the console when it is added (FRU-225): `members`, a
+session of its workspace and nobody else, which is what a site added with no visibility gets; or
+`everyone`, anybody who knows a page address and the id of the site, with or without the widget.
+[SECURITY.md](../SECURITY.md#who-reads-the-pins-the-visibility-of-each-site) says it in full.
 
-- `FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on one client, requires a signed
-  identity token on every read. [modes.md](modes.md) says which mode can supply one.
+- A worker of before FRU-225 read `FRUITBACK_READ` instead, public by default. That worker no longer
+  starts.
 - `FRUITBACK_HIDE_COMMENTS=1`, or `showComments: false` on one client, keeps your team's replies,
   and the names of the people who wrote them, out of the answer.
 - In the Cloud, the switch « Show Linear comments as replies » of a connector does the same for the
