@@ -67,8 +67,8 @@ INSERT INTO sessions (token_hash, subject, workspace, created_at, expires_at, pr
   ('drill-not-a-digest-4', 'bob', NULL, 1, 2, NULL, NULL),
   ('drill-not-a-digest-5', 'bob', NULL, 1, 2, NULL, NULL);
 
-INSERT INTO "session" ("id", "expiresAt", "token", "createdAt", "updatedAt", "ipAddress", "userAgent", "userId", "activeOrganizationId") VALUES
-  ('ses_drill1', '2026-10-18 10:00:00+00', 'drill-not-a-digest', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', NULL, NULL, 'acc_drill1', 'ws_drill1');
+INSERT INTO "session" ("id", "expiresAt", "token", "createdAt", "updatedAt", "ipAddress", "userAgent", "browser", "userId", "activeOrganizationId") VALUES
+  ('ses_drill1', '2026-10-18 10:00:00+00', 'drill-not-a-digest', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', NULL, NULL, 'Firefox on Linux', 'acc_drill1', 'ws_drill1');
 
 INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt") VALUES
   ('ver_drill1', 'drill-not-a-digest', 'alice@acme.dev', '2026-10-11 10:15:00+00', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00');
@@ -102,3 +102,7 @@ INSERT INTO kv (key, value, expires_at) VALUES
 INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, channel, author_kind, author_account_id, place, connector_id, reference, reference_url, created_at, checked_at) VALUES
   ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'seeded', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
   ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'ripe', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);
+
+-- The day a member was last seen in the workspace (FRU-249).
+INSERT INTO last_seen (member_id, day) VALUES
+  ('mem_drill1', '2026-10-11');

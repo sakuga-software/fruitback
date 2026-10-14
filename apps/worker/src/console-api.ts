@@ -22,6 +22,7 @@ import {
   readLocaleTag,
   readPersonName,
 } from './accounts.ts';
+import { seen } from './last-seen.ts';
 import {
   type ProofState,
   type TxtResolver,
@@ -426,6 +427,16 @@ export async function handleConsoleApi(
   if (role === undefined) return json(404, { error: 'not-found' }, headers);
   const allowed = (action: Action): boolean => can(role, action);
   const forbidden = (): Response => json(403, { error: 'forbidden', role }, headers);
+  // A member who calls the console in their workspace is seen there today (FRU-249).
+  await seen(context.accounts, workspaceId as string, account.id);
+
+  // « Last seen » of the members (FRU-249): the day of each, for an owner or an admin only.
+  if (rest === '/members/seen') {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-members')) return forbidden();
+
+    return json(200, { seen: await context.accounts.lastSeen(workspaceId as string) }, headers);
+  }
 
   // The notes of the workspace, and « Send again » (FRU-244): `console-notes.ts`.
   const notes = await handleNotes(rest, request, {

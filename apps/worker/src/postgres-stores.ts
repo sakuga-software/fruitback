@@ -70,6 +70,8 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     memberships: true,
     owners: true,
     role: true,
+    markSeen: true,
+    lastSeen: true,
     addSite: true,
     sites: true,
     removeSite: true,

@@ -5,6 +5,8 @@ export type { Auth };
 import { ACTIONS, ROLES } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
+import { browserLabel } from './browser-label.ts';
+import { forgetSeenOf } from './last-seen.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
@@ -364,6 +366,8 @@ export async function authOptions(
       // The second pass must not fail the call: the member is deleted, the first pass ended their
       // sessions, and a `500` here kept the route from cancelling their invitations.
       afterRemoveMember: async ({ member }) => {
+        // Their day in the workspace went with the membership (FRU-249).
+        forgetSeenOf(member.organizationId, member.userId);
         try {
           await sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now());
         } catch (error) {
@@ -406,6 +410,8 @@ export async function authOptions(
     // The session is read in the database at each call, so a session that is revoked stops at once.
     session: {
       cookieCache: { enabled: false },
+      // The short label of the browser (FRU-249), written by the hook below. `input: false`: no request gives it.
+      additionalFields: { browser: { type: 'string', required: false, input: false } },
       expiresIn: SESSION_TTL_SECONDS,
       updateAge: SESSION_RENEWAL_SECONDS,
       freshAge: SESSION_FRESH_SECONDS,
@@ -431,9 +437,17 @@ export async function authOptions(
       },
       session: {
         create: {
-          // Off, no address and no user agent in the row: the decision of 2026-10-11.
-          before: async (session: Record<string, unknown>) =>
-            config.trackIp ? undefined : { data: { ...session, ipAddress: null, userAgent: null } },
+          // Off, no address and no user agent in the row: the decision of 2026-10-11. The short label
+          // of the browser, read once here from the user agent (FRU-249, Q7), is kept either way.
+          before: async (session: Record<string, unknown>) => {
+            const browser = browserLabel(session.userAgent);
+
+            return {
+              data: config.trackIp
+                ? { ...session, browser }
+                : { ...session, browser, ipAddress: null, userAgent: null },
+            };
+          },
         },
       },
     },

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
-import { organization, user } from './auth-schema.ts';
+import { member, organization, user } from './auth-schema.ts';
 
 /**
  * The schema of the whole PostgreSQL database of a worker (FRU-180): one description, in Drizzle.
@@ -236,6 +236,26 @@ export const sessions = pgTable(
     root_hash: text('root_hash'),
   },
   (table) => [index('sessions_by_expiry').on(table.expires_at), index('sessions_by_root').on(table.root_hash)],
+);
+
+/**
+ * The day a member of a workspace was last seen there (FRU-249): their last call to the console in
+ * that workspace, or the last refresh of an extension of theirs for it. A day of UTC, `YYYY-MM-DD`,
+ * and no hour: « Last seen » says « Today », « Yesterday », « 3 days ago ». Only an owner or an admin
+ * reads it. It goes with the membership: a person who leaves and comes back starts with none.
+ */
+export const last_seen = pgTable(
+  'last_seen',
+  {
+    member_id: text('member_id').notNull(),
+    day: text('day').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'last_seen_pkey', columns: [table.member_id] }),
+    foreignKey({ name: 'last_seen_member_id_fkey', columns: [table.member_id], foreignColumns: [member.id] }).onDelete(
+      'cascade',
+    ),
+  ],
 );
 
 /** The bytes of a file. The driver answers a `Buffer`, and PGlite a `Uint8Array`: both are one here. */

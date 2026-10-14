@@ -135,7 +135,13 @@ can read them, with or without the widget.
   **never its tokens** (FRU-181); for each session of the console, the SHA-256 of its token, never
   the token, and its dates. **The address and the user agent of the browser are kept with a session
   only when the operator sets `FRUITBACK_AUTH_TRACK_IP=1`** (FRU-147); by default the row holds
-  neither. A session goes 7 days after its last day of use, or when it is ended. For a sign-in link
+  neither. **Each session keeps a short label of its browser** (FRU-249, decision of 2026-10-13):
+  a family and a system from a closed list, « Chrome on macOS », read once from the user agent when
+  the session opens, so that « My account » can say where the person is signed in. Never the user
+  agent itself, no version and no device. A session opened before has none. **For each member of a
+  workspace, the day they were last seen there** (FRU-249): the day of UTC, and no hour, of their last
+  call to the console in that workspace or of the last refresh of their extension for it. Only an
+  owner or an admin of the workspace reads it, as « Last seen »; it goes when the person leaves. A session goes 7 days after its last day of use, or when it is ended. For a sign-in link
   that waits, the SHA-256 of its token and the address it was sent to; the workspaces, their members and the address each invitation was sent
   to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.

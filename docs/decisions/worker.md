@@ -2972,3 +2972,20 @@ site sends the cookie, and can make the browser link **the provider account that
 signed in to**, for the address of the account only: what a sign-in with that provider does already,
 since one verified address is one account (FRU-97). A one-time ticket asked for by a `POST` would
 close that too, for a second round trip and a store of tickets; it was not worth it.
+
+## « Last seen » and the label of a browser (FRU-249)
+
+### The rules, in short
+
+- `last_seen` holds one day per membership (`member_id`, cascade): the day of UTC, as `YYYY-MM-DD`.
+  `seen` of `last-seen.ts` writes it from a call of the console in a workspace and from a refresh of
+  an extension for it, once a day per process; it never fails the call.
+- Only `manage-members` reads it, by `GET /console/workspaces/<id>/members/seen`. It is not added to
+  the answer of `list-members` of the organization plugin, which every member reads.
+- `session.browser` is written by the `create` hook of a session, from `browserLabel`: a family and a
+  system of two closed lists, « A browser » when the family is not one of them.
+
+### Why a day
+
+The screen of the mock-up says « Now », « 1 h ago ». A day serves it as « Today », « Yesterday »,
+« 3 days ago », says less of when a person works, and costs one write a day instead of one a call.

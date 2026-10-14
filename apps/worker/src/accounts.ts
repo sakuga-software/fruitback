@@ -297,6 +297,13 @@ export type AccountStore = {
    * no owner yet. A role that is not one of the four is no role, as for `role`.
    */
   owners(): Promise<string[]>;
+  /**
+   * That `account` was seen in `workspace` on `day`, a day of UTC as `YYYY-MM-DD` (FRU-249). Nothing
+   * for somebody who is not a member, and nothing for a day before the one kept.
+   */
+  markSeen(workspace: string, account: string, day: string): Promise<void>;
+  /** The day each member of a workspace was last seen there, by account id. A member never seen is not in it. */
+  lastSeen(workspace: string): Promise<Record<string, string>>;
   addSite(workspace: string, site: { origin: string; visibility: Visibility }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
