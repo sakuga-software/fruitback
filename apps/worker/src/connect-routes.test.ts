@@ -17,6 +17,7 @@ import { verifyForClient } from './app.ts';
 import { mutatedModule } from './conformance.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
 import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
+import { StoreError } from './store.ts';
 import { digest } from './session.ts';
 
 /**
@@ -1001,15 +1002,15 @@ describe('the writes of an ended session, with a check of app.ts taken out (FRU-
     [
       'the note',
       {
-        from: "  if (identity.account && !(await stillWrites())) {\n    return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);\n  }\n\n  const attributed",
-        to: '  const attributed',
+        from: 'const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;',
+        to: 'const ended = undefined;',
       },
     ],
     [
       'the batch',
       {
-        from: '  if (account && !(await stillWrites())) {',
-        to: '  if (false) {',
+        from: 'const ended = account ? await endedSession(stillWrites, corsHeaders) : undefined;',
+        to: 'const ended = undefined;',
       },
     ],
     [
@@ -1078,6 +1079,64 @@ describe('a token of a site, and the claims of a session of the worker (FRU-238)
       const verified = await verify(await token(), policy);
       assert.ok(verified?.ok === true);
       assert.deepEqual([verified.account, verified.chain], [true, 'a-chain']);
+    } finally {
+      mutant.remove();
+    }
+  });
+});
+
+/**
+ * The store of the sessions does not answer while a note of a session of an account is checked
+ * (FRU-238): `502 store-unavailable`, which the widget reads as « keep the note, try again », and
+ * nothing written. Raised in review.
+ */
+async function storeDownKeepsTheNote(worker: Worker): Promise<void> {
+  const alice = await person(worker, 'alice@acme.dev');
+  const acme = await workspaceOf(worker, alice, 'acme');
+  const session = await connected(worker, alice);
+  const seed = seedFixture();
+  const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
+  const bearer = { Authorization: `Bearer ${session.accessToken}` };
+  const down = mock.method(worker.sessions, 'liveIdentity', async () => {
+    throw new StoreError('the sessions did not answer');
+  });
+  try {
+    for (const body of [note, [note]]) {
+      const answer = await worker.call('/feedback', { body, origin: EXTENSION, headers: bearer });
+      assert.equal(answer.status, 502, JSON.stringify(body).slice(0, 1));
+      assert.deepEqual(await answer.json(), { error: 'store-unavailable' });
+    }
+  } finally {
+    down.mock.restore();
+  }
+  const issues = (await (await read(worker, acme.members, 'https://acme.test', session.accessToken)).json()) as {
+    issues: unknown[];
+  };
+  assert.deepEqual(issues.issues, [], 'a note was written while its session could not be read');
+  // The control: the store answers again, and the note goes.
+  assert.equal((await worker.call('/feedback', { body: note, origin: EXTENSION, headers: bearer })).status, 201);
+}
+
+describe('a note of a session of an account while the store of the sessions is down (FRU-238)', () => {
+  it('answers 502 store-unavailable, for a note and a batch, and writes nothing', async () => {
+    await storeDownKeepsTheNote(await workerOf(await opening(createPgliteDatabase)));
+  });
+
+  it('does not answer 502 when the failure of the store is not caught', async () => {
+    const mutant = await mutatedModule('app.ts', {
+      after: 'async function endedSession(',
+      from: "    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);\n",
+      to: '',
+    });
+    try {
+      const worker = await workerOf(await opening(createPgliteDatabase), {
+        handle: mutant.module.handleRequest as never,
+      });
+      const failure = await storeDownKeepsTheNote(worker).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      assert.ok(failure !== undefined, 'the scenario passed with the failure not caught');
     } finally {
       mutant.remove();
     }

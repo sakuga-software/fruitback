@@ -1352,6 +1352,25 @@ async function getFeedback(
 }
 
 /**
+ * The answer to a note of a session of an account that no longer writes, or `undefined` when it still
+ * does (FRU-238). A store that does not answer is `502 store-unavailable`, as for the note itself: the
+ * widget keeps the note and tries again (raised in review).
+ */
+async function endedSession(
+  stillWrites: () => Promise<boolean>,
+  corsHeaders: Record<string, string>,
+): Promise<Response | undefined> {
+  try {
+    if (await stillWrites()) return undefined;
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    throw error;
+  }
+
+  return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
+}
+
+/**
  * Canonicalized server-side for the same reason the write path does it: the filter matches this
  * exact string inside the description, so a caller that skipped normalization would find nothing.
  */
@@ -1412,9 +1431,8 @@ async function postFeedback(
     return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
   }
   // A note signed by a session of an account is a write: the session is read again (FRU-238).
-  if (identity.account && !(await stillWrites())) {
-    return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
-  }
+  const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;
+  if (ended !== undefined) return ended;
 
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
@@ -1654,9 +1672,8 @@ async function postBatch(
     account = identity.account;
   }
   // Once for the request, as the token is one (FRU-238).
-  if (account && !(await stillWrites())) {
-    return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
-  }
+  const ended = account ? await endedSession(stillWrites, corsHeaders) : undefined;
+  if (ended !== undefined) return ended;
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
