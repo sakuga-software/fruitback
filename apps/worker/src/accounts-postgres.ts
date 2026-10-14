@@ -215,6 +215,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
+    async setName(person, name) {
+      await run((db) => db.update(user).set({ name, updatedAt: new Date() }).where(eq(user.id, person)));
+    },
+
     async localeOf(email) {
       const address = normalizeEmail(email);
       if (address === undefined) return undefined;

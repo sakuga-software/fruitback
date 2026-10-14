@@ -118,7 +118,9 @@ can read them, with or without the widget.
   redeemed.
 - **The accounts, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-141, and nowhere
   else since FRU-150). For each person: the
-  address a provider or a link proved, the name the provider gave, and which provider signed them in
+  address a provider or a link proved, the name the provider gave or the one they chose in « My
+  account » (FRU-249: the notes already in a tracker keep the name they were sent with), and which
+  provider signed them in or was linked by them
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
   tracker it connected, encrypted (FRU-121), and where each site sends its notes; its name, its members and their roles, and the address

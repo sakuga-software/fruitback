@@ -93,6 +93,12 @@ export type SessionStore = {
    * before it ends them.
    */
   endSessionsOf(of: SessionsOf, now: number): Promise<void>;
+  /**
+   * Writes the name a person chose on their sessions that live, and on the codes minted for them and
+   * not redeemed yet (FRU-249): an extension signs it from its next access token. The sessions that
+   * ended keep the name they had.
+   */
+  renameSessionsOf(subject: string, name: string, now: number): Promise<void>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
   purge(now: number): Promise<void>;
   /**

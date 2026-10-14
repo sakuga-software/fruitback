@@ -105,6 +105,16 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.signIn({ ...ALICE, locale: 'en-US' })).locale, 'en-US');
   });
 
+  it('keeps the name a person chose, and a later sign-in does not write over it (FRU-249)', async (store) => {
+    const { alice } = await world(store);
+
+    await store.setName(alice.id, 'Alice Martin');
+    assert.equal((await store.account(alice.id))?.name, 'Alice Martin');
+    // GitHub gives its name again at the next sign-in: the one she chose stays.
+    assert.equal((await store.signIn({ ...ALICE, name: 'alice-gh' })).name, 'Alice Martin');
+    assert.equal((await store.account(alice.id))?.name, 'Alice Martin');
+  });
+
   it('gives each thing an id whose prefix says what it names', async (store) => {
     const { alice, workspace } = await world(store);
     const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
