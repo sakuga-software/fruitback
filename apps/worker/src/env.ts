@@ -1,4 +1,5 @@
 import { type FirstReviewer, readFirstReviewer } from './first-reviewer.ts';
+import { readFirstAdmin } from './first-admin.ts';
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
@@ -83,6 +84,13 @@ export type WorkerEnv = {
    * in its log when it starts. **The code is in the log in the clear**: see `first-reviewer.ts`.
    */
   FRUITBACK_FIRST_REVIEWER?: string;
+  /**
+   * The address of the first administrator (FRU-221). A worker whose instance has no owner yet writes
+   * a sign-in link for that address in its log when it starts: see `first-admin.ts`. It needs the
+   * sign-in of the console (`FRUITBACK_AUTH_SECRET`, and what that one needs). Nothing is written
+   * once a workspace has an owner. **The link is in the log, in the clear.**
+   */
+  FRUITBACK_FIRST_ADMIN?: string;
   /**
    * The SQLite file of the accounts, until FRU-150. **Refused at boot**: the accounts are in
    * PostgreSQL, and `migrate-to-postgres` copies a file there. It is read only to say so.
@@ -237,6 +245,7 @@ const configSchema = z.object({
   sessionPath: z.string().min(1).optional(),
   /** The person a worker with no session mints a pairing code for when it starts (FRU-108). */
   firstReviewer: z.custom<FirstReviewer | undefined>().optional(),
+  firstAdmin: z.string().optional(),
   /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
   /** The schema of that database the worker keeps its tables in (FRU-219). `public` when none is named. */
@@ -364,6 +373,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
+    firstAdmin: readFirstAdmin(env.FRUITBACK_FIRST_ADMIN),
     databaseUrl: databaseUrlOf(env),
     // A name that is refused is reported below, with its reason. `public` only lets the rest be read.
     databaseSchema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) ?? DEFAULT_DATABASE_SCHEMA,
@@ -479,6 +489,25 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       ok: false,
       missing: ['FRUITBACK_CLIENTS (FRUITBACK_SESSION_PATH is set, and no client declares a workspace for a session)'],
     };
+  }
+
+  // FRU-221. As below: a variable that would be set and do nothing is refused. The secret of the
+  // sign-in is asked for, and never made by the worker: one that it made would change at each start,
+  // and end every session with it.
+  if (env.FRUITBACK_FIRST_ADMIN?.trim()) {
+    if (result.data.firstAdmin === undefined) {
+      return { ok: false, missing: ['FRUITBACK_FIRST_ADMIN (the address of one person)'] };
+    }
+    if (!hasAuth(result.data)) {
+      return {
+        ok: false,
+        missing: [
+          result.data.databaseUrl === undefined
+            ? 'FRUITBACK_DATABASE_URL (FRUITBACK_FIRST_ADMIN is set, and an account is in the database)'
+            : 'FRUITBACK_AUTH_SECRET (FRUITBACK_FIRST_ADMIN is set, and its link signs a person in to the console: 32 random characters or more, which the worker does not make)',
+        ],
+      };
+    }
   }
 
   // FRU-108. Each refusal is a variable that would be set and do nothing, with the operator waiting

@@ -267,6 +267,11 @@ export type AccountStore = {
   /** Every workspace this account belongs to, with its role there, oldest first. */
   memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;
   role(workspace: string, account: string): Promise<Role | undefined>;
+  /**
+   * The address of every person who owns a workspace, each once (FRU-221). Empty: the instance has
+   * no owner yet. A role that is not one of the four is no role, as for `role`.
+   */
+  owners(): Promise<string[]>;
   addSite(workspace: string, site: { origin: string; visibility: Visibility }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;

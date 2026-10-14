@@ -124,6 +124,12 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: { from: ".run(workspace.id, owner, 'owner', now)", to: ".run(workspace.id, owner, 'admin', now)" },
   },
   {
+    breaks:
+      'names the owners of the instance by their address, each once, and nobody before the first workspace (FRU-221)',
+    by: 'names an owner once for each workspace they own',
+    replace: { from: 'SELECT DISTINCT a.email FROM members m', to: 'SELECT a.email FROM members m' },
+  },
+  {
     breaks: 'lists the workspaces of an account oldest first',
     by: 'lists them newest first',
     replace: { from: 'ORDER BY m.created_at, w.id', to: 'ORDER BY m.created_at DESC, w.id' },

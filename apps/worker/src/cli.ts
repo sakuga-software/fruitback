@@ -1,8 +1,9 @@
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
-import { createPairingCommand, noteIndexFor } from './app.ts';
+import { adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
+import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
@@ -476,4 +477,87 @@ export async function runMigrateToPostgres(
   } finally {
     await database.close();
   }
+}
+
+/**
+ * The sign-in link of an administrator, as a command (FRU-221), for the same reason as `pair`.
+ *
+ * `docker compose exec worker node server.mjs admin-link --email ana@acme.dev`
+ *
+ * For an instance that has no owner yet, or for an owner who lost their session: `first-admin.ts`
+ * says what it refuses. The link is written on the terminal and nowhere else. **A line that says who
+ * the link is for, with no link, goes to the log of the worker**, so a link made by somebody who got
+ * into the container is not made in silence.
+ */
+const ADMIN_LINK_USAGE = 'usage: admin-link --email <address>';
+
+export function parseAdminLinkArgs(
+  argv: readonly string[],
+): { ok: true; email: string } | { ok: false; error: string } {
+  const [flag, value, ...rest] = argv;
+  if (flag !== '--email' || value === undefined || value.startsWith('--') || rest.length > 0) {
+    return {
+      ok: false,
+      error: `${ADMIN_LINK_USAGE}\n${argv.length === 0 ? '--email is required' : `unexpected: ${argv.join(' ')}`}`,
+    };
+  }
+
+  return { ok: true, email: value };
+}
+
+/**
+ * Writes a line where `docker logs` reads it. A command started with `docker exec` writes on the
+ * terminal of whoever started it, and not in the log of the container: the log is the output of the
+ * first process, which Linux gives a path. `false` where there is no such path, or no right to it.
+ */
+export function writeInTheLogOfTheWorker(line: string, path = '/proc/1/fd/1'): boolean {
+  try {
+    appendFileSync(path, `${line}\n`);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function runAdminLink(
+  argv: readonly string[],
+  env: WorkerEnv,
+  held?: AdminLinks,
+  leave: (line: string) => boolean = writeInTheLogOfTheWorker,
+): Promise<{ ok: boolean; lines: string[] }> {
+  const parsed = parseAdminLinkArgs(argv);
+  if (!parsed.ok) return { ok: false, lines: [parsed.error] };
+
+  const config = readConfig(env);
+  if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
+  const links = held ?? adminLinksFor(config.config);
+  if (links === undefined) {
+    return {
+      ok: false,
+      lines: [
+        'this worker signs nobody in to the console: set FRUITBACK_DATABASE_URL, FRUITBACK_AUTH_SECRET, FRUITBACK_PUBLIC_URL and FRUITBACK_CONSOLE_URL. Nothing was written.',
+      ],
+    };
+  }
+
+  let outcome: AdminLinkOutcome;
+  try {
+    outcome = await adminLinkFor(links, parsed.email);
+  } catch (error) {
+    return { ok: false, lines: [`${String(error instanceof Error ? error.message : error)}. No link was made.`] };
+  }
+  if (outcome.log === undefined) return { ok: outcome.ok, lines: outcome.lines };
+
+  const logged = leave(`[fruitback] ${new Date().toISOString()} ${outcome.log}`);
+
+  return {
+    ok: outcome.ok,
+    lines: [
+      ...outcome.lines,
+      logged
+        ? 'A line in the log of the worker says that this link was made, and for whom. It does not hold the link.'
+        : 'The log of the worker could not be written from here: nothing there says that this link was made.',
+    ],
+  };
 }
