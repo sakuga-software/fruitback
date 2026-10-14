@@ -85,10 +85,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   that arrives moves nothing of a row (the room of « Not seen yet » is kept), and the days of a read
   made before, late, are dropped. Who
   else reads the screen, or a worker that refuses the days, gets the day somebody joined (« Joined »).
-  **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour), the role
-  « Guest, one site » and the list « Site » of the form (Q3), and
-  the one site of a guest in « Sites », which says « Every site », or « Shared ones » for a guest.
-  What a guest does is in the legend only when a guest is on the screen. **Kept, though the mockup
+  **The guest of one site** (FRU-250, Q3): « Guest, one site » is the first role of the form when
+  the workspace has a site, and the list « Site » (the hosts of its sites) shows for that role only;
+  the invitation sends `sites: [id]`, and a « Resend » the sites of the invitation. « Sites » names
+  the site of a guest and of an invitation of a guest, « Every site » for the other roles. **The form
+  opens on « Member »**, where the mockup draws « Guest, one site » chosen: the list of the sites
+  arrives after the screen, and a form that opened on a guest would grow a field under a press, and
+  would send a role nobody chose. A site the worker refuses (removed meanwhile) is said, and the list
+  is read again. **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour).
+  What a guest does is in the legend when a guest is on the screen, or can be invited. **Kept, though the mockup
   draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
   (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
   every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
@@ -167,11 +172,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the first site of the workspace when it has one, and leads to the console. **The link of an
   invitation still signs nobody in** (`SECURITY.md`), so the line under the button is « Not
   {email}? Use another address », which ends the session and leads to the sign-in; the mockup's
-  « The link in the invitation signed you in. » is not said. **Three things the mockup has and this
-  screen does not, each for a decision that is open** (FRU-230): the name of who invites (the worker
-  lists the workspace of an invitation, not its sender: the line says « {workspace} invited you »);
-  the guest of one site, with its title and its row « Site » (Q3); « It signs in with this
-  account. » about the extension, which a browser still joins with a code from the console (Q8).
+  « The link in the invitation signed you in. » is not said. **The guest of one site** (FRU-250): « Review {site} with {workspace} », its sentence, and the
+  row « Site »; joined, « Open {site} » is the site the worker lists to the guest. **Two things the
+  mockup has and this screen does not, each for a decision that is open** (FRU-230): the name of who
+  invites (the worker lists the workspace of an invitation, not its sender: the line says
+  « {workspace} invited you »); « It signs in with this account. » about the extension, which a
+  browser still joins with a code from the console (Q8).
   **The extension is in no store yet** (FRU-130): « Add to Chrome » and « Get the Firefox add-on »
   lead to the page of the documentation that says how to install it.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**

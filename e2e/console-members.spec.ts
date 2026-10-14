@@ -19,7 +19,8 @@ import {
  *
  * The values are read in the code of the mockup (`12-console-members.html`), and the boxes in its
  * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
- * screen has no list « Site » and no « Guest, one site » in the form (Q3). The last column is
+ * form offers « Guest, one site » when the workspace has a site, and the list « Site » for that role
+ * only (FRU-250); the mockup draws that state, and the screen opens on « Member ». The last column is
  * « Last seen » for an owner or an admin, read from `…/members/seen` (FRU-249), and the day somebody
  * joined for the others, or when that read gives nothing. The worker is answered by stubs.
  */
@@ -45,7 +46,10 @@ const person = (id: number, name: string, email: string, role: Role, day: string
 const ANA = person(1, 'Ana', 'ana@acme.dev', 'owner', '2026-06-02');
 const TOM = person(2, 'Tom', 'tom@acme.dev', 'admin', '2026-07-14');
 const NORA = person(3, 'Nora', 'nora@acme.dev', 'member', '2026-09-01');
-const INES = person(4, 'Inès Morel', 'ines@client.fr', 'guest', '2026-09-22');
+const INES = {
+  ...person(4, 'Inès Morel', 'ines@client.fr', 'guest', '2026-09-22'),
+  sites: [{ id: 's1', origin: 'https://staging.acme.dev' }],
+};
 const MEMBERS = [ANA, TOM, NORA, INES];
 const PAUL = {
   id: 'i1',
@@ -73,7 +77,7 @@ type Worker = {
   /** An invitation that is asked and not answered yet. */
   slow: boolean;
   /** What the worker answers to a change it refuses. */
-  refuses?: { status: number; error: string };
+  refuses?: { status: number; error: string; field?: string };
 };
 
 type World = {
@@ -144,7 +148,11 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
     const body = request.postDataJSON() as Record<string, unknown>;
     worker.sent.push({ call, body });
     if (worker.slow) return new Promise<void>(() => {});
-    if (worker.refuses !== undefined) return json({ error: worker.refuses.error }, worker.refuses.status);
+    if (worker.refuses !== undefined) {
+      const { status, ...refused } = worker.refuses;
+
+      return json(refused, status);
+    }
     if (call !== 'invite-member') return json({});
     const again = invitations.find((each) => each.email === body.email);
     const invitation = again ?? {
@@ -166,6 +174,11 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
   });
 
   return worker;
+}
+
+/** The sites of the workspace, in place of the one the stub lists. */
+async function stubSites(page: Page, sites: readonly unknown[]): Promise<void> {
+  await page.route(/\/console\/workspaces\/w1\/sites$/, (route) => route.fulfill({ status: 200, json: { sites } }));
 }
 
 async function open(page: Page): Promise<void> {
@@ -292,14 +305,14 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(address, 'color')).toEqual(rgb(MUTED));
 
-  // The role is a word, and the sites are every site: the shared ones for a guest.
+  // The role is a word, and the sites are every site: the site of a guest is named (FRU-250).
   await expect(cells(page, 'Ana (you)')).toHaveText(['AAna (you)ana@acme.dev', 'Owner', 'Every site', '2 Jun 2026']);
   await expect(tom.nth(1)).toHaveText('Admin');
   await expect(tom.nth(2)).toHaveText('Every site');
   await expect(tom.nth(3)).toHaveText('14 Jul 2026Remove');
   await expect(cells(page, 'Nora').nth(1)).toHaveText('Member');
   await expect(cells(page, 'Inès Morel').nth(1)).toHaveText('Guest');
-  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('Shared ones');
+  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('staging.acme.dev');
   expect.soft(await painted(tom.nth(1), 'color')).toEqual(rgb(INK));
   // Nobody removes themselves here.
   await expect(row(page, 'Ana (you)').getByRole('button')).toHaveCount(0);
@@ -418,9 +431,10 @@ test('the invitation is one line: a form with a name, and each field under its l
   expectBox(await box(roles(page)), { x: 1025.1, y: 148.2, width: 200.3, height: 44 }, 2, 'the list of roles');
   expectBox(await box(invite(page)), { x: 1235.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
 
-  // An invitation is for a member or an admin: no guest of one site, and no list of sites.
+  // The roles in the order of the mockup; the list « Site » is for a guest only.
+  await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
   await roles(page).click();
-  await expect(page.getByRole('option')).toHaveText(['Member', 'Admin']);
+  await expect(page.getByRole('option')).toHaveText(['Guest, one site', 'Member', 'Admin']);
   await page.waitForTimeout(250);
   const opened = await new AxeBuilder({ page }).analyze();
   expect
@@ -428,7 +442,6 @@ test('the invitation is one line: a form with a name, and each field under its l
     .toEqual([]);
   await page.getByRole('option', { name: 'Admin' }).click();
   await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Guest, one site')).toHaveCount(0);
 
   // Nothing to send with no address; then the address and the role go as they are.
   await expect(invite(page)).toBeDisabled();
@@ -444,6 +457,67 @@ test('the invitation is one line: a form with a name, and each field under its l
     'Every site',
     /^Sent 13 OctUntil 20 Oct/,
   ]);
+});
+
+const sitesList = (page: Page) => form(page).getByRole('button', { name: /Site$/ });
+
+test('a guest of one site: the list « Site » where the mockup draws it, and the site goes with the invitation (FRU-250)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await stubSites(page, [
+    { id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' },
+    { id: 's2', origin: 'https://acme.dev', visibility: 'everyone' },
+  ]);
+  await open(page);
+  await roles(page).click();
+  await page.getByRole('option', { name: 'Guest, one site' }).click();
+
+  // The state of the mockup at 1440 px: Email, Role, Site, « Invite » on one line.
+  await expect(sitesList(page)).toBeVisible();
+  await expect(sitesList(page)).toContainText('staging.acme.dev');
+  expectBox(await box(email(page)), { x: 296.5, y: 148.2, width: 508.4, height: 44 }, 2, 'the field');
+  expectBox(await box(roles(page)), { x: 815.1, y: 148.2, width: 200, height: 44 }, 2, 'the list of roles');
+  expectBox(await box(sitesList(page)), { x: 1025.1, y: 148.2, width: 200, height: 44 }, 2, 'the list of sites');
+  expectBox(await box(invite(page)), { x: 1235.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
+  const label = form(page).locator('.label', { hasText: 'Site' }).first();
+  expect.soft(await styles(label, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
+  await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
+  await expectNoViolation(page, 'the form of a guest');
+
+  await sitesList(page).click();
+  await expect(page.getByRole('option')).toHaveText(['staging.acme.dev', 'acme.dev']);
+  await page.getByRole('option', { name: 'acme.dev', exact: true }).click();
+  await email(page).fill('zoe@client.fr');
+  await invite(page).click();
+  await expect
+    .poll(() => worker.sent)
+    .toEqual([
+      {
+        call: 'invite-member',
+        body: { organizationId: 'w1', email: 'zoe@client.fr', role: 'guest', sites: ['s2'] },
+      },
+    ]);
+});
+
+test('a workspace with no site offers no guest, and a site the worker refuses is said (FRU-250)', async ({ page }) => {
+  await workerWith(page);
+  await stubSites(page, []);
+  await open(page);
+  await roles(page).click();
+  await expect(page.getByRole('option')).toHaveText(['Member', 'Admin']);
+  await page.keyboard.press('Escape');
+
+  await page.unrouteAll();
+  const worker = await workerWith(page);
+  worker.refuses = { status: 400, error: 'invalid-request', field: 'sites' };
+  await open(page);
+  await roles(page).click();
+  await page.getByRole('option', { name: 'Guest, one site' }).click();
+  await email(page).fill('zoe@client.fr');
+  await invite(page).click();
+  await expect(page.getByRole('alert')).toHaveText('This site is no longer one of the workspace. Choose another one.');
+  await expect(email(page)).toHaveValue('zoe@client.fr');
 });
 
 test('an invitation that was kept gives its link, whatever became of its message', async ({ page }) => {
@@ -658,7 +732,7 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
   await expect(page.getByText('paul@client.fr')).toHaveCount(0);
   // The development build runs an effect twice: what matters is which lists are asked for.
   expect([...new Set(read.read)]).toEqual(['list-members']);
-  // Nobody is a guest here, and nobody can be invited as one yet: what a guest does is not said.
+  // Nobody is a guest here, and a member invites nobody: what a guest does is not said.
   await expect(page.locator('main dt')).toHaveText(['Admin', 'Member']);
   await expectNoViolation(page, 'the screen of a member');
 
@@ -668,7 +742,8 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
   await open(page);
   await expect(table(page).locator('thead th')).toHaveText(['Person', 'Role', 'Sites']);
   await expect(table(page).locator('tbody tr')).toHaveCount(1);
-  await expect(table(page).locator('tbody td')).toHaveText(['AAna (you)ana@acme.dev', 'Guest', 'Shared ones']);
+  // Their site is the one the worker lists to them (FRU-250).
+  await expect(table(page).locator('tbody td')).toHaveText(['AAna (you)ana@acme.dev', 'Guest', 'staging.acme.dev']);
   await expect(page.getByRole('form')).toHaveCount(0);
   await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
   expect(refused.read).toEqual([]);
