@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page, type Route, expect } from '@playwright/test';
-import { type LoadedExtension, openBareSite, openPopup, test } from './extension.ts';
+import { type LoadedExtension, addRule, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -379,6 +379,36 @@ test('a session of the account that ended asks to sign in again; one Fruitback c
   await expect(ended.getByRole('heading', { level: 1, name: 'Your sign-in ended' })).toBeVisible();
   await expect(ended.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
   expect(await stored(extension, 'local')).not.toContain('e2e-refresh-1');
+});
+
+test('a session of the account that ended draws no person in the head, on a site a rule covers', async ({
+  extension,
+}) => {
+  // Raised in review: the popup ended the session, then drew « Signed in as » from what it read before.
+  const { claim } = await signInRoutes(extension.context, requestOf('ended-rule'));
+  claim.answer = 'approved';
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-sign-in-ended-rule');
+  const popup = await openPopup(extension, page);
+  const opened = extension.context.waitForEvent('page');
+  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await opened;
+  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
+  await popup.close();
+  await addRule(extension, { mode: 'team', endpoint: CLOUD });
+
+  await extension.worker.evaluate(async () => {
+    const area = chrome.storage.session;
+    await area.remove(Object.keys(await area.get(null)).filter((key) => key.startsWith('fruitback:grant:')));
+  });
+  await extension.context.route(`${CLOUD}/session/refresh`, (route) =>
+    route.fulfill({ status: 401, json: { error: 'session-revoked' } }),
+  );
+  const after = await openPopup(extension, page);
+  await expect(after.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
+  await expect(after.getByText(`Rule: ${'http://localhost:5177'}`)).toBeVisible();
+  await expect(after.getByRole('img', { name: /^Signed in as/ })).toHaveCount(0);
+  await expect(after.getByRole('link', { name: 'Open the console' })).toHaveCount(0);
 });
 
 test('the popup signed out speaks French, and keeps to its 360 px', async ({ extension }) => {

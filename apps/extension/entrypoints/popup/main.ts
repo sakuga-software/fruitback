@@ -89,6 +89,9 @@ const connect = createBrowserConnect(sessions);
 /** The next claim while the popup shows the word. One at a time: every draw clears it. */
 let nextClaim: ReturnType<typeof setTimeout> | undefined;
 
+/** Which drawing the screen is: each `render` and each sign-in counts one. */
+let drawn = 0;
+
 const openSettings = (): void => void browser.runtime.openOptionsPage();
 
 /** The language of the account when the extension knows it, the browser's own otherwise. */
@@ -122,6 +125,7 @@ void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined
 async function render(editing = false, claimedNow?: ConnectState): Promise<void> {
   if (app === null) return;
   clearTimeout(nextClaim);
+  drawn += 1;
 
   const tab = await tabUnderThePopup;
   const origin = originOf(tab?.url);
@@ -138,7 +142,8 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
 
   const held = await sessions.list();
   const accountState = await accountOf(held);
-  const account = await accountShown(held);
+  // Ended just now: `accountOf` forgot the session, and `held` is what was read before it.
+  const account = accountState === 'ended' ? undefined : await accountShown(held);
 
   const found = origin === undefined ? undefined : await findSite(origin);
   // FRU-101: a site of the reviewer's workspace needs no form. One click, and nothing typed.
@@ -305,6 +310,9 @@ async function accountShown(held: Record<string, StoredSession>): Promise<Accoun
 function signIn(origin: string, fresh: boolean): void {
   if (CLOUD === undefined || app === null) return;
   const endpoint = CLOUD;
+  // No claim of the screen before goes on while this sign-in starts.
+  clearTimeout(nextClaim);
+  drawn += 1;
   for (const button of app.querySelectorAll('button')) button.disabled = true;
 
   void (async () => {
@@ -350,10 +358,15 @@ function problemScreen(origin: string, problem: 'unavailable' | 'untrusted' | 'b
  * would take the focus off « Start again » and read the status out again each time.
  */
 function waitForTheConsole(waiting: PendingConnect, unanswered: boolean): void {
+  clearTimeout(nextClaim);
+  // A claim in the air when the screen changes must not start a second loop: it belongs to a
+  // screen that is gone (raised in review: « Start again » while a claim was in the air).
+  const screen = drawn;
   nextClaim = setTimeout(() => {
     void pollConnect(connect)
       .catch(() => 'unavailable' as const)
       .then((now) => {
+        if (screen !== drawn) return;
         if (now === (unanswered ? 'unavailable' : 'waiting')) waitForTheConsole(waiting, unanswered);
         else void render(false, now);
       });
