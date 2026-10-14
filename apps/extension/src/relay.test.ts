@@ -181,6 +181,27 @@ describe('the relay refuses before it sends', () => {
     assert.equal((await relay(WRITE, 'https://acme.dev')).status, 0);
   });
 
+  /**
+   * The refusal of status 0 is logged by the background, and a session refusal now answers `401`:
+   * without this, a reviewer whose session ended would find no trace of it in the console.
+   */
+  it('tells the log why it answered 401 for a session, and only then (FRU-238)', async () => {
+    for (const reason of ['not-paired', 'session-revoked-or-expired'] as const) {
+      const told: string[] = [];
+      const { relay } = harness({ ensureAccess: async () => ({ ok: false, reason }), warn: (why) => told.push(why) });
+      await relay(WRITE, 'https://acme.dev');
+      assert.deepEqual(told, [reason]);
+    }
+    // A refusal of status 0 is logged by the background already, and an answer is no refusal.
+    const told: string[] = [];
+    await harness({
+      ensureAccess: async () => ({ ok: false, reason: 'unavailable' }),
+      warn: (why) => told.push(why),
+    }).relay(WRITE, 'https://acme.dev');
+    await harness({ warn: (why) => told.push(why) }).relay(WRITE, 'https://acme.dev');
+    assert.deepEqual(told, []);
+  });
+
   it('answers a refusal when the worker cannot be reached', async () => {
     const { relay } = harness({
       send: async () => {
