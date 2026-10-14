@@ -549,6 +549,47 @@ that reviewer signs a note with it, and not before. test:`tells a reader it woul
 identified, and tells nobody who (FRU-112)` holds the worker's half, and
 test:`names nothing of who the session is in code the page can read` holds the extension's.
 
+**The first administrator signs in by a link that the worker writes, with no e-mail and no
+provider** (FRU-221). An instance that sends no e-mail and has no GitHub or Google sign-in could make
+no account at all. With `FRUITBACK_FIRST_ADMIN=<address>`, a worker whose instance has no owner yet
+writes a sign-in link for that address in its log when it starts; `node server.mjs admin-link --email
+<address>` writes one on the terminal instead. It is the link of the e-mail, made by better-auth and
+kept as a digest. **Nothing proves that the person who opens it holds that address: the operator
+names it.** What bounds this way in:
+
+- **Whoever reads the link in its ten minutes signs in as that address, and on an instance with no
+  owner makes its first workspace and owns it.** The link is in the log of the container in the
+  clear, or on a terminal, and a log that is shipped elsewhere keeps the line after the link is
+  dead. Ten minutes (`ADMIN_LINK_TTL_SECONDS`), where the link of an e-mail lives fifteen; spent
+  once; and when it is spent the worker writes who signed in, so an operator who did not open it
+  reads that somebody did: test:`is refused after ten minutes, where the link of an e-mail lives
+fifteen`, test:`is spent once: the same link opened again is refused`.
+- **No request makes one.** Only the start of the worker and the command call the function that
+  does: test:`whatever the path, the method and the body, on a worker that names a first
+administrator` sends every path the routes spell, and reads that no mark of a link was written.
+- **The log writes one only while no workspace has an owner**, and a link kept from before is
+  refused once one has, however that owner signed in: test:`writes nothing once a workspace has an
+owner: the variable left in the environment opens nothing`, test:`is refused once somebody else owns
+a workspace, however they signed in`. A link that was refused stays refused.
+- **One link at a time.** Two replicas that start together write one link (test:`is one link when
+two replicas start together, and the other one says that it was written`), and a new link ends the
+  one before (test:`cancels the link before with each new one, whoever asked for each`).
+- **The command makes a link for an instance with no owner, or for an owner who lost their
+  session, and for nobody else**: no second owner, and no admin or member made one
+  (test:`refuses every other address once there is an owner: no second owner, and nobody
+promoted`). It ends no session (test:`gives an owner who lost their session a link, and ends no
+session that is open`). It needs a shell in the container, which already reads the database. Each
+  link it makes leaves a line in the log of the worker: the address and the time, and never the link.
+- **The token is on one line, and nowhere else.** It is after the `#` of the link, which a browser
+  sends to no server: no access log, no proxy and no error line of the worker holds it, and the
+  database holds a digest (test:`writes its token on one line of the log, and nothing else of the
+worker ever writes it`).
+- **The secret of the sign-in is asked for, and never made by the worker**: with
+  `FRUITBACK_FIRST_ADMIN` and no `FRUITBACK_AUTH_SECRET`, the worker refuses to start.
+
+Empty the variable once the first workspace is made. Left in place it opens nothing while a
+workspace has an owner; on an instance whose last owner left, it would write a link again.
+
 **`FRUITBACK_FIRST_REVIEWER` writes a pairing code in the log** (FRU-108). It is off unless the
 operator sets it. A worker that holds no session yet then mints a code for the person the variable
 names each time it starts, and writes it in the log of the container, in the clear: as a code, or as
@@ -1146,6 +1187,40 @@ verify`.
 - `GET /auth/providers` answers the console which ways the routes of better-auth offer
   (`betterAuth`), and no client id. A worker with no accounts, or with no `FRUITBACK_AUTH_SECRET`,
   answers `{}`.
+
+### A person's name and the ways they sign in, from « My account » (FRU-249)
+
+- **A person names themself, and nobody else.** `POST /console/me/name` sets the name of the
+  account of the cookie, from the console (its `Origin`), and no route takes an id: test:`sets the
+name of the person of the cookie only, by a POST of the console`. The token of an extension opens
+  no route of the console. A name is one line of 1 to 80 characters, in NFC, and **holds no control
+  character, no format character (a direction mark, a character of no width), no character of
+  private use and none that is unassigned**: such a name would draw one name and hold another, as
+  the author of a note in a tracker. test:`refuses what is not a name of one line, and keeps the name
+the account had`. A later sign-in with a provider does not write over it. There is no list of
+  reserved names: a name is a claim of the person, as the name in a note always was, and the
+  address beside it is the one the worker proved.
+- **An extension signs the new name from its next access token**, at its next refresh, within ten
+  minutes: the rename writes it on the live sessions of the person and on their codes that wait:
+  test:`signs the next access token of an extension with the new name, and leaves the token in hand
+as it was`. The notes already in a tracker keep the name they were sent with.
+- **A provider is linked only for the address of the account, verified by the provider.**
+  `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same
+  refusal of a page of another site and of a provider this worker does not have. better-auth
+  refuses another address, an address the provider did not verify, and a provider account that is
+  another person's: no account is joined to another, and the person comes back to « My account »
+  with an error (read in `oauth2/link-account.mjs` of 1.7.7): test:`refuses a provider whose address
+is another one, or is not verified, and joins no account`. No token of the provider is kept, as for
+  a sign-in. better-auth's own `/link-social`, `/unlink-account` and `/list-accounts` stay closed.
+- **A provider goes only while another way to sign in stays** (`DELETE /console/me/sign-in/<provider>`):
+  the link of the e-mail on a worker that sends it, or the other provider, linked and set up on this
+  worker. Otherwise `409 last-sign-in`: test:`keeps the last way to sign in on a worker that sends no
+link`. **The session must be of the last day** (`freshAge`, the default of better-auth, written):
+  an older one answers `403 sign-in-again`, so a cookie copied a week ago takes no way to sign in
+  away: test:`asks a session older than a day to sign in again before a provider goes`. Two unlinks
+  of one person run one after the other, so two at the same moment cannot take both providers:
+  test:`takes one of two providers, and not both, when two unlinks come at the same moment`. **This
+  holds for one process of the worker**, as the lock of a workspace does.
 
 ### The image of the console (FRU-222)
 

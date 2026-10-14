@@ -3,6 +3,7 @@ import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { authConfigOf, authOptions, startAuth } from './auth.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
+import { firstAdminLines } from './first-admin.ts';
 import { createMemoryKv } from './kv.ts';
 import type { MailMessage } from './mail.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
@@ -19,7 +20,12 @@ import { createPostgresConnectStore, createPostgresSessionStore } from './sessio
  * address of the worker. `/__test/sent` and `/__test/received` answer what a test reads: the mail,
  * and the requests. It imports nothing of `node:test`.
  */
-export async function cloudWorker(options: { consoleUrl: string; publicUrl: string }) {
+export async function cloudWorker(options: {
+  consoleUrl: string;
+  publicUrl: string;
+  /** `false`: a worker that sends no e-mail, whose first administrator gets a link another way (FRU-221). */
+  mail?: boolean;
+}) {
   const instance = newPglite();
   const database = await databaseOn(instance);
   await migrate(database);
@@ -64,10 +70,22 @@ export async function cloudWorker(options: { consoleUrl: string; publicUrl: stri
         accounts,
         sessionStore: sessions,
         connectStore,
-        mailer: { send: async (message) => void sent.push(message) },
+        ...(options.mail === false
+          ? {}
+          : { mailer: { send: async (message: MailMessage) => void sent.push(message) } }),
         kv,
         ...(auth === undefined ? {} : { auth }),
       });
+    },
+    /**
+     * The lines that a worker with `FRUITBACK_FIRST_ADMIN` writes in its log when it starts
+     * (FRU-221), or `[]` once a workspace has an owner. No route of the worker gives them: the
+     * process of a test does.
+     */
+    firstAdminLines(email: string): Promise<string[]> {
+      if (auth === undefined) throw new Error('The worker of a test has no better-auth');
+
+      return firstAdminLines({ auth, kv, owners: () => accounts.owners(), consoleUrl: options.consoleUrl }, email);
     },
     async close(): Promise<void> {
       await instance.close();
@@ -81,6 +99,13 @@ if (process.argv[1] === import.meta.filename) {
   const worker = await cloudWorker(options);
   const server = createServer(async (incoming, outgoing) => {
     const path = incoming.url ?? '/';
+    if (path.startsWith('/__test/first-admin?')) {
+      const email = new URL(path, 'http://test.invalid').searchParams.get('email') ?? '';
+      const body = JSON.stringify(await worker.firstAdminLines(email));
+      outgoing.writeHead(200, { 'Content-Type': 'application/json' }).end(body);
+
+      return;
+    }
     if (path === '/__test/sent' || path === '/__test/received') {
       const body = JSON.stringify(path === '/__test/sent' ? worker.sent : worker.received);
       outgoing.writeHead(200, { 'Content-Type': 'application/json' }).end(body);

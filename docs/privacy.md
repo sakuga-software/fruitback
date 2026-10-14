@@ -126,7 +126,9 @@ can read them, with or without the widget.
   account is deleted, or 30 days after it was made.
 - **The accounts, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-141, and nowhere
   else since FRU-150). For each person: the
-  address a provider or a link proved, the name the provider gave, and which provider signed them in
+  address a provider or a link proved, the name the provider gave or the one they chose in « My
+  account » (FRU-249: the notes already in a tracker keep the name they were sent with), and which
+  provider signed them in or was linked by them
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
   tracker it connected, encrypted (FRU-121), and where each site sends its notes; its name, its members and their roles, and the address
@@ -270,6 +272,11 @@ page.
   name, with their replies. If one identifier of the list names no note, nothing is deleted. Use
   one of `--email`, `--name` and `--id` in a command.
 
+- **After the notes moved from the SQLite file to PostgreSQL (FRU-220), the file still holds them.**
+  `migrate-to-postgres --seeds` copies and never writes the file, which is the way back. `forget`
+  then deletes in the database only: a note that a person asked you to delete is still in the file
+  and in the archives that hold it. Delete the file when the way back is no longer needed, and
+  record when its archives expire.
 - **Linear and GitHub:** the notes are issues in your own workspace, so you delete them there, and
   the command says so rather than deleting anything. Search the issues for the address, because the
   description states it, read them, and delete the ones that are this reporter's. On GitHub only an

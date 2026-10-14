@@ -18,6 +18,26 @@ import type { ClientMap } from './clients.ts';
 /** `locale` is the language the person reads: their e-mails are written in it (FRU-119). */
 export type Account = { id: string; email: string; name?: string; locale?: string };
 
+/** The longest name a person gives themself (FRU-249): the same bound as a workspace name. */
+export const MAX_PERSON_NAME = 80;
+
+/**
+ * The name a person chose for their notes (FRU-249), or `undefined` for a value that is not one.
+ *
+ * One line: every run of white space, a separator of lines included, is one space, and the edges
+ * go. No control character, no format character, no character of private use and none that is
+ * unassigned: a direction mark or a character of no width would draw one name and hold another, in
+ * a tracker that shows it as the author of a note. 1 to `MAX_PERSON_NAME` characters, counted as
+ * JavaScript counts them, like a workspace name. NFC, so one name has one form.
+ */
+export function readPersonName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const name = value.normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (name === '' || name.length > MAX_PERSON_NAME) return undefined;
+
+  return /[\p{Cc}\p{Cf}\p{Co}\p{Cn}]/u.test(name) ? undefined : name;
+}
+
 /**
  * A language tag as `Intl` writes it, or `undefined` for a value that is not one.
  *
@@ -261,12 +281,22 @@ export type AccountStore = {
   account(id: string): Promise<Account | undefined>;
   /** The language the person chose. `undefined` removes the choice. */
   setLocale(account: string, locale: string | undefined): Promise<void>;
+  /**
+   * The name the person chose for their notes (FRU-249), read by `readPersonName`. A later sign-in
+   * does not write over it: a provider gives a name only to an account that has none.
+   */
+  setName(account: string, name: string): Promise<void>;
   /** The language of the account behind this address, if there is one and it has one. */
   localeOf(email: string): Promise<string | undefined>;
   createWorkspace(name: string, owner: string): Promise<Workspace>;
   /** Every workspace this account belongs to, with its role there, oldest first. */
   memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;
   role(workspace: string, account: string): Promise<Role | undefined>;
+  /**
+   * The address of every person who owns a workspace, each once (FRU-221). Empty: the instance has
+   * no owner yet. A role that is not one of the four is no role, as for `role`.
+   */
+  owners(): Promise<string[]>;
   addSite(workspace: string, site: { origin: string; visibility: Visibility }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;

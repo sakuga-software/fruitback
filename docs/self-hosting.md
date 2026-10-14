@@ -306,6 +306,7 @@ empty value counts as absent.
 | ----------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FRUITBACK_SESSION_PATH`      | none: the `/session/` routes answer `404`                                     | The SQLite file for the extension's sessions, on a worker with no `FRUITBACK_DATABASE_URL`. See [The worker](#the-worker).                                                                                                                                                                                                                                                                                                                                                                                                                                                            | With `FRUITBACK_DATABASE_URL`: refused. Without `FRUITBACK_IDENTITY_SECRET`: refused. With `FRUITBACK_CLIENTS` and no client that declares a `workspace`: refused. Outside the volume: every reviewer must pair again after the container is recreated.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `FRUITBACK_FIRST_REVIEWER`    | none: no code is minted when the worker starts                                | The first reviewer, as `Alice Martin` or `Alice Martin <alice@acme.dev>`. A worker that holds no session yet writes a pairing code for that person in its log when it starts, as a link when `FRUITBACK_PUBLIC_URL` is set. See [The worker](#the-worker).                                                                                                                                                                                                                                                                                                                            | Without sessions: refused. With accounts, or a client that declares a `workspace`: refused, it names no workspace. A value that names nobody: refused. **The code is in the log in the clear**: whoever reads the log in its 15 minutes pairs as that person.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `FRUITBACK_FIRST_ADMIN`       | none: no link is written when the worker starts                               | The address of the first administrator, for an instance that sends no e-mail and has no provider. A worker whose instance has no owner yet writes a sign-in link for that address in its log when it starts. See [The first administrator](#the-first-administrator).                                                                                                                                                                                                                                                                                                                 | Not one address: refused. Without `FRUITBACK_AUTH_SECRET` and its database: refused, and the worker does not make the secret.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `FRUITBACK_ACCOUNTS_PATH`     | none                                                                          | **Gone since FRU-150.** It named the SQLite file of the accounts. The accounts are in PostgreSQL, with `FRUITBACK_DATABASE_URL`.                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Set: refused at boot, and the log says what to set. See [Upgrading a deployment that has an accounts file](#upgrading-a-deployment-that-has-an-accounts-file).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `FRUITBACK_DATABASE_URL`      | none: the worker has no accounts                                              | The address of a PostgreSQL database that holds the accounts, the workspaces and their sites, which the console writes, and the sessions in place of `FRUITBACK_SESSION_PATH`, as `postgres://user:password@host:5432/database`. The sites are then the clients. The worker makes its tables at the first request, so the role of the address has `CREATE` on the schema of the worker: `public`, or the one of `FRUITBACK_DATABASE_SCHEMA`. The worker sets the search path of each of its connections itself: the one of the address, of the role or of the database has no effect. | With `FRUITBACK_SESSION_PATH`: refused. Without `FRUITBACK_IDENTITY_SECRET`: refused. With `FRUITBACK_CLIENTS`: refused. Without `FRUITBACK_CONSOLE_URL`: refused. Without `FRUITBACK_AUTH_SECRET`: accepted, and nobody can sign in to the console. It holds a password: no log of the worker and no answer of `/health` quotes it. A database that does not answer, or a role that cannot create in the schema of the worker: the worker answers `502` to every read and every write, the log says why, and `/health` stays green.                                                                                                                                                                          |
 | `FRUITBACK_DATABASE_SCHEMA`   | `public`                                                                      | The schema of that database for the tables of the worker and its journal of migrations: see [In a database that another application uses](#in-a-database-that-another-application-uses).                                                                                                                                                                                                                                                                                                                                                                                              | Not a plain name (a lower-case letter or `_`, then lower-case letters, digits and `_`, 63 characters at most, not `pg_…` or `information_schema`, and not a key word of SQL such as `user`, `order` or `table`): refused, and the value is not quoted. Set without `FRUITBACK_DATABASE_URL`: refused. A schema that is not there and a role that cannot create in the database: `502`, and the log says what to grant.                                                                                                                                                                                                                                                                                        |
@@ -486,6 +487,42 @@ not know the service. The database publishes no port, and only the worker reache
 its tables at the first request that needs them. With no password the image refuses to make the
 database, and the service starts again and again: `docker compose --profile postgres logs postgres`
 then says `superuser password is not specified` (measured).
+
+### The first administrator
+
+A person signs in to the console by a link sent by e-mail, or with GitHub or Google. **An instance
+that has none of the three still gets its first administrator**: whoever runs it makes the link.
+
+In `.env`, beside the database and `FRUITBACK_AUTH_SECRET`, `FRUITBACK_PUBLIC_URL` and
+`FRUITBACK_CONSOLE_URL`:
+
+```bash
+FRUITBACK_FIRST_ADMIN=you@example.com
+```
+
+Start the worker and read its log (`docker compose logs worker`). While no workspace has an owner,
+it holds a link:
+
+```
+[fruitback] this Fruitback has no owner yet. Sign-in link for you@example.com (FRUITBACK_FIRST_ADMIN):
+[fruitback]     https://<your console>/sign-in#…
+```
+
+Open it in the browser you will use: the console signs you in and makes your workspace. **The link
+is valid ten minutes and works once, and whoever reads the log in that time can use it in your
+place.** Start the worker again for another one. Then empty the variable.
+
+With nothing in the log, or to get back in when the owner lost their session (a session lasts seven
+days, and an instance with no e-mail has no other way):
+
+```bash
+docker compose exec worker node server.mjs admin-link --email you@example.com
+```
+
+The command writes the link on your terminal. It makes one for an instance that has no owner yet,
+or for the address of an owner, and refuses any other address: invite the others from the console.
+A link made before is refused from then on, and the sessions that are open stay open. The log of
+the worker gets a line that says a link was made, for whom, and when: never the link.
 
 ### In a database that another application uses
 
@@ -785,6 +822,39 @@ to the database since is not in them.
 
 The copy is held by `postgres-copy.test.ts` and `accounts-move.test.ts`, on PGlite and on
 PostgreSQL 17. **Not tried:** these five steps with `docker compose`, as written here.
+
+### Moving the notes of the SQLite file into PostgreSQL
+
+For a worker that keeps its notes itself, with `FRUITBACK_STORE=sqlite`, which is the default of the
+compose file. PostgreSQL becomes required, and that file is going (FRU-184). The notes and their
+replies move with one command, and **a pin keeps its number**.
+
+1. Keep the image that runs, by its digest, and stop the worker. Copy the file of
+   `FRUITBACK_SQLITE_PATH` with its `-wal` out of the volume: it is the way back.
+2. [Start the database](#start-it), start the worker on it once, and stop it. Sign in to the
+   console and add each site: a site has an id of its own, which the console shows.
+3. Try the copy, then run it without `--dry-run`. It reads `FRUITBACK_DATABASE_URL`, and never
+   writes the file:
+
+   ```bash
+   docker compose --profile postgres run --rm --no-deps worker \
+     node server.mjs migrate-to-postgres --seeds /data/fruitback.db --no-client <the id of the site> --dry-run
+   ```
+
+   `--no-client` gives a site the notes of a worker that had one client. A worker that had
+   `FRUITBACK_CLIENTS` takes one `--client <its id of before>=<the id of the site>` for each client.
+   The command says, for each client of the file, how many notes it has and where they go, and
+   whether that is a site of the database: **a note that goes to no site is copied, and no page
+   reads it**. The two lines of counts say `same`, and the last one `dry run`, then `copied`.
+
+4. In `.env`: `FRUITBACK_STORE=postgres`, and remove `FRUITBACK_SQLITE_PATH`, `FRUITBACK_CLIENTS`
+   and `FRUITBACK_SESSION_PATH`. Start the worker.
+5. **Each reviewer pairs the extension again, once**: `pair` writes its code in the database now.
+   A session of a worker that had no accounts names no member of a workspace, and is not copied.
+
+**The way back** is the image of step 1, the `.env` of before and the file. A note sent since is
+not in it. `apps/worker/cloud/README.md`, « Switch 1 bis », is the same switch for the Cloud, with
+what was tried. **Not tried:** these five steps with `docker compose`, as written here.
 
 ### Upgrading a deployment from before FRU-48
 

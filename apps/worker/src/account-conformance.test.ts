@@ -114,6 +114,14 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: { from: 'if (account.locale === undefined && locale !== undefined) {', to: 'if (locale !== undefined) {' },
   },
   {
+    breaks: 'keeps the name a person chose, and a later sign-in does not write over it (FRU-249)',
+    by: 'takes the name of every sign-in',
+    replace: {
+      from: "if (account.name === undefined && name !== undefined && name !== '') {",
+      to: "if (name !== undefined && name !== '') {",
+    },
+  },
+  {
     breaks: 'gives each thing an id whose prefix says what it names',
     by: 'names a site with another prefix',
     replace: { from: "newId('site')", to: "newId('s')" },
@@ -122,6 +130,12 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     breaks: 'makes the creator the owner, and gives nobody else a role',
     by: 'makes the creator an admin',
     replace: { from: ".run(workspace.id, owner, 'owner', now)", to: ".run(workspace.id, owner, 'admin', now)" },
+  },
+  {
+    breaks:
+      'names the owners of the instance by their address, each once, and nobody before the first workspace (FRU-221)',
+    by: 'names an owner once for each workspace they own',
+    replace: { from: 'SELECT DISTINCT a.email FROM members m', to: 'SELECT a.email FROM members m' },
   },
   {
     breaks: 'lists the workspaces of an account oldest first',

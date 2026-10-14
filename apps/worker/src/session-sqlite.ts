@@ -490,6 +490,24 @@ export function createSqliteSessionStore(path: string): SessionStore {
      * A table scan: no index names a person. It runs when a member is removed, never on a request of
      * the widget.
      */
+    async renameSessionsOf(subject, name, now) {
+      if (subject === '') return;
+      const database = connect(path);
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database
+          .prepare('UPDATE sessions SET name = ? WHERE subject = ? AND revoked_at IS NULL AND expires_at > ?')
+          .run(name, subject, now);
+        database
+          .prepare('UPDATE pairings SET name = ? WHERE subject = ? AND expires_at > ? AND redeemed_at IS NULL')
+          .run(name, subject, now);
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+    },
+
     async endSessionsOf(of, now) {
       const { subject, workspace } = namedSessionsOf(of);
       const database = connect(path);

@@ -1,13 +1,14 @@
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
-import { createPairingCommand, noteIndexFor } from './app.ts';
+import { adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
+import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
 import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
-import { copySqliteFiles } from './postgres-stores.ts';
+import { copySeedsFile, copySqliteFiles } from './postgres-stores.ts';
 import type { ForgetSelector, ForgottenSeed, SeedStore } from './store.ts';
 
 /**
@@ -366,41 +367,83 @@ function excerpt(note: string): string {
  * It copies the accounts and the sessions of the two SQLite files into the database of
  * `FRUITBACK_DATABASE_URL`, and never writes the two files: `postgres-copy.ts` says how. The runbook
  * of the switch is in `cloud/README.md`.
+ *
+ * `node server.mjs migrate-to-postgres --seeds /data/fb.db --dry-run` copies the notes of the file
+ * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own.
  */
 
-export type MigrateArgs = { accountsPath: string; sessionsPath: string; dryRun: boolean };
+/**
+ * What the command copies: the two files of the switch n° 1 (FRU-145), or the file of the notes
+ * (FRU-220). Never both in one run: the first copy goes into a database that no worker started on,
+ * and the second into the database of a worker of this image.
+ */
+export type MigrateArgs =
+  | { copy: 'accounts'; accountsPath: string; sessionsPath: string; dryRun: boolean }
+  | { copy: 'seeds'; seedsPath: string; clients: Map<string | null, string>; dryRun: boolean };
 
 export type MigrateArgsResult = { ok: true; args: MigrateArgs } | { ok: false; error: string };
 
-const MIGRATE_USAGE = 'usage: migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]';
+const MIGRATE_USAGE = [
+  'usage: migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]',
+  '       migrate-to-postgres --seeds <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]',
+].join('\n');
+
+const FILE_FLAGS = ['--accounts', '--sessions', '--seeds'];
 
 export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
   const refuse = (reason: string): MigrateArgsResult => ({ ok: false, error: `${MIGRATE_USAGE}\n${reason}` });
   const paths = new Map<string, string>();
+  const clients = new Map<string | null, string>();
   let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index] ?? '';
     if (flag === '--dry-run') {
       dryRun = true;
-    } else if (flag === '--accounts' || flag === '--sessions') {
-      const value = argv[index + 1];
+      continue;
+    }
+    const value = argv[index + 1];
+    const valued = value !== undefined && !value.startsWith('--') && value.trim() !== '';
+    if (FILE_FLAGS.includes(flag)) {
       // `--accounts --dry-run` would otherwise read the flag as the file, and copy for good.
-      if (value === undefined || value.startsWith('--') || value.trim() === '') return refuse(`${flag} needs a file`);
+      if (!valued) return refuse(`${flag} needs a file`);
       if (paths.has(flag)) return refuse(`${flag} takes one file`);
       paths.set(flag, value.trim());
-      index += 1;
+    } else if (flag === '--client') {
+      // The first `=`: an id of a site has none, and an id of `FRUITBACK_CLIENTS` is a key of JSON.
+      const at = valued ? value.indexOf('=') : -1;
+      const before = at === -1 ? '' : (value ?? '').slice(0, at).trim();
+      const site = at === -1 ? '' : (value ?? '').slice(at + 1).trim();
+      if (before === '' || site === '') return refuse('--client needs <id in the file>=<id of the site>');
+      if (clients.has(before)) return refuse(`--client names « ${before} » twice`);
+      clients.set(before, site);
+    } else if (flag === '--no-client') {
+      if (!valued) return refuse('--no-client needs the id of a site');
+      if (clients.has(null)) return refuse('--no-client takes one site');
+      clients.set(null, value.trim());
     } else {
       // Refused rather than ignored: `--dryrun` must not copy for good what `--dry-run` would only try.
       return refuse(`unexpected: ${flag}`);
     }
+    index += 1;
   }
 
   const accountsPath = paths.get('--accounts');
   const sessionsPath = paths.get('--sessions');
-  if (accountsPath === undefined || sessionsPath === undefined) return refuse('--accounts and --sessions are required');
+  const seedsPath = paths.get('--seeds');
+  if (seedsPath !== undefined) {
+    if (accountsPath !== undefined || sessionsPath !== undefined) {
+      return refuse('--seeds is a run of its own: copy the accounts and the sessions first, then the notes');
+    }
 
-  return { ok: true, args: { accountsPath, sessionsPath, dryRun } };
+    return { ok: true, args: { copy: 'seeds', seedsPath, clients, dryRun } };
+  }
+  if (clients.size > 0) return refuse('--client and --no-client go with --seeds');
+  if (accountsPath === undefined || sessionsPath === undefined) {
+    return refuse('--accounts and --sessions are required, or --seeds');
+  }
+
+  return { ok: true, args: { copy: 'accounts', accountsPath, sessionsPath, dryRun } };
 }
 
 export async function runMigrateToPostgres(
@@ -415,9 +458,10 @@ export async function runMigrateToPostgres(
   if (url === undefined)
     return { ok: false, lines: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host) is required'] };
 
-  const { accountsPath, sessionsPath, dryRun } = parsed.args;
+  const { args } = parsed;
+  const files = args.copy === 'seeds' ? [args.seedsPath] : [args.accountsPath, args.sessionsPath];
   // Checked here: `node:sqlite` makes an empty database of a path that names no file.
-  const absent = [accountsPath, sessionsPath].filter((path) => !existsSync(path));
+  const absent = files.filter((path) => !existsSync(path));
   if (absent.length > 0) return { ok: false, lines: [`no file at ${absent.join(', ')}. Nothing was written.`] };
 
   const schema = readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA);
@@ -425,10 +469,95 @@ export async function runMigrateToPostgres(
 
   const database = createPgDatabase(url, schema, { max: 1 });
   try {
-    return await copySqliteFiles({ accountsPath, sessionsPath, database, dryRun });
+    return args.copy === 'seeds'
+      ? await copySeedsFile({ seedsPath: args.seedsPath, clients: args.clients, database, dryRun: args.dryRun })
+      : await copySqliteFiles({ ...args, database });
   } catch (error) {
     return { ok: false, lines: [`${String(error instanceof Error ? error.message : error)}. Nothing was written.`] };
   } finally {
     await database.close();
   }
+}
+
+/**
+ * The sign-in link of an administrator, as a command (FRU-221), for the same reason as `pair`.
+ *
+ * `docker compose exec worker node server.mjs admin-link --email ana@acme.dev`
+ *
+ * For an instance that has no owner yet, or for an owner who lost their session: `first-admin.ts`
+ * says what it refuses. The link is written on the terminal and nowhere else. **A line that says who
+ * the link is for, with no link, goes to the log of the worker**, so a link made by somebody who got
+ * into the container is not made in silence.
+ */
+const ADMIN_LINK_USAGE = 'usage: admin-link --email <address>';
+
+export function parseAdminLinkArgs(
+  argv: readonly string[],
+): { ok: true; email: string } | { ok: false; error: string } {
+  const [flag, value, ...rest] = argv;
+  if (flag !== '--email' || value === undefined || value.startsWith('--') || rest.length > 0) {
+    return {
+      ok: false,
+      error: `${ADMIN_LINK_USAGE}\n${argv.length === 0 ? '--email is required' : `unexpected: ${argv.join(' ')}`}`,
+    };
+  }
+
+  return { ok: true, email: value };
+}
+
+/**
+ * Writes a line where `docker logs` reads it. A command started with `docker exec` writes on the
+ * terminal of whoever started it, and not in the log of the container: the log is the output of the
+ * first process, which Linux gives a path. `false` where there is no such path, or no right to it.
+ */
+export function writeInTheLogOfTheWorker(line: string, path = '/proc/1/fd/1'): boolean {
+  try {
+    appendFileSync(path, `${line}\n`);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function runAdminLink(
+  argv: readonly string[],
+  env: WorkerEnv,
+  held?: AdminLinks,
+  leave: (line: string) => boolean = writeInTheLogOfTheWorker,
+): Promise<{ ok: boolean; lines: string[] }> {
+  const parsed = parseAdminLinkArgs(argv);
+  if (!parsed.ok) return { ok: false, lines: [parsed.error] };
+
+  const config = readConfig(env);
+  if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
+  const links = held ?? adminLinksFor(config.config);
+  if (links === undefined) {
+    return {
+      ok: false,
+      lines: [
+        'this worker signs nobody in to the console: set FRUITBACK_DATABASE_URL, FRUITBACK_AUTH_SECRET, FRUITBACK_PUBLIC_URL and FRUITBACK_CONSOLE_URL. Nothing was written.',
+      ],
+    };
+  }
+
+  let outcome: AdminLinkOutcome;
+  try {
+    outcome = await adminLinkFor(links, parsed.email);
+  } catch (error) {
+    return { ok: false, lines: [`${String(error instanceof Error ? error.message : error)}. No link was made.`] };
+  }
+  if (outcome.log === undefined) return { ok: outcome.ok, lines: outcome.lines };
+
+  const logged = leave(`[fruitback] ${new Date().toISOString()} ${outcome.log}`);
+
+  return {
+    ok: outcome.ok,
+    lines: [
+      ...outcome.lines,
+      logged
+        ? 'A line in the log of the worker says that this link was made, and for whom. It does not hold the link.'
+        : 'The log of the worker could not be written from here: nothing there says that this link was made.',
+    ],
+  };
 }

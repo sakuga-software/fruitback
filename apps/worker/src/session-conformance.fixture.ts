@@ -738,6 +738,24 @@ export function sessionCases(it: Declare<SessionStore>): void {
     assert.equal(await presented(store, alone.tokens.at(-1) as string, alone.at + 20), 'rotated');
   });
 
+  it('writes the name a person chose on their live sessions and codes, and on nobody else (FRU-249)', async (store) => {
+    const alice = await chainOf(store, { ...ALICE, workspace: 'ws_acme' }, 1);
+    const bob = await chainOf(store, { ...BOB, workspace: 'ws_acme' }, 0);
+    const waiting = await createPairing(store, { ...ALICE, workspace: 'ws_other' }, alice.at);
+
+    await store.renameSessionsOf('alice', 'A. Martin', alice.at + 1);
+
+    const next = await refreshSession(store, alice.tokens.at(-1) as string, SECRET, alice.at + 2);
+    assert.ok(next.ok);
+    assert.equal(next.identity.name, 'A. Martin');
+    const theirs = await refreshSession(store, bob.tokens[0] as string, SECRET, alice.at + 2);
+    assert.ok(theirs.ok);
+    assert.equal(theirs.identity.name, 'Bob Durand');
+    const redeemed = await redeemPairing(store, waiting.code, SECRET, alice.at + 3);
+    assert.ok(redeemed.ok);
+    assert.equal(redeemed.session.identity.name, 'A. Martin');
+  });
+
   it('ends every session of a workspace when no person is named, and of a person when no workspace is', async (store) => {
     const alice = await chainOf(store, { ...ALICE, workspace: 'ws_acme' }, 1);
     const bob = await chainOf(store, { ...BOB, workspace: 'ws_acme' }, 0);

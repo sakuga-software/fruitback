@@ -119,6 +119,11 @@ export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; err
 let mails: boolean | undefined;
 /** Whether the worker signs anybody in: it said `betterAuth`. `undefined` until it said. */
 let signsIn: boolean | undefined;
+/**
+ * Whether the only way in is a link that whoever runs the worker makes (FRU-221): the worker signs
+ * people in, and has no mail and no provider. `undefined` until it said.
+ */
+let byOperator: boolean | undefined;
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
@@ -313,6 +318,7 @@ export async function signInProviders(): Promise<Providers | undefined> {
   }
   const served = typeof said.betterAuth === 'object' && said.betterAuth !== null ? said.betterAuth : {};
   mails = served.email === true;
+  if (signsIn !== undefined) byOperator = signsIn && !mails && served.github !== true && served.google !== true;
 
   return { github: served.github === true, google: served.google === true };
 }
@@ -427,6 +433,16 @@ export async function offersSignIn(): Promise<boolean | undefined> {
   if (signsIn === undefined) await signInProviders();
 
   return signsIn;
+}
+
+/**
+ * Whether a person can only get in by a link from whoever runs the worker (FRU-221). `false` when the
+ * worker did not say: a form is not taken away by an outage.
+ */
+export async function signsInByOperatorOnly(): Promise<boolean> {
+  if (byOperator === undefined) await signInProviders();
+
+  return byOperator === true;
 }
 
 export async function sendsMail(): Promise<boolean> {

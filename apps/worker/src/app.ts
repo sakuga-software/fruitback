@@ -17,6 +17,7 @@ import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes, renameWorkspaceWithPlugin } from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
+import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { type TxtResolver, recheckDomains } from './domain-proof.ts';
@@ -131,6 +132,35 @@ export async function announceFirstReviewer(
  */
 export function connectStoreFor(config: WorkerConfig): ConnectStore | undefined {
   return config.databaseUrl === undefined ? undefined : postgresConnectStore(config.databaseUrl, config.databaseSchema);
+}
+
+/** What the links of an administrator need of this worker, or `undefined` when it signs nobody in (FRU-221). */
+export function adminLinksFor(config: WorkerConfig): AdminLinks | undefined {
+  const auth = authFor(config);
+  const accounts = accountStoreFor(config);
+  if (auth === undefined || accounts === undefined || config.consoleUrl === undefined) return undefined;
+
+  return { auth, kv: kvFor(config), owners: () => accounts.owners(), consoleUrl: config.consoleUrl };
+}
+
+/**
+ * Writes the sign-in link of the first administrator in the log, on a worker that names one and whose
+ * instance has no owner yet (FRU-221). `server.ts` calls it when the server listens. It never
+ * rejects, as `announceFirstReviewer`: the next start tries again. Its error names no token.
+ */
+export async function announceFirstAdmin(
+  config: WorkerConfig,
+  log: (line: string) => void = (line) => console.log(`[fruitback] ${line}`),
+): Promise<void> {
+  const links = config.firstAdmin === undefined ? undefined : adminLinksFor(config);
+  if (config.firstAdmin === undefined || links === undefined) return;
+  try {
+    for (const line of await firstAdminLines(links, config.firstAdmin)) log(line);
+  } catch (error) {
+    console.error(
+      `[fruitback] the sign-in link of FRUITBACK_FIRST_ADMIN was not made: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */

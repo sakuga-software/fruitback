@@ -90,10 +90,17 @@ jobs:
           test "$(node -p 'navigator.language')" = fr-FR
           pnpm exec nx run-many -t test --skip-nx-cache
 
-  e2e:
-    # The two things `node --test` cannot answer for: a real selector engine and real layout. Kept to
-    # six specs and ~6 seconds of browser time — a slow E2E job is one people learn to ignore.
-    name: e2e
+  e2e-shard:
+    # The two things `node --test` cannot answer for: a real selector engine and real layout. The
+    # suite runs in three parts side by side, each on four workers (FRU-268): on one runner it took 6
+    # minutes of tests on four workers, 12 on one. `e2e` below is the one check that says whether
+    # every part passed.
+    name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
+    strategy:
+      # A part that fails does not stop the others: their results are still worth reading.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     runs-on: ubuntu-latest
     # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
     # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
@@ -106,9 +113,8 @@ jobs:
       options: --user 1001
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
     # needs a newer Node than noble ships.
-    # The suite grew to about 200 tests on one worker: 6 to 9 minutes on 2026-10-13, and runs that
-    # passed every test were stopped at ten. The ceiling still stops a browser that hangs.
-    timeout-minutes: 20
+    # The ceiling stops a browser that hangs. One part takes about 4 minutes (FRU-268).
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -140,20 +146,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run the E2E suite
+      - name: Run one part of the E2E suite
         # No key and no service: each worker of the suite has a PostgreSQL in its process (PGlite,
-        # `dev-worker.fixture.ts`, FRU-223).
-        run: pnpm e2e
+        # `dev-worker.fixture.ts`, FRU-223). The count of parts comes from the matrix, so a part
+        # added there is run here too.
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ strategy.job-total }}
+        run: pnpm e2e --shard="$SHARD/$SHARDS"
 
       - name: Keep the traces of a failed run
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+
+  e2e:
+    # The check that a pull request reads, under the name it had before the suite was cut in two
+    # (FRU-268). It fails when a part failed, was cancelled, or did not run.
+    name: e2e
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every part of the E2E suite passed
+        env:
+          RESULT: ${{ needs.e2e-shard.result }}
+        run: test "$RESULT" = success
 
   postgres:
     # FRU-141, FRU-142. The accounts and the sessions in PostgreSQL, against a real server. `test` runs

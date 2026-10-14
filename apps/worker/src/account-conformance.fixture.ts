@@ -105,6 +105,16 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.signIn({ ...ALICE, locale: 'en-US' })).locale, 'en-US');
   });
 
+  it('keeps the name a person chose, and a later sign-in does not write over it (FRU-249)', async (store) => {
+    const { alice } = await world(store);
+
+    await store.setName(alice.id, 'Alice Martin');
+    assert.equal((await store.account(alice.id))?.name, 'Alice Martin');
+    // GitHub gives its name again at the next sign-in: the one she chose stays.
+    assert.equal((await store.signIn({ ...ALICE, name: 'alice-gh' })).name, 'Alice Martin');
+    assert.equal((await store.account(alice.id))?.name, 'Alice Martin');
+  });
+
   it('gives each thing an id whose prefix says what it names', async (store) => {
     const { alice, workspace } = await world(store);
     const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
@@ -129,6 +139,18 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.role(workspace.id, bob.id), undefined);
     assert.deepEqual(await store.memberships(alice.id), [{ workspace, role: 'owner' }]);
     assert.deepEqual(await store.memberships(bob.id), []);
+  });
+
+  it('names the owners of the instance by their address, each once, and nobody before the first workspace (FRU-221)', async (store) => {
+    const alice = await store.signIn(ALICE);
+    await store.signIn(BOB);
+    // Two accounts, and no workspace: the instance has no owner yet.
+    assert.deepEqual(await store.owners(), []);
+
+    await store.createWorkspace('Sakuga', alice.id);
+    await store.createWorkspace('Another one', alice.id);
+
+    assert.deepEqual(await store.owners(), [alice.email]);
   });
 
   it('lists the workspaces of an account oldest first', async (store) => {

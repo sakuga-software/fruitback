@@ -1,5 +1,13 @@
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
-import { type Providers, call, offersSignIn, providerStart, requestLink, signInProviders } from './api';
+import {
+  type Providers,
+  call,
+  offersSignIn,
+  providerStart,
+  requestLink,
+  signInProviders,
+  signsInByOperatorOnly,
+} from './api';
 import { locale, msg, t } from './i18n';
 import { awaitSignIn } from './tab-signal';
 import { AutoGrid, Button, Divider, Field, LinkButton, Problem, WideButton } from './ui';
@@ -84,6 +92,12 @@ export function useSignInWays(): { providers: Providers; closed: boolean } {
       void offersSignIn().then((offered) => {
         if (asked && offered === false) setClosed(true);
       });
+      // FRU-221: a worker with no mail and no provider. A link asked for there is never sent either.
+      void signsInByOperatorOnly().then((only) => {
+        if (!asked || !only) return;
+        closedByOperator = true;
+        setClosed(true);
+      });
     });
 
     return () => {
@@ -94,15 +108,30 @@ export function useSignInWays(): { providers: Providers; closed: boolean } {
   return { providers, closed };
 }
 
-/** What a screen says in place of its form when the worker signs nobody in (FRU-217). */
+/**
+ * Why the form is closed, for `SignInClosed`: the worker has no mail and no provider (FRU-221). One
+ * worker for a console, so one answer for every screen that shows the sentence.
+ */
+let closedByOperator = false;
+
+/**
+ * What a screen says in place of its form: the worker signs nobody in (FRU-217), or it signs in
+ * only by a link that whoever runs it makes (FRU-221). That link is for the first administrator and
+ * for an owner, and for nobody else (raised in review): the sentence does not send a member to ask
+ * for one. It is opened like any other: this page, with the link after its `#`.
+ */
 export function SignInClosed() {
   useLocale();
 
   return (
     <Problem>
-      {t(
-        'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',
-      )}
+      {closedByOperator
+        ? t(
+            'This Fruitback sends no sign-in link by e-mail. Only its owner signs in for now, with a link that the person who runs it makes. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.',
+          )
+        : t(
+            'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',
+          )}
     </Problem>
   );
 }

@@ -18,6 +18,8 @@ export type Worker = {
   /** Each message the worker was asked to send, with its address, in order. */
   mail(): Promise<{ to: string; subject: string; text: string }[]>;
   received(): Promise<Received[]>;
+  /** What the worker writes in its log for its first administrator when it starts (FRU-221). */
+  firstAdminLines(email: string): Promise<string[]>;
   /** Stops the process, and answers when it is gone. */
   close(): Promise<void>;
 };
@@ -26,13 +28,13 @@ export type Worker = {
  * Starts a worker of the Cloud on PGlite, in a process of its own: `cloud-worker.fixture.ts` says
  * why it is not imported here.
  */
-export async function cloudWorker(): Promise<Worker> {
+export async function cloudWorker(options: { mail?: boolean } = {}): Promise<Worker> {
   const child: ChildProcess = spawn(process.execPath, ['src/cloud-worker.fixture.ts'], {
     // Relative to the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
     cwd: 'apps/worker',
     env: {
       ...process.env,
-      CLOUD_WORKER: JSON.stringify({ consoleUrl: CONSOLE, publicUrl: WORKER_ORIGIN }),
+      CLOUD_WORKER: JSON.stringify({ consoleUrl: CONSOLE, publicUrl: WORKER_ORIGIN, ...options }),
     },
     stdio: ['ignore', 'pipe', 'inherit', 'ipc'],
   });
@@ -59,6 +61,7 @@ export async function cloudWorker(): Promise<Worker> {
     sent: async () => (await read<{ text: string }[]>('/__test/sent')).map((each) => each.text),
     mail: () => read<{ to: string; subject: string; text: string }[]>('/__test/sent'),
     received: () => read<Received[]>('/__test/received'),
+    firstAdminLines: (email) => read<string[]>(`/__test/first-admin?email=${encodeURIComponent(email)}`),
     close: () =>
       new Promise<void>((resolve) => {
         if (child.exitCode !== null || child.signalCode !== null) return resolve();

@@ -467,7 +467,7 @@ describe('the arguments of migrate-to-postgres (FRU-145)', () => {
   it('takes the two files, and --dry-run', () => {
     assert.deepEqual(parseMigrateArgs(['--accounts', 'a.db', '--sessions', 's.db', '--dry-run']), {
       ok: true,
-      args: { accountsPath: 'a.db', sessionsPath: 's.db', dryRun: true },
+      args: { copy: 'accounts', accountsPath: 'a.db', sessionsPath: 's.db', dryRun: true },
     });
   });
 

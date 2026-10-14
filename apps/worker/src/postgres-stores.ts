@@ -65,9 +65,11 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     signIn: true,
     account: true,
     setLocale: true,
+    setName: true,
     localeOf: true,
     createWorkspace: true,
     memberships: true,
+    owners: true,
     role: true,
     addSite: true,
     sites: true,
@@ -110,6 +112,7 @@ export function sessionStoreOn(database: Database): SessionStore {
     rotateSession: true,
     revokeSession: true,
     endSessionsOf: true,
+    renameSessionsOf: true,
     purge: true,
     holdsSession: true,
     chainOf: true,
@@ -221,6 +224,16 @@ export function createPostgresStoreSpec(): StoreSpec {
     schema: z.object({ url: z.string().min(1), schema: z.string().min(1) }),
     create: ({ url, schema }) => postgresSeedStore(url, schema),
   });
+}
+
+/** The copy of the notes of a SQLite file (FRU-220): `copySeedsFile` of `postgres-copy.ts`, loaded at the call. */
+export async function copySeedsFile(copy: {
+  seedsPath: string;
+  clients: ReadonlyMap<string | null, string>;
+  database: Database;
+  dryRun: boolean;
+}): Promise<{ ok: boolean; lines: string[] }> {
+  return (await import('./postgres-copy.ts')).copySeedsFile(copy);
 }
 
 /** What `migrate-to-postgres` copies, and where (FRU-145). */

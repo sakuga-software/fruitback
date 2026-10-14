@@ -215,6 +215,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
+    async setName(person, name) {
+      await run((db) => db.update(user).set({ name, updatedAt: new Date() }).where(eq(user.id, person)));
+    },
+
     async localeOf(email) {
       const address = normalizeEmail(email);
       if (address === undefined) return undefined;
@@ -261,6 +265,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
         return workspace === undefined || role === undefined ? [] : [{ workspace, role }];
       });
+    },
+
+    async owners() {
+      const rows = await run((db) =>
+        db
+          .selectDistinct({ email: user.email })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          // Strict, as `roleOf`: « owner,admin », which better-auth reads as two roles, is no owner.
+          .where(eq(member.role, 'owner'))
+          .orderBy(user.email),
+      );
+
+      return rows.map((row) => row.email.toLowerCase());
     },
 
     async role(workspace, person) {

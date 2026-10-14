@@ -147,6 +147,22 @@ const SPEND_CODES =
 /** One change to `session-sqlite.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<SessionStore>[] = [
   {
+    breaks: 'writes the name a person chose on their live sessions and codes, and on nobody else (FRU-249)',
+    by: 'renames every session of the worker',
+    replace: {
+      from: "'UPDATE sessions SET name = ? WHERE subject = ? AND revoked_at IS NULL AND expires_at > ?'",
+      to: "'UPDATE sessions SET name = ? WHERE subject IS NOT ? AND revoked_at IS NULL AND expires_at > ? OR 1 = 1'",
+    },
+  },
+  {
+    breaks: 'writes the name a person chose on their live sessions and codes, and on nobody else (FRU-249)',
+    by: 'leaves the codes that wait with the name of before',
+    replace: {
+      from: "'UPDATE pairings SET name = ? WHERE subject = ? AND expires_at > ? AND redeemed_at IS NULL'",
+      to: "'UPDATE pairings SET name = name WHERE name <> ? AND subject = ? AND expires_at > ? AND redeemed_at IS NULL'",
+    },
+  },
+  {
     breaks: 'opens a session for the person the operator named, not for whoever redeemed',
     by: 'does not keep the name of a pairing',
     replace: { after: 'async createPairing(', from: 'identity.name ?? null,', to: 'null,' },

@@ -77,6 +77,12 @@ export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
  */
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const SESSION_RENEWAL_SECONDS = 24 * 60 * 60;
+/**
+ * How old a session may be and still unlink a provider (FRU-249): one day from its sign-in, the
+ * default of 1.7.7, written. An older one signs in again first: a cookie copied a week ago does not
+ * take away a way to sign in.
+ */
+export const SESSION_FRESH_SECONDS = 24 * 60 * 60;
 
 /**
  * The header that carries the address of the caller to better-auth when the worker keeps addresses
@@ -402,6 +408,7 @@ export async function authOptions(
       cookieCache: { enabled: false },
       expiresIn: SESSION_TTL_SECONDS,
       updateAge: SESSION_RENEWAL_SECONDS,
+      freshAge: SESSION_FRESH_SECONDS,
     },
     socialProviders: providers,
     // A sign-in that fails goes back to the console, which says why. Without it, to a page of the
@@ -436,7 +443,13 @@ export async function authOptions(
     // The state of a sign-in with a provider holds the state and the PKCE verifier in the clear. In
     // the database, a copy and an intercepted code would finish the sign-in. In an encrypted cookie,
     // it is in the browser that started it, and in no copy.
-    account: { storeStateStrategy: 'cookie' },
+    account: {
+      storeStateStrategy: 'cookie',
+      // FRU-249: the worker decides whether a provider may go (`unlinkProvider` of `auth-routes.ts`):
+      // the link of the e-mail is a way to sign in that has no row here, so the count of better-auth,
+      // one row left, is not the rule. Its own route `/unlink-account` stays closed to a request.
+      accountLinking: { allowUnlinkingAll: true },
+    },
     // To a request, as `SERVED_PATHS` closes them too. The two of the link stay open to `auth.api`.
     disabledPaths: [
       ...Object.keys(DISABLED_PATHS),

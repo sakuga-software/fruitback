@@ -1532,6 +1532,47 @@ One migration, generated, that only adds: two tables, their sequences, three ind
 is taken at the merge**: a pull request that is rebased after another one merged a migration
 removes its own SQL file, snapshot and entry, and generates again.
 
+## The notes of the SQLite file, copied into PostgreSQL (FRU-220)
+
+### The rules, in short
+
+- **`migrate-to-postgres --seeds <file>` copies the notes and their replies**, in a run of its own:
+  never with `--accounts` and `--sessions`. That copy goes into a database that no worker started
+  on, and this one applies every migration first. The runbook is « Switch 1 bis » of
+  `apps/worker/cloud/README.md`.
+- **A note keeps its number, and no number is given twice.** The ids of the file are written as
+  they are, and each sequence goes to the largest number the file ever gave: `sqlite_sequence`
+  holds it, and a note that was deleted is in it
+  (test:`goes on after the largest number the file ever gave, a deleted note included`).
+- **`seed` is copied byte for byte.** `--client` and `--no-client` change the column `client_id`
+  and nothing inside the text, whose `client.id` stays the one of before: no read compares the two.
+- **A date must come back as it is written.** The file holds ISO text and the database
+  milliseconds. A row whose date does not is refused, with its number: the digest compares the
+  dates as milliseconds, and would not see a rounded one.
+- **A note that goes to no site is copied, and said.** The store of the database has no foreign key
+  on the site (FRU-218), and a read names a site. The command writes « NOT A SITE of this database »
+  on the line of such a client. It does not refuse: the notes of a site that is gone are still the
+  operator's to keep or to forget.
+- **The same file twice writes nothing; the same file under another `--client` is refused**
+  (test:`holds the same rows under another name of site as other rows: a second run with another
+--client is refused`): the comparison is on the rows as they would be written.
+- **`--sessions` alone does not exist.** The ticket asked for it only if a session of a worker with
+  no accounts can be given to a member. It cannot: test:`reads no site for members, whatever
+workspace it names: each reviewer pairs again, once` measures `401` for a session that names no
+  workspace or the one of `FRUITBACK_CLIENTS`, and `401` at the first refresh of one whose
+  workspace was rewritten. Each reviewer pairs again.
+
+### The reasons, and what was measured
+
+- **The sequence is set before the commit, and is not in the transaction.** A commit that fails
+  leaves the sequence forward and no row: a gap in the numbers, and nothing else. A dry run does
+  not touch it: test:`keeps nothing on a dry run, not even a number, and says what the next one
+would be`.
+- **Played backwards**, on PGlite and PostgreSQL 17.11: with `sqlite_sequence` ignored, 2 tests
+  fail; with no `setval`, 4; with no comparison after the copy, 2.
+- **The copy holds every row in memory**, as the copy of the accounts does. The size of the file
+  of the Cloud is not known here, and no large file was tried.
+
 ## The copy of the SQLite files into PostgreSQL (FRU-145)
 
 `node server.mjs migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]` copies the
@@ -2460,6 +2501,57 @@ signed with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignored t
 refused at boot instead of shipping a feature that paired successfully and then answered `401` to
 everything. FRU-95 lifted it, below.
 
+## The first administrator, with no e-mail and no provider (FRU-221)
+
+### The rules, in short
+
+- **`FRUITBACK_FIRST_ADMIN=<address>` and `admin-link --email <address>` make the sign-in link of
+  an e-mail, and send it nowhere.** `first-admin.ts` holds it. `sendLinkThrough` of `auth.ts` asks
+  better-auth for the token, as the route of the e-mail does, and the token is handed to a function
+  in place of a mailer. The link opens the sign-in page of the console, and the person goes on
+  through the setup: no screen of its own, and no route.
+- **The log writes a link only while no workspace has an owner. The command also makes one for an
+  owner**, who lost their session on an instance with no e-mail: a session of the console lives
+  seven days, and nothing else would let them back in. It refuses any other address. Arbitrated on
+  2026-10-13 on delegation of Mathieu, and to be confirmed by him.
+- **« No owner » and not « no account ».** A person who opened the link and closed the browser
+  before the workspace was made is an account that owns nothing: the instance is still empty, and
+  the next start writes a link again.
+- **A link is marked in the `Kv`, by the digest of its token**: its kind (`first` or `owner`), its
+  address and its moment. One more key holds the digest of the one link that may be spent. The `Kv`
+  of a worker with a database is in that database, so the replicas share the marks.
+- **The route that spends a link reads the mark first** (`redeemLink` of `auth-routes.ts`): a link
+  with no mark is the link of an e-mail. A link with a mark is spent only when it is the current
+  one, less than ten minutes old, and still allowed: no owner yet for `first`, still an owner for
+  `owner`.
+- **A mark is never removed, and outlives the link.** This is the rule that the tests found: see
+  the reasons.
+- **`FRUITBACK_FIRST_REVIEWER` stays refused on a worker with workspaces**, as before: a session of
+  such a worker names a workspace, and the variable names none. Once the database is required
+  (FRU-225) it has no valid configuration left, and goes with the SQLite sessions (FRU-226). The
+  first reviewer of an instance with accounts is paired from the console, or with `pair --workspace`.
+
+### The reasons, and what was measured
+
+- **A link whose mark is gone is the link of an e-mail, and would be spent with no check.** Two
+  versions of this code had that hole, and a test found each. The mark first lived ten minutes,
+  where better-auth keeps the link fifteen: an eleven-minute-old link signed in. The mark then was
+  taken away when a link was refused, and better-auth, which had not been asked, still held the
+  link: the second try signed in. So the mark holds the moment of the link and lives twice as long
+  as the link, and a link that is spent or refused keeps a mark that says « ended ». A mark that
+  cannot be read refuses too.
+- **Two replicas.** Both find no owner. `Kv.incr` on one key counts the starts of a window, and the
+  first one writes the link: the other says that one was written, and where to look. A worker that
+  starts again inside the window writes that line too, and the command gives a link at once.
+- **The command writes in the log of the worker through `/proc/1/fd/1`.** A process started with
+  `docker exec` writes on the terminal of whoever started it. The log of a container is the output
+  of its first process, and Linux gives that a path. Where the path is not there, the command says
+  that nothing in the log tells of the link. Measured in the image: see the pull request.
+- **The console says to ask for a link** when the worker signs people in and has no mail and no
+  provider (`betterAuth` with the three `false`), in place of a form whose link is never sent.
+- **Played backwards**: see the pull request for each check that was taken away and the tests that
+  then fail.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 - **`FRUITBACK_FIRST_REVIEWER` names the person, and the worker mints their code when it starts**,
@@ -2843,3 +2935,31 @@ client map were refused together at boot.
   one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`
   appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, FRU-50).
   The self-hosting guide depends on the difference.
+
+## « My account »: the name and the ways to sign in (FRU-249)
+
+### The rules, in short
+
+- `POST /console/me/name {name}` names the person of the cookie, and nobody else. `readPersonName`
+  of `accounts.ts` is the one rule: one line, 1 to 80 characters, NFC, no control, format, private
+  or unassigned character.
+- A rename writes the new name on the live sessions of the person and on their codes that wait
+  (`renameSessionsOf` of the session stores): each extension signs it from its next access token. A
+  name read from the account at each refresh was tried first, and dropped: it would also have
+  replaced the name an operator gave a pairing of the `pair` command, for a person who never chose
+  one (the E2E suite caught it).
+- `GET /console/me/sign-in` lists the ways; `GET /console/auth/link/<provider>` links one by a
+  navigation, because WebKit keeps no cookie of the state from the answer of a `fetch` (FRU-147);
+  `DELETE /console/me/sign-in/<provider>` unlinks one.
+- The worker decides whether a provider may go, not better-auth: its count of rows does not see the
+  link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
+  `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.
+
+### Why a navigation, and why no ticket for it
+
+A `GET` that starts a link changes something. A page of another site does not start one
+(`Sec-Fetch-Site`), and sends no cookie of the session anyway (`SameSite=Strict`). A page of the same
+site sends the cookie, and can make the browser link **the provider account that the browser is
+signed in to**, for the address of the account only: what a sign-in with that provider does already,
+since one verified address is one account (FRU-97). A one-time ticket asked for by a `POST` would
+close that too, for a second round trip and a store of tickets; it was not worth it.

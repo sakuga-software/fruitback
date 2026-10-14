@@ -1,7 +1,7 @@
 import { PROOF_GRACE_MS, RECHECK_MS } from './domain-proof.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
+import { SESSION_FRESH_SECONDS, SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -172,6 +172,11 @@ describe('SECURITY.md states what the code does', () => {
       'SECURITY.md does not give the lifetime of a session of better-auth',
     );
     assert.equal(SESSION_RENEWAL_SECONDS, 86_400, 'SECURITY.md says « each day it is used »');
+  });
+
+  it('quotes how old a session may be and still take a way to sign in away (FRU-249)', () => {
+    assert.ok(SECURITY.includes('**The session must be of the last day**'), 'SECURITY.md does not say it');
+    assert.equal(SESSION_FRESH_SECONDS, 86_400, 'SECURITY.md says « of the last day »');
   });
 
   it('quotes how often a domain is proven again, and how long a DNS that does not answer is waited for (FRU-103)', () => {
