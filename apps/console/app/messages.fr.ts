@@ -593,6 +593,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Visitor: 'Visiteur',
   'Somebody of the workspace': 'Quelqu’un du workspace',
   'Not delivered yet': 'Pas encore livrée',
+  'Not delivered: Fruitback stopped trying': 'Non livrée : Fruitback a cessé d’essayer',
   'Delivered to {host}': 'Livrée à {host}',
   'Pages of notes': 'Pages de notes',
   '{from} to {to} of {total}': '{from} à {to} sur {total}',

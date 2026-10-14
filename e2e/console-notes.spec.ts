@@ -166,6 +166,8 @@ const SECOND: Note[] = [
     id: 'n10',
     excerpt: 'The contact form says nothing after it is sent.',
     stage: 'green',
+    // The worker stopped trying to deliver this one (FRU-122).
+    delivery: { id: 'd10', state: 'gave-up' },
     createdAt: since(9 * 24 * 60),
   },
 ];
@@ -621,6 +623,23 @@ test('« Send again » waits, then the row loses its alert; a refusal says so on
     'POST /console/workspaces/w1/notes/n1/retry',
     'POST /console/workspaces/w1/notes/n1/retry',
   ]);
+});
+
+test('a delivery the worker gave up says so, and « Send again » still sends it', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await pages(page).getByRole('button', { name: 'Next' }).click();
+  const given = row(page, 'The contact form');
+  await expect(given.locator('td').nth(3)).toHaveText('REST APINot delivered: Fruitback stopped tryingSend again');
+  const words = given.getByText('Not delivered: Fruitback stopped trying', { exact: true });
+  expect.soft(await painted(words, 'color')).toEqual(rgb(ACCENT));
+  // One that the worker still tries says « yet ».
+  await pages(page).getByRole('button', { name: 'Previous' }).click();
+  await expect(row(page, 'The order form').getByText('Not delivered yet', { exact: true })).toBeVisible();
+  await pages(page).getByRole('button', { name: 'Next' }).click();
+  await given.getByRole('button', { name: 'Send again' }).click();
+  await expect(given.getByText(/Not delivered/)).toHaveCount(0);
+  expect(worker.sent).toEqual(['POST /console/workspaces/w1/notes/n10/retry']);
 });
 
 test('« Send again » is off while it is on its way', async ({ page }) => {
