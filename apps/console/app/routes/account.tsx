@@ -189,6 +189,8 @@ export default function Account() {
       const connected = await extensionBrowsers();
       // A list that could not be read says nothing of this browser: the line of a failed read says so.
       if (!connected.ok) return setExtensionsFailed(true);
+      // A list read now says what the line of a read that failed before did not.
+      setExtensionsFailed(false);
       if (connected.data.some((each) => each.id === browser.id)) return setExtensionStuck(browser.id);
       return setExtensions(connected.data);
     }

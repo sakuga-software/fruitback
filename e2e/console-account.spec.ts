@@ -55,6 +55,8 @@ type Stubbed = {
   extensions: unknown[] | undefined;
   /** The worker ends no extension when it is asked to. */
   extensionRefuses: boolean;
+  /** The worker knows no extension by the id it is asked to end: its session ended elsewhere. */
+  extensionGone?: boolean;
   /** How the person signs in (FRU-249); `undefined`: the worker does not answer. */
   methods: Record<string, unknown> | undefined;
   /** What the worker answers to « Unlink », and to a name, when it refuses. */
@@ -127,6 +129,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.startsWith('/console/me/browsers/')) {
       worker.sent.push(`${method} ${pathname}`);
       if (worker.extensionRefuses) return route.fulfill({ status: 502, json: { error: 'auth-unavailable' } });
+      if (worker.extensionGone) return route.fulfill({ status: 404, json: { error: 'not-found' } });
       const id = pathname.split('/').at(-1);
       worker.extensions = (worker.extensions ?? []).filter((each) => (each as { id: string }).id !== id);
 
@@ -1011,4 +1014,29 @@ test('what is typed while a refused name is on its way is sent after the refusal
   expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
   await expect(name).toHaveValue('Ana López');
   await expect(section(page, 'Profile').getByRole('alert')).toHaveCount(0);
+});
+
+test('the line of a list of the extension that was not read goes when a later read succeeds', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
+  const worker = await workerWith(page);
+  worker.extensions = EXTENSIONS;
+  await open(page);
+  const where = section(page, 'Where you are signed in');
+  const disconnect = async (name: string) => {
+    const row = where.getByRole('listitem').filter({ hasText: `Extension · ${name}` });
+    await row.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await row.getByRole('button', { name: `Disconnect the extension in ${name}` }).click();
+  };
+  // Chrome ended elsewhere (404), and the list cannot be read again: the line says so.
+  worker.extensionGone = true;
+  worker.extensions = undefined;
+  await disconnect('Chrome on macOS');
+  await expect(where.getByRole('alert')).toHaveText(
+    'Fruitback did not answer. The browsers of the extension could not be read.',
+  );
+  // Firefox ended elsewhere too, and the list is read: the rows are the worker's, and the line goes.
+  worker.extensions = [];
+  await disconnect('Firefox on Linux');
+  await expect(where.getByText(/^Extension ·/)).toHaveCount(0);
+  await expect(where.getByRole('alert')).toHaveCount(0);
 });
