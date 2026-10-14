@@ -33,10 +33,11 @@ run there.
 **Sign in to Fruitback**: the console opens in a tab and shows a word. Check that the popup shows the
 same word, then approve in the console; the popup picks the sign-in up by itself, even when it was
 closed meanwhile. The console's **Connect this browser** button, which opens a pairing link, still
-works too. Then, on a site of your workspace, the popup says the site is in your workspace and offers
-**Turn on Fruitback here**. One click: the browser asks
-for access to that site only, and the widget appears, reading and writing as you. **Set up by hand**
-leads to the form below.
+works too. Then, on a site of one of your workspaces, the popup names the workspace, how many notes
+wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
+only, and the widget appears, reading and writing as you. Once it is on, the popup has a switch to
+turn it off and on, the notes of the page by stage, **Leave feedback** and **Show every note of the
+page**. To set a site up by hand, the gear opens the options page.
 
 On a worker you run yourself, or on a site of no workspace, open the page you want to review and
 click the extension. While this browser holds no session at all, the popup offers
