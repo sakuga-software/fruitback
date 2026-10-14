@@ -55,6 +55,8 @@ type Stubbed = {
   extensions: unknown[] | undefined;
   /** The worker ends no extension when it is asked to. */
   extensionRefuses: boolean;
+  /** The worker knows no extension by the id it is asked to end: its session ended elsewhere. */
+  extensionGone?: boolean;
   /** How the person signs in (FRU-249); `undefined`: the worker does not answer. */
   methods: Record<string, unknown> | undefined;
   /** What the worker answers to « Unlink », and to a name, when it refuses. */
@@ -62,6 +64,8 @@ type Stubbed = {
   nameRefuses?: string;
   /** The answer to a name is held until `release` is called. */
   nameWaits?: boolean;
+  /** A held answer refuses the name: the worker says `invalid-name` when it is released. */
+  nameWaitsRefused?: boolean;
   release?: () => void;
   sent: string[];
   /** The bodies the console sent, by path. */
@@ -107,9 +111,11 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       if (worker.nameWaits) {
         return new Promise<void>((resolve) => {
           worker.release = () =>
-            void route
-              .fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } })
-              .then(resolve);
+            void (
+              worker.nameWaitsRefused
+                ? route.fulfill({ status: 400, json: { error: 'invalid-name' } })
+                : route.fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } })
+            ).then(resolve);
         });
       }
 
@@ -123,6 +129,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.startsWith('/console/me/browsers/')) {
       worker.sent.push(`${method} ${pathname}`);
       if (worker.extensionRefuses) return route.fulfill({ status: 502, json: { error: 'auth-unavailable' } });
+      if (worker.extensionGone) return route.fulfill({ status: 404, json: { error: 'not-found' } });
       const id = pathname.split('/').at(-1);
       worker.extensions = (worker.extensions ?? []).filter((each) => (each as { id: string }).id !== id);
 
@@ -986,4 +993,50 @@ test('what is typed while a name is on its way stays in the field, and leaves af
   await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(2);
   expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
   await expect(name).toHaveValue('Ana López');
+});
+
+test('what is typed while a refused name is on its way is sent after the refusal', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.nameWaits = true;
+  worker.nameWaitsRefused = true;
+  await open(page);
+  const name = section(page, 'Profile').getByRole('textbox', { name: 'Name shown on notes' });
+  await name.fill('Ana Lopez');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(1);
+  // Typed, and the field left, while the worker has not answered.
+  await name.fill('Ana López');
+  await page.keyboard.press('Tab');
+  worker.nameWaits = false;
+  worker.release?.();
+  // The first is refused; the newer text leaves in its turn, and the worker keeps it.
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(2);
+  expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
+  await expect(name).toHaveValue('Ana López');
+  await expect(section(page, 'Profile').getByRole('alert')).toHaveCount(0);
+});
+
+test('the line of a list of the extension that was not read goes when a later read succeeds', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
+  const worker = await workerWith(page);
+  worker.extensions = EXTENSIONS;
+  await open(page);
+  const where = section(page, 'Where you are signed in');
+  const disconnect = async (name: string) => {
+    const row = where.getByRole('listitem').filter({ hasText: `Extension · ${name}` });
+    await row.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await row.getByRole('button', { name: `Disconnect the extension in ${name}` }).click();
+  };
+  // Chrome ended elsewhere (404), and the list cannot be read again: the line says so.
+  worker.extensionGone = true;
+  worker.extensions = undefined;
+  await disconnect('Chrome on macOS');
+  await expect(where.getByRole('alert')).toHaveText(
+    'Fruitback did not answer. The browsers of the extension could not be read.',
+  );
+  // Firefox ended elsewhere too, and the list is read: the rows are the worker's, and the line goes.
+  worker.extensions = [];
+  await disconnect('Firefox on Linux');
+  await expect(where.getByText(/^Extension ·/)).toHaveCount(0);
+  await expect(where.getByRole('alert')).toHaveCount(0);
 });
