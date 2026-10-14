@@ -448,8 +448,8 @@ The polling is the worker's pace (`interval`, 5 s, believed between 2 and 60), a
 `410`, a `400` and a `404` end the request as expired. An outage keeps it.
 
 What is not done here: the account's own shape of `GET /session/sites` (several workspaces), its
-counts and the switch of screen 07 are FRU-254; adding a site from the popup is FRU-255. Until then a
-person signed in on a site of no rule gets the fields of before.
+counts and the switch of screen 07 are FRU-254; adding a site from the popup is FRU-255, screen 08,
+which replaced the fields of before for a person signed in on a site of no rule.
 
 ## A site of a workspace in the popup (FRU-254)
 
@@ -491,6 +491,10 @@ person signed in on a site of no rule gets the fields of before.
   must be the origin of the tab, in the workspace chosen, or nothing is stored.
 - A refused add says why: the role does not allow it, too many sites in the hour, Fruitback did not
   answer; a session that ended draws the screen of a sign-in that ended.
+- **08 has no fields.** A site of no workspace that one browser alone should cover (a private
+  site, a worker of its own) is set in the settings, one click away (« Settings and every site »), as
+  the person with no account reaches it. 08 is drawn only signed in to the build's Fruitback, so a
+  build without one never asks for the workspaces.
 
 ## A pairing code that arrives as a link (FRU-92)
 
