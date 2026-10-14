@@ -671,6 +671,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Disconnect the extension in {browser}': 'Déconnecter l’extension dans {browser}',
   'It stops showing notes at once. It connects again from its popup, with your approval here.':
     'Elle cesse d’afficher les notes tout de suite. Elle se reconnecte depuis son popup, avec votre accord ici.',
+  'Fruitback did not answer. The browsers of the extension could not be read.':
+    'Fruitback n’a pas répondu. Les navigateurs de l’extension n’ont pas pu être lus.',
   'This extension is still connected: Fruitback did not end its session. Try again.':
     'Cette extension est toujours connectée : Fruitback n’a pas mis fin à sa session. Réessayez.',
 };

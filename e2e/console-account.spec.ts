@@ -920,19 +920,22 @@ test('an extension is disconnected in two presses, and one that is still connect
   ]);
 });
 
-test('the browsers of the extension come with those of the console: « Sign out » does not move twice', async ({
-  page,
-}) => {
+test('a list of the extension that was not read leaves the browsers of the console, and says so', async ({ page }) => {
   const worker = await workerWith(page);
-  // A list of the extension that the worker could not read is no list: the section says so.
   worker.extensions = undefined;
   await page.goto(`${CONSOLE}/w/w1/account`);
-  await expect(
-    section(page, 'Where you are signed in').getByText(
-      'Fruitback did not answer. The browsers where you are signed in could not be read.',
-    ),
-  ).toBeVisible();
-  await expect(section(page, 'Where you are signed in').getByRole('listitem')).toHaveCount(0);
+  const where = section(page, 'Where you are signed in');
+  // The browsers of the console are there, with their « Disconnect ».
+  await expect(where.getByRole('listitem').filter({ hasText: 'Console · this browser' })).toBeVisible();
+  await expect(where.getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(2);
+  // And a line says what is missing, with the way to read it again.
+  await expect(where.getByRole('alert')).toHaveText(
+    'Fruitback did not answer. The browsers of the extension could not be read.',
+  );
+  worker.extensions = EXTENSIONS;
+  await where.getByRole('button', { name: 'Try again' }).click();
+  await expect(where.getByText('Extension · Chrome on macOS')).toBeVisible();
+  await expect(where.getByRole('alert')).toHaveCount(0);
 });
 
 test('a browser is named as the worker names it', async ({ page }) => {

@@ -162,13 +162,16 @@ export default function Account() {
   // The browsers of the extension come in the same list, read together: the rows are drawn once, and
   // nothing under them moves when the second answer comes (FRU-271).
   const [sessions, setSessions] = useState<Listed<ConsoleSession>>('loading');
+  // The browsers of the extension that could not be read do not take the browsers of the console
+  // with them: those stay, with their « Disconnect », and a line says what is missing.
   const [extensions, setExtensions] = useState<ExtensionBrowser[]>([]);
+  const [extensionsFailed, setExtensionsFailed] = useState(false);
   const read = useCallback(async () => {
     setSessions('loading');
     const [listed, connected] = await Promise.all([consoleSessions(), extensionBrowsers()]);
-    if (!listed.ok || !connected.ok) return setSessions('failed');
-    setExtensions(connected.data);
-    setSessions(listed.data);
+    setExtensions(connected.ok ? connected.data : []);
+    setExtensionsFailed(!connected.ok);
+    setSessions(listed.ok ? listed.data : 'failed');
   }, []);
   const [extensionStuck, setExtensionStuck] = useState<string | undefined>();
 
@@ -179,7 +182,9 @@ export default function Account() {
     if (ended === 'unknown') {
       // Ended since the list was read, or a worker with no such route: only the list says which.
       const connected = await extensionBrowsers();
-      if (!connected.ok || connected.data.some((each) => each.id === browser.id)) return setExtensionStuck(browser.id);
+      // A list that could not be read says nothing of this browser: the line of a failed read says so.
+      if (!connected.ok) return setExtensionsFailed(true);
+      if (connected.data.some((each) => each.id === browser.id)) return setExtensionStuck(browser.id);
       return setExtensions(connected.data);
     }
     setExtensions((current) => current.filter((each) => each.id !== browser.id));
@@ -421,6 +426,16 @@ export default function Account() {
                     />
                   </Row>
                 ))}
+              {extensionsFailed ? (
+                <li className={`${ONE_ROW} gap-[12px] border-t-0`}>
+                  <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+                    {t('Fruitback did not answer. The browsers of the extension could not be read.')}
+                  </p>
+                  <Button tone="outline" onClick={() => void read()}>
+                    {t('Try again')}
+                  </Button>
+                </li>
+              ) : null}
             </ul>
           )}
         </section>

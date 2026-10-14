@@ -315,7 +315,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET
 /console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
   after the browsers of the console. The two lists are read together and drawn once, so nothing under
-  them moves when the second answer comes; a list that one of them could not read is no list.
+  them moves when the second answer comes. A list of the console that could not be read is no list; a
+  list of the extension that could not be read leaves the browsers of the console and their
+  « Disconnect », with a line that says what is missing and « Try again ».
   « Disconnect » of an extension asks twice (it reconnects only with an approval here), and ends its
   session on the worker (`DELETE /console/me/browsers/<id>`): its next refresh is refused. The deletion of the
   workspace stays at the bottom, for its owner: the mockup does not draw it, and it is nowhere else.
