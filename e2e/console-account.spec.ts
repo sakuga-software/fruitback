@@ -51,6 +51,10 @@ type Stubbed = {
   refuses: boolean;
   /** The sessions are ended already: the worker knows no session by these ids. */
   gone: boolean;
+  /** The browsers of the extension (FRU-249); `undefined`: the worker does not answer. */
+  extensions: unknown[] | undefined;
+  /** The worker ends no extension when it is asked to. */
+  extensionRefuses: boolean;
   /** How the person signs in (FRU-249); `undefined`: the worker does not answer. */
   methods: Record<string, unknown> | undefined;
   /** What the worker answers to « Unlink », and to a name, when it refuses. */
@@ -70,6 +74,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     refuses: false,
     gone: false,
     methods: { email: true, github: { linked: true }, google: { linked: false } },
+    extensions: [],
+    extensionRefuses: false,
     sent: [],
     bodies: {},
   };
@@ -108,6 +114,19 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       }
 
       return route.fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } });
+    }
+    if (pathname === '/console/me/browsers') {
+      return worker.extensions === undefined
+        ? route.fulfill({ status: 500, json: { error: 'unknown' } })
+        : route.fulfill({ json: { browsers: worker.extensions } });
+    }
+    if (pathname.startsWith('/console/me/browsers/')) {
+      worker.sent.push(`${method} ${pathname}`);
+      if (worker.extensionRefuses) return route.fulfill({ status: 502, json: { error: 'auth-unavailable' } });
+      const id = pathname.split('/').at(-1);
+      worker.extensions = (worker.extensions ?? []).filter((each) => (each as { id: string }).id !== id);
+
+      return route.fulfill({ status: 204 });
     }
     if (pathname === '/console/sessions') {
       return worker.sessions === undefined
@@ -605,6 +624,60 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     return { sites: sites.status, refresh: refreshed.status, next };
   }
 
+  test('an extension connected to the account is listed, and « Disconnect » ends it on the worker', async ({
+    browser,
+  }) => {
+    const first = await browserOf(browser, 'ana@acme.dev');
+    const cookie = await cookieOf(first.context);
+    const consoleCall = (path: string, method = 'GET', body?: unknown) =>
+      fetch(`${worker.origin}${path}`, {
+        method,
+        headers: { Origin: WORKER_CONSOLE, Cookie: cookie, 'Content-Type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+
+    // The extension asks (FRU-238), the console approves with the word and the account, the extension
+    // claims its session.
+    const asked = await fetch(`${worker.origin}/session/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ browser: 'Chrome on macOS' }),
+    });
+    expect(asked.status).toBe(201);
+    const { request, claim, word } = (await asked.json()) as { request: string; claim: string; word: string };
+    const me = (await (await consoleCall('/console/me')).json()) as { account: { id: string } };
+    expect(
+      (await consoleCall(`/console/connect/${request}/approve`, 'POST', { word, account: me.account.id })).status,
+    ).toBe(200);
+    const claimed = await fetch(`${worker.origin}/session/connect/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ claim }),
+    });
+    expect(claimed.status).toBe(200);
+    const session = (await claimed.json()) as { accessToken: string; refreshToken: string };
+
+    // My account lists it after the browsers of the console.
+    await first.page.getByRole('link', { name: 'My account' }).click();
+    const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
+    await expect(browsers).toHaveCount(2);
+    const extension = browsers.filter({ hasText: 'Extension · Chrome on macOS' });
+    await expect(extension).toContainText(/Connected \d+ \w+ · used (Just now|\d+ min ago)/);
+
+    // Disconnected in two presses: the row goes, and the worker refuses its refresh.
+    await extension.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await extension.getByRole('button', { name: 'Disconnect the extension in Chrome on macOS' }).click();
+    await expect(browsers).toHaveCount(1);
+    const refreshed = await fetch(`${worker.origin}/session/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: session.refreshToken }),
+    });
+    expect(refreshed.status).toBe(401);
+    // The browser of the console is not the one that ended.
+    expect(await accepted(first.context)).toBe(200);
+  });
+
   test('the extension stays connected when My account disconnects a browser, and when it signs out everywhere', async ({
     browser,
   }) => {
@@ -781,6 +854,85 @@ test('a provider is « Not set up » when the worker has none, and the three row
   await expect(ways.nth(1)).toContainText('Not set up');
   await expect(ways.nth(2)).toContainText('Not set up');
   await expect(section(page, 'How you sign in').getByRole('link')).toHaveCount(0);
+});
+
+/** Noon of a fixed day: « used 2 h ago » is read on a clock of the browser set there. */
+const NOON = new Date(2026, 9, 13, 12, 0, 0);
+const EXTENSIONS = [
+  {
+    id: 'e1',
+    browser: 'Chrome on macOS',
+    connectedAt: new Date(2026, 9, 12, 9, 0).toISOString(),
+    usedAt: new Date(NOON.getTime() - 2 * 3_600_000).toISOString(),
+  },
+  {
+    id: 'e2',
+    browser: 'Firefox on Linux',
+    connectedAt: new Date(2026, 9, 2, 9, 0).toISOString(),
+    usedAt: new Date(2026, 9, 10, 9, 0).toISOString(),
+  },
+];
+
+test('the browsers of the extension are rows of the list, as the mockup draws them', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
+  const worker = await workerWith(page);
+  worker.extensions = EXTENSIONS;
+  await open(page);
+  const browsers = section(page, 'Where you are signed in').getByRole('listitem');
+  // The browsers of the console first, then those of the extension, the one used last first.
+  await expect(browsers).toHaveCount(5);
+  await expect(browsers.nth(3)).toContainText('Extension · Chrome on macOS');
+  await expect(browsers.nth(3)).toContainText('Connected 12 Oct · used 2 h ago');
+  await expect(browsers.nth(4)).toContainText('Extension · Firefox on Linux');
+  await expect(browsers.nth(4)).toContainText('Connected 2 Oct · used 3 days ago');
+  // The row is the one of the console: its title at 600, its line at 13 px.
+  expect.soft(await styles(browsers.nth(3).getByText('Extension · Chrome on macOS'), ['font-weight'])).toEqual({
+    'font-weight': '600',
+  });
+  expect.soft(await styles(browsers.nth(3).getByText(/^Connected/), ['font-size'])).toEqual({ 'font-size': '13px' });
+  await expectNoViolation(page, 'the browsers of the extension');
+});
+
+test('an extension is disconnected in two presses, and one that is still connected says so', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
+  const worker = await workerWith(page);
+  worker.extensions = EXTENSIONS;
+  await open(page);
+  const browsers = section(page, 'Where you are signed in').getByRole('listitem');
+  const chrome = browsers.filter({ hasText: 'Extension · Chrome on macOS' });
+
+  worker.extensionRefuses = true;
+  await chrome.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(chrome).toContainText('It stops showing notes at once.');
+  await chrome.getByRole('button', { name: 'Disconnect the extension in Chrome on macOS' }).click();
+  await expect(chrome.getByRole('alert')).toHaveText(
+    'This extension is still connected: Fruitback did not end its session. Try again.',
+  );
+  await expect(browsers).toHaveCount(5);
+
+  worker.extensionRefuses = false;
+  await chrome.getByRole('button', { name: 'Disconnect the extension in Chrome on macOS' }).click();
+  await expect(browsers).toHaveCount(4);
+  await expect(page.getByText('Extension · Chrome on macOS')).toHaveCount(0);
+  expect(worker.sent.filter((each) => each.includes('/me/browsers/'))).toEqual([
+    'DELETE /console/me/browsers/e1',
+    'DELETE /console/me/browsers/e1',
+  ]);
+});
+
+test('the browsers of the extension come with those of the console: « Sign out » does not move twice', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // A list of the extension that the worker could not read is no list: the section says so.
+  worker.extensions = undefined;
+  await page.goto(`${CONSOLE}/w/w1/account`);
+  await expect(
+    section(page, 'Where you are signed in').getByText(
+      'Fruitback did not answer. The browsers where you are signed in could not be read.',
+    ),
+  ).toBeVisible();
+  await expect(section(page, 'Where you are signed in').getByRole('listitem')).toHaveCount(0);
 });
 
 test('a browser is named as the worker names it', async ({ page }) => {

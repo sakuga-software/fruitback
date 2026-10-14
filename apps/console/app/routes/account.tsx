@@ -2,12 +2,15 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useStat
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   type ConsoleSession,
+  type ExtensionBrowser,
   LINKABLE,
   type Linkable,
   type SignInMethods,
   call,
   consoleSessions,
   endConsoleSession,
+  endExtensionBrowser,
+  extensionBrowsers,
   linkAddress,
   renameMe,
   saveLanguage,
@@ -16,6 +19,7 @@ import {
   signOutEverywhere,
   unlinkProvider,
 } from '../api';
+import { ago } from '../ago';
 import { type Listed, edited } from '../listed';
 import { problemOf } from '../problems';
 import { Button, Choice, Field, LinkButton, Problem } from '../ui';
@@ -75,6 +79,15 @@ const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only the owner of the workspace deletes it.'),
 };
 const WORKSPACE_NOT_DELETED = msg('The workspace was not deleted. Try again.');
+
+/** « 12 Oct », as the mockup writes the day a browser connected. */
+function dayOf(iso: string): string {
+  const date = new Date(iso);
+
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleDateString(locale() === 'fr' ? 'fr' : 'en-GB', { day: 'numeric', month: 'short' });
+}
 
 /** A day and a time, in the language of the console. */
 function moment(iso: string): string {
@@ -146,12 +159,31 @@ export default function Account() {
   const [unsent, setUnsent] = useState(false);
 
   // The browsers where the console is signed in. No list is not an empty list (FRU-162).
+  // The browsers of the extension come in the same list, read together: the rows are drawn once, and
+  // nothing under them moves when the second answer comes (FRU-271).
   const [sessions, setSessions] = useState<Listed<ConsoleSession>>('loading');
+  const [extensions, setExtensions] = useState<ExtensionBrowser[]>([]);
   const read = useCallback(async () => {
     setSessions('loading');
-    const listed = await consoleSessions();
-    setSessions(listed.ok ? listed.data : 'failed');
+    const [listed, connected] = await Promise.all([consoleSessions(), extensionBrowsers()]);
+    if (!listed.ok || !connected.ok) return setSessions('failed');
+    setExtensions(connected.data);
+    setSessions(listed.data);
   }, []);
+  const [extensionStuck, setExtensionStuck] = useState<string | undefined>();
+
+  async function disconnectExtension(browser: ExtensionBrowser) {
+    setExtensionStuck(undefined);
+    const ended = await endExtensionBrowser(browser.id);
+    if (ended === 'failed') return setExtensionStuck(browser.id);
+    if (ended === 'unknown') {
+      // Ended since the list was read, or a worker with no such route: only the list says which.
+      const connected = await extensionBrowsers();
+      if (!connected.ok || connected.data.some((each) => each.id === browser.id)) return setExtensionStuck(browser.id);
+      return setExtensions(connected.data);
+    }
+    setExtensions((current) => current.filter((each) => each.id !== browser.id));
+  }
   useEffect(() => void read(), [read]);
   // The browser whose session did not end, by the id of its session.
   const [stuck, setStuck] = useState<string | undefined>();
@@ -359,6 +391,36 @@ export default function Account() {
                   </Row>
                 ),
               )}
+              {[...extensions]
+                .sort((one, other) => other.usedAt.localeCompare(one.usedAt))
+                .map((browser) => (
+                  <Row
+                    key={browser.id}
+                    title={t('Extension · {browser}', { browser: browser.browser })}
+                    detail={t('Connected {day} · used {last}', {
+                      day: dayOf(browser.connectedAt),
+                      last: ago(browser.usedAt),
+                    })}
+                    under={
+                      extensionStuck === browser.id ? (
+                        <Problem>
+                          {t('This extension is still connected: Fruitback did not end its session. Try again.')}
+                        </Problem>
+                      ) : undefined
+                    }
+                  >
+                    <AsksTwice
+                      space="normal"
+                      label={t('Disconnect')}
+                      confirmLabel={t('Disconnect the extension in {browser}', { browser: browser.browser })}
+                      keepLabel={t('Keep it')}
+                      consequence={t(
+                        'It stops showing notes at once. It connects again from its popup, with your approval here.',
+                      )}
+                      onConfirm={() => void disconnectExtension(browser)}
+                    />
+                  </Row>
+                ))}
             </ul>
           )}
         </section>

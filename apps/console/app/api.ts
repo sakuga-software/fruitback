@@ -384,6 +384,30 @@ export async function signOut(): Promise<boolean> {
  */
 export type ConsoleSession = { id: string; createdAt: string; lastUsedAt: string; current: boolean; browser?: string };
 
+/**
+ * A browser where the extension is connected to the account (FRU-238, FRU-249): its short label, when
+ * it connected, and when it last refreshed its tokens.
+ */
+export type ExtensionBrowser = { id: string; browser: string; connectedAt: string; usedAt: string };
+
+/** The browsers of the extension of the person. A refusal is no list. */
+export async function extensionBrowsers(): Promise<Answer<ExtensionBrowser[]>> {
+  const listed = await call<{ browsers?: ExtensionBrowser[] }>('GET', '/console/me/browsers');
+  if (!listed.ok) return listed;
+
+  return Array.isArray(listed.data?.browsers)
+    ? { ok: true, data: listed.data.browsers }
+    : { ok: false, status: 200, error: 'unknown' };
+}
+
+/** Ends the session of the extension in one browser: its next refresh is refused. */
+export async function endExtensionBrowser(id: string): Promise<'ended' | 'unknown' | 'failed'> {
+  const ended = await call('DELETE', `/console/me/browsers/${encodeURIComponent(id)}`);
+  if (ended.ok) return 'ended';
+
+  return ended.status === 404 ? 'unknown' : 'failed';
+}
+
 /** The providers that an account links (FRU-249). */
 export const LINKABLE = ['github', 'google'] as const;
 export type Linkable = (typeof LINKABLE)[number];
