@@ -373,6 +373,82 @@ describe('the sessions of a member end while one of them refreshes, on two conne
 });
 
 /**
+ * A person renames themself while their extension refreshes (FRU-249, raised in review). The refresh
+ * holds its chain and has written a successor that it did not commit yet; the rename waits for it.
+ * One statement that renames the rows it could see when it started does not see that successor,
+ * which keeps the name of before: the store holds the codes and the chains of the person first.
+ */
+describe('a person renames themself while their extension refreshes, on two connections (FRU-249)', () => {
+  const IN_FLIGHT = 'gives the new name to the successor of a refresh that was in flight';
+  const identity = { subject: 'alice', name: 'Alice', workspace: 'ws_acme' };
+  const inFlight = (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
+    it(IN_FLIGHT, async (store) => {
+      const now = Date.now();
+      const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
+      assert.ok(redeemed.ok);
+      const [tokenHash, successorHash] = await Promise.all([
+        digest(redeemed.session.refreshToken),
+        digest('a-successor'),
+      ]);
+
+      const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
+      // The trigger holds the successor inside the transaction of the refresh: the rename starts then.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await store.renameSessionsOf('alice', 'Alice Martin', now + 2);
+
+      assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
+      const after = await store.rotateSession({
+        tokenHash: successorHash,
+        successorHash: await digest('another'),
+        now: now + 3,
+        graceMs: 60_000,
+      });
+      assert.equal(after.outcome, 'rotated');
+      assert.equal(
+        after.outcome === 'rotated' ? after.identity.name : undefined,
+        'Alice Martin',
+        'the successor of the refresh kept the name of before',
+      );
+    });
+  const outcomeOf = (change: { from: string; to: string }, open: () => Promise<Database>) =>
+    outcomeOnChangedStore({
+      file: 'session-postgres.ts',
+      factory: 'createPostgresSessionStore',
+      cases: inFlight,
+      name: IN_FLIGHT,
+      change,
+      held: { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' },
+      open,
+    });
+  // The chains of the person are read, and not held.
+  const WITHOUT_THE_HOLD = {
+    from: ".orderBy(asc(sessions.token_hash))\n          .for('update');",
+    to: '.orderBy(asc(sessions.token_hash));',
+  };
+  // The store as it is, through the same machinery: the case can pass.
+  const AS_IT_IS = { from: 'A code that nobody redeemed yet', to: 'A code that nobody has redeemed yet' };
+
+  it('passes on PGlite when the rename holds nothing', async () => {
+    assert.equal(await outcomeOf(WITHOUT_THE_HOLD, createPgliteDatabase), 'passed');
+  });
+
+  it('fails on a real server when the rename holds nothing', { skip: NO_REAL_POSTGRES }, async () => {
+    const outcome = await outcomeOf(WITHOUT_THE_HOLD, createRealDatabase);
+
+    assert.ok(outcome instanceof assert.AssertionError, `the case did not fail on its assertion: ${String(outcome)}`);
+    assert.match(outcome.message, /kept the name of before/);
+  });
+
+  it(
+    'gives the new name to a refresh in flight, on a real server, with the store as it is',
+    { skip: NO_REAL_POSTGRES },
+    async () => {
+      assert.equal(await outcomeOf(AS_IT_IS, createRealDatabase), 'passed');
+    },
+  );
+});
+
+/**
  * `node server.mjs pair` on a worker that has a database. It runs as a process of its own: what is
  * held is that the code is written where the worker reads it, and that the command ends.
  */
