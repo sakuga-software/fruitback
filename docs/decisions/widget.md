@@ -1191,3 +1191,16 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **`pageCounts()` reads what the last read gave, and asks nothing.** Nothing until a read of this page
   answered, since zeros would say there are no notes; a stage the reporter hid is not on the page, so
   it is not counted. test:`counts the notes the page shows by stage, from the last read, and nothing before one (FRU-254)`.
+
+## A picture asked for and not taken is said (FRU-238)
+
+### The rules, in short
+
+- **A note never loses its picture in silence.** When the reporter asked for a picture and the host's
+  `captureScreenshot` gives none, or throws, the note goes without it, and the composer says « sent,
+  without the picture » instead of « sent » (« kept for later, without the picture » for a note kept
+  for later). `plant` answers `{ picture: 'missed' }` then. A picture
+  the widget does not take on purpose (the page changed under the place, FRU-152) is not missed.
+- In the extension, a picture refused for its token (`401 identity-required`, a token minted before
+  the worker names its session) renews the access once and is sent again (`renewAccess`); refused
+  again, it is missed, and said.

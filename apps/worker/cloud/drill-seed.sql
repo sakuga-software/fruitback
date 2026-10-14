@@ -67,6 +67,14 @@ INSERT INTO sessions (token_hash, subject, workspace, created_at, expires_at, pr
   ('drill-not-a-digest-4', 'bob', NULL, 1, 2, NULL, NULL),
   ('drill-not-a-digest-5', 'bob', NULL, 1, 2, NULL, NULL);
 
+-- A session of an account (FRU-238): of the account, of no workspace, with the label of its browser.
+INSERT INTO sessions (token_hash, subject, workspace, created_at, expires_at, account_id, browser, connection_id) VALUES
+  ('drill-not-a-digest-6', 'acc_drill1', NULL, 1, 2, 'acc_drill1', 'Chrome on macOS', 'drill-connection-1');
+
+-- A request of the extension that a person approved and the extension claimed (FRU-238).
+INSERT INTO connect_requests (request_hash, claim_hash, word, browser, created_at, expires_at, outcome, account_id, answered_at, claimed_at, misses) VALUES
+  ('drill-not-a-digest-request', 'drill-not-a-digest-claim', 'PLUM 47', 'Chrome on macOS', 1, 2, 'approved', 'acc_drill1', 1, 1, 1);
+
 INSERT INTO "session" ("id", "expiresAt", "token", "createdAt", "updatedAt", "ipAddress", "userAgent", "browser", "userId", "activeOrganizationId") VALUES
   ('ses_drill1', '2026-10-18 10:00:00+00', 'drill-not-a-digest', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', NULL, NULL, 'Firefox on Linux', 'acc_drill1', 'ws_drill1');
 

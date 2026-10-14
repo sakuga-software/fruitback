@@ -899,6 +899,46 @@ describe('who carries the calls', () => {
     assert.equal(bodies[2]?.screenshot, undefined);
   });
 
+  it('says a picture that was asked for and did not come, and the note goes without it (FRU-238)', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    const button = page.query('button');
+    setRect(button, { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+    const bodies: { screenshot?: unknown }[] = [];
+    const send = (screenshot: boolean, captureScreenshot: () => Promise<{ url: string } | undefined>) =>
+      plant({
+        note: 'the price is wrong',
+        target: { element: button, source: undefined },
+        reporter: undefined,
+        config: { hiddenStages: [], screenshot },
+        options: {
+          endpoint: ENDPOINT,
+          clientId: 'acme',
+          captureScreenshot,
+          transport: async (request) => {
+            bodies.push(JSON.parse(request.body ?? '{}') as { screenshot?: unknown });
+
+            return { ok: true, status: 201, body: '{}' };
+          },
+        },
+      });
+
+    // Refused by the extension, or thrown: the note goes, and the answer says the picture is missing.
+    assert.deepEqual(await send(true, async () => undefined), { picture: 'missed' });
+    assert.deepEqual(
+      await send(true, async () => {
+        throw new Error('refused');
+      }),
+      { picture: 'missed' },
+    );
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[0]?.screenshot, undefined);
+    // The control: a picture that came, and a picture nobody asked for, say nothing more.
+    assert.equal(await send(true, async () => ({ url: 'https://cdn.test/shot.png' })), true);
+    assert.equal(await send(false, async () => undefined), true);
+  });
+
   it('names the place a member chose in the query, and leaves the body the seed it was (FRU-123)', async () => {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     setDocumentSize(page.document, 1_000, 1_000);

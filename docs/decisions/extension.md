@@ -537,6 +537,33 @@ ticket asked for a link, and left the path to be measured. Four were on the tabl
   say who the code was for. That name is the word of whoever wrote the link, which is the claim
   FRU-9 refuses from a browser. The worker says who, after the code is spent.
 
+## Connected from the console: what the worker offers (FRU-238)
+
+The worker half of « Sign in to Fruitback » (FRU-251 draws the popup). The extension asks, the person
+approves in the console, and the extension claims a session **of the account**, for every workspace
+the account is a member of. The pairing by code stays. `SECURITY.md` says what each step protects.
+
+### The rules, in short
+
+- **`POST /session/connect {browser}`** answers `{request, claim, word, browser, verificationUri,
+expiresIn, interval}`. The extension opens `verificationUri` in a tab as it is, shows `word` in the
+  popup, and keeps `claim` where a page cannot read it (the background, or `chrome.storage.session`).
+  **`claim` never goes in an address, a log or a message to a page.** `browser` is a short label
+  (« Chrome on macOS »): the console shows it, so it names the browser and nothing else.
+- **`POST /session/connect/claim {claim}`** every `interval` seconds: `202` while nobody answered,
+  `429 slow-down` with a longer `interval` when asked too soon, `200` once with the session (the
+  answer of `POST /session/pair`, with `identity.account: true`), `410 connect-refused` or
+  `410 connect-expired`. After a `410` the extension stops and forgets the claim.
+- **The session refreshes and logs out as every session**: `POST /session/refresh` and
+  `POST /session/revoke`, one storage key per endpoint (FRU-63).
+- **`GET /session/sites` answers a session of an account in another shape**:
+  `{account: true, workspaces: [{id, name, role}], sites: [{id, origin, visibility, workspace,
+previews?}], locale?}`, with no `workspace` in the singular. `parseWorkspaceSites` of the extension
+  of before reads it as no list, and offers nothing: it breaks nothing, and FRU-251 reads it.
+- **The worker reads the memberships at each call.** A workspace the person left is gone from the next
+  answer, and a note to one of its sites is refused with `401`: the extension shows that, and does not
+  keep a list of its own as the truth.
+
 ## The session, and the token that never goes down (FRU-60)
 
 ### The rules, in short

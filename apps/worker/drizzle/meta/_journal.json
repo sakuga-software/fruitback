@@ -82,8 +82,15 @@
     {
       "idx": 11,
       "version": "7",
-      "when": 1791969331415,
-      "tag": "0011_last_seen_and_browser",
+      "when": 1791969729389,
+      "tag": "0011_connect",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791985018311,
+      "tag": "0012_last_seen_and_browser",
       "breakpoints": true
     }
   ]

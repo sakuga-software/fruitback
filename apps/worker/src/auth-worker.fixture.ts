@@ -7,7 +7,7 @@ import type { WorkerEnv } from './env.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
 import type { MailMessage, Mailer } from './mail.ts';
 import type { PgDatabase } from './postgres.ts';
-import { createPostgresSessionStore } from './session-postgres.ts';
+import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
 
 /**
  * A worker with better-auth on, as the tests of its routes call it (FRU-147, FRU-149): every case goes
@@ -59,6 +59,7 @@ export async function workerOf(database: PgDatabase, more: { trackIp?: boolean; 
   await make(database);
   const accounts = createPostgresAccountStore(database);
   const sessions = createPostgresSessionStore(database);
+  const connectStore = createPostgresConnectStore(database);
   const options = await authOptions(
     { ...AUTH_CONFIG, github: GITHUB, google: GOOGLE, trackIp: more.trackIp === true },
     await database.pool(),
@@ -89,7 +90,15 @@ export async function workerOf(database: PgDatabase, more: { trackIp?: boolean; 
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
       }),
       env,
-      { clientIp: init.ip ?? `198.51.100.${ip % 250}`, accounts, sessionStore: sessions, mailer: mail, kv, auth },
+      {
+        clientIp: init.ip ?? `198.51.100.${ip % 250}`,
+        accounts,
+        sessionStore: sessions,
+        connectStore,
+        mailer: mail,
+        kv,
+        auth,
+      },
     );
   };
 
@@ -111,7 +120,7 @@ export async function workerOf(database: PgDatabase, more: { trackIp?: boolean; 
     return cookieOf(answer);
   };
 
-  return { database, auth, accounts, sessions, mail, kv, env, received, call, lastToken, signIn };
+  return { database, auth, accounts, sessions, connectStore, mail, kv, env, received, call, lastToken, signIn };
 }
 
 export function cookieOf(answer: Response): string {

@@ -19,12 +19,17 @@ import type { SessionIdentity } from './session.ts';
  */
 export function identityOf(row: Record<string, unknown>): SessionIdentity | undefined {
   if (typeof row.subject !== 'string' || row.subject === '') return undefined;
+  // A session of an account (FRU-238) names its account twice, and no workspace. A row that names
+  // another account than its person, or a workspace beside it, is one somebody edited: unreadable.
+  const account = row.account_id ?? null;
+  if (account !== null && (account !== row.subject || (row.workspace ?? null) !== null)) return undefined;
 
   return {
     subject: row.subject,
     ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
     ...(typeof row.email === 'string' && row.email !== '' ? { email: row.email } : {}),
     ...(typeof row.workspace === 'string' && row.workspace !== '' ? { workspace: row.workspace } : {}),
+    ...(account === null ? {} : { account: true as const }),
   };
 }
 

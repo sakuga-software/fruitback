@@ -158,3 +158,75 @@ describe('the area cut out of the capture', () => {
     assert.equal(pixelsOf({ left: 0, top: 0, width: 0, height: 10, scale: 1 }, { width: 100, height: 100 }), undefined);
   });
 });
+
+describe('a picture refused for an access token the worker no longer takes (FRU-238)', () => {
+  const REFUSED = { status: 401, body: JSON.stringify({ error: 'identity-required' }) };
+  const KEPT = {
+    status: 201,
+    body: JSON.stringify({ id: 'shot_0123456789abcdef0123456789abcdef', width: 200, height: 80 }),
+  };
+
+  it('renews the access once, and sends the picture again with the new token', async () => {
+    const tokens: string[] = [];
+    const renewed: string[] = [];
+    const { capture } = harness({
+      renewAccess: async (_endpoint, refused) => {
+        renewed.push(refused);
+
+        return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
+      },
+      upload: async (_url, token) => {
+        tokens.push(token);
+
+        return token === 'access.1' ? REFUSED : KEPT;
+      },
+    });
+
+    assert.equal((await capture(AREA, 'https://acme.dev'))?.width, 200);
+    assert.deepEqual(tokens, ['access.1', 'access.2']);
+    assert.deepEqual(renewed, ['access.1']);
+  });
+
+  it('gives up after one renewal, and on any other refusal renews nothing', async () => {
+    let renewals = 0;
+    const always = harness({
+      renewAccess: async () => {
+        renewals += 1;
+
+        return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
+      },
+      upload: async () => REFUSED,
+    });
+    assert.equal(await always.capture(AREA, 'https://acme.dev'), undefined);
+    assert.equal(renewals, 1);
+
+    for (const answer of [
+      { status: 403, body: '{"error":"forbidden"}' },
+      { status: 401, body: '{"error":"other"}' },
+    ]) {
+      const other = harness({
+        renewAccess: async () => {
+          renewals += 1;
+
+          return { ok: true, grant: GRANT };
+        },
+        upload: async () => answer,
+      });
+      assert.equal(await other.capture(AREA, 'https://acme.dev'), undefined);
+    }
+    assert.equal(renewals, 1);
+
+    // A renewal that fails: no second upload.
+    let uploads = 0;
+    const ended = harness({
+      renewAccess: async () => ({ ok: false, reason: 'session-revoked-or-expired' }),
+      upload: async () => {
+        uploads += 1;
+
+        return REFUSED;
+      },
+    });
+    assert.equal(await ended.capture(AREA, 'https://acme.dev'), undefined);
+    assert.equal(uploads, 1);
+  });
+});
