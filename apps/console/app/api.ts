@@ -524,7 +524,8 @@ export function connectRequest(request: string): Promise<Answer<ConnectRequest>>
 /**
  * « Connect », with the word and the account the page showed: the worker refuses an answer for
  * another word, or from an account that changed since the page read the request (409).
- * « Not now » refuses it.
+ * « Not now » refuses it. Quiet: on a 401 the page asks for a sign-in itself, so the banner of the
+ * root would be a second, different instruction.
  */
 export function answerConnect(
   request: string,
@@ -537,6 +538,7 @@ export function answerConnect(
     'POST',
     path,
     approve ? { word: asked.word, account: asked.account.id } : { account: asked.account.id },
+    { quiet: true },
   );
 }
 

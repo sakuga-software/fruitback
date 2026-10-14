@@ -278,6 +278,19 @@ test.describe('Connect this browser (FRU-240)', () => {
     expect(worker.sent).toEqual(['approve r1']);
   });
 
+  test('a session that ends while the question is on the screen asks for a sign-in once, at the press', async ({
+    page,
+  }) => {
+    const worker = await workerWith(page);
+    await open(page);
+    worker.signedIn = false;
+    await connect(page).click();
+    await expect(page.locator('main h1')).toHaveText('Sign in to connect this browser');
+    // The page asks for the sign-in itself: the banner of the root would say another thing.
+    await expect(page.getByText('Your session ended.', { exact: false })).toHaveCount(0);
+    expect(worker.requests.r1?.state).toBe('pending');
+  });
+
   test('nobody signed in: the ways in, and back to the question after, never to the answer', async ({ page }) => {
     const worker = await workerWith(page, { signedIn: false });
     await open(page);
