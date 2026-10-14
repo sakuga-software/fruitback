@@ -21,6 +21,7 @@ import {
   readConnectorSettings,
   readLocaleTag,
   readPersonName,
+  readableSites,
 } from './accounts.ts';
 import { seen } from './last-seen.ts';
 import {
@@ -442,6 +443,8 @@ export async function handleConsoleApi(
   const notes = await handleNotes(rest, request, {
     workspace: workspaceId as string,
     account: account.id,
+    // The sites a guest reads (FRU-250), read only for a route of the notes.
+    reach: () => context.accounts.reach(workspaceId as string, account.id),
     allowed,
     noteIndex: context.noteIndex,
     accounts: context.accounts,
@@ -455,7 +458,10 @@ export async function handleConsoleApi(
       if (!allowed('read-feedback')) return forbidden();
 
       const seesTracker = allowed('see-tracker');
-      const sites = await context.accounts.sites(workspaceId as string);
+      // A guest reads the sites shared with them and no other (FRU-250), and the counts of those.
+      const reach = await context.accounts.reach(workspaceId as string, account.id);
+      if (reach === undefined) return json(404, { error: 'not-found' }, headers);
+      const sites = readableSites(await context.accounts.sites(workspaceId as string), reach);
       // FRU-237: the notes of each site, from the index. What did not arrive is about the tracker.
       // An index that does not answer costs the counts, never the list of the sites.
       const [notes, undelivered] = await Promise.all([

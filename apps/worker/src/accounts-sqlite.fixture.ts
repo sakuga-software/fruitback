@@ -435,6 +435,30 @@ export function createSqliteAccountStore(path: string): AccountStore {
       return roleOf(row?.role);
     },
 
+    // The file of before has no invitation and no share (FRU-250): a guest of it reads no site.
+    async reach(workspace, account) {
+      const role = await store.role(workspace, account);
+      if (role === undefined) return undefined;
+
+      return { role, sites: role === 'guest' ? [] : 'every' };
+    },
+
+    async shareByInvitation() {
+      return false;
+    },
+
+    async sitesOfInvitations() {
+      return new Map();
+    },
+
+    async shareOnAcceptance() {},
+
+    async sharedIn() {
+      return new Map();
+    },
+
+    async unshare() {},
+
     async addSite(workspace, { origin, visibility }) {
       const database = connect(path);
       const existing = database

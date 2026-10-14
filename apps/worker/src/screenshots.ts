@@ -24,6 +24,8 @@ export type StoredScreenshot = {
   workspace: string;
   /** Who sent it: the account of the session. */
   account: string;
+  /** The site of the note it goes with (FRU-250). Absent on a picture sent before: no guest reads it. */
+  site?: string;
   png: Uint8Array;
   width: number;
   height: number;

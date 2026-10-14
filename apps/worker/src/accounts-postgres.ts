@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
@@ -11,12 +11,28 @@ import {
   siteOf,
   workspaceOf,
 } from './account-rows.ts';
-import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS, type Site, clientOf, normalizeEmail } from './accounts.ts';
+import {
+  type AccountStore,
+  DEFAULT_CONNECTOR_SETTINGS,
+  type SharedSite,
+  type Site,
+  clientOf,
+  normalizeEmail,
+} from './accounts.ts';
 import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { account, member, organization, user } from './auth-schema.ts';
-import { connectors, deliveries, domains, last_seen, site_destinations, sites } from './postgres-schema.ts';
+import { account, invitation, member, organization, user } from './auth-schema.ts';
+import {
+  connectors,
+  deliveries,
+  domains,
+  invitation_sites,
+  last_seen,
+  site_destinations,
+  site_shares,
+  sites,
+} from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -322,6 +338,111 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
       // Strict: « guest,admin », which better-auth reads as two roles, is no role of the worker.
       return roleOf(rows[0]?.role);
+    },
+
+    async reach(workspace, person) {
+      // One statement: the member, and the sites shared with them. A share with no member is not read.
+      const rows = await run((db) =>
+        db
+          .select({ role: member.role, site: site_shares.site_id })
+          .from(member)
+          .leftJoin(
+            site_shares,
+            and(eq(site_shares.workspace_id, member.organizationId), eq(site_shares.account_id, member.userId)),
+          )
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person))),
+      );
+      const role = roleOf(rows[0]?.role);
+      if (role === undefined) return undefined;
+      if (role !== 'guest') return { role, sites: 'every' };
+
+      return { role, sites: rows.flatMap((row) => (row.site === null ? [] : [row.site])) };
+    },
+
+    async shareByInvitation(workspace, invited, named) {
+      const wanted = [...new Set(named)];
+      if (wanted.length === 0) return true;
+
+      return transaction(async (tx) => {
+        // The sites are read in the workspace of the invitation: a site of another workspace is none.
+        const found = await tx
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), inArray(sites.id, wanted)));
+        if (found.length !== wanted.length) return false;
+        await tx
+          .insert(invitation_sites)
+          .values(wanted.map((site) => ({ invitation_id: invited, site_id: site })))
+          .onConflictDoNothing({ target: [invitation_sites.invitation_id, invitation_sites.site_id] });
+
+        return true;
+      });
+    },
+
+    async sitesOfInvitations(invitations) {
+      const found = new Map<string, SharedSite[]>();
+      if (invitations.length === 0) return found;
+      const rows = await run((db) =>
+        db
+          .select({ invitation: invitation_sites.invitation_id, id: sites.id, origin: sites.origin })
+          .from(invitation_sites)
+          .innerJoin(sites, eq(sites.id, invitation_sites.site_id))
+          .where(inArray(invitation_sites.invitation_id, [...invitations]))
+          .orderBy(sites.created_at, sites.id),
+      );
+      for (const row of rows)
+        found.set(row.invitation, [...(found.get(row.invitation) ?? []), { id: row.id, origin: row.origin }]);
+
+      return found;
+    },
+
+    async shareOnAcceptance(person, invited) {
+      const now = Date.now();
+      await transaction(async (tx) => {
+        const rows = await tx
+          .select({ workspace: invitation.organizationId })
+          .from(invitation)
+          .where(eq(invitation.id, invited));
+        const workspace = rows[0]?.workspace;
+        if (workspace === undefined) return;
+        await tx
+          .delete(site_shares)
+          .where(and(eq(site_shares.workspace_id, workspace), eq(site_shares.account_id, person)));
+        // The sites of the invitation that are still sites of its workspace.
+        const named = await tx
+          .select({ id: sites.id })
+          .from(invitation_sites)
+          .innerJoin(sites, eq(sites.id, invitation_sites.site_id))
+          .where(and(eq(invitation_sites.invitation_id, invited), eq(sites.workspace_id, workspace)));
+        if (named.length === 0) return;
+        await tx
+          .insert(site_shares)
+          .values(
+            named.map(({ id }) => ({ workspace_id: workspace, account_id: person, site_id: id, created_at: now })),
+          );
+      });
+    },
+
+    async sharedIn(workspace) {
+      const rows = await run((db) =>
+        db
+          .select({ account: site_shares.account_id, id: sites.id, origin: sites.origin })
+          .from(site_shares)
+          .innerJoin(sites, eq(sites.id, site_shares.site_id))
+          .where(eq(site_shares.workspace_id, workspace))
+          .orderBy(sites.created_at, sites.id),
+      );
+      const found = new Map<string, SharedSite[]>();
+      for (const row of rows)
+        found.set(row.account, [...(found.get(row.account) ?? []), { id: row.id, origin: row.origin }]);
+
+      return found;
+    },
+
+    async unshare(workspace, person) {
+      await run((db) =>
+        db.delete(site_shares).where(and(eq(site_shares.workspace_id, workspace), eq(site_shares.account_id, person))),
+      );
     },
 
     async addSite(workspace, { origin, visibility }) {

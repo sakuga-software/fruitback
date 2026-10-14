@@ -3,7 +3,15 @@ import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type Role, destinationId } from './accounts.ts';
 import { IDENTITY_SECRET } from './auth-worker.fixture.ts';
-import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
+import {
+  type CallOptions,
+  type World,
+  callOn,
+  memberOf,
+  shareWith,
+  signInTo,
+  worlds,
+} from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
 
@@ -143,6 +151,8 @@ async function acme(env: World) {
   const person = async (role: Role) => {
     const { id, token } = await signInTo(env, `${role}@acme.dev`);
     await memberOf(env, workspace.id, id, role);
+    // A guest of the site (FRU-250): the share their invitation left.
+    if (role === 'guest') await shareWith(env, workspace.id, id, [site.id]);
 
     return { account: { id }, console: token, session: await sessionOf(id) };
   };

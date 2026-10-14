@@ -1,4 +1,4 @@
-import { type AccountStore, can } from './accounts.ts';
+import { type AccountStore, can, readableSites } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { addSessionSite } from './session-site-add.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
@@ -14,7 +14,8 @@ import type { SessionIdentity } from './session.ts';
  * belongs to, and the client id is the site's.
  *
  * Only a session that names a workspace gets an answer, and only while its person is still a member
- * of it: the role is read here, as the console's routes read it.
+ * of it: the role is read here, as the console's routes read it. A guest reads the sites shared with
+ * them and no other (FRU-250): the extension offers no site it could not write on.
  */
 export const SESSION_SITES_PATH = '/session/sites';
 
@@ -72,11 +73,11 @@ export async function handleSessionSites(
     return json(401, { error: 'identity-required', reason: 'no-workspace' }, headers);
   }
 
-  const role = await accounts.role(workspaceId, subject);
-  if (role === undefined) return json(401, { error: 'identity-required', reason: 'not-a-member' }, headers);
+  const reach = await accounts.reach(workspaceId, subject);
+  if (reach === undefined) return json(401, { error: 'identity-required', reason: 'not-a-member' }, headers);
 
   const workspace = (await accounts.memberships(subject)).find((each) => each.workspace.id === workspaceId)?.workspace;
-  const sites = await accounts.sites(workspaceId);
+  const sites = readableSites(await accounts.sites(workspaceId), reach);
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
   const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
@@ -130,9 +131,12 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
   const locale = (await accounts.account(account))?.locale;
   const sites = [];
   for (const { workspace } of memberships) {
+    // Read again, with the sites of a guest (FRU-250). A membership that ended since reads none.
+    const reach = await accounts.reach(workspace.id, account);
+    if (reach === undefined) continue;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
     const notes = await notesIn(noteIndex, workspace.id);
-    for (const site of await accounts.sites(workspace.id)) {
+    for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
       const previews = previewsOf(site.id);
       sites.push({
         id: site.id,

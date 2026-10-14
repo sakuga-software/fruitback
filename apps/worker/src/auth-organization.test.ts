@@ -1028,13 +1028,13 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
     });
 
-    it('invites as an admin or a member only, and nobody who is a member already', async () => {
+    it('invites as an admin, a member or a guest only, and nobody who is a member already', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
       const before = worker.mail.sent.length;
 
-      // Not an owner, not a guest yet, and never two roles.
-      for (const role of ['owner', 'guest', 'guest,admin', ['member', 'admin'], 'superuser', '']) {
+      // Not an owner, and never two roles. A guest names its sites: see « the guest of one site ».
+      for (const role of ['owner', 'guest,admin', ['member', 'admin'], 'superuser', '']) {
         const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role });
         assert.deepEqual(
           [answer.status, await answer.json()],
