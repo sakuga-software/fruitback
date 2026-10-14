@@ -433,6 +433,8 @@ export default function Members() {
                       when={sent !== undefined && went ? t('Sent {date}', { date: sent }) : (sent ?? '')}
                       {...(until === undefined ? {} : { until: t('Until {date}', { date: until }) })}
                       problem={stuck?.row === invitation.id ? stuck.problem : undefined}
+                      // No message left (FRU-269): the link to send by hand is on the row, after a reload too.
+                      {...(went ? {} : { onCopy: () => copyText(invitationLink()) })}
                       onResend={() => void resend(invitation)}
                       asks={{
                         label: t('Cancel'),
@@ -527,6 +529,8 @@ type RowProps = {
   /** Under the day of an invitation: the day it ends. */
   until?: string;
   onResend?: () => void;
+  /** Copies the link of an invitation whose message did not leave. `false`: the browser refused. */
+  onCopy?: () => Promise<boolean>;
   /** The gesture of the row that asks twice: « Remove », or « Cancel ». */
   asks?: { label: string; confirmLabel: string; consequence: string; onConfirm: () => void };
   /** Why the gesture of the row did not go through. */
@@ -534,9 +538,28 @@ type RowProps = {
 };
 
 /** The row of a person or of an invitation, and under it the second time of its gesture. */
-function Row({ initial, pending = false, name, detail, role, sites, when, until, onResend, asks, problem }: RowProps) {
+function Row({
+  initial,
+  pending = false,
+  name,
+  detail,
+  role,
+  sites,
+  when,
+  until,
+  onResend,
+  onCopy,
+  asks,
+  problem,
+}: RowProps) {
   useLocale();
   const [asking, setAsking] = useState(false);
+  const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
+  const refused =
+    copied === 'refused'
+      ? t('The browser refused the copy. The link is {link}: copy it by hand.', { link: invitationLink() })
+      : undefined;
+  const said = problem ?? refused;
   const actions = useRef<HTMLSpanElement>(null);
   // « Keep it » and Escape give focus back to the button that asked, the last one of the row.
   const keep = () => {
@@ -552,6 +575,11 @@ function Row({ initial, pending = false, name, detail, role, sites, when, until,
             <span className="block">{when}</span>
             {until === undefined ? null : <span className="block text-hint leading-[inherit]">{until}</span>}
           </span>
+          {onCopy === undefined ? null : (
+            <LinkButton onClick={() => void onCopy().then((taken) => setCopied(taken ? 'yes' : 'refused'))}>
+              {copied === 'yes' ? t('Copied') : t('Copy the link')}
+            </LinkButton>
+          )}
           {onResend === undefined ? null : <LinkButton onClick={onResend}>{t('Resend')}</LinkButton>}
           {asks === undefined ? null : <LinkButton onClick={() => setAsking(true)}>{asks.label}</LinkButton>}
         </span>
@@ -574,7 +602,7 @@ function Row({ initial, pending = false, name, detail, role, sites, when, until,
         <td className="[overflow-wrap:anywhere]">{sites}</td>
         {last}
       </tr>
-      {(asking && asks !== undefined) || problem !== undefined ? (
+      {(asking && asks !== undefined) || said !== undefined ? (
         <tr className="bg-subtle">
           <td colSpan={when === undefined ? 3 : 4}>
             {/* The table is wider than a phone and scrolls in its frame: what the gesture costs stays
@@ -589,6 +617,7 @@ function Row({ initial, pending = false, name, detail, role, sites, when, until,
                 />
               ) : null}
               {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+              {refused === undefined ? null : <Problem>{refused}</Problem>}
             </div>
           </td>
         </tr>

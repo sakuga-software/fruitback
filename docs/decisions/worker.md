@@ -2080,6 +2080,11 @@ roles, when it is accepted`.
 - **What the plugin answers on a resend is the invitation as it was**, with the new end.
 - **An invitation past its end** is refused at acceptance (`INVITATION_NOT_FOUND`), and leaves the
   list of the person.
+- **Whether a message of an invitation left is kept on it** (FRU-269): `invitation.mailed`, an
+  additional field of the plugin (`input: false`), written by the route after it sent or held the
+  message (`noteMailed`). `list-invitations` answers it, so « Members » says « Invitation kept »
+  after a reload too, with the link to copy on the row. A message that left stays left: a « Resend »
+  that sends nothing does not write `false` over `true`. NULL: an invitation kept before.
 
 **Not done here**, from the ticket: a guest limited to one site (FRU-250, the section below),
 « Last seen » in the table (nothing records an activity), « My account » (sessions, API keys), the

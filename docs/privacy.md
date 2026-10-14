@@ -150,8 +150,8 @@ can read them, with or without the widget.
   workspace, the day they were last seen there** (FRU-249): the day of UTC, and no hour, of their last
   call to the console in that workspace or of the last refresh of their extension for it. Only an
   owner or an admin of the workspace reads it, as « Last seen »; it goes when the person leaves. A session goes 7 days after its last day of use, or when it is ended. For a sign-in link
-  that waits, the SHA-256 of its token and the address it was sent to; the workspaces, their members and the address each invitation was sent
-  to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
+  that waits, the SHA-256 of its token and the address it was sent to; the workspaces, their members, the address each invitation was sent
+  to and whether a message of it left (FRU-269). The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
 
 - **The sites shared with a guest** (FRU-250): for each invitation of a guest, the ids of the sites
