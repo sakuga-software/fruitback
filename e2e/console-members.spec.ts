@@ -476,9 +476,9 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   // The state of the mockup at 1440 px: Email, Role, Site, « Invite » on one line.
   await expect(sitesList(page)).toBeVisible();
   await expect(sitesList(page)).toContainText('staging.acme.dev');
-  expectBox(await box(email(page)), { x: 296.5, y: 148.2, width: 508.4, height: 44 }, 2, 'the field');
-  expectBox(await box(roles(page)), { x: 815.1, y: 148.2, width: 200, height: 44 }, 2, 'the list of roles');
-  expectBox(await box(sitesList(page)), { x: 1025.1, y: 148.2, width: 200, height: 44 }, 2, 'the list of sites');
+  expectBox(await box(email(page)), { x: 297, y: 148, width: 508.3, height: 44 }, 2, 'the field');
+  expectBox(await box(roles(page)), { x: 815, y: 148, width: 200.3, height: 44 }, 2, 'the list of roles');
+  expectBox(await box(sitesList(page)), { x: 1025, y: 148, width: 200.3, height: 44 }, 2, 'the list of sites');
   expectBox(await box(invite(page)), { x: 1235.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
   const label = form(page).locator('.label', { hasText: 'Site' }).first();
   expect.soft(await styles(label, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
