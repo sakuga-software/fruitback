@@ -64,6 +64,20 @@
       "when": 1791928356677,
       "tag": "0008_note_index_by_date",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791966821917,
+      "tag": "0009_note_index_removed_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791966822542,
+      "tag": "0010_note_index_author",
+      "breakpoints": true
     }
   ]
 }

@@ -106,10 +106,15 @@ export type NoteIndex = {
    */
   undelivered(workspace: string): Promise<Map<string, number>>;
   /**
-   * Removes the rows of these notes: each by its reference in the store and the id the widget gave
-   * it, or every row of the account of a member.
+   * Removes the rows of these notes, and answers what they held. `notes`: the notes `forget` deleted
+   * from the worker's store, each by its reference **and** the id the widget gave it. `seeds`: notes
+   * that went to a tracker, by the id the widget gave them, which their issue carries (FRU-237).
+   * `dryRun` removes nothing and answers the same rows.
+   *
+   * The account of a member goes from the index by itself: `author_account_id` is a foreign key to
+   * the account, `ON DELETE SET NULL`.
    */
-  forget(which: { notes: readonly { identifier: string; seed: string }[] } | { account: string }): Promise<number>;
+  forget(which: ForgetIndex, options?: { dryRun?: boolean }): Promise<IndexedNote[]>;
   /**
    * One page of the notes of a workspace (FRU-244), the newest first, with the counts of the filter.
    * It reads the index and nothing else: **a search finds what the index keeps** (the excerpt, the
@@ -193,6 +198,18 @@ export type NoteList = {
   undelivered: number;
   /** Where the next page starts; absent on the last one. */
   next?: NoteCursor;
+};
+
+export type ForgetIndex = { notes: readonly { identifier: string; seed: string }[] } | { seeds: readonly string[] };
+
+/** A row of the index, as `forget` lists it to an operator. */
+export type IndexedNote = {
+  site: string;
+  seed: string;
+  pageUrl: string;
+  excerpt: string;
+  reference?: string;
+  createdAt: number;
 };
 
 /** The author of a note, from what the worker verified when it took it. */

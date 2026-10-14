@@ -4,7 +4,7 @@ import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
 import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
-import type { NoteIndex } from './notes-index.ts';
+import type { IndexedNote, NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
 import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
@@ -192,20 +192,26 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
  * `docker exec <container> node server.mjs forget --email alice@acme.dev --dry-run`
  * `docker exec <container> node server.mjs forget --name "Alice" --dry-run`
  * `docker exec <container> node server.mjs forget --id FB-12 --id FB-13`
+ * `docker exec <container> node server.mjs forget --seed sd_2f8c1a90 --dry-run`
+ *
+ * `--seed` is for a note that went to a tracker (FRU-237): the worker does not hold it, and cannot
+ * find it by an address or a name. Its issue holds the seed, and the seed its `id`. The command then
+ * removes what the worker holds of it, its row in the index of the notes with its excerpt, whatever
+ * the store; the issue itself is deleted in the tracker.
  *
  * It always lists what it found before it says what it did. A typed address is a claim: a reporter
  * can type somebody else's, and two reporters can type the same one. A typed name is a weaker claim,
  * so `--name` only lists. Run it with `--dry-run` first, read the list, and delete by `--id`.
  */
 
-export type ForgetArgs = { which: ForgetSelector; dryRun: boolean };
+export type ForgetArgs = { which: ForgetSelector | { seeds: readonly string[] }; dryRun: boolean };
 
 export type ForgetArgsResult = { ok: true; args: ForgetArgs } | { ok: false; error: string };
 
 const FORGET_USAGE =
-  'usage: forget (--email <address> | --name <name> --dry-run | --id <FB-n> [--id <FB-n> ...]) [--dry-run]';
+  'usage: forget (--email <address> | --name <name> --dry-run | --id <FB-n> [--id <FB-n> ...] | --seed <id> [--seed <id> ...]) [--dry-run]';
 
-const VALUE_FLAGS = ['--email', '--name', '--id'] as const;
+const VALUE_FLAGS = ['--email', '--name', '--id', '--seed'] as const;
 type ValueFlag = (typeof VALUE_FLAGS)[number];
 
 /** A note excerpt long enough to recognise it, short enough to keep one note on one line. */
@@ -213,7 +219,7 @@ const NOTE_EXCERPT_LENGTH = 60;
 
 export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
   const refuse = (reason: string): ForgetArgsResult => ({ ok: false, error: `${FORGET_USAGE}\n${reason}` });
-  const given: Record<ValueFlag, string[]> = { '--email': [], '--name': [], '--id': [] };
+  const given: Record<ValueFlag, string[]> = { '--email': [], '--name': [], '--id': [], '--seed': [] };
   let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -234,11 +240,12 @@ export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
   }
 
   const kinds = VALUE_FLAGS.filter((flag) => given[flag].length > 0);
-  if (kinds.length === 0) return refuse('one of --email, --name and --id is required');
+  if (kinds.length === 0) return refuse('one of --email, --name, --id and --seed is required');
   // Two selectors in one command have two readings, all of them or any of them. Neither is asked for.
   if (kinds.length > 1) return refuse(`use one of ${kinds.join(' and ')}, not both`);
 
   const [kind] = kinds;
+  if (kind === '--seed') return { ok: true, args: { which: { seeds: [...new Set(given['--seed'])] }, dryRun } };
   if (kind === '--id') {
     const malformed = given['--id'].filter((identifier) => !/^FB-[1-9]\d*$/.test(identifier));
     if (malformed.length > 0) return refuse(`not an identifier of this store: ${malformed.join(', ')}`);
@@ -298,6 +305,11 @@ export async function runForget(
   if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
 
   const { which, dryRun } = parsed.args;
+  // The index of the environment when the store is the one of the environment too: a test that
+  // hands a store hands its index, or none.
+  const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
+  if ('seeds' in which) return forgetSeeds(which.seeds, dryRun, index);
+
   const { that, none, search } = describe(which);
   const store = held ?? config.config.store.create();
   if (store.forget === undefined) {
@@ -310,6 +322,7 @@ export async function runForget(
         provider === 'memory'
           ? 'Its notes are in the memory of the worker, and they go when the worker stops.'
           : `They are issues in your tracker: search them for ${search}, read them, and delete the ones that are this reporter's.`,
+        ...(index === undefined ? [] : [TRACKER_NOTES]),
       ],
     };
   }
@@ -328,15 +341,40 @@ export async function runForget(
       // FRU-237: the index of these notes goes first, its excerpt of their text included. An index
       // that does not answer stops the command before a note is deleted: run it again, and nothing
       // of a note is left behind in the index.
-      const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
-      await index?.forget({ notes: found.map(({ identifier, seed }) => ({ identifier, seed })) });
+      const notes = { notes: found.map(({ identifier, seed }) => ({ identifier, seed })) };
+      await index?.forget(notes);
       found = await store.forget(which, { dryRun: false });
+      // Again, once the notes are gone: a read of their page that asked the store before the
+      // deletion may have written their rows back since (FRU-237). A read that starts now does not
+      // find them, and writes nothing of them. The notes are deleted by now, so a failure here is
+      // said as what it is, with the command that ends it: a second run would find no note.
+      // The notes the deletion took, with the ones listed: a note of the same reporter that arrived
+      // between the list and the deletion went too, and so does its row.
+      const deleted = {
+        notes: [...notes.notes, ...found.map(({ identifier, seed }) => ({ identifier, seed }))].filter(
+          (note, at, all) =>
+            all.findIndex((other) => other.identifier === note.identifier && other.seed === note.seed) === at,
+        ),
+      };
+      try {
+        await index?.forget(deleted);
+      } catch (error) {
+        const seeds = deleted.notes.map((note) => `--seed ${note.seed}`).join(' ');
+
+        return {
+          ok: false,
+          lines: [
+            `deleted ${found.length} note(s) that ${that}, but the index of the notes did not answer after: ${String(error instanceof Error ? error.message : error)}`,
+            `A row of them may be left in the index, with up to 64 characters of their text. Run: forget ${seeds}`,
+          ],
+        };
+      }
     }
   } catch (error) {
     return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
   }
 
-  if (found.length === 0) return { ok: true, lines: [none] };
+  if (found.length === 0) return { ok: true, lines: [none, ...(index === undefined ? [] : [TRACKER_NOTES])] };
 
   const listed = found.map((seed) => `  ${seed.identifier}  ${seed.createdAt}  ${seed.pageUrl}  ${excerpt(seed.note)}`);
 
@@ -349,7 +387,49 @@ export async function runForget(
           ...listed,
           // The worker caches a read for this long, so a page can still show the note for a moment.
           `A page can still show them for ${Math.round(CACHE_TTL_MS / 1000)} seconds. Your backups still hold them.`,
+          ...(index === undefined ? [] : [TRACKER_NOTES]),
         ],
+  };
+}
+
+/** What `forget` says of the notes it does not see, on a worker with an index (FRU-237). */
+const TRACKER_NOTES =
+  'Notes that went to a tracker are not found by an address or a name here: delete each issue in its tracker, and remove what the worker holds of it, its row in the index with up to 64 characters of its text, with --seed <id> (the "id" of the seed in the issue).';
+
+/** `--seed`: the rows of the index of these notes, whatever the store (FRU-237). */
+async function forgetSeeds(
+  seeds: readonly string[],
+  dryRun: boolean,
+  index: NoteIndex | undefined,
+): Promise<ForgetOutcome> {
+  if (index === undefined) {
+    return {
+      ok: false,
+      lines: ['this worker has no index of the notes (no FRUITBACK_DATABASE_URL): nothing of a note to remove.'],
+    };
+  }
+  let rows: IndexedNote[];
+  try {
+    rows = await index.forget({ seeds }, { dryRun });
+  } catch (error) {
+    return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
+  }
+  const missing = seeds.filter((seed) => !rows.some((row) => row.seed === seed));
+  const listed = rows.map(
+    (row) =>
+      `  ${row.seed}  ${row.reference ?? '-'}  ${new Date(row.createdAt).toISOString()}  ${row.pageUrl}  ${row.excerpt}`,
+  );
+
+  return {
+    ok: true,
+    lines: [
+      dryRun
+        ? `${rows.length} row(s) of the index name these notes. Nothing was removed (--dry-run):`
+        : `removed ${rows.length} row(s) of the index, with their excerpt:`,
+      ...listed,
+      ...(missing.length === 0 ? [] : [`no row of the index names ${missing.join(', ')}.`]),
+      'The notes themselves are where they went: delete each issue in its tracker.',
+    ],
   };
 }
 

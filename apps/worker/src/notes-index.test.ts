@@ -222,7 +222,14 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
 
   it('holds no more than 64 characters of the text of a note in any column', async () => {
     const { world, acme } = await aWorkspace();
-    const notes = [`${'Long note, '.repeat(40)}end.`, `${'é'.repeat(30)}👨‍👩‍👧‍👦${'x'.repeat(80)}`, ''];
+    const notes = [
+      `${'Long note, '.repeat(40)}end.`,
+      `${'é'.repeat(30)}👨‍👩‍👧‍👦${'x'.repeat(80)}`,
+      // Line breaks and runs of spaces: the excerpt makes one space of each, so a copy of the text
+      // as it was typed would not be found in a row that holds it normalised.
+      `${'Line one\n\n   line two\t '.repeat(10)}end.`,
+      '',
+    ];
     for (const note of notes) await leave(world, acme, note);
 
     const rows = await rowsOf(world.database, 'SELECT * FROM note_index');
@@ -231,11 +238,14 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
       for (const row of rows) {
         for (const [column, value] of Object.entries(row)) {
           if (typeof value !== 'string') continue;
-          // No 65 characters of the note in a row, wherever they start.
-          const characters = [...note];
-          for (let start = 0; start + EXCERPT_LENGTH < characters.length; start += 1) {
-            const window = characters.slice(start, start + EXCERPT_LENGTH + 1).join('');
-            assert.equal(value.includes(window), false, `${column} holds more than 64 characters of a note`);
+          // No 65 characters of the note in a row, wherever they start: of the text as it was
+          // typed, and of the text as the excerpt normalises it.
+          for (const text of [note, note.replace(/\s+/gu, ' ').trim()]) {
+            const characters = [...text];
+            for (let start = 0; start + EXCERPT_LENGTH < characters.length; start += 1) {
+              const window = characters.slice(start, start + EXCERPT_LENGTH + 1).join('');
+              assert.equal(value.includes(window), false, `${column} holds more than 64 characters of a note`);
+            }
           }
         }
       }
@@ -404,6 +414,312 @@ describe('forget, and the index (FRU-237)', () => {
         { seed_id: 'sd_bob', excerpt: 'A note of Bob.' },
         { seed_id: 'sd_other', excerpt: 'A note of the other workspace.' },
       ]);
+    } finally {
+      await database.close();
+    }
+  });
+});
+
+describe('the index, against what the review of #300 found (FRU-237)', () => {
+  const issueOf = (seedId: string, identifier: string, note: string, stage: SeedStage): SeedIssue => ({
+    id: identifier,
+    identifier,
+    title: note.slice(0, 20),
+    stage,
+    stateName: 'x',
+    updatedAt: '2026-10-13T00:00:00.000Z',
+    seed: seedFixture({ id: seedId, note }),
+  });
+
+  async function oneSite() {
+    const { createPgliteDatabase } = await import('./postgres.fixture.ts');
+    const { createPostgresAccountStore } = await import('./accounts-postgres.ts');
+    const database = await createPgliteDatabase();
+    const accounts = createPostgresAccountStore(database);
+    const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+    const acme = await accounts.createWorkspace('Acme', alice.id);
+    const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'everyone' });
+
+    return { database, accounts, alice, acme, site, index: createPostgresNoteIndex(database) };
+  }
+
+  it('writes the page when two of its issues carry one seed id, the first of them', async () => {
+    const { database, acme, site, index } = await oneSite();
+    try {
+      await index.refresh(
+        acme.id,
+        site.id,
+        { kind: 'fruitback' },
+        [
+          issueOf('sd_same', 'FB-1', 'first', 'ripe'),
+          issueOf('sd_same', 'FB-2', 'second', 'green'),
+          issueOf('sd_other', 'FB-3', 'third', 'ripe'),
+        ],
+        Date.now(),
+      );
+
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, reference, stage FROM note_index ORDER BY seed_id'), [
+        { seed_id: 'sd_other', reference: 'FB-3', stage: 'ripe' },
+        { seed_id: 'sd_same', reference: 'FB-1', stage: 'ripe' },
+      ]);
+    } finally {
+      await database.close();
+    }
+  });
+
+  it('leaves no row of a forgotten note that a read of its page wrote back during the command', async () => {
+    const { database, acme, site, index } = await oneSite();
+    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { runForget } = await import('./cli.ts');
+    try {
+      const real = createPostgresSeedStore(database);
+      const seed = seedFixture({
+        id: 'sd_alice',
+        note: 'Secret note of Alice.',
+        client: { id: site.id, name: 'Acme' },
+        reporter: { name: 'Alice', email: 'alice@client.fr' },
+      });
+      const issue = await real.create(seed, undefined, { read: 'public' } as never);
+      await index.record(
+        [
+          {
+            workspace: acme.id,
+            site: site.id,
+            seed,
+            channel: 'script',
+            author: { kind: 'visitor' },
+            place: { kind: 'fruitback' },
+            issue,
+            stage: 'seeded',
+          },
+        ],
+        Date.now(),
+      );
+      // A reader's GET that misses the cache between the index and the store: it reads the note in
+      // the store, still there, and writes its row back.
+      const forget = real.forget?.bind(real);
+      const store: SeedStore = {
+        ...real,
+        forget: async (which, options) => {
+          if (!options.dryRun) {
+            const issues = await real.findForPage({ url: seed.page.url, clientId: site.id }, undefined, {
+              read: 'public',
+            } as never);
+            await index.refresh(acme.id, site.id, { kind: 'fruitback' }, issues, Date.now());
+          }
+
+          return (forget as NonNullable<SeedStore['forget']>)(which, options);
+        },
+      };
+
+      const done = await runForget(
+        ['--email', 'alice@client.fr'],
+        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        store,
+        index,
+      );
+
+      assert.equal(done.ok, true, done.lines.join('\n'));
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), []);
+    } finally {
+      await database.close();
+    }
+  });
+
+  it('removes with --seed the row of a note that went to a tracker, whatever the store, and no other', async () => {
+    const { database, acme, site, index } = await oneSite();
+    const { runForget } = await import('./cli.ts');
+    try {
+      for (const [id, note] of [
+        ['sd_tracked', 'A note that went to Linear.'],
+        ['sd_kept', 'Another note.'],
+      ] as const) {
+        await index.record(
+          [
+            {
+              workspace: acme.id,
+              site: site.id,
+              seed: seedFixture({ id, note }),
+              channel: 'script',
+              author: { kind: 'visitor' },
+              place: { kind: 'fruitback' },
+              issue: { identifier: id === 'sd_tracked' ? 'ACM-151' : 'ACM-152' },
+              stage: 'seeded',
+            },
+          ],
+          Date.now(),
+        );
+      }
+      // A store that deletes nothing from this command: Linear, REST, memory.
+      const tracker: SeedStore = {
+        name: 'linear',
+        scope: () => 'linear',
+        create: async () => ({ id: 'x', identifier: 'x' }),
+        findForPage: async () => [],
+      };
+      const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' };
+
+      const byEmail = await runForget(['--email', 'alice@client.fr'], env, tracker, index);
+      assert.equal(byEmail.ok, false);
+      assert.match(byEmail.lines.join('\n'), /--seed <id>/);
+
+      const listed = await runForget(
+        ['--seed', 'sd_tracked', '--seed', 'sd_nowhere', '--dry-run'],
+        env,
+        tracker,
+        index,
+      );
+      assert.equal(listed.ok, true, listed.lines.join('\n'));
+      assert.match(listed.lines.join('\n'), /sd_tracked {2}ACM-151 .* A note that went to Linear\./);
+      assert.match(listed.lines.join('\n'), /no row of the index names sd_nowhere/);
+      assert.equal((await rowsOf(database, 'SELECT seed_id FROM note_index')).length, 2, 'a dry run removes nothing');
+
+      const done = await runForget(['--seed', 'sd_tracked'], env, tracker, index);
+      assert.equal(done.ok, true, done.lines.join('\n'));
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), [{ seed_id: 'sd_kept' }]);
+    } finally {
+      await database.close();
+    }
+  });
+
+  it('keeps no account that was removed: the row stays, with no account', async () => {
+    const { database, accounts, alice, acme, site, index } = await oneSite();
+    try {
+      await index.record(
+        [
+          {
+            workspace: acme.id,
+            site: site.id,
+            seed: seedFixture({ id: 'sd_member', note: 'A note of a member.' }),
+            channel: 'extension',
+            author: { kind: 'member', account: alice.id },
+            place: { kind: 'fruitback' },
+            issue: { identifier: 'FB-1' },
+            stage: 'seeded',
+          },
+        ],
+        Date.now(),
+      );
+      void accounts;
+
+      await rowsOf(database, `DELETE FROM "user" WHERE id = '${alice.id}'`);
+
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, author_kind, author_account_id FROM note_index'), [
+        { seed_id: 'sd_member', author_kind: 'member', author_account_id: null },
+      ]);
+    } finally {
+      await database.close();
+    }
+  });
+
+  it('says that the notes are deleted, and how to end it, when the index fails after the store', async () => {
+    const { database, acme, site, index } = await oneSite();
+    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { runForget } = await import('./cli.ts');
+    try {
+      const store = createPostgresSeedStore(database);
+      const seed = seedFixture({
+        id: 'sd_alice',
+        note: 'A note of Alice.',
+        client: { id: site.id, name: 'Acme' },
+        reporter: { name: 'Alice', email: 'alice@client.fr' },
+      });
+      const issue = await store.create(seed, undefined, { read: 'public' } as never);
+      await index.record(
+        [
+          {
+            workspace: acme.id,
+            site: site.id,
+            seed,
+            channel: 'script',
+            author: { kind: 'visitor' },
+            place: { kind: 'fruitback' },
+            issue,
+            stage: 'seeded',
+          },
+        ],
+        Date.now(),
+      );
+      let calls = 0;
+      const failing: NoteIndex = {
+        ...index,
+        forget: async (which, options) => {
+          calls += 1;
+          if (calls === 2) throw new Error('the index went away');
+
+          return index.forget(which, options);
+        },
+      };
+
+      const done = await runForget(
+        ['--email', 'alice@client.fr'],
+        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        store,
+        failing,
+      );
+
+      assert.equal(done.ok, false);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
+      assert.match(done.lines.join('\n'), /deleted 1 note\(s\)/);
+      assert.match(done.lines.join('\n'), /Run: forget --seed sd_alice/);
+    } finally {
+      await database.close();
+    }
+  });
+
+  it('removes the row of a note of the same reporter that arrived between the list and the deletion', async () => {
+    const { database, acme, site, index } = await oneSite();
+    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { runForget } = await import('./cli.ts');
+    try {
+      const real = createPostgresSeedStore(database);
+      const plant = async (id: string) => {
+        const seed = seedFixture({
+          id,
+          note: `A note ${id}.`,
+          client: { id: site.id, name: 'Acme' },
+          reporter: { name: 'Alice', email: 'alice@client.fr' },
+        });
+        const issue = await real.create(seed, undefined, { read: 'public' } as never);
+        await index.record(
+          [
+            {
+              workspace: acme.id,
+              site: site.id,
+              seed,
+              channel: 'script',
+              author: { kind: 'visitor' },
+              place: { kind: 'fruitback' },
+              issue,
+              stage: 'seeded',
+            },
+          ],
+          Date.now(),
+        );
+      };
+      await plant('sd_first');
+      const forget = real.forget?.bind(real) as NonNullable<SeedStore['forget']>;
+      // A second note of Alice arrives after the list the command read, before it deletes.
+      const store: SeedStore = {
+        ...real,
+        forget: async (which, options) => {
+          if (!options.dryRun) await plant('sd_late');
+
+          return forget(which, options);
+        },
+      };
+
+      const done = await runForget(
+        ['--email', 'alice@client.fr'],
+        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        store,
+        index,
+      );
+
+      assert.equal(done.ok, true, done.lines.join('\n'));
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), []);
     } finally {
       await database.close();
     }

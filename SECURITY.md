@@ -585,8 +585,10 @@ that served one site with this key, and then got accounts, must change it. The s
 
 A worker with accounts keeps an index of the notes of its sites: `docs/privacy.md` names each
 column. **It holds at most 64 characters of the text of a note**, in one column, and no name or
-address a reporter typed: a test leaves a long note, one with composed emoji and an empty one, and
-reads every column of every row for 65 characters of a text.
+address a reporter typed: a test leaves a long note, one with composed emoji, one with line breaks
+and runs of spaces, and an empty one, and reads every column of every row for 65 characters of each
+text, as it was typed and as the excerpt normalises it. A note of 64 characters or fewer is there
+whole.
 
 - **The counts of a site are read by every member of its workspace**, as the list of the sites is:
   owner, admin, member and guest (`read-feedback`). **What did not arrive** (`undelivered`) is about
@@ -600,8 +602,12 @@ reads every column of every row for 65 characters of a text.
 - **An anonymous reader of a public page writes to the index**: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.
-- **The index never costs a note**: a note whose row is not written is kept and answered `201`, and
-  its row is written at the next read of its page.
+- **The index never costs a note**: a note whose row is not written is kept and answered `201`. Its
+  row is written by a later read of its page that asks the store, if one comes and the store lists
+  the note.
+- **`forget` removes the rows of the notes it deletes, before and after it deletes them**, and
+  `forget --seed <id>` the row of a note that went to a tracker, whatever the store. **The account
+  of a member leaves the index with the account** (`ON DELETE SET NULL`).
 
 ### The list of the notes of a workspace (FRU-244)
 
