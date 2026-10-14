@@ -27,7 +27,7 @@ const REQUEST_TIMEOUT_MS = 20 * 1_000;
  * is. A `fetch` that rejects stays a rejection, which `session.ts` reads as "the worker said
  * nothing".
  */
-async function postJson(url: string, body: Record<string, unknown>): Promise<SessionResponse> {
+export async function postJson(url: string, body: Record<string, unknown>): Promise<SessionResponse> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

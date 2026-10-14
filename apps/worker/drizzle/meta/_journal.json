@@ -61,8 +61,15 @@
     {
       "idx": 8,
       "version": "7",
-      "when": 1791929037528,
-      "tag": "0008_connect",
+      "when": 1791928356677,
+      "tag": "0008_note_index_by_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791966632087,
+      "tag": "0009_connect",
       "breakpoints": true
     }
   ]

@@ -29,14 +29,19 @@ run there.
 
 ## 2. Switch a site on
 
-**With Fruitback Cloud, there is nothing to type.** Connect this browser from the console first (its
-**Connect this browser** button opens a pairing link). Then, on a site of your workspace, the popup
-says the site is in your workspace and offers **Turn on Fruitback here**. One click: the browser asks
+**With Fruitback Cloud, there is nothing to type.** Click the extension on any page and choose
+**Sign in to Fruitback**: the console opens in a tab and shows a word. Check that the popup shows the
+same word, then approve in the console; the popup picks the sign-in up by itself, even when it was
+closed meanwhile. The console's **Connect this browser** button, which opens a pairing link, still
+works too. Then, on a site of your workspace, the popup says the site is in your workspace and offers
+**Turn on Fruitback here**. One click: the browser asks
 for access to that site only, and the widget appears, reading and writing as you. **Set up by hand**
 leads to the form below.
 
-On a worker you run yourself, or on a site of no workspace, open the page you want to review and click the extension. The popup names the origin it is about,
-and asks for three things:
+On a worker you run yourself, or on a site of no workspace, open the page you want to review and
+click the extension. While this browser holds no session at all, the popup offers
+**Connect it in settings**, and the options page asks for the three things below. Once it holds one, the popup names
+the site it is about and asks for them itself:
 
 | Field               |                                             |                                                                |
 | ------------------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -146,8 +151,8 @@ message, or a rules file that only another file replaces.
 ## 4. Many sites, from the options page
 
 The popup switches the site you are on, and names the rule that covers it. On a site that no rule covers, the
-popup says `No rule covers this origin, so Fruitback does nothing here.` **All sites and rules** opens the
-options page, which lists every rule and adds new ones.
+popup says `No rule covers this origin, so Fruitback does nothing here.` The gear at the top of the
+popup, **Settings and every site**, opens the options page, which lists every rule and adds new ones.
 
 A rule names the sites it covers:
 

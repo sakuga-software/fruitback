@@ -1,3 +1,4 @@
+import { handleNotes } from './console-notes.ts';
 import { type NoteIndex, noNotes } from './notes-index.ts';
 import {
   type AccountStore,
@@ -425,6 +426,18 @@ export async function handleConsoleApi(
   if (role === undefined) return json(404, { error: 'not-found' }, headers);
   const allowed = (action: Action): boolean => can(role, action);
   const forbidden = (): Response => json(403, { error: 'forbidden', role }, headers);
+
+  // The notes of the workspace, and « Send again » (FRU-244): `console-notes.ts`.
+  const notes = await handleNotes(rest, request, {
+    workspace: workspaceId as string,
+    account: account.id,
+    allowed,
+    noteIndex: context.noteIndex,
+    accounts: context.accounts,
+    now: context.now ?? Date.now(),
+    headers,
+  });
+  if (notes !== undefined) return notes;
 
   if (rest === '/sites') {
     if (request.method === 'GET') {

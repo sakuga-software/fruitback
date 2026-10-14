@@ -192,6 +192,12 @@ site goes: the worker is not told of a deletion there, and a read of the page ca
 that was deleted from one that a tracker did not list. That is the one place where up to 64
 characters of a note outlive it; `docs/decisions/worker.md` says how it would be closed.
 
+**The console lists these rows** (FRU-244): the excerpt, the page, the site, the stage, the dates,
+the way the note came, and, for a role that sees the tracker, where it went and its reference. Its
+search reads these columns only. The name of an author is the name of a member's account as it is
+now, read from the account at each request and not kept in the index; a member who left the
+workspace is shown with no name.
+
 ### What stays in the reporter's browser
 
 Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.
@@ -217,7 +223,10 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   removed while it is on. That vendor is a recipient you did not have before: say so to a reviewer
   whose staging addresses are confidential.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
-  It also keeps the language of the reviewer's account there. That language goes to a page where
+  While a sign-in from the popup waits for the console (FRU-251), it keeps that request there too,
+  until it ends or the browser closes; then the address of the console, for « Open the console ». To
+  start a sign-in it sends the worker the name of the browser and of its system (« Chrome on
+  macOS »), which the console shows to the person who approves. It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read
   which language their account is set to.
 - The widget sets no cookie.

@@ -399,6 +399,18 @@ the answer.
 Pairing asks for a host permission on the **worker's** origin, which is not the site's. It is optional
 and granted per worker at the moment somebody pairs, never at install.
 
+**Signing in from the popup** (FRU-251) gives the same session by another door: the extension asks
+the worker for a request, the person approves it in the console, and the extension spends a
+**claim** for the session. The claim is a secret worth a session of thirty days once approved, so it
+is kept in `chrome.storage.session` only, with the access token: never in an address, in a page or in
+`chrome.storage.local`, and it goes to the worker in the body of one route. What goes in the address
+of the console is the request, which takes nothing by itself. A word shown in the popup and in the
+console lets the person check that the tab they approve is their browser's. The address of the
+console comes from the worker, and the extension opens it only when it is of the worker's site, over
+https (loopback excepted), and the page of that request; any other address opens nothing. A request
+lives 30 minutes at most here, whatever the worker says, and the click asks for the same optional
+access to the worker's origin as a pairing.
+
 ### Connecting the extension from the console (FRU-238)
 
 The extension can also be connected by the person it is for, with no operator and no code to copy:
@@ -689,7 +701,25 @@ reads every column of every row for 65 characters of a text.
 - **The index never costs a note**: a note whose row is not written is kept and answered `201`, and
   its row is written at the next read of its page.
 
-### The accounts, and what decides who reads a site (FRU-96)
+### The list of the notes of a workspace (FRU-244)
+
+`GET /console/workspaces/<id>/notes` answers the rows of the index above, a page at a time: **an
+excerpt of 64 characters at most, never the text of a note**, and a search on what the index keeps
+only (the excerpt, the page, the origin of the site, the stage, and the reference for a role with
+`see-tracker`). **A guest's search does not read the references**: trying words would otherwise
+tell it which note carries which reference (raised by the heavy review of #306; test in
+`gives a guest the notes, and nothing of where they went`).
+
+- **Every member of the workspace reads the list** (`read-feedback`), a guest included, as it reads
+  every site today. **Where a note went is read with `see-tracker` only**: the place and the
+  connector, the reference and its link in the tracker, the delivery that did not arrive, and the
+  counts by place. A guest gets none of it, and a `place` filter is `403` to it. A person of another
+  workspace gets `404`, a caller with no session `401`, and the token of an extension `401`.
+- **The name of an author is the name its account has now, for a member of the workspace only**;
+  a member who left is shown with no name. A name a reporter typed is not in the index, so it is
+  not in the list.
+- **« Send again » is `manage-sites`**, and reaches only a delivery of a connector of the workspace
+  in the address: the note of another workspace is `404`.
 
 With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from
 that database on every request. A site is a client of one workspace, so a session reaches it only through

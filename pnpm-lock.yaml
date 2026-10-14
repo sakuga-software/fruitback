@@ -139,6 +139,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.1
+      happy-dom:
+        specifier: 'catalog:'
+        version: 20.11.2
       oxfmt:
         specifier: 'catalog:'
         version: 0.60.0

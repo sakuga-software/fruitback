@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
 import { organization } from './auth-schema.ts';
 
@@ -438,7 +439,16 @@ export const note_index = pgTable(
     }).onDelete('set null'),
     // The counts of the sites of a workspace: one pass over this index, grouped by site and stage.
     index('note_index_by_workspace').on(table.workspace_id, table.site_id, table.stage),
-    // `forget` of a member.
+    // `forget` of a member, and the notes of one (`mine`, FRU-244).
     index('note_index_by_author').on(table.author_account_id),
+    // The list of the notes of a workspace (FRU-244): the newest first, so a page reads its rows in
+    // the order of this index and stops. Two notes of one millisecond are then ordered by their ids,
+    // in the bytes of `COLLATE "C"`: the same order on every server, whatever its collation.
+    index('note_index_by_date').on(
+      table.workspace_id,
+      table.created_at.desc(),
+      sql`"site_id" COLLATE "C" DESC`,
+      sql`"seed_id" COLLATE "C" DESC`,
+    ),
   ],
 );
