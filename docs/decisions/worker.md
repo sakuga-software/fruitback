@@ -2113,7 +2113,11 @@ protected; this section says how to change it.
   no member yet. better-auth writes the member in its own transaction, and runs no hook inside it
   (read in `routes/crud-invites.mjs` and `adapter.mjs` of 1.7.7): before is the one place that
   leaves no guest with sites that are not theirs. A share with no member gives nothing, since `reach`
-  reads the member first; an acceptance that better-auth refuses removes the rows it wrote.
+  reads the member first; an acceptance that better-auth refuses removes the rows it wrote, unless
+  the person is a member by then. **An acceptance runs alone in the workspace of its invitation**
+  (`oneAtATime`): two « Join » of one guest at the same moment wrote and removed the same rows (heavy
+  review of #334). A « Resend » writes the sites when better-auth answers another invitation than
+  the one that waited (one past its end is replaced). A guest who becomes a member loses the rows.
 - **`site_shares` is keyed by the workspace and the account, not by a member id**, because its rows
   are written before the member exists. They go with the site, the workspace and the account (foreign
   keys), and with the person who leaves or is removed (`unshare`, beside the end of their sessions).

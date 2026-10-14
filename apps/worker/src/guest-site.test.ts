@@ -531,6 +531,8 @@ describe('the guest of one site (FRU-250)', () => {
 
     it('takes the share away with its site: the guest stays a member and reads nothing', async () => {
       const team = await acme();
+      // Notes of both sites, before the shared one goes.
+      await plantNotes(team);
       const token = await workspaceSession(team, team.gina, team.workspace);
       const removed = await team.call('DELETE', `/console/workspaces/${team.workspace}/sites/${team.shared}`, {
         token: team.alice.token,
@@ -542,6 +544,10 @@ describe('the guest of one site (FRU-250)', () => {
       assert.deepEqual(((await sites.json()) as { sites: unknown[] }).sites, []);
       const listed = await team.call('GET', `/console/workspaces/${team.workspace}/sites`, { token: team.gina.token });
       assert.deepEqual(((await listed.json()) as { sites: unknown[] }).sites, []);
+      // No site is not « no filter »: the notes of the other site stay out of the list (review of #334).
+      const notes = await team.call('GET', `/console/workspaces/${team.workspace}/notes`, { token: team.gina.token });
+      assert.equal(notes.status, 200);
+      assert.deepEqual(((await notes.json()) as { notes: unknown[] }).notes, []);
       const other = { id: team.other, origin: OTHER };
       assert.equal(await (ROUTES[0] as Route).reads(team, token, other), false);
     });
@@ -577,6 +583,81 @@ describe('the guest of one site (FRU-250)', () => {
       assert.deepEqual(await team.world.accounts.reach(team.workspace, team.gina.id), {
         role: 'guest',
         sites: [team.other],
+      });
+    });
+
+    it('keeps the share of a guest who presses « Join » twice at the same moment (heavy review of #334)', async () => {
+      const team = await acme();
+      const invited = await team.call('POST', `${ORG}/invite-member`, {
+        token: team.alice.token,
+        body: { organizationId: team.workspace, email: 'paul@client.fr', role: 'guest', sites: [team.other] },
+      });
+      const { id } = (await invited.json()) as { id: string };
+      const paul = await signInTo(team.world, 'paul@client.fr');
+
+      const answers = await Promise.all(
+        [1, 2].map(() =>
+          team.call('POST', `${ORG}/accept-invitation`, { token: paul.token, body: { invitationId: id } }),
+        ),
+      );
+
+      assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 400]);
+      assert.deepEqual(await team.world.accounts.reach(team.workspace, paul.id), {
+        role: 'guest',
+        sites: [team.other],
+      });
+    });
+
+    it('writes the sites of the invitation a « Resend » makes when the one that waited is past its end (heavy review of #334)', async () => {
+      const team = await acme();
+      const body = { organizationId: team.workspace, email: 'paul@client.fr', role: 'guest', sites: [team.other] };
+      const first = await team.call('POST', `${ORG}/invite-member`, { token: team.alice.token, body });
+      const { id } = (await first.json()) as { id: string };
+      await rowsOf(
+        team.world.database,
+        `UPDATE invitation SET "expiresAt" = now() - interval '1 day' WHERE id = '${id}'`,
+      );
+
+      const again = await team.call('POST', `${ORG}/invite-member`, {
+        token: team.alice.token,
+        body: { ...body, resend: true },
+      });
+
+      assert.equal(again.status, 200, await again.clone().text());
+      const made = (await again.json()) as { id: string };
+      assert.notEqual(made.id, id, 'better-auth made a new invitation');
+      const paul = await signInTo(team.world, 'paul@client.fr');
+      const joined = await team.call('POST', `${ORG}/accept-invitation`, {
+        token: paul.token,
+        body: { invitationId: made.id },
+      });
+      assert.equal(joined.status, 200, await joined.clone().text());
+      assert.deepEqual(await team.world.accounts.reach(team.workspace, paul.id), {
+        role: 'guest',
+        sites: [team.other],
+      });
+    });
+
+    it('takes the shares away from a guest who becomes a member (review of #334)', async () => {
+      const team = await acme();
+      const members = await team.call('GET', `${ORG}/list-members?organizationId=${team.workspace}`, {
+        token: team.alice.token,
+      });
+      const gina = ((await members.json()) as { members: { id: string; userId: string }[] }).members.find(
+        (each) => each.userId === team.gina.id,
+      );
+      const promoted = await team.call('POST', `${ORG}/update-member-role`, {
+        token: team.alice.token,
+        body: { organizationId: team.workspace, memberId: gina?.id, role: 'member' },
+      });
+      assert.equal(promoted.status, 200, await promoted.clone().text());
+      assert.deepEqual(
+        await rowsOf(team.world.database, `SELECT site_id FROM site_shares WHERE account_id = '${team.gina.id}'`),
+        [],
+      );
+      assert.deepEqual(await team.world.accounts.reach(team.workspace, team.gina.id), {
+        role: 'member',
+        sites: 'every',
       });
     });
 

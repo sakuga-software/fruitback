@@ -302,10 +302,30 @@ export async function handleOrganizationRoutes(
   const workspace = rule.scope === 'person' ? undefined : String(read.input.organizationId);
   const call: Call = { request, path, rule, input: read.input, workspace, auth, mine };
 
-  // A call that changes a workspace runs alone in it (FRU-209): see `oneAtATime`.
-  return workspace !== undefined && rule.method === 'POST'
-    ? oneAtATime(workspace, () => answerOrganizationCall(call, context, headers))
+  // A call that changes a workspace runs alone in it (FRU-209): see `oneAtATime`. An acceptance
+  // names no workspace, and changes the one of its invitation: two « Join » of one guest at the same
+  // moment wrote and removed the same shares (FRU-250, raised by the heavy review of #334).
+  const changed =
+    workspace ??
+    (path === '/organization/accept-invitation' ? await workspaceOfInvitation(auth, read.input) : undefined);
+
+  return changed !== undefined && rule.method === 'POST'
+    ? oneAtATime(changed, () => answerOrganizationCall(call, context, headers))
     : answerOrganizationCall(call, context, headers);
+}
+
+/** The workspace of the invitation an acceptance names, or `undefined` for one that does not exist. */
+async function workspaceOfInvitation(
+  auth: Auth,
+  input: Record<string, OrganizationValue>,
+): Promise<string | undefined> {
+  const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
+  const invitation = await adapter.findOne({
+    model: 'invitation',
+    where: [{ field: 'id', value: String(input.invitationId) }],
+  });
+
+  return typeof invitation?.organizationId === 'string' ? invitation.organizationId : undefined;
 }
 
 /** A call that passed what needs no workspace: its route, what it sent, and who sent it. */
@@ -354,8 +374,8 @@ async function answerOrganizationCall(
   const read = { input: call.input };
   /** The sites a guest is invited on (FRU-250), read in this workspace. */
   let guestSites: SharedSite[] | undefined;
-  /** A « Resend » of an invitation that waits: better-auth makes none. */
-  let resent = false;
+  /** The invitation that waits for the address of a « Resend », whose sites are written already. */
+  let waiting: string | undefined;
   const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
 
   if (workspace !== undefined) {
@@ -420,8 +440,9 @@ async function answerOrganizationCall(
           kept.length === guestSites.length && guestSites.every((site) => kept.some((each) => each.id === site.id));
         if (!same) return json(400, { error: 'invalid-request', field: 'sites' }, headers);
       }
-      // better-auth makes a new invitation for a « Resend » of an address that has none waiting.
-      resent = waits !== null;
+      // better-auth makes a new invitation for a « Resend » of an address that has none waiting, or
+      // whose invitation is past its end: the id it answers says which (heavy review of #334).
+      waiting = waits === null ? undefined : String((waits as { id?: unknown }).id);
     }
   }
 
@@ -462,8 +483,13 @@ async function answerOrganizationCall(
   );
 
   // An acceptance that better-auth refused leaves no share: the person is no member, and the rows
-  // would give nothing, but they are theirs to keep only as a guest.
-  if (shared?.workspace !== undefined && !answer.ok) {
+  // would give nothing, but they are theirs to keep only as a guest. A person who is a member, by
+  // another acceptance of the same invitation, keeps the rows of that one.
+  if (
+    shared?.workspace !== undefined &&
+    !answer.ok &&
+    (await context.accounts.role(shared.workspace, mine.userId)) === undefined
+  ) {
     await context.accounts.unshare(shared.workspace, mine.userId);
   }
 
@@ -489,8 +515,8 @@ async function answerOrganizationCall(
     if (typeof changed !== 'string') throw new AuthUnavailable('better-auth answered a member with no person');
     const role = path === '/organization/remove-member' ? undefined : roleOf(told?.role);
     if (role === undefined || !can(role, 'manage-members')) await cancelInvitationsOf(adapter, workspace, changed);
-    // What was shared with a guest goes with them (FRU-250).
-    if (path === '/organization/remove-member') await context.accounts.unshare(workspace, changed);
+    // What was shared with a guest goes with them (FRU-250), and with the role of a guest.
+    if (role !== 'guest') await context.accounts.unshare(workspace, changed);
   }
 
   // The invitation is kept: its message goes now, when the worker sends mail and the window of this
@@ -507,7 +533,7 @@ async function answerOrganizationCall(
     if (typeof kept?.id !== 'string') throw new AuthUnavailable('better-auth answered an invitation with no id');
     // The sites of a new invitation of a guest, beside it (FRU-250). When they cannot be written, the
     // invitation does not wait: a guest who accepted it would read nothing.
-    if (guestSites !== undefined && !resent) {
+    if (guestSites !== undefined && kept.id !== waiting) {
       let written = false;
       try {
         written = await context.accounts.shareByInvitation(
