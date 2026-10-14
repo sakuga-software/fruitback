@@ -730,6 +730,10 @@ test('« Unlink » asks twice, and the last way to sign in stays and says why', 
   await github.getByRole('button', { name: 'Unlink', exact: true }).click();
   await github.getByRole('button', { name: 'Unlink GitHub' }).click();
   await expect(github.getByRole('alert')).toHaveText('This is the last way you sign in here: link another one first.');
+  // A code of the worker that names a property of every object reads as a refusal it does not name.
+  worker.unlinkRefuses = 'constructor';
+  await github.getByRole('button', { name: 'Unlink GitHub' }).click();
+  await expect(github.getByRole('alert')).toHaveText('GitHub is still linked. Try again.');
   await expect(github).toContainText('Linked');
 
   // The second time is still there: pressed again, once the worker takes it.
@@ -738,6 +742,7 @@ test('« Unlink » asks twice, and the last way to sign in stays and says why', 
   await expect(github).toContainText('Not linked');
   await expect(github.getByRole('link', { name: 'Link GitHub' })).toBeVisible();
   expect(worker.sent.filter((each) => each.includes('/me/sign-in/'))).toEqual([
+    'DELETE /console/me/sign-in/github',
     'DELETE /console/me/sign-in/github',
     'DELETE /console/me/sign-in/github',
   ]);
@@ -756,6 +761,11 @@ test('the way back of a link says what happened, once', async ({ page }) => {
   await page.goto(`${CONSOLE}/w/w1/account?error=email_doesn't_match`);
   await expect(section(page, 'How you sign in').getByRole('alert')).toHaveText(
     'That account has another address than yours. Fruitback links only the address of your account.',
+  );
+  // A code of the address that names a property of every object reads as a link that failed.
+  await page.goto(`${CONSOLE}/w/w1/account?error=constructor`);
+  await expect(section(page, 'How you sign in').getByRole('alert')).toHaveText(
+    'The account was not linked. Try again.',
   );
 });
 

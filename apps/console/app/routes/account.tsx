@@ -112,7 +112,8 @@ export default function Account() {
     setUnlinkStuck(undefined);
     const gone = await unlinkProvider(provider);
     if (!gone.ok && gone.status !== 404) {
-      setUnlinkStuck({ provider, problem: UNLINK_PROBLEMS[gone.error] ?? NOT_UNLINKED });
+      // Own keys only (`problemOf`): a code named `constructor` must not find a method of `Object`.
+      setUnlinkStuck({ provider, problem: problemOf(gone, UNLINK_PROBLEMS, NOT_UNLINKED) });
     }
     await readMethods();
   }
@@ -258,7 +259,11 @@ export default function Account() {
           ) : null}
           {linkError === null ? null : (
             <div className="mb-[12px]">
-              <Problem>{t(LINK_PROBLEMS[linkError] ?? NOT_LINKED)}</Problem>
+              {/* The code comes from the address, which anybody writes: own keys only, so that
+                  `?error=constructor` reads the sentence of a link that failed, not a method of Object. */}
+              <Problem>
+                {t(Object.hasOwn(LINK_PROBLEMS, linkError) ? (LINK_PROBLEMS[linkError] as string) : NOT_LINKED)}
+              </Problem>
             </div>
           )}
           {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
