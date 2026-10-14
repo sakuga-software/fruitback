@@ -8,6 +8,7 @@ import {
   loading,
   notAWebPage,
   shell,
+  showPageCounts,
   signInProblem,
   signedOut,
   siteInWorkspace,
@@ -402,5 +403,38 @@ describe('a site of a workspace, on here (07, FRU-254)', () => {
     assert.equal(root.querySelector('.subtitle')?.textContent, 'Activé · Sakuga');
     assert.equal(root.querySelector('.page-notes h2')?.textContent, 'Sur cette page1 note');
     assert.equal(root.querySelector('.action')?.textContent, 'Laisser un feedback');
+  });
+});
+
+describe('the notes of the page, added to a screen 07 already drawn (FRU-254)', () => {
+  const base = {
+    origin: ORIGIN,
+    workspace: 'Sakuga',
+    on: true,
+    onToggle: nothing,
+    onLeaveFeedback: nothing,
+    onShowEveryNote: nothing,
+    onSettings: nothing,
+  };
+  const COUNTS = { seeded: 1, green: 0, ripening: 2, ripe: 0, composted: 0 };
+
+  it('goes above the two actions, once', () => {
+    const root = siteOn(page(), base);
+    assert.equal(root.querySelector('.page-notes'), null);
+
+    showPageCounts(root, COUNTS);
+    showPageCounts(root, COUNTS);
+
+    assert.equal(root.querySelectorAll('.page-notes').length, 1);
+    assert.equal(root.querySelector('.page-notes')?.nextElementSibling?.className, 'action-block');
+    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'On this page3 notes');
+  });
+
+  it('is not added to a screen that is off', () => {
+    const root = siteOn(page(), { ...base, on: false });
+
+    showPageCounts(root, COUNTS);
+
+    assert.equal(root.querySelector('.page-notes'), null);
   });
 });

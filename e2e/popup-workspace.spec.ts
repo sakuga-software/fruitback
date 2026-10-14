@@ -186,6 +186,44 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
+test('screen 07 is drawn before the page answers how many notes it shows, and the notes come after', async ({
+  extension,
+}) => {
+  // The answers of the widget of the page are held in its own world, until the spec lets them go.
+  await extension.context.addInitScript(() => {
+    const held: (() => void)[] = [];
+    const scope = window as unknown as { __releaseCounts?: () => void };
+    scope.__releaseCounts = () => {
+      for (const send of held.splice(0)) send();
+    };
+    const post = window.postMessage.bind(window);
+    window.postMessage = ((message: unknown, ...rest: unknown[]) => {
+      const answer = message as { kind?: string; counts?: unknown };
+      if (answer?.kind === 'command-response' && answer.counts !== undefined) {
+        held.push(() => (post as (...all: unknown[]) => void)(message, ...rest));
+
+        return;
+      }
+      (post as (...all: unknown[]) => void)(message, ...rest);
+    }) as typeof window.postMessage;
+  });
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-workspace-held');
+  let popup = await reopen(extension, page);
+  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+
+  popup = await reopen(extension, page, popup);
+  // The switch and the actions are there while the page holds its answer.
+  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(popup.getByRole('region', { name: /^On this page/ })).toHaveCount(0);
+
+  await page.evaluate(() => (window as unknown as { __releaseCounts: () => void }).__releaseCounts());
+  await expect(popup.getByRole('region', { name: /^On this page/ })).toContainText('0 notes');
+});
+
 test('the popup on a site of the workspace speaks French', async ({ extension }) => {
   await extension.context.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });

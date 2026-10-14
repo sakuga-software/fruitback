@@ -432,6 +432,16 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   return root;
 }
 
+/**
+ * The notes of the page, added to a screen 07 already drawn (FRU-254): the popup does not wait for
+ * the widget of the tab before it shows the switch. Nothing for a screen that is off, or that has them.
+ */
+export function showPageCounts(screen: HTMLElement, counts: Counts): void {
+  const actions = screen.querySelector('.popup-body > .action-block');
+  if (actions === null || screen.querySelector('.page-notes') !== null) return;
+  actions.before(pageSection(screen.ownerDocument, counts));
+}
+
 function pageSection(document: Document, counts: Counts): HTMLElement {
   const section = element(document, 'section', '', 'page-notes');
   const title = element(document, 'h2', '');
