@@ -48,6 +48,11 @@ export type PopupFacts = {
   connect: ConnectState;
   /** A rule of this browser covers the origin. */
   rule: boolean;
+  /**
+   * The rule is of a site of the workspace of this build's Fruitback, and no session of it is held
+   * now: it ended, and its widget reads and writes nothing until the person signs in again (FRU-238).
+   */
+  ruleWantsSession?: boolean;
   /** A workspace of a session lists the origin (FRU-101). */
   offer: boolean;
   account: AccountState;
@@ -83,6 +88,10 @@ export function decide(facts: PopupFacts): PopupState {
 
   if (facts.editing) return { kind: 'form' };
   // A rule of this browser is what runs here: its switch comes before anything about an account.
+  // The rule needs a session that is gone: signing in again is the one thing that makes it work.
+  if (facts.rule && facts.ruleWantsSession === true) {
+    return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: facts.account === 'ended' };
+  }
   if (facts.rule) return { kind: 'rule' };
   if (facts.offer) return { kind: 'offer' };
 

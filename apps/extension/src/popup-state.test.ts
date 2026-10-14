@@ -52,6 +52,17 @@ describe('the screen of the popup (FRU-251)', () => {
     assert.deepEqual(on({ connect: 'signed-in', account: 'ok', sessions: 1 }), { kind: 'new-site' });
   });
 
+  it('asks to sign in on a site of the workspace whose session is gone, and the rule waits (FRU-238)', () => {
+    assert.deepEqual(on({ rule: true, ruleWantsSession: true }), { kind: 'signed-out', canSignIn: true, ended: false });
+    assert.deepEqual(on({ rule: true, ruleWantsSession: true, account: 'ended' }), {
+      kind: 'signed-out',
+      canSignIn: true,
+      ended: true,
+    });
+    // The control: with the session there, the rule is the screen.
+    assert.deepEqual(on({ rule: true, ruleWantsSession: false, account: 'ok', sessions: 1 }), { kind: 'rule' });
+  });
+
   it('puts the rule of this browser before anything about an account', () => {
     assert.deepEqual(on({ rule: true }), { kind: 'rule' });
     assert.deepEqual(on({ rule: true, account: 'ended' }), { kind: 'rule' });

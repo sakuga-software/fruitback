@@ -496,6 +496,24 @@ which replaced the fields of before for a person signed in on a site of no rule.
   the person with no account reaches it. 08 is drawn only signed in to the build's Fruitback, so a
   build without one never asks for the workspaces.
 
+## A session that ended, met by the relay (FRU-238)
+
+### The rules, in short
+
+- **A call the worker refuses with `401` is renewed once** (`Sessions.renewAccess`, as the picture of a
+  note does). A token that was only old gets a new one, and the call goes once more. A session that
+  ended (in « My account », by a log out) is refused its refresh too, and forgotten there. Never a
+  second renewal: a worker that refuses every token is answered.
+- **No session, or one that ended, answers `401` to the widget** (`relay.ts`), not the refusal of
+  status `0`. The widget then keeps the text and says « Your session has ended. Your text is kept:
+  sign in again, then send it. », where it said « try again » before. A worker that does not answer
+  is the moment, and stays a refusal.
+- **A rule of a site of the workspace of the build's Fruitback, whose session is gone, draws the
+  screen of a sign-in** (`ruleWantsSession` in `popup-state.ts`): the switch of a site that reads and
+  writes nothing would hide the one thing to do.
+- `e2e/popup-sign-in.spec.ts` holds the way: signed in, the site on, the session refused by the worker,
+  a note sent, its text kept, the session forgotten, and the popup offering to sign in.
+
 ## A pairing code that arrives as a link (FRU-92)
 
 ### The rules, in short
