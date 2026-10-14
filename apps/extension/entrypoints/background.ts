@@ -188,6 +188,7 @@ export default defineBackground(() => {
     createCapture({
       readSite,
       ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+      renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
       captureTab: async () => (await fetch(await browser.tabs.captureVisibleTab(windowId, { format: 'png' }))).blob(),
       crop: cropPicture,
       upload: async (url, accessToken, png) => {

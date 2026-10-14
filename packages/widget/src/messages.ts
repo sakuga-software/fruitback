@@ -65,6 +65,7 @@ export const ENGLISH = {
   'composer.send': 'Send',
   'composer.sending': 'sending…',
   'composer.sent': 'sent',
+  'composer.sentWithoutPicture': 'sent, without the picture',
   // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.
   'composer.keep': 'Keep for later',
   'composer.kept': 'kept for later',

@@ -198,6 +198,11 @@ export type Sessions = {
    */
   claim(endpoint: string, claim: string): Promise<ClaimResult>;
   ensureAccess(endpoint: string): Promise<AccessResult>;
+  /**
+   * A new access token, because a route refused `refused` (FRU-238). One refresh, shared with whoever
+   * asks at the same time; none when the token stored is already another one, fresh, of this session.
+   */
+  renewAccess(endpoint: string, refused: string): Promise<AccessResult>;
   refreshDue(): Promise<void>;
   logout(endpoint: string): Promise<void>;
 };
@@ -526,6 +531,22 @@ export function createSessions({
     },
 
     ensureAccess,
+
+    async renewAccess(endpoint, refused) {
+      const [storedGrants, storedSessions] = await Promise.all([grants.read(), sessions.read()]);
+      const held = storedGrants[endpoint];
+      // Renewed already, by another call or another context: that one is the token to use.
+      if (
+        held !== undefined &&
+        held.accessToken !== refused &&
+        isFresh(held, now()) &&
+        matches(held, storedSessions[endpoint])
+      ) {
+        return { ok: true, grant: held };
+      }
+
+      return refreshOnce(endpoint);
+    },
 
     async refreshDue() {
       for (const endpoint of Object.keys(await sessions.read())) await ensureAccess(endpoint);
