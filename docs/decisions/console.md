@@ -312,7 +312,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   taken from the address; « Unlink » asks twice, and the last way to sign in stays and says why
   (`409 last-sign-in`, `403 sign-in-again`). The three rows of « How you sign in » are drawn before
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
-  not « Linked as ». No extension is listed yet: their route comes with FRU-238. The deletion of the
+  not « Linked as ». **The browsers of the extension are rows of the same list** (`GET
+/console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
+  after the browsers of the console. The two lists are read together and drawn once, so nothing under
+  them moves when the second answer comes. A list of the console that could not be read is no list; a
+  list of the extension that could not be read leaves the browsers of the console and their
+  « Disconnect », with a line that says what is missing and « Try again ».
+  « Disconnect » of an extension asks twice (it reconnects only with an approval here), and ends its
+  session on the worker (`DELETE /console/me/browsers/<id>`): its next refresh is refused. The deletion of the
   workspace stays at the bottom, for its owner: the mockup does not draw it, and it is nowhere else.
   `e2e/console-account.spec.ts` holds the screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
   which learns it at its next call, and « Sign out everywhere » ends every one.
