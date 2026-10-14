@@ -804,3 +804,21 @@ test('a name on its way is sent once, though the field is left before the answer
   worker.release?.();
   await expect(name).toHaveValue('Ana Lopez');
 });
+
+test('what is typed while a name is on its way stays in the field, and leaves after it', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.nameWaits = true;
+  await open(page);
+  const name = section(page, 'Profile').getByRole('textbox', { name: 'Name shown on notes' });
+  await name.fill('Ana Lopez');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(1);
+  // Typed while the worker has not answered.
+  await name.fill('Ana López');
+  worker.nameWaits = false;
+  worker.release?.();
+  // The answer to the first name does not write over the second, which leaves in its turn.
+  await expect.poll(() => worker.sent.filter((each) => each.endsWith('/me/name')).length).toBe(2);
+  expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana López' });
+  await expect(name).toHaveValue('Ana López');
+});

@@ -119,20 +119,28 @@ export default function Account() {
 
   // The name on the notes. What is typed stays when the worker refuses it.
   const [name, setName] = useState(me.account.name ?? '');
-  const [kept, setKept] = useState(me.account.name ?? '');
   const [nameProblem, setNameProblem] = useState<string | undefined>();
+  // The name the worker keeps, and what is in the field now: an answer reads them when it lands, and
+  // not as they were when the name left.
+  const kept = useRef(me.account.name ?? '');
+  const typed = useRef(name);
+  typed.current = name;
   // One name on its way at a time: Enter, then leaving the field before the answer, sent it twice.
   const saving = useRef(false);
   async function saveName(event?: FormEvent) {
     event?.preventDefault();
-    if (saving.current || name.trim() === kept.trim()) return;
+    const sent = typed.current.trim();
+    if (saving.current || sent === kept.current.trim()) return;
     saving.current = true;
     setNameProblem(undefined);
-    const saved = await renameMe(name.trim());
+    const saved = await renameMe(sent);
     saving.current = false;
     if (!saved.ok) return setNameProblem(problemOf(saved, NAME_PROBLEMS, NAME_NOT_KEPT));
-    setKept(saved.data.account.name ?? name.trim());
-    setName(saved.data.account.name ?? name.trim());
+    kept.current = saved.data.account.name ?? sent;
+    // What was typed while the name was on its way stays in the field, and leaves in its turn: the
+    // answer never writes over it.
+    if (typed.current.trim() !== sent) return void saveName();
+    setName(kept.current);
   }
   const [unsent, setUnsent] = useState(false);
 
