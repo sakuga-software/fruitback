@@ -1,0 +1,1 @@
+ALTER TABLE "note_index" ADD CONSTRAINT "note_index_author_account_id_fkey" FOREIGN KEY ("author_account_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;

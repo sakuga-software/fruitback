@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
-import { organization } from './auth-schema.ts';
+import { organization, user } from './auth-schema.ts';
 
 /**
  * The schema of the whole PostgreSQL database of a worker (FRU-180): one description, in Drizzle.
@@ -394,7 +394,13 @@ export const note_index = pgTable(
     }).onDelete('set null'),
     // The counts of the sites of a workspace: one pass over this index, grouped by site and stage.
     index('note_index_by_workspace').on(table.workspace_id, table.site_id, table.stage),
-    // `forget` of a member, and the notes of one (`mine`, FRU-244).
+    // The account of a member goes when the account goes: no row names an account that is not one.
+    foreignKey({
+      name: 'note_index_author_account_id_fkey',
+      columns: [table.author_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    // What `ON DELETE SET NULL` of an account looks for, and the notes of one member (FRU-244).
     index('note_index_by_author').on(table.author_account_id),
     // The list of the notes of a workspace (FRU-244): the newest first, so a page reads its rows in
     // the order of this index and stops. Two notes of one millisecond are then ordered by their ids,
