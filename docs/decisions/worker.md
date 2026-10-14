@@ -1467,6 +1467,47 @@ One migration, generated, that only adds: two tables, their sequences, three ind
 is taken at the merge**: a pull request that is rebased after another one merged a migration
 removes its own SQL file, snapshot and entry, and generates again.
 
+## The notes of the SQLite file, copied into PostgreSQL (FRU-220)
+
+### The rules, in short
+
+- **`migrate-to-postgres --seeds <file>` copies the notes and their replies**, in a run of its own:
+  never with `--accounts` and `--sessions`. That copy goes into a database that no worker started
+  on, and this one applies every migration first. The runbook is « Switch 1 bis » of
+  `apps/worker/cloud/README.md`.
+- **A note keeps its number, and no number is given twice.** The ids of the file are written as
+  they are, and each sequence goes to the largest number the file ever gave: `sqlite_sequence`
+  holds it, and a note that was deleted is in it
+  (test:`goes on after the largest number the file ever gave, a deleted note included`).
+- **`seed` is copied byte for byte.** `--client` and `--no-client` change the column `client_id`
+  and nothing inside the text, whose `client.id` stays the one of before: no read compares the two.
+- **A date must come back as it is written.** The file holds ISO text and the database
+  milliseconds. A row whose date does not is refused, with its number: the digest compares the
+  dates as milliseconds, and would not see a rounded one.
+- **A note that goes to no site is copied, and said.** The store of the database has no foreign key
+  on the site (FRU-218), and a read names a site. The command writes « NOT A SITE of this database »
+  on the line of such a client. It does not refuse: the notes of a site that is gone are still the
+  operator's to keep or to forget.
+- **The same file twice writes nothing; the same file under another `--client` is refused**
+  (test:`holds the same rows under another name of site as other rows: a second run with another
+--client is refused`): the comparison is on the rows as they would be written.
+- **`--sessions` alone does not exist.** The ticket asked for it only if a session of a worker with
+  no accounts can be given to a member. It cannot: test:`reads no site for members, whatever
+workspace it names: each reviewer pairs again, once` measures `401` for a session that names no
+  workspace or the one of `FRUITBACK_CLIENTS`, and `401` at the first refresh of one whose
+  workspace was rewritten. Each reviewer pairs again.
+
+### The reasons, and what was measured
+
+- **The sequence is set before the commit, and is not in the transaction.** A commit that fails
+  leaves the sequence forward and no row: a gap in the numbers, and nothing else. A dry run does
+  not touch it: test:`keeps nothing on a dry run, not even a number, and says what the next one
+would be`.
+- **Played backwards**, on PGlite and PostgreSQL 17.11: with `sqlite_sequence` ignored, 2 tests
+  fail; with no `setval`, 4; with no comparison after the copy, 2.
+- **The copy holds every row in memory**, as the copy of the accounts does. The size of the file
+  of the Cloud is not known here, and no large file was tried.
+
 ## The copy of the SQLite files into PostgreSQL (FRU-145)
 
 `node server.mjs migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]` copies the

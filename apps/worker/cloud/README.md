@@ -361,6 +361,141 @@ label of the Swarm service, the network of Dokploy, a sign-in to the console and
 extension (steps 7.3 and 7.4 were checked by a refresh of the session only), the files of the Cloud
 and the time the copy takes on them. The copy holds every row of the two files in memory, and a file of hundreds of megabytes was not tried.
 
+## Switch 1 bis: the notes into PostgreSQL (FRU-220)
+
+For the operator, step by step. **No agent ran any of it on the host, and no agent ran the command
+against a real instance.** PostgreSQL becomes required (FRU-184), and the notes that the worker keeps
+itself are in `fb.db`, the file of `FRUITBACK_STORE=sqlite`. The store of the database (FRU-218)
+starts empty. This switch copies the notes and their replies, and changes the store. **A pin that a
+page shows keeps its number**: `FB-12` in the file is `FB-12` in the database, and the next note
+takes the number after the largest one the file ever gave, a deleted note included.
+
+The copy is the same command, in a run of its own:
+
+```bash
+node server.mjs migrate-to-postgres --seeds <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]
+```
+
+- It reads a copy of the file, made with its `-wal`, in a folder of its own. **It never writes the
+  file**: it is the way back. It reads it on a volume mounted read-only.
+- It applies every migration of the worker to the database first, as a worker does when it starts.
+  **So it runs after Switch 1, never before**: the copy of the accounts goes into a database that no
+  worker started on. `--dry-run` applies the migrations too, and keeps no row.
+- It copies the two tables in one transaction, under a lock, then compares a count and a digest of
+  each one, file against database. A difference rolls everything back, and the command exits 1.
+- **The text of a note is copied as it is, byte for byte.** A date is ISO text in the file and
+  milliseconds in the database: a date that would not come back as it is written is refused, with
+  the number of its row.
+- **`--client` gives the notes of a client of `FRUITBACK_CLIENTS` to a site of the console**, and
+  `--no-client` does it for the notes that name no client (a worker with one client wrote those).
+  Without them the id is kept: on the Cloud it is already the id of the site. A worker with a
+  database reads the notes of a site by the id of that site, so the command says, for each client of
+  the file, how many notes it has, where they go, and **whether that is a site of the database**. A
+  note that goes to no site is copied, and no page reads it: read those lines of the dry run.
+- It refuses a database whose two tables hold a note that is not of the file, a file of another
+  version, a column on one side only, and a `--client` that no note of the file names. Run again on
+  a database that holds exactly these notes, it writes nothing and exits 0. Run again with another
+  `--client`, it refuses: the notes are there under their first site. An interruption leaves nothing.
+
+**The sessions of a worker that had no accounts are not copied.** Such a session names a person
+the operator typed and a workspace of `FRUITBACK_CLIENTS`, or none, and a site for members is read
+by a session of its workspace, held by a member. Measured
+(`postgres-copy-seeds.test.ts`): such a session reads nothing (`401`), and one whose workspace was
+rewritten is ended by its first refresh. **Each reviewer pairs again, once.** On the Cloud the
+sessions went with Switch 1.
+
+**Before you start.** Switch 1 is done, and the worker runs with `FRUITBACK_DATABASE_URL` and
+`FRUITBACK_STORE=sqlite`. The digest of the image that has this command is `D_bis` below. Each site
+whose notes move exists in the console. The window is chosen: from step 2 to step 6 the widget
+cannot send a note. `$PG` and `$WORKER` are as in Switch 1.
+
+1. **`D_bis`, with the configuration unchanged.** Check `/health` and a pin on a page, then that
+   the command is in the image: `docker exec <container of the worker> node server.mjs
+migrate-to-postgres` prints two lines of usage, the second with `--seeds`, and exits 1.
+   Way back: the digest before.
+2. **A fresh copy, then stop the worker.** `sh snapshot.sh` and `sh snapshot-pg.sh`, then:
+
+   ```bash
+   docker service scale "$WORKER"=0 &&
+     test -z "$(docker ps -q --filter label=com.docker.swarm.service.name=$WORKER)" &&
+     docker run --rm -v fruitback-cloud-data:/data:ro alpine sh -c 'sha256sum /data/fb.db*'
+   ```
+
+   Keep the digests: step 4 compares them.
+
+3. **The dry run.** The address is read from the terminal, as in Switch 1.
+
+   ```bash
+   read -rs FRUITBACK_DATABASE_URL   # postgres://fruitback:<password>@127.0.0.1:5432/fruitback
+   export FRUITBACK_DATABASE_URL
+   docker run --rm --network "container:$PG" -v fruitback-cloud-data:/data:ro -e FRUITBACK_DATABASE_URL \
+     ghcr.io/sakuga-software/fruitback-worker@sha256:<D_bis> \
+     node server.mjs migrate-to-postgres --seeds /data/fb.db --dry-run
+   ```
+
+   Check: the command exits 0; the two lines say `same`; **each line under « the site of each note »
+   names a site, and none says `NOT A SITE`**; the last line says `dry run`, and the number of the
+   next note. A client that is not a site: add `--client <that id>=<the id of its site>`, and run
+   the dry run again. Way back: no row was kept.
+
+4. **The copy.** The same command, without `--dry-run`. Check:
+   - the command exits 0, the two lines say `same`, and the last one says `copied`;
+   - `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT count(*), max(id) FROM seeds'`
+     gives the count of the file;
+   - the digests of `fb.db*` are the ones of step 2.
+5. **The environment.** `FRUITBACK_STORE=postgres`; remove `FRUITBACK_SQLITE_PATH`. Nothing else.
+6. **« Deploy ».** Check:
+   - `/health` answers `200` with `"store":"postgres"`;
+   - a page that had pins shows them, with their numbers and their colours;
+   - a new note takes the number that step 3 announced.
+7. **The backups.** `snapshot-pg.sh` holds the notes from now on. `snapshot.sh` copies a `fb.db`
+   that nothing writes: a pull request removes it when `fb.db` goes (FRU-226).
+
+### The way back, written before it is needed
+
+1. `docker service scale "$WORKER"=0`.
+2. `FRUITBACK_STORE=sqlite` and `FRUITBACK_SQLITE_PATH` as before.
+3. « Deploy »: the worker reads `fb.db` as it was at step 2.
+
+**The file keeps every note it had.** `forget` deletes in the database from step 6 on, and not in
+`fb.db`: a note that somebody asked to have deleted since is still in the file and in the archives
+of `snapshot.sh`. Going back brings it back. `docs/privacy.md` says the same to a self-hoster.
+
+**What it costs.** Every note sent since step 6 is in PostgreSQL only, and a page no longer shows
+it. Its number is given again by the file to the next note. There is no copy back from PostgreSQL
+to the file. **The point of no return** is the day `fb.db` is removed, or the worker has no SQLite
+store (FRU-226): keep the file, and the archives that hold it, until then.
+
+### What was tried, and what was not
+
+**Tried on 2026-10-13, on a laptop and never on the host**, with the image built from this branch,
+a PostgreSQL 17 container and a scratch volume. A worker of the image on SQLite, with one client and
+no database, took three notes and was killed, so the notes were in `fb.db-wal` (61,832 bytes, and
+`fb.db` at 4,096). A worker of the image then started once on an empty database, and a workspace
+and a site were written there with `psql`, in place of a sign-in to the console. Steps 3 to 6 ran as
+written, with `docker kill` and `docker run` in place of `docker service scale` and « Deploy », and
+`--no-client <the site>`:
+
+- the dry run exited 0, said `same` twice, « 3 note(s) of no client go to « site_drill » » and
+  « The next note would be FB-4 », and left `seeds` empty;
+- the copy exited 0 and said `copied`; a third run said that PostgreSQL already holds exactly
+  these notes, and exited 0;
+- the digests of `fb.db`, `fb.db-wal` and `fb.db-shm` were the same after the three runs;
+- the worker on `FRUITBACK_STORE=postgres` gave a read of the page the three notes that the worker
+  on SQLite gave, with `FB-1` to `FB-3`, and a note sent after took `FB-4`;
+- the way back: the worker on SQLite again read the three notes of before, and not the fourth.
+
+The command is also held by `postgres-copy-seeds.test.ts`, on PGlite and on PostgreSQL 17: the five
+stages, replies, a note deleted before the copy, two clients and the notes of none, a planted
+interruption, a planted lost row, a second run, a note planted since, a file of another version, a
+column on one side only, a date that does not come back, and a file with no note.
+
+**Not tried:** steps 1, 2 and 7 on the host, `docker service scale`, « Deploy » in Dokploy,
+`--client` in the image (the tests hold it), a site made by a sign-in to the console, and **the
+`fb.db` of the Cloud**: its size, its clients, and the time the copy takes on it. The copy holds
+every row of the file in memory, twice; a file of hundreds of megabytes was not tried. Try it on a
+copy of that file, with `--dry-run`, before the window.
+
 ## Before the deployment of FRU-146: a dump, and the way back
 
 For the operator. **No agent ran any of it on the host.** FRU-146 changes no behaviour, and it

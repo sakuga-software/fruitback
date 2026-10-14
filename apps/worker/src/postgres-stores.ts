@@ -202,6 +202,16 @@ export function createPostgresStoreSpec(): StoreSpec {
   });
 }
 
+/** The copy of the notes of a SQLite file (FRU-220): `copySeedsFile` of `postgres-copy.ts`, loaded at the call. */
+export async function copySeedsFile(copy: {
+  seedsPath: string;
+  clients: ReadonlyMap<string | null, string>;
+  database: Database;
+  dryRun: boolean;
+}): Promise<{ ok: boolean; lines: string[] }> {
+  return (await import('./postgres-copy.ts')).copySeedsFile(copy);
+}
+
 /** What `migrate-to-postgres` copies, and where (FRU-145). */
 export type SqliteCopy = { accountsPath: string; sessionsPath: string; database: Database; dryRun: boolean };
 
