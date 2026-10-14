@@ -97,6 +97,7 @@ export default function Members() {
   const [members, setMembers] = useState<Listed<Member>>('loading');
   // The day each account was last seen, by its id. `asking`: on its way. `undefined`: not for this
   // role, or refused; the column is then the day somebody joined.
+  const seenAsked = useRef(0);
   const [seen, setSeen] = useState<Readonly<Record<string, string>> | 'asking' | undefined>(
     manages ? 'asking' : undefined,
   );
@@ -119,9 +120,16 @@ export default function Members() {
     setMembers(whileRead);
     // The days come on their own: the table does not wait for them. Their place in a row is kept
     // (`min-w` of the cell), so a day that arrives moves nothing of the row.
+    // An answer to a read that is no longer the last one, or of another workspace, is dropped: its
+    // days are of another list. The days shown are taken away while the next ones are read.
+    const asked = (seenAsked.current += 1);
     if (manages) {
+      setSeen('asking');
       void call<{ seen: Record<string, string> }>('GET', `/console/workspaces/${workspace.id}/members/seen`).then(
-        (days) => setSeen(days.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined),
+        (days) => {
+          if (asked !== seenAsked.current) return;
+          setSeen(days.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined);
+        },
       );
     }
     const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);

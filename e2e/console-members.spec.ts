@@ -85,13 +85,17 @@ type World = {
   seen?: Record<string, string> | 'refused' | 'waits';
   /** The days that a held answer gives when it is released. */
   released?: Record<string, string>;
+  /** The days that a read made again gets, while the first one is still held. */
+  later?: Record<string, string>;
 };
 
 /** A workspace with the people above, for a role. The stub keeps what the console sent. */
 async function workerWith(page: Page, world: World = {}): Promise<Worker> {
-  let release: () => void = () => {};
+  const held: (() => void)[] = [];
   const worker: Worker = {
-    release: () => release(),
+    release: () => {
+      for (const each of held.splice(0)) each();
+    },
     sent: [],
     read: [],
     members: 'list',
@@ -116,9 +120,15 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
     }
     if (pathname === '/console/workspaces/w1/members/seen' && world.seen !== undefined) {
       worker.read.push('seen');
+      // A read made again while the first is held gets its answer at once, when the test gives one.
+      // The first read is sent twice by the development server (the effects of React run twice):
+      // it is the read after an action, counted from the invitations, that is the second one.
+      if (world.seen === 'waits' && world.later !== undefined && worker.sent.length > 0) {
+        return json({ seen: world.later });
+      }
       if (world.seen === 'waits') {
         return new Promise<void>((resolve) => {
-          release = () => void json({ seen: world.released ?? {} }).then(resolve);
+          held.push(() => void json({ seen: world.released ?? {} }).then(resolve));
         });
       }
       if (world.seen === 'refused') return json({ error: 'forbidden' }, 403);
@@ -940,4 +950,23 @@ test('a « Last seen » the worker refuses leaves the day somebody joined', asyn
   await open(page);
   const table = page.getByRole('region', { name: 'Members' });
   await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Joined']);
+});
+
+test('the days of a read made before, late, do not replace those of the read made after', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  // The first days are held; the members are read again (an invitation whose message did not
+  // leave), and the second days come at once: Nora was seen two days ago.
+  const worker = await workerWith(page, { seen: 'waits', released: SEEN, later: { a3: '2026-10-11' } });
+  await open(page);
+  worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await page.getByRole('textbox', { name: 'Email' }).fill('zoe@client.fr');
+  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  const nora = page.getByRole('region', { name: 'Members' }).locator('tbody tr').filter({ hasText: 'nora@acme.dev' });
+  await expect(nora).toContainText('2 days ago');
+
+  // The first answer lands now: it is of a read that is no longer the last one.
+  worker.release();
+  await page.waitForTimeout(300);
+  await expect(nora).toContainText('2 days ago');
+  await expect(nora).not.toContainText('3 days ago');
 });

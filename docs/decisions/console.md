@@ -82,7 +82,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   what each role does. **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
   never an hour (« Today », « Yesterday », « 3 days ago », then the day; « Not seen yet » for who
   was not seen since it came), read beside the members: the table does not wait for it, and a day
-  that arrives moves nothing of a row (the room of « Not seen yet » is kept). Who
+  that arrives moves nothing of a row (the room of « Not seen yet » is kept), and the days of a read
+  made before, late, are dropped. Who
   else reads the screen, or a worker that refuses the days, gets the day somebody joined (« Joined »).
   **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour), the role
   « Guest, one site » and the list « Site » of the form (Q3), and
