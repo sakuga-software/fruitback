@@ -378,7 +378,46 @@ export async function signOut(): Promise<boolean> {
  * never its token. `current` is the session of this browser. The worker also answers a user agent
  * when its operator switched that on; this type leaves it out, and no screen shows it (Q7 of FRU-230).
  */
-export type ConsoleSession = { id: string; createdAt: string; lastUsedAt: string; current: boolean };
+/**
+ * `browser`: a short label the worker reads in the user agent (« Chrome on macOS », FRU-249), or
+ * « A browser » when it cannot tell. Absent from a worker of before.
+ */
+export type ConsoleSession = { id: string; createdAt: string; lastUsedAt: string; current: boolean; browser?: string };
+
+/** The providers that an account links (FRU-249). */
+export const LINKABLE = ['github', 'google'] as const;
+export type Linkable = (typeof LINKABLE)[number];
+
+/**
+ * How the person signs in (FRU-249): `email` when this worker sends the link of an e-mail, and each
+ * provider the worker has, or the account has linked, with whether it is linked.
+ */
+export type SignInMethods = { email: boolean } & Partial<Record<Linkable, { linked: boolean }>>;
+
+export async function signInMethods(): Promise<Answer<SignInMethods>> {
+  const asked = await call<SignInMethods>('GET', '/console/me/sign-in');
+  if (!asked.ok) return asked;
+
+  return typeof asked.data?.email === 'boolean' ? asked : { ok: false, status: 200, error: 'unknown' };
+}
+
+/** Takes a provider away from the account. The worker keeps the last way to sign in (`last-sign-in`). */
+export async function unlinkProvider(provider: Linkable): Promise<Answer<unknown>> {
+  return call('DELETE', `/console/me/sign-in/${provider}`);
+}
+
+/**
+ * Where the browser goes to link a provider: a navigation, as a sign-in, which comes back to « My
+ * account » of `workspace` with `?linked=<provider>` or `?error=<code>`.
+ */
+export function linkAddress(provider: Linkable, workspace: string): string {
+  return `${API}/console/auth/link/${provider}?workspace=${encodeURIComponent(workspace)}`;
+}
+
+/** The name on the notes of the person: one line, 1 to 80 characters. */
+export async function renameMe(name: string): Promise<Answer<{ account: Account }>> {
+  return call<{ account: Account }>('POST', '/console/me/name', { name });
+}
 
 /** The sessions of the console of the person. A refusal is no list: the screen says it could not read. */
 export async function consoleSessions(): Promise<Answer<ConsoleSession[]>> {

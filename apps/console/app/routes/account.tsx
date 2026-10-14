@@ -1,15 +1,20 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   type ConsoleSession,
-  type Providers,
+  LINKABLE,
+  type Linkable,
+  type SignInMethods,
   call,
   consoleSessions,
   endConsoleSession,
+  linkAddress,
+  renameMe,
   saveLanguage,
-  signInProviders,
+  signInMethods,
   signOut,
   signOutEverywhere,
+  unlinkProvider,
 } from '../api';
 import { type Listed, edited } from '../listed';
 import { problemOf } from '../problems';
@@ -20,24 +25,51 @@ import { LOCALES, chooseLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
 /**
- * My account, as screen 13 of the mockup of 2026-10-13 draws it (FRU-248), with what the worker of
- * today does: the profile, how the person signs in, the browsers where the console is signed in, and
- * the end of the workspace for its owner.
+ * My account, as screen 13 of the mockup of 2026-10-13 draws it (FRU-248, FRU-249): the profile, how
+ * the person signs in, the browsers where the console is signed in, and the end of the workspace for
+ * its owner.
  *
- * The name is read and not changed, a provider is not linked or unlinked, and the browsers of the
- * extension are not listed: the worker has no route for these yet (FRU-249).
+ * The name is changed here, and a provider linked or unlinked (FRU-249). The browsers of the
+ * extension are not listed yet: their route comes with the session of an account (FRU-238).
  */
 
 /** `asking`: the worker has not answered yet. `silent`: it did not say, and nothing is in flight. */
-type Asked = Providers | 'asking' | 'silent';
+type Asked = SignInMethods | 'asking' | 'silent';
+
+const PROVIDER_NAMES: Readonly<Record<Linkable, string>> = { github: 'GitHub', google: 'Google' };
 
 /** What the page says of one provider. WARNING: « Not set up » only when the worker said so. */
-function providerWord(asked: Asked, provider: keyof Providers): string {
+function providerWord(asked: Asked, provider: Linkable): string {
   if (asked === 'asking') return msg('Checking…');
   if (asked === 'silent') return msg('Could not check');
+  const known = asked[provider];
+  if (known === undefined) return msg('Not set up');
 
-  return asked[provider] ? msg('On this Fruitback') : msg('Not set up');
+  return known.linked ? msg('Linked') : msg('Not linked');
 }
+
+/** Why a provider did not link, by the code the worker puts in the address on the way back. */
+const LINK_PROBLEMS: Readonly<Record<string, string>> = {
+  "email_doesn't_match": msg(
+    'That account has another address than yours. Fruitback links only the address of your account.',
+  ),
+  account_already_linked_to_different_user: msg('That account already opens another Fruitback account.'),
+  email_not_verified: msg('The provider did not say that this address is verified. Verify it there, then link again.'),
+  identity_required: msg('Your session ended before the link. Sign in, then link again.'),
+};
+const NOT_LINKED = msg('The account was not linked. Try again.');
+
+/** Why a provider is still there after « Unlink ». */
+const UNLINK_PROBLEMS: Readonly<Record<string, string>> = {
+  'last-sign-in': msg('This is the last way you sign in here: link another one first.'),
+  'sign-in-again': msg('Sign in again first: a way to sign in changes only in the day after a sign-in.'),
+};
+const NOT_UNLINKED = msg('{provider} is still linked. Try again.');
+
+const NAME_PROBLEMS: Readonly<Record<string, string>> = {
+  'invalid-name': msg('A name is one line of 1 to 80 characters.'),
+};
+const NAME_NOT_KEPT = msg('Your name was not changed. Try again.');
 
 const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only the owner of the workspace deletes it.'),
@@ -61,16 +93,56 @@ export default function Account() {
   // What the worker signs people in with (FRU-135). A provider is on or "not set up" only when the
   // worker said so: a slow answer and no answer prove neither, and each has its own word.
   const [providers, setProviders] = useState<Asked>('asking');
-  useEffect(() => {
-    let asked = true;
-    void signInProviders().then((has) => {
-      if (asked) setProviders(has ?? 'silent');
-    });
-
-    return () => {
-      asked = false;
-    };
+  const readMethods = useCallback(async () => {
+    const asked = await signInMethods();
+    setProviders(asked.ok ? asked.data : 'silent');
   }, []);
+  useEffect(() => void readMethods(), [readMethods]);
+
+  // The way back of a link: `?linked=<provider>` or `?error=<code>`, said once, then taken away.
+  const [params, setParams] = useSearchParams();
+  const [linked] = useState(() => params.get('linked'));
+  const [linkError] = useState(() => params.get('error'));
+  useEffect(() => {
+    if (params.has('linked') || params.has('error')) setParams({}, { replace: true });
+  }, [params, setParams]);
+  const [unlinkStuck, setUnlinkStuck] = useState<{ provider: Linkable; problem: string } | undefined>();
+
+  async function unlink(provider: Linkable) {
+    setUnlinkStuck(undefined);
+    const gone = await unlinkProvider(provider);
+    if (!gone.ok && gone.status !== 404) {
+      // Own keys only (`problemOf`): a code named `constructor` must not find a method of `Object`.
+      setUnlinkStuck({ provider, problem: problemOf(gone, UNLINK_PROBLEMS, NOT_UNLINKED) });
+    }
+    await readMethods();
+  }
+
+  // The name on the notes. What is typed stays when the worker refuses it.
+  const [name, setName] = useState(me.account.name ?? '');
+  const [nameProblem, setNameProblem] = useState<string | undefined>();
+  // The name the worker keeps, and what is in the field now: an answer reads them when it lands, and
+  // not as they were when the name left.
+  const kept = useRef(me.account.name ?? '');
+  const typed = useRef(name);
+  typed.current = name;
+  // One name on its way at a time: Enter, then leaving the field before the answer, sent it twice.
+  const saving = useRef(false);
+  async function saveName(event?: FormEvent) {
+    event?.preventDefault();
+    const sent = typed.current.trim();
+    if (saving.current || sent === kept.current.trim()) return;
+    saving.current = true;
+    setNameProblem(undefined);
+    const saved = await renameMe(sent);
+    saving.current = false;
+    if (!saved.ok) return setNameProblem(problemOf(saved, NAME_PROBLEMS, NAME_NOT_KEPT));
+    kept.current = saved.data.account.name ?? sent;
+    // What was typed while the name was on its way stays in the field, and leaves in its turn: the
+    // answer never writes over it.
+    if (typed.current.trim() !== sent) return void saveName();
+    setName(kept.current);
+  }
   const [unsent, setUnsent] = useState(false);
 
   // The browsers where the console is signed in. No list is not an empty list (FRU-162).
@@ -140,8 +212,17 @@ export default function Account() {
         <section aria-labelledby="profile-title" className="flex flex-col gap-[14px]">
           <SectionTitle id="profile-title">{t('Profile')}</SectionTitle>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(240px,100%),1fr))] gap-[14px]">
-            {/* Read, and not changed: the worker has no route that changes a name yet (FRU-249). */}
-            <Field label={t('Name shown on notes')} value={me.account.name ?? ''} locked hint={me.account.email} />
+            {/* Kept when the field is left, or by Enter: the mockup draws no button. */}
+            <form onSubmit={(event) => void saveName(event)} onBlur={() => void saveName()} className="min-w-0">
+              <Field
+                label={t('Name shown on notes')}
+                value={name}
+                maxLength={80}
+                autoComplete="name"
+                hint={me.account.email}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </form>
             <div>
               <Choice
                 label={t('Language')}
@@ -158,6 +239,7 @@ export default function Account() {
               />
             </div>
           </div>
+          {nameProblem === undefined ? null : <Problem>{t(nameProblem)}</Problem>}
           {unsent ? (
             <Problem>
               {t(
@@ -170,19 +252,63 @@ export default function Account() {
         <section aria-labelledby="signin-title">
           <SectionTitle id="signin-title">{t('How you sign in')}</SectionTitle>
           <SectionHelp>{t('Any of these opens the same account, in the console and in the extension.')}</SectionHelp>
+          {linked !== null && (LINKABLE as readonly string[]).includes(linked) ? (
+            <p role="status" className="mb-[12px] text-small text-muted">
+              {t('{provider} is linked to your account.', { provider: PROVIDER_NAMES[linked as Linkable] })}
+            </p>
+          ) : null}
+          {linkError === null ? null : (
+            <div className="mb-[12px]">
+              {/* The code comes from the address, which anybody writes: own keys only, so that
+                  `?error=constructor` reads the sentence of a link that failed, not a method of Object. */}
+              <Problem>
+                {t(Object.hasOwn(LINK_PROBLEMS, linkError) ? (LINK_PROBLEMS[linkError] as string) : NOT_LINKED)}
+              </Problem>
+            </div>
+          )}
+          {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
           <ul className="border-t border-line text-body">
             <Row title={t('Email link')} detail={me.account.email}>
-              <span className="text-small leading-auto text-muted">{t('Always on')}</span>
+              <span className="text-small leading-auto text-muted">
+                {typeof providers === 'object' && !providers.email ? t('Not sent by this Fruitback') : t('Always on')}
+              </span>
             </Row>
-            {/* What the worker signs people in with, read only: no route links or unlinks a provider
-                yet (FRU-249), so no button says that it does. */}
-            {(['GitHub', 'Google'] as const).map((provider) => (
-              <Row
-                key={provider}
-                title={provider}
-                detail={t(providerWord(providers, provider === 'GitHub' ? 'github' : 'google'))}
-              />
-            ))}
+            {LINKABLE.map((provider) => {
+              const known = typeof providers === 'object' ? providers[provider] : undefined;
+              const named = PROVIDER_NAMES[provider];
+
+              return (
+                <Row
+                  key={provider}
+                  title={named}
+                  detail={t(providerWord(providers, provider))}
+                  under={
+                    unlinkStuck?.provider === provider ? (
+                      <Problem>{t(unlinkStuck.problem, { provider: named })}</Problem>
+                    ) : undefined
+                  }
+                >
+                  {known?.linked === true ? (
+                    <AsksTwice
+                      space="normal"
+                      label={t('Unlink')}
+                      confirmLabel={t('Unlink {provider}', { provider: named })}
+                      keepLabel={t('Keep it')}
+                      consequence={t('You no longer sign in with {provider}. Your account and its notes stay.', {
+                        provider: named,
+                      })}
+                      onConfirm={() => void unlink(provider)}
+                    />
+                  ) : null}
+                  {known?.linked === false ? (
+                    // An outlined button of 40 px, as the mockup draws it, that leads to the worker.
+                    <Button tone="outline" href={linkAddress(provider, workspace.id)}>
+                      {t('Link {provider}', { provider: named })}
+                    </Button>
+                  ) : null}
+                </Row>
+              );
+            })}
           </ul>
         </section>
 
@@ -208,13 +334,13 @@ export default function Account() {
             <ul className="border-t border-line text-body">
               {browsers.map((session) =>
                 session.current ? (
-                  <Row key={session.id} title={t('Console · this browser')} detail={t('Active now')}>
+                  <Row key={session.id} title={titleOf(session)} detail={t('Active now')}>
                     <span className="text-small leading-auto text-muted">{t('This browser')}</span>
                   </Row>
                 ) : (
                   <Row
                     key={session.id}
-                    title={t('Console · another browser')}
+                    title={titleOf(session)}
                     detail={t('Signed in {since} · used {last}', {
                       since: moment(session.createdAt),
                       last: moment(session.lastUsedAt),
@@ -295,6 +421,17 @@ export default function Account() {
       </div>
     </>
   );
+}
+
+/**
+ * « Console · Chrome on macOS », as the worker names the browser of a session (FRU-249). A worker of
+ * before, or a browser it could not name, reads as this browser or another one.
+ */
+function titleOf(session: ConsoleSession): string {
+  const named = session.browser !== undefined && session.browser !== 'A browser' ? session.browser : undefined;
+  if (named !== undefined) return t('Console · {browser}', { browser: named });
+
+  return session.current ? t('Console · this browser') : t('Console · another browser');
 }
 
 /** The title of a section: the section is named by it. */
