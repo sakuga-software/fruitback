@@ -569,6 +569,28 @@ With accounts no site needs it: a site is a row the console wrote, and it signs 
 that served one site with this key, and then got accounts, must change it. The steps are in
 [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret).
 
+### The index of the notes, and who reads it (FRU-237)
+
+A worker with accounts keeps an index of the notes of its sites: `docs/privacy.md` names each
+column. **It holds at most 64 characters of the text of a note**, in one column, and no name or
+address a reporter typed: a test leaves a long note, one with composed emoji and an empty one, and
+reads every column of every row for 65 characters of a text.
+
+- **The counts of a site are read by every member of its workspace**, as the list of the sites is:
+  owner, admin, member and guest (`read-feedback`). **What did not arrive** (`undelivered`) is about
+  the tracker, and only a role with `see-tracker` gets it: a guest does not. A person of another
+  workspace gets `404`, a caller with no session `401`, and the token of an extension `401` on the
+  console's routes (FRU-202).
+- **The extension gets the counts of the sites of its workspace** in `GET /session/sites`, with the
+  session of a member, and not what did not arrive.
+- **A guest reads the counts of every site of the workspace**, because a guest reads every site
+  today. The guest of one site (Q3 of FRU-230) narrows the list first, and the counts with it.
+- **An anonymous reader of a public page writes to the index**: a read that asks the store writes
+  the stages it got, at most once for each answer of the read cache. It writes only what the store
+  answered for the site of that read, and nothing the reader sent.
+- **The index never costs a note**: a note whose row is not written is kept and answered `201`, and
+  its row is written at the next read of its page.
+
 ### The accounts, and what decides who reads a site (FRU-96)
 
 With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from
@@ -578,6 +600,28 @@ the `ws` check above. A site read by `members` is `read: 'authenticated'`; one r
 client**: an empty map is not the absence of a map, which would answer every page to anybody. The
 file holds addresses, names and the id each provider gives a person, no password, and no token of a provider
 that signs a person in. Since FRU-121 it also holds the key of each connector, encrypted: see below. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
+
+**A visitor with no account leaves a note on a site that everyone reads, and that is the design**
+(FRU-224, a decision of 2026-10-13): no session, no token, no cookie. The page sends the id of the
+site and the browser sends its `Origin`; the worker refuses an origin that is no site of the worker
+(`origin-not-allowed`) and the origin of another site (`origin-not-allowed-for-client`), and keeps
+the name the visitor typed as a claim, never as verified. `visitor.test.ts` holds that path on a
+worker whose site was made in the console, with the notes in PostgreSQL:
+test:`leaves a note and reads it again, with no session, no token and no cookie`,
+test:`refuses a note and a read that name the site from the page of another site`,
+test:`keeps the name the visitor typed, and never says the worker verified it`. In a browser,
+`e2e/visitor.spec.ts` adds what CORS does: test:`a page of another origin reads no note of the site,
+and plants none`. As above, `Origin` binds a claim to a site and authenticates nobody: a request
+that is not from a browser sends the one it wants, or none.
+
+**The visibility of a site decides who reads it, and not who writes on it.** On a site read by
+`members`, a read with no session answers `401`
+(test:`reads no note: the worker asks for a session, and says so`). **A note sent with no session is
+still kept there**, as a claim, as on every site: its sender cannot read it back, and the members
+find it, in the worker or in the tracker of the site
+(test:`still takes a note sent with no session, which its sender cannot read back`). This is what
+the worker did before FRU-224, measured there, and not a choice made there. A team that wants
+notes from its members only has no setting for it today.
 
 **With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
 of that file, and the worker refuses to start with both. The database holds what the file holds:
@@ -1045,6 +1089,28 @@ verify`.
 - `GET /auth/providers` answers the console which ways the routes of better-auth offer
   (`betterAuth`), and no client id. A worker with no accounts, or with no `FRUITBACK_AUTH_SECRET`,
   answers `{}`.
+
+### The image of the console (FRU-222)
+
+The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing
+of the repository but the built files, no variable but the address of the worker, and the session
+is a cookie of the worker that no script reads.
+
+- **Its `Content-Security-Policy` lets the page call one worker and run no other script**:
+  `script-src 'self'` and the hashes of the inline scripts of the build, never `'unsafe-inline'`;
+  `connect-src 'self'` and the origin of the worker; `frame-ancestors 'none'`; `base-uri 'none'`.
+- **The address of the worker is given when the container starts**, as `FRUITBACK_API`, and goes
+  into that policy and into `/config.js`. It is held to the letters of an address first: a scheme,
+  a host, a port, a path. Anything else stops the container before a file is written, so a value
+  cannot add a source to the policy or a statement to the script. **Whoever sets the variables of
+  the container chooses the worker the console calls**: that is the operator, as for every variable.
+- **`/config.js` is public.** It holds the address of the worker and nothing else.
+- **It runs as a user that is not root**, writes under `/tmp` only, and starts with a read-only root
+  and no capability, which is how the compose file runs it.
+- **The console and the worker are two origins of one site.** The worker answers the origin of
+  `FRUITBACK_CONSOLE_URL` and no other, with credentials, and the cookie of the session is
+  `SameSite=Strict`: two names of one domain. Not measured: one name with two paths, and the cookie
+  on `http://localhost`, where a browser must accept a `Secure` cookie without TLS.
 
 ### What the console may change, and who (FRU-99)
 

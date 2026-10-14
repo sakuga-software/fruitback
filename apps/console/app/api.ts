@@ -31,6 +31,17 @@ export type Site = {
   visibility: Visibility;
   destination?: Destination;
   destinations?: Destination[];
+  /**
+   * The summary of the site (FRU-237), from the index of its notes: how many have each stage, when
+   * the last one came, and how they came (the script on the page, or the extension). Absent from a
+   * worker of before. The counts can date by a read of a page: `asOf` says when they were taken.
+   */
+  notes?: Readonly<Record<Stage, number>>;
+  lastNoteAt?: string;
+  via?: readonly ('script' | 'extension')[];
+  /** Notes sent to an address that did not take them yet (REST, FRU-122). */
+  undelivered?: number;
+  asOf?: string;
 };
 /**
  * A domain the workspace says it owns (FRU-103), as the worker answers it. `state` is the worker's

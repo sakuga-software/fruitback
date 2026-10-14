@@ -99,7 +99,7 @@ for (const language of ['en', 'fr'] as const) {
     await empty.close();
 
     // 2. A pairing link.
-    const { link } = mintPairing(NAME);
+    const { link } = await mintPairing(NAME);
     const worker = await extension.context.newPage();
     await worker.goto(link);
     const linked = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);

@@ -1,10 +1,12 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { type Destination, type Site, type Visibility, type Workspace, call } from '../api';
+import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type Destination, STAGES, type Site, type Visibility, type Workspace, call } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
-import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem } from '../ui';
+import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar, StatusDot } from '../ui';
+import { ago } from '../ago';
+import { STAGE_NAMES, STAGE_STATUS } from './connector-parts';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
@@ -26,9 +28,10 @@ type Under = { site: string; what: 'install' | 'previews' | 'remove' };
  * The sites of a workspace, as screen 09 of the mockup of 2026-10-13 draws them (FRU-243): a table,
  * a card when there is none, and an alert when the read failed.
  *
- * The table has the columns that the worker of today fills: the site, and where its notes go. The
- * count of notes, how the widget got on the page and the last note wait for the summary of the
- * sites (FRU-237), and the legend of the statuses comes with them.
+ * The table has the six columns of the mockup (FRU-270): the site, its notes by status, how they
+ * came (the script or the extension), where they go, and the last one. The counts are the summary
+ * of the sites that the worker keeps from the index of the notes (FRU-237), read with the list:
+ * nothing arrives after the rows, so nothing moves under a press.
  */
 export default function Sites() {
   useLocale();
@@ -142,10 +145,11 @@ export default function Sites() {
         </div>
       ) : null}
 
-      {/* Three columns fit a phone, so the table does not scroll and what opens under a row stays on
-          screen. The six columns of the mockup need 860 px (FRU-237). */}
+      {/* The six columns need 860 px: on a phone the table scrolls in its frame, and what opens under a
+          row stays in what is seen of it. */}
       {listed ? (
         <>
+          <Legend />
           {adding ? (
             <section
               aria-label={t('Add a site')}
@@ -160,13 +164,14 @@ export default function Sites() {
               />
             </section>
           ) : null}
-          <DataTable label={t('Sites')} minWidth={0} hover>
+          <DataTable label={t('Sites')} minWidth={860} hover>
             <thead>
               <tr>
-                <th scope="col" className="w-[55%]">
-                  {t('Site')}
-                </th>
+                <th scope="col">{t('Site')}</th>
+                <th scope="col">{t('Notes')}</th>
+                <th scope="col">{t('On the page with')}</th>
                 {seesTracker ? <th scope="col">{t('Notes go to')}</th> : null}
+                <th scope="col">{t('Last note')}</th>
                 {/* The header holds its hidden name: with no anchor, the name widens the page at 390 px. */}
                 <th scope="col" data-align="end" className="relative">
                   <span className="sr-only">{t('Actions')}</span>
@@ -307,8 +312,13 @@ function GoesTo({ site }: { site: Site }) {
     );
   const place = placeOf(first);
   // The worker writes « Linear · Design »: the place in a Linear is a team, and its project if any.
-  const detail =
+  const named =
     place.detail !== undefined && place.name === 'Linear' ? t('Team {team}', { team: place.detail }) : place.detail;
+  // Notes that an address did not take yet say so where the address was: it is what to look at.
+  const late = site.undelivered ?? 0;
+  let detail = named;
+  if (late === 1) detail = t('1 not delivered yet');
+  else if (late > 1) detail = t('{count} not delivered yet', { count: late });
 
   return (
     <>
@@ -371,19 +381,39 @@ function SiteRows({
     <>
       <tr data-site={site.id}>
         <td>
-          {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159). */}
-          <span className="block font-semibold [overflow-wrap:anywhere]">{host}</span>
+          {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
+              dot or a hyphen first, and inside a name only when one name is wider than the column. */}
+          <span className="block font-semibold [overflow-wrap:break-word]">
+            {host.split('.').map((part, index) => (
+              <Fragment key={index}>
+                {index === 0 ? null : (
+                  <>
+                    .<wbr />
+                  </>
+                )}
+                {part}
+              </Fragment>
+            ))}
+          </span>
           <span className="block text-hint leading-[inherit] text-muted">
             {site.visibility === 'members'
               ? t('Members of {workspace}', { workspace: workspace.name })
               : t('Everyone who visits')}
           </span>
         </td>
+        {/* The cells that can hold hidden words hold them: with no anchor, they widen the page at 390 px. */}
+        <td className="relative">
+          <Counts site={site} />
+        </td>
+        <td className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</td>
         {seesTracker ? (
           <td>
             <GoesTo site={site} />
           </td>
         ) : null}
+        <td className="relative whitespace-nowrap text-muted tabular-nums">
+          {site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}
+        </td>
         <td data-align="end">
           <span ref={more} className="inline-flex">
             <Menu
@@ -403,10 +433,11 @@ function SiteRows({
       </tr>
       {under === undefined && problem === undefined ? null : (
         <tr className="bg-subtle">
-          <td colSpan={seesTracker ? 3 : 2}>
+          <td colSpan={seesTracker ? 6 : 5}>
             {/* No width of its own: what is under a row takes the width of the table and never widens
-                it. A script is one long line, and without this it pushed the row past the screen. */}
-            <div className="flex w-0 min-w-full flex-col gap-[16px] py-[6px]">
+                it. A script is one long line, and without this it pushed the row past the screen. On a
+                phone the table scrolls: this stays at the left of what is seen, as wide as the frame. */}
+            <div className="sticky left-[20px] flex w-0 min-w-[min(100%,calc(100vw-72px))] flex-col gap-[16px] py-[6px]">
               {under === 'remove' ? (
                 <Confirmation
                   confirmLabel={t('Remove {site}', { site: host })}
@@ -435,5 +466,82 @@ function SiteRows({
         </tr>
       )}
     </>
+  );
+}
+
+/** The five statuses, as the drops of the bars mean them. */
+function Legend() {
+  useLocale();
+
+  return (
+    <ul
+      aria-label={t('Statuses')}
+      className="mb-[12px] flex flex-wrap gap-x-[18px] gap-y-[6px] text-hint leading-auto text-muted"
+    >
+      {STAGES.map((stage) => (
+        <li key={stage} className="flex items-center gap-[7px]">
+          <StatusDot status={STAGE_STATUS[stage]} />
+          {t(STAGE_NAMES[stage])}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A cell with nothing to say yet: a dot for the eye, and words for a screen reader. */
+function None() {
+  useLocale();
+
+  return (
+    <>
+      <span aria-hidden="true">·</span>
+      <span className="sr-only">{t('None yet')}</span>
+    </>
+  );
+}
+
+/** How the notes of a site came: the script pasted on its pages, the extension, or both. */
+function viaOf(via: readonly ('script' | 'extension')[]): string {
+  if (via.includes('script') && via.includes('extension')) return t('Extension, script');
+
+  return via.includes('extension') ? t('Extension') : t('Script');
+}
+
+/** The notes of a site: how many, and a bar of their statuses that the words say again. */
+function Counts({ site }: { site: Site }) {
+  useLocale();
+  const notes = site.notes;
+  if (notes === undefined) return <None />;
+  const total = STAGES.reduce((sum, stage) => sum + notes[stage], 0);
+  if (total === 0) return <span className="text-hint text-muted">{t('Waiting for the first note')}</span>;
+  const values = {
+    count: total,
+    new: notes.seeded,
+    todo: notes.green,
+    progress: notes.ripening,
+    done: notes.ripe,
+    closed: notes.composted,
+  };
+  const label =
+    total === 1
+      ? t('1 note: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed', values)
+      : t('{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed', values);
+
+  return (
+    <span className="flex items-center gap-[10px]">
+      <span aria-hidden="true" className="w-[22px] text-right font-semibold tabular-nums">
+        {total}
+      </span>
+      <StatusBar
+        label={label}
+        counts={{
+          new: notes.seeded,
+          todo: notes.green,
+          progress: notes.ripening,
+          done: notes.ripe,
+          closed: notes.composted,
+        }}
+      />
+    </span>
   );
 }

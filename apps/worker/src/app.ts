@@ -35,7 +35,14 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
-import { postgresAccountStore, postgresKv, postgresScreenshotStore, postgresSessionStore } from './postgres-stores.ts';
+import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
+import {
+  postgresAccountStore,
+  postgresKv,
+  postgresNoteIndex,
+  postgresScreenshotStore,
+  postgresSessionStore,
+} from './postgres-stores.ts';
 import {
   MAX_SCREENSHOT_BYTES,
   SCREENSHOT_PATH,
@@ -305,6 +312,8 @@ export type RequestContext = {
    * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
    */
   kv?: Kv;
+  /** The index of the notes (FRU-237). A suite hands over one on PGlite. */
+  noteIndex?: NoteIndex;
 };
 
 /**
@@ -445,6 +454,8 @@ async function routed(
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
   const kv = context.kv ?? kvFor(served);
+  // FRU-237: the notes of the sites of the accounts are indexed, in the database of the accounts.
+  const noteIndex = accounts === undefined ? undefined : (context.noteIndex ?? noteIndexFor(served));
   let allowed: boolean;
 
   try {
@@ -551,6 +562,7 @@ async function routed(
           sessions,
           ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
           kv,
+          ...(noteIndex === undefined ? {} : { noteIndex }),
           ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
           ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
           ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
@@ -602,7 +614,7 @@ async function routed(
     try {
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers);
+        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers, undefined, noteIndex);
       }
 
       return await handleSession(request, pathname, served, context, cors.headers);
@@ -638,8 +650,8 @@ async function routed(
 
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
-    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers)
-    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp);
+    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
+    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex);
 }
 
 /**
@@ -736,6 +748,53 @@ async function handleSession(
 }
 
 /** Where this worker keeps the pictures of the notes: its database, or nowhere (FRU-44). */
+/** The index of the notes of a worker with a database (FRU-237), or none: `notes-index.ts`. */
+export function noteIndexFor(config: WorkerConfig): NoteIndex | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresNoteIndex(config.databaseUrl, config.databaseSchema);
+}
+
+/**
+ * Writes to the index of the notes, and never fails the request for it (FRU-237). The note is in its
+ * store by then: a `502` would have the widget send it a second time. A row that is missing is
+ * written again by the next read of its page.
+ */
+async function indexed(index: NoteIndex | undefined, work: (index: NoteIndex) => Promise<void>): Promise<void> {
+  if (index === undefined) return;
+  try {
+    await work(index);
+  } catch (error) {
+    console.error(
+      `[fruitback] the index of the notes was not written: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/** The row of the index of one note this worker just planted. */
+function noteEntry(
+  workspace: string,
+  site: string,
+  seed: Seed,
+  channel: Channel,
+  target: ClientConfig | undefined,
+  issue: CreatedIssue,
+): NoteEntry {
+  return {
+    workspace,
+    site,
+    seed,
+    channel,
+    author: authorOf(seed, channel === 'extension'),
+    place: placeOf(target),
+    issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
+    stage: 'seeded',
+  };
+}
+
+/** Where a note of this target goes, as the index says it. */
+function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
+  return target?.connector === undefined ? { kind: 'fruitback' } : { kind: 'connector', connector: target.connector };
+}
+
 export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | undefined {
   return config.databaseUrl === undefined
     ? undefined
@@ -982,15 +1041,16 @@ async function attributionFor(
   request: Request,
   policy: ClientPolicy,
   claimed: SeedReporter | undefined,
-): Promise<{ ok: true; reporter: SeedReporter | undefined } | { ok: false; reason: string }> {
+): Promise<{ ok: true; reporter: SeedReporter | undefined; channel: Channel } | { ok: false; reason: string }> {
   const token = readBearerToken(request.headers.get('Authorization'));
-  if (token === undefined) return { ok: true, reporter: stripClaimedVerification(claimed) };
+  if (token === undefined) return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script' };
 
   const verified = await verifyForClient(token, policy);
   if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, reason: verified.reason };
 
-  return { ok: true, reporter: verified.reporter };
+  // FRU-237: a session of the workspace is an extension. A token the site signed is its own page.
+  return { ok: true, reporter: verified.reporter, channel: verified.session === true ? 'extension' : 'script' };
 }
 
 /** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
@@ -1018,6 +1078,7 @@ async function getFeedback(
   store: SeedStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
+  noteIndex?: NoteIndex,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const requested = params.get('url');
@@ -1063,7 +1124,19 @@ async function getFeedback(
       targets.map((target) => {
         const key = JSON.stringify([store.name, store.scope(target), clientId ?? null, url]);
 
-        return cached(kv, url, key, () => store.findForPage({ url, clientId }, target, route.policy));
+        return cached(kv, url, key, async () => {
+          const issues = await store.findForPage({ url, clientId }, target, route.policy);
+          // FRU-237: what the store says now is the stage the index keeps. Only a read that asked the
+          // store writes, so a page that many read costs one write for each answer of the cache.
+          const workspace = route.client?.workspace;
+          if (workspace !== undefined && clientId !== undefined) {
+            await indexed(noteIndex, (index) =>
+              index.refresh(workspace, clientId, placeOf(target), issues, Date.now()),
+            );
+          }
+
+          return issues;
+        });
       }),
     );
     // Two places of one team are one read of the tracker, so a note can come back twice. A site
@@ -1142,6 +1215,7 @@ async function postFeedback(
   kv: Kv,
   corsHeaders: Record<string, string>,
   clientIp: string,
+  noteIndex?: NoteIndex,
 ): Promise<Response> {
   const body = await readBoundedText(request);
   if (body === null) {
@@ -1156,7 +1230,7 @@ async function postFeedback(
   }
 
   // FRU-124: an array is a batch, an object is one note, as before.
-  if (Array.isArray(payload)) return postBatch(request, config, store, kv, corsHeaders, clientIp, payload);
+  if (Array.isArray(payload)) return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex);
 
   const parsed = parseSeed(payload);
   if (!parsed.ok) {
@@ -1184,6 +1258,11 @@ async function postFeedback(
   try {
     const issue = await store.create(attributed, target, route.policy);
     await invalidatePages(kv, [attributed.page.url]);
+    const workspace = route.client?.workspace;
+    if (workspace !== undefined && clientId !== undefined) {
+      const entry = noteEntry(workspace, clientId, attributed, identity.channel, target, issue);
+      await indexed(noteIndex, (index) => index.record([entry], Date.now()));
+    }
 
     return json(201, { issue }, corsHeaders);
   } catch (error) {
@@ -1361,6 +1440,7 @@ async function postBatch(
   corsHeaders: Record<string, string>,
   clientIp: string,
   payload: unknown[],
+  noteIndex?: NoteIndex,
 ): Promise<Response> {
   const max = maxBatch(config.rateLimitPerMinute);
   if (payload.length === 0 || payload.length > max) {
@@ -1397,10 +1477,12 @@ async function postBatch(
 
   // One request is one caller: the identity is checked once, and written on every note it signs.
   const attributed: Seed[] = [];
+  let channel: Channel = 'script';
   for (const seed of seeds) {
     const identity = await attributionFor(request, route.policy, seed.reporter);
     if (!identity.ok) return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
     attributed.push({ ...seed, ...optionalReporter(identity.reporter) });
+    channel = identity.channel;
   }
 
   const target = await chosenPlace(request, config, route);
@@ -1467,6 +1549,17 @@ async function postBatch(
     ),
   );
   const kept = results.filter((result) => 'issue' in result);
+  // FRU-237: the notes this request planted. One kept by an earlier attempt is in the index already.
+  const workspace = route.client?.workspace;
+  if (workspace !== undefined && clientId !== undefined) {
+    const entries = attributed.flatMap((seed, index) => {
+      const result = results[index];
+      const issue = result !== undefined && 'issue' in result ? result.issue : undefined;
+
+      return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, seed, channel, target, issue)] : [];
+    });
+    await indexed(noteIndex, (index) => index.record(entries, Date.now()));
+  }
   await invalidatePages(
     kv,
     attributed.filter((_, index) => 'issue' in (results[index] as object)).map((seed) => seed.page.url),

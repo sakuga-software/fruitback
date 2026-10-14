@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Join Sakuga on Fruitback</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button{cursor:pointer}
+.b-accent:hover{background:#b91c1c !important}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <header style="border-bottom: 1px solid #e4e4e7">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 32px); min-height: 64px; display: flex; align-items: center">
+      <a href="https://fruitback.com" style="display: flex; padding: 8px 0"><img src="../assets/3e4b1a38775a5dbf.svg" alt="Fruitback" style="height: 22px; width: 113px; display: block"></a>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; display: flex; justify-content: center; padding: clamp(48px, 10vh, 112px) 16px 64px">
+    <div style="width: 100%; max-width: 440px; display: flex; flex-direction: column">
+
+      <sc-if value="{{ isInvite }}" hint-placeholder-val="{{ true }}">
+        <p style="margin: 0 0 20px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #6b6b74">
+          <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: #3f3f46; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">M</span>
+          <span><span style="color: #18181b; font-weight: 600">Mathieu</span> from Sakuga invited you</span>
+        </p>
+        <h1 style="margin: 0 0 10px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance">Review staging.acme.dev with Sakuga</h1>
+        <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.5; color: #6b6b74">You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker.</p>
+
+        <dl style="margin: 0 0 28px; border-top: 1px solid #e4e4e7; font-size: 15px">
+          <div style="display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e4e4e7"><dt style="color: #6b6b74">Signed in as</dt><dd style="margin: 0; font-weight: 600; text-align: right">camille@acme.dev</dd></div>
+          <div style="display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e4e4e7"><dt style="color: #6b6b74">Role</dt><dd style="margin: 0; font-weight: 600; text-align: right">Guest</dd></div>
+          <div style="display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #e4e4e7"><dt style="color: #6b6b74">Site</dt><dd style="margin: 0; font-weight: 600; text-align: right">staging.acme.dev</dd></div>
+        </dl>
+
+        <button type="button" class="b-accent" style="height: 44px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.006em">Join Sakuga</button>
+        <p style="margin: 18px 0 0; font-size: 14px; line-height: 1.5; color: #6b6b74">The link in the invitation signed you in. Not camille@acme.dev? <a href="Sign-in.dc.html" style="font-weight: 600">Use another address</a></p>
+      </sc-if>
+
+      <sc-if value="{{ isJoined }}" hint-placeholder-val="{{ false }}">
+        <span aria-hidden="true" style="width: 40px; height: 40px; margin: 0 0 24px 4px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28)"><svg sc-camel-view-box="0 0 24 24" style="width: 18px; height: 18px; transform: rotate(90deg)"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+        <h1 style="margin: 0 0 10px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">You are in</h1>
+        <p role="status" style="margin: 0 0 28px; font-size: 16px; line-height: 1.5; color: #6b6b74">One more thing: the extension shows the notes on staging.acme.dev and lets you leave yours. It signs in with this account.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center">
+          <a href="https://chromewebstore.google.com" class="b-accent" style="height: 44px; padding: 0 22px; display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: #dd2c27; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none">Add to Chrome<svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 14px; height: 14px"><path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+          <a href="https://staging.acme.dev" style="font-size: 14px; font-weight: 600; padding: 12px 0">Open staging.acme.dev</a>
+        </div>
+        <p style="margin: 28px 0 0; padding-top: 18px; border-top: 1px solid #e4e4e7; font-size: 14px; line-height: 1.5; color: #6b6b74">Using Firefox? <a href="https://addons.mozilla.org" style="font-weight: 600">Get the Firefox add-on</a></p>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;invitation&quot;,&quot;joined&quot;],&quot;default&quot;:&quot;invitation&quot;,&quot;section&quot;:&quot;State&quot;},&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const state = this.props.state ?? 'invitation';
+    return { isInvite: state === 'invitation', isJoined: state === 'joined' };
+  }
+}
+</script>
+
+
+</body></html>

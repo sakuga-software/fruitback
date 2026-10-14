@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Answer, Workspace } from './api.ts';
-import { type SetupCalls, firstWorkspace, leaveFor, resolveStage, siteStage } from './setup-stage.ts';
+import { type SetupCalls, firstWorkspace, leaveFor, noted, resolveStage, siteNow, siteStage } from './setup-stage.ts';
 
 /**
  * Where the setup takes a person (FRU-239), with a worker of fakes: each case says what the worker
@@ -156,5 +156,19 @@ describe('where the setup takes a person (FRU-239)', () => {
     assert.equal(leaveFor({ kind: 'invited' }), '/invitations');
     // The control: the owner of the same workspace stays, at the form.
     assert.equal(leaveFor(await siteStage(fake({}).calls, account, owner)), undefined);
+  });
+
+  it('sees a first note by a count of the index, or by the day of a last note, and not on a worker of before', () => {
+    const none = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
+    assert.equal(noted(site), false);
+    assert.equal(noted({ ...site, notes: none }), false);
+    assert.equal(noted({ ...site, notes: { ...none, ripe: 1 } }), true);
+    assert.equal(noted({ ...site, lastNoteAt: '2026-10-14T08:00:00.000Z' }), true);
+  });
+
+  it('reads the same site again by its id, and nothing when the list was not read', async () => {
+    assert.deepEqual(await siteNow(fake({ sites: 1 }).calls, owner, site), site);
+    assert.equal(await siteNow(fake({ sites: 0 }).calls, owner, site), undefined);
+    assert.equal(await siteNow(fake({ sites: no(503) }).calls, owner, site), undefined);
   });
 });

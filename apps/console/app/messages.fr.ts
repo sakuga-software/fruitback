@@ -283,7 +283,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
   'Site address': 'Adresse du site',
-  Finish: 'Terminer',
   Script: 'Script',
   'Paste it before the closing body tag of the site.': 'Collez-le avant la balise body fermante du site.',
   Copied: 'Copié',
@@ -517,4 +516,56 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open {site}': 'Ouvrir {site}',
   'Using Firefox?': 'Vous utilisez Firefox ?',
   'Get the Firefox add-on': 'Obtenir le module pour Firefox',
+  // The last step of the setup, and the example page of its preview (FRU-242).
+  'An example page. Pins show the same way on your site.':
+    'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
+  'Leave feedback': 'Laisser un feedback',
+  'Click Leave feedback, then any part of the page.':
+    'Cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Use one, or both.': 'Utilisez l’un, ou les deux.',
+  'Browser extension': 'Extension de navigateur',
+  "Nothing to deploy. Right for a client's site you cannot touch.":
+    'Rien à déployer. Convient au site d’un client auquel vous ne pouvez pas toucher.',
+  'Add it, then connect this browser: a page opens, and you click the Fruitback icon there.':
+    'Ajoutez-la, puis connectez ce navigateur : une page s’ouvre, et vous y cliquez sur l’icône Fruitback.',
+  'Script tag': 'Balise de script',
+  'Before the closing body tag. Members see their pins on every visit.':
+    'Avant la balise body fermante. Les membres voient leurs pins à chaque visite.',
+  'Before the closing body tag. Every visitor sees the pins.':
+    'Avant la balise body fermante. Chaque visiteur voit les pins.',
+  'Copy script': 'Copier le script',
+  'Open the site, click Leave feedback, then any part of the page.':
+    'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Open the console': 'Ouvrir la console',
+  // The first note of the setup (FRU-242).
+  'Waiting for your first note.': 'En attente de votre première note.',
+  'Extension on': 'Extension activée',
+  'Script on the site': 'Script sur le site',
+  'Fruitback on the site': 'Fruitback sur le site',
+  'First note received': 'Première note reçue',
+  'First note received just now': 'Première note reçue à l’instant',
+  'First note received {when}': 'Première note reçue {when}',
+  'Your first note is in': 'Votre première note est arrivée',
+  'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.':
+    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers Linear ou votre propre API quand vous voulez.',
+  '{name} · just now': '{name} · à l’instant',
+  // How long ago (ago.ts).
+  'Just now': 'À l’instant',
+  '{count} min ago': 'il y a {count} min',
+  '{count} h ago': 'il y a {count} h',
+  Yesterday: 'Hier',
+  '{count} days ago': 'il y a {count} jours',
+  // Sites, second time (FRU-270).
+  'On the page with': 'Sur la page avec',
+  'Last note': 'Dernière note',
+  Statuses: 'Statuts',
+  'None yet': 'Aucune pour l’instant',
+  'Extension, script': 'Extension, script',
+  'Waiting for the first note': 'En attente de la première note',
+  '1 not delivered yet': '1 pas encore livrée',
+  '{count} not delivered yet': '{count} pas encore livrées',
+  '1 note: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '1 note : {new} nouvelle, {todo} à faire, {progress} en cours, {done} terminée, {closed} fermée',
+  '{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '{count} notes : {new} nouvelles, {todo} à faire, {progress} en cours, {done} terminées, {closed} fermées',
 };

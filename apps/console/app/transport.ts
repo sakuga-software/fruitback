@@ -5,8 +5,13 @@
  * (`credentials: 'include'`): the cookie of a session of better-auth (FRU-148).
  */
 
-export const API =
-  (import.meta.env?.VITE_FRUITBACK_API as string | undefined)?.replace(/\/+$/, '') ?? 'http://localhost:8788';
+import { apiFrom } from './instance.ts';
+
+/** Where the worker answers: see `instance.ts`. Read once, when the bundle starts. */
+export const API = apiFrom(
+  (globalThis as { __FRUITBACK__?: unknown }).__FRUITBACK__,
+  import.meta.env?.VITE_FRUITBACK_API as string | undefined,
+);
 
 /**
  * A worker that never answers must not hold a screen: every call stops after this long.

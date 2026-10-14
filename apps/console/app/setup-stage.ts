@@ -114,6 +114,26 @@ export async function siteStage(calls: SetupCalls, account: Account, workspace: 
   return manages(workspace) ? { kind: 'site', account, workspace } : { kind: 'waiting', workspace };
 }
 
+/**
+ * Whether a first note reached the site (FRU-242, FRU-237): a count of the index above zero, or the
+ * day of a last note. A worker of before says neither, and the setup then waits as it did.
+ */
+export function noted(site: Site): boolean {
+  const counted = Object.values(site.notes ?? {}).reduce((sum, count) => sum + count, 0);
+
+  return counted > 0 || site.lastNoteAt !== undefined;
+}
+
+/**
+ * The site as the worker reads it now, to see whether its first note came: the same site by its id,
+ * or `undefined` when the list was not read or no longer holds it.
+ */
+export async function siteNow(calls: SetupCalls, workspace: Workspace, site: Site): Promise<Site | undefined> {
+  const listed = await calls.sites(workspace);
+
+  return listed.ok ? listed.data.sites.find((each) => each.id === site.id) : undefined;
+}
+
 /** Where a stage sends the person, away from the setup: none for a stage the setup shows. */
 export function leaveFor(stage: Stage): string | undefined {
   if (stage.kind === 'invited') return '/invitations';

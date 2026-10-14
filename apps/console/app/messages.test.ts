@@ -16,6 +16,7 @@ const APP = new URL('./', import.meta.url);
 // `invitation-message.ts` holds the three notices of the members screen (FRU-209).
 // `sign-in-form.tsx` holds the ways to sign in, for the sign-in page and the setup (FRU-235).
 // `install-options.tsx` holds the script tag and the browser of a site, for the Sites screen (FRU-239).
+// `ago.ts` says how long ago something happened, for the Sites screen and My account (FRU-270).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -28,6 +29,7 @@ const screens = [
   'invitation-message.ts',
   'sign-in-form.tsx',
   'install-options.tsx',
+  'ago.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

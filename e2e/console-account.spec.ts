@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page, type Route, expect, test } from '@playwright/test';
+import { WORKER_ORIGIN } from './pin.ts';
 import {
   CONSOLE as WORKER_CONSOLE,
   SESSION_COOKIE,
@@ -334,6 +335,43 @@ test('a list of browsers that was not read is no list: it says so, and reads aga
   await expect(where.getByRole('listitem')).toHaveCount(1);
   await expect(where.getByRole('button')).toHaveCount(0);
 });
+
+for (const state of ['read', 'not read'] as const) {
+  test(`« Sign out » keeps its place when the list of the browsers is ${state}, and a press across it is heard`, async ({
+    page,
+  }) => {
+    const worker = await workerWith(page);
+    worker.sessions = state === 'read' ? SESSIONS.slice(0, 1) : undefined;
+    // The list is held: the screen is drawn without it, as on a slow line.
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(`${WORKER_ORIGIN}/console/sessions`, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    await page.goto(`${CONSOLE}/w/w1/account`);
+    const out = page.getByRole('button', { name: 'Sign out', exact: true });
+    const everywhere = page.getByRole('button', { name: 'Sign out everywhere', exact: true });
+    await expect(out).toBeVisible();
+    await expect(section(page, 'Where you are signed in').getByText('Loading…')).toBeVisible();
+    const before = { out: await out.boundingBox(), everywhere: await everywhere.boundingBox() };
+
+    // The press starts before the list arrives, and ends after.
+    await page.mouse.move(before.out!.x + before.out!.width / 2, before.out!.y + before.out!.height / 2);
+    await page.mouse.down();
+    release();
+    await expect(
+      state === 'read'
+        ? page.getByText('Console · this browser')
+        : section(page, 'Where you are signed in').getByRole('alert'),
+    ).toBeVisible();
+    expect({ out: await out.boundingBox(), everywhere: await everywhere.boundingBox() }).toEqual(before);
+    await page.mouse.up();
+
+    await expect.poll(() => worker.sent).toContain('POST /console/auth/sign-out');
+    await expect(page).toHaveURL(`${CONSOLE}/setup`);
+  });
+}
 
 test('« Sign out everywhere » asks twice, and a sign-out that the worker did not confirm says so', async ({ page }) => {
   const worker = await workerWith(page);

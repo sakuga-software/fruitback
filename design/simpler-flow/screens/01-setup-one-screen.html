@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Set up Fruitback</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+::placeholder{color:#6b6b74;opacity:1}
+input,textarea{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button{cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.b-accent:hover{background:#b91c1c !important}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-link:hover{color:#b91c1c !important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+pre{scrollbar-width:thin;scrollbar-color:#8a8a93 transparent}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <header style="border-bottom: 1px solid #e4e4e7">
+    <div style="max-width: 1280px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 32px); min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px">
+      <a href="https://fruitback.com" style="display: flex; padding: 8px 0"><img src="../assets/3e4b1a38775a5dbf.svg" alt="Fruitback" style="height: 22px; width: 113px; display: block"></a>
+      <p style="margin: 0; font-size: 14px; color: #6b6b74">Running your own server? <a href="https://fruitback.com/self-hosting.html">Self-hosting guide</a></p>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; width: 100%; max-width: 1280px; margin: 0 auto; box-sizing: border-box; padding: 48px clamp(16px, 4vw, 32px) 72px; display: flex; flex-wrap: wrap; gap: 56px; align-items: flex-start">
+
+    <section aria-labelledby="setup-title" style="flex: 1 1 400px; max-width: 540px; min-width: 0">
+      <h1 id="setup-title" style="margin: 0 0 8px; font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance">Set up Fruitback</h1>
+      <p style="margin: 0 0 36px; font-size: 16px; line-height: 1.5; color: #6b6b74">Three steps to your first note on a live page. Hosted in Europe.</p>
+
+      <ol style="list-style: none; margin: 0; padding: 0">
+
+        <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 16px">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 1px">
+            <sc-if value="{{ s1Current }}" hint-placeholder-val="{{ false }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #18181b; display: flex; align-items: center; justify-content: center"><span style="transform: rotate(90deg); color: #ffffff; font-size: 12px; font-weight: 700; line-height: 1">1</span></span>
+            </sc-if>
+            <sc-if value="{{ s1Done }}" hint-placeholder-val="{{ true }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d; display: flex; align-items: center; justify-content: center"><svg sc-camel-view-box="0 0 24 24" style="width: 13px; height: 13px; transform: rotate(90deg)"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            </sc-if>
+            <span aria-hidden="true" style="width: 2px; flex: 1 1 auto; min-height: 24px; background: #e4e4e7; border-radius: 2px"></span>
+          </div>
+          <div style="padding-bottom: 32px; min-width: 0">
+            <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600"><sc-if value="{{ s1Current }}" hint-placeholder-val="{{ false }}"><span class="sr-only">Current step: </span></sc-if>Your account</h2>
+
+            <sc-if value="{{ s1Form }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px">
+                <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #6b6b74">We send you a sign-in link. No password to make up.</p>
+                <form style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end">
+                  <label style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Work email
+                    <input type="email" autocomplete="email" placeholder="you@studio.com" style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+                  </label>
+                  <button type="submit" class="b-accent" style="height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.006em">Email me a link</button>
+                </form>
+                <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #6b6b74">Your workspace takes the name of your domain. Rename it whenever you like.</p>
+                <div aria-hidden="true" style="display: flex; align-items: center; gap: 12px; font-size: 13px; color: #6b6b74"><span style="flex: 1; height: 1px; background: #e4e4e7"></span>or<span style="flex: 1; height: 1px; background: #e4e4e7"></span></div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px">
+                  <button type="button" class="b-wide" style="height: 44px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Continue with Google</button>
+                  <button type="button" class="b-wide" style="height: 44px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Continue with GitHub</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ s1Sent }}" hint-placeholder-val="{{ false }}">
+              <div role="status" style="margin-top: 12px; padding: 18px 20px; border: 1px solid #e4e4e7; border-radius: 10px; background: #fafafa; display: flex; flex-direction: column; gap: 10px">
+                <p style="margin: 0; font-size: 15px; font-weight: 600">Check your inbox</p>
+                <p style="margin: 0; font-size: 15px; line-height: 1.5">A sign-in link is on its way to <strong>mathieu@sakuga.dev</strong>. Open it in this browser: this page carries on by itself.</p>
+                <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #6b6b74">The link works once, for fifteen minutes. Nothing in it asks for a password.</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; margin-top: 4px">
+                  <button type="button" disabled="" style="height: 40px; padding: 0 16px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Send again in 0:41</button>
+                  <button type="button" class="b-link" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Use another address</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ s1Done }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 1.5">
+                <p style="margin: 0; color: #6b6b74">Signed in as <span style="color: #18181b; font-weight: 600">mathieu@sakuga.dev</span></p>
+                <p style="margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; color: #6b6b74">Workspace <span style="color: #18181b; font-weight: 600">Sakuga</span><button type="button" class="b-link" style="border: 0; background: none; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Rename</button></p>
+              </div>
+            </sc-if>
+          </div>
+        </li>
+
+        <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 16px">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 1px">
+            <sc-if value="{{ s2Pending }}" hint-placeholder-val="{{ false }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; box-sizing: border-box; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ffffff; border: 1.5px solid #8a8a93; display: flex; align-items: center; justify-content: center"><span style="transform: rotate(90deg); color: #6b6b74; font-size: 12px; font-weight: 700; line-height: 1">2</span></span>
+            </sc-if>
+            <sc-if value="{{ s2Current }}" hint-placeholder-val="{{ false }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #18181b; display: flex; align-items: center; justify-content: center"><span style="transform: rotate(90deg); color: #ffffff; font-size: 12px; font-weight: 700; line-height: 1">2</span></span>
+            </sc-if>
+            <sc-if value="{{ s2Done }}" hint-placeholder-val="{{ true }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d; display: flex; align-items: center; justify-content: center"><svg sc-camel-view-box="0 0 24 24" style="width: 13px; height: 13px; transform: rotate(90deg)"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            </sc-if>
+            <span aria-hidden="true" style="width: 2px; flex: 1 1 auto; min-height: 24px; background: #e4e4e7; border-radius: 2px"></span>
+          </div>
+          <div style="padding-bottom: 32px; min-width: 0">
+            <sc-if value="{{ s2Pending }}" hint-placeholder-val="{{ false }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600; color: #6b6b74">Your site</h2>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: #6b6b74">The address you review.</p>
+            </sc-if>
+
+            <sc-if value="{{ s2Current }}" hint-placeholder-val="{{ false }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600"><span class="sr-only">Current step: </span>Your site</h2>
+              <form style="display: flex; flex-direction: column; gap: 20px; margin-top: 12px">
+                <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Site address
+                  <input type="text" inputmode="url" autocomplete="url" placeholder="staging.acme.dev" style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+                  <span style="font-size: 13px; font-weight: 400; line-height: 1.5; color: #6b6b74">Any page of it will do. A pattern such as *.preview.acme.dev covers every preview build.</span>
+                </label>
+                <fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0">
+                  <legend style="padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 600">Who sees the notes?</legend>
+                  <label style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; padding: 14px 16px; border: 1px solid #18181b; border-radius: 10px; cursor: pointer">
+                    <input type="radio" name="who" checked="" style="margin: 3px 0 0; width: 16px; height: 16px; accent-color: #18181b">
+                    <span style="font-size: 15px; font-weight: 600">Members of Sakuga</span>
+                    <span style="grid-column: 2; font-size: 13px; line-height: 1.5; color: #6b6b74">Visitors of the site see nothing. Right for staging and for a client's site.</span>
+                  </label>
+                  <label style="display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; padding: 14px 16px; border: 1px solid #e4e4e7; border-radius: 10px; cursor: pointer">
+                    <input type="radio" name="who" style="margin: 3px 0 0; width: 16px; height: 16px; accent-color: #18181b">
+                    <span style="font-size: 15px; font-weight: 600">Everyone who visits</span>
+                    <span style="grid-column: 2; font-size: 13px; line-height: 1.5; color: #6b6b74">A public way to report a problem on a live site.</span>
+                  </label>
+                </fieldset>
+                <div><button type="submit" class="b-accent" style="height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; letter-spacing: -0.006em">Add site</button></div>
+              </form>
+            </sc-if>
+
+            <sc-if value="{{ s2Done }}" hint-placeholder-val="{{ true }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600">Your site</h2>
+              <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 1.5">
+                <p style="margin: 0; font-weight: 600">staging.acme.dev</p>
+                <p style="margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; color: #6b6b74">Members of Sakuga see the notes<button type="button" class="b-link" style="border: 0; background: none; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Change</button></p>
+              </div>
+            </sc-if>
+          </div>
+        </li>
+
+        <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 16px">
+          <div style="display: flex; flex-direction: column; align-items: center; padding-top: 1px">
+            <sc-if value="{{ s3Pending }}" hint-placeholder-val="{{ false }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; box-sizing: border-box; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ffffff; border: 1.5px solid #8a8a93; display: flex; align-items: center; justify-content: center"><span style="transform: rotate(90deg); color: #6b6b74; font-size: 12px; font-weight: 700; line-height: 1">3</span></span>
+            </sc-if>
+            <sc-if value="{{ s3Current }}" hint-placeholder-val="{{ true }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #18181b; display: flex; align-items: center; justify-content: center"><span style="transform: rotate(90deg); color: #ffffff; font-size: 12px; font-weight: 700; line-height: 1">3</span></span>
+            </sc-if>
+            <sc-if value="{{ s3Done }}" hint-placeholder-val="{{ false }}">
+              <span aria-hidden="true" style="width: 26px; height: 26px; flex: none; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d; display: flex; align-items: center; justify-content: center"><svg sc-camel-view-box="0 0 24 24" style="width: 13px; height: 13px; transform: rotate(90deg)"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+            </sc-if>
+          </div>
+          <div style="min-width: 0">
+            <sc-if value="{{ s3Pending }}" hint-placeholder-val="{{ false }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600; color: #6b6b74">Put it on the site</h2>
+              <p style="margin: 2px 0 0; font-size: 14px; line-height: 1.5; color: #6b6b74">The extension, or a script tag.</p>
+            </sc-if>
+
+            <sc-if value="{{ s3Current }}" hint-placeholder-val="{{ true }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600"><span class="sr-only">Current step: </span>Put it on the site</h2>
+              <p style="margin: 4px 0 16px; font-size: 15px; line-height: 1.5; color: #6b6b74">Use one, or both.</p>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px">
+                <div style="padding: 18px; border: 1px solid #e4e4e7; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 600">Browser extension</h3>
+                  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6b6b74">Nothing to deploy. Right for a client's site you cannot touch.</p>
+                  <p style="margin: 0 0 6px; font-size: 13px; line-height: 1.5">Signs in with this account. No code to type.</p>
+                  <a href="https://chromewebstore.google.com" class="b-wide" style="margin-top: auto; height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font-size: 14px; font-weight: 600; text-decoration: none">Add to Chrome<svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 14px; height: 14px"><path d="M8 16L16 8M9.5 8H16v6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+                </div>
+                <div style="padding: 18px; border: 1px solid #e4e4e7; border-radius: 10px; display: flex; flex-direction: column; gap: 8px">
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 600">Script tag</h3>
+                  <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6b6b74">Before the closing body tag. Members see their pins on every visit.</p>
+                  <pre style="margin: 0 0 6px; padding: 10px 12px; border-radius: 6px; background: #fafafa; border: 1px solid #e4e4e7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; color: #18181b; overflow-x: auto">&lt;script
+  src="https://cloud.fruitback.com/fruitback.iife.js"
+  data-fruitback-client="st_7k2m9q"
+  defer&gt;&lt;/script&gt;</pre>
+                  <button type="button" class="b-wide" style="margin-top: auto; height: 44px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Copy script</button>
+                </div>
+              </div>
+              <p role="status" style="margin: 18px 0 0; font-size: 14px; line-height: 1.5"><strong>Waiting for your first note.</strong> <span style="color: #6b6b74">Open the site, click Leave feedback, then any part of the page.</span> <a href="https://staging.acme.dev" style="font-weight: 600; white-space: nowrap">Open staging.acme.dev</a></p>
+            </sc-if>
+
+            <sc-if value="{{ s3Done }}" hint-placeholder-val="{{ false }}">
+              <h2 style="margin: 0; font-size: 17px; line-height: 26px; font-weight: 600">Put it on the site</h2>
+              <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 1.5">
+                <p style="margin: 0; font-weight: 600">Extension on in Chrome</p>
+                <p style="margin: 0; color: #6b6b74">First note received just now</p>
+              </div>
+            </sc-if>
+          </div>
+        </li>
+      </ol>
+
+      <sc-if value="{{ s3Done }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top: 36px; padding-top: 28px; border-top: 1px solid #e4e4e7; display: flex; flex-direction: column; gap: 10px">
+          <h2 style="margin: 0; font-size: 22px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em">Your first note is in</h2>
+          <p style="margin: 0; font-size: 15px; line-height: 1.55; color: #6b6b74">It waits in the Sakuga workspace. Send your notes to Linear, GitHub or your own API whenever you like.</p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px">
+            <a href="Sites.dc.html" class="b-accent" style="height: 44px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; background: #dd2c27; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none">Open the console</a>
+            <a href="Connectors.dc.html" class="b-wide" style="height: 44px; padding: 0 18px; display: inline-flex; align-items: center; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font-size: 14px; font-weight: 600; text-decoration: none">Connect a tracker</a>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+
+    <section aria-label="Preview of your site" style="flex: 999 1 520px; min-width: 0">
+      <div style="border: 1px solid #e4e4e7; border-radius: 14px; overflow: hidden; background: #ffffff; box-shadow: 0 10px 30px rgba(24, 24, 27, 0.08)">
+        <div style="height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #fafafa; border-bottom: 1px solid #e4e4e7">
+          <span aria-hidden="true" style="display: flex; gap: 6px; width: 42px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #e4e4e7"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #e4e4e7"></span><span style="width: 10px; height: 10px; border-radius: 50%; background: #e4e4e7"></span></span>
+          <span style="flex: 1; display: flex; justify-content: center; min-width: 0"><span style="font-size: 13px; color: #6b6b74; background: #ffffff; border: 1px solid #e4e4e7; border-radius: 999px; padding: 4px 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ address }}</span></span>
+          <span aria-hidden="true" style="width: 42px"></span>
+        </div>
+
+        <div style="position: relative; height: 620px; overflow: hidden">
+          <sc-if value="{{ previewEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; box-sizing: border-box; background: #fafafa; text-align: center">
+              <svg aria-hidden="true" sc-camel-view-box="16 6 96 116" style="width: 56px; height: 68px"><path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z" fill="#e4e4e7" fill-rule="evenodd"></path></svg>
+              <p style="margin: 0; max-width: 280px; font-size: 15px; line-height: 1.5; color: #6b6b74">Your site shows here once you add it, with its pins.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ previewSite }}" hint-placeholder-val="{{ true }}">
+            <div style="height: 100%; background: #f6f6f3; color: #22302a; font-family: Georgia, 'Times New Roman', serif">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 28px">
+                <span style="font-size: 17px; font-weight: 700; letter-spacing: 0.02em">Acme Outdoor</span>
+                <span style="display: flex; gap: 20px; font-family: -apple-system, system-ui, sans-serif; font-size: 13px">
+                  <span>Shop</span><span>Journal</span><span>Stores</span>
+                </span>
+              </div>
+              <div style="position: relative; margin: 0 28px; border-radius: 6px; background: #2f4a3a; color: #f6f6f3; padding: 44px 36px 40px">
+                <p style="position: relative; margin: 0; max-width: 340px; font-size: 40px; line-height: 1.06">Pack light, walk far.<sc-if value="{{ firstPin }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position: absolute; inset: -4px; border: 2px solid #dd2c27; border-radius: 6px"><span style="position: absolute; bottom: 100%; right: 100%; width: 26px; height: 26px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #dd2c27; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28); display: grid; place-items: center"><span style="transform: rotate(90deg); color: #ffffff; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; line-height: 1">1</span></span></span></sc-if></p>
+                <p style="margin: 14px 0 22px; font-family: -apple-system, system-ui, sans-serif; font-size: 14px; color: #dfe6df">The spring range is in the shops.</p>
+                <span style="display: inline-block; background: #f6f6f3; color: #22302a; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; padding: 10px 16px; border-radius: 4px">Shop the range</span>
+
+                <sc-if value="{{ firstPin }}" hint-placeholder-val="{{ false }}">
+                  <div style="position: absolute; top: 150px; left: 36px; width: 264px; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; background: #ffffff; color: #18181b; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px">
+                    <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; letter-spacing: -0.006em"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #dd2c27"></span>New</span>
+                    <span style="font-size: 14px; line-height: 1.5">The headline runs to three lines on a phone. Could it be shorter?</span>
+                    <span style="font-size: 12px; line-height: 1.5; color: #6b6b74">Mathieu · just now</span>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 16px; padding: 24px 28px">
+                <div><div style="height: 120px; border-radius: 4px; background: #d8dee8; display: flex; align-items: flex-end; padding: 8px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 11px; color: #3f4652">[product photo]</div><p style="margin: 8px 0 0; font-size: 14px">Ridge 28 pack</p></div>
+                <div><div style="height: 120px; border-radius: 4px; background: #cfe0d6; display: flex; align-items: flex-end; padding: 8px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 11px; color: #35483c">[product photo]</div><p style="margin: 8px 0 0; font-size: 14px">Fell shell jacket</p></div>
+                <div><div style="height: 120px; border-radius: 4px; background: #ecd5cf; display: flex; align-items: flex-end; padding: 8px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 11px; color: #5c3a36">[product photo]</div><p style="margin: 8px 0 0; font-size: 14px">Camp mug, enamel</p></div>
+              </div>
+            </div>
+
+            <sc-if value="{{ hint }}" hint-placeholder-val="{{ true }}">
+              <div style="position: absolute; right: 18px; bottom: 74px; max-width: 230px; padding: 10px 14px; border-radius: 10px; background: #18181b; color: #ffffff; font-size: 13px; line-height: 1.45; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18)">Click Leave feedback, then any part of the page.<span aria-hidden="true" style="position: absolute; right: 52px; bottom: -5px; width: 10px; height: 10px; background: #18181b; transform: rotate(45deg)"></span></div>
+            </sc-if>
+
+            <div style="position: absolute; right: 18px; bottom: 18px; display: flex; align-items: center; gap: 8px; font-family: -apple-system, system-ui, sans-serif">
+              <button type="button" aria-label="Fruitback settings" style="width: 36px; height: 36px; border: 0; border-radius: 999px; background: #3f3f46; color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25)"><svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 16px; height: 16px"><path fill="currentColor" fill-rule="evenodd" d="M19.62 10.33 L22.10 10.60 L22.10 13.40 L19.62 13.67 L18.57 16.21 L20.13 18.16 L18.16 20.13 L16.21 18.57 L13.67 19.62 L13.40 22.10 L10.60 22.10 L10.33 19.62 L7.79 18.57 L5.84 20.13 L3.87 18.16 L5.43 16.21 L4.38 13.67 L1.90 13.40 L1.90 10.60 L4.38 10.33 L5.43 7.79 L3.87 5.84 L5.84 3.87 L7.79 5.43 L10.33 4.38 L10.60 1.90 L13.40 1.90 L13.67 4.38 L16.21 5.43 L18.16 3.87 L20.13 5.84 L18.57 7.79 Z M15.10 12 A3.1 3.1 0 1 0 8.90 12 A3.1 3.1 0 1 0 15.10 12 Z"></path></svg></button>
+              <button type="button" style="height: 40px; padding: 0 16px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: -0.006em; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25)"><svg aria-hidden="true" sc-camel-view-box="16 6 96 116" style="width: 12px; height: 14px"><path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z" fill="currentColor"></path></svg>Leave feedback</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <p style="margin: 12px 4px 0; font-size: 13px; line-height: 1.5; color: #6b6b74">A preview of your site. Pins show the same way on the real page.</p>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;step&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;email&quot;,&quot;sent&quot;,&quot;site&quot;,&quot;install&quot;,&quot;first-note&quot;],&quot;default&quot;:&quot;install&quot;,&quot;section&quot;:&quot;State&quot;},&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1060}}">
+class Component extends DCLogic {
+  renderVals() {
+    const order = ['email', 'sent', 'site', 'install', 'first-note'];
+    const step = this.props.step ?? 'install';
+    const i = Math.max(0, order.indexOf(step));
+    return {
+      s1Form: i === 0,
+      s1Sent: i === 1,
+      s1Current: i <= 1,
+      s1Done: i >= 2,
+      s2Pending: i <= 1,
+      s2Current: i === 2,
+      s2Done: i >= 3,
+      s3Pending: i <= 2,
+      s3Current: i === 3,
+      s3Done: i === 4,
+      previewEmpty: i <= 2,
+      previewSite: i >= 3,
+      hint: i === 3,
+      firstPin: i === 4,
+      address: i >= 3 ? 'staging.acme.dev' : 'your site'
+    };
+  }
+}
+</script>
+
+
+</body></html>

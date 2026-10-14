@@ -23,9 +23,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   See _The session of the console_ below for the worker of before, the `401` and the providers.
   The image hashes the inline scripts of `index.html` into its policy (`csp.mjs`), never
   `'unsafe-inline'`, and serves the widget's script at `/fruitback.iife.js` until it has a CDN.
-- `design/` — the reference mockups of the Cloud and the simplified extension (a Claude Design
-  export, 2026-10-07), with a picture of each board. **Build a screen that has a board to its board**:
-  layout, words and tokens. `design/README.md` says which board belongs to which ticket.
+  **The address of the worker is read when the page loads, not when it is built** (FRU-222):
+  `/config.js`, which the container writes, sets `globalThis.__FRUITBACK__` before the bundle, and
+  `apiFrom` of `instance.ts` reads it once. The file of the repository sets nothing, so `pnpm dev`
+  and a console built with `VITE_FRUITBACK_API` keep the address of their build. The script tag is
+  in `<head>` with neither `async` nor `defer`: a module starts after it. Nothing secret goes in
+  that file. See [image.md](image.md).
+- `design/` — the reference mockups of the Cloud and the simplified extension: the simpler flow of
+  2026-10-13 (`design/simpler-flow/`, its `SPEC.md` and the texts of every state word for word) and
+  the Claude Design export of 2026-10-07. **Build a screen that has a board to its board**: layout,
+  words and tokens, and **the simpler flow wins** for each screen it draws. `design/README.md` says
+  which screen belongs to which ticket.
 - **The console connects an address, and shows the notes that did not arrive** (FRU-132). A source is
   drawn by its `kind`: a tracker has teams to choose, an address has none, so a site sends there or
   does not. **A secret that the worker made is on the screen once**, in the form that made the
@@ -78,12 +86,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
   (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
   every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
-  kept ». What is asked under a row stays in what is seen of a table that scrolls.
+  kept ». What is asked under a row stays in what is seen of a table that scrolls. **A read made
+  again keeps the rows that are shown** (FRU-271): « Loading… » in their place took the table away
+  for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
 - **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
   the mockup of 2026-10-13). `setup.tsx` shows three steps together (step 1 in `setup-account.tsx`,
-  step 2 in `setup-site.tsx`; where the person is, decided from the answers of the worker, in
+  step 2 in `setup-site.tsx`, step 3 in `setup-install.tsx`; where the person is, decided from the answers of the worker, in
   `setup-stage.ts`, which knows no React and no network and has its own `setup-stage.test.ts`): « Your account », « Your site »,
   « Put it on the site ». The step is read from the worker at each visit: nobody signed in, no
   workspace, no site, a site. So a visit goes on anywhere, and the address has no `?step=`. **The
@@ -113,8 +123,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **What the setup does not say, on purpose.** The hint of « Site address » stops at « Any page of it
   will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
-  under the hint is 19.5 px higher than on the mockup. The last step keeps the script and the
-  browser of `install-options.tsx` until FRU-242 draws it.
+  under the hint is 19.5 px higher than on the mockup.
+- **The last step is two cards, and the preview is a picture** (FRU-242). « Browser extension » and
+  « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
+  `install-options.tsx`). **The preview asks the site of the person for nothing**: it is the example
+  page of the mockup (`preview-scene.tsx`), with the address of the site in its bar, and no frame
+  (decided on 2026-10-13: a fixed illustration). Its caption says « An example page ». The picture
+  is `aria-hidden` and `inert`: its two buttons are drawn, and take no focus. **Its colours are the
+  example site's, in `preview-scene.css`, and are no tokens**: nothing of the console takes them.
+  **The setup ends at the first note on the site** (FRU-237 counts them): while the step waits it
+  says « Waiting for your first note. », and reads the site again every five seconds while the tab
+  is shown (`useFirstNote` in `setup.tsx`; a hidden tab asks nothing, a read that fails changes
+  nothing). At the first note the step is done by itself, the picture has its pin and its card,
+  and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
+  console » and « Connect a tracker ». The sentence says « Linear or your own API »: GitHub is no
+  source of a workspace yet (FRU-188). « Open the console » stays under the cards while the step
+  waits, for a person who sends no note now. **Still waiting**: « Signs in with this account. No
+  code to type. » (a browser is still connected from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
+  its worker by that attribute only.
 - **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
   of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
   the workspace that invites, the role and what it lets its person do, « Join », and « Decline »
@@ -188,29 +214,38 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
   a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
   (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
-- **The Sites screen is the table of the mockup, with the columns the worker fills** (FRU-243,
-  `routes/sites.tsx`): the site and who sees its notes, and where its notes go, to whoever sees the
-  tracker. The count of notes, the way on the page and the last note wait for the summary of the
-  sites (FRU-237), and the legend of the statuses comes with them: a column with nothing true to
-  show is not drawn. **A row has one menu, and what it opens is under the row**: « Install », for
-  every role; « Preview builds », which is the proof of a domain of FRU-103, and « Remove », for who
-  manages the sites. One thing is open at a time, and what closes gives focus back to the button of
-  the row. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) the
-  second. **No item changes who sees the notes of a site**: the worker has no route for it, and a
-  button that does nothing is not drawn; so the form that adds a site asks it, in the card of a
-  workspace with no site too, where the mockup draws the address alone. **The address of a site is
-  no link** until a site has a page. **The table has no minimum width while it has three columns**:
-  it fits a phone, so what opens under a row is on screen; the six columns of the mockup need
-  860 px and a place for it outside the table. The card and the alert are sized by their content
-  (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
-  `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **The Sites screen is the table of the mockup, with its six columns** (FRU-243, FRU-270,
+  `routes/sites.tsx`): the site and who sees its notes, its notes by status (a count and a bar whose
+  name says the counts again), how they came (the script or the extension), where they go, to
+  whoever sees the tracker, and the last one (`ago.ts`: « 12 min ago », « Yesterday », then the day).
+  The counts are the summary of the sites (FRU-237), in the answer that lists them: **nothing of a row
+  comes after the row**, so nothing moves under a press, and a test holds the read to prove it. A
+  cell with nothing to say draws « · » for the eye and says « None yet » to a screen reader; a worker
+  that sends no summary gets that, and no bar. The legend of the statuses is above the table. **A row
+  has one menu, and what it opens is under the row**: « Install », for every role; « Preview builds »,
+  which is the proof of a domain of FRU-103, and « Remove », for who manages the sites. One thing is
+  open at a time, and what closes gives focus back to the button of the row. « Remove » asks twice:
+  the menu is the first time, and `Confirmation` (`confirm.tsx`) the second. **No item changes who
+  sees the notes of a site**: the worker has no route for it, and a button that does nothing is not
+  drawn; so the form that adds a site asks it, in the card of a workspace with no site too, where the
+  mockup draws the address alone. **The address of a site is no link** until a site has a page. **The
+  table is 860 px at the least**, as the mockup draws it: on a phone it scrolls in its frame, and what
+  opens under a row stays at the left of what is seen (`sticky`), as wide as the frame. A host breaks
+  after its dots first (`<wbr>`). The hidden words of a cell are anchored to the cell: with no anchor,
+  they widen the page at 390 px. The card and the alert are sized by their content (`box-content`),
+  as the mockup sizes them: 640 px and 760 px inside their padding. `e2e/console-sites.spec.ts` holds
+  the three states, the counts, the form, the menu, the roles, 390 px and axe.
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
   `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
   share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
   where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
-  connected: a workspace can connect a second one. **A row says « Connected », « Needs attention »,
+  connected: a workspace can connect a second one. **« Add a source » waits for the list to be read**
+  (FRU-271; after a read that failed there is « Try again » and no source to add): the list arrives above it and its buttons went down by the height of the
+  list (45 px for one source, 110 for two, measured), so a press that started before and ended
+  after was lost; and the same read says what « Connect Linear » does, the consent at Linear or a
+  key. **A row says « Connected », « Needs attention »,
   or how many notes did not reach an address**; the count is read with the list, and an address
   whose count was not read says « Connected » and no number. On the chosen row the red is the
   strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
@@ -227,7 +262,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   press: a session ended by mistake is a sign-in away). « Sign out everywhere » is
   `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
   worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
-  not read is no list.** **No kind of browser is shown**: the worker answers a user agent when its
+  not read is no list.** **The list keeps the room of one row while it is read, and when it could
+  not be**: it arrives above « Sign out », and a press that starts before a button moves and ends
+  after is lost, with no request and no message (measured: 53 px, `main` red on 30c62f8). A second
+  browser still adds its row. **No kind of browser is shown**: the worker answers a user agent when its
   operator switched that on, the type of `api.ts` leaves it out, and what to show of it waits for
   Q7 of FRU-230. So another browser is « Console · another browser », with when it signed in and
   when it was last used. **What has no route has no control**: the name is a locked field, a

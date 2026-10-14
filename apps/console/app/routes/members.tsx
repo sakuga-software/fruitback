@@ -52,6 +52,11 @@ function dayOf(iso: string | undefined, year: boolean): string | undefined {
   });
 }
 
+/** What a list is while it is read again: itself when it is shown, « loading » when it is not. */
+function whileRead<T>(current: Listed<T>): Listed<T> {
+  return typeof current === 'string' ? 'loading' : current;
+}
+
 /**
  * Who belongs to the workspace, and who is invited, as screen 12 of the mockup of 2026-10-13 draws
  * them (FRU-247, on FRU-104): the invitation on one line, the table of the people, and what each
@@ -84,11 +89,14 @@ export default function Members() {
   const read = useCallback(async () => {
     setMailed(await sendsMail());
     if (!reads) return;
-    setMembers('loading');
+    // WARNING: a read made again keeps the rows that are shown. « Loading… » in their place took the
+    // table away for the time of the read: what is under it went up, then down again, and an
+    // action of a row was not there to press. Only a list that is not shown says that it is read.
+    setMembers(whileRead);
     const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);
     setMembers(listedOf(listed, (data) => data.members));
     if (!manages) return;
-    setInvitations('loading');
+    setInvitations(whileRead);
     const waiting = await call<Invitation[]>('GET', `${base}/list-invitations?${query}`);
     setInvitations(listedOf(waiting, (data) => data.filter((each) => each.status === 'pending')));
   }, [base, query, reads, manages]);

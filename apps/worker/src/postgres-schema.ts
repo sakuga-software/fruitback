@@ -345,3 +345,55 @@ export const seed_comments = pgTable(
     index('seed_comments_by_seed').on(table.seed_id, table.created_at),
   ],
 );
+
+/**
+ * The index of the notes of a workspace (FRU-237): `notes-index.ts` says what it keeps and why, and
+ * `docs/privacy.md` names each column. **No column holds more than `EXCERPT_LENGTH` characters of
+ * the text of a note**: `excerpt`, and nothing else of the text.
+ *
+ * A row goes with its site and with its workspace (`cascade`): the index of a site that is removed
+ * is removed, whatever becomes of the notes themselves (FRU-194). `connector_id` is `set null` when
+ * the connector goes, and `place` then still says that the note went to one.
+ */
+export const note_index = pgTable(
+  'note_index',
+  {
+    site_id: text('site_id').notNull(),
+    seed_id: text('seed_id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    page_url: text('page_url').notNull(),
+    excerpt: text('excerpt').notNull(),
+    stage: text('stage').notNull(),
+    channel: text('channel'),
+    author_kind: text('author_kind').notNull(),
+    author_account_id: text('author_account_id'),
+    place: text('place').notNull(),
+    connector_id: text('connector_id'),
+    reference: text('reference'),
+    reference_url: text('reference_url'),
+    created_at: instant('created_at').notNull(),
+    checked_at: instant('checked_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.seed_id] }),
+    foreignKey({
+      name: 'note_index_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'note_index_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'note_index_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('set null'),
+    // The counts of the sites of a workspace: one pass over this index, grouped by site and stage.
+    index('note_index_by_workspace').on(table.workspace_id, table.site_id, table.stage),
+    // `forget` of a member.
+    index('note_index_by_author').on(table.author_account_id),
+  ],
+);

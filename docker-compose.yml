@@ -1,5 +1,5 @@
-# The Fruitback worker, from its published image (FRU-48). Nothing here needs a clone of this
-# repository:
+# The Fruitback worker, from its published image (FRU-48), with its database and its console behind
+# two profiles. Nothing here needs a clone of this repository:
 #
 #   curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
 #   curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
@@ -107,6 +107,39 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+  # The console (FRU-222): the screens where a person signs in, makes a workspace and adds its sites.
+  # Static files and nothing else: it holds no secret, and it calls the worker from the browser. It
+  # needs a worker with accounts, so it starts only with its profile, beside the database:
+  #   docker compose --profile postgres --profile console up -d --wait
+  # Two values of .env say where the two answer, as a browser reaches them:
+  #   FRUITBACK_PUBLIC_URL    the worker   (on this machine: http://localhost:8080)
+  #   FRUITBACK_CONSOLE_URL   the console  (on this machine: http://localhost:8081)
+  # Two addresses, not one: the worker answers the console as another origin, and the cookie of the
+  # session is the worker's. Behind a proxy, give them two names of one domain (api. and app.).
+  # A console with no FRUITBACK_PUBLIC_URL stops when it starts, and says so in its log.
+  console:
+    profiles: [console]
+    image: ${FRUITBACK_CONSOLE_IMAGE:-ghcr.io/sakuga-software/fruitback-console:edge}
+    restart: unless-stopped
+    ports:
+      # If a reverse proxy is in front, remove this mapping, as for the worker.
+      - '${FRUITBACK_CONSOLE_PORT:-8081}:8080'
+    # The image runs as a user that is not root, and writes under /tmp only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # The address the browser calls the worker at. It goes into the page and into its
+      # Content-Security-Policy when the container starts: no image is built for it.
+      FRUITBACK_API: ${FRUITBACK_PUBLIC_URL:-}
+      # The port inside the container. The image listens on 80 by default; no user but root opens
+      # that port on every runtime, so this file asks for 8080.
+      FRUITBACK_CONSOLE_LISTEN: 8080
 
 volumes:
   # Compose prefixes this volume with the project name, so two stacks on one host keep separate data

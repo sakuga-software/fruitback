@@ -11,6 +11,7 @@ import {
   signOut,
 } from '../api';
 import { msg, t } from '../i18n';
+import { EXTENSION_GUIDE } from '../install-options';
 import { problemOf } from '../problems';
 import { withStrong } from '../sign-in-form';
 import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
@@ -37,12 +38,6 @@ const ANSWER_PROBLEMS: Readonly<Record<string, string>> = {
 };
 const NOT_ANSWERED = msg('The invitation could not be answered. Try again.');
 const STILL_SIGNED_IN = msg('You are still signed in: Fruitback did not confirm the sign-out. Try again.');
-
-/**
- * Where the extension is explained. It is in no store yet (FRU-130): until it is, « Add to Chrome »
- * and « Get the Firefox add-on » lead to the page that says how to install it.
- */
-const EXTENSION_GUIDE = 'https://fruitback.com/reviewing.html#1-install-it';
 
 type Read =
   | { kind: 'loading' }

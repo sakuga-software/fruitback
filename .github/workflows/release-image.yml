@@ -22,6 +22,8 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/fruitback-worker
+  # The console (FRU-222): a second image, published by its own two jobs below, behind the same gates.
+  CONSOLE_IMAGE: ghcr.io/${{ github.repository_owner }}/fruitback-console
 
 jobs:
   # Lint, format, typecheck, the tests, the E2E suite and zizmor, on the commit that is published.
@@ -259,4 +261,175 @@ jobs:
             echo
             echo "The digest is the only immutable reference. A re-run of this workflow on the same"
             echo "commit republishes every tag above, including \`sha-\`, under a new digest."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The console (FRU-222), with the gates of the worker: each architecture is booted and scanned
+  # before anything is published. Its own jobs, so that a red console does not hold a fix of the
+  # worker back, and a red worker does not hold the console.
+  check-console:
+    name: check console ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The build stage runs on the runner's own architecture (BUILDPLATFORM in the Dockerfile): the
+      # files are the same for both. QEMU is for the runtime stage and for `docker run` below.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # No build argument: the image that is published holds the address of no worker.
+      - name: Build the candidate
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: fruitback-console:candidate
+          cache-from: type=gha,scope=release-console-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-console-${{ matrix.arch }}
+
+      - name: It serves the worker it is given, as a user that is not root, and refuses to start with none
+        run: |
+          set -euo pipefail
+
+          docker run -d --name serves -p 8082:80 -e FRUITBACK_API=https://api.acme.example fruitback-console:candidate
+          # Ninety attempts, not thirty: a foreign architecture starts under emulation.
+          for _ in $(seq 1 90); do
+            if curl -sf -o /dev/null http://127.0.0.1:8082/; then break; fi
+            sleep 1
+          done
+          policy=$(curl -s -D - -o /dev/null http://127.0.0.1:8082/sign-in | tr -d '\r' | grep -i '^content-security-policy:')
+          echo "$policy"
+          echo "$policy" | grep -q "connect-src 'self' https://api.acme.example;"
+          echo "$policy" | grep -q "'sha256-"
+          # Never `! grep`: under `bash -e` a command that `!` inverts does not stop the script.
+          if echo "$policy" | grep -q "script-src[^;]*unsafe-inline"; then
+            echo "the policy allows inline scripts"
+            exit 1
+          fi
+          test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'
+          test "$(docker exec serves id -u)" = 101
+          docker rm -f serves
+
+          # Exit 1 from the entry script, never 124 from the timeout.
+          code=0
+          timeout 60 docker run --rm fruitback-console:candidate || code=$?
+          test "$code" = 1
+
+      - name: Scan it, and fail on anything actionable
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: fruitback-console:candidate
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+  publish-console:
+    name: push console
+    # `ci`, so a commit that fails a check is never published, and both architectures of the
+    # console. `workflows.test.ts` holds the first.
+    needs: [ci, check-console]
+    # The same line as `publish`: a dispatch from a branch checks, and publishes nothing.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job's token carries `packages: write`, and nothing here runs a git command.
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.CONSOLE_IMAGE }}
+          # The tags of the worker, so that one version names both images.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=edge,branch=main
+            type=sha,format=long
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build every architecture and push
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: |
+            type=gha,scope=release-console-amd64
+            type=gha,scope=release-console-arm64
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest what was built
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.CONSOLE_IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Say what was published
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### Published: the console"
+            echo
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+            echo
+            echo "Digest: \`$DIGEST\` — \`linux/amd64\` and \`linux/arm64\`."
           } >> "$GITHUB_STEP_SUMMARY"

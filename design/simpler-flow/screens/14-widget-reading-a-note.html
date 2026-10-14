@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Widget, reading a note</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#f6f6f3}
+::selection{background:#18181b;color:#fff}
+::placeholder{color:#6b6b74;opacity:1}
+textarea{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button{cursor:pointer}
+.b-accent:hover{background:#b91c1c !important}
+.b-icon:hover{background:#f4f4f5 !important}
+.pin:hover{filter:brightness(1.06)}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #f6f6f3; color: #22302a; font-family: Georgia, 'Times New Roman', serif">
+
+  <div style="height: 72px; box-sizing: border-box; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e3e3de">
+    <span style="font-size: 21px; font-weight: 700; letter-spacing: 0.02em">Acme Outdoor</span>
+    <span style="display: flex; gap: 32px; font-family: -apple-system, system-ui, sans-serif; font-size: 15px">
+      <span>Shop</span><span>Journal</span><span>Stores</span><span>Basket (2)</span>
+    </span>
+  </div>
+
+  <div style="position: relative; margin: 24px 48px 0; height: 440px; box-sizing: border-box; border-radius: 8px; background: #2f4a3a; color: #f6f6f3; padding: 72px 64px">
+    <p style="position: relative; margin: 0; max-width: 600px; font-size: 76px; line-height: 1.02">Pack light, walk far.
+      <span style="position: absolute; inset: -4px; border: 2px solid #dd2c27; border-radius: 6px; pointer-events: none">
+        <button type="button" class="pin" aria-label="Note 1, new" style="position: absolute; bottom: 100%; right: 100%; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #dd2c27; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28); display: grid; place-items: center; pointer-events: auto"><span style="transform: rotate(90deg); color: #ffffff; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; line-height: 1">1</span></button>
+      </span>
+    </p>
+    <p style="margin: 20px 0 32px; font-family: -apple-system, system-ui, sans-serif; font-size: 18px; color: #dfe6df">The spring range is in the shops and online.</p>
+    <span style="position: relative; display: inline-block">
+      <span style="display: inline-block; background: #f6f6f3; color: #22302a; font-family: -apple-system, system-ui, sans-serif; font-size: 15px; font-weight: 600; padding: 15px 22px; border-radius: 4px">Shop the range</span>
+      <span style="position: absolute; inset: -4px; border: 2px solid #f59e0b; border-radius: 6px; background: rgba(245, 158, 11, 0.12); pointer-events: none">
+        <button type="button" class="pin" aria-label="Note 2, in progress, open" aria-expanded="true" style="position: absolute; bottom: 100%; right: 100%; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #f59e0b; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28); display: grid; place-items: center; pointer-events: auto"><span style="transform: rotate(90deg); color: #18181b; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; line-height: 1">2</span></button>
+      </span>
+
+      <div role="dialog" aria-label="Note 2" style="position: absolute; z-index: 2; top: -36px; left: calc(100% + 30px); width: 360px; box-sizing: border-box; background: #ffffff; color: #18181b; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); font-family: -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 1.5">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; border-bottom: 1px solid #e4e4e7">
+          <span style="display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; letter-spacing: -0.006em"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #f59e0b"></span>In progress</span>
+          <a href="#" style="font-size: 12px; color: #6b6b74">ACM-142 in Linear</a>
+          <button type="button" class="b-icon" aria-label="Close the note" style="margin-left: auto; width: 32px; height: 32px; border: 0; border-radius: 8px; background: #ffffff; color: #6b6b74; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 15px; height: 15px"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"></path></svg></button>
+        </div>
+        <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+          <p style="margin: 0">The button is hard to read on the green. Could it take the cream of the logo, with dark text?</p>
+          <p style="margin: 0; font-size: 12px; color: #6b6b74">Camille Durand · guest · 2 days ago</p>
+          <p style="margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: #fafafa; border: 1px solid #e4e4e7; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.5; color: #52525b; overflow-wrap: anywhere">HeroBanner · src/components/Hero.tsx:42</p>
+        </div>
+        <div style="padding: 12px 16px; border-top: 1px solid #e4e4e7; display: flex; flex-direction: column; gap: 2px">
+          <p style="margin: 0; font-size: 11px; color: #6b6b74"><span style="font-weight: 600; color: #18181b">Léa</span> · Sakuga · yesterday</p>
+          <p style="margin: 0; font-size: 12px; line-height: 1.5">Trying the cream variant in the next build. I will mark it done when it is live.</p>
+        </div>
+        <form style="display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px 16px; border-top: 1px solid #e4e4e7">
+          <label style="flex: 1; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Reply</span>
+            <textarea rows="1" placeholder="Reply to Camille" style="flex: 1; min-height: 36px; box-sizing: border-box; resize: none; border: 1px solid #8a8a93; border-radius: 6px; padding: 7px 10px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff"></textarea>
+          </label>
+          <button type="submit" class="b-accent" style="height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 13px; font-weight: 600; letter-spacing: -0.006em">Send</button>
+        </form>
+      </div>
+    </span>
+
+    <div style="position: absolute; right: 64px; top: 56px; width: 420px; height: 328px; border-radius: 6px; background: #3d5c49; display: flex; align-items: flex-end; padding: 14px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; color: #dfe6df">[hero photo: a walker on a ridge at dawn]
+      <span style="position: absolute; inset: -4px; border: 2px solid #2563eb; border-radius: 8px; pointer-events: none">
+        <button type="button" class="pin" aria-label="Note 4, to do" style="position: absolute; bottom: 100%; right: 100%; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #2563eb; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28); display: grid; place-items: center; pointer-events: auto"><span style="transform: rotate(90deg); color: #ffffff; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; line-height: 1">4</span></button>
+      </span>
+    </div>
+  </div>
+
+  <div style="padding: 40px 48px 0">
+    <p style="margin: 0; font-size: 30px">New this spring</p>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin-top: 20px">
+      <div><div style="height: 200px; border-radius: 4px; background: #d8dee8; display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; color: #3f4652">[product photo]</div><p style="margin: 10px 0 0; font-size: 16px">Ridge 28 pack</p></div>
+      <div><div style="height: 200px; border-radius: 4px; background: #cfe0d6; display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; color: #35483c">[product photo]</div><p style="margin: 10px 0 0; font-size: 16px">Fell shell jacket</p></div>
+      <div style="position: relative"><div style="height: 200px; border-radius: 4px; background: #ecd5cf; display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; color: #5c3a36">[product photo]</div><p style="margin: 10px 0 0; font-size: 16px">Camp mug, enamel</p>
+        <span style="position: absolute; inset: -4px; border: 2px solid #15803d; border-radius: 6px; pointer-events: none">
+          <button type="button" class="pin" aria-label="Note 3, done" style="position: absolute; bottom: 100%; right: 100%; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #15803d; box-shadow: 0 3px 10px rgba(24, 24, 27, 0.28); display: grid; place-items: center; pointer-events: auto"><span style="transform: rotate(90deg); color: #ffffff; font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 600; line-height: 1">3</span></button>
+        </span>
+      </div>
+      <div><div style="height: 200px; border-radius: 4px; background: #e2e0ec; display: flex; align-items: flex-end; padding: 10px; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; font-size: 12px; color: #44425a">[product photo]</div><p style="margin: 10px 0 0; font-size: 16px">Trail socks, two pairs</p></div>
+    </div>
+  </div>
+
+  <div style="position: absolute; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 10px; font-family: -apple-system, system-ui, sans-serif">
+    <button type="button" aria-label="Fruitback settings" style="width: 44px; height: 44px; border: 0; border-radius: 999px; background: #3f3f46; color: #ffffff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25)"><svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 18px; height: 18px"><path fill="currentColor" fill-rule="evenodd" d="M19.62 10.33 L22.10 10.60 L22.10 13.40 L19.62 13.67 L18.57 16.21 L20.13 18.16 L18.16 20.13 L16.21 18.57 L13.67 19.62 L13.40 22.10 L10.60 22.10 L10.33 19.62 L7.79 18.57 L5.84 20.13 L3.87 18.16 L5.43 16.21 L4.38 13.67 L1.90 13.40 L1.90 10.60 L4.38 10.33 L5.43 7.79 L3.87 5.84 L5.84 3.87 L7.79 5.43 L10.33 4.38 L10.60 1.90 L13.40 1.90 L13.67 4.38 L16.21 5.43 L18.16 3.87 L20.13 5.84 L18.57 7.79 Z M15.10 12 A3.1 3.1 0 1 0 8.90 12 A3.1 3.1 0 1 0 15.10 12 Z"></path></svg></button>
+    <button type="button" class="b-accent" style="height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: -0.006em; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25)"><svg aria-hidden="true" sc-camel-view-box="16 6 96 116" style="width: 12px; height: 15px"><path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z" fill="currentColor"></path></svg>Leave feedback</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>

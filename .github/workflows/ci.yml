@@ -141,7 +141,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run the E2E suite
-        # No LINEAR_API_KEY anywhere: the worker runs on its in-memory store (FRUITBACK_STORE=memory).
+        # No key and no service: each worker of the suite has a PostgreSQL in its process (PGlite,
+        # `dev-worker.fixture.ts`, FRU-223).
         run: pnpm e2e
 
       - name: Keep the traces of a failed run
@@ -282,6 +283,42 @@ jobs:
           echo "the container never became ready:"
           docker logs worker
           exit 1
+
+      - name: Boot it with the switch of the database of development, and find it refused
+        # FRU-223. `pnpm dev` and the E2E suite run on a PostgreSQL in the process, behind
+        # FRUITBACK_DEV_DATABASE. The image must refuse the switch, and never ignore it: a worker
+        # that ignored it would start with no database, or on another one than its operator thinks.
+        # Matched on the 503 and on the name of the variable, as for FRUITBACK_STORE=memory in
+        # release-image.yml. The second half checks what makes the refusal true whatever the code
+        # says: the image holds neither the file that makes that database nor PGlite.
+        run: |
+          docker run -d --name dev-database -p 8084:8080 \
+            -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e FRUITBACK_STORE=postgres \
+            -e FRUITBACK_DEV_DATABASE=pglite \
+            -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
+            -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+            fruitback-worker:ci
+          code=000
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /tmp/dev-database-body -w '%{http_code}' http://127.0.0.1:8084/health || true)
+            if [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
+          body=$(cat /tmp/dev-database-body)
+          case "$code:$body" in
+            503:*FRUITBACK_DEV_DATABASE*) echo "refused as it should: $body" ;;
+            *)
+              echo "the image did not refuse FRUITBACK_DEV_DATABASE (HTTP $code, body: $body)"
+              docker logs dev-database
+              exit 1
+              ;;
+          esac
+          if docker exec dev-database sh -c 'ls -R / 2>/dev/null | grep -i -E "pglite|dev-worker"'; then
+            echo "the image holds PGlite or the worker of development"
+            exit 1
+          fi
+          docker rm -f dev-database
 
       - name: Boot it with its accounts in PostgreSQL, and read the sites from the database
         # FRU-141. The driver of PostgreSQL is CommonJS inside an ESM bundle: without the banner of the
@@ -428,7 +465,7 @@ jobs:
           docker rm -f playground
 
       - name: Build the image of the console
-        # FRU-99. Dokploy builds this Dockerfile too, for app.fruitback.com.
+        # FRU-222. The image that is published: built with no address of a worker in it.
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -436,31 +473,111 @@ jobs:
           push: false
           load: true
           tags: fruitback-console:ci
-          build-args: VITE_FRUITBACK_API=https://api.fruitback.example
           cache-from: type=gha,scope=console
           cache-to: type=gha,mode=max,scope=console
 
-      - name: Boot the console, and check what it serves
-        # The policy must name the worker and allow the inline scripts by hash, never as unsafe-inline.
+      - name: Boot the console for two workers, and check what each serves
+        # One image, any instance: the address of the worker is given when the container starts. Each
+        # policy must name its own worker and allow the inline scripts by hash, never as unsafe-inline.
         run: |
-          # No FRUITBACK_API: it defaults to the address the bundle was built with.
-          docker run -d --name console -p 8082:80 fruitback-console:ci
+          set -euo pipefail
+          serve() {
+            docker run -d --name "$1" -p "$2:80" -e "FRUITBACK_API=$3" fruitback-console:ci
+            for attempt in $(seq 1 30); do
+              if curl -sf -o /dev/null "http://127.0.0.1:$2/"; then return 0; fi
+              sleep 1
+            done
+            docker logs "$1"
+            return 1
+          }
+          serve console-acme 8082 https://api.acme.example
+          # A slash at the end and a path: the page gets the address with no slash, the policy its origin.
+          serve console-other 8083 https://other.example:8443/fruitback/
+
+          policy() { curl -s -D - -o /dev/null "http://127.0.0.1:$1/w/any/sites" | tr -d '\r' | grep -i '^content-security-policy:'; }
+          # WARNING: never `! grep`. Under `bash -e` a command that `!` inverts does not stop the script,
+          # so the step stayed green with the very thing it looks for. `absent` exits by itself.
+          absent() { if grep -q -- "$1" "$2"; then echo "found « $1 » in $2, where it must not be"; exit 1; fi; }
+          policy 8082 | tee /tmp/acme
+          policy 8083 | tee /tmp/other
+          grep -q "connect-src 'self' https://api.acme.example;" /tmp/acme
+          grep -q "connect-src 'self' https://other.example:8443;" /tmp/other
+          absent "other.example" /tmp/acme
+          absent "acme.example" /tmp/other
+          for file in /tmp/acme /tmp/other; do
+            grep -q "'sha256-" "$file"
+            absent "script-src[^;]*unsafe-inline" "$file"
+            grep -q "frame-ancestors 'none'" "$file"
+          done
+          test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'
+          test "$(curl -s http://127.0.0.1:8083/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://other.example:8443/fruitback" };'
+          # The address is never kept by a browser, and the page loads it before its bundle.
+          curl -s -D - -o /dev/null http://127.0.0.1:8082/config.js | tr -d '\r' | grep -qi '^cache-control: no-store$'
+          curl -s http://127.0.0.1:8082/ | grep -q '<script src="/config.js"></script>'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
+          # Not root, and nothing of the repository beside the built files.
+          test "$(docker exec console-acme id -u)" = 101
+          test -z "$(docker exec console-acme find / -xdev \( -name '*.ts' -o -name '*.tsx' -o -name '*.map' -o -name 'package.json' -o -name 'pnpm-lock.yaml' -o -name '.env*' -o -name node_modules \) 2>/dev/null)"
+          test -z "$(docker exec console-acme find / -xdev -writable -not -path '/tmp*' -not -path '/proc/*' -not -path '/dev/*' 2>/dev/null)"
+          docker rm -f console-acme console-other
+
+          # As the compose file runs it: a read-only root, no capability, a port that needs no right.
+          docker run -d --name console-locked -p 8082:8080 --read-only --tmpfs /tmp --cap-drop ALL \
+            --security-opt no-new-privileges -e FRUITBACK_CONSOLE_LISTEN=8080 \
+            -e FRUITBACK_API=https://api.acme.example fruitback-console:ci
           for attempt in $(seq 1 30); do
             if curl -sf -o /dev/null http://127.0.0.1:8082/; then break; fi
             sleep 1
           done
-          policy=$(curl -s -D - -o /dev/null http://127.0.0.1:8082/w/any/sites | grep -i '^content-security-policy:')
-          echo "$policy"
-          echo "$policy" | grep -q "connect-src 'self' https://api.fruitback.example"
-          echo "$policy" | grep -q "'sha256-"
-          ! echo "$policy" | grep -q "script-src[^;]*unsafe-inline"
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
-          docker rm -f console
-          # Another address at run time would block every call of the bundle, so the container stops.
-          # Exit 1 from the check, never 124 from a timeout: a container that started would also fail.
-          code=0
-          timeout 30 docker run --rm -e FRUITBACK_API=https://other.example fruitback-console:ci || code=$?
-          test "$code" = 1
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/sign-in)" = 200
+          docker rm -f console-locked
+
+      - name: Refuse to start a console with no worker, or with what is not an address
+        # Exit 1 from the entry script, with its sentence, never 124 from a timeout: a container that
+        # started would also fail. An address goes into a header and into a script, so what is not
+        # one must stop the container before either is written.
+        run: |
+          set -euo pipefail
+          refused() {
+            code=0
+            said=$(timeout 30 docker run --rm "$@" fruitback-console:ci 2>&1) || code=$?
+            echo "$code: $said"
+            test "$code" = 1 && echo "$said" | grep -q '^fruitback-console: FRUITBACK_API'
+          }
+          refused
+          refused -e "FRUITBACK_API=https://a.example; script-src *"
+          refused -e "FRUITBACK_API=https://a.example'"
+          refused -e 'FRUITBACK_API=https://a.example"};alert(1);//'
+          refused -e "FRUITBACK_API=https://user:pw@a.example"
+          refused -e "FRUITBACK_API=https://a.example?next=1"
+          refused -e "FRUITBACK_API=javascript:alert(1)"
+          refused -e "FRUITBACK_API=$(printf 'https://a.example\nhttps://b.example')"
+
+      - name: Build the console as the Cloud does, and check that it starts with no variable
+        # FRU-99, kept by FRU-222. Dokploy builds this Dockerfile for app.fruitback.com with the
+        # address as a build argument and gives the container no variable: that must still serve.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          push: false
+          load: true
+          tags: fruitback-console:cloud
+          build-args: VITE_FRUITBACK_API=https://api.fruitback.example
+          cache-from: type=gha,scope=console
+
+      - name: Boot the console of the Cloud
+        run: |
+          set -euo pipefail
+          docker run -d --name console-cloud -p 8082:80 fruitback-console:cloud
+          for attempt in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8082/; then break; fi
+            sleep 1
+          done
+          curl -s -D - -o /dev/null http://127.0.0.1:8082/w/any/sites | tr -d '\r' | grep -i '^content-security-policy:' | tee /tmp/cloud
+          grep -q "connect-src 'self' https://api.fruitback.example;" /tmp/cloud
+          test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.fruitback.example" };'
+          docker rm -f console-cloud
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -488,6 +605,30 @@ jobs:
           # Recreated, not restarted: the pin must outlive the container, so it must be on the volume.
           docker compose up -d --wait --force-recreate
           node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT" --read
+
+      - name: The console of docker-compose.yml, in the same directory
+        # FRU-222. The `console` profile, with the image of this commit under the name the file pulls.
+        # The worker of the step above keeps running: only the console is started here.
+        env:
+          FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
+          FRUITBACK_PORT: '8081'
+          FRUITBACK_CONSOLE_IMAGE: ghcr.io/sakuga-software/fruitback-console:edge
+          FRUITBACK_CONSOLE_PORT: '8084'
+        run: |
+          set -euo pipefail
+          docker tag fruitback-console:ci "$FRUITBACK_CONSOLE_IMAGE"
+          cd "$RUNNER_TEMP/compose"
+          # The `.env` of the example names no address of the worker: the console stops, and says why.
+          if docker compose --profile console up -d --wait --wait-timeout 60 console; then
+            echo "the console started with no address of a worker"
+            exit 1
+          fi
+          docker compose --profile console logs --no-color console | grep -q 'FRUITBACK_API is not set'
+          docker compose --profile console rm -fsv console
+          FRUITBACK_PUBLIC_URL=http://127.0.0.1:8081 docker compose --profile console up -d --wait --wait-timeout 60 console
+          curl -s -D - -o /dev/null http://127.0.0.1:8084/sign-in | tr -d '\r' | grep -i '^content-security-policy:' | tee /tmp/composed
+          grep -q "connect-src 'self' http://127.0.0.1:8081;" /tmp/composed
+          test "$(docker compose --profile console exec -T console id -u)" = 101
 
       - name: Worker logs, if the compose run failed
         if: failure()

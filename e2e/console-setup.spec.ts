@@ -122,6 +122,58 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     expect(made).toHaveLength(1);
   });
 
+  test('the last step gives the script of the site, copies it, and connects the browser', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    const toSite: string[] = [];
+    await context.route('https://staging.acme.dev/**', (route) => {
+      toSite.push(route.request().url());
+
+      return route.abort();
+    });
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
+    await page.getByRole('button', { name: 'Email me a link' }).click();
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+    await page.goto(await linkIn(worker));
+    await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
+    await page.getByRole('button', { name: 'Add site' }).click();
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+
+    // The script names the site as the worker made it, and « Copy script » copies that script.
+    const [workspace] = await workspaces(page);
+    const site = await page.evaluate(
+      async ([origin, id]) => {
+        const answer = await fetch(`${origin}/console/workspaces/${id}/sites`, { credentials: 'include' });
+
+        return ((await answer.json()) as { sites: { id: string }[] }).sites[0]!.id;
+      },
+      [WORKER_ORIGIN, workspace!.id],
+    );
+    const script = page.getByRole('region', { name: 'Script tag' });
+    await expect(script).toContainText(`data-fruitback-client="${site}"`);
+    await expect(script).toContainText(`data-fruitback-endpoint="${WORKER_ORIGIN}"`);
+    await page.getByRole('button', { name: 'Copy script' }).click();
+    await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(await script.innerText());
+
+    // « Connect this browser »: the pairing page of the worker opens, with a code after the `#`.
+    const opened = context.waitForEvent('page');
+    await page.getByRole('button', { name: 'Connect this browser' }).click();
+    const pairing = await opened;
+    await pairing.waitForURL(/\/pair#/);
+    expect(new URL(pairing.url()).hash.slice(1)).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    await pairing.close();
+
+    // The preview is a picture: the site of the person was asked for nothing.
+    await expect(
+      page.getByRole('region', { name: 'Preview of your site' }).getByText('staging.acme.dev'),
+    ).toBeVisible();
+    expect(toSite).toEqual([]);
+    // The way on is always there: nothing tells the console that a first note came.
+    await page.getByRole('link', { name: 'Open the console' }).click();
+    await expect(page).toHaveURL(`${CONSOLE}/w/${workspace!.id}/sites`);
+  });
+
   test('a name the worker refuses stays in its field, with the reason', async ({ page }) => {
     await page.goto(`${CONSOLE}/setup`);
     await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
@@ -234,6 +286,17 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
   });
 });
 
+/**
+ * Lets `periods` reads of five seconds go by, each with the real time a request takes to reach the
+ * stub: a read made in one of them is counted after it, not lost in a jump of the clock.
+ */
+async function quietFor(page: Page, periods: number): Promise<void> {
+  for (let period = 0; period < periods; period += 1) {
+    await page.clock.runFor(5_000);
+    await page.waitForTimeout(150);
+  }
+}
+
 type Stub = {
   /** Nobody signed in, somebody with a workspace, or somebody with a workspace and a site. */
   as: 'nobody' | 'named' | 'sited';
@@ -241,6 +304,12 @@ type Stub = {
   /** What the worker answers when a workspace is made or a site is added. */
   refuses?: { workspace?: boolean | 'invalid-name'; site?: number; sites?: boolean; invitations?: 503 | 404 };
   locale?: 'en' | 'fr';
+  /** Who sees the notes of the site of « sited ». */
+  audience?: 'members' | 'everyone';
+  /** From this read of the sites on, the site of « sited » has its first note (FRU-242). */
+  notedFrom?: number;
+  /** The worker counts the note and gives no day of the last one. */
+  noDay?: boolean;
 };
 
 const LONG_HOST = 'preview-branch-feature-very-long-name-1234.staging.acme.dev';
@@ -256,7 +325,7 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
   const asked: string[] = [];
   const workspace = { id: 'w1', name: NAME, role: stub.role ?? 'owner' };
   const account = { id: 'a1', email: EMAIL, name: 'Marianne', locale: stub.locale ?? 'en' };
-  const site = { id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' };
+  const site = { id: 's1', origin: 'https://staging.acme.dev', visibility: stub.audience ?? 'members' };
   let made = stub.as !== 'nobody';
   await page.context().route(`${WORKER_ORIGIN}/**`, (route) => {
     const request = route.request();
@@ -285,8 +354,17 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
     if (pathname === '/console/workspaces/w1/sites') {
       if (request.method() === 'GET') {
         if (stub.refuses?.sites === true) return json({ error: 'unavailable' }, 503);
+        const reads = asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+        const first =
+          stub.notedFrom !== undefined && reads >= stub.notedFrom
+            ? {
+                notes: { seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
+                ...(stub.noDay === true ? {} : { lastNoteAt: new Date().toISOString() }),
+                via: ['extension'],
+              }
+            : {};
 
-        return json({ sites: stub.as === 'sited' ? [site] : [] });
+        return json({ sites: stub.as === 'sited' ? [{ ...site, ...first }] : [] });
       }
       if (stub.refuses?.site !== undefined) return json({ error: 'forbidden' }, stub.refuses.site);
       const { url, visibility } = request.postDataJSON() as { url: string; visibility: string };
@@ -503,6 +581,199 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(group.getByRole('radio')).toHaveCount(2);
     await expect(group.getByRole('radio', { name: /^Members of Havane/ })).toBeChecked();
     expect(await violations(page)).toEqual([]);
+  });
+
+  test('« Put it on the site »: the two cards, the example page, and the boxes of the mockup at 1440 px', async ({
+    page,
+  }) => {
+    await stubWorker(page, { as: 'sited' });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+
+    expectNear(
+      await boxOf(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })),
+      { x: 160, y: 466, width: 352.2, height: 26 },
+      'step 3',
+    );
+    const change = await boxOf(page.getByRole('button', { name: 'Change' }));
+    expectNear(
+      { ...change, y: change.y + 6, height: change.height - 12 },
+      { x: 405, y: 412, width: 51.8, height: 21 },
+      '« Change »',
+    );
+    expectNear(
+      await boxOf(page.getByRole('heading', { name: 'Browser extension' })),
+      { x: 179, y: 553, width: 314.2, height: 18 },
+      'card of the extension',
+    );
+    // The cards are one under the other in this column, as on the mockup, and as wide.
+    const cards = page.locator('.kit-option');
+    await expect(cards).toHaveCount(2);
+    expectNear(
+      await boxOf(cards.nth(0)),
+      { x: 160, y: 534, width: 352.2, height: (await boxOf(cards.nth(0))).height },
+      'first card',
+    );
+    expect.soft((await boxOf(cards.nth(1))).x).toBe(160);
+    await expect(page.getByRole('link', { name: 'Add to Chrome' })).toHaveAttribute(
+      'href',
+      'https://fruitback.com/reviewing.html#1-install-it',
+    );
+    // The step says that it waits for the first note, and what to do on the site (FRU-237 tells it).
+    await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
+      'Waiting for your first note. Open the site, click Leave feedback, then any part of the page.',
+    );
+    await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
+      'href',
+      'https://staging.acme.dev',
+    );
+    await expect(page.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
+    await expect(page.getByText('Before the closing body tag. Members see their pins on every visit.')).toBeVisible();
+
+    // The example page: the address of the site in the bar, the scene of the mockup, its caption.
+    const preview = page.getByRole('region', { name: 'Preview of your site' });
+    expectNear(await boxOf(preview), { x: 568, y: 113, width: 759.8, height: 698.5 }, 'preview');
+    expectNear(
+      await boxOf(preview.locator('.scene__settings')),
+      { x: 1117, y: 723, width: 36, height: 36 },
+      'settings of the picture',
+    );
+    expectNear(
+      await boxOf(preview.locator('.scene__launch')),
+      { x: 1161, y: 721, width: 147.8, height: 40 },
+      'launch of the picture',
+    );
+    await expect(preview.getByText('An example page. Pins show the same way on your site.')).toBeVisible();
+    await expect(preview.locator('.scene__hint')).toHaveText('Click Leave feedback, then any part of the page.');
+    // A picture: hidden from a screen reader, and nothing in it takes focus or a press.
+    const scene = preview.locator('.scene');
+    await expect(scene).toHaveAttribute('aria-hidden', 'true');
+    expect(await scene.evaluate((element) => (element as HTMLElement).inert)).toBe(true);
+    await expect(scene.locator('button, a, input, [tabindex]')).toHaveCount(0);
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('the setup ends by itself at the first note: the step, the conclusion and the pin', async ({ page }) => {
+    await page.clock.install();
+    const asked = await stubWorker(page, { as: 'sited', notedFrom: 3 });
+    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    const preview = page.getByRole('region', { name: 'Preview of your site' });
+    await expect(preview.locator('.scene__pin')).toHaveCount(0);
+
+    // Every five seconds while the tab is shown; the third read has the note.
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(2);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(3);
+
+    // The last step is done, by itself, and says how the note came.
+    await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
+    // The worker does not say which browser sent the note: none is named.
+    await expect(page.getByText('Extension on', { exact: true })).toBeVisible();
+    await expect(page.getByText('First note received just now')).toBeVisible();
+    await expect(page.getByText('Waiting for your first note.')).toHaveCount(0);
+    // The conclusion is said, and takes no focus: the person may be on their site, in another tab.
+    const conclusion = page
+      .getByRole('status')
+      .filter({ has: page.getByRole('heading', { name: 'Your first note is in' }) });
+    await expect(conclusion).toContainText(
+      'It waits in the Havane workspace. Send your notes to Linear or your own API whenever you like.',
+    );
+    await expect(conclusion.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
+    await expect(conclusion.getByRole('link', { name: 'Connect a tracker' })).toHaveAttribute(
+      'href',
+      '/w/w1/connectors',
+    );
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    // The picture has its pin and its card, and no more hint.
+    await expect(preview.locator('.scene__pin')).toHaveText('1');
+    await expect(preview.locator('.scene__note')).toContainText('New');
+    await expect(preview.locator('.scene__note')).toContainText('Marianne · just now');
+    await expect(preview.locator('.scene__hint')).toHaveCount(0);
+    expect(await violations(page)).toEqual([]);
+
+    // Nothing is read again once the note came.
+    await quietFor(page, 6);
+    expect(reads()).toBe(3);
+  });
+
+  test('a hidden tab reads nothing, and reads again once it is shown', async ({ page }) => {
+    await page.clock.install();
+    const asked = await stubWorker(page, { as: 'sited' });
+    const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    const show = (state: 'hidden' | 'visible') =>
+      page.evaluate((value) => {
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
+        document.dispatchEvent(new Event('visibilitychange'));
+      }, state);
+
+    await show('hidden');
+    await quietFor(page, 6);
+    expect(reads()).toBe(1);
+    // The control: shown again, the reads go on at their pace.
+    await show('visible');
+    await page.clock.runFor(5_000);
+    await expect.poll(reads).toBe(2);
+  });
+
+  test('a read that fails changes nothing on the screen, and the next one finds the note', async ({ page }) => {
+    await page.clock.install();
+    const stub: Stub = { as: 'sited', notedFrom: 2 };
+    await stubWorker(page, stub);
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    stub.refuses = { sites: true };
+    await page.clock.runFor(10_000);
+    await expect(page.getByText('Waiting for your first note.')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    stub.refuses = undefined;
+    await page.clock.runFor(5_000);
+    await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
+  });
+
+  test('a count with no day of the last note says no moment', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1, noDay: true });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('First note received', { exact: true })).toBeVisible();
+    await expect(page.getByText('First note received just now')).toHaveCount(0);
+  });
+
+  test('a site that has its first note already: the setup opens on its end', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1 });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
+  });
+
+  test('the script card says who sees the pins of a site that everyone sees', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', audience: 'everyone' });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect(page.getByText('Before the closing body tag. Every visitor sees the pins.')).toBeVisible();
+    await expect(page.getByText('Everyone who visits sees the notes')).toBeVisible();
+  });
+
+  test('a copy the browser refuses says so, and the script stays to select', async ({ page }) => {
+    await stubWorker(page, { as: 'sited' });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: () => Promise.reject(new Error('denied')) },
+        configurable: true,
+      });
+    });
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('button', { name: 'Copy script' }).click();
+
+    await expect(page.getByRole('alert')).toHaveText(
+      'The browser refused the copy. Select the script above and copy it by hand.',
+    );
+    await expect(page.getByRole('region', { name: 'Script tag' })).toContainText('data-fruitback-client="s1"');
   });
 
   test('the keyboard walks the setup in the order it reads', async ({ page }) => {
