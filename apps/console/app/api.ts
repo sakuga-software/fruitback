@@ -113,7 +113,10 @@ export type Delivery = {
 export type Team = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
 export type Me = { account: Account; workspaces: Workspace[] };
 
-export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
+export type Answer<T> =
+  | { ok: true; data: T }
+  /** `field`: the field of the request the worker refused, when it names one (`invalid-request`). */
+  | { ok: false; status: number; error: string; field?: string };
 
 /** Whether the worker sends mail: `email` in what it says of better-auth. `undefined`: not asked yet. */
 let mails: boolean | undefined;
@@ -149,12 +152,19 @@ export function onSignedOut(listener: SignedOutListener): () => void {
 async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
   if (response === undefined) return UNREACHABLE;
   if (response.status === 204) return { ok: true, data: undefined as T };
-  const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown } & T;
+  const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown; field?: unknown } & T;
   // A refusal of the worker names itself in `error`, and one of better-auth in `code` (FRU-209):
   // without the second, no sentence a screen holds for a code of better-auth was ever shown.
   const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
 
-  return response.ok ? { ok: true, data: body } : { ok: false, status: response.status, error: named ?? 'unknown' };
+  if (response.ok) return { ok: true, data: body };
+
+  return {
+    ok: false,
+    status: response.status,
+    error: named ?? 'unknown',
+    ...(typeof body.field === 'string' ? { field: body.field } : {}),
+  };
 }
 
 /**
@@ -526,12 +536,17 @@ export function invitationLink(origin: string = window.location.origin): string 
 export const ORGANIZATION = '/console/auth/organization';
 
 /** A member of a workspace, as the worker lists them (FRU-149). */
+/** A site shared with a guest (FRU-250): its id and its address. */
+export type SharedSite = { id: string; origin: string };
+
 export type Member = {
   id: string;
   userId: string;
   role: Role;
   createdAt: string;
   user: { id: string; email: string; name: string };
+  /** The sites of a guest (FRU-250). Absent for another role, which reads every site. */
+  sites?: SharedSite[];
 };
 
 /** An invitation that waits (FRU-104). `organizationName` is there for the person it is for. */
@@ -546,6 +561,8 @@ export type Invitation = {
   createdAt?: string;
   /** In the answer to an invitation only: `false` when the worker kept it and sent no message. */
   mailed?: boolean;
+  /** The sites an invitation of a guest names (FRU-250). */
+  sites?: SharedSite[];
 };
 
 /**

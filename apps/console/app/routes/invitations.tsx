@@ -26,12 +26,32 @@ import { useLocale } from '../use-locale';
  * in is asked to sign in with the address the message came to.
  */
 
-const ROLE_WORDS: Readonly<Record<string, string>> = { admin: msg('Admin'), member: msg('Member') };
+const ROLE_WORDS: Readonly<Record<string, string>> = {
+  admin: msg('Admin'),
+  member: msg('Member'),
+  guest: msg('Guest'),
+};
 /** What a role lets its person do, said before they join. A role this screen does not know reads as a member. */
 const ROLE_MEANS: Readonly<Record<string, string>> = {
   admin: msg('You join as an admin: you manage the sites, the connectors and the members of {workspace}.'),
   member: msg('You join as a member: you see and leave notes on every site of {workspace}.'),
+  guest: msg(
+    'You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker.',
+  ),
 };
+
+/** The hosts of the sites an invitation of a guest names (FRU-250), « staging.acme.dev ». */
+function hostsOf(invitation: Invitation): string | undefined {
+  const hosts = (invitation.sites ?? []).map((site) => {
+    try {
+      return new URL(site.origin).host;
+    } catch {
+      return site.origin;
+    }
+  });
+
+  return hosts.length === 0 ? undefined : hosts.join(', ');
+}
 const ANSWER_PROBLEMS: Readonly<Record<string, string>> = {
   INVITATION_NOT_FOUND: msg('This invitation was cancelled, or it ended. Ask for another one.'),
   INVITER_NO_LONGER_INVITES: msg('This invitation was cancelled, or it ended. Ask for another one.'),
@@ -216,6 +236,8 @@ type InvitedProps = {
 function Invited({ email, invitation, others, busy, stuck, onAnswer, onAnother }: InvitedProps) {
   useLocale();
   const workspace = nameOf(invitation);
+  // The guest of one site (FRU-250): the screen names the site they review.
+  const site = invitation.role === 'guest' ? hostsOf(invitation) : undefined;
 
   return (
     <>
@@ -226,7 +248,11 @@ function Invited({ email, invitation, others, busy, stuck, onAnswer, onAnother }
         </span>
       </p>
       <div className="mb-2.5 text-balance wrap-anywhere">
-        <Title>{t('Join {workspace} on Fruitback', { workspace })}</Title>
+        <Title>
+          {site === undefined
+            ? t('Join {workspace} on Fruitback', { workspace })
+            : t('Review {site} with {workspace}', { site, workspace })}
+        </Title>
       </div>
       <Lead className="mb-6">{t(ROLE_MEANS[invitation.role] ?? (ROLE_MEANS.member as string), { workspace })}</Lead>
 
@@ -235,6 +261,7 @@ function Invited({ email, invitation, others, busy, stuck, onAnswer, onAnother }
           rows={[
             { term: t('Signed in as'), value: email },
             { term: t('Role'), value: t(ROLE_WORDS[invitation.role] ?? msg('Member')) },
+            ...(site === undefined ? [] : [{ term: t('Site'), value: site }]),
           ]}
         />
       </div>

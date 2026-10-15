@@ -1,5 +1,15 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { type Invitation, type Member, ORGANIZATION, type Role, call, invitationLink, sendsMail } from '../api';
+import {
+  type Invitation,
+  type Member,
+  ORGANIZATION,
+  type Role,
+  type SharedSite,
+  type Site,
+  call,
+  invitationLink,
+  sendsMail,
+} from '../api';
 import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
 import { type Listed, edited, known, listedOf } from '../listed';
@@ -16,8 +26,25 @@ const ROLE_WORDS: Readonly<Record<Role, string>> = {
   guest: msg('Guest'),
 };
 
-/** The roles an invitation gives: the worker refuses the others (FRU-104). */
-type InvitedRole = 'member' | 'admin';
+/** The roles an invitation gives: the worker refuses the others (FRU-104), and a guest names a site (FRU-250). */
+type InvitedRole = 'guest' | 'member' | 'admin';
+
+/** The host of a site, as the mockup writes it: « staging.acme.dev ». */
+function hostOf(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+}
+
+/** What the column « Sites » says of a row: every site, or the sites shared with a guest. */
+function sitesOf(role: Role, sites: readonly SharedSite[] | undefined): string {
+  if (role !== 'guest') return t('Every site');
+  if (sites === undefined) return t('Shared ones');
+
+  return sites.length === 0 ? t('No site') : sites.map((site) => hostOf(site.origin)).join(', ');
+}
 
 const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
   'invalid-request': msg('Type the full address of the person, like name@company.com.'),
@@ -30,6 +57,8 @@ const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace invites.'),
 };
 const NOT_INVITED = msg('The invitation was not sent. Try again.');
+/** The worker refused the site of a guest: it is no site of the workspace any more (FRU-250). */
+const NO_SUCH_SITE = msg('This site is no longer one of the workspace. Choose another one.');
 const NOT_CHANGED = msg('That did not go through. Try again.');
 const MEMBER_PROBLEMS: Readonly<Record<string, string>> = {
   YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER: msg('The last owner of a workspace stays in it.'),
@@ -86,7 +115,9 @@ function whileRead<T>(current: Listed<T>): Listed<T> {
  * day somebody joined for the others. It is read beside the members, and the table does not wait
  * for it: its place in a row is kept, so a day that arrives moves nothing under a press.
  *
- * Not here: the one site of a guest (Q3, after the rest).
+ * The guest of one site (FRU-250, Q3): « Guest, one site » in the form, offered when the workspace
+ * has a site, with the list « Site » for that role only; the column « Sites » names the site of a
+ * guest, and of an invitation of a guest.
  */
 export default function Members() {
   useLocale();
@@ -104,6 +135,9 @@ export default function Members() {
   const [invitations, setInvitations] = useState<Listed<Invitation>>('loading');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitedRole>('member');
+  // The sites of the workspace: the ones a guest may be invited on, and for a guest their own.
+  const [sites, setSites] = useState<readonly Site[] | undefined>();
+  const [site, setSite] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [sentTo, setSentTo] = useState<{ email: string; message: Message } | undefined>();
@@ -113,6 +147,10 @@ export default function Members() {
 
   const read = useCallback(async () => {
     setMailed(await sendsMail());
+    // The sites are read beside the rest: the form and the column wait for nothing but them.
+    void call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`).then((listed) =>
+      setSites(listed.ok && Array.isArray(listed.data?.sites) ? listed.data.sites : undefined),
+    );
     if (!reads) return;
     // WARNING: a read made again keeps the rows that are shown. « Loading… » in their place took the
     // table away for the time of the read: what is under it went up, then down again, and an
@@ -151,12 +189,19 @@ export default function Members() {
     const sent = await call<Invitation>('POST', `${base}/invite-member`, {
       organizationId: workspace.id,
       email: address,
-      role,
+      role: chosen,
+      ...(chosen === 'guest' && shared !== undefined ? { sites: [shared] } : {}),
     });
     setBusy(false);
     if (!sent.ok) {
       // A message that did not leave: the invitation is kept, so it is shown, to send again.
       if (sent.error === 'mail-unavailable') void read();
+      // The site was removed meanwhile: the list is read again, and the sentence says so.
+      if (sent.error === 'invalid-request' && sent.field === 'sites') {
+        void read();
+
+        return setProblem(NO_SUCH_SITE);
+      }
       // The field keeps what was typed: the sentence says the cause.
       return setProblem(problemOf(sent, INVITE_PROBLEMS, NOT_INVITED));
     }
@@ -173,6 +218,10 @@ export default function Members() {
       organizationId: workspace.id,
       email: invitation.email,
       role: invitation.role,
+      // A guest's names the same sites (FRU-250).
+      ...(invitation.role === 'guest' && invitation.sites !== undefined
+        ? { sites: invitation.sites.map((each) => each.id) }
+        : {}),
       resend: true,
     });
     if (!sent.ok) return setStuck({ row: invitation.id, problem: problemOf(sent, INVITE_PROBLEMS, NOT_INVITED) });
@@ -224,10 +273,18 @@ export default function Members() {
     createdAt: '',
     user: { id: me.account.id, email: me.account.email, name: me.account.name ?? '' },
   } satisfies Member;
-  const people: Listed<Member> = reads ? members : [self];
+  // A guest reads their own row; their sites are the ones the worker lists to them.
+  const mine =
+    workspace.role === 'guest' && sites !== undefined ? { sites: sites.map(({ id, origin }) => ({ id, origin })) } : {};
+  const people: Listed<Member> = reads ? members : [{ ...self, ...mine }];
   const waiting: Listed<Invitation> = manages ? invitations : [];
-  // What a guest does is said only where a guest is on the screen: nobody is invited as one yet.
+  // A guest is invited on a site of the workspace: no site, no « Guest, one site ».
+  const offersGuest = manages && sites !== undefined && sites.length > 0;
+  const chosen: InvitedRole = role === 'guest' && !offersGuest ? 'member' : role;
+  const shared = sites?.some((each) => each.id === site) ? site : sites?.[0]?.id;
+  // What a guest does is said where a guest is on the screen, or can be invited.
   const guests =
+    offersGuest ||
     workspace.role === 'guest' ||
     [...(known(people) ?? []), ...(known(waiting) ?? [])].some((each) => each.role === 'guest');
 
@@ -257,14 +314,25 @@ export default function Members() {
           <div className="min-w-0 flex-[1_1_200px]">
             <Choice
               label={t('Role')}
-              value={role}
+              value={chosen}
               onChange={(value) => setRole(value as InvitedRole)}
               options={[
+                ...(offersGuest ? [{ value: 'guest', label: t('Guest, one site') }] : []),
                 { value: 'member', label: t('Member') },
                 { value: 'admin', label: t('Admin') },
               ]}
             />
           </div>
+          {chosen === 'guest' && shared !== undefined ? (
+            <div className="min-w-0 flex-[1_1_200px]">
+              <Choice
+                label={t('Site')}
+                value={shared}
+                onChange={setSite}
+                options={(sites ?? []).map((each) => ({ value: each.id, label: hostOf(each.origin) }))}
+              />
+            </div>
+          ) : null}
           <Button type="submit" inset={24} disabled={busy || email.trim() === ''}>
             {busy ? t('Sending…') : t('Invite')}
           </Button>
@@ -325,6 +393,7 @@ export default function Members() {
                   name={member.userId === me.account.id ? t('{name} (you)', { name }) : name}
                   detail={member.user.email}
                   role={member.role}
+                  sites={sitesOf(member.role, member.sites)}
                   when={reads ? lastOf(member) : undefined}
                   problem={stuck?.row === member.id ? stuck.problem : undefined}
                   {...(removes
@@ -360,6 +429,7 @@ export default function Members() {
                       name={invitation.email}
                       detail={went ? t('Invitation sent') : t('Invitation kept')}
                       role={invitation.role}
+                      sites={sitesOf(invitation.role, invitation.sites)}
                       when={sent !== undefined && went ? t('Sent {date}', { date: sent }) : (sent ?? '')}
                       {...(until === undefined ? {} : { until: t('Until {date}', { date: until }) })}
                       problem={stuck?.row === invitation.id ? stuck.problem : undefined}
@@ -450,6 +520,8 @@ type RowProps = {
   /** The second line: an address, or « Invitation sent ». */
   detail: string;
   role: Role;
+  /** The column « Sites »: « Every site », or the sites of a guest. */
+  sites: string;
   /** The last column: the day somebody joined, or the day an invitation was sent. No column: `undefined`. */
   when: string | undefined;
   /** Under the day of an invitation: the day it ends. */
@@ -462,7 +534,7 @@ type RowProps = {
 };
 
 /** The row of a person or of an invitation, and under it the second time of its gesture. */
-function Row({ initial, pending = false, name, detail, role, when, until, onResend, asks, problem }: RowProps) {
+function Row({ initial, pending = false, name, detail, role, sites, when, until, onResend, asks, problem }: RowProps) {
   useLocale();
   const [asking, setAsking] = useState(false);
   const actions = useRef<HTMLSpanElement>(null);
@@ -499,7 +571,7 @@ function Row({ initial, pending = false, name, detail, role, when, until, onRese
           </span>
         </td>
         <td>{t(ROLE_WORDS[role])}</td>
-        <td>{role === 'guest' ? t('Shared ones') : t('Every site')}</td>
+        <td className="[overflow-wrap:anywhere]">{sites}</td>
         {last}
       </tr>
       {(asking && asks !== undefined) || problem !== undefined ? (
