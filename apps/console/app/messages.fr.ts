@@ -675,6 +675,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas répondu. Les navigateurs de l’extension n’ont pas pu être lus.',
   'This extension is still connected: Fruitback did not end its session. Try again.':
     'Cette extension est toujours connectée : Fruitback n’a pas mis fin à sa session. Réessayez.',
+  // The link of an invitation whose message did not leave, on its row (FRU-269).
+  'The browser refused the copy. The link is {link}: copy it by hand.':
+    'Le navigateur a refusé la copie. Le lien est {link} : copiez-le à la main.',
   // The guest of one site (FRU-250).
   'Guest, one site': 'Invité, un site',
   'This site is no longer one of the workspace. Choose another one.':

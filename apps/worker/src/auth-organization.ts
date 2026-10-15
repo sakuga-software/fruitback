@@ -106,7 +106,13 @@ type InvitationAdapter = {
     status?: unknown;
     email?: unknown;
     expiresAt?: unknown;
+    mailed?: unknown;
   } | null>;
+  update(input: {
+    model: 'invitation';
+    where: { field: string; value: string }[];
+    update: { mailed: boolean };
+  }): Promise<unknown>;
   updateMany(input: {
     model: 'invitation';
     where: { field: string; value: string }[];
@@ -174,6 +180,18 @@ async function inviterStillInvites(adapter: InvitationAdapter, invitationId: str
   const role = roleOf(member?.role);
 
   return role !== undefined && can(role, 'manage-members');
+}
+
+/**
+ * Whether a message of this invitation left (FRU-269), kept on the invitation so that the list says it
+ * after a reload. A message that left stays left: a « Resend » that sent nothing does not take it back.
+ */
+async function noteMailed(adapter: InvitationAdapter, invitationId: string, mailed: boolean): Promise<void> {
+  if (!mailed) {
+    const kept = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
+    if (kept?.mailed === true) return;
+  }
+  await adapter.update({ model: 'invitation', where: [{ field: 'id', value: invitationId }], update: { mailed } });
 }
 
 /** An invitation made by this call, that cannot wait: its sites were not written (FRU-250). */
@@ -579,10 +597,12 @@ async function answerOrganizationCall(
       } catch (error) {
         if (!(error instanceof MailError)) throw error;
         console.error(`[fruitback] ${error.message}`);
+        await noteMailed(adapter, kept.id, false);
 
         return json(502, { error: 'mail-unavailable' }, headers);
       }
     }
+    await noteMailed(adapter, kept.id, mailed);
 
     told = JSON.stringify({ ...kept, mailed, ...(guestSites === undefined ? {} : { sites: guestSites }) });
   }

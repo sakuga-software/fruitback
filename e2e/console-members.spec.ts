@@ -591,6 +591,29 @@ test('an invitation that was kept gives its link, whatever became of its message
   await expect(notice).toContainText('Invitation kept for zoe@client.fr. Send them this link:');
 });
 
+test('after a reload, an invitation whose message did not leave reads « kept », with its link to copy (FRU-269)', async ({
+  page,
+}) => {
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: CONSOLE });
+  await workerWith(page, {
+    invitations: [
+      { ...PAUL, mailed: false },
+      { ...PAUL, id: 'i2', email: 'zoe@client.fr', mailed: true },
+    ],
+  });
+  await open(page);
+
+  await expect(cells(page, 'paul@client.fr').nth(0)).toContainText('Invitation kept');
+  await expect(cells(page, 'zoe@client.fr').nth(0)).toContainText('Invitation sent');
+  // The control: a message that left gives no link on its row.
+  await expect(row(page, 'zoe@client.fr').getByRole('button', { name: 'Copy the link' })).toHaveCount(0);
+  const copy = row(page, 'paul@client.fr').getByRole('button', { name: 'Copy the link', exact: true });
+  await copy.click();
+  await expect(row(page, 'paul@client.fr').getByRole('button', { name: 'Copied', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${CONSOLE}/invitations`);
+  await expectNoViolation(page, 'a kept invitation after a reload');
+});
+
 test('an invitation that is refused says its cause, and clears nothing that was typed', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
