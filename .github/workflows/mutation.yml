@@ -25,7 +25,8 @@ jobs:
   mutation:
     name: mutation ${{ matrix.package }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A full run of the worker took more than 55 minutes on 2026-10-14. See conventions.md.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
