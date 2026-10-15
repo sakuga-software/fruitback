@@ -91,6 +91,16 @@ async function added(worker: Worker, workspace: string, who: Person, role: Role)
   return member?.id as string;
 }
 
+/** The sites of a workspace shared with a guest, as the acceptance of their invitation leaves them (FRU-250). */
+async function shared(worker: Worker, workspace: string, who: Person, sites: readonly string[]): Promise<void> {
+  for (const site of sites) {
+    await rowsOf(
+      worker.database,
+      `INSERT INTO site_shares (workspace_id, account_id, site_id, created_at) VALUES ('${workspace}', '${who.id}', '${site}', 1)`,
+    );
+  }
+}
+
 /** The extension asks. */
 async function asks(worker: Worker, init: Call = {}): Promise<Asked> {
   const answer = await worker.call('/session/connect', {
@@ -197,6 +207,7 @@ for (const { label, open, skip } of DATABASES) {
       const acme = await workspaceOf(worker, alice, 'acme');
       const globex = await workspaceOf(worker, bob, 'globex');
       await added(worker, globex.id, alice, 'guest');
+      await shared(worker, globex.id, alice, [globex.members, globex.everyone]);
 
       const asked = await asks(worker);
       assert.match(asked.request, /^[A-Za-z0-9_-]{22}$/);
@@ -410,6 +421,7 @@ for (const { label, open, skip } of DATABASES) {
       for (const role of ['owner', 'admin', 'member', 'guest'] as const) {
         const who = role === 'owner' ? owner : await person(worker, `${role}@acme.dev`);
         if (role !== 'owner') await added(worker, acme.id, who, role);
+        if (role === 'guest') await shared(worker, acme.id, who, [acme.members, acme.everyone]);
 
         // A session of the workspace, paired with a code of the console, as before.
         const minted = await as(worker, who, `/console/workspaces/${acme.id}/connect`, { body: {} });
@@ -1049,7 +1061,7 @@ describe('a token of a site, and the claims of a session of the worker (FRU-238)
     showComments: false,
     read: 'authenticated' as const,
     locale: 'en',
-    sessions: { secret: SECRET, workspace: 'ws_acme', member: async () => true },
+    sessions: { secret: SECRET, workspace: 'ws_acme', reaches: async () => true },
   };
   const token = async () => {
     const now = Math.floor(Date.now() / 1000);

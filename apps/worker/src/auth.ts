@@ -342,6 +342,9 @@ export async function authOptions(
     // The invitations (FRU-104). Written, though three are the defaults of 1.7.7: an invitation is
     // read, accepted and declined by a session whose address is verified, a second invitation of one
     // address is refused while the first waits, and a workspace has a hundred waiting at most.
+    // Whether a message of an invitation left (FRU-269), so that the list says it after a reload.
+    // `input: false`: no request gives it; the route of the worker writes it after it sent, or not.
+    schema: { invitation: { additionalFields: { mailed: { type: 'boolean', required: false, input: false } } } },
     invitationExpiresIn: INVITATION_SECONDS,
     invitationLimit: 100,
     cancelPendingInvitationsOnReInvite: false,

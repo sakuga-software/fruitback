@@ -82,11 +82,19 @@ INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt
   ('ver_drill1', 'drill-not-a-digest', 'alice@acme.dev', '2026-10-11 10:15:00+00', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00');
 
 INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "expiresAt", "createdAt", "inviterId") VALUES
-  ('inv_drill1', 'ws_drill1', 'carol@acme.dev', 'member', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:00:00+00', 'acc_drill1');
+  ('inv_drill1', 'ws_drill1', 'carol@acme.dev', 'member', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:00:00+00', 'acc_drill1'),
+  ('inv_drill2', 'ws_drill1', 'dana@client.fr', 'guest', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:03:00+00', 'acc_drill1');
+
+-- The guest of one site (FRU-250): the site an invitation of a guest names, and the site shared with
+-- Bob, who is a guest.
+INSERT INTO invitation_sites (invitation_id, site_id) VALUES
+  ('inv_drill2', 'site_drill3');
+INSERT INTO site_shares (workspace_id, account_id, site_id, created_at) VALUES
+  ('ws_drill1', 'acc_drill2', 'site_drill1', 1);
 
 -- The picture of a note (FRU-44): the first bytes of a PNG, enough for a row that the drill compares.
-INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
-  ('shot_drill1', 'ws_drill1', 'acc_drill1', '\x89504e470d0a1a0a0000000d49484452', 120, 60, 1);
+INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, height, created_at) VALUES
+  ('shot_drill1', 'ws_drill1', 'acc_drill1', 'site_drill1', '\x89504e470d0a1a0a0000000d49484452', 120, 60, 1);
 
 -- The notes the worker keeps itself, and the replies to them (FRU-218). An explicit number, as the
 -- copy of a SQLite file writes them, and the sequence moved after it: a restore that left the

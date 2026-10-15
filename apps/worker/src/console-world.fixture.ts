@@ -115,3 +115,19 @@ export async function memberOf(world: World, workspace: string, account: string,
        VALUES ('${newId('mem')}', '${workspace}', '${account}', '${role}', now())`,
   );
 }
+
+/** Shares sites of a workspace with a guest, as the acceptance of their invitation does (FRU-250). */
+export async function shareWith(
+  world: World,
+  workspace: string,
+  account: string,
+  sites: readonly string[],
+): Promise<void> {
+  for (const site of sites) {
+    await rowsOf(
+      world.database,
+      `INSERT INTO site_shares (workspace_id, account_id, site_id, created_at)
+         VALUES ('${workspace}', '${account}', '${site}', ${Date.now()})`,
+    );
+  }
+}

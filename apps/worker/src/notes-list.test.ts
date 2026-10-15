@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { cursorOf, noteIdOf } from './console-notes.ts';
-import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import type { NoteEntry, Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -69,6 +69,13 @@ async function sixtyNotes() {
   const origins = ['https://acme.dev', 'https://quiet.acme.dev', 'https://shop.acme.dev'];
   const sites = [];
   for (const origin of origins) sites.push(await world.accounts.addSite(workspace, { origin, visibility: 'everyone' }));
+  // Gina is a guest of the three sites (FRU-250): `guest-site.test.ts` holds a guest of one.
+  await shareWith(
+    world,
+    workspace,
+    gina.id,
+    sites.map((site) => site.id),
+  );
   const linear = await world.accounts.addConnector(workspace, { kind: 'linear', label: 'Linear ACM', sealed: 'x' });
   const rest = await world.accounts.addConnector(workspace, {
     kind: 'rest',

@@ -236,6 +236,16 @@ write <package> <mutation.json>` prints it from the report of a full run.
   2 minutes 32, then 4 minutes 17 once `main` held the PostgreSQL tests of #138, installs included.
   A pull request that changes every file of the worker scope takes the full run, about 10 minutes.
   That is over the five minutes a required check may cost here. A red job says which file lost what.
+- **The dry run of the worker has 15 minutes, not the 5 of StrykerJS** (`dryRunTimeoutMinutes`).
+  The dry run is the whole suite of the worker, one file at a time, with coverage. Measured in CI:
+  84 files in 3 minutes 51 seconds on 2026-10-14 at 09:56 (run 38545506665); the same day at 21:44
+  and at 22:55 (runs 38642556303 and 38650887857) the suite had grown, and the dry run stopped at 5
+  minutes, « Initial test run timed out! », with no mutant run. 15 leaves room for the suite to grow.
+- **The job has 150 minutes, not 60** (`timeout-minutes`). The full run of the worker, on a pull
+  request that changes how mutation runs, mutated 879 mutants in 8 files on 2026-10-14 (run
+  38653521349): its dry run took 4 minutes 47, and the job was cancelled at 60 minutes, before the
+  report. The weekly full run of both packages took 18 minutes on 2026-10-12. The suite became slower
+  in two days, and why is not measured yet.
 - **The ratchet was planted in CI, twice** (#150). Two tests of `seed.test.ts` deleted, and no source
   file changed: the job mutated `seed.ts` because its test changed, measured 67.27 under its line of
   72.12, and failed. Before that, one test of `identity.test.ts` deleted: the job mutated

@@ -1028,13 +1028,13 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
     });
 
-    it('invites as an admin or a member only, and nobody who is a member already', async () => {
+    it('invites as an admin, a member or a guest only, and nobody who is a member already', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
       const before = worker.mail.sent.length;
 
-      // Not an owner, not a guest yet, and never two roles.
-      for (const role of ['owner', 'guest', 'guest,admin', ['member', 'admin'], 'superuser', '']) {
+      // Not an owner, and never two roles. A guest names its sites: see « the guest of one site ».
+      for (const role of ['owner', 'guest,admin', ['member', 'admin'], 'superuser', '']) {
         const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role });
         assert.deepEqual(
           [answer.status, await answer.json()],
@@ -1167,6 +1167,42 @@ for (const { label, open, skip } of DATABASES) {
       } finally {
         logged.mock.restore();
       }
+    });
+
+    it('says after a reload whether the message of an invitation left, to whoever invites and to nobody else (FRU-269)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      // The window of this address in this workspace is full: the invitation is kept, no message goes.
+      await worker.kv.set(`fruitback:invitation:${acme.workspace}:held@client.dev`, '3', 60_000);
+      const held = await invite(worker, acme.owner, acme.workspace, { email: 'held@client.dev' });
+      assert.equal(((await held.json()) as { mailed: boolean }).mailed, false);
+      const sent = await invite(worker, acme.owner, acme.workspace, { email: 'sent@client.dev' });
+      assert.equal(((await sent.json()) as { mailed: boolean }).mailed, true);
+
+      const listed = async (who: Person) => {
+        const answer = await as(worker, who, `${ORG}/list-invitations?organizationId=${acme.workspace}`);
+
+        return [answer.status, answer.ok ? await answer.json() : undefined] as const;
+      };
+      const mailedOf = (rows: unknown) =>
+        Object.fromEntries((rows as { email: string; mailed?: unknown }[]).map((each) => [each.email, each.mailed]));
+      // Role by role: the list, with `mailed`, is for whoever invites.
+      for (const who of [acme.owner, acme.admin]) {
+        const [status, rows] = await listed(who);
+        assert.equal(status, 200, who.email);
+        assert.deepEqual(mailedOf(rows), { 'held@client.dev': false, 'sent@client.dev': true }, who.email);
+      }
+      for (const who of [acme.member, acme.guest]) assert.equal((await listed(who))[0], 403, who.email);
+
+      // The window opens again: « Resend » sends, and the invitation reads as sent.
+      await worker.kv.set(`fruitback:invitation:${acme.workspace}:held@client.dev`, '0', 60_000);
+      const again = await invite(worker, acme.owner, acme.workspace, { email: 'held@client.dev', resend: true });
+      assert.equal(((await again.json()) as { mailed: boolean }).mailed, true);
+      // A « Resend » that sends nothing does not take back a message that left.
+      await worker.kv.set(`fruitback:invitation:${acme.workspace}:held@client.dev`, '3', 60_000);
+      const late = await invite(worker, acme.owner, acme.workspace, { email: 'held@client.dev', resend: true });
+      assert.equal(((await late.json()) as { mailed: boolean }).mailed, false);
+      assert.deepEqual(mailedOf((await listed(acme.owner))[1]), { 'held@client.dev': true, 'sent@client.dev': true });
     });
 
     it('sends no more messages than one account may in an hour, in every workspace together, and keeps the invitations (FRU-209)', async () => {

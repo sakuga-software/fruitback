@@ -176,6 +176,9 @@ export const invitation = pgTable(
     expiresAt: instant('expiresAt').notNull(),
     createdAt: createdAt(),
     inviterId: text('inviterId').notNull(),
+    // Whether a message of this invitation left (FRU-269): an additional field of `invitation` in
+    // `authOptions`, written by the route that invites. NULL: an invitation made before it was kept.
+    mailed: boolean('mailed'),
   },
   (table) => [
     foreignKey({

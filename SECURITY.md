@@ -714,8 +714,9 @@ whole.
   console's routes (FRU-202).
 - **The extension gets the counts of the sites of its workspace** in `GET /session/sites`, with the
   session of a member, and not what did not arrive.
-- **A guest reads the counts of every site of the workspace**, because a guest reads every site
-  today. The guest of one site (Q3 of FRU-230) narrows the list first, and the counts with it.
+- **A guest reads the counts of the sites shared with them, and of no other** (FRU-250): the list
+  of the sites is narrowed first, in the console and in `GET /session/sites`, and the counts with it.
+  test:`lets the guest read every site in GET /console/workspaces/<id>/sites without its filter`.
 - **An anonymous reader of a public page writes to the index**: a read that asks the store writes
   the stages it got, at most once for each answer of the read cache. It writes only what the store
   answered for the site of that read, and nothing the reader sent.
@@ -735,8 +736,9 @@ only (the excerpt, the page, the origin of the site, the stage, and the referenc
 tell it which note carries which reference (raised by the heavy review of #306; test in
 `gives a guest the notes, and nothing of where they went`).
 
-- **Every member of the workspace reads the list** (`read-feedback`), a guest included, as it reads
-  every site today. **Where a note went is read with `see-tracker` only**: the place and the
+- **Every member of the workspace reads the list** (`read-feedback`), a guest included, **a guest
+  on the sites shared with them only** (FRU-250): the list, its counts and its search are of those
+  sites, whatever `site` the query names. **Where a note went is read with `see-tracker` only**: the place and the
   connector, the reference and its link in the tracker, the delivery that did not arrive, and the
   counts by place. A guest gets none of it, and a `place` filter is `403` to it. A person of another
   workspace gets `404`, a caller with no session `401`, and the token of an extension `401`.
@@ -1371,8 +1373,44 @@ one test for each other route.
 
 `POST /console/workspaces/<id>/connect` mints a pairing code for the person, in that workspace
 (FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
-as it spends a code an operator minted. **A guest's session reaches every site of its workspace
-today**: sharing one site with one guest is FRU-104, and until it lands the console creates no guest.
+as it spends a code an operator minted. **A guest's session reaches the sites shared with them
+only** (FRU-250): its token names the workspace, and every route that answers a thing of one site
+reads the role and the sites of the person at the request (below, « The guest of one site »).
+
+**The guest of one site (FRU-250).** A guest reads and writes on the sites shared with them, and on
+no other site of the workspace; they never read a reference of the tracker.
+
+- **The sites of a guest come from their invitation, and only from it.** `invite-member` with
+  `role: 'guest'` takes `sites`, 1 to `MAX_GUEST_SITES` ids, each a site of the workspace the call
+  names, read in the store before better-auth keeps anything: a guest with no site, a site of
+  another workspace, or `sites` for another role is `400`.
+  test:`refuses a guest with no site, a site of another workspace, a site to another role, and a list that is no list`.
+  A change of role gives no `guest`: test:`makes no guest by a change of role: a guest is made by an invitation, which names the sites`.
+- **The acceptance copies the sites to `site_shares` before better-auth writes the member**, and only
+  for the person the invitation is for, while it waits, and who is not a member yet: no moment has a
+  guest with sites that are not theirs, and the invitation of another person changes nothing of
+  yours. test:`writes no share for somebody who accepts the invitation of another person`. A guest
+  invitation whose sites were all removed is refused at the acceptance.
+- **Every route that answers a thing of one site reads the role and the sites of the person at the
+  request** (`AccountStore.reach`): `GET` and `POST /feedback` (a batch too), `POST /screenshot` and
+  `GET /screenshot/<id>` (a picture keeps the site of its note; one sent before has none, and no
+  guest reads it), `GET /session/sites` for both kinds of session, `GET /console/workspaces/<id>/sites`
+  and `/notes`. **A session of a workspace is asked it too**: its token names the workspace, not the
+  site. On another site the answer is the one a person of another workspace gets. `guest-site.test.ts`
+  asks each route, on the shared site and on another, and plants one violation for each guard:
+  test:`lets the guest read the notes of every site in GET /console/workspaces/<id>/notes without its filter`.
+  The cost is one read of the database for each authenticated read of a page, as a session of an
+  account already paid (FRU-238); it also ends the reads of a member who was removed at once, where
+  a token used to live its ten minutes.
+- **A guest reads no reference of the tracker**, on any route: no place, no reference, no address
+  and no id of an issue. On the routes of the widget the worker gives a guest the id of the note in
+  place of the reference and the id of the issue, after the read cache, whose answer every reader
+  of the page shares. One test for each route a guest reaches, with a tracker that writes `ACM-n`,
+  and its control: test:`gives the same routes a reference for a member: the marks above are what the tracker writes`,
+  test:`fails without the hiding of the references on the routes of the widget (planted violation)`. A visitor of a public
+  site is not changed by this (FRU-84).
+- **A site that goes takes its shares**, and a guest who goes takes theirs: the guest of a removed
+  site stays a member and reads nothing. test:`takes the share away with its site: the guest stays a member and reads nothing`.
 
 **The members of a workspace (FRU-149) and the invitations (FRU-104).** With better-auth on, ten
 routes of its organization plugin are served under `/console/auth/organization/`, with the cookie of
@@ -1381,10 +1419,10 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
 | Route                   | Who                                          | What it does                               |
 | ----------------------- | -------------------------------------------- | ------------------------------------------ |
 | `list-members`          | owner, admin, member                         | names, addresses and roles                 |
-| `update-member-role`    | owner, admin                                 | owner, admin or member, not guest          |
+| `update-member-role`    | owner, admin                                 | owner, admin or member, never guest        |
 | `remove-member`         | owner, admin                                 | the member, and their codes                |
 | `leave`                 | anybody of the workspace, but its last owner | themselves                                 |
-| `invite-member`         | owner, admin                                 | an address, as an admin or a member        |
+| `invite-member`         | owner, admin                                 | an address, as admin, member or guest      |
 | `list-invitations`      | owner, admin                                 | the invitations that wait                  |
 | `cancel-invitation`     | owner, admin                                 | an invitation of that workspace            |
 | `list-user-invitations` | the person of the session                    | the invitations to the address they proved |
@@ -1398,8 +1436,8 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   to read, accept or decline an invitation for any other session, and for an address that is not
   verified (`requireEmailVerificationOnInvitation`, written).
   test:`gives an invitation to the address it names, and to no other session`.
-- **An invitation gives `admin` or `member`, never `owner` and not yet `guest`**: a guest still
-  reaches every site, so the console creates none (above). The role of an accepted invitation is
+- **An invitation gives `admin`, `member`, or `guest` with the sites it names, never `owner`**
+  (FRU-250): « The guest of one site » below. The role of an accepted invitation is
   refused again when its row holds two roles: test:`refuses an invitation whose row holds two roles,
 when it is accepted`. An invitation waits 7 days; one address gets one invitation of a workspace at a
   time, sent again on request; and **3 messages from one workspace to one address in 15 minutes**,
@@ -1489,7 +1527,7 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   test:`does not let a guest read the members or the invitations, on the API`). So `list-members`
   asks `can(role, 'read-members')`, which a guest does not have; `list-invitations` asks
   `manage-members`; `get-full-organization` and `get-invitation` stay closed to every role. A guest
-  reads the invitations sent to their own address, and no other. A guest reads the name of the workspace, their own role, and its sites
+  reads the invitations sent to their own address, and no other. A guest reads the name of the workspace, their own role, and the sites shared with them
   without their destinations, as before.
 - **Every other route of the plugin answers `404`, twice.** The worker answers it for a path that
   has no rule, and better-auth is built with that path closed to a request: the list of the closed
@@ -1557,8 +1595,9 @@ writes the address it gets back in the seed. The setting is off until the review
   picture for the workspace of that site when the token is a session of that workspace and its
   person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
   anybody else with a token, as for a picture that does not exist; `401` with no token. **« A
-  member » is anybody of the workspace, a guest included**: a guest reads the notes, and the
-  address of a picture is in its note. test:`is sent and read by a guest of the workspace, as by a member`. The address
+  member » is anybody of the workspace, a guest included, on the site of the picture**: a guest reads
+  the notes of the sites shared with them, and the address of a picture is in its note. A picture
+  keeps its site (FRU-250); a guest reads none of another site, and none sent before it was kept. test:`is sent and read by a guest of the workspace, as by a member`. The address
   is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
   the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
 - **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,

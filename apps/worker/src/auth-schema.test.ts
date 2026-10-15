@@ -170,7 +170,7 @@ for (const { label, open, skip } of DATABASES) {
       });
 
       it('reports a table that the migration lost', async () => {
-        const lost = plantedAfterTheMigrations('DROP TABLE "invitation"');
+        const lost = plantedAfterTheMigrations('DROP TABLE "invitation" CASCADE');
 
         assert.deepEqual(await plan(await opening(open), lost), { ...NOTHING, create: ['invitation'] });
       });

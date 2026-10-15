@@ -102,8 +102,10 @@ export function signInMessage(to: string, link: string, minutes: number, locale 
 const INVITATION_WORDS = {
   en: {
     subject: 'You are invited to a workspace on Fruitback',
-    lead: (inviter: string, workspace: string, role: string) =>
-      `${inviter} invites you to the workspace « ${workspace} » on Fruitback, as ${role === 'admin' ? 'an admin' : 'a member'}.`,
+    lead: (inviter: string, workspace: string, role: string, sites: string) =>
+      role === 'guest'
+        ? `${inviter} invites you to the workspace « ${workspace} » on Fruitback, as a guest, on ${sites}.`
+        : `${inviter} invites you to the workspace « ${workspace} » on Fruitback, as ${role === 'admin' ? 'an admin' : 'a member'}.`,
     how: (address: string) => `Sign in with ${address}, and you will see the invitation:`,
     button: 'See the invitation',
     lasts: (days: number) => `It waits for ${days} days.`,
@@ -112,8 +114,10 @@ const INVITATION_WORDS = {
   },
   fr: {
     subject: 'Vous êtes invité dans un espace de travail sur Fruitback',
-    lead: (inviter: string, workspace: string, role: string) =>
-      `${inviter} vous invite dans l'espace de travail « ${workspace} » sur Fruitback, comme ${role === 'admin' ? 'administrateur' : 'membre'}.`,
+    lead: (inviter: string, workspace: string, role: string, sites: string) =>
+      role === 'guest'
+        ? `${inviter} vous invite dans l'espace de travail « ${workspace} » sur Fruitback, comme invité, sur ${sites}.`
+        : `${inviter} vous invite dans l'espace de travail « ${workspace} » sur Fruitback, comme ${role === 'admin' ? 'administrateur' : 'membre'}.`,
     how: (address: string) => `Connectez-vous avec ${address}, et vous verrez l'invitation :`,
     button: "Voir l'invitation",
     lasts: (days: number) => `Elle attend ${days} jours.`,
@@ -137,11 +141,21 @@ const INVITATION_WORDS = {
  */
 export function invitationMessage(
   to: string,
-  invitation: { inviter: string; workspace: string; role: string; link: string; days: number },
+  invitation: {
+    inviter: string;
+    workspace: string;
+    role: string;
+    link: string;
+    days: number;
+    /** The sites a guest is invited on (FRU-250), by their address: the message names their hosts. */
+    sites?: readonly string[];
+  },
   locale = 'en',
 ): MailMessage {
   const words = locale.toLowerCase().startsWith('fr') ? INVITATION_WORDS.fr : INVITATION_WORDS.en;
-  const lead = words.lead(unlinked(invitation.inviter), unlinked(invitation.workspace), invitation.role);
+  // A site is an address an admin pasted: its host, written so that no client makes a link of it.
+  const sites = (invitation.sites ?? []).map((origin) => unlinked(hostOf(origin))).join(', ');
+  const lead = words.lead(unlinked(invitation.inviter), unlinked(invitation.workspace), invitation.role, sites);
   const text = [lead, '', words.how(to), '', invitation.link, '', words.lasts(invitation.days), words.ignore].join(
     '\n',
   );
@@ -164,6 +178,14 @@ export function invitationMessage(
  */
 export function unlinked(value: string): string {
   return value.replaceAll(/[.:/@]/g, (mark) => `${mark}\u200B`);
+}
+
+function hostOf(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
 }
 
 function escapeHtml(value: string): string {

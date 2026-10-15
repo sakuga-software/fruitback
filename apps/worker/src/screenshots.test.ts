@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
-import { WORKER, type World, memberOf, signInTo, worlds } from './console-world.fixture.ts';
+import { WORKER, type World, memberOf, shareWith, signInTo, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
@@ -169,6 +169,8 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
       assert.equal((await call(env, store, send, { method: 'POST', token, body: picture })).status, 401, role);
 
       await memberOf(env, acme.id, person.id, role);
+      // A guest of the site of the picture (FRU-250): `guest-site.test.ts` holds the other sites.
+      if (role === 'guest') await shareWith(env, acme.id, person.id, [send.slice(send.indexOf('client=') + 7)]);
       const read = await call(env, store, `/screenshot/${id}`, { token });
       assert.equal(read.status, 200, role);
       assert.deepEqual(new Uint8Array(await read.arrayBuffer()), picture, role);

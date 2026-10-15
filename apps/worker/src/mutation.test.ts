@@ -231,6 +231,14 @@ describe('the configuration of the mutation job', () => {
     }
   });
 
+  // The dry run of the worker is its whole suite, one file at a time: over the 5 minutes of StrykerJS
+  // since 2026-10-14, and the run then stops with no mutant run. See conventions.md.
+  it('gives the dry run of the worker the time its suite takes', () => {
+    const minutes = (WORKER as { dryRunTimeoutMinutes?: number }).dryRunTimeoutMinutes;
+
+    assert.ok(minutes !== undefined && minutes >= 15, `dryRunTimeoutMinutes is ${minutes}`);
+  });
+
   it('runs on every pull request, on a schedule and by hand', () => {
     const on = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS().on as Record<
       string,

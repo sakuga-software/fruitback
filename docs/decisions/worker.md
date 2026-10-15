@@ -1320,7 +1320,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-four columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-five columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1410,7 +1410,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1423,7 +1423,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-four BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty-five BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2084,8 +2084,8 @@ joins. Six routes of the organization plugin more, under the rules of the sectio
   (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
   console shows the link to send by hand. The link is the same `<console>/invitations`, so a link
   sent in a chat is worth exactly the message: nothing without a session of the address.
-- **The roles an invitation gives are `INVITED_ROLES`**: `admin` and `member`. `guest` waits for
-  a site that can be shared with one person; `owner` is given by a change of role, by an owner.
+- **The roles an invitation gives are `INVITED_ROLES`**: `admin`, `member`, and `guest` with the
+  sites it names (FRU-250, the section below); `owner` is given by a change of role, by an owner.
 - **The language of the message** is the one of the account of the address when it has one, else
   the one of the person who invites.
 - **The console** (`invitations.tsx`, `members.tsx`, `home.tsx`): the front door sends somebody who
@@ -2131,11 +2131,68 @@ roles, when it is accepted`.
 - **What the plugin answers on a resend is the invitation as it was**, with the new end.
 - **An invitation past its end** is refused at acceptance (`INVITATION_NOT_FOUND`), and leaves the
   list of the person.
+- **Whether a message of an invitation left is kept on it** (FRU-269): `invitation.mailed`, an
+  additional field of the plugin (`input: false`), written by the route after it sent or held the
+  message (`noteMailed`). `list-invitations` answers it, so « Members » says « Invitation kept »
+  after a reload too, with the link to copy on the row. A message that left stays left: a « Resend »
+  that sends nothing does not write `false` over `true`. NULL: an invitation kept before.
 
-**Not done here**, from the ticket: a guest limited to one site (a table of ours, the next slice),
+**Not done here**, from the ticket: a guest limited to one site (FRU-250, the section below),
 « Last seen » in the table (nothing records an activity), « My account » (sessions, API keys), the
 export of a workspace. The ticket said « the invitation is a pairing code »: with the plugin it is a
 row that a session of the address accepts, and the pairing code stays what connects an extension.
+
+## The guest of one site (FRU-250)
+
+Q3 of FRU-230, decided by Mathieu on 2026-10-13: a guest reads and writes on the sites shared with
+them, and on no other site of the workspace. `SECURITY.md`, « The guest of one site », says what is
+protected; this section says how to change it.
+
+### The rules, in short
+
+- **`AccountStore.reach(workspace, account)` is the one question**: the role and the sites, in one
+  statement. `'every'` for a role other than `guest`; for a guest, the ids of `site_shares`.
+  `readsSite(reach, site)` answers it, and `readableSites` filters a list. A route that answers a
+  thing of one site asks it at the request; a new such route asks it too, and gets its line in
+  `guest-site.test.ts` (`ROUTES`), with a planted violation.
+- **The read path asks it through `ClientPolicy.sessions.reaches`**, built in `routeFor` for the
+  client of the request, and `verifyForClient` asks it of **both** kinds of session: a session of an
+  account names no workspace, and a session of a workspace names the workspace and not the site.
+  `memberOf` asks it with the site of the picture.
+- **The sites of a guest come from their invitation.** `invite-member` reads `sites` (a field the
+  rule keeps, `kept`: better-auth 1.7.7 spreads an unknown field of the body into the row it writes),
+  checks each one in the workspace, and writes `invitation_sites` after better-auth answers the
+  invitation. When that write fails, the invitation is cancelled: a guest who accepted it would read
+  nothing. A « Resend » of a guest names the same sites.
+- **The acceptance copies them to `site_shares` before better-auth writes the member**
+  (`shareBeforeAcceptance`), for the person of the invitation only, while it waits, and when they are
+  no member yet. better-auth writes the member in its own transaction, and runs no hook inside it
+  (read in `routes/crud-invites.mjs` and `adapter.mjs` of 1.7.7): before is the one place that
+  leaves no guest with sites that are not theirs. A share with no member gives nothing, since `reach`
+  reads the member first; an acceptance that better-auth refuses removes the rows it wrote, unless
+  the person is a member by then. **An acceptance runs alone in the workspace of its invitation**
+  (`oneAtATime`): two « Join » of one guest at the same moment wrote and removed the same rows (heavy
+  review of #334). A « Resend » writes the sites when better-auth answers another invitation than
+  the one that waited (one past its end is replaced). A guest who becomes a member loses the rows.
+- **`site_shares` is keyed by the workspace and the account, not by a member id**, because its rows
+  are written before the member exists. They go with the site, the workspace and the account (foreign
+  keys), and with the person who leaves or is removed (`unshare`, beside the end of their sessions).
+- **A guest reads no reference of the tracker.** `hidesTracker` (a session of the workspace whose
+  role has no `see-tracker`) and `withoutTracker` put the id of the note in place of the identifier
+  and the id of the issue, and drop its address, after the read cache. A visitor is not asked: FRU-84.
+- **No change of role makes a guest** (`GIVEN_ROLES`): it would be a guest with no site.
+
+### The reasons, and the measurements
+
+- **One read for each authenticated read of a page.** Before, a session of a workspace read no row
+  on `GET /feedback` (« Not done here » of FRU-149 said why: the cost). A guest's token names the
+  workspace, so the site must be read at the request, or the token of a guest reaches every site for
+  its ten minutes. A session of an account paid it already (FRU-238). It also ends the reads of a
+  member who was removed at once.
+- **The picture keeps its site** (`screenshots.site_id`, no foreign key, as for its account): one
+  sent before FRU-250 has none, and only a role that reads every site reads it.
+- **The model takes several sites** (`MAX_GUEST_SITES`, 10); the console names one. Changing the
+  sites of a guest after the acceptance is not done: invite again.
 
 ## The sign-in of before and the accounts file go (FRU-150)
 
@@ -2721,9 +2778,8 @@ the command`). A read that starts after the deletion does not find the note. A r
   `undelivered`. A guest gets none of them, and a `place` filter is `403` to it. `mine` reads the
   account of the session. The name of an author is the one its account has now, for a member of
   the workspace only; a member who left is `former-member`, with no name.
-- **The guest of one site (Q3 of FRU-230) is not closed out**: `NoteQuery.sites` narrows the list
-  and every count to the sites a caller may read. Nothing sets it today, since a guest reads every
-  site.
+- **The guest of one site** (FRU-250): `NoteQuery.sites` narrows the list and every count to the
+  sites a guest reads (`AccountStore.reach`), whatever `site` the query names.
 - **« Send again »**: `POST …/notes/<note>/retry` (`manage-sites`) finds the delivery of the note
   and asks the route of FRU-122 for a new attempt, which checks the workspace again. A delivery has
   no column for its note: its body, the JSON that was sent, names the site and the reference, and

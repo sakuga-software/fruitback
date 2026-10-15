@@ -1,4 +1,11 @@
-import { SEED_STAGES, type Seed, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
+import {
+  SEED_STAGES,
+  type Seed,
+  type SeedIssue,
+  canonicalizePageUrl,
+  parseSeed,
+  type SeedReporter,
+} from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
@@ -11,7 +18,7 @@ import {
   originsFromClients,
   resolveClient,
 } from './clients.ts';
-import { type AccountStore, type Role, can } from './accounts.ts';
+import { type AccountStore, type Reach, type Role, can, readsSite } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes, renameWorkspaceWithPlugin } from './auth-organization.ts';
@@ -188,6 +195,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
+    reachIn: (workspace, account) => accounts.reach(workspace, account),
     accountExists: async (account) => (await accounts.account(account)) !== undefined,
     seenIn: (workspace, account) => seen(accounts, workspace, account),
   };
@@ -201,6 +209,8 @@ type Served = WorkerConfig & {
   clients?: ClientMap;
   /** Absent on a worker with no accounts: nobody is a member of anything there. */
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
+  /** The role and the sites of a person in a workspace (FRU-250). Absent on a worker with no accounts. */
+  reachIn?: (workspace: string, account: string) => Promise<Reach | undefined>;
   /** Whether an account is still there (FRU-238). Absent on a worker with no accounts. */
   accountExists?: (account: string) => Promise<boolean>;
   /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
@@ -242,6 +252,34 @@ async function seesTracker(request: Request, config: Served, policy: ClientPolic
   const role = await config.roleIn(policy.sessions.workspace, account);
 
   return role !== undefined && can(role, 'see-tracker');
+}
+
+/**
+ * Whether the caller is a person of the workspace of this client who does not see the tracker: a
+ * guest (FRU-250). Such a caller gets no reference of a tracker on any route: `withoutTracker`.
+ *
+ * A visitor and a token of a site are not asked: what a public site shows is FRU-84, and this does
+ * not change it.
+ */
+async function hidesTracker(request: Request, config: Served, policy: ClientPolicy): Promise<boolean> {
+  if (config.roleIn === undefined || policy.sessions === undefined) return false;
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return false;
+  const verified = await verifyForClient(token, policy);
+  if (verified?.ok !== true || verified.session !== true || verified.reporter.id === undefined) return false;
+  const role = await config.roleIn(policy.sessions.workspace, verified.reporter.id);
+
+  return role !== undefined && !can(role, 'see-tracker');
+}
+
+/**
+ * A note as a guest reads it (FRU-250): no reference in the tracker, no address of the issue, and no
+ * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
+ */
+function withoutTracker<T extends { id: string; identifier: string; url?: string }>(issue: T, seed: string): T {
+  const { url: _url, ...rest } = issue;
+
+  return { ...rest, id: seed, identifier: seed } as T;
 }
 
 /**
@@ -883,32 +921,36 @@ export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | unde
 }
 
 /**
- * The account of a session of the extension, when it is a session of `workspace` and that account is
- * still a member of it (FRU-44). `undefined` for anything else: no token, a token of a site, a
- * session of another workspace, a person who left.
+ * The account of a session of the extension, when it is a session of `workspace` and that account
+ * reads `site` there now (FRU-44, FRU-250): a member, and a guest only on a site shared with them.
+ * `site` undefined: a thing of the workspace that names no site, which a guest does not read.
+ * `undefined` for anything else: no token, a token of a site, a session of another workspace, a
+ * person who left, a guest on another site.
  *
  * Verified by `verifyForClient`, the one place that checks the workspace of a token, with a policy
  * that holds the worker key and nothing of a site: no site key may stand for a member.
  */
-async function memberOf(request: Request, config: Served, workspace: string): Promise<string | undefined> {
-  const { roleIn } = config;
-  if (config.identitySecret === undefined || roleIn === undefined) return undefined;
+async function memberOf(
+  request: Request,
+  config: Served,
+  workspace: string,
+  site: string | undefined,
+): Promise<string | undefined> {
+  const { reachIn } = config;
+  if (config.identitySecret === undefined || reachIn === undefined) return undefined;
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return undefined;
+  const reaches = async (account: string) => readsSite(await reachIn(workspace, account), site);
   const verified = await verifyForClient(token, {
     showComments: false,
     identitySecret: undefined,
     read: 'authenticated',
     locale: config.teamLocale,
-    sessions: {
-      secret: config.identitySecret,
-      workspace,
-      member: async (account) => (await roleIn(workspace, account)) !== undefined,
-    },
+    sessions: { secret: config.identitySecret, workspace, reaches },
   });
   if (verified?.ok !== true || verified.session !== true || verified.reporter.id === undefined) return undefined;
 
-  return (await roleIn(workspace, verified.reporter.id)) === undefined ? undefined : verified.reporter.id;
+  return (await reaches(verified.reporter.id)) ? verified.reporter.id : undefined;
 }
 
 /**
@@ -943,8 +985,9 @@ async function writerIn(
   config: Served,
   context: RequestContext,
   workspace: string,
+  site: string | undefined,
 ): Promise<string | undefined> {
-  const account = await memberOf(request, config, workspace);
+  const account = await memberOf(request, config, workspace, site);
   if (account === undefined) return undefined;
   const session = await sessionWrites(request, config, context);
 
@@ -985,8 +1028,10 @@ async function handleScreenshot(
     const route = routeFor(request, config, normalizeClientId(new URL(request.url).searchParams.get('client')));
     if (!route.ok) return routingFailure(route, headers);
     const workspace = route.policy.sessions?.workspace;
+    // The site of the note: a guest sends a picture on a site shared with them only (FRU-250).
+    const site = normalizeClientId(new URL(request.url).searchParams.get('client'));
     // A write: a member of the workspace, with a session read again in the store (FRU-238).
-    const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace);
+    const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace, site);
     if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
 
     const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
@@ -995,7 +1040,15 @@ async function handleScreenshot(
     if (size === undefined) return json(400, { error: 'not-a-png' }, headers);
 
     const id = newScreenshotId();
-    await store.put({ id, workspace, account, png: body, ...size, createdAt: Date.now() });
+    await store.put({
+      id,
+      workspace,
+      account,
+      ...(site === undefined ? {} : { site }),
+      png: body,
+      ...size,
+      createdAt: Date.now(),
+    });
     const base = config.publicUrl ?? new URL(request.url).origin;
 
     // `id` is what a caller builds the address from, at the address it reaches this worker by: `url`
@@ -1010,8 +1063,9 @@ async function handleScreenshot(
   if (readBearerToken(request.headers.get('Authorization')) === undefined)
     return json(401, { error: 'identity-required' }, headers);
   const found = await store.get(id);
-  // A picture of another workspace answers as one that does not exist.
-  if (found === undefined || (await memberOf(request, config, found.workspace)) === undefined)
+  // A picture of another workspace answers as one that does not exist, and so does a picture of a
+  // site that is not shared with a guest (FRU-250).
+  if (found === undefined || (await memberOf(request, config, found.workspace, found.site)) === undefined)
     return json(404, { error: 'not-found' }, headers);
 
   return new Response(found.png, {
@@ -1089,7 +1143,7 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
  * business knowing that a store has any.
  */
 function routeFor(request: Request, config: Served, clientId: string | undefined): ClientResolution {
-  const { roleIn } = config;
+  const { reachIn } = config;
 
   return resolveClient({
     clients: config.clients,
@@ -1103,11 +1157,13 @@ function routeFor(request: Request, config: Served, clientId: string | undefined
       locale: config.teamLocale,
     },
     ...(hasSessions(config) && config.identitySecret !== undefined ? { sessionSecret: config.identitySecret } : {}),
-    // A session of an account reaches a client of a workspace it is a member of now (FRU-238).
-    ...(roleIn === undefined
+    // A session reaches a client of a workspace it is a member of now (FRU-238), and a guest only a
+    // site shared with them (FRU-250).
+    ...(reachIn === undefined
       ? {}
       : {
-          sessionMember: async (workspace: string, account: string) => (await roleIn(workspace, account)) !== undefined,
+          sessionReaches: async (workspace: string, site: string, account: string) =>
+            readsSite(await reachIn(workspace, account), site),
         }),
   });
 }
@@ -1130,21 +1186,27 @@ export async function verifyForClient(token: string, policy: ClientPolicy): Prom
   const asSession = await verifyIdentityToken(token, policy.sessions.secret);
   if (!asSession.ok) return asSite ?? asSession;
 
-  // A session of an account (FRU-238) names no workspace: it reaches this client while the account is
-  // a member of the workspace of the client, read now. A worker that cannot say refuses it.
+  // A session of an account (FRU-238) names no workspace: it reaches this client while the account
+  // reads it, read now. A worker that cannot say refuses it.
+  const { reaches } = policy.sessions;
   if (asSession.account === true) {
     const account = asSession.reporter.id;
-    const member = policy.sessions.member;
-    if (account === undefined || member === undefined || !(await member(account))) {
+    if (account === undefined || reaches === undefined || !(await reaches(account))) {
       return { ok: false, reason: 'invalid-claims' };
     }
 
     return { ...asSession, session: true };
   }
 
-  return asSession.workspace === policy.sessions.workspace
-    ? { ...asSession, session: true }
-    : { ok: false, reason: 'invalid-claims' };
+  if (asSession.workspace !== policy.sessions.workspace) return { ok: false, reason: 'invalid-claims' };
+  // A session of a workspace names the workspace, not the site: a guest of one site holds one that
+  // names the workspace (FRU-250). Where the worker can say, the person must read this client now.
+  if (reaches !== undefined) {
+    const account = asSession.reporter.id;
+    if (account === undefined || !(await reaches(account))) return { ok: false, reason: 'invalid-claims' };
+  }
+
+  return { ...asSession, session: true };
 }
 
 /** A token verified with the key of a site, with nothing of a session of the worker. */
@@ -1314,10 +1376,14 @@ async function getFeedback(
     // that is read in one place gets what its store answers, as it is: nothing there comes back
     // twice, and two notes can hold one seed id.
     const seen = new Set<string>();
-    const issues =
+    const all =
       found.length < 2
         ? found.flat()
         : found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
+    // Asked at each request, after the cache, whose answer every reader of the page shares.
+    const issues: SeedIssue[] = (await hidesTracker(request, config, route.policy))
+      ? all.map((issue) => withoutTracker(issue, issue.seed.id))
+      : all;
 
     // The stages of the trackers that answered, in the order of `SEED_STAGES` (FRU-188). A site read in
     // several places can show a pin of each of them.
@@ -1461,7 +1527,9 @@ async function postFeedback(
       await indexed(noteIndex, (index) => index.record([entry], Date.now()));
     }
 
-    return json(201, { issue }, corsHeaders);
+    const hidden = await hidesTracker(request, config, route.policy);
+
+    return json(201, { issue: hidden ? withoutTracker(issue, attributed.id) : issue }, corsHeaders);
   } catch (error) {
     if (error instanceof StoreError) {
       // Upstream failed, not the caller: 502 tells the widget to keep the note and retry.
@@ -1768,9 +1836,17 @@ async function postBatch(
     attributed.filter((_, index) => 'issue' in (results[index] as object)).map((seed) => seed.page.url),
   );
 
-  if (kept.length === 0) return json(502, { error: 'store-unavailable', results }, corsHeaders);
+  // A guest gets no reference of the tracker (FRU-250).
+  const answered = (await hidesTracker(request, config, route.policy))
+    ? results.map((result) =>
+        'issue' in result && result.issue !== undefined
+          ? { ...result, issue: withoutTracker(result.issue, result.id) }
+          : result,
+      )
+    : results;
+  if (kept.length === 0) return json(502, { error: 'store-unavailable', results: answered }, corsHeaders);
 
-  return json(kept.length === results.length ? 201 : 207, { results }, corsHeaders);
+  return json(kept.length === results.length ? 201 : 207, { results: answered }, corsHeaders);
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {

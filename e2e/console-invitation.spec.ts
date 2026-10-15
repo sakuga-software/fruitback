@@ -229,7 +229,14 @@ test.describe('an invited reviewer (FRU-104)', () => {
 type Stub = {
   as?: 'nobody' | 'somebody';
   invitations?:
-    | { id: string; role: string; organizationId: string; organizationName: string; createdAt: string }[]
+    | {
+        id: string;
+        role: string;
+        organizationId: string;
+        organizationName: string;
+        createdAt: string;
+        sites?: { id: string; origin: string }[];
+      }[]
     | 'failed';
   /** What the worker answers to « Join » and to « Decline ». */
   answer?: { status: number; body: unknown };
@@ -334,8 +341,8 @@ const violations = async (page: Page): Promise<string[]> =>
 
 test.describe('the screen of an invitation, against the mockup (FRU-241)', () => {
   // The boxes of the mockup at 1440 × 900, read in its `measures.json`. Its title has two lines and
-  // its list three rows, for a guest of one site, a role that does not exist yet: here the title has
-  // one line (32.2 px less) and the list two rows (43 px less).
+  // its list three rows, for a guest of one site (the next test): a member's title has one line
+  // (32.2 px less) and the list two rows (43 px less).
   test('the invitation: the boxes of the mockup at 1440 px, less what a guest of one site adds', async ({ page }) => {
     await stubWorker(page);
     await page.goto(`${CONSOLE}/invitations`);
@@ -360,6 +367,46 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await expect(page.getByText(/signed you in/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Decline' })).toBeVisible();
     expect(await violations(page)).toEqual([]);
+  });
+
+  // The state the mockup draws (FRU-250): a guest of one site, the title on two lines, three rows.
+  test('the invitation of a guest of one site: the boxes, the words and the row « Site » of the mockup', async ({
+    page,
+  }) => {
+    await stubWorker(page, {
+      invitations: [{ ...HAVANE, role: 'guest', sites: [{ id: 's1', origin: 'https://staging.acme.dev' }] }],
+    });
+    await page.goto(`${CONSOLE}/invitations`);
+    const join = page.getByRole('button', { name: 'Join Havane' });
+    await expect(join).toBeVisible();
+
+    const title = page.getByRole('heading', { level: 1 });
+    await expect(title).toHaveText('Review staging.acme.dev with Havane');
+    expectNear(await boxOf(title), { x: 500, y: 203, width: 440, height: 64.4 }, 'title');
+    await expect(
+      page.getByText(
+        'You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker.',
+      ),
+    ).toBeVisible();
+    await expect(page.locator('dl > div')).toHaveCount(3);
+    await expect(page.locator('dl')).toHaveText(`Signed in as${INVITED}RoleGuestSitestaging.acme.dev`);
+    expectNear(await boxOf(join), { x: 500, y: 507, width: 440, height: 44 }, '« Join »');
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('a guest who joined is sent to their site: « Open staging.acme.dev »', async ({ page }) => {
+    await stubWorker(page, {
+      invitations: [{ ...HAVANE, role: 'guest', sites: [{ id: 's1', origin: 'https://staging.acme.dev' }] }],
+      // The worker lists to a guest the sites shared with them (FRU-250).
+      sites: ['https://staging.acme.dev'],
+    });
+    await page.goto(`${CONSOLE}/invitations`);
+    await page.getByRole('button', { name: 'Join Havane' }).click();
+    await expect(page.getByRole('heading', { name: 'You are in' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
+      'href',
+      'https://staging.acme.dev',
+    );
   });
 
   test('joined: the boxes of the mockup at 1440 px, and the confirmation is said', async ({ page }) => {
