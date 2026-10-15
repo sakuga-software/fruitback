@@ -280,11 +280,12 @@ export type ClientPolicy = {
     secret: string;
     workspace: string;
     /**
-     * Whether an account is a member of `workspace` now (FRU-238), read at each call. A session of an
-     * account names no workspace, and reaches this client only through this answer. Absent: no such
-     * session reaches it.
+     * Whether an account reads this client now, read at each call: a member of `workspace` (FRU-238),
+     * and for a guest, a site shared with them (FRU-250). A session of an account names no workspace,
+     * and reaches this client only through this answer: absent, no such session reaches it. A session
+     * of a workspace is asked it too when it is there: its `ws` says the workspace, not the site.
      */
-    member?: (account: string) => Promise<boolean>;
+    reaches?: (account: string) => Promise<boolean>;
   };
 };
 
@@ -311,8 +312,11 @@ export type ResolveClientOptions = {
   fallback: ClientPolicy;
   /** The key that signs session tokens, on a worker that opens sessions. */
   sessionSecret?: string;
-  /** Whether an account is a member of a workspace, on a worker that keeps accounts (FRU-238). */
-  sessionMember?: (workspace: string, account: string) => Promise<boolean>;
+  /**
+   * Whether an account reads a site of a workspace, on a worker that keeps accounts: a member of it
+   * (FRU-238), and a guest only on a site shared with them (FRU-250). `site` is the id of the client.
+   */
+  sessionReaches?: (workspace: string, site: string, account: string) => Promise<boolean>;
 };
 
 /**
@@ -337,7 +341,7 @@ export function resolveClient({
   origin,
   fallback,
   sessionSecret,
-  sessionMember,
+  sessionReaches,
 }: ResolveClientOptions): ClientResolution {
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
   // `client: undefined` is what the store reads as "no per-client entry, use your own defaults".
@@ -380,9 +384,9 @@ export function resolveClient({
             sessions: {
               secret: sessionSecret,
               workspace: client.workspace,
-              ...(sessionMember === undefined
+              ...(sessionReaches === undefined
                 ? {}
-                : { member: (account: string) => sessionMember(client.workspace as string, account) }),
+                : { reaches: (account: string) => sessionReaches(client.workspace as string, id, account) }),
             },
           }
         : {}),

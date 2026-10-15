@@ -154,10 +154,16 @@ can read them, with or without the widget.
   to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
 
+- **The sites shared with a guest** (FRU-250): for each invitation of a guest, the ids of the sites
+  it names; for each guest who accepted one, the ids of those sites, with the workspace, the account
+  and the date. Nothing else: the sites themselves are the rows above. A row goes with its site, its
+  invitation, its workspace or its account, and when the guest leaves or is removed.
+
 - **The pictures of the notes, in the PostgreSQL database** (FRU-44), when a reviewer turned on
   « Attach a picture of the element » in a widget that the extension mounts. A PNG of the element,
-  as the screen showed it, of 1 MB at most, with the workspace it belongs to, the account that sent
-  it and its date. Only a member of that workspace reads it. Deleting the workspace deletes its
+  as the screen showed it, of 1 MB at most, with the workspace it belongs to, the site of its note
+  (since FRU-250), the account that sent it and its date. Only a member of that workspace reads it,
+  and a guest only the pictures of the sites shared with them. Deleting the workspace deletes its
   pictures. The seed in the tracker holds the address of the picture, not the picture. **The picture
   is sent when the note is written**, so a note that is kept for later (FRU-124) and never sent
   leaves its picture on the worker, with no note that names it.

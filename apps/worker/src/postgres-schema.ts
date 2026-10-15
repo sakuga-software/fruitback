@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
-import { member, organization, user } from './auth-schema.ts';
+import { invitation, member, organization, user } from './auth-schema.ts';
 
 /**
  * The schema of the whole PostgreSQL database of a worker (FRU-180): one description, in Drizzle.
@@ -197,6 +197,71 @@ export const site_destinations = pgTable(
 );
 
 /**
+ * The sites an invitation of a guest names (FRU-250): the guest of one site reads these and no other.
+ * Written by the route that invites, after better-auth kept the invitation. A site that goes, or an
+ * invitation that goes, takes its rows with it.
+ */
+export const invitation_sites = pgTable(
+  'invitation_sites',
+  {
+    invitation_id: text('invitation_id').notNull(),
+    site_id: text('site_id').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'invitation_sites_pkey', columns: [table.invitation_id, table.site_id] }),
+    foreignKey({
+      name: 'invitation_sites_invitation_id_fkey',
+      columns: [table.invitation_id],
+      foreignColumns: [invitation.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'invitation_sites_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    index('invitation_sites_by_site').on(table.site_id),
+  ],
+);
+
+/**
+ * The sites a guest of a workspace reads (FRU-250), copied from their invitation when they accept it,
+ * before the member exists. A role other than `guest` reads every site and never reads this table.
+ * A site that goes takes its rows: the guest stays a member, and reads nothing of it.
+ *
+ * Its key is the workspace and the account, and not a member id: the rows are written before
+ * better-auth writes the member. A row without a member gives nothing (`reach` reads the member
+ * first), and the next acceptance of the person in the workspace replaces the rows.
+ */
+export const site_shares = pgTable(
+  'site_shares',
+  {
+    workspace_id: text('workspace_id').notNull(),
+    account_id: text('account_id').notNull(),
+    site_id: text('site_id').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'site_shares_pkey', columns: [table.workspace_id, table.account_id, table.site_id] }),
+    foreignKey({
+      name: 'site_shares_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'site_shares_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [user.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'site_shares_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    index('site_shares_by_site').on(table.site_id),
+  ],
+);
+
+/**
  * The pairing codes and the sessions (FRU-142). Every code and every token is a SHA-256 digest: a
  * copy of the database is not a way in.
  */
@@ -321,6 +386,10 @@ export const screenshots = pgTable(
     id: text('id').primaryKey(),
     workspace_id: text('workspace_id').notNull(),
     account_id: text('account_id').notNull(),
+    // The site of the note the picture goes with (FRU-250): a guest reads the pictures of their
+    // sites only. NULL for a picture sent before: no guest reads one. No foreign key, as for the
+    // account: the picture of a site that goes stays with its workspace, as before.
+    site_id: text('site_id'),
     content: bytes('content').notNull(),
     width: integer('width').notNull(),
     height: integer('height').notNull(),

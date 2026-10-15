@@ -347,6 +347,11 @@ describe('the membership that lets a session of an account read a site, taken ou
     {
       clientMap: async () => ({ site_acme: ACME_SITE }),
       role: async (workspace: string, account: string) => roles[`${workspace} ${account}`],
+      reach: async (workspace: string, account: string) => {
+        const role = roles[`${workspace} ${account}`];
+
+        return role === undefined ? undefined : { role, sites: 'every' };
+      },
       account: async (id: string) => PEOPLE[id],
     } as Record<string, unknown>,
     { get: (target, name: string) => target[name] ?? (async () => []) },
@@ -376,7 +381,7 @@ describe('the membership that lets a session of an account read a site, taken ou
     return answer.status;
   }
 
-  const MEMBERSHIP = 'if (account === undefined || member === undefined || !(await member(account))) {';
+  const MEMBERSHIP = 'if (account === undefined || reaches === undefined || !(await reaches(account))) {';
 
   it('reads the site for a member, and refuses an account that is none', async () => {
     const { handleRequest } = await import('./app.ts');
@@ -389,8 +394,8 @@ describe('the membership that lets a session of an account read a site, taken ou
     [
       'with a membership that is always there',
       {
-        from: 'sessionMember: async (workspace: string, account: string) => (await roleIn(workspace, account)) !== undefined',
-        to: 'sessionMember: async () => true',
+        from: 'readsSite(await reachIn(workspace, account), site),\n        }),',
+        to: 'true,\n        }),',
       },
     ],
   ] as const) {

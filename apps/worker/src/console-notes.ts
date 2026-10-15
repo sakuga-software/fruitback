@@ -1,5 +1,5 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
-import type { Action, AccountStore } from './accounts.ts';
+import type { Action, AccountStore, Reach } from './accounts.ts';
 import {
   type ListedNote,
   type NoteCursor,
@@ -28,6 +28,9 @@ import {
  *   and a `place` filter is refused to it, as the list of the sites hides it the destinations;
  * - `manage-sites` sends a note again.
  *
+ * A guest reads the notes of the sites shared with them and no other (FRU-250): the list, its
+ * counts and its search are of those sites, whatever `site` the query names.
+ *
  * The name of an author is the name its account has now, read at each request, for a member of the
  * workspace only. A name a visitor typed is not in the index (FRU-237), so it is nowhere here.
  */
@@ -36,6 +39,8 @@ export type NotesContext = {
   workspace: string;
   account: string;
   allowed: (action: Action) => boolean;
+  /** The role and the sites of the caller, read when a route of the notes is asked (FRU-250). */
+  reach: () => Promise<Reach | undefined>;
   noteIndex: NoteIndex | undefined;
   accounts: Pick<AccountStore, 'retryDelivery'>;
   now: number;
@@ -81,9 +86,15 @@ export async function handleNotes(
   if (!query.ok) return json(400, { error: query.error }, headers);
   if (query.query.place !== undefined && !seesTracker) return forbidden(context);
 
+  // The sites the caller reads: a guest, the ones shared with them (FRU-250).
+  const reach = await context.reach();
+  if (reach === undefined) return json(404, { error: 'not-found' }, headers);
+  const sites = reach.sites === 'every' ? {} : { sites: reach.sites };
   // A guest does not see the references: its search does not read them either, or it would find one
   // by trying words (review of #306).
-  const list = await answered(() => index.list(context.workspace, { ...query.query, searchesReference: seesTracker }));
+  const list = await answered(() =>
+    index.list(context.workspace, { ...query.query, ...sites, searchesReference: seesTracker }),
+  );
   if (list === failed) return json(503, { error: 'index-unavailable' }, headers);
 
   return json(

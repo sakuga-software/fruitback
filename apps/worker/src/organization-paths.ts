@@ -1,4 +1,4 @@
-import { type Action, normalizeEmail } from './accounts.ts';
+import { type Action, MAX_GUEST_SITES, normalizeEmail } from './accounts.ts';
 
 /**
  * The routes of the organization plugin of better-auth that a request reaches (FRU-149), each with
@@ -27,7 +27,7 @@ import { type Action, normalizeEmail } from './accounts.ts';
  */
 
 /** A value of a request, read: the value to hand over, or `undefined` for one that is refused. */
-type Reader = (value: unknown) => string | number | boolean | undefined;
+type Reader = (value: unknown) => string | number | boolean | readonly string[] | undefined;
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const id: Reader = (value) => (typeof value === 'string' && ID.test(value) ? value : undefined);
@@ -43,16 +43,30 @@ const count =
 
 /**
  * The roles somebody can be invited with (FRU-104). Not `owner`: a workspace gets a second owner by a
- * change of role, from its owner. Not `guest` yet: a guest reads every site of the workspace until a
- * site can be shared with one person, and `SECURITY.md` says that the console creates none before.
+ * change of role, from its owner. `guest` since FRU-250, with the sites the invitation shares
+ * (`sites`): a guest reads those and no other.
  */
-export const INVITED_ROLES = ['admin', 'member'] as const;
+export const INVITED_ROLES = ['admin', 'member', 'guest'] as const;
 
 /**
- * The roles a change of role gives (FRU-209): the ones of an invitation, and `owner`. Not `guest`,
- * for the reason an invitation gives none: the route made the guest that the console does not.
+ * The roles a change of role gives (FRU-209): `owner`, `admin` and `member`. Not `guest`: a guest
+ * reads the sites of their invitation, and a change of role names none, so it would make a guest
+ * who reads nothing. A guest is made by an invitation only.
  */
-export const GIVEN_ROLES = ['owner', ...INVITED_ROLES] as const;
+export const GIVEN_ROLES = ['owner', 'admin', 'member'] as const;
+
+/**
+ * The sites of an invitation of a guest (FRU-250): 1 to `MAX_GUEST_SITES` ids, each once. That each
+ * is a site of the workspace is read by the route, in the store.
+ */
+const siteIds: Reader = (value) =>
+  Array.isArray(value) &&
+  value.length >= 1 &&
+  value.length <= MAX_GUEST_SITES &&
+  value.every((each) => id(each) !== undefined) &&
+  new Set(value).size === value.length
+    ? (value as string[])
+    : undefined;
 
 export type OrganizationRule = {
   method: 'GET' | 'POST';
@@ -82,6 +96,11 @@ export type OrganizationRule = {
   fields: Readonly<Record<string, Reader>>;
   /** The fields a call must have. `organizationId` is one of them on every route of a workspace. */
   required: readonly string[];
+  /**
+   * The fields the worker reads and keeps, and does not hand to better-auth: the plugin would write a
+   * field it does not know on its row (1.7.7 spreads the rest of the body in the invitation).
+   */
+  kept?: readonly string[];
   why: string;
 };
 
@@ -105,7 +124,7 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
       role: (value) => ((GIVEN_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
     },
     required: ['organizationId', 'memberId', 'role'],
-    why: 'an owner or an admin changes the role of a member: one role, owner, admin or member. Not guest, as for an invitation',
+    why: 'an owner or an admin changes the role of a member: one role, owner, admin or member. Not guest: a guest is made by an invitation, which names their sites',
   },
   '/organization/remove-member': {
     method: 'POST',
@@ -132,9 +151,12 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
       role: (value) => ((INVITED_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
       // Only `true`: an invitation that exists is sent again, and lasts from now.
       resend: (value) => (value === true ? true : undefined),
+      // The sites of a guest (FRU-250), and only of a guest: the route reads them in the store.
+      sites: siteIds,
     },
     required: ['organizationId', 'email', 'role'],
-    why: 'an owner or an admin invites an address as an admin or a member. The worker sends a message when it has a mailer; the console also gives a link to send by hand, and neither link opens anything',
+    kept: ['sites'],
+    why: 'an owner or an admin invites an address as an admin, a member, or a guest of the sites it names. The worker sends a message when it has a mailer; the console also gives a link to send by hand, and neither link opens anything',
   },
   '/organization/list-invitations': {
     method: 'GET',
@@ -174,6 +196,9 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
   },
 };
 
+/** A value of a call, as a reader of its rule read it. */
+export type OrganizationValue = string | number | boolean | readonly string[];
+
 /**
  * What better-auth is handed for a call, read from what the caller sent: the fields of the rule and
  * no other. `undefined` names nothing: the call is refused, with the field that refused it.
@@ -181,8 +206,8 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
 export function readOrganizationInput(
   rule: OrganizationRule,
   sent: Readonly<Record<string, unknown>>,
-): { ok: true; input: Record<string, string | number | boolean> } | { ok: false; field: string } {
-  const input: Record<string, string | number | boolean> = {};
+): { ok: true; input: Record<string, OrganizationValue> } | { ok: false; field: string } {
+  const input: Record<string, OrganizationValue> = {};
 
   for (const [name, value] of Object.entries(sent)) {
     const reader = Object.hasOwn(rule.fields, name) ? rule.fields[name] : undefined;

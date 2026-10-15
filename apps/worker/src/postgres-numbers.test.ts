@@ -92,6 +92,11 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'a reply', 1)`);
   await rowsOf(database, 'ALTER TABLE seed_comments DROP CONSTRAINT seed_comments_seed_id_fkey');
   await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
+  // A site shared with a guest (FRU-250).
+  await rowsOf(
+    database,
+    `INSERT INTO site_shares (workspace_id, account_id, site_id, created_at) VALUES ('ws_acme', 'acc_alice', 'site_acme', 1)`,
+  );
   // A request of the extension, answered and claimed (FRU-238).
   await rowsOf(
     database,
@@ -113,7 +118,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-four BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-five BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'connect_requests.answered_at',
     'connect_requests.claimed_at',
@@ -148,6 +153,7 @@ it('knows the thirty-four BIGINT columns of the worker, and that better-auth has
     'sessions.expires_at',
     'sessions.revoked_at',
     'sessions.rotated_at',
+    'site_shares.created_at',
     'sites.created_at',
   ]);
   // better-auth reads its tables on the same pool, with no parser of ours: it has no BIGINT to read.

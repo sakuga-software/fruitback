@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
+import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { EXCERPT_LENGTH, type NoteIndex, excerptOf } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -261,6 +261,8 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
       guest: await signInTo(world, 'guest@client.fr'),
     };
     for (const [role, person] of Object.entries(people)) await memberOf(world, workspace, person.id, role);
+    // The guest of the site (FRU-250).
+    await shareWith(world, workspace, people.guest.id, [acme]);
     const outsider = await signInTo(world, 'mallory@other.dev');
     await workspaceIn(world, outsider.token, 'Other');
 

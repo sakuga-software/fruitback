@@ -61,8 +61,8 @@ export type Workspace = { id: string; name: string };
  * - `owner`: everything, and the only one who can delete the workspace.
  * - `admin`: sites, sources and members.
  * - `member`: every site of the workspace, and the links to the tracker.
- * - `guest`: leaves and reads notes, never sees the tracker, and does not read who the members are
- *   (FRU-149). Sharing a site with one guest is FRU-104.
+ * - `guest`: leaves and reads notes on the sites shared with them and no other (FRU-250), never sees
+ *   the tracker, and does not read who the members are (FRU-149).
  */
 export const ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 export type Role = (typeof ROLES)[number];
@@ -90,6 +90,37 @@ const RIGHTS: Record<Role, readonly Action[]> = {
 export function can(role: Role, action: Action): boolean {
   return RIGHTS[role].includes(action);
 }
+
+/**
+ * The sites of a workspace a person reads (FRU-250): every one for a role other than `guest`, and for
+ * a guest the ones shared with them, by id. A guest with none is a member who reads no site.
+ */
+export type Reach = { role: Role; sites: 'every' | readonly string[] };
+
+/**
+ * How many sites one invitation of a guest names. The console names one; the model takes a few,
+ * and the bound is what one request may write.
+ */
+export const MAX_GUEST_SITES = 10;
+
+/**
+ * Whether this reach reads this site. `undefined` reach: not a member, nothing. `undefined` site: a
+ * thing of the workspace that names no site (a picture sent before FRU-250), which a guest does not read.
+ */
+export function readsSite(reach: Reach | undefined, site: string | undefined): boolean {
+  if (reach === undefined) return false;
+  if (reach.sites === 'every') return true;
+
+  return site !== undefined && reach.sites.includes(site);
+}
+
+/** The ones of `sites` this reach reads, in their order. */
+export function readableSites<T extends { id: string }>(sites: readonly T[], reach: Reach): T[] {
+  return sites.filter((site) => readsSite(reach, site.id));
+}
+
+/** A site as the invitations and the members name it (FRU-250): its id and its address. */
+export type SharedSite = { id: string; origin: string };
 
 /**
  * Who reads the notes of a site: the two words of the design (P2) in place of the three modes.
@@ -292,6 +323,29 @@ export type AccountStore = {
   /** Every workspace this account belongs to, with its role there, oldest first. */
   memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;
   role(workspace: string, account: string): Promise<Role | undefined>;
+  /**
+   * The role of `account` in `workspace` and the sites it reads there (FRU-250), in one read, or
+   * `undefined` for somebody who is not a member. Every route that answers a thing of one site asks
+   * this, and `readsSite` reads it.
+   */
+  reach(workspace: string, account: string): Promise<Reach | undefined>;
+  /**
+   * The sites an invitation of `workspace` names (FRU-250). `false` when one of them is not a site of
+   * this workspace, and then nothing is written.
+   */
+  shareByInvitation(workspace: string, invitation: string, sites: readonly string[]): Promise<boolean>;
+  /** The sites each of these invitations names, by invitation id. An invitation that names none is absent. */
+  sitesOfInvitations(invitations: readonly string[]): Promise<Map<string, SharedSite[]>>;
+  /**
+   * What `account` reads in the workspace of `invitation` once it accepts it (FRU-250), written before
+   * the acceptance: the sites of the invitation, in place of any share the person had there. An
+   * invitation that names none leaves none. Nothing for an invitation that does not exist.
+   */
+  shareOnAcceptance(account: string, invitation: string): Promise<void>;
+  /** The sites shared with each guest of a workspace, by account id. */
+  sharedIn(workspace: string): Promise<Map<string, SharedSite[]>>;
+  /** Removes what was shared with `account` in `workspace`: they left, or were removed. */
+  unshare(workspace: string, account: string): Promise<void>;
   /**
    * The address of every person who owns a workspace, each once (FRU-221). Empty: the instance has
    * no owner yet. A role that is not one of the four is no role, as for `role`.

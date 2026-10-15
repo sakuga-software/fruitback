@@ -63,7 +63,9 @@ A worker with a database (`FRUITBACK_DATABASE_URL`) reads its sites from the con
 - **`everyone`** is `read: 'public'`. A visitor needs no account, no extension and no token to
   leave a note and to see the pins: this is the public mode, and the reporter is self-declared.
 - **`members`** is `read: 'authenticated'`. A read needs the session of a member of the workspace,
-  which the extension gets by pairing: this is the team mode.
+  which the extension gets by pairing: this is the team mode. **A guest is a member of the sites
+  shared with them only** (FRU-250): on another site of the workspace, their session reads and
+  writes nothing, as the session of a person of another workspace.
 
 **The token that the host's own backend mints does not exist there.** A site of the console has no
 secret of its own, so `init({ identityToken })` has nothing to sign with: the second line of « So »
