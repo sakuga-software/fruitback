@@ -97,8 +97,11 @@ export function defineStore<TOptions>(spec: {
   };
 }
 
-/** What `FRUITBACK_STORE` selects when it is not set: what every deployment ran before FRU-33. */
-export const DEFAULT_STORE_PROVIDER = 'linear';
+/**
+ * What `FRUITBACK_STORE` selects when it is not set: the database every worker has since FRU-225.
+ * It was `linear` before, what every deployment ran before FRU-33.
+ */
+export const DEFAULT_STORE_PROVIDER = 'postgres';
 
 /**
  * Read `FRUITBACK_STORE`, including the compatibility shim for the flag it replaces.

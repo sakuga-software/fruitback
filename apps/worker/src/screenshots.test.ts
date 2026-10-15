@@ -16,6 +16,7 @@ import {
   screenshotIdOf,
 } from './screenshots.ts';
 import type { Database } from './postgres.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * The pictures of the notes (FRU-44): `POST /screenshot` and `GET /screenshot/<id>`, which answer a
@@ -274,7 +275,11 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
         headers: { Origin: EXTENSION, Authorization: `Bearer ${token}` },
         body: png(4, 4),
       }),
-      { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test', FRUITBACK_IDENTITY_SECRET: secret },
+      beforePostgres({
+        FRUITBACK_STORE: 'memory',
+        ALLOWED_ORIGINS: 'https://app.fruitback.test',
+        FRUITBACK_IDENTITY_SECRET: secret,
+      }),
       { clientIp: '198.18.2.1', kv: createMemoryKv() },
     );
 

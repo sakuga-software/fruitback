@@ -211,19 +211,27 @@ immutable.
   `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
   `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
   interpolates. A new variable in the worker fails the suite until both files carry it.
-- **CI's `image` job plants a pin through the compose file from an empty directory**, with the fresh
-  build tagged under the name the file pulls. A variable exported in the shell wins over `.env`, so
+- **CI's `image` job goes from an empty directory to a pin a visitor planted** (FRU-48, FRU-225),
+  with the fresh builds tagged under the names the file pulls. It fills the five lines `.env.example`
+  asks for, with the commands it gives, then `docker compose up --wait`, the sign-in link of the first
+  administrator from the log, a workspace and a site through the API of the console, and a note of a
+  visitor with no account (`plant-a-pin.ts`). A variable exported in the shell wins over `.env`, so
   run the same check locally under `env -i`.
-- **The `postgres` service starts only with its profile** (FRU-143): `docker compose --profile
-postgres up`. A worker with no accounts needs no database, and the default path stays one
-  container and one volume (measured). `compose.test.ts` holds five things, each seen failing on a
-  planted change: the profile, no published port, no password in the file, a volume of its own, and
-  the image that CI and `restore-drill.sh` run, by its digest.
+- **The three services start together** (FRU-225): every worker needs its database, and the console
+  is how an administrator makes a site. No profile is left. `FRUITBACK_POSTGRES_PASSWORD` is required
+  by the file (`:?`), and the address the worker gets is made from it, unless `.env` names another
+  database. `compose.test.ts` holds, each seen failing on a planted change: no profile, the wait of
+  the worker, no published port, no password in the file, a volume of its own, and the image that CI
+  and `restore-drill.sh` run, by its digest.
 - **`worker` stays the first service of the file.** `compose.test.ts` reads the first `environment:`
   block as the worker's. The variables of another service are not the worker's:
   `FRUITBACK_POSTGRES_PASSWORD` is in `.env.example` and in the guide, and the worker does not read it.
-- **The worker waits for no service** (`depends_on`). It opens the database at the first request
-  that needs it, and a failure is not kept: the next request tries again.
+- **The worker waits for its database to be healthy** (`depends_on`, FRU-225), and for nothing else.
+  It still opens the database at the first request that needs it, and a failure is not kept: the next
+  request tries again. Before FRU-225 it waited for nothing, because the database was optional.
+- **The image with no database refuses to serve** (FRU-225): `/health` answers `503` and names the
+  variable and the page, every other route `500`, and Docker marks the container unhealthy. The CI job
+  measures it, and each variable of a worker of before, one at a time, refused by its sentence.
 - **A backup of PostgreSQL is checked by reading it to its end, never with `pg_restore --list`.**
   Measured on a dump of 806,907 bytes: `--list` accepts it cut to 90 %, to 50 % and to 10 %, because
   it reads the table of contents at the start of the file. `pg_restore -f /dev/null` refuses each
@@ -255,7 +263,8 @@ postgres up`. A worker with no accounts needs no database, and the default path 
 - **The store is a variable, not a compose profile.** The ticket asked for one profile per connector.
   Profiles need one service per connector, and four documented commands say
   `docker compose exec worker`: the SQLite backup in `.env.example` and `self-hosting.md`, and the
-  pairing command in `.env.example` and `reviewing.md`. SQLite is the default. Linear is
+  pairing command in `.env.example` and `reviewing.md`. SQLite was the default until FRU-225, and
+  `postgres` is since. Linear is
   `FRUITBACK_STORE=linear` and two keys. GitHub is `FRUITBACK_STORE=github` and three variables
   (FRU-32).
 - **`TRUSTED_PROXY_HOPS` is 0 in this file and 1 in the code.** The file publishes the port with
@@ -264,8 +273,9 @@ postgres up`. A worker with no accounts needs no database, and the default path 
   limit with 1, and answered `429` with 0.
 - **CI plants a pin through the file.** The `image` job copies only the compose file and
   `.env.example` into an empty directory, and tags the image it built under the name the file pulls.
-  Then `plant-a-pin.ts` plants and reads back, the container is recreated, and the pin is read again.
-  The recreate proves that the seeds are on the volume.
+  Then `plant-a-pin.ts` plants and reads back, the containers are recreated, and the pin is read
+  again. The recreate proves that the notes are in the database, and not in a container. Since
+  FRU-225 the pin is planted on a site the first administrator made, as a visitor with no account.
 - **The volume is scoped to the Compose project, and that was decided twice.** A review asked for
   `name: fruitback-data`, so that the compose file and the `docker run` example open the same volume.
   The next review showed the cost: a global name shares the data of every stack on the host, and

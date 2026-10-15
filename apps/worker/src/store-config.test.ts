@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { readConfig, type WorkerEnv } from './env.ts';
+import { envWith } from './auth-worker.fixture.ts';
+import { REFUSED_SINCE_POSTGRES, readConfig, type WorkerEnv } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason, storeProviderFor } from './store-config.ts';
 
 /**
@@ -13,11 +14,10 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason, storeProviderFor 
  * `storeProviderFor` killed only when it ran out of time.
  */
 
-const linearEnv: WorkerEnv = {
-  ALLOWED_ORIGINS: 'https://acme.test',
-  LINEAR_API_KEY: 'lin_api_key',
-  LINEAR_TEAM_ID: 'team_1',
-};
+/** A worker with its database and its console (FRU-225), and nothing said of its store. */
+const deployed: WorkerEnv = { ...envWith(), FRUITBACK_STORE: undefined, ALLOWED_ORIGINS: 'https://acme.test' };
+
+const linearEnv: WorkerEnv = { ...deployed, LINEAR_API_KEY: 'lin_api_key', LINEAR_TEAM_ID: 'team_1' };
 
 /** The flag of before, alone. */
 const sugar: WorkerEnv = { ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_FAKE_LINEAR: '1' };
@@ -33,16 +33,20 @@ describe('FRUITBACK_STORE, as an operator writes it', () => {
   it('names the store without the spaces around it', () => {
     assert.equal(storeProviderFor({ FRUITBACK_STORE: ' memory ' }), 'memory');
     assert.equal(storeProviderFor({ FRUITBACK_STORE: '\tsqlite\n' }), 'sqlite');
-    assert.equal(providerOf({ ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_STORE: ' memory ' }), 'memory');
+    assert.equal(providerOf({ ...deployed, FRUITBACK_STORE: ' memory ' }), 'memory');
   });
 
   it('is not set when it holds only spaces', () => {
-    assert.equal(storeProviderFor({ FRUITBACK_STORE: '   ' }), 'linear');
-    assert.equal(storeProviderFor({ FRUITBACK_STORE: '' }), 'linear');
-    assert.equal(storeProviderFor({}), 'linear');
+    // The default, `postgres` since FRU-225.
+    assert.equal(storeProviderFor({ FRUITBACK_STORE: '   ' }), 'postgres');
+    assert.equal(storeProviderFor({ FRUITBACK_STORE: '' }), 'postgres');
+    assert.equal(storeProviderFor({}), 'postgres');
     // The flag of before still decides then, as with no variable at all.
     assert.equal(storeProviderFor({ FRUITBACK_STORE: '   ', FRUITBACK_FAKE_LINEAR: '1' }), 'memory');
-    assert.equal(providerOf({ ...linearEnv, FRUITBACK_STORE: '   ' }), 'linear');
+    // A blank store beside the key of Linear is refused, and not moved to the default (FRU-225).
+    assert.equal(providerOf({ ...deployed, FRUITBACK_STORE: '   ' }), 'postgres');
+    const blank = readConfig({ ...linearEnv, FRUITBACK_STORE: '   ' });
+    assert.deepEqual(blank.ok ? [] : blank.missing, [REFUSED_SINCE_POSTGRES.unnamedStore]);
   });
 
   it('is named without its spaces in what the boot says about the flag of before', () => {

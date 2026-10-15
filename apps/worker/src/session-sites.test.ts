@@ -12,6 +12,7 @@ import { createMemoryKv } from './kv.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const directories: string[] = [];
@@ -27,12 +28,12 @@ function envWithoutAccounts(): WorkerEnv {
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-session-sites-'));
   directories.push(directory);
 
-  return {
+  return beforePostgres({
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: 'https://app.fruitback.test',
     FRUITBACK_IDENTITY_SECRET: 'a-worker-secret-of-exactly-enough',
     FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-  };
+  });
 }
 
 function ask(env: World, token?: string, method = 'GET'): Promise<Response> {

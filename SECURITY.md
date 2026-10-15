@@ -4,7 +4,8 @@ Fruitback puts a widget inside somebody else's page and a worker in front of som
 tracker. Both of those are trust boundaries, and this file says where they are.
 
 **Writing the known limits down is the policy.** A file that only says "email us" leaves a
-self-hoster to discover on their own that their read path is open to anyone who can build a URL.
+self-hoster to discover on their own that the pins of a site everyone reads are open to anyone who can
+build a URL.
 
 ## Reporting a vulnerability
 
@@ -37,33 +38,43 @@ republishes it under a new digest. See
 Everything below is a property of the code as it stands, not an aspiration. Each one is somewhere a
 self-hoster could otherwise be surprised.
 
-### The read path is public by default
+### Who reads the pins: the visibility of each site
 
-`GET /feedback` answers **anyone who can build the URL** unless you say otherwise. Every note, the
-name and address its reporter typed, and the team's replies are readable by any visitor of the
-client's site — and by `curl`. Hiding pins in a browser was never the fix.
+Every worker has a database since FRU-225, and its sites are the ones its console made. **Each site
+has a visibility, chosen when it is added**:
+
+- `members`: `GET /feedback` answers a session of the workspace of the site, and nobody else. A site
+  added through the API with no visibility is `members`.
+- `everyone`: `GET /feedback` answers **anyone who can build the URL**. Every note, the name and
+  address its reporter typed, and the team's replies are readable by any visitor of the site — and by
+  `curl`. Hiding pins in a browser was never the fix.
+
+The boot log says that the visibility is chosen site by site. `FRUITBACK_READ` does not apply to a
+site: it was the setting of a worker with no database, and that worker no longer starts. **A site
+that only members read still takes a note from anybody** (measured in FRU-224): only the read asks
+for a session.
 
 A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
 cannot already read that page: the widget opens the note among those `GET /feedback` answered to
 this reader, and a refused read opens nothing. The id in the address is not a secret and gives no
 access.
 
-`FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on a client, requires a signed identity
-token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
-boot log names every client whose pins anyone can read, and `/health` counts them.
+A worker with no database, until FRU-225, read `FRUITBACK_READ`: `public` by default, so that an
+upgrade never closed a read for its operator, or `authenticated`, which asked for a signed identity
+token.
 
-The widget sends that token in an `Authorization` header, which makes the request preflighted, so the
-worker has to advertise the header in `Access-Control-Allow-Headers`. **It did not until this file
-was written**, and the setting therefore answered nobody from a browser at all — the request was
-refused by the browser before the worker saw it. Writing the mitigation down is what found that.
+A token travels in an `Authorization` header, which makes the request preflighted, so the worker has
+to advertise the header in `Access-Control-Allow-Headers`. **It did not until this file was
+written**, and `FRUITBACK_READ=authenticated` therefore answered nobody from a browser at all — the
+request was refused by the browser before the worker saw it. Writing the mitigation down is what
+found that.
 
 `FRUITBACK_HIDE_COMMENTS=1` keeps the team's replies out of the answer. Under `read: 'public'` that
 is the only thing between an issue thread and the internet.
 
-**It is the worker-wide fallback, not an override.** A client declared in `FRUITBACK_CLIENTS` with
-its own `showComments` wins over it, so setting the flag on a multi-client worker does not close
-every client — check each entry, or an operator who believes replies are hidden is wrong for the
-ones that say otherwise.
+**It was the worker-wide fallback, not an override**, on a worker of before FRU-225: a client declared
+in `FRUITBACK_CLIENTS` with its own `showComments` won over it. A site of the console has no such
+setting of its own: the switch of its connector, below, is the one that can take replies away.
 
 **A connector of a workspace can only take the replies away** (FRU-102). Its switch « Show Linear
 comments as replies » is off or on, and on keeps what the worker decides: a worker with
@@ -81,8 +92,8 @@ describing it as such in your own deployment notes would be a mistake.
 A request with no `Origin` at all is served — `curl`, a health check, anything server-to-server. That
 is about **cross-site forgery** and nothing else: there is no cookie or ambient session, so a page
 cannot make a visitor's browser do something privileged. It is emphatically **not** a claim that a
-direct caller reads nothing. Under the public default, `curl` reads every note on a page, and closing
-that is `FRUITBACK_READ=authenticated`, not CORS.
+direct caller reads nothing. On a site that everyone reads, `curl` reads every note on a page, and
+closing that is the visibility `members`, not CORS.
 
 **The extension's site rules are the same claim, made by the reviewer's browser** (FRU-43). A rule
 maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a mode, and it can
@@ -120,13 +131,14 @@ stored as it arrived, and **where** depends on the connector:
 | Store      | Where a seed lands                                                                              | Who can read it                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `linear`   | verbatim in an issue description                                                                | anyone with access to that workspace                                                                                 |
-| `sqlite`   | `JSON.stringify(seed)` in a column of your database file                                        | anyone who can read the file, or a backup of it                                                                      |
 | `postgres` | `JSON.stringify(seed)` in the `seed` column of the table `seeds`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
 | `github`   | verbatim in an issue body                                                                       | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
-`Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
-and they deserve the care a database of personal data deserves.
+`Authorization` header and never in the seed. On PostgreSQL the database and its dumps are the
+boundary, and they deserve the care a database of personal data deserves. (A SQLite file kept the
+seeds of a worker of before FRU-225: `migrate-to-postgres` copies it, and the file and its backups
+stay personal data until they are deleted.)
 
 **On PostgreSQL one database holds the notes of every workspace** (FRU-218), in the clear, beside
 the accounts. Nothing is sealed: `FRUITBACK_SECRETS_KEY` covers the keys of the trackers, not the
@@ -152,13 +164,13 @@ token to one repository and one hour, but the key itself does not expire. So:
 - If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
   the App, and restart the worker with the new key.
 
-### The rate limit is per process, unless the worker has a database
+### The rate limit is counted in the database
 
-`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container, on a worker with no
-`FRUITBACK_DATABASE_URL`. **Run N replicas of such a worker and the effective ceiling is N times what
-you configured**, with nothing to see anywhere.
+`RATE_LIMIT_PER_MINUTE` (20 by default) was held in memory, per container, on a worker with no
+`FRUITBACK_DATABASE_URL`: N replicas of such a worker had N times the ceiling. Every worker has a
+database since FRU-225.
 
-**A worker with a database counts there** (FRU-67), in the table `kv`: its replicas share one limit,
+**A worker counts in its database** (FRU-67), in the table `kv`: its replicas share one limit,
 one count of the sign-in links and of the invitations of an address, and one read cache. No variable
 turns it on. What follows from it:
 
@@ -620,7 +632,8 @@ were all purged after their 30 days is a worker with no session again, so empty 
 paired. The worker refuses the variable with accounts or with a client that declares a workspace: a
 session there names a workspace, and the variable names none. The browser never names the person.
 
-**`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
+**`FRUITBACK_SESSION_PATH` was a credentials file**, until FRU-225 refused it. A file of before
+holds what follows, until it is deleted. Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log. With
 `FRUITBACK_DATABASE_URL` there is no such file: the sessions are two tables of that database

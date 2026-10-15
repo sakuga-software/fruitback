@@ -8,6 +8,7 @@ import { type WorkerEnv, readConfig } from './env.ts';
 import { firstReviewerLines, readFirstReviewer } from './first-reviewer.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { PAIRING_TTL_SECONDS, createPairing, redeemPairing } from './session.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /** The pairing code of the first reviewer, in the log of a worker that starts (FRU-108). */
 
@@ -28,14 +29,14 @@ function sessionsPath(): string {
 }
 
 function envWith(extra: Partial<WorkerEnv> = {}): WorkerEnv {
-  return {
+  return beforePostgres({
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: 'https://staging.acme.test',
     FRUITBACK_IDENTITY_SECRET: SECRET,
     FRUITBACK_SESSION_PATH: sessionsPath(),
     FRUITBACK_FIRST_REVIEWER: 'Alice Martin',
     ...extra,
-  } as WorkerEnv;
+  });
 }
 
 /** The code or the link of the second line, as a person copies it from the log. */

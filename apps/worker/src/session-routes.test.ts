@@ -11,6 +11,7 @@ import { verifyIdentityToken } from './identity.ts';
 import { LOOPBACK, runPair } from './cli.ts';
 import { readFileSync } from 'node:fs';
 import { sessionConnectionsOpened } from './session-sqlite.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
 const SECRET = 'a-worker-secret-of-exactly-enough';
@@ -26,13 +27,13 @@ function sessionPath(): string {
 }
 
 function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  return {
+  return beforePostgres({
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: '*',
     FRUITBACK_IDENTITY_SECRET: SECRET,
     FRUITBACK_SESSION_PATH: sessionPath(),
     ...overrides,
-  };
+  });
 }
 
 async function call(
@@ -237,7 +238,7 @@ describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
   });
 
   it('does not exist on a worker that keeps no sessions', async () => {
-    const response = await page({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+    const response = await page(beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }));
 
     assert.equal(response.status, 404);
   });
@@ -271,14 +272,14 @@ describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
 
 describe('a worker with no session store', () => {
   it('does not advertise that these routes exist', async () => {
-    const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' } satisfies WorkerEnv;
+    const env = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
 
     assert.equal((await call(env, '/session/pair', { code: 'ZZZZ-ZZZZ-ZZZZ' })).status, 404);
     assert.equal((await call(env, '/session/refresh', { refreshToken: 'x' })).status, 404);
   });
 
   it('leaves /health exactly as it was', async () => {
-    const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' } satisfies WorkerEnv;
+    const env = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
     const response = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: '203.0.113.7' });
 
     assert.deepEqual(await response.json(), { ok: true, store: 'memory', openRead: 1 });
@@ -399,18 +400,24 @@ describe('the pair command', () => {
    * command is what cannot run. It has to name the variable rather than fail on the database file.
    */
   it('names the variable when this worker keeps no sessions', async () => {
-    const outcome = await runPair(['--subject', 'alice'], { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+    const outcome = await runPair(
+      ['--subject', 'alice'],
+      beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }),
+    );
 
     assert.equal(outcome.ok, false);
     assert.ok(outcome.lines.join(' ').includes('FRUITBACK_SESSION_PATH'), outcome.lines.join('\n'));
   });
 
   it('reports a misconfigured worker rather than minting against it', async () => {
-    const outcome = await runPair(['--subject', 'alice'], {
-      FRUITBACK_STORE: 'memory',
-      ALLOWED_ORIGINS: '*',
-      FRUITBACK_SESSION_PATH: '/tmp/never-opened.db',
-    });
+    const outcome = await runPair(
+      ['--subject', 'alice'],
+      beforePostgres({
+        FRUITBACK_STORE: 'memory',
+        ALLOWED_ORIGINS: '*',
+        FRUITBACK_SESSION_PATH: '/tmp/never-opened.db',
+      }),
+    );
 
     assert.equal(outcome.ok, false);
     // The boot guard: a session path with no key to sign with. Named, not discovered at runtime.

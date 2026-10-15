@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { sql } from 'drizzle-orm';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest, sessionStoreFor } from './app.ts';
-import { type WorkerEnv, hasSessions, readConfig } from './env.ts';
+import { REFUSED_SINCE_POSTGRES, type WorkerEnv, hasSessions, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import {
@@ -28,6 +28,7 @@ import {
   refreshSession,
   revokeSession,
 } from './session.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 // The database of this environment is at an address where nothing listens: a case hands its stores
 // over, and the `Kv` with them, as the transport does (FRU-67).
@@ -52,6 +53,8 @@ function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
     FRUITBACK_IDENTITY_SECRET: SECRET,
     FRUITBACK_DATABASE_URL: DATABASE_URL,
     FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
+    FRUITBACK_PUBLIC_URL: 'https://api.fruitback.test',
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-that-signs-nothing-here',
     ...overrides,
   };
 }
@@ -69,23 +72,29 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
   it('refuses a session file beside the database', () => {
     const both = readConfig(envWith({ FRUITBACK_SESSION_PATH: '/data/sessions.db' }));
 
-    assert.deepEqual(both.ok === false && both.missing, [
+    assert.deepEqual(both.ok === false && both.missing, [REFUSED_SINCE_POSTGRES.FRUITBACK_SESSION_PATH]);
+    // The worker of before said it this way, and its code is still there until FRU-226.
+    const before = readConfig(beforePostgres(envWith({ FRUITBACK_SESSION_PATH: '/data/sessions.db' })));
+    assert.deepEqual(before.ok === false && before.missing, [
       'FRUITBACK_SESSION_PATH (FRUITBACK_DATABASE_URL is set, and the sessions are in that database)',
     ]);
   });
 
+  // The worker of before (FRU-225): every worker has a database since, and its sessions in it.
   it('leaves a worker without a database on its session file, and one without sessions with none', () => {
-    const onFile = readConfig({
-      FRUITBACK_STORE: 'memory',
-      ALLOWED_ORIGINS: 'https://acme.dev',
-      FRUITBACK_IDENTITY_SECRET: SECRET,
-      FRUITBACK_SESSION_PATH: '/data/sessions.db',
-    });
+    const onFile = readConfig(
+      beforePostgres({
+        FRUITBACK_STORE: 'memory',
+        ALLOWED_ORIGINS: 'https://acme.dev',
+        FRUITBACK_IDENTITY_SECRET: SECRET,
+        FRUITBACK_SESSION_PATH: '/data/sessions.db',
+      }),
+    );
     assert.ok(onFile.ok, onFile.ok ? '' : onFile.missing.join(', '));
     assert.equal(onFile.config.sessionPath, '/data/sessions.db');
     assert.equal(hasSessions(onFile.config), true);
 
-    const none = readConfig({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.dev' });
+    const none = readConfig(beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.dev' }));
     assert.ok(none.ok, none.ok ? '' : none.missing.join(', '));
     assert.equal(hasSessions(none.config), false);
     assert.equal(sessionStoreFor(none.config), undefined);

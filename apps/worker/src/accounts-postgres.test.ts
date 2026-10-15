@@ -1,13 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
 import { afterEach, describe, it } from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { accountStoreFor, handleRequest } from './app.ts';
-import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
+import { REFUSED_SINCE_POSTGRES, REQUIRED_WITH_DATABASE, type WorkerEnv, hasAccounts, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import type { Database } from './postgres.ts';
 import {
@@ -31,7 +28,6 @@ const kv = createMemoryKv();
  * are in `account-conformance.fixture.ts`, and `account-conformance.test.ts` runs them on this store.
  */
 
-const run = promisify(execFile);
 const SECRET = 'a-worker-secret-of-exactly-enough';
 const PASSWORD = 'hunter2-not-for-a-log';
 // Port 1 of this machine: nothing listens there.
@@ -45,6 +41,8 @@ function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
     FRUITBACK_IDENTITY_SECRET: SECRET,
     FRUITBACK_DATABASE_URL: DATABASE_URL,
     FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
+    FRUITBACK_PUBLIC_URL: 'https://api.fruitback.test',
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-that-signs-nothing-here',
     ...overrides,
   };
 }
@@ -63,18 +61,13 @@ describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
     assert.ok(both.ok === false && both.missing.some((name) => name.startsWith('FRUITBACK_ACCOUNTS_PATH')));
 
     const clients = readConfig(envWith({ FRUITBACK_CLIENTS: '{"acme":{"workspace":"ws"}}' }));
-    assert.ok(
-      clients.ok === false &&
-        clients.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS (FRUITBACK_DATABASE_URL is set')),
-    );
+    assert.ok(clients.ok === false && clients.missing.includes(REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS));
   });
 
   it('asks of the database what it asks of the accounts file: a console, and the key of a session', () => {
     // The sessions are in the database too (FRU-142), so the key that signs one is asked for.
     const noKey = readConfig(envWith({ FRUITBACK_IDENTITY_SECRET: undefined }));
-    assert.deepEqual(noKey.ok === false && noKey.missing, [
-      'FRUITBACK_IDENTITY_SECRET (FRUITBACK_DATABASE_URL is set, and a session signs its access token)',
-    ]);
+    assert.deepEqual(noKey.ok === false && noKey.missing, [REQUIRED_WITH_DATABASE.FRUITBACK_IDENTITY_SECRET]);
 
     const noConsole = readConfig(envWith({ FRUITBACK_CONSOLE_URL: undefined }));
     assert.ok(noConsole.ok === false && noConsole.missing.some((name) => name.startsWith('FRUITBACK_CONSOLE_URL')));
@@ -302,60 +295,6 @@ describe('two lists of destinations for one site, on two connections (FRU-141)',
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
     assert.equal((outcome as { code?: string }).code, '23505');
-  });
-});
-
-/**
- * « Without `FRUITBACK_DATABASE_URL`, the worker loads nothing of PostgreSQL »: no file of the driver
- * (FRU-141), and no file of Drizzle (FRU-180). Each run is a process of its own: the modules that one
- * test loaded would be loaded for the next.
- */
-describe('Drizzle and the driver of PostgreSQL, loaded only by a worker that has a database (FRU-141)', () => {
-  const script = `
-    import { createRequire, registerHooks } from 'node:module';
-    // Drizzle is ES modules, and Node keeps no list of those: every module that is asked for is noted here.
-    const asked = [];
-    registerHooks({
-      resolve(specifier, context, next) {
-        const found = next(specifier, context);
-        asked.push(found.url);
-        return found;
-      },
-    });
-    const { handleRequest } = await import(${JSON.stringify(new URL('./app.ts', import.meta.url).href)});
-    const env = JSON.parse(process.env.WORKER_ENV);
-    const ask = (path) => handleRequest(new Request('https://worker.test' + path, { headers: { Origin: 'https://acme.dev' } }), env, { clientIp: '192.0.2.9' });
-    const statuses = [(await ask('/health')).status, (await ask('/feedback?url=' + encodeURIComponent('https://acme.dev/'))).status];
-    // The driver is CommonJS: Node keeps every CommonJS module it loaded in this cache.
-    const loaded = Object.keys(createRequire(import.meta.url).cache).filter((path) => /node_modules\\/(pg|pg-[a-z-]+)\\//.test(path));
-    const drizzle = asked.filter((url) => /node_modules\\/drizzle-orm\\//.test(url));
-    console.log(JSON.stringify({ statuses, driver: loaded.length, drizzle: drizzle.length, modules: asked.length }));
-    process.exit(0);
-  `;
-  type Loaded = { statuses: number[]; driver: number; drizzle: number; modules: number };
-  const worker = async (env: WorkerEnv): Promise<Loaded> => {
-    const { stdout } = await run(process.execPath, ['--input-type=module', '--eval', script], {
-      cwd: fileURLToPath(new URL('.', import.meta.url)),
-      env: { ...process.env, WORKER_ENV: JSON.stringify(env) },
-    });
-
-    return JSON.parse(stdout) as Loaded;
-  };
-
-  it('loads no file of Drizzle and no file of the driver for a worker without the variable', async () => {
-    const answered = await worker({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.dev' });
-
-    assert.deepEqual({ ...answered, modules: 0 }, { statuses: [200, 200], driver: 0, drizzle: 0, modules: 0 });
-    assert.ok(answered.modules > 0, 'no module was noted at all, so a zero for Drizzle proves nothing');
-  });
-
-  // The control of the test above: the same counts are not zero when the worker has a database.
-  it('loads them at the first request that reads the accounts, and not for /health', async () => {
-    const answered = await worker(envWith({ ALLOWED_ORIGINS: 'https://acme.dev' }));
-
-    assert.deepEqual(answered.statuses, [200, 502]);
-    assert.ok(answered.driver > 0, 'the count of the files of the driver found none, so a zero proves nothing');
-    assert.ok(answered.drizzle > 0, 'the count of the files of Drizzle found none, so a zero proves nothing');
   });
 });
 

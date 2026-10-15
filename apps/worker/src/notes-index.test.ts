@@ -8,6 +8,7 @@ import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import type { SeedStore } from './store.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 const open = worlds();
 
@@ -406,7 +407,7 @@ describe('forget, and the index (FRU-237)', () => {
 
       const done = await runForget(
         ['--email', 'alice@client.fr'],
-        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }),
         store,
         index,
       );
@@ -516,7 +517,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
       const done = await runForget(
         ['--email', 'alice@client.fr'],
-        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }),
         store,
         index,
       );
@@ -560,7 +561,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         create: async () => ({ id: 'x', identifier: 'x' }),
         findForPage: async () => [],
       };
-      const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' };
+      const env = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
 
       const byEmail = await runForget(['--email', 'alice@client.fr'], env, tracker, index);
       assert.equal(byEmail.ok, false);
@@ -656,7 +657,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
       const done = await runForget(
         ['--email', 'alice@client.fr'],
-        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }),
         store,
         failing,
       );
@@ -714,7 +715,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
       const done = await runForget(
         ['--email', 'alice@client.fr'],
-        { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
+        beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' }),
         store,
         index,
       );

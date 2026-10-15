@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { parseForgetArgs, runForget } from './cli.ts';
 import { closeSqliteConnections, createSqliteStore } from './sqlite.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 let directories: string[] = [];
 
@@ -30,7 +31,7 @@ async function storeWithAlice(): Promise<string> {
 }
 
 function sqliteEnv(path: string) {
-  return { FRUITBACK_STORE: 'sqlite', FRUITBACK_SQLITE_PATH: path, ALLOWED_ORIGINS: '*' };
+  return beforePostgres({ FRUITBACK_STORE: 'sqlite', FRUITBACK_SQLITE_PATH: path, ALLOWED_ORIGINS: '*' });
 }
 
 describe('node server.mjs forget (FRU-85)', () => {
@@ -125,18 +126,24 @@ describe('node server.mjs forget (FRU-85)', () => {
   });
 
   it('refuses a store that cannot delete from here, and says where the notes are', async () => {
-    const memory = await runForget(['--email', 'alice@example.com'], {
-      FRUITBACK_STORE: 'memory',
-      ALLOWED_ORIGINS: '*',
-    });
+    const memory = await runForget(
+      ['--email', 'alice@example.com'],
+      beforePostgres({
+        FRUITBACK_STORE: 'memory',
+        ALLOWED_ORIGINS: '*',
+      }),
+    );
     assert.equal(memory.ok, false);
     assert.match(memory.lines.join('\n'), /the memory store does not delete[\s\S]*memory of the worker/);
 
-    const linear = await runForget(['--email', 'alice@example.com'], {
-      LINEAR_API_KEY: 'lin_api_test',
-      LINEAR_TEAM_ID: 'team',
-      ALLOWED_ORIGINS: '*',
-    });
+    const linear = await runForget(
+      ['--email', 'alice@example.com'],
+      beforePostgres({
+        LINEAR_API_KEY: 'lin_api_test',
+        LINEAR_TEAM_ID: 'team',
+        ALLOWED_ORIGINS: '*',
+      }),
+    );
     assert.equal(linear.ok, false);
     assert.match(
       linear.lines.join('\n'),

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { SEED_STAGES, type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
 import { handleRequest } from './app.ts';
-import type { WorkerEnv } from './env.ts';
+import { DATABASE_REQUIRED, type WorkerEnv } from './env.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
 import { signIdentityToken } from './identity.ts';
 import type { SeedStore } from './store.ts';
@@ -13,16 +14,21 @@ import { memoryIssues, resetMemoryLinear } from './linear-memory.ts';
 
 const ORIGIN = 'https://preview.acme.test';
 
-const env: WorkerEnv = {
+const env: WorkerEnv = beforePostgres({
   LINEAR_API_KEY: 'lin_api_test',
   LINEAR_TEAM_ID: 'team_1',
   LINEAR_PROJECT_ID: 'project_1',
   ALLOWED_ORIGINS: `${ORIGIN},http://localhost:5173`,
-};
+});
 
 type RequestOverrides = {
   origin?: string | null;
   env?: WorkerEnv;
+  /**
+   * The environment as a process gets it. Absent, the worker of before (FRU-225): these cases hold
+   * its code, with no database. See `beforePostgres`.
+   */
+  asDeployed?: boolean;
   headers?: Record<string, string>;
   /** Already resolved by the transport in production — see `resolveClientIp`. */
   clientIp?: string;
@@ -31,6 +37,10 @@ type RequestOverrides = {
   /** Built once by the transport in production — see `RequestContext.kv` (FRU-49). */
   kv?: Kv;
 };
+
+function asGiven(init: RequestOverrides): WorkerEnv {
+  return init.asDeployed === true ? (init.env ?? env) : beforePostgres(init.env ?? env);
+}
 
 function post(body: unknown, init: RequestOverrides = {}) {
   const headers = new Headers({ 'Content-Type': 'application/json', ...(init.headers ?? {}) });
@@ -42,7 +52,7 @@ function post(body: unknown, init: RequestOverrides = {}) {
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 
-  return handleRequest(request, init.env ?? env, {
+  return handleRequest(request, asGiven(init), {
     clientIp: init.clientIp ?? '203.0.113.1',
     ...(init.store ? { store: init.store } : {}),
     ...(init.kv ? { kv: init.kv } : {}),
@@ -53,7 +63,7 @@ function get(path: string, init: RequestOverrides = {}) {
   const headers = new Headers(init.headers ?? {});
   if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
 
-  return handleRequest(new Request(`https://worker.fruitback.dev${path}`, { headers }), init.env ?? env, {
+  return handleRequest(new Request(`https://worker.fruitback.dev${path}`, { headers }), asGiven(init), {
     clientIp: init.clientIp ?? '203.0.113.1',
     ...(init.store ? { store: init.store } : {}),
     ...(init.kv ? { kv: init.kv } : {}),
@@ -614,13 +624,15 @@ describe('the in-memory Linear (dev loop)', () => {
 
   it('refuses the flag in production and reports itself misconfigured', async () => {
     // The Dockerfile sets NODE_ENV=production, so this is what a container inheriting the flag does.
-    // The flag *degrades* to the real store, which then has no credentials — so the diagnostic names
-    // Linear's variables rather than the flag. An explicit FRUITBACK_STORE=memory is refused outright
-    // instead; see the FRU-33 suite.
-    const response = await get('/health', { env: { ...fakeEnv, NODE_ENV: 'production' } });
+    // The flag *degrades* to the default store, which then has no database (FRU-225; it was Linear
+    // and its credentials before) — so the diagnostic names the database rather than the flag. An
+    // explicit FRUITBACK_STORE=memory is refused outright instead; see the FRU-33 suite.
+    const response = await get('/health', { env: { ...fakeEnv, NODE_ENV: 'production' }, asDeployed: true });
 
     assert.equal(response.status, 503);
-    assert.partialDeepStrictEqual(await response.json(), { missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'] });
+    const { missing } = (await response.json()) as { missing: string[] };
+    assert.ok(missing.includes(DATABASE_REQUIRED), missing.join('\n'));
+    assert.ok(!missing.some((line) => line.includes('FAKE_LINEAR')), missing.join('\n'));
   });
 });
 

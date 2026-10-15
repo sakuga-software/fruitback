@@ -9,6 +9,7 @@ import { type Database, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrated } from './postgres-migrate.ts';
 import { StoreError } from './store.ts';
+import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
  * What the `Kv` of the database does that the contract of `kv.test.ts` cannot see (FRU-67): two
@@ -293,7 +294,7 @@ describe('the Kv of the database (FRU-67)', () => {
 });
 
 describe('which Kv a worker runs on (FRU-67)', () => {
-  const base = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test' };
+  const base = beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test' });
 
   it('changes nothing for a worker with no database: the store of the process, the very instance', () => {
     assert.equal(kvFor({ databaseSchema: 'public' }), processKv());
