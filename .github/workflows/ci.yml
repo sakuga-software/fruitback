@@ -427,6 +427,7 @@ jobs:
           done
           docker run -d --name worker-db --network accounts -p 8083:8080 \
             -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e FRUITBACK_STORE=linear \
             -e LINEAR_API_KEY=ci-not-a-real-key \
             -e LINEAR_TEAM_ID=ci-team \
             -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
@@ -475,6 +476,7 @@ jobs:
             shift 2
             docker run -d --name "$name" --network auth -p "$port:8080" \
               -e ALLOWED_ORIGINS=http://localhost:5173 \
+              -e FRUITBACK_STORE=linear \
               -e LINEAR_API_KEY=ci-not-a-real-key \
               -e LINEAR_TEAM_ID=ci-team \
               -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \

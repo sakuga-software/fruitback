@@ -104,10 +104,25 @@ jobs:
             echo "000"
           }
 
-          docker run -d --name serves -p 8080:8080 \
-            -e ALLOWED_ORIGINS=http://localhost:5173 \
-            -e LINEAR_API_KEY=ci-not-a-real-key \
-            -e LINEAR_TEAM_ID=ci-team \
+          # FRU-225. A worker serves nothing without PostgreSQL, so the check gives it a database. The
+          # database runs on the runner's own architecture: only the worker is the candidate.
+          docker network create check
+          docker run -d --name check-db --network check \
+            -e POSTGRES_PASSWORD=ci-not-a-real-password \
+            postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          for _ in $(seq 1 30); do
+            if docker exec check-db pg_isready -U postgres -q; then break; fi
+            sleep 1
+          done
+          worker_env=(
+            -e ALLOWED_ORIGINS=http://localhost:5173
+            -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters
+            -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example
+            -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example
+            -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789
+            -e FRUITBACK_DATABASE_URL=postgres://postgres:ci-not-a-real-password@check-db:5432/postgres
+          )
+          docker run -d --name serves --network check -p 8080:8080 "${worker_env[@]}" \
             fruitback-worker:candidate
           code=$(health 8080)
           body=$(cat /tmp/body)
@@ -121,8 +136,9 @@ jobs:
           # NODE_ENV=production is what refuses FRUITBACK_STORE=memory, and a --target that stopped
           # at the build stage would take it away with no other symptom at all. Asserting the refusal
           # tests the guard; asserting the variable would only test that somebody wrote it down.
-          docker run -d --name dev-store -p 8081:8080 \
-            -e ALLOWED_ORIGINS=http://localhost:5173 \
+          # The rest of the environment is the one that serves above, so that the store is the only
+          # thing refused.
+          docker run -d --name dev-store --network check -p 8081:8080 "${worker_env[@]}" \
             -e FRUITBACK_STORE=memory \
             fruitback-worker:candidate
           code=$(health 8081)
