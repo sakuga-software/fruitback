@@ -1,32 +1,83 @@
 # Installing Fruitback
 
-Two things have to exist: **the worker**, which holds the Linear key, and **the widget**, which goes
-on the site you want feedback about. Neither is useful alone — the widget has nowhere to write, and
-the worker has nobody writing to it.
+Three things have to exist: **an instance** — the worker, its PostgreSQL and its console — **a site**,
+made in the console, and **the widget**, which goes on the pages of that site. The widget writes to the
+worker, and the worker answers only the sites its console made.
 
-Do the worker first. The widget needs its URL.
+Do the instance first, then the site. The widget needs the address of the worker and the id of the
+site.
 
-**Which mode you are installing changes step 3 and nothing else.** Steps 1, 2, 4, 5 and 6 are the
-worker's, and every mode needs them. Step 3 is where public mode puts the widget on the page, team
-mode ships it dormant, and private mode ships nothing at all — there the extension mounts it, and the
-reviewer's side is [reviewing.md](reviewing.md). [modes.md](modes.md) is the page that picks between
-the three, and it is worth reading first: **who may read is `read`** — `FRUITBACK_READ` in the
-worker's environment at step 2, or per client in the map at step 4 — **and the mode decides who can
-satisfy it.** A public-mode site can, by minting the identity tokens of step 5; team mode is the one
-where the reviewer supplies the credential and the page never holds it; private mode can do neither.
+**Which mode you are installing changes step 3 and nothing else.** Step 3 is where public mode puts the
+widget on the page, team mode ships it dormant, and private mode ships nothing at all — there the
+extension mounts it, and the reviewer's side is [reviewing.md](reviewing.md). [modes.md](modes.md) is
+the page that picks between the three, and it is worth reading first: **who may read a site is the
+visibility you choose at step 2, and the mode decides who can satisfy it.**
 
 > **The packages are not on npm yet.** Everything below describes the shape of the install; the
-> `npm i` lines will work once the first release is published. Until then, the `<script>` route works
-> from a file you host yourself — `pnpm --filter @fruitback/widget build` produces it.
+> `npm i` lines will work once the first release is published. Until then, the `<script>` route works:
+> the console serves the script of the widget at `/fruitback.iife.js`, and
+> `pnpm --filter @fruitback/widget build` produces the same file.
 
 ---
 
-## 1. Linear
+## 1. The instance
 
-You need two values and a key.
+**Fruitback Cloud** runs it for you. **Self-hosted**, it is three containers that one compose file
+starts: [self-hosting.md](self-hosting.md) goes from an empty folder to a pin in seven steps, and this
+page does not repeat them. Every instance keeps its notes, its sites and its accounts in PostgreSQL,
+and has an administrator who signs in to the console. A visitor who leaves a note needs no account.
 
-**The API key** — a personal API key from your Linear settings. It is the only real secret here, and
-the entire reason the worker exists: it must never reach a browser.
+Two things matter whatever you deploy with:
+
+- **`/health` checks the configuration, not the database or a tracker.** It answers `503` and names
+  each variable that is missing or wrong. It answers `200` while the database does not answer, or
+  while Linear refuses a key: those show on the first read, as `502 store-unavailable`. So check a
+  read as well, at step 2.
+- **`TRUSTED_PROXY_HOPS` is the number of proxies in front of the container**: `0` when the port is
+  published directly, `1` behind one Traefik. Too high behind a proxy that appends to
+  `X-Forwarded-For`, and a caller escapes the rate limit with a forged header. Too low, and every
+  caller shares one bucket. [Behind a reverse proxy](self-hosting.md#behind-a-reverse-proxy) has the
+  measured cases and a check you can run.
+
+To try the whole loop from the sources with no Linear account at all, `pnpm dev` runs the worker with
+a database in its process and an in-memory Linear, and serves the playground next to it. Nothing is
+written to anyone's workspace.
+
+---
+
+## 2. The site
+
+In the console, add the address of the site, and choose **who sees the notes**:
+
+- **Members of the workspace** — the default. A read needs the session of a member, which the
+  extension gets when the reviewer connects it: this is the team mode. A visitor can still send a note,
+  and sees no pin, theirs included.
+- **Everyone who visits** — a read needs nothing: this is the public mode. Every note, the name its
+  reporter typed and the replies are readable by anybody who knows a page address and the id of the
+  site, with or without the widget.
+
+The console then gives the script tag of the site. `data-fruitback-client` in it is **the id of the
+site**, `site_…`: it is the `clientId` of every example below. The worker answers the page of each site
+by itself; nothing to add to `ALLOWED_ORIGINS`.
+
+Check a read before going further, with the address of a page of the site, encoded, and its id:
+
+```bash
+curl -H 'Origin: https://staging.acme.test' \
+  'https://api.feedback.acme.dev/feedback?url=https%3A%2F%2Fstaging.acme.test%2F&client=site_…'
+# {"url":"https://staging.acme.test/","issues":[],…}
+```
+
+On a site that only members read, that read answers `401` with no session, which is expected.
+
+### A Linear team for the whole instance
+
+The notes of a site go to the database of the instance, unless its workspace connects a tracker in the
+console, and the site chooses it. A self-hosted instance can also send the notes of every site with no
+tracker of its own to one Linear team: `FRUITBACK_STORE=linear`, with two values and a key in `.env`.
+
+**The API key** — a personal API key from your Linear settings. It is a secret: it must never reach a
+browser, and that is one reason the worker exists.
 
 **The team, and optionally the project.** Both are UUIDs. The quickest way to read them is to ask
 Linear:
@@ -41,76 +92,15 @@ curl -s https://api.linear.app/graphql \
 Swap `teams` for `projects` for the other one. A project is optional: without it, issues are created
 in the team's default.
 
-**Labels need no setup.** Fruitback creates `fruitback` — and `fruitback:<clientId>` when a client is
-named — on demand, on first use. A label that cannot be created is dropped and the feedback still
-goes through: losing a label is a triage annoyance, losing someone's note is a bug.
-
----
-
-## 2. The worker
-
-It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable
-[`docker-compose.yml`](../docker-compose.yml) reads, with the reasoning next to each: the worker's own,
-and the two that choose the image and the host port.
-
-The minimum, with the seeds in Linear:
-
 ```bash
 FRUITBACK_STORE=linear
 LINEAR_API_KEY=lin_api_…
 LINEAR_TEAM_ID=…
-ALLOWED_ORIGINS=https://staging.acme.test
 ```
 
-With SQLite, which is the default of `docker-compose.yml`, `ALLOWED_ORIGINS` is the only line to set.
-
-### Locally
-
-From the sources, with no container and no `.env`. The command keeps running, so use another
-terminal for anything else:
-
-```bash
-pnpm --filter @fruitback/worker dev:pglite   # node --watch, a database in the process
-```
-
-In a container, with the image built from this checkout:
-
-```bash
-cp .env.example .env                  # then set ALLOWED_ORIGINS
-docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
-docker compose up -d --wait           # the image you just built
-```
-
-To try the whole loop with no Linear account at all, `pnpm dev` runs the worker against an in-memory
-Linear and serves the playground next to it. Nothing is written to anyone's workspace.
-
-### On a server
-
-[docs/self-hosting.md](self-hosting.md) is the guide: the reverse proxy, every variable, backups,
-upgrades, and what to check when something is wrong. Whatever you deploy with, two things matter:
-
-- **`/health` checks the configuration, not the store.** It answers `503` and names each variable that
-  is missing or wrong. It answers `200` when the SQLite file cannot be opened or Linear refuses the
-  key: those show on the first read, as `502 store-unavailable`. So check a read as well.
-- **`TRUSTED_PROXY_HOPS` is the number of proxies in front of the container**: `0` when the port is
-  published directly, `1` behind one Traefik. Too high behind a proxy that appends to
-  `X-Forwarded-For`, and a caller escapes the rate limit with a forged header. Too low, and every
-  caller shares one bucket. [Behind a reverse proxy](self-hosting.md#behind-a-reverse-proxy) has the
-  measured cases and a check you can run.
-
-Check both before going further:
-
-```bash
-curl https://feedback.acme.dev/health
-# {"ok":true,"store":"sqlite","openRead":1}
-curl 'https://feedback.acme.dev/feedback?url=https%3A%2F%2Fstaging.acme.test%2F'
-# {"url":"https://staging.acme.test/","issues":[]}
-```
-
-`store` is the store the worker runs on. `openRead` counts the clients whose pins anyone can read, and
-is absent when there are none. With `FRUITBACK_CLIENTS` set, add `&client=<id>` to the read. The read answers `401` when the
-client's policy is `authenticated` and no token is sent, which is expected. That policy is the
-client's own `read` when the client sets one, and `FRUITBACK_READ` when it does not.
+**Labels need no setup.** Fruitback creates `fruitback`, and a label for the site of the note, on
+demand, on first use. A label that cannot be created is dropped and the feedback still goes
+through: losing a label is a triage annoyance, losing someone's note is a bug.
 
 ---
 
@@ -119,13 +109,14 @@ client's own `read` when the client sets one, and `FRUITBACK_READ` when it does 
 ### A script tag
 
 For a site with no build step. `endpoint` and `client` are required and are the whole configuration;
-`label` is optional.
+`label` is optional. The console gives this tag, with the address of its own copy of the script and
+the id of the site.
 
 ```html
 <script
   src="https://cdn.acme.dev/fruitback.iife.js"
-  data-fruitback-endpoint="https://feedback.acme.dev"
-  data-fruitback-client="acme"
+  data-fruitback-endpoint="https://api.feedback.acme.dev"
+  data-fruitback-client="site_…"
   data-fruitback-label="Leave feedback"
   defer
 ></script>
@@ -149,8 +140,8 @@ npm i fruitback
 import { init } from 'fruitback';
 
 const widget = init({
-  endpoint: 'https://feedback.acme.dev',
-  clientId: 'acme',
+  endpoint: 'https://api.feedback.acme.dev',
+  clientId: 'site_…',
 });
 ```
 
@@ -159,7 +150,7 @@ arrive after they do:
 
 ```tsx
 useEffect(() => {
-  const widget = init({ endpoint: WORKER_URL, clientId: 'acme' });
+  const widget = init({ endpoint: WORKER_URL, clientId: 'site_…' });
 
   return () => widget.destroy();
 }, []);
@@ -177,7 +168,7 @@ npm i @fruitback/react
 ```tsx
 import { Fruitback } from '@fruitback/react';
 
-<Fruitback endpoint="https://feedback.acme.dev" clientId="acme" />;
+<Fruitback endpoint="https://api.feedback.acme.dev" clientId="site_…" />;
 ```
 
 It renders nothing, mounts the widget in an effect and destroys it when it unmounts. Its props are
@@ -198,7 +189,7 @@ import '@fruitback/element/auto'; // registers <fruitback-widget>
 ```
 
 ```html
-<fruitback-widget endpoint="https://feedback.acme.dev" client-id="acme"></fruitback-widget>
+<fruitback-widget endpoint="https://api.feedback.acme.dev" client-id="site_…"></fruitback-widget>
 ```
 
 On a page with no build step, load `fruitback-element.iife.js` from the package's `dist` instead of
@@ -256,7 +247,7 @@ Reply from Léa · 2026-10-07
 - The same text comes from your own code, with no request to the worker:
 
   ```ts
-  const widget = init({ endpoint: WORKER_URL, clientId: 'acme' });
+  const widget = init({ endpoint: WORKER_URL, clientId: 'site_…' });
   const text = widget.feedbackAsText();
   ```
 
@@ -267,8 +258,8 @@ The widget ships English and French. It follows the browser's language, `locale`
 
 ```ts
 init({
-  endpoint: 'https://feedback.acme.dev',
-  clientId: 'acme',
+  endpoint: 'https://api.feedback.acme.dev',
+  clientId: 'site_…',
   messages: {
     de: {
       'launch.label': 'Feedback geben',
@@ -331,8 +322,8 @@ const sync = () => {
   if (widget !== undefined) return;
 
   widget = init({
-    endpoint: 'https://feedback.acme.dev',
-    clientId: 'acme',
+    endpoint: 'https://api.feedback.acme.dev',
+    clientId: 'site_…',
     // Every call goes through the extension, which attaches the reviewer's session.
     transport: extension.transport,
   });
@@ -348,68 +339,68 @@ reads the property rather than assuming an arrival — and it is written so a se
 cannot mount a second widget.
 
 The reviewer then turns your origin on in the extension's popup, in **Team** mode, and pairs with
-the worker. Until they pair, the extension relays nothing — see
+the worker, from the console. Until they do, the extension relays nothing — see
 [the threat model](../SECURITY.md#what-the-extension-relays-and-what-it-refuses-to) for why, and for
 the five other things the relay checks first.
 
-> This mode is worth turning on only with `FRUITBACK_READ=authenticated`. Otherwise the same pins
-> are readable by anyone who can build the URL, and all it buys is a page your users do not see the
-> widget on.
+> This mode is worth turning on only for a site that « Members of … » read. On a site that everyone
+> reads, the same pins are readable by anyone who can build the URL, and all it buys is a page your
+> users do not see the widget on.
 
 ---
 
----
+## 4. One instance, several sites
 
-## 4. One worker, several sites
+Add each site in the console: one address, one id, one visibility. A site is the client of one
+workspace, so a session of another workspace reads and writes nothing there. A workspace per client
+keeps their notes and their members apart; a guest of one site reads that site and no other of the
+workspace (FRU-250).
 
-Set `FRUITBACK_CLIENTS` and each site routes to its own team, project and labels:
-
-```json
-{
-  "acme": { "teamId": "team_…", "projectId": "proj_…", "origins": ["https://acme.test"] },
-  "globex": { "teamId": "team_…" }
-}
-```
-
-Once it is set, a client has to be named on **both** paths — `client=` on a read, `seed.client.id` on
-a write — and an unknown one is refused rather than served from the default. On a shared worker,
-falling back to the default team is how one client reads another's feedback.
-
-`origins` binds a client to the sites it may be embedded on. It is not authentication: `clientId` is
-asserted by the browser. It is the same trust level CORS gives, and strictly more than nothing.
+Each site is bound to its address. The worker refuses a note or a read that names a site from the page
+of another origin (`403 origin-not-allowed-for-client`), and a page that is on no site
+(`403 origin-not-allowed`). It is not authentication: the id of a site is asserted by the browser, and
+`Origin` is what the browser says about the page. It is the same trust level CORS gives, and strictly
+more than nothing. [SECURITY.md](../SECURITY.md) says what it stops.
 
 ---
 
-## 5. Identified reporters, optionally
+## 5. Identified reporters
 
-By default a reporter is anonymous, and a name typed into the popover is stored as a **claim** —
-Linear shows it as _self-declared_. A site that already knows who its visitor is can say so properly:
-share a secret with the worker, mint a short-lived JWT, and hand it to the widget.
+By default a reporter is anonymous, and a name typed into the popover is stored as a **claim** — a
+tracker shows it as _self-declared_. On a site of the console, a reporter is **verified** in one case:
+a member of the workspace whose extension is connected, in team mode. The worker sets the flag, and
+removes it from anything a browser sends.
+
+`init({ identityToken })` is the other way, for a site that already knows who its visitor is: the
+site's backend mints a short-lived **HS256 JWT** (`sub`, an `exp`, and optionally `name` and `email`)
+and hands it to the widget, which sends it in the `Authorization` header and never inside the seed.
 
 ```ts
 init({
   endpoint: WORKER_URL,
-  clientId: 'acme',
+  clientId: 'site_…',
   // Called before every write, so a token that expired mid-session is refreshed rather than refused.
   identityToken: () => fetch('/api/fruitback-token').then((response) => response.text()),
 });
 ```
 
-The token is an **HS256 JWT** with `sub`, an `exp`, and optionally `name` and `email`, signed with
-the client's `identitySecret`. It travels in the `Authorization` header and never inside the seed —
-the seed is stored verbatim in an issue description that anyone with workspace access can read.
-
-A token that fails to verify is a `401`, not a silent downgrade to anonymous: a site that meant to
-identify someone and got it wrong should hear about it.
+**A site of the console has no key to verify such a token with, so do not pass one.** A token that
+fails to verify is a `401`, not a silent downgrade to anonymous: measured on 2026-10-16, a note sent
+with a token signed by a key of the host answered `401 invalid-identity`, and was not kept. The key was
+the `identitySecret` of a client of `FRUITBACK_CLIENTS`, which no worker takes since FRU-225. Whether a
+site of the console gets one is not decided (FRU-184).
 
 ---
 
 ## 6. What the team sees
 
-A note becomes a Linear issue titled with the reporter's own words, carrying the CSS selector, the
-React component and the source file. Replying in the issue puts the reply back inside the pin on the
+Where the notes go is the site's choice in the console. **In the database**, the default, the
+« Notes » screen of the console lists them, and the pins on the page are the thread. **In a tracker**,
+a note becomes an issue titled with the reporter's own words, carrying the CSS selector, the React
+component and the source file, and replying in the issue puts the reply back inside the pin on the
 page — that is the loop closing, and it needs nothing configured.
 
-If your team treats issue comments as internal, turn that off: `FRUITBACK_HIDE_COMMENTS=1`, or
-`"showComments": false` on one client. The read path needs no authentication, so anything it returns
-is readable by anyone who can load the page.
+If your team treats issue comments as internal, turn that off: the switch « Show Linear comments as
+replies » of the connector, or `FRUITBACK_HIDE_COMMENTS=1` for the whole instance. On a site that
+everyone reads, the read path needs no authentication, so anything it returns is readable by anyone
+who can load the page.

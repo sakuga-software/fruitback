@@ -87,12 +87,10 @@ Team mode relays every call through your session, so until you pair the site can
 
 > Not paired — this site cannot reach the worker until you do
 
-**The worker has to be holding sessions at all**, which is not the default: it needs
-`FRUITBACK_SESSION_PATH` — its own SQLite file, whatever `FRUITBACK_STORE` says — and
-`FRUITBACK_IDENTITY_SECRET`, which signs the access token. A worker with neither mints no codes, and
-the command below fails. That is the operator's side, in
-[self-hosting.md](self-hosting.md#the-worker), which lists the three `/session/` routes that exist
-only when it is set.
+**Every worker holds sessions since FRU-225**: they are in its PostgreSQL, whatever `FRUITBACK_STORE`
+says, and `FRUITBACK_IDENTITY_SECRET` signs the access token. The usual way is « Connect this
+browser » in the console. That is the operator's side, in
+[self-hosting.md](self-hosting.md#the-worker), which lists the `/session/` routes.
 
 **A pairing code is minted by an operator, on the container, never over HTTP:**
 

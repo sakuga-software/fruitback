@@ -117,15 +117,15 @@
           </article>
           <article class="plan">
             <h3>Self-hosted</h3>
-            <p class="muted">You run one container. Everything stays on your server.</p>
+            <p class="muted">You run one compose file: the server, its PostgreSQL and the console.</p>
             <p class="price"><strong>Free</strong> open source, MIT and AGPL</p>
             <a class="button button-outline button-block" href="{{ '/self-hosting.html' | relative_url }}"
               >Read the install guide</a
             >
             <ul class="checks">
-              <li>One Docker image, for amd64 and arm64</li>
-              <li>Linear, GitHub Issues or SQLite</li>
-              <li>Feedback can stay in SQLite, on your volume</li>
+              <li>Two Docker images, for amd64 and arm64</li>
+              <li>Your PostgreSQL, Linear or GitHub Issues</li>
+              <li>Feedback can stay in your database</li>
               <li>Your own keys, on your server only</li>
             </ul>
           </article>
@@ -150,12 +150,12 @@
               <tr>
                 <td>Where notes land</td>
                 <td>Your workspace</td>
-                <td>Linear, GitHub Issues or SQLite</td>
+                <td>Your PostgreSQL, Linear or GitHub Issues</td>
               </tr>
               <tr>
                 <td>Accounts</td>
                 <td>Sign in by e-mail link</td>
-                <td>Pairing codes, minted by you</td>
+                <td>A first administrator from the log, then GitHub, Google or e-mail if you set them up</td>
               </tr>
               <tr>
                 <td>Updates</td>

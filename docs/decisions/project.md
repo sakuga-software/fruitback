@@ -29,11 +29,15 @@ naming decision, not a third code path: what differs lives in the assembly layer
 `packages/widget` does not know which one it is in.
 
 **Status, threads, assignees and history belong to the store**, never to a second model kept in step
-with it. Every store the worker speaks to is one somebody already runs: Linear is the default and
-the richest of them, `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
-party, and `FRUITBACK_STORE=github` is for a team whose issues are already on GitHub. Fruitback does not reinvent issue tracking, and since FRU-31 it no longer requires somebody
-else's account either. See [docs/architecture.md](../architecture.md) for the alternatives that
-were dropped.
+with it. Every store the worker speaks to is one somebody already runs: the PostgreSQL of the
+instance is the default (FRU-225), Linear the richest, and `FRUITBACK_STORE=github` is for a team
+whose issues are already on GitHub. Fruitback does not reinvent issue tracking, and since FRU-31 it
+no longer requires somebody else's account either. See [docs/architecture.md](../architecture.md) for
+the alternatives that were dropped.
+
+**Every instance has PostgreSQL and an administrator account; a visitor needs no account**
+(decided on 2026-10-13, FRU-225, FRU-227). See
+[PostgreSQL and an administrator, on every instance](#postgresql-and-an-administrator-on-every-instance).
 
 **Fruitback Cloud is one such deployment**, and `apps/worker/cloud/README.md` is its runbook
 (FRU-106, FRU-128): where it runs, what is backed up, and how to restore. The host archives every
@@ -62,6 +66,53 @@ dashboard, the triage, the API, the MCP server and the integrations all come for
 Deployment is **Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
 managed platform primitives. When something needs infrastructure, reach for what a single container
 behind Traefik can do.
+
+## PostgreSQL and an administrator, on every instance
+
+Decision of Mathieu, 2026-10-13, in his words:
+
+> « il faut toujours un postgres quoiqu'il arrive pour faire tourner fruitback même en self-hosted, sur
+> une nouvelle db ou sur une db existante dans un schema dédié / et on peut créer un compte quoiqu'il
+> arrive aussi pour la partie admin, par contre pas forcément besoin de compte pour laisser des notes
+> côté user / et au pire on peut fournir un driver pour permettre de stocker les mêmes infos sur
+> d'autres systèmes de données (adapter) »
+
+### The rules, in short
+
+- **A worker needs PostgreSQL to start**, a database of its own or a schema of one that exists
+  (`FRUITBACK_DATABASE_SCHEMA`, FRU-219). Nothing falls back to a file. The code that enforces it is
+  FRU-225; [worker.md](worker.md#postgresql-is-required-fru-225) has its rules.
+- **Every instance has an administrator account**, made from the link the worker writes in its log
+  for `FRUITBACK_FIRST_ADMIN` (FRU-221), so an instance with no e-mail and no provider still has one.
+  **A visitor who leaves a note needs no account** (FRU-224).
+- **Another data system is an adapter to write later, if somebody needs one**: « au pire on peut
+  fournir un driver ». None exists, and nothing in the worker waits for one.
+- **The self-hosting guide starts from an empty folder and ends on a pin a visitor planted**
+  (FRU-227): the compose file, five lines of `.env`, the link of the first administrator, a site in
+  the console, the script tag, and the note. Seven steps, measured on the images; FRU-107 counted
+  seven for the path of before, which ran one container with no account.
+
+### What it replaces
+
+- **The first default of FRU-143**: a `postgres` service behind a profile, which the default path did
+  not start, so that « the self-hoster with no accounts keeps one container ». The compose file starts
+  the worker, its PostgreSQL and the console together since FRU-225.
+- **The « starting position » of the Self-hosted simplified project** (FRU-107, 2026-10-08): « the
+  code typed by the admin stays the default way, and nothing becomes mandatory that is not today ».
+  PostgreSQL and an administrator account are mandatory now. It is option B of the framing of
+  2026-10-12; the framing recommended A, two tiers with a one-container tier kept, and A was not
+  taken.
+- **`FRUITBACK_STORE=sqlite` as the door for a self-hoster who wants no third party** (FRU-31). The
+  door is the database of the instance. A file of before is copied there by `migrate-to-postgres`, and
+  the code of the file store goes with FRU-226.
+
+### The reasons, and the history
+
+The cost is stated rather than hidden: an instance is three containers where it was one, and a person
+has to sign in once before a site exists. What it buys is one path to document and to keep green,
+where option A would have kept two; one place for every note, site, account and session; and a
+console for every self-hoster, which the Cloud already had. CI's `image` job runs that path from an
+empty directory on every pull request, and the guide was replayed by hand on the images for FRU-227.
 
 ## Layout
 

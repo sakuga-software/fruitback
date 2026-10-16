@@ -123,7 +123,7 @@ Anything a browser posts carrying `verified` has it stripped before storage, wha
 The flag is set only after an HS256 token verifies against the client's key. Without a token, a name
 and an address are a claim by whoever was on the page, and they are stored as one.
 
-### A seed is stored in the clear, in your issue tracker
+### A seed is stored in the clear, in your database or your tracker
 
 The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
 stored as it arrived, and **where** depends on the connector:
@@ -151,6 +151,38 @@ the worker. The notes of a site that is removed stay in the table (FRU-194 will 
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
+
+### What the database keeps, and who reads it
+
+Every instance has a PostgreSQL database since FRU-225 (a decision of 2026-10-13): one of its own,
+which `docker-compose.yml` starts, or a schema of one that exists. **What it keeps**, all of it in the
+clear unless this list says otherwise:
+
+- **The notes and their replies**, for every site whose notes stay in the instance: the store
+  `postgres`, which is the default. A note sent to a tracker leaves its id there, and at most 64
+  characters of its text in the index (below).
+- **The accounts**: the address of each person, the name they gave, the id each provider gives them,
+  their language; the workspaces, their members and roles, the sites and the address of each site.
+  No password, and no token of a provider.
+- **The sessions**, of the extension and of the console: SHA-256 digests of each code and token, never
+  the token, with the name and the dates of each.
+- **The key of each connector, encrypted** with `FRUITBACK_SECRETS_KEY`, which is in no row. The notes
+  are not encrypted by that key.
+- **The addresses of callers, for two minutes**, in the table `kv` of the rate limit.
+
+**Who reads it**: the role of `FRUITBACK_DATABASE_URL`, and so whoever holds that address; whoever
+runs the server of the database, and any other role it grants; and whoever holds a dump. The worker
+keeps the workspaces apart by what each read names, never by a wall in the database. In a database
+that another application uses, a schema of its own is a place for names and not a wall: see below.
+The connection is encrypted only when the address asks for it (`sslmode`), and only then.
+
+**How long**: as long as the row exists. Fruitback deletes no note on its own: a site removed from
+its workspace leaves its notes in the table (FRU-194 will decide), and `node server.mjs forget`
+deletes them, as [docs/privacy.md](docs/privacy.md) says. A session of the extension ends after
+30 days at most; a row of `kv` goes after its two minutes, as requests come. **A dump keeps all of it
+for as long as the dump is kept**, and the four secrets that the dump lacks
+(`FRUITBACK_POSTGRES_PASSWORD`, `FRUITBACK_AUTH_SECRET`, `FRUITBACK_IDENTITY_SECRET`,
+`FRUITBACK_SECRETS_KEY`) are what make it a set of working keys. Keep them apart from the dumps.
 
 ### The GitHub App key
 
@@ -1609,7 +1641,6 @@ writes the address it gets back in the seed. The setting is off until the review
   entry, with a session it never sees, and only when `activeTab` was granted. The background refuses
   a request from a tab that is not the active one, and the endpoint, the client and the token come
   from the stored entry and the session, never from the message.
-- **A worker with no database keeps no picture**: both routes answer `404`.
 - **A picture is kept when its note is written, not when it is sent.** A note kept for later
   (FRU-124) holds the address of its picture in the seed that waits in the tab. A note that is never
   sent leaves a picture that no note names; it goes with its workspace, and nothing else removes it.
@@ -1621,7 +1652,8 @@ widget included when it covers the element.
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user
 agent (`includeEnv`), the page URL, and a picture of what the person was looking at. All of it lands
-in an issue tracker, and for the Linear and GitHub connectors that is outside your own infrastructure.
+in the database of the instance or in an issue tracker, and for the Linear and GitHub connectors that
+is outside your own infrastructure.
 
 That is a processing of personal data and a deployment of Fruitback has to be declared as one.
 [docs/privacy.md](docs/privacy.md) lists every field, what is sent by default, where it is kept, and
@@ -1631,8 +1663,9 @@ how to delete a reporter's notes. It is not legal advice.
 
 - **A reporter typing somebody else's name.** With no token that is a claim, which is what
   `verified: false` means. Report a case where a claim comes back marked verified.
-- **Pins readable on a worker left at `read: 'public'`.** That is the documented default and the boot
-  log says so. Report a case where `authenticated` still answers without a valid token.
+- **Pins readable on a site that everyone reads.** That is the visibility the person who added the
+  site chose in the console. Report a case where a site that members read answers without a valid
+  session.
 - **Exceeding the rate limit from several addresses.** It is quota protection, not authentication.
   Report a bypass from _one_ address, or one that works by setting a header.
 - **A page forging bridge messages on an origin its reviewer enabled.** Stated above, and inherent to
