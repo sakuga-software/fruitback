@@ -199,15 +199,15 @@ an `endpoint` and a `client-id` it mounts nothing, and it takes the widget away 
 
 ### What else `init` takes
 
-| Option          | Why you would                                                                        |
-| --------------- | ------------------------------------------------------------------------------------ |
-| `label`         | the text on the floating button                                                      |
-| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default       |
-| `messages`      | your own words for that language — see [Another language](#another-language)         |
-| `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner    |
-| `identityToken` | a function returning a signed token, so a reporter is _verified_ rather than claimed |
-| `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default     |
-| `transport`     | who carries the calls — the extension's, in team mode below                          |
+| Option          | Why you would                                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `label`         | the text on the floating button                                                                                  |
+| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default                                   |
+| `messages`      | your own words for that language — see [Another language](#another-language)                                     |
+| `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner                                |
+| `identityToken` | a signed token, so a reporter is _verified_ — not on a site of the console yet, see [5](#5-identified-reporters) |
+| `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default                                 |
+| `transport`     | who carries the calls — the extension's, in team mode below                                                      |
 
 **One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
 `https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget
@@ -371,9 +371,11 @@ tracker shows it as _self-declared_. On a site of the console, a reporter is **v
 a member of the workspace whose extension is connected, in team mode. The worker sets the flag, and
 removes it from anything a browser sends.
 
-`init({ identityToken })` is the other way, for a site that already knows who its visitor is: the
-site's backend mints a short-lived **HS256 JWT** (`sub`, an `exp`, and optionally `name` and `email`)
-and hands it to the widget, which sends it in the `Authorization` header and never inside the seed.
+**Do not pass `init({ identityToken })` on a site of the console: the worker has no key to verify the
+token with, and the note is refused.** The option exists for a site that already knows who its
+visitor is: its backend mints a short-lived **HS256 JWT** (`sub`, an `exp`, and optionally `name` and
+`email`) and hands it to the widget, which sends it in the `Authorization` header and never inside the
+seed. This is what it looks like, for the day a site of the console gets a key:
 
 ```ts
 init({
@@ -384,8 +386,7 @@ init({
 });
 ```
 
-**A site of the console has no key to verify such a token with, so do not pass one.** A token that
-fails to verify is a `401`, not a silent downgrade to anonymous: measured on 2026-10-16, a note sent
+A token that fails to verify is a `401`, not a silent downgrade to anonymous: measured on 2026-10-16, a note sent
 with a token signed by a key of the host answered `401 invalid-identity`, and was not kept. The key was
 the `identitySecret` of a client of `FRUITBACK_CLIENTS`, which no worker takes since FRU-225. Whether a
 site of the console gets one is not decided (FRU-184).
