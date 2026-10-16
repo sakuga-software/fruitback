@@ -18,6 +18,7 @@ import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { COMMENTS_PER_ISSUE as SQLITE_REPLY_CAP, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
 import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst } from './store-conformance.fixture.ts';
+import { REFUSED_SINCE_POSTGRES } from './env.ts';
 import { isDevOnlyProvider, storeProviders } from './stores.ts';
 
 /**
@@ -533,8 +534,12 @@ describe('the conformance suite', () => {
  * The matrix is compared with the code where the code holds the answer: the stages, the reply cap and
  * whether the store runs in production. The column that says what changes a stage is prose about each
  * provider, and no test reads it.
+ *
+ * The matrix lists the stores that an operator can choose. A store that `readConfig` refuses by its
+ * name since FRU-225 is not one of them, and the page names it in « Upgrading » only.
  */
 describe('the store matrix in docs/self-hosting.md', () => {
+  const offered = (provider: string) => !Object.hasOwn(REFUSED_SINCE_POSTGRES, provider);
   const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
   const header = ['', 'Store', 'Stages', 'What changes the stage', 'Replies', 'Runs in production', ''];
   const lines = guide.split('\n').map((line) => line.split('|').map((cell) => cell.trim()));
@@ -547,12 +552,13 @@ describe('the store matrix in docs/self-hosting.md', () => {
 
   it('has one row for each store, and no other', () => {
     assert.ok(start >= 0, 'the store matrix was not found');
-    assert.deepEqual(rows.map((row) => row.provider).sort(), storeProviders().sort());
+    assert.deepEqual(rows.map((row) => row.provider).sort(), storeProviders().filter(offered).sort());
   });
 
   // One row for a provider, whatever the number of places its suite runs on.
   const first = SUBJECTS.filter(
-    (subject, index) => SUBJECTS.findIndex((each) => each.provider === subject.provider) === index,
+    (subject, index) =>
+      offered(subject.provider) && SUBJECTS.findIndex((each) => each.provider === subject.provider) === index,
   );
 
   for (const subject of first) {

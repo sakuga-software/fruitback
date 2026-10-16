@@ -71,15 +71,20 @@ store it is configured with:
 | ---------- | -------------------------------------------------------- | ----------------------------------- |
 | `linear`   | an issue in your Linear workspace, the seed in its body  | Linear, outside your infrastructure |
 | `github`   | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
-| `sqlite`   | a row in a database file on your volume                  | you                                 |
 | `postgres` | a row in the database of the worker, beside the accounts | you                                 |
 
 On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
 in the worker and a copy is posted to that address, whole and signed. Who runs that address decides
 who reads the copy. [Receiving notes on your own address](rest-connector.md) is the request.
 
+`postgres` is the default, and the database is the one every instance has (FRU-225): the notes of
+every workspace are in it, in the clear, beside the accounts. Who reads them there is whoever can
+read the database or a dump of it: the role of `FRUITBACK_DATABASE_URL`, the people who run the
+server, and whoever holds a backup. [SECURITY.md](../SECURITY.md#what-the-database-keeps-and-who-reads-it)
+says it in full.
+
 In the two trackers, the issue description also states the reporter's name and e-mail in a line
-your team reads, and the seed below it repeats them. [SECURITY.md](../SECURITY.md#a-seed-is-stored-in-the-clear-in-your-issue-tracker)
+your team reads, and the seed below it repeats them. [SECURITY.md](../SECURITY.md#a-seed-is-stored-in-the-clear-in-your-database-or-your-tracker)
 says who can read each store. **On a public GitHub repository, that is everyone.**
 
 ### Who can read a note back
@@ -104,17 +109,16 @@ session of its workspace and nobody else, which is what a site added with no vis
   failed request. It does not log the requests it serves. Your reverse proxy probably does: its
   access log holds the address of every visitor that loaded a pin, and you set its retention.
 - **The address of a caller, for two minutes.** The rate limit counts requests per address over
-  one-minute windows, and keeps a window for two. On a worker with no database it is in memory, and
-  nothing writes the address to disk. **On a worker with a database it is a row of the table `kv`**
-  (FRU-67), so that the replicas share one limit: the address is then in the database for those two
+  one-minute windows, and keeps a window for two. **It is a row of the table `kv`** of the database
+  (FRU-67), so that the replicas share one limit: the address is in the database for those two
   minutes, and in a backup taken during them. Expired rows are removed as requests come.
-- **The answer to a read, for 15 seconds**, in the same place: memory, or the table `kv`. The read
+- **The answer to a read, for 15 seconds**, in the same table. The read
   cache keeps a page's notes so a burst of visitors costs one call to the store.
 - **The address a sign-in link or an invitation was sent to, for the time of its limit**, in the same
   place, as the key of a count: the worker sends a few messages to one address in a window, and no
   more.
-- **The extension's sessions, on disk**, when `FRUITBACK_SESSION_PATH` is set, or in the PostgreSQL
-  database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-142). Each row holds the
+- **The extension's sessions, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-142).
+  Each row holds the
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
@@ -262,9 +266,8 @@ As long as the issue or the row exists. Fruitback deletes nothing on its own.
 
 - **Linear and GitHub:** the retention of your workspace or repository. Closing an issue does not
   delete it.
-- **SQLite:** yours, and the file's backups are part of it. A backup kept for a year keeps every
-  note for a year.
-- **PostgreSQL:** yours too, and the dumps of the database are part of it. The notes of a site stay
+- **PostgreSQL:** yours, and the dumps of the database are part of it. A dump kept for a year keeps
+  every note for a year. The notes of a site stay
   when the site is removed from its workspace: nothing deletes them but the command below.
 
 ## Deleting a reporter's notes
@@ -278,17 +281,17 @@ one. So list the notes first, read the list, and delete after.
 nothing to search for at all. Each note has an identifier, and the thread of its pin shows it on the
 page.
 
-- **SQLite and PostgreSQL:** the worker has a command for it. Run it in the container, like `pair`:
+- **PostgreSQL:** the worker has a command for it. Run it in the container, like `pair`:
 
   ```bash
-  docker exec <container> node server.mjs forget --email alice@example.com --dry-run
-  docker exec <container> node server.mjs forget --email alice@example.com
+  docker compose exec worker node server.mjs forget --email alice@example.com --dry-run
+  docker compose exec worker node server.mjs forget --email alice@example.com
   ```
 
   The first line lists the notes that give this address, with their `FB-n`, date, page and the start
   of the note, and deletes nothing. The second deletes them, with the team's replies to them. The
   address is compared without case and without the spaces around it. You do not have to stop the
-  worker: the file is in WAL mode, and the database takes the deletion in one transaction. A page
+  worker: the database takes the deletion in one transaction. A page
   can still show a deleted note for up to 15 seconds, from the cache. Then delete it from your
   backups too, or record when they expire. **On PostgreSQL the command reads the notes of every
   site of the worker**, whatever their workspace: it is for whoever runs the worker, not for a
@@ -297,16 +300,19 @@ page.
   For a note with no address, list by name, then delete by identifier:
 
   ```bash
-  docker exec <container> node server.mjs forget --name "Alice" --dry-run
-  docker exec <container> node server.mjs forget --id FB-12 --id FB-15
+  docker compose exec worker node server.mjs forget --name "Alice" --dry-run
+  docker compose exec worker node server.mjs forget --id FB-12 --id FB-15
   ```
 
   `--name` only lists, and the command refuses it without `--dry-run`: two reporters sign with the
   same name, so a name finds notes and does not decide which ones go. `--id` deletes the notes you
   name, with their replies. If one identifier of the list names no note, nothing is deleted. Use
-  one of `--email`, `--name` and `--id` in a command.
+  one of `--email`, `--name` and `--id` in a command. Measured with the compose file on 2026-10-16:
+  `forget --id FB-1 --dry-run` listed the note of the path of [self-hosting.md](self-hosting.md), and
+  deleted nothing.
 
-- **After the notes moved from the SQLite file to PostgreSQL (FRU-220), the file still holds them.**
+- **After an upgrade copied the notes of an instance of before FRU-225 into the database (FRU-220),
+  the file of before still holds them.** See « Upgrading » in [self-hosting.md](self-hosting.md#upgrading-and-rolling-back).
   `migrate-to-postgres --seeds` copies and never writes the file, which is the way back. `forget`
   then deletes in the database only: a note that a person asked you to delete is still in the file
   and in the archives that hold it. Delete the file when the way back is no longer needed, and
@@ -318,10 +324,6 @@ page.
 
 If you delete PostgreSQL rows by hand, delete the row of `seeds`: its replies in `seed_comments` go
 with it.
-
-If you delete SQLite rows by hand with `sqlite3`, start the session with `PRAGMA foreign_keys = ON`.
-The `sqlite3` shell turns foreign keys off for each new connection, and without them the note goes
-and its replies stay, attached to nothing (measured). The worker's own connection has them on.
 
 ## A notice you can adapt
 

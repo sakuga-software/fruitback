@@ -14,9 +14,10 @@ When they come back to the page, their pins are still there, coloured by the iss
 The guides are on **[sakuga-software.github.io/fruitback](https://sakuga-software.github.io/fruitback/)**,
 and they are the files in [docs/](docs/).
 
-**Fruitback runs no service that holds your feedback.** It lands in the tracker your team already
-uses — or, with `FRUITBACK_STORE=sqlite`, in a file on a volume you own. No database of ours, no
-dashboard of ours, no account to create anywhere.
+**Self-hosted, Fruitback holds your feedback on your server, and nowhere else.** It stays in your
+PostgreSQL, or lands in the tracker your team already uses. An administrator account in your own
+console, and none anywhere else; a visitor who leaves a note needs no account at all. Fruitback Cloud
+runs the same thing for you.
 
 **It comes in three modes, and which one you want is the first thing to settle.** They differ on what
 the site has to ship: **public**, where the site embeds the widget and every visitor can leave a
@@ -26,9 +27,10 @@ extension has signed in. One page each way — [docs/modes.md](docs/modes.md).
 
 ## Install, in public mode
 
-Two lines on a site with no build step. `client` is the name this site reports under, and `endpoint`
-is **your own worker** — the piece that holds the tracker's API key, because that key cannot ship in
-client-side JavaScript. It is one container: [docs/self-hosting.md](docs/self-hosting.md).
+Two lines on a site with no build step. `client` is the id of the site, which the console gives with
+this tag, and `endpoint` is **your own worker** — the piece that holds the notes, or the tracker's API
+key, because that key cannot ship in client-side JavaScript. It is one compose file:
+[docs/self-hosting.md](docs/self-hosting.md).
 
 The other two modes need the same worker and a browser extension on top; the reviewer's side of both
 is [docs/reviewing.md](docs/reviewing.md).
@@ -36,8 +38,8 @@ is [docs/reviewing.md](docs/reviewing.md).
 ```html
 <script
   src="https://cdn.acme.dev/fruitback.iife.js"
-  data-fruitback-endpoint="https://feedback.acme.dev"
-  data-fruitback-client="acme"
+  data-fruitback-endpoint="https://api.feedback.acme.dev"
+  data-fruitback-client="site_29000420191b4eb2b0ea"
   defer
 ></script>
 ```
@@ -68,31 +70,28 @@ import { Fruitback } from '@fruitback/react';
 > **The packages are not on npm yet.** The lines above are the shape of the install, not something
 > that resolves today. The worker image _is_ published — see [docs/self-hosting.md](docs/self-hosting.md).
 
-The worker is **three commands and one line to edit**, and none of them needs a clone of this
-repository:
+The instance is **two files, five lines to fill, and one command**, and none of them needs a clone of
+this repository:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
 curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
-# set ALLOWED_ORIGINS in .env to the site that embeds the widget
+# fill the five lines .env asks for: the site, the database password, two secrets, your address
 docker compose up -d --wait
 ```
 
-It keeps the notes in SQLite on a Docker volume, with no account anywhere. CI runs this file from an
-empty directory, plants a pin, recreates the container and reads the pin back. To update, run
-`docker compose pull` first: Compose does not pull a tag that is already on the machine, and `edge`
-moves on every merge.
+It starts the worker, its PostgreSQL and the console. The sign-in link of the first administrator is
+in `docker compose logs worker`; the console then adds the site and gives its script tag.
+[docs/self-hosting.md](docs/self-hosting.md) is the path, seven steps from an empty folder to a pin a
+visitor planted. CI runs this file from an empty directory the same way, recreates the containers and
+reads the pin back. To update, run `docker compose pull` first: Compose does not pull a tag that is
+already on the machine, and `edge` moves on every merge.
 
-**While this repository is private, the raw files and the image are private too.** Until then,
-download the two files with the GitHub CLI, logged in with `gh auth login`, and log in to `ghcr.io`
-with a token that has `read:packages` — see [docs/self-hosting.md](docs/self-hosting.md#before-you-start):
+**The two images are not public yet.** Until an owner makes the packages public, log in to `ghcr.io`
+with a token that has `read:packages` before `docker compose up` — see
+[docs/self-hosting.md](docs/self-hosting.md#before-you-start).
 
-```bash
-gh api repos/sakuga-software/fruitback/contents/docker-compose.yml -H 'Accept: application/vnd.github.raw' > docker-compose.yml
-gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: application/vnd.github.raw' > .env
-```
-
-The full walk-through — Linear setup, per-client routing, identified reporters — is in
+The full walk-through — the site, the widget, a Linear team, several sites — is in
 [docs/install.md](docs/install.md).
 
 <img src="docs/assets/writing-a-note.png" alt="The note popover, anchored to the element it is about" width="330">
@@ -108,18 +107,16 @@ answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between
 | Delivered as                              | `<script>` tag or npm                 | a browser extension                   | `<script>` tag or npm            |
 | Published                                 | **not yet** — build it from this repo | **not yet** — load it unpacked        | **not yet** — both of the above  |
 | Who is **shown** the pins                 | every visitor                         | the reviewer who switched the site on | reviewers who are signed in      |
-| Who can fetch them **with no credential** | anyone                                | anyone                                | nobody, under `authenticated`    |
-| Who supplies the credential               | the host's backend, or nobody         | **nobody can**                        | the reviewer, by pairing         |
+| Who can fetch them **with no credential** | anyone                                | anyone, or nobody                     | nobody, on a site members read   |
+| Who supplies the credential               | nobody                                | **nobody can**                        | the reviewer, by connecting      |
 | Good for                                  | a public "report a problem"           | reviewing a client's site, invisibly  | a team reviewing its own staging |
 | Built                                     | **yes**                               | **yes**, MV3 on Chromium and Firefox  | **yes**                          |
 
-**Who may read is `read` — `FRUITBACK_READ` worker-wide, or per client in `FRUITBACK_CLIENTS` — and
-the mode decides who can satisfy it.** A public-mode site can
-run `read: 'authenticated'` if it mints identity tokens of its own — `init({ identityToken })` is the
-seam, and the credential then lives in that site's page. **Team mode is the only one where the
-reviewer supplies it and the page never holds it**, attached in the extension's background. **Private
-mode can supply nothing at all**: the widget it mounts has no token and no relay, so on an
-`authenticated` worker its reads answer `401`, and left at the `public` default its pins are readable
+**Who may read is the visibility of the site — « Members of … » or « Everyone who visits », chosen
+in the console — and the mode decides who can satisfy it.** **Team mode is the only one where the
+reviewer supplies a credential and the page never holds it**, attached in the extension's background.
+**Private mode can supply nothing at all**: the widget it mounts has no token and no relay, so on a
+site that members read its reads answer `401`, and on a site that everyone reads its pins are readable
 by anyone who can build the URL — it changes who is _shown_ the feedback, never who may _fetch_ it.
 [docs/modes.md](docs/modes.md) is the page that lays this out. The four lines a team-mode site adds are in
 [docs/install.md](docs/install.md#team-mode-dormant-until-a-reviewer-arrives); what the relay
@@ -130,22 +127,22 @@ runtime, per origin, when somebody switches that site on.
 
 ## Where your feedback lives
 
-`FRUITBACK_STORE` picks the connector. It defaults to `linear`, so a deployment that sets nothing
-keeps the behaviour it has. Each connector reads only its own variables — a worker on SQLite is never
-asked for a Linear key — and an unknown name is refused at boot rather than quietly defaulted.
+**In your PostgreSQL, by default.** A workspace can send the notes of a site to a tracker it connects
+in the console — a Linear workspace, or an address that receives them — and `FRUITBACK_STORE` picks
+where the notes of a site with no tracker of its own go. Each connector reads only its own variables,
+and an unknown name is refused at boot rather than quietly defaulted.
 
-| `FRUITBACK_STORE`    | Needs                                                                                    | Runs on                          | Good for                                                                                                                                                                     |
-| -------------------- | ---------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `linear` _(default)_ | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                       | anywhere the worker runs         | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free.                                                                                       |
-| `sqlite`             | `FRUITBACK_SQLITE_PATH`                                                                  | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume.                                                                                                               |
-| `github`             | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs         | A team whose issues are already on GitHub. Three stages instead of five: New while open, Done when closed as completed, Closed when closed as not planned or as a duplicate. |
-| `memory`             | nothing                                                                                  | the dev loop                     | Refused under `NODE_ENV=production`.                                                                                                                                         |
+| `FRUITBACK_STORE`      | Needs                                                                                    | Good for                                                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres` _(default)_ | nothing more: the database every instance has                                            | No third party at all. The console lists the notes, and the pins on the page are the thread.                                                                                 |
+| `linear`               | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                       | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free.                                                                                       |
+| `github`               | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | A team whose issues are already on GitHub. Three stages instead of five: New while open, Done when closed as completed, Closed when closed as not planned or as a duplicate. |
+| `memory`               | nothing                                                                                  | The dev loop. Refused under `NODE_ENV=production`.                                                                                                                           |
 
-SQLite is one file through `node:sqlite` — no dependency, no native module, and the schema migrates
-itself on open, so a self-hoster starts one container rather than two. What it gives up is the
-dashboard: with no tracker behind it, the pins on the page are the interface. The compose snippet,
-the one-line backup and what else you trade are in
-[docs/self-hosting.md](docs/self-hosting.md#storing-the-seeds-in-sqlite).
+The database is the one the instance keeps its sites and accounts in, so keeping the notes there adds
+nothing to run. What it gives up is the triage of a tracker: no assignee and no workflow, and a stage
+changes only in the database. Backups and what else you trade are in
+[docs/self-hosting.md](docs/self-hosting.md#back-it-up).
 
 GitHub Issues signs in as a GitHub App, never with a personal token: the worker mints a token that
 expires after an hour and reaches one repository. Setting up the App is in
@@ -158,12 +155,13 @@ Fruitback puts a widget in somebody else's page and a worker in front of somebod
 **[SECURITY.md](SECURITY.md) says where those boundaries are**, and it is worth reading before you
 deploy rather than after. Two things surprise people most often:
 
-- **`GET /feedback` answers anyone who can build the URL**, unless you set
-  `FRUITBACK_READ=authenticated`. Every note, its reporter's name and address, and the team's replies
-  are readable by any visitor of the client's site — and by `curl`. The default stays open so an
-  upgrade never blanks a working deployment; the boot log names every client it applies to.
-- **`clientId` is asserted by the browser, never authenticated.** `origins` makes the claim checkable
-  against the browser's own header — the trust level CORS gives, and no more.
+- **On a site that everyone reads, `GET /feedback` answers anyone who can build the URL.** Every note,
+  the name its reporter typed, and the team's replies are readable by any visitor of the site — and
+  by `curl`. A site that only members read answers a session of its workspace and nobody else. The
+  console asks which when the site is added, and « Members of … » is the default.
+- **The id of a site is asserted by the browser, never authenticated.** The address of the site makes
+  the claim checkable against the browser's own `Origin` header — the trust level CORS gives, and no
+  more.
 
 It also says how to report a vulnerability.
 

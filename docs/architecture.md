@@ -24,14 +24,14 @@ from the anchor we stored.
 
 ## Architecture
 
-**The diagram shows the default path, `FRUITBACK_STORE=linear`.** Since FRU-33 the third column is
-whichever connector is configured — `sqlite` writes a row in a file the worker owns, `github` an issue
-in a repository (FRU-32), and the shape of the exchange does not change. This page was written when Linear was the only answer, and it is scoped
-here rather than rewritten: the reasoning below is still why the Linear connector looks the way it
-does.
+**The diagram shows the Linear path.** Since FRU-33 the third column is whichever store the site
+sends to — the database of the worker by default (`postgres`, FRU-225), an issue in a repository with
+`github` (FRU-32), a Linear team — and the shape of the exchange does not change. This page was written
+when Linear was the only answer, and it is scoped here rather than rewritten: the reasoning below is
+still why the Linear connector looks the way it does.
 
 ```
-widget (client site)            worker (proxy)              the store (linear by default)
+widget (client site)            worker (proxy)              the store (here, linear)
 ──────────────────              ──────────────              ──────
 react-grab picker      ──POST──▶ create issue      ──────▶  issue + labels
 comment popover                  (server-side token)        description = seed
@@ -43,8 +43,13 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   the pins it reads back.
 - **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
   GitHub push). Why it exists at all: a tracker's API token cannot live in client-side JS on a public
-  site. On `FRUITBACK_STORE=sqlite` there is no such token and it still exists, because somebody has
-  to hold the file and answer the two routes. It also decides attribution (anonymous vs signed in).
+  site. With the notes in its own database there is no such token and it still exists, because
+  somebody has to hold the database and answer the two routes. It also decides attribution (anonymous
+  vs signed in).
+- **PostgreSQL** — every instance has one since FRU-225, on a database of its own or in a schema of
+  one that exists: the notes of the store `postgres`, the sites, the accounts and the sessions.
+- **console** — `@fruitback/console`, static files behind nginx, a second image. A person signs in,
+  makes a workspace and adds its sites there. It holds no secret: the session is the worker's cookie.
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 - **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (FRU-41).
   The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
@@ -52,17 +57,19 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   Firefox. It asks for **no host permission at install**: the content scripts are registered at
   runtime, per origin, when somebody turns that site on.
 
-No dashboard and no user accounts: the tracker you already run is both. The sentence that stood here
-until FRU-26 said "no database, no session store" as well, and it had simply outlived itself —
-`FRUITBACK_STORE=sqlite` keeps the seeds in a file of the worker's own since FRU-31, and
-`FRUITBACK_SESSION_PATH` keeps the extension's sessions in another since FRU-42. Neither is a
-database _of users_, which is what the claim was ever about.
+**Accounts, and a database, on every instance** (FRU-225, decided on 2026-10-13). An administrator
+signs in to the console, adds the sites and invites the members; a visitor who leaves a note needs no
+account. Status, threads and assignees still belong to the store: the console lists the notes, and a
+tracker you already run stays the place to triage them. The sentence that stood here said "no
+dashboard and no user accounts", and before FRU-26 "no database, no session store" as well. Each
+outlived itself in turn: a file of the worker's own for the seeds (FRU-31) and another for the
+sessions (FRU-42), then the accounts (FRU-141), then PostgreSQL for all of it.
 
 ## The seed
 
 A **seed** is one piece of feedback planted on an element. **Where** it is stored is the connector's
 business: `linear` puts it as a JSON block inside the issue description, under a human-readable
-summary, `github` puts the same block in the issue body, and `sqlite` puts it in a column. The two
+summary, `github` puts the same block in the issue body, and `postgres` puts it in a column. The two
 decisions below were made for the Linear connector, and they are what the markdown codec exists for.
 The GitHub connector uses the same codec, and finds a page's seeds by label instead of by
 `description contains`: see _GitHub Issues, and the stages it cannot say_ in
@@ -108,6 +115,7 @@ See [`packages/shared/src/seed.ts`](../packages/shared/src/seed.ts),
 ```
 packages/shared    the seed contract: schema, markdown codec, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to the store  ✅
+apps/console       the console: sign-in, workspaces, sites                 ✅
 packages/widget    capture + overlay + Shadow DOM host + popover          ✅
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```

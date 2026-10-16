@@ -11,8 +11,9 @@ as an issue carrying the CSS selector, the React component and the source file b
 Coming back to the page, they see their pins again, coloured by that issue's status.
 
 Two ways to run it. **Fruitback Cloud** runs the server for you, in Europe, and keeps the notes in
-your workspace. **Self-hosted**, you run one container, and the notes land in the tracker your team
-already uses (Linear, GitHub Issues) or in a SQLite file on a volume you own.
+your workspace. **Self-hosted**, you run one compose file — the server, its PostgreSQL and the
+console — and the notes stay in your database, or land in the tracker your team already uses (Linear,
+GitHub Issues).
 
 ## The guides
 
@@ -20,7 +21,7 @@ already uses (Linear, GitHub Issues) or in a SQLite file on a volume you own.
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | [The three modes](modes.md)                              | Public, private and team: what the site ships in each, and who may read the pins. Start here.      |
 | [Installing Fruitback](install.md)                       | Two lines on a site with no build step, and what each option does.                                 |
-| [Running the worker yourself](self-hosting.md)           | One container behind a reverse proxy: every environment variable, and what a wrong value breaks.   |
+| [Running Fruitback yourself](self-hosting.md)            | From an empty folder to a first pin, then backups, upgrades and every environment variable.        |
 | [Reviewing a site with the extension](reviewing.md)      | The reviewer's side: the browser extension, a rule per site, and pairing.                          |
 | [Translating the widget](translating.md)                 | The words a host can replace, and the catalogs the bundle carries.                                 |
 | [Receiving notes on your own address](rest-connector.md) | The request the Cloud posts for each note, its signature, and what happens when you do not answer. |
