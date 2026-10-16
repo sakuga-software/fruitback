@@ -18,8 +18,9 @@ did, and it says what was not.
 
 - **Docker Engine, with Compose 2.20 or later.** `docker compose up --wait` needs 2.20. Check with
   `docker compose version`.
-- **A 64-bit Linux machine, `amd64` or `arm64`.** The images are published for both, and Docker picks
-  the right one. One CPU is more than enough for one team: see [Sizing](#sizing-and-more-than-one-replica).
+- **A 64-bit machine, `amd64` or `arm64`.** Linux for a server. For a trial, a Mac with Docker Desktop
+  or OrbStack is fine: the path below was measured on one. The images are published for both
+  architectures, and Docker picks the right one. One CPU is more than enough for one team: see [Sizing](#sizing-and-more-than-one-replica).
 - **`openssl`**, to make the secrets.
 - **On a server, two HTTPS names**, one for the worker and one for the console, on one domain:
   `api.feedback.example.com` and `app.feedback.example.com`, for example. A browser blocks a call from
@@ -67,10 +68,14 @@ each start, or end up in a backup.
 | `FRUITBACK_IDENTITY_SECRET`   | `openssl rand -base64 32`, another one                                                     |
 | `FRUITBACK_FIRST_ADMIN`       | your e-mail address. Nothing is sent to it: it names the first administrator, at step 4    |
 
+The lines below are written for **a trial on one machine**: `ALLOWED_ORIGINS` is
+`http://localhost:5500`, where step 6 serves a page. For a real site, write its address in the first
+line instead, `https://staging.example.com` for example.
+
 Edit the file, or run these lines in the folder (they work with the `sed` of Linux and of macOS):
 
 ```bash
-sed -i.bak "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://staging.example.com|" .env
+sed -i.bak "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://localhost:5500|" .env
 sed -i.bak "s|^FRUITBACK_POSTGRES_PASSWORD=.*|FRUITBACK_POSTGRES_PASSWORD=$(openssl rand -hex 32)|" .env
 sed -i.bak "s|^FRUITBACK_AUTH_SECRET=.*|FRUITBACK_AUTH_SECRET=$(openssl rand -base64 32)|" .env
 sed -i.bak "s|^FRUITBACK_IDENTITY_SECRET=.*|FRUITBACK_IDENTITY_SECRET=$(openssl rand -base64 32)|" .env
@@ -81,9 +86,8 @@ rm .env.bak
 **Keep the three secrets and the password somewhere other than the server.** No backup holds them,
 and [Back it up](#back-it-up) says what each one costs when it is lost.
 
-To try the path on one machine, write `http://localhost:5500` in `ALLOWED_ORIGINS`: step 6 serves a
-page there. `FRUITBACK_PUBLIC_URL` and `FRUITBACK_CONSOLE_URL` stay as they are. On a server, set them
-to the two HTTPS names now: see [Behind a reverse proxy](#behind-a-reverse-proxy).
+For the trial, `FRUITBACK_PUBLIC_URL` and `FRUITBACK_CONSOLE_URL` stay as they are. On a server, set
+them to the two HTTPS names now: see [Behind a reverse proxy](#behind-a-reverse-proxy).
 
 ### 3. Start the three containers
 
@@ -92,14 +96,31 @@ docker compose up -d --wait
 ```
 
 **With no login to `ghcr.io`, the pull of the two images is refused** while they are private (see
-[Before you start](#before-you-start)). Build them at the root of a checkout of this repository instead, and name
-them in `.env`, which is what the measurements of this page did:
+[Before you start](#before-you-start)), and the command ends with:
+
+```text
+Error response from daemon: error from registry: unauthorized
+```
+
+Then build the two images from a checkout of this repository, and name them in `.env`. That is what
+the measurements of this page did. From the folder that holds `.env`:
 
 ```bash
-docker build -f apps/worker/Dockerfile -t fruitback-worker:local .
-docker build -f apps/console/Dockerfile -t fruitback-console:local .
-# then, in .env: FRUITBACK_IMAGE=fruitback-worker:local and FRUITBACK_CONSOLE_IMAGE=fruitback-console:local
+git clone https://github.com/sakuga-software/fruitback.git ../fruitback-src
+(cd ../fruitback-src &&
+  docker build -f apps/worker/Dockerfile -t fruitback-worker:local . &&
+  docker build -f apps/console/Dockerfile -t fruitback-console:local .)
+sed -i.bak "s|^FRUITBACK_IMAGE=.*|FRUITBACK_IMAGE=fruitback-worker:local|" .env
+sed -i.bak "s|^FRUITBACK_CONSOLE_IMAGE=.*|FRUITBACK_CONSOLE_IMAGE=fruitback-console:local|" .env
+rm .env.bak
+docker compose up -d --wait
 ```
+
+The builds run in the checkout, inside the parentheses, and the shell stays in the folder of `.env`.
+`.env` already has the two image lines, so `sed` replaces them. Measured on 2026-10-16: the clone took
+3 seconds, and the two builds 12 and 16 seconds with `--no-cache`, on a Mac that held the base images
+and the build cache of an earlier build. A first build on a new machine also downloads Node and the
+dependencies: count several minutes, which were not measured.
 
 Measured: about 20 seconds, the pull of PostgreSQL included, then `docker compose ps` shows `worker`,
 `postgres` and `console`, each `healthy`. The worker makes its tables in the database at its first
@@ -122,12 +143,14 @@ secrets, the worker starts, refuses to serve, and `--wait` ends with `container 
 docker compose logs worker
 ```
 
-While no workspace has an owner, the worker writes a sign-in link in its log when it starts:
+While no workspace has an owner, the worker writes a sign-in link in its log when it starts. The log
+has other lines before these (`listening on …`, `better-auth is ready, under /console/auth`); here are
+the three lines of the link:
 
 ```text
 [fruitback] this Fruitback has no owner yet. Sign-in link for you@example.com (FRUITBACK_FIRST_ADMIN):
 [fruitback]     http://localhost:8081/sign-in#nnuYpvfbXZOxsrjEchrnOFXOugBwtFCq
-[fruitback] you@example.com opens it, and makes the first workspace. Valid for 10 minutes, and usable once. …
+[fruitback] you@example.com opens it, and makes the first workspace. Valid for 10 minutes, and usable once. Whoever reads this log can use it: start the worker again for another one.
 ```
 
 Open it in your browser. The console signs you in, makes your workspace, and names it after the domain
@@ -140,8 +163,13 @@ refused from then on (measured):
 docker compose exec worker node server.mjs admin-link --email you@example.com
 ```
 
-A restart writes no new link within the ten minutes; it says so in the log. Once a
-workspace has an owner, the worker writes no link at start: [The first administrator](#the-first-administrator-and-getting-back-in) says how to
+**The last line of the log is wrong within the ten minutes.** It says to start the worker again for
+another link, but a restart inside the ten minutes writes no link (measured). It writes this line
+instead: « this Fruitback has no owner yet, and a sign-in link for its first administrator was written
+less than 10 minutes ago, by this worker or by another one (FRUITBACK_FIRST_ADMIN). Read the log of
+that start, wait and start again, or run `node server.mjs admin-link --email <address>`. » Use the
+command above: it gives a link at once. Once a workspace has an owner, the worker writes no link at
+start: [The first administrator](#the-first-administrator-and-getting-back-in) says how to
 get back in.
 
 ### 5. Add your site
@@ -170,8 +198,9 @@ and the worker answers the page of each site you add, whatever `ALLOWED_ORIGINS`
 
 ### 6. Put the script on the site
 
-Paste it before `</body>` of the pages of the site. For the trial, a page in a folder of its own, and a
-server for it:
+Paste it before `</body>` of the pages of the site. For the trial, a page in a folder of its own,
+which holds the tag of step 5. **Replace `site_…` with the id of your site**, from the tag the console
+shows, before you run it:
 
 ```bash
 mkdir site && cat > site/index.html <<'EOF'
@@ -179,12 +208,19 @@ mkdir site && cat > site/index.html <<'EOF'
 <html lang="en">
   <body>
     <main><h1>My site</h1></main>
-    <!-- paste the script tag of step 5 here -->
+    <script
+      src="http://localhost:8081/fruitback.iife.js"
+      data-fruitback-endpoint="http://localhost:8080"
+      data-fruitback-client="site_…"
+      defer
+    ></script>
   </body>
 </html>
 EOF
 python3 -m http.server 5500 --directory site
 ```
+
+With `site_…` left as it is, the note is refused: the read and the write answer `400 unknown-client`.
 
 The last command keeps running; use another terminal for the next step.
 
@@ -192,7 +228,9 @@ The last command keeps running; use another terminal for the next step.
 
 Open `http://localhost:5500` in a private window, where nobody is signed in. Click **Leave feedback**,
 then the title, write a note, and click **Send**. The pin is on the title. Another visitor who opens
-the page sees it too, and the console shows « First note received ».
+the page sees it too. The screen of step 5 in the console (« Set up Fruitback », `/setup`) shows
+« First note received » if it is still open. The « Sites » screen shows the count `1` for the site,
+and « Just now ».
 
 Read it back as the widget does, with the id of your site:
 
@@ -248,7 +286,9 @@ curl -X POST http://localhost:8080/feedback -H 'Origin: http://localhost:5500' -
 ```
 
 The read of step 7 then answers that note, with the id of the site this answer gave. Measured on 2026-10-16. A read that names no site answers
-`400 client-required`, and the page of another origin `403 origin-not-allowed-for-client`.
+`400 client-required`. A page whose origin is neither a site of the worker nor in `ALLOWED_ORIGINS`
+gets `403 origin-not-allowed`. An origin the worker allows, in `ALLOWED_ORIGINS` or the address of
+another site, gets `403 origin-not-allowed-for-client` when it names this site.
 
 ## What the compose file decides
 
