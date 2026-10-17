@@ -73,7 +73,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
       # Node runs the TypeScript of the script as is: no package and no build.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
       # The script reads the code and never runs it.
@@ -135,7 +135,7 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
       # A comment event carries no commit: read the head and the base of the pull request, and
