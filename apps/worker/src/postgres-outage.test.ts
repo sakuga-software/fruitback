@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { sql } from 'drizzle-orm';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, ownDatabase, rowsOf } from './postgres.fixture.ts';
 
@@ -51,9 +52,28 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-/** A pairing code for `subject`, minted by the command of the worker. */
-async function pairingCode(env: NodeJS.ProcessEnv, subject: string): Promise<string> {
-  const { stdout } = await run(process.execPath, ['src/main.ts', 'pair', '--subject', subject], {
+/**
+ * An account that owns a workspace with a site: `pair` mints only for a member of such a workspace
+ * (FRU-277). The store migrates the database at its first call.
+ */
+async function owner(url: string, email: string): Promise<{ id: string; workspace: string }> {
+  const database = createPgDatabase(url, 'public', { max: 1 });
+  try {
+    const accounts = createPostgresAccountStore(database);
+    const id = (await accounts.signIn({ provider: 'email', subject: email, email })).id;
+    const workspace = (await accounts.createWorkspace(email, id)).id;
+    await accounts.addSite(workspace, { origin: `https://${email.split('@')[0]}.test`, visibility: 'everyone' });
+
+    return { id, workspace };
+  } finally {
+    await database.close();
+  }
+}
+
+/** A pairing code for `subject` in `workspace`, minted by the command of the worker. */
+async function pairingCode(env: NodeJS.ProcessEnv, subject: string, workspace: string): Promise<string> {
+  const args = ['src/main.ts', 'pair', '--subject', subject, '--workspace', workspace];
+  const { stdout } = await run(process.execPath, args, {
     cwd: WORKER,
     env,
     timeout: 8_000,
@@ -90,9 +110,10 @@ describe('a worker whose PostgreSQL closes a connection in a transaction (FRU-18
       cleanups.push(own.drop);
       const port = await freePort();
       const env = envOf(own.url, port);
-      // The command migrates the database, as the worker does at its first call.
-      const first = await pairingCode(env, 'alice');
-      const second = await pairingCode(env, 'bob');
+      const alice = await owner(own.url, 'alice@acme.test');
+      const bob = await owner(own.url, 'bob@acme.test');
+      const first = await pairingCode(env, alice.id, alice.workspace);
+      const second = await pairingCode(env, bob.id, bob.workspace);
 
       const worker: ChildProcess = spawn(process.execPath, ['src/main.ts'], { cwd: WORKER, env });
       let output = '';
@@ -114,7 +135,7 @@ describe('a worker whose PostgreSQL closes a connection in a transaction (FRU-18
       let holding = false;
       const holder = admin.alone(async (db) => {
         await db.execute(sql`BEGIN`);
-        await db.execute(sql`SELECT 1 FROM pairings WHERE subject = 'alice' FOR UPDATE`);
+        await db.execute(sql`SELECT 1 FROM pairings WHERE subject = ${alice.id} FOR UPDATE`);
         holding = true;
         await held;
         await db.execute(sql`COMMIT`);
@@ -161,7 +182,10 @@ describe('a worker whose PostgreSQL closes a connection in a transaction (FRU-18
 
       const next = await redeem(second);
       assert.equal(next.status, 200, output);
-      assert.deepEqual(((await next.json()) as { identity: unknown }).identity, { subject: 'bob' });
+      assert.deepEqual(((await next.json()) as { identity: unknown }).identity, {
+        subject: bob.id,
+        workspace: bob.workspace,
+      });
     },
   );
 });

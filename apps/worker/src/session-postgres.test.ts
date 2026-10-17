@@ -474,7 +474,14 @@ describe('the pair command of a worker on a database (FRU-142)', () => {
 
     // Less than the ten seconds an idle connection of the pool lives: a command that leaves the
     // pool open is still running when this gives up.
-    const { stdout } = await run(process.execPath, ['src/main.ts', 'pair', '--subject', 'alice'], {
+    // A member of a workspace that has a site: `pair` mints only for one (FRU-277).
+    const accounts = createPostgresAccountStore(database);
+    const alice = (await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' })).id;
+    const workspace = (await accounts.createWorkspace('Acme', alice)).id;
+    await accounts.addSite(workspace, { origin: 'https://acme.test', visibility: 'everyone' });
+
+    const args = ['src/main.ts', 'pair', '--subject', alice, '--workspace', workspace];
+    const { stdout } = await run(process.execPath, args, {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
       env: { PATH: process.env.PATH, ...envWith({ FRUITBACK_DATABASE_URL: own.url }) },
       timeout: 8_000,
@@ -482,9 +489,9 @@ describe('the pair command of a worker on a database (FRU-142)', () => {
 
     const code = /^ {4}(\S+)$/m.exec(stdout)?.[1];
     assert.ok(code !== undefined, stdout);
-    assert.match(stdout, /^pairing code for alice:/);
+    assert.match(stdout, new RegExp(`^pairing code for ${alice} in the workspace ${workspace}:`));
     assert.deepEqual(await rowsOf(database, 'SELECT subject, code_hash, redeemed_at FROM pairings'), [
-      { subject: 'alice', code_hash: await digest(normalizePairingCode(code)), redeemed_at: null },
+      { subject: alice, code_hash: await digest(normalizePairingCode(code)), redeemed_at: null },
     ]);
   });
 });
