@@ -487,9 +487,7 @@ describe('FRUITBACK_FIRST_ADMIN in the configuration (FRU-221)', () => {
     // FRU-225: every worker has workspaces, so the variable is refused by its own sentence.
     assert.deepEqual(missing(env), [REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER]);
     assert.match(REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER, /FRUITBACK_FIRST_ADMIN/);
-    assert.match(
-      missing(beforePostgres(env)).join(' | '),
-      /FRUITBACK_FIRST_REVIEWER \(it names no workspace: on a worker with workspaces, pair with `pair --workspace`, or from the console\)/,
-    );
+    // FRU-226: the code of the variable is gone, so the worker of before says the same sentence.
+    assert.ok(missing(beforePostgres(env)).includes(REFUSED_SINCE_POSTGRES.FRUITBACK_FIRST_REVIEWER));
   });
 });

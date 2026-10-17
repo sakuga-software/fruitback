@@ -58,7 +58,7 @@ describe('selecting the store', () => {
   });
 
   it('refuses a store it does not have, rather than falling back to the default', () => {
-    // A typo must not send a worker configured for SQLite to an API it has no key for. That would be
+    // A typo must not send a worker configured for GitHub to an API it has no key for. That would be
     // an opaque failure on every request instead of one line at boot — the same reasoning as
     // FRUITBACK_READ and TRUSTED_PROXY_HOPS.
     // A name that is no store, and not a store somebody may build: this test named `sqlite`, then
@@ -110,7 +110,7 @@ describe('selecting the store', () => {
   });
 
   it('lists the providers it can build', () => {
-    assert.deepEqual(storeProviders(), ['linear', 'sqlite', 'postgres', 'github', 'memory']);
+    assert.deepEqual(storeProviders(), ['linear', 'postgres', 'github', 'memory']);
   });
 });
 

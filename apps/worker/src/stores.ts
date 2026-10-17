@@ -2,7 +2,6 @@ import { createGithubStoreSpec } from './github.ts';
 import { createMemoryStoreSpec } from './linear-memory.ts';
 import { createLinearStoreSpec } from './linear.ts';
 import { createPostgresStoreSpec } from './postgres-stores.ts';
-import { createSqliteStoreSpec } from './sqlite.ts';
 import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor } from './store-config.ts';
 
 /**
@@ -10,11 +9,11 @@ import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor
  *
  * A separate module from `store-config.ts` because the connectors import `defineStore` from there:
  * holding the registry in the same file would make `store-config.ts` and `linear.ts` import each
- * other. SQLite (FRU-31) and GitHub (FRU-32) are one entry each.
+ * other. GitHub (FRU-32) and PostgreSQL (FRU-218) are one entry each. The SQLite store of FRU-31 went
+ * with FRU-226: `env.ts` refuses `FRUITBACK_STORE=sqlite` with what to do.
  */
 export const STORE_SPECS: readonly StoreSpec[] = [
   createLinearStoreSpec(),
-  createSqliteStoreSpec(),
   createPostgresStoreSpec(),
   createGithubStoreSpec(),
   createMemoryStoreSpec(),
@@ -41,7 +40,7 @@ export function isDevOnlyProvider(provider: string): boolean {
  * also refused rather than defaulted:
  *
  * - **An unknown provider** is a typo, and defaulting to Linear would send a worker someone
- *   configured for SQLite to an API it has no key for — an opaque failure per request instead of one
+ *   configured for GitHub to an API it has no key for — an opaque failure per request instead of one
  *   clear line at boot.
  * - **A dev-only provider under `NODE_ENV=production`** is refused outright, not downgraded. This is
  *   the guard `FRUITBACK_FAKE_LINEAR` has always had, and the one thing FRU-33 must not loosen:

@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
 import { describe, it, mock } from 'node:test';
 import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -15,7 +12,6 @@ import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts'
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
 import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './seed-rows.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
-import { COMMENTS_PER_ISSUE as SQLITE_REPLY_CAP, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
 import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst } from './store-conformance.fixture.ts';
 import { REFUSED_SINCE_POSTGRES } from './env.ts';
@@ -288,16 +284,6 @@ async function writeWithReplies(
 
 let linear: ReturnType<typeof fakeLinear> | undefined;
 let github: ReturnType<typeof fakeGithub> | undefined;
-let directories: string[] = [];
-let sqlitePath = '';
-
-function freshDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-conformance-'));
-  directories.push(directory);
-
-  return directory;
-}
-
 /** The databases a case opened, the one of `open` first. Closed after the case. */
 let databases: Database[] = [];
 
@@ -451,46 +437,6 @@ const SUBJECTS: ConformanceSubject[] = [
       unreadableAnswers();
 
       return createGithubStore(GITHUB_CONFIG);
-    },
-  },
-  {
-    provider: 'sqlite',
-    writtenStage: DEFAULT_SEED_STAGE,
-    replyCap: SQLITE_REPLY_CAP,
-    otherTenant: 'one file holds the seeds of every client, so there is no other tenant',
-    open() {
-      sqlitePath = join(freshDirectory(), 'fruitback.db');
-
-      return createSqliteStore({ path: sqlitePath });
-    },
-    close() {
-      closeSqliteConnections();
-      for (const directory of directories) rmSync(directory, { recursive: true, force: true });
-      directories = [];
-    },
-    unknownState(created) {
-      // The store keeps its connection open. Close it before another connection writes the file.
-      closeSqliteConnections();
-      const database = new DatabaseSync(sqlitePath);
-      database.prepare('UPDATE seeds SET stage = ? WHERE id = ?').run('marmalade', Number(created.id));
-      database.close();
-    },
-    plantReplies: (store, seed, count) =>
-      writeWithReplies(store, seed, (created) => {
-        closeSqliteConnections();
-        const database = new DatabaseSync(sqlitePath);
-        const insert = database.prepare('INSERT INTO comments (seed_id, author, body, created_at) VALUES (?, ?, ?, ?)');
-        for (const reply of repliesNewestFirst(count))
-          insert.run(Number(created.id), 'Alice', reply.body, reply.createdAt);
-        database.close();
-      }),
-    broken: () => createSqliteStore({ path: join(freshDirectory(), 'missing', 'fruitback.db') }),
-    unreachable: 'the file is on a local disk, so there is no network to lose',
-    garbled() {
-      const path = join(freshDirectory(), 'fruitback.db');
-      writeFileSync(path, 'not a database');
-
-      return createSqliteStore({ path });
     },
   },
   postgresSubject('PGlite', createPgliteDatabase, false),

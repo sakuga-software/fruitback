@@ -1,9 +1,6 @@
-import { afterEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
 import { connectorSettingsOf } from './account-rows.ts';
 import {
   ACTIONS,
@@ -16,26 +13,11 @@ import {
   normalizeEmail,
   siteOrigin,
 } from './accounts.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.fixture.ts';
 import { readExposureNotice } from './clients.ts';
 import { WORKER, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
 import { readConfig } from './env.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
-
-const directories: string[] = [];
-
-function scratch(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-accounts-'));
-  directories.push(directory);
-
-  return directory;
-}
-
-afterEach(() => {
-  closeAccountConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
 
 describe('the rights of each role (FRU-96)', () => {
   const expected: Record<Role, readonly Action[]> = {
@@ -94,32 +76,6 @@ describe('the words people paste', () => {
       read: 'authenticated',
     });
     assert.equal(clientOf({ ...site, visibility: 'everyone' }).read, 'public');
-  });
-});
-
-/**
- * What is true of the SQLite file alone. Since FRU-150 this store is a fixture: the worker keeps its
- * accounts in PostgreSQL, and the copy command `migrate-to-postgres` reads the file. The rules of
- * every `AccountStore` are in `account-conformance.fixture.ts`, and `account-conformance.test.ts`
- * runs them on this store.
- */
-describe('the SQLite account store', () => {
-  it('leaves no site of a deleted workspace in the file, read with the foreign keys off', async () => {
-    const path = join(scratch(), 'accounts.db');
-    const store = createSqliteAccountStore(path);
-    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const gone = await store.createWorkspace('Gone', alice.id);
-    await store.addSite(gone.id, { origin: 'https://gone.dev', visibility: 'members' });
-
-    await store.deleteWorkspace(gone.id);
-
-    closeAccountConnections();
-    // The cascade is the rule, so it is checked with the pragma off: `node:sqlite` turns it on itself.
-    const raw = new DatabaseSync(path);
-    raw.exec('PRAGMA foreign_keys = OFF');
-    const left = raw.prepare('SELECT count(*) AS n FROM sites WHERE workspace_id = ?').get(gone.id) as { n: number };
-    assert.equal(left.n, 0);
-    raw.close();
   });
 });
 
@@ -225,42 +181,6 @@ describe('what the boot log says about who reads the pins (FRU-116)', () => {
     assert.match(server, /readExposureNotice\(\{[^}]*accounts: hasAccounts\(config\.config\)/s);
     assert.match(server, /console\.warn\(exposure\)/);
     assert.equal(server.includes('openReadClients('), false, 'the server holds no second copy of the rule');
-  });
-});
-
-describe('the accounts file of a version before (FRU-119)', () => {
-  it('keeps an account written before the language column, with no language', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'fruitback-accounts-old-'));
-    directories.push(directory);
-    const path = join(directory, 'accounts.db');
-    // The shape of the file at version 2, as FRU-98 left it: no `locale` on an account.
-    const old = new DatabaseSync(path);
-    old.exec(`
-      CREATE TABLE accounts (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, created_at INTEGER NOT NULL);
-      CREATE TABLE logins (provider TEXT NOT NULL, subject TEXT NOT NULL, account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY (provider, subject));
-      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
-      CREATE TABLE members (workspace_id TEXT NOT NULL, account_id TEXT NOT NULL, role TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id, account_id));
-      CREATE TABLE sites (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, origin TEXT NOT NULL UNIQUE, visibility TEXT NOT NULL, created_at INTEGER NOT NULL);
-      CREATE TABLE email_links (code_hash TEXT PRIMARY KEY, email TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, spent_at INTEGER);
-      INSERT INTO accounts VALUES ('acc_old', 'alice@acme.dev', 'Alice', 1);
-      INSERT INTO logins VALUES ('email', 'alice@acme.dev', 'acc_old', 1);
-      PRAGMA user_version = 2;
-    `);
-    old.close();
-
-    const accounts = createSqliteAccountStore(path);
-
-    assert.deepEqual(await accounts.account('acc_old'), { id: 'acc_old', email: 'alice@acme.dev', name: 'Alice' });
-    assert.equal(await accounts.localeOf('alice@acme.dev'), undefined);
-    await accounts.setLocale('acc_old', 'fr-FR');
-    assert.equal((await accounts.account('acc_old'))?.locale, 'fr-FR');
-    const again = await accounts.signIn({
-      provider: 'email',
-      subject: 'alice@acme.dev',
-      email: 'alice@acme.dev',
-      locale: 'en-US',
-    });
-    assert.equal(again.locale, 'fr-FR', 'a later sign-in does not change a language somebody has');
   });
 });
 

@@ -189,7 +189,6 @@
         "**/*.fixture.ts",
         "apps/worker/src/auth.ts",
         "apps/worker/src/postgres.ts",
-        "apps/worker/src/session-sqlite.ts",
         "apps/worker/src/accounts-postgres.ts",
         "apps/worker/src/session-postgres.ts",
         "apps/worker/src/screenshots-postgres.ts",
@@ -329,59 +328,6 @@
                   "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["apps/worker/src/session-sqlite.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["./sqlite.ts", "**/sqlite.ts"],
-                "message": "The session database has its own connect. The one of sqlite.ts applies the seeds migrations and drives PRAGMA user_version with them (docs/decisions/worker.md)."
-              },
-              {
-                "group": ["better-auth", "better-auth/**", "@better-auth/**", "kysely", "kysely/**"],
-                "message": "auth.ts is the one file that names better-auth, as types, and loads it when the instance is built. A worker that has better-auth switched off loads nothing of it (docs/decisions/worker.md, FRU-144)."
-              },
-              {
-                "group": ["drizzle-orm", "drizzle-orm/*", "drizzle-kit"],
-                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts, postgres-copy.ts and the stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
-              },
-              {
-                "group": [
-                  "./accounts-postgres.ts",
-                  "./session-postgres.ts",
-                  "./screenshots-postgres.ts",
-                  "./seeds-postgres.ts",
-                  "./kv-postgres.ts",
-                  "./notes-index-postgres.ts",
-                  "./postgres-schema.ts",
-                  "./auth-schema.ts",
-                  "./postgres-migrate.ts",
-                  "./postgres-copy.ts"
-                ],
-                "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
-              }
-            ],
-            "paths": [
-              {
-                "name": "happy-dom",
-                "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
-              },
-              {
-                "name": "@electric-sql/pglite",
-                "message": "PGlite is the PostgreSQL of the tests: *.test.ts and *.fixture.ts only. It is 25 MB, and it must not enter the bundle of the worker (docs/decisions/worker.md, FRU-141)."
-              },
-              {
-                "name": "pg",
-                "message": "postgres.ts is the one file that names the driver, as types, and loads it at the first query. A worker without FRUITBACK_DATABASE_URL loads nothing of PostgreSQL (docs/decisions/worker.md, FRU-141)."
               }
             ]
           }

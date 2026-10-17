@@ -37,8 +37,8 @@ import { StoreError } from './store.ts';
 
 /**
  * The accounts in PostgreSQL (FRU-141), the one place they live since FRU-150. The store on a file
- * that it took the place of is a test fixture now (`accounts-sqlite.fixture.ts`): same interface, same ids.
- * `account-conformance.test.ts` holds both to the same cases.
+ * that it took the place of went with FRU-226. `account-conformance.test.ts` holds this store to its
+ * cases.
  *
  * The statements are written with Drizzle (FRU-180). A site, a connector and what goes with them are
  * in the tables of `postgres-schema.ts`, with the names of the SQLite file: a row has the keys of its

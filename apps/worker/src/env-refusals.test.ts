@@ -178,6 +178,15 @@ describe('PostgreSQL is required, with what an administrator signs in with (FRU-
       assert.ok(all.includes(said), `not said: ${said}`);
     }
     assert.equal(all.length, 5 + Object.keys(named).length, all.join('\n'));
+    // FRU-226: the code of the files is gone, so the worker of before of the tests is refused them too.
+    // `FRUITBACK_CLIENTS` is the control: its code is still there.
+    for (const [before, said] of BEFORE) {
+      const refused = missing(
+        beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', ...before }),
+      );
+      if (said === REFUSED_SINCE_POSTGRES.FRUITBACK_CLIENTS) assert.ok(!refused.includes(said), JSON.stringify(before));
+      else assert.deepEqual(refused, [said], JSON.stringify(before));
+    }
   });
 
   it('refuses a store left unnamed beside the variables of a tracker, which ran on Linear before', () => {

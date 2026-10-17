@@ -64,7 +64,7 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
     const config = readConfig(envWith());
 
     assert.ok(config.ok, config.ok ? '' : config.missing.join(', '));
-    assert.equal(config.config.sessionPath, undefined);
+    assert.equal('sessionPath' in config.config, false);
     assert.equal(hasSessions(config.config), true);
     assert.ok(sessionStoreFor(config.config) !== undefined);
   });
@@ -73,15 +73,13 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
     const both = readConfig(envWith({ FRUITBACK_SESSION_PATH: '/data/sessions.db' }));
 
     assert.deepEqual(both.ok === false && both.missing, [REFUSED_SINCE_POSTGRES.FRUITBACK_SESSION_PATH]);
-    // The worker of before said it this way, and its code is still there until FRU-226.
+    // FRU-226: the code of the file is gone, so the worker of before says the same sentence.
     const before = readConfig(beforePostgres(envWith({ FRUITBACK_SESSION_PATH: '/data/sessions.db' })));
-    assert.deepEqual(before.ok === false && before.missing, [
-      'FRUITBACK_SESSION_PATH (FRUITBACK_DATABASE_URL is set, and the sessions are in that database)',
-    ]);
+    assert.deepEqual(before.ok === false && before.missing, [REFUSED_SINCE_POSTGRES.FRUITBACK_SESSION_PATH]);
   });
 
-  // The worker of before (FRU-225): every worker has a database since, and its sessions in it.
-  it('leaves a worker without a database on its session file, and one without sessions with none', () => {
+  // The worker of before (FRU-225): its session file went with FRU-226, and the variable is refused.
+  it('refuses a session file to a worker without a database, and gives that worker no session', () => {
     const onFile = readConfig(
       beforePostgres({
         FRUITBACK_STORE: 'memory',
@@ -90,9 +88,7 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
         FRUITBACK_SESSION_PATH: '/data/sessions.db',
       }),
     );
-    assert.ok(onFile.ok, onFile.ok ? '' : onFile.missing.join(', '));
-    assert.equal(onFile.config.sessionPath, '/data/sessions.db');
-    assert.equal(hasSessions(onFile.config), true);
+    assert.deepEqual(onFile.ok === false && onFile.missing, [REFUSED_SINCE_POSTGRES.FRUITBACK_SESSION_PATH]);
 
     const none = readConfig(beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.dev' }));
     assert.ok(none.ok, none.ok ? '' : none.missing.join(', '));

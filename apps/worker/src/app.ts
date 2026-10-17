@@ -29,7 +29,6 @@ import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.t
 import { handleConsoleApi } from './console-api.ts';
 import { seen } from './last-seen.ts';
 import { type TxtResolver, recheckDomains } from './domain-proof.ts';
-import { firstReviewerLines } from './first-reviewer.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
@@ -72,7 +71,6 @@ import {
   refreshSession,
   revokeSession,
 } from './session.ts';
-import { createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
@@ -104,34 +102,11 @@ export function storeFor(config: WorkerConfig): SeedStore {
  * The extension's session store, or `undefined` when this worker runs without one (FRU-42).
  *
  * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
- * never share a backend. They are in the database of the accounts when the worker has one (FRU-142),
- * and in their own file otherwise. See `FRUITBACK_SESSION_PATH`.
+ * never share a backend. They are in the database of the accounts (FRU-142), and in no file since
+ * FRU-226.
  */
 export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
-  // `readConfig` refuses the two together, so the order here decides nothing.
-  if (config.databaseUrl !== undefined) return postgresSessionStore(config.databaseUrl, config.databaseSchema);
-
-  return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
-}
-
-/**
- * Writes the pairing code of the first reviewer in the log, on a worker that names one and holds no
- * session yet (FRU-108). `server.ts` calls it when the server listens. It never rejects: a store
- * that does not open must not stop a worker that can still serve, and the next start tries again.
- */
-export async function announceFirstReviewer(
-  config: WorkerConfig,
-  log: (line: string) => void = (line) => console.log(`[fruitback] ${line}`),
-): Promise<void> {
-  const store = config.firstReviewer === undefined ? undefined : sessionStoreFor(config);
-  if (config.firstReviewer === undefined || store === undefined) return;
-  try {
-    for (const line of await firstReviewerLines(store, config.firstReviewer, config.publicUrl)) log(line);
-  } catch (error) {
-    console.error(
-      `[fruitback] the pairing code of FRUITBACK_FIRST_REVIEWER was not minted: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  return config.databaseUrl === undefined ? undefined : postgresSessionStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**
@@ -154,7 +129,7 @@ export function adminLinksFor(config: WorkerConfig): AdminLinks | undefined {
 /**
  * Writes the sign-in link of the first administrator in the log, on a worker that names one and whose
  * instance has no owner yet (FRU-221). `server.ts` calls it when the server listens. It never
- * rejects, as `announceFirstReviewer`: the next start tries again. Its error names no token.
+ * rejects: the next start tries again. Its error names no token.
  */
 export async function announceFirstAdmin(
   config: WorkerConfig,
@@ -1107,12 +1082,12 @@ async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): P
 export async function createPairingCommand(
   config: WorkerConfig,
   identity: { subject: string; name?: string; email?: string; workspace?: string },
+  /** The store a test opened. Absent, the one of the configuration. */
+  held?: SessionStore,
 ): Promise<{ code: string; expiresAt: number }> {
-  const store = sessionStoreFor(config);
+  const store = held ?? sessionStoreFor(config);
   if (store === undefined) {
-    throw new Error(
-      'FRUITBACK_SESSION_PATH is not set, and no FRUITBACK_DATABASE_URL, so this worker keeps no sessions',
-    );
+    throw new Error('FRUITBACK_DATABASE_URL is not set, so this worker keeps no sessions');
   }
 
   return openPairing(store, identity);

@@ -9,14 +9,17 @@ import { after, afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
-import {
-  ACCOUNTS_FILE_VERSION as VERSION_OF_THE_FILE_STORE,
-  closeAccountConnections,
-  createSqliteAccountStore,
-} from './accounts-sqlite.fixture.ts';
+import { newId } from './account-rows.ts';
 import { parseMigrateArgs } from './cli.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
-import { ACCOUNTS_FILE_VERSION, COPY_SCHEMA, copySqliteFiles } from './postgres-copy.ts';
+import {
+  ACCOUNTS_FILE_VERSION,
+  COPY_SCHEMA,
+  SEEDS_FILE_VERSION,
+  SESSIONS_FILE_VERSION,
+  copySqliteFiles,
+} from './postgres-copy.ts';
+import { FROZEN_VERSIONS, closeFrozenFiles, frozenFile } from './postgres-copy.fixture.ts';
 import {
   NO_REAL_POSTGRES,
   appliedDates,
@@ -29,14 +32,21 @@ import {
 } from './postgres.fixture.ts';
 import { open, seal } from './secrets.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
-import { createPairing, redeemPairing, refreshSession } from './session.ts';
+import {
+  PAIRING_TTL_SECONDS,
+  REFRESH_TTL_SECONDS,
+  createPairingCode,
+  createRefreshToken,
+  digest,
+  normalizePairingCode,
+  refreshSession,
+} from './session.ts';
 
 /**
  * The copy of the switch n° 1 (FRU-145): the two SQLite files of a worker, into an empty PostgreSQL.
  *
- * The files are made by the stores of the worker, with their real migrations, and their connections
- * stay open while the copy runs: the rows are in the `-wal`, as on a worker that was just stopped.
+ * The files are the frozen files of `postgres-copy.fixture.ts`, and their connections stay open
+ * while the copy runs: the rows are in the `-wal`, as on a worker that was just stopped.
  *
  * **The copy leaves the database at the migration `COPY_SCHEMA`** (FRU-146), where the tables are the
  * ones of the files. A store of PostgreSQL applies the migrations after it at its first call, as a
@@ -52,6 +62,7 @@ const API_KEY = 'lin_api_not_a_real_key';
 const folders: string[] = [];
 
 after(() => {
+  closeFrozenFiles();
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
@@ -61,60 +72,101 @@ async function filesOfAWorker() {
   folders.push(folder);
   const accountsPath = join(folder, 'accounts.db');
   const sessionsPath = join(folder, 'sessions.db');
-  const accounts = createSqliteAccountStore(accountsPath);
-  const sessions = createSqliteSessionStore(sessionsPath);
+  const accounts = frozenFile(accountsPath, 'accounts');
+  const sessions = frozenFile(sessionsPath, 'sessions');
+  const now = Date.now();
+  const write = (statement: string, ...values: (string | number | null)[]) =>
+    accounts.prepare(statement).run(...values);
 
-  const alice = await accounts.signIn({ provider: 'github', subject: '1', email: 'alice@acme.dev', name: 'Alice' });
-  await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev', locale: 'fr' });
-  const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
-  const workspace = await accounts.createWorkspace('Acme', alice.id);
-  await accounts.createWorkspace('Bob and co', bob.id);
-  const site = await accounts.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
-  const tracker = await accounts.addConnector(workspace.id, {
-    kind: 'linear',
-    label: 'Linear',
-    sealed: seal(API_KEY, SECRETS_KEY),
-  });
-  const hook = await accounts.addConnector(workspace.id, {
-    kind: 'rest',
-    label: 'Hook',
-    sealed: seal('h', SECRETS_KEY),
-  });
-  assert.equal(
-    await accounts.setDestinations(workspace.id, site.id, [
-      { connector: tracker.id, teamId: 'team-1', label: 'Bugs' },
-      { connector: hook.id },
-    ]),
-    true,
+  const alice = newId('acc');
+  const bob = newId('acc');
+  const workspace = newId('ws');
+  const site = newId('site');
+  const tracker = newId('con');
+  const hook = newId('con');
+  const settled = newId('dlv');
+  const insertAccount = 'INSERT INTO accounts (id, email, name, locale, created_at) VALUES (?, ?, ?, ?, ?)';
+  write(insertAccount, alice, 'alice@acme.dev', 'Alice', 'fr', now);
+  write(insertAccount, bob, 'bob@acme.dev', null, null, now);
+  const insertLogin = 'INSERT INTO logins (provider, subject, account_id, created_at) VALUES (?, ?, ?, ?)';
+  write(insertLogin, 'github', '1', alice, now);
+  write(insertLogin, 'email', 'alice@acme.dev', alice, now);
+  write(insertLogin, 'email', 'bob@acme.dev', bob, now);
+  for (const [id, name, owner] of [
+    [workspace, 'Acme', alice],
+    [newId('ws'), 'Bob and co', bob],
+  ] as const) {
+    write('INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)', id, name, now);
+    write(
+      'INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)',
+      id,
+      owner,
+      'owner',
+      now,
+    );
+  }
+  write(
+    'INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES (?, ?, ?, ?, ?)',
+    site,
+    workspace,
+    'https://acme.dev',
+    'members',
+    now,
   );
-  await accounts.noteConnector(hook.id, 'key-refused', 1_000);
-  const delivery = await accounts.enqueueDelivery(hook.id, '{"n":1}', 2_000);
-  await accounts.settleDelivery(delivery, { delivered: false, attempts: 0, at: 3_000, status: 503 });
-  await accounts.enqueueDelivery(hook.id, '{"n":2}', 4_000);
-  // A link of the sign-in of before, which waits in the file: the store no longer writes one (FRU-150).
-  const file = new DatabaseSync(accountsPath);
-  file
-    .prepare('INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)')
-    .run('digest-1', 'carol@acme.dev', Date.now(), Date.now() + 60_000);
-  file.close();
-
-  const redeemed = await redeemPairing(
-    sessions,
-    (await createPairing(sessions, { subject: alice.id, name: 'Alice', workspace: workspace.id })).code,
-    SECRET,
+  const insertConnector =
+    'INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES (?, ?, ?, ?, ?, ?)';
+  write(insertConnector, tracker, workspace, 'linear', 'Linear', seal(API_KEY, SECRETS_KEY), now);
+  write(insertConnector, hook, workspace, 'rest', 'Hook', seal('h', SECRETS_KEY), now);
+  const insertDestination =
+    'INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id, label) VALUES (?, ?, ?, ?, ?, ?)';
+  write(insertDestination, site, 0, tracker, 'team-1', null, 'Bugs');
+  write(insertDestination, site, 1, hook, null, null, null);
+  write('UPDATE connectors SET attention = ?, attention_at = ? WHERE id = ?', 'key-refused', 1_000, hook);
+  // A delivery that failed once, and one that waits.
+  write(
+    `INSERT INTO deliveries (id, connector_id, body, created_at, attempts, next_at, last_at, last_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    settled,
+    hook,
+    '{"n":1}',
+    2_000,
+    1,
+    null,
+    3_000,
+    503,
   );
-  assert.ok(redeemed.ok);
-  await createPairing(sessions, { subject: bob.id });
+  write(
+    'INSERT INTO deliveries (id, connector_id, body, created_at, next_at) VALUES (?, ?, ?, ?, ?)',
+    newId('dlv'),
+    hook,
+    '{"n":2}',
+    4_000,
+    4_000,
+  );
+  // A link of the sign-in of before, which waits in the file: the copy leaves it.
+  write(
+    'INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)',
+    'digest-1',
+    'carol@acme.dev',
+    now,
+    now + 60_000,
+  );
 
-  return {
-    folder,
-    accountsPath,
-    sessionsPath,
-    refreshToken: redeemed.session.refreshToken,
-    tracker: tracker.id,
-    workspace: workspace.id,
-    alice: alice.id,
-  };
+  // A code that Alice spent, and the session it bought. A code for Bob that nobody spent.
+  const refreshToken = createRefreshToken();
+  const insertPairing =
+    'INSERT INTO pairings (code_hash, subject, name, email, workspace, created_at, expires_at, redeemed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+  const codeHash = async () => digest(normalizePairingCode(createPairingCode()));
+  const pairingEnd = now + PAIRING_TTL_SECONDS * 1000;
+  sessions.prepare(insertPairing).run(await codeHash(), alice, 'Alice', null, workspace, now, pairingEnd, now);
+  sessions.prepare(insertPairing).run(await codeHash(), bob, null, null, null, now, pairingEnd, null);
+  sessions
+    .prepare(
+      'INSERT INTO sessions (token_hash, subject, name, email, workspace, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+    .run(await digest(refreshToken), alice, 'Alice', null, workspace, now, now + REFRESH_TTL_SECONDS * 1000);
+
+  return { folder, accountsPath, sessionsPath, refreshToken, tracker, workspace, alice };
 }
 
 /** The SHA-256 of every file of the folder: a file, its `-wal` and its `-shm`. */
@@ -186,8 +238,7 @@ for (const subject of SUBJECTS) {
     let database: Database | undefined;
 
     afterEach(async () => {
-      closeAccountConnections();
-      closeSessionConnections();
+      closeFrozenFiles();
       await database?.close();
       database = undefined;
     });
@@ -429,7 +480,7 @@ for (const subject of SUBJECTS) {
     it('refuses a file with a column that PostgreSQL does not have', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();
-      closeAccountConnections();
+      closeFrozenFiles();
       const file = new DatabaseSync(files.accountsPath);
       file.exec('ALTER TABLE accounts ADD COLUMN nickname TEXT');
       file.close();
@@ -443,7 +494,7 @@ for (const subject of SUBJECTS) {
     it('refuses a file that a worker of another version wrote', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();
-      closeSessionConnections();
+      closeFrozenFiles();
       const file = new DatabaseSync(files.sessionsPath);
       file.exec('PRAGMA user_version = 2');
       file.close();
@@ -457,9 +508,12 @@ for (const subject of SUBJECTS) {
   });
 }
 
-describe('the version of the accounts file that the copy takes (FRU-150)', () => {
-  it('is the one of the store that wrote the files, which is a fixture now', () => {
-    assert.equal(ACCOUNTS_FILE_VERSION, VERSION_OF_THE_FILE_STORE);
+describe('the versions of the files that the copy takes (FRU-150, FRU-226)', () => {
+  it('are the ones of the last worker that wrote the files, frozen in a fixture', () => {
+    assert.deepEqual(
+      { accounts: ACCOUNTS_FILE_VERSION, sessions: SESSIONS_FILE_VERSION, seeds: SEEDS_FILE_VERSION },
+      FROZEN_VERSIONS,
+    );
   });
 });
 
@@ -489,8 +543,7 @@ describe('the command migrate-to-postgres, as a process (FRU-145)', () => {
     { skip: NO_REAL_POSTGRES, timeout: 30_000 },
     async () => {
       const files = await filesOfAWorker();
-      closeAccountConnections();
-      closeSessionConnections();
+      closeFrozenFiles();
       const own = await ownDatabase();
       try {
         const env = { PATH: process.env.PATH, FRUITBACK_DATABASE_URL: own.url };

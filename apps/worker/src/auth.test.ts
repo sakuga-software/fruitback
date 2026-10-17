@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, it, mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -57,7 +55,6 @@ import { beforePostgres } from './before-postgres.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, appliedDates, createPgliteDatabase, journalDates, ownDatabase } from './postgres.fixture.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 
 // The database of this environment is at an address where nothing listens: a case hands its stores
 // over, and the `Kv` with them, as the transport does (FRU-67).
@@ -75,13 +72,12 @@ const run = promisify(execFile);
 const IDENTITY_SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'a-key-that-seals-the-connectors-0123';
 
-const directories: string[] = [];
 // Registered first: the databases of a case are closed before the pools of the process.
 const { opening } = databasesOfACase();
 
 /**
  * A worker with its accounts and its sessions in PostgreSQL and better-auth on, unless `overrides`
- * says otherwise. `FRUITBACK_SESSION_PATH` is refused beside the database (FRU-142).
+ * says otherwise.
  */
 function envWith(overrides: Record<string, string | undefined> = {}): WorkerEnv {
   return {
@@ -94,25 +90,6 @@ function envWith(overrides: Record<string, string | undefined> = {}): WorkerEnv 
     FRUITBACK_AUTH_SECRET: AUTH_SECRET,
     ...overrides,
   };
-}
-
-/**
- * A worker whose sessions are in a file: what a worker with no database ran on, until FRU-225. Every
- * environment a process can be given refuses it since: see `beforePostgres`.
- */
-function filesOnly(overrides: Record<string, string | undefined> = {}): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
-  directories.push(directory);
-
-  return beforePostgres(
-    envWith({
-      // A worker with no accounts: its sessions are in a file, and it has no console.
-      FRUITBACK_DATABASE_URL: undefined,
-      FRUITBACK_CONSOLE_URL: undefined,
-      FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-      ...overrides,
-    }),
-  );
 }
 
 function configOf(env: WorkerEnv) {
@@ -130,9 +107,7 @@ function refusal(env: WorkerEnv): string {
 }
 
 afterEach(async () => {
-  closeSessionConnections();
   await closeDatabases();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
 describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
@@ -184,15 +159,10 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
       refusal(envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined })),
       [DATABASE_REQUIRED, REQUIRED_WITH_DATABASE.FRUITBACK_CONSOLE_URL].join(' | '),
     );
-    for (const env of [
-      beforePostgres(envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined })),
-      filesOnly(),
-    ]) {
-      assert.equal(
-        refusal(env),
-        'FRUITBACK_DATABASE_URL (FRUITBACK_AUTH_SECRET is set, and better-auth keeps its tables there)',
-      );
-    }
+    assert.equal(
+      refusal(beforePostgres(envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined }))),
+      'FRUITBACK_DATABASE_URL (FRUITBACK_AUTH_SECRET is set, and better-auth keeps its tables there)',
+    );
   });
 
   it('refuses the secret of better-auth without the address of the worker, or with a path in it', () => {
@@ -300,15 +270,9 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     const log = { log: (line: string) => void lines.push(line), error: (line: string) => void lines.push(line) };
     const refuses = (): never => assert.fail('a worker with better-auth off asked for a database');
 
-    for (const env of [
-      beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }),
-      filesOnly({ FRUITBACK_AUTH_SECRET: undefined }),
-    ]) {
-      const config = configOf(env);
-
-      assert.equal(authFor(config, refuses), undefined);
-      assert.equal(await announceAuth(config, log, refuses), 'off');
-    }
+    const without = configOf(beforePostgres({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }));
+    assert.equal(authFor(without, refuses), undefined);
+    assert.equal(await announceAuth(without, log, refuses), 'off');
     assert.deepEqual(lines, [], 'a worker with no accounts said something of the sign-in at boot');
 
     // FRU-217: accounts and no secret. It starts, nobody signs in, and it says so in one line that

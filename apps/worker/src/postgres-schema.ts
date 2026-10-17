@@ -18,8 +18,9 @@ import { invitation, member, organization, user } from './auth-schema.ts';
  * Every instant is a `BIGINT` of milliseconds, as in the SQLite files: `now` comes from the worker,
  * and the same number goes in both. `mode: 'number'` answers it as a number.
  *
- * The tables are the ones of `accounts-sqlite.fixture.ts` after its seven migrations, and of
- * `session-sqlite.ts` after its three, with the same names, **but four** (FRU-146): a person, a way
+ * The tables are the ones of the accounts file of before after its seven migrations, and of the
+ * sessions file after its three (`postgres-copy.fixture.ts` holds both), with the same names, **but
+ * four** (FRU-146): a person, a way
  * to sign in, a workspace and a membership are rows of `user`, `account`, `organization` and
  * `member`, the tables of better-auth in `auth-schema.ts`. `drizzle.config.ts` reads both files. A
  * site and a connector are of an `organization`, and go with it.
@@ -425,8 +426,8 @@ export const kv = pgTable(
 
 /**
  * A note that the worker keeps itself (FRU-218): the notes of a site with no destination, on a worker
- * whose store is `postgres`. Until then they were in a SQLite file, `sqlite.ts`, and the columns are
- * the same.
+ * whose store is `postgres`. Until then they were in a SQLite file, and the columns are the same
+ * (`postgres-copy.fixture.ts` holds that file).
  *
  * - `id` is the number of the note, `FB-<id>`. An identity that takes a value when one is given: the
  *   copy of a SQLite file (FRU-220) keeps the numbers that people already quoted.

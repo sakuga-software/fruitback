@@ -77,7 +77,7 @@ export type SessionStore = {
    * Every refresh rotates, so there is no read-only lookup beside this one: a caller that could ask
    * "is this token live" without spending it would be a second path to keep in step with this one.
    *
-   * The three outcomes are the whole design, and `rotateSession` in `session-sqlite.ts` carries the
+   * The three outcomes are the whole design, and `decide` in `session-postgres.ts` carries the
    * reasoning for each.
    */
   rotateSession(rotation: {
