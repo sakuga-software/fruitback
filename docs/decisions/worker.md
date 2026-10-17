@@ -85,7 +85,8 @@ peut créer un compte quoiqu'il arrive aussi pour la partie admin ». FRU-184 is
   turns the refusals above off. It is a symbol, and `process.env` holds strings: only a test can set
   it, through `before-postgres.fixture.ts`. test:`keeps the worker of before out of any environment a
 process can be given` holds it, with the scan that finds no file of the bundle but `env.ts` naming
-  it. The SQLite code goes with FRU-226, and the symbol with it.
+  it. The SQLite code went with FRU-226. The symbol stays for the client map of the tests: see
+  _The SQLite stores go_.
 - **`pnpm dev` and the E2E suite have their sign-in on**: `devEnvironment` gives the worker of
   development a secret of development and its own address (`http://localhost:<PORT>`).
 
@@ -106,6 +107,56 @@ process can be given` holds it, with the scan that finds no file of the bundle b
   brings the worker, its PostgreSQL and the console up healthy in 17 s; the sign-in link of the first
   administrator is in the log; the link, a workspace, a site and a visitor's note through the API of
   the console, then `--force-recreate`, and the note is still read.
+
+## The SQLite stores go (FRU-226)
+
+Child of FRU-184, stacked on FRU-225: it removes code that nothing reaches since a worker needs a
+database.
+
+### The rules, in short
+
+- **No note, no session and no account is on SQLite any more.** `sqlite.ts`, `session-sqlite.ts`,
+  `accounts-sqlite.fixture.ts` and their tests are gone, with the entry `sqlite` of `STORE_SPECS`.
+  `FRUITBACK_STORE=sqlite`, `FRUITBACK_SQLITE_PATH`, `FRUITBACK_SESSION_PATH` and
+  `FRUITBACK_FIRST_REVIEWER` stay refused by their sentence (`REFUSED_SINCE_POSTGRES`): an `.env` of
+  before is still told what to do.
+- **`WITHOUT_DATABASE` stays, for the client map of the tests.** The code of `FRUITBACK_CLIENTS` is
+  still there, and nineteen test files hold it through `before-postgres.fixture.ts`. The variables
+  of the files are refused to that worker too, because their code is gone.
+- **A worker keeps sessions if and only if it has a database** (`hasSessions`). `sessionPath` is no
+  field of the configuration. Three refusals that only a session file reached went with it: a file
+  beside a database, a file beside a client map that declares no workspace, and a client whose key is
+  the worker key.
+- **`first-reviewer.ts` went.** FRU-225 refused the variable on every worker, so nothing read it.
+- **`migrate-to-postgres` and `postgres-copy.ts` stay one more version.** `node:sqlite` is in Node,
+  and the copy is the one way up. Its tests make their files with `postgres-copy.fixture.ts`: the
+  last schema of each file (accounts 8, sessions 3, seeds 1) as literals, and plain statements. It
+  holds no store.
+- **The three conformance suites run on PGlite, always, and on PostgreSQL 17 in the job
+  « postgres ».** Their controls change the source of `accounts-postgres.ts` and
+  `session-postgres.ts`. Three controls break their rule another way than on SQLite: `addSite` is
+  one insert with `onConflictDoUpdate`, so the control of « another workspace's site » is a store
+  around the real one; the control of the cascade turns it off with
+  `SET LOCAL session_replication_role = replica`; the control of a redeem that keeps its code spent
+  runs it with `run` in place of `transaction`.
+- **The image keeps `sqlite3` and the directory `/data`, and declares no volume.** « Upgrading » of
+  `docs/self-hosting.md` restores the files of an old deployment with `.restore` in the new image,
+  before the copy, and `cloud/snapshot.sh` makes its `.backup` there. `/data` stays owned by `node`,
+  because an empty named volume takes that owner. `sqlite3` is 1.4 MB: 73,038,684 bytes with it,
+  71,608,982 without (measured on the image of `main`).
+- **`cloud/snapshot.sh` and the SQLite restore of the runbook are marked « of before »**, not removed:
+  the archive of 30 days still holds the files.
+
+### The reasons, and what was measured
+
+- **Each case that went held SQLite alone**, or the file of the sessions, and the pull request names
+  each one with its reason. The others run on PGlite: `seeds-postgres.test.ts` took eight cases of
+  `sqlite.test.ts` that no suite held on PostgreSQL. The rule of #222 was the method: list the cases
+  of a file before it goes, and decide case by case.
+- **Found, and not fixed here: `pair --workspace` refuses on a worker with a database.**
+  `checkWorkspace` of `cli.ts` reads the workspaces of `FRUITBACK_CLIENTS`, which a worker with a
+  database has not had since FRU-225. The case that held the command on a session file went; a
+  reviewer pairs from the console.
 
 ## The rate limit and the cache, behind a Kv (FRU-49)
 
@@ -2429,7 +2480,8 @@ ticket removes; it adds no route and no table.
 - **Three boot refusals, all loud rather than silent.** A session path with no
   `FRUITBACK_IDENTITY_SECRET` mints nothing; a session path with a client map in which no client
   declares a `workspace` mints tokens no client accepts; a client whose own key is the worker key
-  would verify every session token as its own.
+  would verify every session token as its own. The last two went with the session file (FRU-226),
+  and the first one now names the database.
 - **A session belongs to one workspace, and the `ws` claim is what separates them** (FRU-95). Every
   session token of every workspace is signed with the one worker key, so the signature proves
   nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
@@ -2648,7 +2700,7 @@ everything. FRU-95 lifted it, below.
   the reasons.
 - **`FRUITBACK_FIRST_REVIEWER` stays refused on a worker with workspaces**, as before: a session of
   such a worker names a workspace, and the variable names none. Once the database is required
-  (FRU-225) it has no valid configuration left, and goes with the SQLite sessions (FRU-226). The
+  (FRU-225) it has no valid configuration left, and its code went with the SQLite sessions (FRU-226). The
   first reviewer of an instance with accounts is paired from the console, or with `pair --workspace`.
 
 ### The reasons, and what was measured
@@ -2673,6 +2725,9 @@ everything. FRU-95 lifted it, below.
   then fail.
 
 ## The first reviewer, named in the environment (FRU-108)
+
+Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is
+refused by its sentence. What follows is the history.
 
 - **`FRUITBACK_FIRST_REVIEWER` names the person, and the worker mints their code when it starts**,
   only while `SessionStore.holdsSession()` is false: no session, live or ended. A code that nobody

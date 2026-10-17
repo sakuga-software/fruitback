@@ -1,5 +1,5 @@
 name: New connector
-description: Propose a store for the seeds, beside Linear, SQLite and GitHub Issues.
+description: Propose a store for the seeds, beside Linear, PostgreSQL and GitHub Issues.
 body:
   - type: markdown
     attributes:

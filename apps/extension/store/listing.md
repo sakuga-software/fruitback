@@ -42,7 +42,7 @@ WHERE YOUR NOTES GO
 To the worker address you entered, and nowhere else. Fruitback is open source and self-hosted: the publisher of this extension runs no server that receives your notes, and collects no analytics.
 
 YOU NEED A WORKER
-The extension is one half. The other half is a Fruitback worker, a small server your team runs with Docker. It stores the notes in Linear, in GitHub Issues, or in a SQLite file. The guide is at https://sakuga-software.github.io/fruitback/
+The extension is one half. The other half is a Fruitback worker, a small server your team runs with Docker. It stores the notes in Linear, in GitHub Issues, or in its PostgreSQL database. The guide is at https://sakuga-software.github.io/fruitback/
 
 TRY IT
 A public sandbox runs at https://demo.fruitback.com/?widget=off with the worker https://api.demo.fruitback.com. Anybody can write there, and it is emptied every night.

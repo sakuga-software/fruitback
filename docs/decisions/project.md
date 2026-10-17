@@ -104,7 +104,7 @@ Decision of Mathieu, 2026-10-13, in his words:
   taken.
 - **`FRUITBACK_STORE=sqlite` as the door for a self-hoster who wants no third party** (FRU-31). The
   door is the database of the instance. A file of before is copied there by `migrate-to-postgres`, and
-  the code of the file store goes with FRU-226.
+  the code of the file store went with FRU-226.
 
 ### The reasons, and the history
 
