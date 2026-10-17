@@ -25,6 +25,12 @@ ready, and nothing of it runs.
 
 ## What is backed up
 
+> **Of before (FRU-226).** The accounts, the sessions and the notes are in PostgreSQL since
+> 2026-10-15/16, and the point of no return is behind: no worker writes the three SQLite files, and
+> the worker has no SQLite store any more. `snapshot.sh` and « Restore » below are of before. They stay
+> while the archive of 30 days holds the files, then a pull request removes them. Restore the data of
+> today from the dump: « The database » below.
+
 1. **02:45, `snapshot.sh`**, from the crontab of the host. It writes a copy of each database into
    `/data/snapshots/` with SQLite's own backup, checks it, and only then replaces the copy before.
 2. **03:00, the backup of the host** (`~/backups/backup.sh`). It archives every Docker volume to the
@@ -41,6 +47,8 @@ the connectors do not open, and each workspace must add its key again. Without t
 session ends.
 
 ## Restore
+
+Of before: the three SQLite files, while the archive of 30 days holds them (see « What is backed up »).
 
 Stop the worker first: it keeps its files open, and a file replaced under it is not read.
 
@@ -449,9 +457,13 @@ migrate-to-postgres` prints two lines of usage, the second with `--seeds`, and e
    - a page that had pins shows them, with their numbers and their colours;
    - a new note takes the number that step 3 announced.
 7. **The backups.** `snapshot-pg.sh` holds the notes from now on. `snapshot.sh` copies a `fb.db`
-   that nothing writes: a pull request removes it when `fb.db` goes (FRU-226).
+   that nothing writes: it is of before, and goes when the archive of 30 days no longer holds the
+   file (see « What is backed up »).
 
 ### The way back, written before it is needed
+
+Of before: an image of FRU-226 or later has no SQLite store, so this way back needs an image of
+before it. The production passed the point of no return on 2026-10-15/16.
 
 1. `docker service scale "$WORKER"=0`.
 2. `FRUITBACK_STORE=sqlite` and `FRUITBACK_SQLITE_PATH` as before.
@@ -464,7 +476,8 @@ of `snapshot.sh`. Going back brings it back. `docs/privacy.md` says the same to 
 **What it costs.** Every note sent since step 6 is in PostgreSQL only, and a page no longer shows
 it. Its number is given again by the file to the next note. There is no copy back from PostgreSQL
 to the file. **The point of no return** is the day `fb.db` is removed, or the worker has no SQLite
-store (FRU-226): keep the file, and the archives that hold it, until then.
+store (FRU-226, now): keep the file, and the archives that hold it, while the archive of 30 days
+holds them.
 
 ### What was tried, and what was not
 

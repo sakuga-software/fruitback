@@ -3,6 +3,8 @@
 # The host archives every Docker volume at 03:00, and a file that SQLite holds open is not a
 # copy to trust. This writes a copy with SQLite's own backup into the same volume, before 03:00.
 # WARNING: FRUITBACK_SECRETS_KEY is not in any backup. Without it the connector keys do not open.
+# Of before (FRU-226): no worker writes these files since 2026-10-15/16. Remove this script when the
+# archive of 30 days no longer holds them. snapshot-pg.sh holds the data of today.
 set -eu
 SERVICE=fruitback-cloud-worker-a9zdeo
 DIR=/data/snapshots
