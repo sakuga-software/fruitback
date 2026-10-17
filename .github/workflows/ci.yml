@@ -450,7 +450,17 @@ jobs:
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM public.__drizzle_migrations')" = "$(jq '.entries | length' apps/worker/drizzle/meta/_journal.json)"
           # FRU-146. The accounts are in the tables of better-auth, and the table of before is gone.
           test "$(docker exec accounts-db psql -U postgres -Atc "SELECT to_regclass('public.user') IS NOT NULL AND to_regclass('public.accounts') IS NULL")" = t
-          timeout 30 docker exec worker-db node server.mjs pair --subject ci
+          # FRU-277. `pair` mints for a member of a workspace that has a site, as the console makes them.
+          docker exec -i accounts-db psql -U postgres -q -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+            VALUES ('acc_ci', 'CI', 'ci@acme.dev', true, now(), now());
+          INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_ci', 'CI', 'ws_ci', now());
+          INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
+            VALUES ('mem_ci', 'ws_ci', 'acc_ci', 'owner', now());
+          INSERT INTO sites (id, workspace_id, origin, visibility, created_at)
+            VALUES ('site_ci', 'ws_ci', 'http://localhost:5173', 'everyone', 1);
+          SQL
+          timeout 30 docker exec worker-db node server.mjs pair --subject acc_ci --workspace ws_ci
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM pairings')" = 1
           docker rm -f worker-db accounts-db
 
