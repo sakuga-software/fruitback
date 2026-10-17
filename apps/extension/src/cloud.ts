@@ -222,10 +222,11 @@ const NO_ACCOUNTS = 'no-accounts';
 /**
  * One bounded `GET /session/sites`.
  *
- * `405` is a worker with no such route: it keeps no accounts, and its session routes take a POST
- * (measured; `session-sites.test.ts` of the worker pins it). Any other failure is no answer: a `401`
- * is about the token, and a `404`, a `429` and a `5xx` are about the moment. A proxy that routes
- * wrong while a worker deploys answers `404`, and that must not read as « no accounts ».
+ * `405` is a worker of before FRU-225 with no such route: it keeps no accounts, and its session
+ * routes take a POST (measured). A worker of today always has accounts, so it never answers `405`
+ * here. Any other failure is no answer: a `401` is about the token, and a `404`, a `429` and a `5xx`
+ * are about the moment. A proxy that routes wrong while a worker deploys answers `404`, and that must
+ * not read as « no accounts ».
  */
 async function ask(
   endpoint: string,
