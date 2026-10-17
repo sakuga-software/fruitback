@@ -205,3 +205,79 @@ describe('pair --workspace (FRU-95)', () => {
     assert.match(outcome.lines.join('\n'), /--workspace is required/);
   });
 });
+
+/** The code a run of `pair` printed, on the line of four spaces. */
+function codeIn(lines: readonly string[]): string | undefined {
+  return lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
+}
+
+describe('the pair command on a worker with a database (FRU-277)', () => {
+  it('mints a code for a workspace of the database, whose session reads its site and no other', async () => {
+    const { world: opened, alice, a, b } = await twoWorkspaces();
+    const outcome = await runPair(
+      ['--subject', alice, '--workspace', a.workspace],
+      opened.env,
+      opened.sessions,
+      opened.accounts,
+    );
+    assert.ok(outcome.ok, outcome.lines.join('\n'));
+    assert.match(outcome.lines.join('\n'), new RegExp(`in the workspace ${a.workspace}`));
+
+    const code = codeIn(outcome.lines);
+    assert.ok(code !== undefined, outcome.lines.join('\n'));
+    const redeemed = await redeemPairing(opened.sessions, code, IDENTITY_SECRET);
+    assert.ok(redeemed.ok);
+    const access = redeemed.session.accessToken;
+
+    assert.equal((await read(opened, a.site, 'https://a.test', 'https://a.test', access)).status, 200);
+    assert.equal((await read(opened, b.site, 'https://b.test', 'https://b.test', access)).status, 401);
+  });
+
+  it('mints nothing without a workspace, and names the workspaces that have a site', async () => {
+    const { world: opened, alice, a, b } = await twoWorkspaces();
+    const outcome = await runPair(['--subject', alice], opened.env, opened.sessions, opened.accounts);
+
+    assert.equal(outcome.ok, false);
+    assert.equal(codeIn(outcome.lines), undefined);
+    const said = outcome.lines.join('\n');
+    assert.match(said, /--workspace is required: one of/);
+    assert.ok(said.includes(a.workspace) && said.includes(b.workspace), said);
+  });
+
+  it('mints nothing for somebody who is not a member of the workspace, whose code the route would refuse', async () => {
+    const { world: opened, bob, a } = await twoWorkspaces();
+    const outcome = await runPair(
+      ['--subject', bob, '--workspace', a.workspace],
+      opened.env,
+      opened.sessions,
+      opened.accounts,
+    );
+
+    assert.equal(outcome.ok, false);
+    assert.equal(codeIn(outcome.lines), undefined);
+    assert.match(outcome.lines.join('\n'), /must be the id of an account that is a member of the workspace/);
+  });
+
+  it('mints nothing for a workspace that has no site on this worker', async () => {
+    const { world: opened, alice } = await twoWorkspaces();
+    const outcome = await runPair(
+      ['--subject', alice, '--workspace', 'ws_nobody'],
+      opened.env,
+      opened.sessions,
+      opened.accounts,
+    );
+
+    assert.equal(outcome.ok, false);
+    assert.equal(codeIn(outcome.lines), undefined);
+    assert.match(outcome.lines.join('\n'), /no site belongs to the workspace ws_nobody/);
+  });
+
+  it('mints nothing on a worker with no site yet, and says to add one first', async () => {
+    const opened = await world();
+    const outcome = await runPair(['--subject', 'alice'], opened.env, opened.sessions, opened.accounts);
+
+    assert.equal(outcome.ok, false);
+    assert.equal(codeIn(outcome.lines), undefined);
+    assert.match(outcome.lines.join('\n'), /no workspace of this worker has a site yet: add a site in the console/);
+  });
+});

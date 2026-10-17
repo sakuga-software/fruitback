@@ -25,13 +25,25 @@ const ALICE = { subject: 'alice', name: 'Alice Martin', email: 'alice@acme.dev' 
  */
 let accounts: AccountStore;
 let sessions: SessionStore;
+/** A workspace with a site: `pair` mints only for a workspace that has one (FRU-277). */
+let workspace: string;
+/** The id of the account that owns it: `pair` mints only for a member (FRU-277). */
+let member: string;
 const kv = createMemoryKv();
 
 before(async () => {
   const database = await createPgliteDatabase();
   accounts = createPostgresAccountStore(database);
   sessions = createPostgresSessionStore(database);
+  member = (await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' })).id;
+  workspace = (await accounts.createWorkspace('Acme', member)).id;
+  await accounts.addSite(workspace, { origin: 'https://acme.test', visibility: 'everyone' });
 });
+
+/** `pair`, as an operator runs it on this worker: for the workspace of the file. */
+function pair(args: readonly string[], env: WorkerEnv) {
+  return runPair([...args, '--workspace', workspace], env, sessions, accounts);
+}
 
 /** A worker with a database. Its stores are the ones of the file: see `contextFor`. */
 function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
@@ -301,7 +313,7 @@ describe('the boot guards', () => {
 describe('the pair command', () => {
   it('mints a code the pair route then accepts', async () => {
     const env = envWith();
-    const outcome = await runPair(['--subject', 'alice', '--name', 'Alice Martin'], env, sessions);
+    const outcome = await pair(['--subject', member, '--name', 'Alice Martin'], env);
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
     const code = outcome.lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
@@ -311,16 +323,12 @@ describe('the pair command', () => {
     assert.equal(response.status, 200);
 
     const session = (await response.json()) as { identity: unknown };
-    assert.deepEqual(session.identity, { subject: 'alice', name: 'Alice Martin' });
+    assert.deepEqual(session.identity, { subject: member, name: 'Alice Martin', workspace });
   });
 
   it('prints a link when it is told where the worker answers, with the code after the # (FRU-92)', async () => {
     const env = envWith();
-    const outcome = await runPair(
-      ['--subject', 'alice', '--endpoint', 'https://feedback.acme.dev/fruitback/?x=1#y'],
-      env,
-      sessions,
-    );
+    const outcome = await pair(['--subject', member, '--endpoint', 'https://feedback.acme.dev/fruitback/?x=1#y'], env);
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
     const code = outcome.lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
@@ -332,7 +340,7 @@ describe('the pair command', () => {
   });
 
   it('prints the code alone, and how to get a link, when it is not told where the worker answers', async () => {
-    const outcome = await runPair(['--subject', 'alice'], envWith(), sessions);
+    const outcome = await pair(['--subject', member], envWith());
 
     assert.ok(outcome.ok);
     assert.equal(
@@ -356,14 +364,14 @@ describe('the pair command', () => {
     assert.deepEqual([...LOOPBACK].sort(), ofTheExtension.filter((host) => host !== '::1').sort());
 
     for (const host of LOOPBACK) {
-      const outcome = await runPair(['--subject', 'alice', '--endpoint', `http://${host}:8789`], envWith(), sessions);
+      const outcome = await pair(['--subject', member, '--endpoint', `http://${host}:8789`], envWith());
       assert.ok(outcome.ok && outcome.lines.some((line) => line.includes(`http://${host}:8789/pair#`)), host);
     }
   });
 
   it('refuses an address a pairing code must not cross, and mints nothing', async () => {
     for (const endpoint of ['http://feedback.acme.dev', 'ftp://acme.dev', 'not a url', 'https://user:pw@acme.dev']) {
-      const outcome = await runPair(['--subject', 'alice', '--endpoint', endpoint], envWith(), sessions);
+      const outcome = await pair(['--subject', member, '--endpoint', endpoint], envWith());
 
       assert.equal(outcome.ok, false, endpoint);
       assert.equal(
@@ -373,7 +381,7 @@ describe('the pair command', () => {
       );
     }
     // Loopback is the dev loop, and it is not on a wire.
-    assert.ok((await runPair(['--subject', 'alice', '--endpoint', 'http://localhost:8789'], envWith(), sessions)).ok);
+    assert.ok((await pair(['--subject', member, '--endpoint', 'http://localhost:8789'], envWith())).ok);
   });
 
   /**
@@ -399,7 +407,7 @@ describe('the pair command', () => {
   });
 
   it('requires a subject, because that is what lands in reporter.id', async () => {
-    const outcome = await runPair(['--name', 'Alice Martin'], envWith(), sessions);
+    const outcome = await pair(['--name', 'Alice Martin'], envWith());
 
     assert.equal(outcome.ok, false);
     assert.ok(outcome.lines.join(' ').includes('--subject'), outcome.lines.join('\n'));
@@ -407,7 +415,7 @@ describe('the pair command', () => {
 
   /** `--name=Alice Martin` is the spelling that silently drops the surname, so it is refused. */
   it('refuses --flag=value rather than half-supporting it', async () => {
-    const outcome = await runPair(['--subject=alice'], envWith(), sessions);
+    const outcome = await pair(['--subject=alice'], envWith());
 
     assert.equal(outcome.ok, false);
   });
@@ -595,18 +603,14 @@ describe('the body cap', () => {
 describe('the pair command, on a typo', () => {
   /** `--emali alice@acme.dev` used to mint a code whose session carried no address, silently. */
   it('refuses an unknown flag rather than dropping it', async () => {
-    const outcome = await runPair(['--subject', 'alice', '--emali', 'alice@acme.dev'], envWith(), sessions);
+    const outcome = await pair(['--subject', member, '--emali', 'alice@acme.dev'], envWith());
 
     assert.equal(outcome.ok, false);
     assert.ok(outcome.lines.join(' ').includes('--emali'), outcome.lines.join('\n'));
   });
 
   it('still accepts the three it knows', async () => {
-    const outcome = await runPair(
-      ['--subject', 'alice', '--name', 'Alice Martin', '--email', 'alice@acme.dev'],
-      envWith(),
-      sessions,
-    );
+    const outcome = await pair(['--subject', member, '--name', 'Alice Martin', '--email', 'alice@acme.dev'], envWith());
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
   });

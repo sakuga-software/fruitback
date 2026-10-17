@@ -1173,11 +1173,19 @@ on a list. The rate limiter is what protects them, which is why it runs above th
 
 **A reviewer connects the extension from the console**: « Connect this browser », on « Put it on the
 site » or on « Sites ». An operator can also mint a pairing code on the container, never over HTTP,
-for one workspace (its id is in the address of the console, `/w/<id>/sites`):
+for one workspace and one of its members (FRU-277). The workspace id is in the address of the console,
+`/w/<id>/sites`, and the workspace must have a site. `--subject` is the id of the member's account,
+which the database gives from their address:
 
 ```bash
-docker compose exec worker node server.mjs pair --subject alice --name "Alice Martin" --workspace <id>
+docker compose exec -T postgres psql -U fruitback -d fruitback -Atc \
+  "SELECT id FROM \"user\" WHERE email = 'alice@acme.dev'"
+docker compose exec worker node server.mjs pair --subject <account id> --name "Alice Martin" --workspace <id>
 ```
+
+With a [dedicated schema](#in-a-database-you-already-run), add `SET search_path TO <schema>;` before the
+`SELECT`. The command refuses, and prints no code, when the workspace is missing, when it has no site,
+and when the account is not a member of it: the route would end such a session at once (FRU-149).
 
 Add `--endpoint https://api.feedback.example.com`, the address reviewers reach this worker at, and the
 command also prints a link, `https://api.feedback.example.com/pair#<code>`. The reviewer opens it and
