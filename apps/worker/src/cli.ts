@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
-import { PAIRING_TTL_SECONDS } from './session.ts';
+import { PAIRING_TTL_SECONDS, type SessionStore } from './session.ts';
 import { adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
 import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
 import type { IndexedNote, NoteIndex } from './notes-index.ts';
@@ -140,7 +140,12 @@ export type PairOutcome = { ok: true; lines: string[] } | { ok: false; lines: st
  * Reads the same configuration the server reads, so a container that cannot serve cannot mint
  * either — and says which variable is missing rather than failing on the database.
  */
-export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<PairOutcome> {
+export async function runPair(
+  argv: readonly string[],
+  env: WorkerEnv,
+  /** The store a test opened. Absent, the one of the environment. */
+  held?: SessionStore,
+): Promise<PairOutcome> {
   const parsed = parsePairArgs(argv);
   if (!parsed.ok) return { ok: false, lines: [parsed.error] };
 
@@ -152,7 +157,7 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
 
   let minted: { code: string; expiresAt: number };
   try {
-    minted = await createPairingCommand(config.config, parsed.args);
+    minted = await createPairingCommand(config.config, parsed.args, held);
   } catch (error) {
     return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
   }

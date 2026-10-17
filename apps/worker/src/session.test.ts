@@ -1,10 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
 import {
   ACCESS_TTL_SECONDS,
   CODE_ALPHABET,
@@ -13,45 +10,44 @@ import {
   ROTATION_GRACE_SECONDS,
   createPairing,
   createPairingCode,
-  createRefreshToken,
-  digest,
   normalizePairingCode,
   redeemPairing,
   refreshSession,
 } from './session.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
+import type { PgDatabase } from './postgres.ts';
+import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
+import { createPostgresSessionStore } from './session-postgres.ts';
 import { verifyIdentityToken } from './identity.ts';
 
 const SECRET = 'a-worker-secret-nobody-else-has';
 const ALICE = { subject: 'alice', name: 'Alice Martin', email: 'alice@acme.dev' };
 
-const directories: string[] = [];
+const databases: PgDatabase[] = [];
 
-/** A real file rather than `:memory:`, because one test reads the bytes SQLite actually wrote. */
-function storeOnDisk() {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-session-'));
-  directories.push(directory);
-  const path = join(directory, 'sessions.db');
+/** The store of the worker, on an empty PGlite database. */
+async function storeOnDatabase() {
+  const database = await createPgliteDatabase();
+  databases.push(database);
 
-  return { store: createSqliteSessionStore(path), path };
+  return { store: createPostgresSessionStore(database), database };
 }
 
-afterEach(() => {
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+afterEach(async () => {
+  for (const database of databases.splice(0)) await database.close();
 });
 
 /**
- * What `session.ts` does above any store, and what is true of the SQLite file alone.
+ * What `session.ts` does above any store.
  *
  * The rules of every `SessionStore` are in `session-conformance.fixture.ts`, and
- * `session-conformance.test.ts` runs them on this store: pairing, rotation, log out and the purge.
+ * `session-conformance.test.ts` runs them on the store of the worker: pairing, rotation, log out and
+ * the purge. `session-postgres.test.ts` holds what the database keeps of a session.
  */
 describe('pairing', () => {
   // The store refuses a late code by its own comparison: that is a case of the conformance suite.
   // Here the code is late for `redeemPairing`, which purges first.
   it('refuses a code past its expiry', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const minted = Date.now();
     const { code } = await createPairing(store, ALICE, minted);
 
@@ -61,7 +57,7 @@ describe('pairing', () => {
   });
 
   it('answers the same way for a code that never existed as for one already spent', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const { code } = await createPairing(store, ALICE);
     await redeemPairing(store, code, SECRET);
 
@@ -73,7 +69,7 @@ describe('pairing', () => {
   });
 
   it('reads a code back the way a person retypes it', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const { code } = await createPairing(store, ALICE);
 
     const retyped = ` ${code.toLowerCase().replaceAll('-', ' ')} `;
@@ -140,7 +136,7 @@ describe('the lifetimes of a session', () => {
 
 describe('the access token', () => {
   it('is an ordinary identity token, so the read and write paths need no new check', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const { code } = await createPairing(store, ALICE);
     const redeemed = await redeemPairing(store, code, SECRET);
 
@@ -153,7 +149,7 @@ describe('the access token', () => {
   });
 
   it('does not verify against another worker secret', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const { code } = await createPairing(store, ALICE);
     const redeemed = await redeemPairing(store, code, SECRET);
 
@@ -164,7 +160,7 @@ describe('the access token', () => {
   });
 
   it('expires on its own, well before the refresh token does', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const opened = Date.now();
     const { code } = await createPairing(store, ALICE, opened);
     const redeemed = await redeemPairing(store, code, SECRET, opened);
@@ -185,7 +181,7 @@ describe('the access token', () => {
 
 describe('refresh', () => {
   it('mints a new access token while the session is live', async () => {
-    const { store } = storeOnDisk();
+    const { store } = await storeOnDatabase();
     const { code } = await createPairing(store, ALICE);
     const redeemed = await redeemPairing(store, code, SECRET);
     assert.ok(redeemed.ok);
@@ -198,69 +194,17 @@ describe('refresh', () => {
   });
 });
 
-describe('what is on the disk', () => {
-  /**
-   * A copy of this file must not be a set of working logins.
-   *
-   * It reads every file SQLite wrote, not just the `.db`: in WAL mode a row that was just written is
-   * in `sessions.db-wal` and nowhere else, which is the same trap the seed store's backup note
-   * records. Checking only the `.db` would pass against a store that wrote the code in the clear.
-   */
-  it('holds neither the pairing code nor the refresh token in the clear', async () => {
-    const { store, path } = storeOnDisk();
-    const { code } = await createPairing(store, ALICE);
-    const redeemed = await redeemPairing(store, code, SECRET);
-    assert.ok(redeemed.ok);
-
-    const written = readdirSync(join(path, '..'))
-      .map((name) => readFileSync(join(path, '..', name)).toString('latin1'))
-      .join('\n');
-
-    assert.ok(written.includes('alice@acme.dev'), 'expected the database to hold the identity it vouches for');
-    assert.equal(written.includes(normalizePairingCode(code)), false, 'the pairing code is stored in the clear');
-    assert.equal(written.includes(redeemed.session.refreshToken), false, 'the refresh token is stored in the clear');
-  });
-});
-
-describe('a row nobody can trust', () => {
-  /**
-   * `A row is parsed, never trusted` — the rule this repo already states for the seed store. The file
-   * sits on a volume an operator can edit and a restore can be older than the code.
-   *
-   * **SQLite narrows what can actually arrive, and the first version of this test got that wrong.**
-   * The column has `TEXT` affinity, so an integer or a float written into it comes back as a string
-   * (`42` reads as `"42.0"`) and never reaches the guard as a non-string. Measured. What does reach
-   * it is a **BLOB**, which keeps its type and arrives as an object, and an empty string, which a
-   * `NOT NULL` column happily holds. The blob is the case below; the empty string is a case of the
-   * conformance suite, because every store can hold one.
-   */
-  it('refuses a pairing whose subject is a blob, which keeps its type through TEXT affinity', async () => {
-    const { store } = storeOnDisk();
-    const code = createPairingCode();
-
-    await store.createPairing({
-      codeHash: await digest(normalizePairingCode(code)),
-      identity: { subject: Buffer.from('alice') } as unknown as Parameters<typeof store.createPairing>[0]['identity'],
-      expiresAt: Date.now() + 60_000,
-    });
-
-    const redeemed = await redeemPairing(store, code, SECRET);
-
-    assert.equal(redeemed.ok, false, 'a malformed row minted a session');
-  });
-});
-
 /**
- * Rotation (FRU-61), in the file. What a rotation answers is in the conformance suite.
+ * Rotation (FRU-61), in the database. What a rotation answers is in the conformance suite.
  */
 describe('rotation', () => {
   /**
-   * The property the whole file rests on, re-checked on the tokens a rotation adds: a copy of this
+   * The property the store rests on, checked again on the tokens a rotation adds: a copy of the
    * database is not a set of working logins. A successor that had to be answered twice would have to
    * be stored in the clear, which is why a retry inside the grace mints a fresh one instead.
    */
   it('writes no rotated token into the database in the clear', async () => {
-    const { store, path } = storeOnDisk();
+    const { store, database } = await storeOnDatabase();
     const redeemed = await redeemPairing(store, (await createPairing(store, ALICE)).code, SECRET);
     assert.ok(redeemed.ok);
     const token = redeemed.session.refreshToken;
@@ -269,12 +213,17 @@ describe('rotation', () => {
     const second = await refreshSession(store, first.refreshToken, SECRET);
     assert.ok(second.ok);
 
-    const bytes = readdirSync(join(path, '..'))
-      .map((name) => readFileSync(join(path, '..', name)).toString('latin1'))
-      .join('');
+    const tables = await rowsOf(
+      database,
+      'SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()',
+    );
+    let bytes = '';
+    for (const { table_name: table } of tables)
+      bytes += JSON.stringify(await rowsOf(database, `SELECT * FROM "${String(table)}"`));
+    assert.ok(bytes.includes('alice@acme.dev'), 'the rows were read: they hold the identity of the session');
 
     for (const secret of [token, first.refreshToken, second.refreshToken]) {
-      assert.equal(bytes.includes(secret), false, 'a refresh token is in the file the operator backs up');
+      assert.equal(bytes.includes(secret), false, 'a refresh token is in the database the operator backs up');
     }
   });
 });
@@ -321,56 +270,5 @@ describe('the rotation grace is derived, not chosen', () => {
       margin + retry,
       'the extension changed how long it waits; this grace has to follow it',
     );
-  });
-});
-
-/**
- * The upgrade path, which a test on a fresh file never walks (FRU-61).
- *
- * Every other test here creates an empty database, so both migrations run together and
- * `ALTER TABLE ... ADD COLUMN` is applied to a table with no rows in it. What ships is the opposite:
- * a volume holding sessions somebody is using, opened by a worker one version newer. This builds the
- * version-1 schema by hand, puts a live session in it, and then lets the store open it.
- */
-describe('the rotation migration', () => {
-  it('adds its columns to a database that already holds a session', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'fruitback-session-'));
-    directories.push(directory);
-    const path = join(directory, 'sessions.db');
-
-    const token = createRefreshToken();
-    const before = new DatabaseSync(path);
-    before.exec(`
-      CREATE TABLE sessions (
-        token_hash TEXT PRIMARY KEY,
-        subject TEXT NOT NULL,
-        name TEXT,
-        email TEXT,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL,
-        revoked_at INTEGER
-      );
-      CREATE TABLE pairings (
-        code_hash TEXT PRIMARY KEY,
-        subject TEXT NOT NULL,
-        name TEXT,
-        email TEXT,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL,
-        redeemed_at INTEGER
-      );
-      PRAGMA user_version = 1;
-    `);
-    before
-      .prepare('INSERT INTO sessions (token_hash, subject, created_at, expires_at) VALUES (?, ?, ?, ?)')
-      .run(await digest(token), ALICE.subject, Date.now(), Date.now() + REFRESH_TTL_SECONDS * 1000);
-    before.close();
-
-    const store = createSqliteSessionStore(path);
-    const refreshed = await refreshSession(store, token, SECRET);
-
-    assert.ok(refreshed.ok, 'a session opened before rotation existed must survive the upgrade');
-    assert.ok((await refreshSession(store, refreshed.refreshToken, SECRET)).ok);
-    assert.equal((await refreshSession(store, token, SECRET)).ok, false, 'and it rotates from then on');
   });
 });

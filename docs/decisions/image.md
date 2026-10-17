@@ -284,8 +284,8 @@ immutable.
 - **An `.env` from before this file is read differently.** It has no `FRUITBACK_STORE`, says `PORT`
   for the host port and `TRUSTED_PROXY_HOPS=1`. `self-hosting.md` lists the four changes, and
   `.env.example` repeats each one beside its variable.
-- **An old SQLite deployment keeps its data in an anonymous volume.** The image declares
-  `VOLUME /data`, and the old file mounted nothing there. The new named volume starts empty, so the
+- **An old SQLite deployment keeps its data in an anonymous volume.** The image declared
+  `VOLUME /data` until FRU-226, and the old file mounted nothing there. The new named volume starts empty, so the
   upgrade section copies each database out with `.backup` and back in with `.restore`: the seeds,
   and the sessions when `FRUITBACK_SESSION_PATH` was set. Tested on a stand-in for the old file with
   sessions on: the pin and the pairing code were both back after the restore.

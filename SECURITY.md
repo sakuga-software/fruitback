@@ -652,17 +652,10 @@ worker ever writes it`).
 Empty the variable once the first workspace is made. Left in place it opens nothing while a
 workspace has an owner; on an instance whose last owner left, it would write a link again.
 
-**`FRUITBACK_FIRST_REVIEWER` writes a pairing code in the log** (FRU-108). It is off unless the
-operator sets it. A worker that holds no session yet then mints a code for the person the variable
-names each time it starts, and writes it in the log of the container, in the clear: as a code, or as
-a link when `FRUITBACK_PUBLIC_URL` is set. **Whoever reads that log while the code is valid pairs as
-that person**, and gets their session: reading the log is then enough to become the first reviewer.
-A log that is shipped elsewhere keeps the line after the code is dead. The code is an ordinary one:
-valid 15 minutes, usable once, kept as a digest. Once the store holds a session, live or ended, the
-worker mints nothing, so the variable left in place opens nothing later; a worker whose sessions
-were all purged after their 30 days is a worker with no session again, so empty the variable once
-paired. The worker refuses the variable with accounts or with a client that declares a workspace: a
-session there names a workspace, and the variable names none. The browser never names the person.
+**`FRUITBACK_FIRST_REVIEWER` wrote a pairing code in the log** (FRU-108), on a worker with no
+workspace. FRU-225 refused it, and FRU-226 removed its code: the worker refuses the variable with what
+to do, and writes no code. The first administrator is `FRUITBACK_FIRST_ADMIN`, above, and a reviewer
+pairs from the console.
 
 **`FRUITBACK_SESSION_PATH` was a credentials file**, until FRU-225 refused it. A file of before
 holds what follows, until it is deleted. Give it the same care as a key: a copy of it is

@@ -1,13 +1,11 @@
-import { afterEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { IDENTITY_SECRET } from './auth-worker.fixture.ts';
+import { type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { type SessionIdentity, createPairing, redeemPairing, refreshSession } from './session.ts';
-import { handleRequest } from './app.ts';
 import { signIdentityToken, verifyIdentityToken } from './identity.ts';
 import { checkWorkspace, runPair } from './cli.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
@@ -17,166 +15,124 @@ import { beforePostgres } from './before-postgres.fixture.ts';
  *
  * Every session token of every workspace is signed with the one worker key. So the signature is not
  * what keeps workspace A off the sites of workspace B: the `ws` claim is. These tests are the proof
- * the ticket asks for, on the read and on the write, from a page and from the relay.
+ * the ticket asks for, on the read and on the write, from a page and from the relay. The sites are
+ * the ones of the database (FRU-226): a worker with no database keeps no session.
  */
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
-const SITE_KEY = 'the-own-key-of-the-loose-client-site';
 const RELAY_ORIGIN = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+const world = worlds();
 
-const CLIENTS = {
-  a: { workspace: 'ws-a', origins: ['https://a.test'], read: 'authenticated' },
-  /** A site that mints its own tokens and also belongs to a workspace. */
-  both: { workspace: 'ws-a', origins: ['https://both.test'], read: 'authenticated', identitySecret: SITE_KEY },
-  b: { workspace: 'ws-b', origins: ['https://b.test'], read: 'authenticated' },
-  loose: { origins: ['https://loose.test'], read: 'authenticated', identitySecret: SITE_KEY },
+type Workspaces = {
+  world: World;
+  alice: string;
+  bob: string;
+  /** The workspace of each letter, and its site. */
+  a: { workspace: string; site: string };
+  b: { workspace: string; site: string };
 };
 
-const directories: string[] = [];
+/**
+ * Alice owns the workspace A and Bob the workspace B. Each workspace has one site for its members.
+ * Alice is a member of B too: only the `ws` claim of her session keeps it off the site of B.
+ */
+async function twoWorkspaces(): Promise<Workspaces> {
+  const opened = await world();
+  const alice = (await signInTo(opened, 'alice@acme.dev')).id;
+  const bob = (await signInTo(opened, 'bob@acme.dev')).id;
+  const of = async (letter: string, owner: string) => {
+    const workspace = await opened.accounts.createWorkspace(`Workspace ${letter}`, owner);
+    const site = await opened.accounts.addSite(workspace.id, {
+      origin: `https://${letter}.test`,
+      visibility: 'members',
+    });
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-workspaces-'));
-  directories.push(directory);
+    return { workspace: workspace.id, site: site.id };
+  };
 
-  return beforePostgres({
-    FRUITBACK_STORE: 'memory',
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_CLIENTS: JSON.stringify(CLIENTS),
-    ...overrides,
-  });
+  const a = await of('a', alice);
+  const b = await of('b', bob);
+  await memberOf(opened, b.workspace, alice, 'member');
+
+  return { world: opened, alice, bob, a, b };
 }
 
 /** A session of one workspace, opened through the store and the real redemption. */
-async function sessionOf(env: WorkerEnv, identity: SessionIdentity): Promise<{ access: string; refresh: string }> {
-  const store = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-  const { code } = await createPairing(store, identity);
-  const redeemed = await redeemPairing(store, code, SECRET);
+async function sessionOf(opened: World, identity: SessionIdentity): Promise<{ access: string; refresh: string }> {
+  const { code } = await createPairing(opened.sessions, identity);
+  const redeemed = await redeemPairing(opened.sessions, code, IDENTITY_SECRET);
   assert.ok(redeemed.ok);
 
   return { access: redeemed.session.accessToken, refresh: redeemed.session.refreshToken };
 }
 
-let nextIp = 0;
+function read(opened: World, site: string, origin: string, page: string, token?: string): Promise<Response> {
+  const url = encodeURIComponent(`${page}/pricing`);
 
-function read(env: WorkerEnv, client: string, origin: string, token?: string): Promise<Response> {
-  const url = encodeURIComponent(`https://${client}.test/pricing`);
-  const headers: Record<string, string> = { Origin: origin };
-  if (token !== undefined) headers.Authorization = `Bearer ${token}`;
-  nextIp += 1;
-
-  return handleRequest(new Request(`https://worker.test/feedback?url=${url}&client=${client}`, { headers }), env, {
-    clientIp: `198.51.100.${nextIp}`,
+  return callOn(opened, 'GET', `/feedback?url=${url}&client=${site}`, {
+    origin,
+    ...(token === undefined ? {} : { token }),
   });
 }
 
-function write(env: WorkerEnv, client: string, origin: string, token?: string): Promise<Response> {
+function write(opened: World, site: string, origin: string, page: string, token?: string): Promise<Response> {
   const seed = seedFixture();
-  const body = {
-    ...seed,
-    page: { ...seed.page, url: `https://${client}.test/pricing` },
-    client: { id: client },
-  };
-  const headers: Record<string, string> = { Origin: origin, 'Content-Type': 'application/json' };
-  if (token !== undefined) headers.Authorization = `Bearer ${token}`;
-  nextIp += 1;
+  const body = { ...seed, page: { ...seed.page, url: `${page}/pricing` }, client: { id: site } };
 
-  return handleRequest(
-    new Request('https://worker.test/feedback', { method: 'POST', headers, body: JSON.stringify(body) }),
-    env,
-    { clientIp: `198.51.100.${nextIp}` },
-  );
+  return callOn(opened, 'POST', '/feedback', { origin, body, ...(token === undefined ? {} : { token }) });
 }
-
-afterEach(() => {
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
 
 describe('a session belongs to one workspace (FRU-95)', () => {
   it('carries its workspace from the pairing to the token, and through every refresh', async () => {
-    const env = envWith();
-    const session = await sessionOf(env, { subject: 'alice', workspace: 'ws-a' });
+    const { world: opened, alice, a } = await twoWorkspaces();
+    const session = await sessionOf(opened, { subject: alice, workspace: a.workspace });
 
-    const first = await verifyIdentityToken(session.access, SECRET);
+    const first = await verifyIdentityToken(session.access, IDENTITY_SECRET);
     assert.ok(first.ok);
-    assert.equal(first.workspace, 'ws-a');
+    assert.equal(first.workspace, a.workspace);
     assert.equal('workspace' in first.reporter, false, 'the workspace is not part of what a seed stores');
 
-    const store = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-    const refreshed = await refreshSession(store, session.refresh, SECRET);
+    const refreshed = await refreshSession(opened.sessions, session.refresh, IDENTITY_SECRET);
     assert.ok(refreshed.ok);
-    const second = await verifyIdentityToken(refreshed.accessToken, SECRET);
+    const second = await verifyIdentityToken(refreshed.accessToken, IDENTITY_SECRET);
     assert.ok(second.ok);
-    assert.equal(second.workspace, 'ws-a');
+    assert.equal(second.workspace, a.workspace);
   });
 
   for (const [how, originOf] of [
-    ['from the page', (client: string) => `https://${client}.test`],
+    ['from the page', (letter: string) => `https://${letter}.test`],
     ['through the relay', () => RELAY_ORIGIN],
   ] as const) {
     it(`reads the sites of its workspace and no other, ${how}`, async () => {
-      const env = envWith();
-      const { access } = await sessionOf(env, { subject: 'alice', workspace: 'ws-a' });
+      const { world: opened, alice, a, b } = await twoWorkspaces();
+      const { access } = await sessionOf(opened, { subject: alice, workspace: a.workspace });
 
-      assert.equal((await read(env, 'a', originOf('a'), access)).status, 200);
-      assert.equal((await read(env, 'b', originOf('b'), access)).status, 401);
-      assert.equal((await read(env, 'b', originOf('b'))).status, 401, 'the control: no token is refused too');
+      assert.equal((await read(opened, a.site, originOf('a'), 'https://a.test', access)).status, 200);
+      assert.equal((await read(opened, b.site, originOf('b'), 'https://b.test', access)).status, 401);
+      assert.equal(
+        (await read(opened, b.site, originOf('b'), 'https://b.test')).status,
+        401,
+        'the control: no token is refused too',
+      );
     });
 
     it(`writes on the sites of its workspace and no other, ${how}`, async () => {
-      const env = envWith();
-      const { access } = await sessionOf(env, { subject: 'alice', name: 'Alice', workspace: 'ws-a' });
+      const { world: opened, alice, a, b } = await twoWorkspaces();
+      const { access } = await sessionOf(opened, { subject: alice, name: 'Alice', workspace: a.workspace });
 
-      const own = await write(env, 'a', originOf('a'), access);
+      const own = await write(opened, a.site, originOf('a'), 'https://a.test', access);
       assert.equal(own.status, 201, await own.clone().text());
-      const other = await write(env, 'b', originOf('b'), access);
+      const other = await write(opened, b.site, originOf('b'), 'https://b.test', access);
       assert.equal(other.status, 401);
       assert.deepEqual(await other.json(), { error: 'invalid-identity', reason: 'invalid-claims' });
     });
   }
 
-  it('refuses the token of a session of an account on a worker that keeps no accounts (FRU-238)', async () => {
-    const env = envWith();
-    const now = Math.floor(Date.now() / 1000);
-    // Signed with the worker key, of the account of a member: nothing here can say what it is a member of.
-    const token = await signIdentityToken({ sub: 'alice', scope: 'account', iat: now, exp: now + 600 }, SECRET);
-
-    for (const client of ['a', 'b']) {
-      assert.equal((await read(env, client, `https://${client}.test`, token)).status, 401, client);
-      assert.equal((await write(env, client, RELAY_ORIGIN, token)).status, 401, client);
-    }
-    // The control: the same person, with a session of the workspace, reads.
-    const { access } = await sessionOf(env, { subject: 'alice', workspace: 'ws-a' });
-    assert.equal((await read(env, 'a', 'https://a.test', access)).status, 200);
-  });
-
   it('lets the workspace B read its own site with its own session', async () => {
-    const env = envWith();
-    const { access } = await sessionOf(env, { subject: 'bob', workspace: 'ws-b' });
+    const { world: opened, bob, a, b } = await twoWorkspaces();
+    const { access } = await sessionOf(opened, { subject: bob, workspace: b.workspace });
 
-    assert.equal((await read(env, 'b', 'https://b.test', access)).status, 200);
-    assert.equal((await read(env, 'a', 'https://a.test', access)).status, 401);
-  });
-
-  it('refuses a session token on a client that belongs to no workspace', async () => {
-    const env = envWith();
-    const { access } = await sessionOf(env, { subject: 'alice', workspace: 'ws-a' });
-    const ownToken = await signIdentityToken({ sub: 'carol', exp: Math.floor(Date.now() / 1000) + 600 }, SITE_KEY);
-
-    assert.equal((await read(env, 'loose', 'https://loose.test', access)).status, 401);
-    assert.equal((await read(env, 'loose', 'https://loose.test', ownToken)).status, 200, 'its own key still works');
-  });
-
-  it('takes its own tokens and the sessions of its workspace, on a site that has both, and no other session', async () => {
-    const env = envWith();
-    const own = await signIdentityToken({ sub: 'carol', exp: Math.floor(Date.now() / 1000) + 600 }, SITE_KEY);
-    const ofA = (await sessionOf(env, { subject: 'alice', workspace: 'ws-a' })).access;
-    const ofB = (await sessionOf(env, { subject: 'bob', workspace: 'ws-b' })).access;
-
-    assert.equal((await read(env, 'both', 'https://both.test', own)).status, 200);
-    assert.equal((await read(env, 'both', 'https://both.test', ofA)).status, 200);
-    assert.equal((await read(env, 'both', 'https://both.test', ofB)).status, 401);
+    assert.equal((await read(opened, b.site, 'https://b.test', 'https://b.test', access)).status, 200);
+    assert.equal((await read(opened, a.site, 'https://a.test', 'https://a.test', access)).status, 401);
   });
 
   /**
@@ -197,44 +153,33 @@ describe('a session belongs to one workspace (FRU-95)', () => {
   });
 
   it('refuses a token signed with the worker key that names no workspace', async () => {
-    const env = envWith();
-    const bare = await signIdentityToken({ sub: 'mallory', exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+    const { world: opened, alice, a } = await twoWorkspaces();
+    const bare = await signIdentityToken({ sub: alice, exp: Math.floor(Date.now() / 1000) + 600 }, IDENTITY_SECRET);
 
-    assert.equal((await read(env, 'a', 'https://a.test', bare)).status, 401);
+    assert.equal((await read(opened, a.site, 'https://a.test', 'https://a.test', bare)).status, 401);
+    // The control: the same person, with a session of the workspace, reads.
+    const { access } = await sessionOf(opened, { subject: alice, workspace: a.workspace });
+    assert.equal((await read(opened, a.site, 'https://a.test', 'https://a.test', access)).status, 200);
   });
 });
 
+/** The worker of before, with its sites in `FRUITBACK_CLIENTS`. It keeps no session since FRU-226. */
+function envOfClients(clients: Record<string, unknown>): WorkerEnv {
+  return beforePostgres({
+    FRUITBACK_STORE: 'memory',
+    FRUITBACK_IDENTITY_SECRET: IDENTITY_SECRET,
+    FRUITBACK_CLIENTS: JSON.stringify(clients),
+  });
+}
+
+const PUBLIC_CLIENTS = {
+  a: { workspace: 'ws-a', origins: ['https://a.test'], read: 'public' },
+  b: { workspace: 'ws-b', origins: ['https://b.test'], read: 'public' },
+};
+
 describe('the boot guards of a worker with workspaces (FRU-95)', () => {
-  it('accepts sessions when a client declares a workspace', () => {
-    const result = readConfig(envWith());
-
-    assert.ok(result.ok, result.ok ? '' : result.missing.join(', '));
-  });
-
-  it('refuses sessions when no client declares a workspace, and names the map', () => {
-    const result = readConfig(
-      envWith({ FRUITBACK_CLIENTS: JSON.stringify({ acme: { origins: ['https://acme.test'] } }) }),
-    );
-
-    assert.equal(result.ok, false);
-    assert.ok(result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')));
-  });
-
-  it('refuses a client whose own key is the worker key, because it would skip the workspace check', () => {
-    const result = readConfig(
-      envWith({
-        FRUITBACK_CLIENTS: JSON.stringify({ ...CLIENTS, shared: { workspace: 'ws-a', identitySecret: SECRET } }),
-      }),
-    );
-
-    assert.equal(result.ok, false);
-    assert.ok(result.ok === false && result.missing.some((name) => name.includes('shared')));
-  });
-
   it('still refuses an authenticated client with no key and no workspace', () => {
-    const result = readConfig(
-      envWith({ FRUITBACK_CLIENTS: JSON.stringify({ ...CLIENTS, orphan: { read: 'authenticated' } }) }),
-    );
+    const result = readConfig(envOfClients({ ...PUBLIC_CLIENTS, orphan: { read: 'authenticated' } }));
 
     assert.equal(result.ok, false);
     assert.ok(result.ok === false && result.missing.some((name) => name.includes('orphan')));
@@ -253,21 +198,8 @@ describe('pair --workspace (FRU-95)', () => {
     assert.equal(checkWorkspace(undefined, []), undefined);
   });
 
-  it('mints a code whose session reads the sites of that workspace', async () => {
-    const env = envWith();
-    const outcome = await runPair(['--subject', 'alice', '--workspace', 'ws-a'], env);
-    assert.ok(outcome.ok, outcome.lines.join('\n'));
-    assert.match(outcome.lines[0] ?? '', /in the workspace ws-a/);
-
-    const code = outcome.lines[2]?.trim() as string;
-    const store = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-    const redeemed = await redeemPairing(store, code, SECRET);
-    assert.ok(redeemed.ok);
-    assert.equal((await read(env, 'a', 'https://a.test', redeemed.session.accessToken)).status, 200);
-  });
-
   it('mints nothing without a workspace on a worker that has some', async () => {
-    const outcome = await runPair(['--subject', 'alice'], envWith());
+    const outcome = await runPair(['--subject', 'alice'], envOfClients(PUBLIC_CLIENTS));
 
     assert.equal(outcome.ok, false);
     assert.match(outcome.lines.join('\n'), /--workspace is required/);

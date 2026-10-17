@@ -1,38 +1,24 @@
-import { afterEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import { noNotes } from './notes-index.ts';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { handleRequest } from './app.ts';
 import { type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
-const directories: string[] = [];
 const envWith = worlds();
 
-afterEach(() => {
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
-
-/** A worker with no accounts: it has no database, and its sessions are in a file. */
+/** A worker with no accounts: it has no database. */
 function envWithoutAccounts(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-session-sites-'));
-  directories.push(directory);
-
   return beforePostgres({
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: 'https://app.fruitback.test',
     FRUITBACK_IDENTITY_SECRET: 'a-worker-secret-of-exactly-enough',
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
   });
 }
 
@@ -117,8 +103,9 @@ describe('the sites a session may turn on (FRU-101)', () => {
       envWithoutAccounts(),
       { clientIp: '198.51.100.9', kv: createMemoryKv() },
     );
-    // The session routes take a POST, so this GET is a `405`. The extension reads it as « this worker
-    // keeps no accounts », which is an answer about a language (FRU-131): do not change it alone.
-    assert.equal(without.status, 405, 'a worker with no accounts has no such route');
+    // A worker with no database keeps no sessions since FRU-226, so no session route exists: `404`.
+    // A worker of before with a session file answered `405`, which the extension reads as « this
+    // worker keeps no accounts » (FRU-131).
+    assert.equal(without.status, 404, 'a worker with no accounts has no such route');
   });
 });

@@ -1,40 +1,34 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  type FileStoreModule,
   type Subject,
   type Violation,
   describeConformance,
   describeControls,
   factoriesOf,
   mutatedModule,
-  onFile,
   turn,
 } from './conformance.fixture.ts';
+import type { Database } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
 import type { RotationOutcome, SessionIdentity, SessionStore } from './session.ts';
 import { sessionCases } from './session-conformance.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
  * Each `SessionStore` against the conformance suite (FRU-140). A new implementation adds a subject
  * here: the last test of this file fails until it does.
  */
 
-const SQLITE = onFile<SessionStore>('the SQLite session store', 'createSqliteSessionStore', () => ({
-  create: createSqliteSessionStore,
-  close: closeSessionConnections,
-}));
+const PGLITE = onDatabase(
+  'the PostgreSQL session store, on PGlite',
+  'createPostgresSessionStore',
+  createPgliteDatabase,
+  createPostgresSessionStore,
+);
 
 const SUBJECTS: Subject<SessionStore>[] = [
-  SQLITE,
-  onDatabase(
-    'the PostgreSQL session store, on PGlite',
-    'createPostgresSessionStore',
-    createPgliteDatabase,
-    createPostgresSessionStore,
-  ),
+  PGLITE,
   // The same store on a server, where two refreshes are two connections.
   onDatabase(
     'the PostgreSQL session store, on a real server',
@@ -131,46 +125,47 @@ function decidesThenWaits(real: SessionStore): SessionStore {
   };
 }
 
-const REPLAY_ANSWER = "return { answer: { outcome: 'reused' }, commit: true };";
-const EXPIRED_OR_UNKNOWN = "if (row === undefined || typeof row.expires_at !== 'number' || row.expires_at <= now) {";
-const PAST_THE_GRACE = 'if (now > rotatedAt + graceMs) {';
-const DROP_ORPHANS = 'revokeChain(database, chainOf(row, tokenHash), now, tokenHash);';
-const RETIRE_PREDECESSOR = "if (typeof row.predecessor_hash === 'string') revoke(database, row.predecessor_hash, now);";
-const NAME_THE_HEAD = 'if (root !== keep) revoke(database, root, now);';
-const SPEND_THE_CODE = 'AND redeemed_at IS NULL AND expires_at > ?';
-const PURGE_SESSIONS = "'DELETE FROM sessions WHERE expires_at <= ?'";
-const END_SESSIONS =
-  "'UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)'";
-const SPEND_CODES =
-  "'UPDATE pairings SET redeemed_at = ? WHERE redeemed_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)'";
+const REPLAY_ANSWER = "await revokeChain(tx, root, now);\n\n    return { outcome: 'reused' };";
+const SPEND_THE_CODE = 'eq(pairings.code_hash, codeHash), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)';
+const EXPIRED_OR_UNKNOWN = "if (row === undefined || row.expires_at <= now) return { outcome: 'gone' };";
+const PAST_THE_GRACE = 'if (rotatedAt !== undefined && now > rotatedAt + graceMs) {';
+const DROP_ORPHANS = 'if (rotatedAt !== undefined) await revokeChain(tx, root, now, tokenHash);';
+const RETIRE_PREDECESSOR = 'if (row.predecessor_hash !== null) await revoke(tx, row.predecessor_hash, now);';
+const NAME_THE_HEAD = 'if (root !== keep) await revoke(tx, root, now);';
+const CHAIN_IS_DEAD = "if (!(await chainHasLive(tx, root))) return { outcome: 'gone' };";
+const PURGE_SESSIONS = 'db.delete(sessions).where(lte(sessions.expires_at, now))';
+const END_SESSIONS = '.where(and(isNull(sessions.revoked_at), theirs(sessions)));';
+const SPEND_CODES = '.where(and(isNull(pairings.redeemed_at), theirs(pairings)));';
+const OF_THE_PERSON = 'subject === undefined ? undefined : eq(sessions.subject, subject)';
+const OF_THE_WORKSPACE = 'workspace === undefined ? undefined : eq(sessions.workspace, workspace)';
 
-/** One change to `session-sqlite.ts`, or one store around it, for each case: the case must fail. */
+/** One change to `session-postgres.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'writes the name a person chose on their live sessions and codes, and on nobody else (FRU-249)',
     by: 'renames every session of the worker',
     replace: {
-      from: "'UPDATE sessions SET name = ? WHERE subject = ? AND revoked_at IS NULL AND expires_at > ?'",
-      to: "'UPDATE sessions SET name = ? WHERE subject IS NOT ? AND revoked_at IS NULL AND expires_at > ? OR 1 = 1'",
+      from: '.where(and(eq(sessions.subject, subject), isNull(sessions.revoked_at), gt(sessions.expires_at, now)));',
+      to: '.where(and(isNull(sessions.revoked_at), gt(sessions.expires_at, now)));',
     },
   },
   {
     breaks: 'writes the name a person chose on their live sessions and codes, and on nobody else (FRU-249)',
     by: 'leaves the codes that wait with the name of before',
     replace: {
-      from: "'UPDATE pairings SET name = ? WHERE subject = ? AND expires_at > ? AND redeemed_at IS NULL'",
-      to: "'UPDATE pairings SET name = name WHERE name <> ? AND subject = ? AND expires_at > ? AND redeemed_at IS NULL'",
+      from: 'eq(pairings.subject, subject), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)',
+      to: 'sql`false`',
     },
   },
   {
     breaks: 'opens a session for the person the operator named, not for whoever redeemed',
     by: 'does not keep the name of a pairing',
-    replace: { after: 'async createPairing(', from: 'identity.name ?? null,', to: 'null,' },
+    replace: { after: 'async createPairing(', from: 'name: identity.name ?? null,', to: 'name: null,' },
   },
   {
     breaks: 'spends the code, so a second reviewer with the same code gets nothing',
     by: 'redeems a code each time it is asked',
-    replace: { from: SPEND_THE_CODE, to: 'AND expires_at > ?' },
+    replace: { from: SPEND_THE_CODE, to: 'eq(pairings.code_hash, codeHash), gt(pairings.expires_at, now)' },
   },
   {
     breaks: 'gives one session to two reviewers who redeem one code at the same moment',
@@ -198,27 +193,30 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'refuses a code at its expiry, and after, with no purge before',
     by: 'never reads the expiry of a code',
-    replace: { from: SPEND_THE_CODE, to: 'AND redeemed_at IS NULL AND ? IS NOT NULL' },
+    replace: { from: SPEND_THE_CODE, to: 'eq(pairings.code_hash, codeHash), isNull(pairings.redeemed_at)' },
   },
   {
     breaks: 'refuses a code at its expiry, and after, with no purge before',
     by: 'still takes a code at the instant of its expiry',
-    replace: { from: SPEND_THE_CODE, to: 'AND redeemed_at IS NULL AND expires_at >= ?' },
+    replace: {
+      from: SPEND_THE_CODE,
+      to: 'eq(pairings.code_hash, codeHash), isNull(pairings.redeemed_at), sql`${pairings.expires_at} >= ${now}`',
+    },
   },
   {
     breaks: 'leaves the code spendable when the session cannot be written',
     by: 'keeps the code spent when the session failed',
     replace: {
       after: 'async redeemPairing(',
-      from: "} catch (error) {\n        database.exec('ROLLBACK');",
-      to: "} catch (error) {\n        database.exec('COMMIT');",
+      from: 'return transaction(async (tx) => {',
+      to: 'return run(async (tx) => {',
     },
   },
   {
     breaks: 'refuses a pairing whose subject is an empty string',
     by: 'takes an empty subject',
-    // The parser of a row is in `session-rows.ts`, for the two stores. The change is where this
-    // store reads its answer: a row that is no person is taken as one.
+    // The parser of a row is in `session-rows.ts`. The change is where this store reads its answer:
+    // a row that is no person is taken as one.
     replace: {
       from: 'const identity = row === undefined ? undefined : identityOf(row);',
       to: "const identity = row === undefined ? undefined : (identityOf(row) ?? { subject: '' });",
@@ -227,7 +225,11 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'keeps the workspace of a pairing through every rotation',
     by: 'does not copy the workspace to a successor',
-    replace: { after: 'function decide(', from: 'identity.workspace ?? null,', to: 'null,' },
+    replace: {
+      after: 'async function decide(',
+      from: 'workspace: identity.workspace ?? null,',
+      to: 'workspace: null,',
+    },
   },
   {
     breaks: 'refuses a refresh token that was never issued',
@@ -244,50 +246,47 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'refuses a session past its expiry',
     by: 'never reads the expiry of a session',
-    replace: { from: EXPIRED_OR_UNKNOWN, to: "if (row === undefined || typeof row.expires_at !== 'number') {" },
+    replace: { from: EXPIRED_OR_UNKNOWN, to: "if (row === undefined) return { outcome: 'gone' };" },
   },
   {
     breaks: 'refuses a session past its expiry',
     by: 'still takes a token at the instant of its expiry',
-    replace: { from: 'row.expires_at <= now', to: 'row.expires_at < now' },
+    replace: { after: 'async function decide(', from: 'row.expires_at <= now', to: 'row.expires_at < now' },
   },
   {
     breaks: 'answers rotated, gone and reused for the three things a token can be',
     by: 'calls a replay an ended session',
-    replace: { from: REPLAY_ANSWER, to: "return { answer: { outcome: 'gone' }, commit: true };" },
+    replace: { from: REPLAY_ANSWER, to: "await revokeChain(tx, root, now);\n\n    return { outcome: 'gone' };" },
   },
   {
     breaks: 'revokes on the worker, so the refresh token stops working everywhere',
     by: 'rotates a token that is revoked',
-    replace: { from: 'if (row.revoked_at !== null && row.revoked_at !== undefined) {', to: 'if (false) {' },
+    replace: { from: 'if (row.revoked_at !== null) {', to: 'if (false) {' },
   },
   {
     breaks: 'treats a second logout as a no-op rather than an error',
     by: 'answers that every log out revoked something',
-    replace: { from: 'return revoked.changes === 1;', to: 'return true;' },
+    replace: { from: 'return revoked.length === 1;', to: 'return true;' },
   },
   {
     breaks: 'leaves every other session alone',
     by: 'revokes every chain with one',
-    replace: {
-      from: 'WHERE root_hash = ? AND token_hash IS NOT ?',
-      to: 'WHERE (root_hash = ? OR 1) AND token_hash IS NOT ?',
-    },
+    replace: { after: 'async function revokeChain(', from: 'eq(sessions.root_hash, root),', to: 'sql`true`,' },
   },
   {
     breaks: 'hands back a new refresh token, and the new one works',
     by: 'does not copy the name to a successor',
-    replace: { after: 'function decide(', from: 'identity.name ?? null,', to: 'null,' },
+    replace: { after: 'async function decide(', from: 'name: identity.name ?? null,', to: 'name: null,' },
   },
   {
     breaks: 'keeps the old token usable until the new one is used',
     by: 'gives a rotated token no grace',
-    replace: { from: PAST_THE_GRACE, to: 'if (now >= rotatedAt) {' },
+    replace: { from: PAST_THE_GRACE, to: 'if (rotatedAt !== undefined && now >= rotatedAt) {' },
   },
   {
     breaks: 'takes a third presentation inside the ceiling, not just a second',
     by: 'revokes the token that presents itself with the successors nobody received',
-    replace: { from: DROP_ORPHANS, to: 'revokeChain(database, chainOf(row, tokenHash), now);' },
+    replace: { from: DROP_ORPHANS, to: 'if (rotatedAt !== undefined) await revokeChain(tx, root, now);' },
   },
   {
     breaks: 'drops the successor that was never received',
@@ -297,12 +296,12 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'ends the chain when an orphan is presented and something in it is still live',
     by: 'rolls the revocation of the chain back',
-    replace: { from: REPLAY_ANSWER, to: "return { answer: { outcome: 'reused' }, commit: false };" },
+    replace: { from: REPLAY_ANSWER, to: "return { outcome: 'reused' };" },
   },
   {
     breaks: 'answers a token from a chain that is entirely revoked without calling it a replay',
     by: 'calls every revoked token a replay',
-    replace: { from: 'if (!chainHasLive(database, chainOf(row, tokenHash))) {', to: 'if (false) {' },
+    replace: { from: CHAIN_IS_DEAD, to: '' },
   },
   {
     breaks: 'retires the old token the moment the new one is used',
@@ -312,10 +311,7 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'revokes the whole chain when a retired token is replayed',
     by: 'refuses the replay and leaves the chain live',
-    replace: {
-      from: `revokeChain(database, chainOf(row, tokenHash), now);\n\n    ${REPLAY_ANSWER}`,
-      to: REPLAY_ANSWER,
-    },
+    replace: { from: REPLAY_ANSWER, to: "return { outcome: 'reused' };" },
   },
   {
     breaks: 'gives up on a rotated token once the grace has run out, and takes the chain with it',
@@ -325,36 +321,39 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'gives up on a rotated token once the grace has run out, and takes the chain with it',
     by: 'refuses the late token and leaves its successor live',
-    replace: { after: PAST_THE_GRACE, from: 'commit: true', to: 'commit: false' },
+    replace: { after: PAST_THE_GRACE, from: 'await revokeChain(tx, root, now);', to: '' },
   },
   {
     breaks: 'still accepts the retry the grace exists for, at the last moment it covers',
     by: 'ends the grace one instant early',
-    replace: { from: PAST_THE_GRACE, to: 'if (now >= rotatedAt + graceMs) {' },
+    replace: { from: PAST_THE_GRACE, to: 'if (rotatedAt !== undefined && now >= rotatedAt + graceMs) {' },
   },
   {
     breaks: 'does not extend the session it rotates',
     by: 'gives a successor an expiry of its own',
     replace: {
-      after: 'function decide(',
-      from: 'row.expires_at,\n      tokenHash,',
-      to: 'Number(row.expires_at) * 2,\n      tokenHash,',
+      after: 'async function decide(',
+      from: 'expires_at: row.expires_at,',
+      to: 'expires_at: Number(row.expires_at) * 2,',
     },
   },
   {
     breaks: 'tells a logged-out token apart from a replayed one',
     by: 'calls every revoked token a replay',
-    replace: { from: 'if (!chainHasLive(database, chainOf(row, tokenHash))) {', to: 'if (false) {' },
+    replace: { from: CHAIN_IS_DEAD, to: '' },
   },
   {
     breaks: 'does not extend the grace by retrying inside it',
     by: 'writes the instant of every rotation',
-    replace: { from: 'WHERE token_hash = ? AND rotated_at IS NULL', to: 'WHERE token_hash = ?' },
+    replace: {
+      from: '.where(and(eq(sessions.token_hash, tokenHash), isNull(sessions.rotated_at)));',
+      to: '.where(eq(sessions.token_hash, tokenHash));',
+    },
   },
   {
     breaks: 'ends the whole chain on log out, not only the token it was handed',
     by: 'revokes the row it was handed alone',
-    replace: { from: 'if (row !== undefined) revokeChain(database, chainOf(row, tokenHash), now);', to: '' },
+    replace: { after: 'async revokeSession(', from: 'await revokeChain(tx, root, now);', to: '' },
   },
   {
     breaks: 'ends a chain from any link, including the token nobody is holding',
@@ -369,22 +368,23 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'answers false on a token already revoked, whatever the chain did',
     by: 'answers for the chain, and not for the row it was handed',
-    replace: { from: 'return revoked.changes === 1;', to: 'return row !== undefined;' },
+    replace: { after: 'async revokeSession(', from: 'return revoked;', to: 'return true;' },
   },
   {
     breaks: 'leaves the token a client just received alone when its predecessor is retired',
     by: 'retires the whole chain with the predecessor',
     replace: {
       from: RETIRE_PREDECESSOR,
-      to: "if (typeof row.predecessor_hash === 'string') revokeChain(database, chainOf(row, tokenHash), now);",
+      to: 'if (row.predecessor_hash !== null) await revokeChain(tx, root, now);',
     },
   },
   {
     breaks: 'revokes a forked chain to its tip when the root is replayed',
     by: 'revokes the direct successors of the root alone',
     replace: {
-      from: 'WHERE root_hash = ? AND token_hash IS NOT ?',
-      to: 'WHERE predecessor_hash = ? AND token_hash IS NOT ?',
+      after: 'async function revokeChain(',
+      from: 'eq(sessions.root_hash, root),',
+      to: 'eq(sessions.predecessor_hash, root),',
     },
   },
   {
@@ -395,81 +395,68 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'names the chain of a token, the head for the first and every successor alike',
     by: 'names each token as a chain of its own',
-    replace: {
-      after: 'async chainOf(tokenHash)',
-      from: 'chainOf(row, tokenHash)',
-      to: 'tokenHash',
-    },
+    replace: { after: 'async chainOf(tokenHash)', from: 'chainOf(rows[0], tokenHash)', to: 'tokenHash' },
   },
   {
     breaks: 'answers the person of a chain while one of its tokens lives, and nobody once it ended or expired',
     by: 'answers the person of a chain that ended',
-    replace: { from: 'WHERE revoked_at IS NULL AND expires_at > ? AND', to: 'WHERE ? IS NOT NULL AND' },
+    replace: { after: 'async liveIdentity(', from: 'isNull(sessions.revoked_at),', to: '' },
   },
   {
     breaks: 'answers the person of a chain while one of its tokens lives, and nobody once it ended or expired',
     by: 'answers the person of a chain that expired',
-    replace: {
-      from: 'WHERE revoked_at IS NULL AND expires_at > ? AND',
-      to: 'WHERE revoked_at IS NULL AND ? IS NOT NULL AND',
-    },
+    replace: { after: 'async liveIdentity(', from: 'gt(sessions.expires_at, now),', to: '' },
   },
   {
     breaks: 'holds no session until a code is spent, and holds one after, ended or not',
     by: 'counts a code that nobody spent as a session',
-    replace: { from: "'SELECT 1 FROM sessions LIMIT 1'", to: "'SELECT 1 FROM pairings LIMIT 1'" },
+    replace: {
+      from: 'db.select({ token_hash: sessions.token_hash }).from(sessions).limit(1)',
+      to: 'db.select({ code_hash: pairings.code_hash }).from(pairings).limit(1)',
+    },
   },
   {
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'keeps the codes that are expired',
     replace: {
-      from: "'DELETE FROM pairings WHERE expires_at <= ?'",
-      to: "'DELETE FROM pairings WHERE expires_at <= ? AND 0'",
+      from: 'db.delete(pairings).where(lte(pairings.expires_at, now))',
+      to: 'db.delete(pairings).where(sql`false`)',
     },
   },
   {
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'keeps the sessions that are expired',
-    replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE expires_at <= ? AND 0'" },
+    replace: { from: PURGE_SESSIONS, to: 'db.delete(sessions).where(sql`false`)' },
   },
   {
     breaks: 'ends every session of a person in a workspace, from any link of each chain',
     by: 'ends nothing when a member is removed',
-    replace: {
-      from: END_SESSIONS,
-      to: END_SESSIONS.replace('WHERE revoked_at IS NULL', 'WHERE 0 AND revoked_at IS NULL'),
-    },
+    replace: { from: END_SESSIONS, to: '.where(sql`false`);' },
   },
   {
     breaks: 'ends every session of a person in a workspace, from any link of each chain',
     by: 'ends the tokens that never issued a successor, and leaves the others',
     replace: {
       from: END_SESSIONS,
-      to: END_SESSIONS.replace('WHERE revoked_at IS NULL', 'WHERE rotated_at IS NULL AND revoked_at IS NULL'),
+      to: '.where(and(isNull(sessions.rotated_at), isNull(sessions.revoked_at), theirs(sessions)));',
     },
   },
   {
     breaks: 'leaves the same person in another workspace, and another person in the same one',
     by: 'ends every session of the person, whatever the workspace',
-    replace: {
-      from: END_SESSIONS,
-      to: END_SESSIONS.replace('(? IS NULL OR workspace = ?)', '(? IS NULL OR ? IS NOT NULL)'),
-    },
+    replace: { from: END_SESSIONS, to: `.where(and(isNull(sessions.revoked_at), ${OF_THE_PERSON}));` },
   },
   {
     breaks: 'leaves the same person in another workspace, and another person in the same one',
     by: 'ends every session of the workspace, whoever the person',
-    replace: {
-      from: END_SESSIONS,
-      to: END_SESSIONS.replace('(? IS NULL OR subject = ?)', '(? IS NULL OR ? IS NOT NULL)'),
-    },
+    replace: { from: END_SESSIONS, to: `.where(and(isNull(sessions.revoked_at), ${OF_THE_WORKSPACE}));` },
   },
   {
     breaks: 'ends every session of a workspace when no person is named, and of a person when no workspace is',
     by: 'ends nothing when no person is named',
     replace: {
       from: END_SESSIONS,
-      to: END_SESSIONS.replace('(? IS NULL OR subject = ?)', '(? IS NOT NULL AND subject = ?)'),
+      to: `.where(and(isNull(sessions.revoked_at), subject === undefined ? sql\`false\` : eq(sessions.subject, subject), ${OF_THE_WORKSPACE}));`,
     },
   },
   {
@@ -477,26 +464,20 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     by: 'keeps the sessions that name no workspace when the person is the only name',
     replace: {
       from: END_SESSIONS,
-      to: END_SESSIONS.replace(
-        '(? IS NULL OR workspace = ?)',
-        '((? IS NULL AND workspace IS NOT NULL) OR workspace = ?)',
-      ),
+      to: `.where(and(isNull(sessions.revoked_at), ${OF_THE_PERSON}, workspace === undefined ? sql\`\${sessions.workspace} IS NOT NULL\` : eq(sessions.workspace, workspace)));`,
     },
   },
   {
     breaks: 'spends the codes minted for the person in the workspace, and no other code',
     by: 'leaves the code of a removed member spendable',
-    replace: {
-      from: SPEND_CODES,
-      to: SPEND_CODES.replace('WHERE redeemed_at IS NULL', 'WHERE 0 AND redeemed_at IS NULL'),
-    },
+    replace: { from: SPEND_CODES, to: '.where(sql`false`);' },
   },
   {
     breaks: 'spends the codes minted for the person in the workspace, and no other code',
     by: 'spends every code of the workspace',
     replace: {
       from: SPEND_CODES,
-      to: SPEND_CODES.replace('(? IS NULL OR subject = ?)', '(? IS NULL OR ? IS NOT NULL)'),
+      to: '.where(and(isNull(pairings.redeemed_at), workspace === undefined ? undefined : eq(pairings.workspace, workspace)));',
     },
   },
   {
@@ -529,26 +510,34 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'drops every session',
-    replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE ? IS NOT NULL'" },
+    replace: { from: PURGE_SESSIONS, to: 'db.delete(sessions)' },
   },
   {
     breaks: 'keeps a revoked session until it expires, so a replay of it still ends the chain',
     by: 'drops a session when it is revoked',
-    replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL'" },
+    replace: {
+      from: PURGE_SESSIONS,
+      to: 'db.delete(sessions).where(or(lte(sessions.expires_at, now), sql`${sessions.revoked_at} IS NOT NULL`))',
+    },
   },
 ];
 
-describeControls('SessionStore', sessionCases, VIOLATIONS, SQLITE, async (change) => {
-  const mutant = await mutatedModule('session-sqlite.ts', change);
-  const subject = onFile<SessionStore>('a changed SQLite session store', 'createSqliteSessionStore', () => ({
-    create: mutant.module.createSqliteSessionStore as FileStoreModule<SessionStore>['create'],
-    close: mutant.module.closeSessionConnections as FileStoreModule<SessionStore>['close'],
-  }));
+describeControls('SessionStore', sessionCases, VIOLATIONS, PGLITE, async (change) => {
+  const mutant = await mutatedModule('session-postgres.ts', change);
+  let database: Database | undefined;
 
   return {
-    ...subject,
-    close() {
-      subject.close();
+    factory: 'createPostgresSessionStore',
+    label: 'a changed PostgreSQL session store',
+    async open() {
+      database = await createPgliteDatabase();
+      const create = mutant.module.createPostgresSessionStore as (database: Database) => SessionStore;
+
+      return create(database);
+    },
+    async close() {
+      await database?.close();
+      database = undefined;
       mutant.remove();
     },
   };

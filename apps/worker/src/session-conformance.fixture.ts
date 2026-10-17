@@ -72,8 +72,8 @@ export function sessionCases(it: Declare<SessionStore>): void {
 
   /**
    * On a store that waits between its read and its write, two redemptions interleave, and this case
-   * is what refuses a read followed by a write. On `node:sqlite` nothing interleaves, so the case
-   * proves nothing there: its control is a store that waits.
+   * is what refuses a read followed by a write. On PGlite, one connection, nothing interleaves, so
+   * the case proves nothing there: its control is a store that waits.
    */
   it('gives one session to two reviewers who redeem one code at the same moment', async (store) => {
     const { code } = await createPairing(store, ALICE);

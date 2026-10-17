@@ -7,15 +7,16 @@ import { chainOf, identityOf } from './session-rows.ts';
 import { type RotationOutcome, type SessionStore, namedSessionsOf } from './session.ts';
 
 /**
- * The sessions in PostgreSQL (FRU-142): the same interface as `session-sqlite.ts`, the same names of
- * tables and columns, the same digests. `session-conformance.test.ts` holds both to the same cases.
+ * The sessions in PostgreSQL (FRU-142): the names of tables and columns and the digests of the SQLite
+ * file of before, whose store went with FRU-226. `session-conformance.test.ts` holds this store to its
+ * cases.
  *
  * The statements are written with Drizzle (FRU-180), on the tables of `postgres-schema.ts`.
  *
  * This store stays after better-auth: it holds the session of the extension.
  *
- * **What `BEGIN IMMEDIATE` did without saying it.** The SQLite store has one writer at a time for
- * the whole file, so nothing could write between a read and the write that followed it. Here two
+ * **What `BEGIN IMMEDIATE` did without saying it.** The SQLite store of before had one writer at a
+ * time for the whole file, so nothing could write between a read and the write that followed it. Here two
  * refreshes are two connections, and each rule says in its statement how it holds:
  *
  * - **A code is spent by one statement that reads what it changes.** Of two redemptions, the second
@@ -105,8 +106,9 @@ async function revoke(tx: Db, tokenHash: string, now: number): Promise<boolean> 
 /**
  * Is any token of this chain still live?
  *
- * A head carries NULL in `root_hash`, so it cannot be found by chain and is asked for by name. See
- * `chainHasLive` of `session-sqlite.ts` for what that clause holds.
+ * A head carries NULL in `root_hash`, so it cannot be found by chain and is asked for by name. That
+ * clause is defensive: no reachable state has the head as the only live row, so to remove it fails no
+ * case. It stays, so that the predicate does not rest on an argument about the other branches.
  */
 async function chainHasLive(tx: Db, root: string): Promise<boolean> {
   const live = await tx
@@ -143,10 +145,14 @@ async function revokeChain(tx: Db, root: string, now: number, keep?: string): Pr
 /**
  * What this refresh token buys, decided on the row it names. The caller holds the chain.
  *
- * The four cases and the reason for each are in `decide` of `session-sqlite.ts`, and they are the
- * same here. One thing differs in form: the SQLite store rolls back when a row cannot be read as an
- * identity, to undo what the grace branch revoked. Here the identity is read before that branch
- * writes, so every path that answers has written exactly what stays.
+ * Four cases: unknown or expired, revoked, rotated, and live. The identity is read before the grace
+ * branch writes, so every path that answers has written exactly what stays.
+ *
+ * A revoked token that comes back while its chain still holds a live token is a replay, and the whole
+ * chain goes. The test was « revoked and rotated » once, and it missed this: a thief presents the
+ * predecessor inside the grace, the successor of the client is revoked under it, and the client then
+ * presents a token that is revoked and never rotated. The cost is stated: whoever reads one answer in
+ * flight can end the session at will. That position already lets them take the session.
  */
 async function decide(
   tx: Db,

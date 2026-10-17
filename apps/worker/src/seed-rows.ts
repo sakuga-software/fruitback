@@ -11,9 +11,9 @@ import {
 import type { ForgetSelector } from './store.ts';
 
 /**
- * A row of a store that keeps the notes itself, read: what `sqlite.ts` and `seeds-postgres.ts` share
- * (FRU-218). The two databases have the same columns, and a row of either is parsed here and never
- * trusted: a file is something an operator can edit, and a restore can be older than the code.
+ * A row of a store that keeps the notes itself, read (FRU-218): `seeds-postgres.ts`, and the file of
+ * before that `postgres-copy.ts` copies, with the same columns. A row is parsed here and never
+ * trusted: an operator can edit a row, and a restore can be older than the code.
  *
  * This file imports no database.
  */

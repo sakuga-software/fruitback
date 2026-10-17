@@ -9,13 +9,14 @@ import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from 
 /**
  * The notes in the database of the worker (FRU-218): `FRUITBACK_STORE=postgres`.
  *
- * The same store as `sqlite.ts`, on the tables `seeds` and `seed_comments`: the same columns, the
- * same `FB-<n>`, no page to open, and stages that are its own. `seed-rows.ts` reads a row of either.
+ * The store of the SQLite file of before (FRU-31, gone with FRU-226), on the tables `seeds` and
+ * `seed_comments`: the same columns, the same `FB-<n>`, no page to open, and stages that are its own.
+ * `seed-rows.ts` reads a row.
  *
  * **One database holds the notes of every workspace, so every read names its site.** A worker on a
  * database takes its sites from it, and a call always names one. A read that names none gets the
- * notes that name none, and never the notes of a site: where `sqlite.ts` answers the whole page, this
- * would answer one workspace with the notes of another.
+ * notes that name none, and never the notes of a site: the store of the file answered the whole page,
+ * and here that would answer one workspace with the notes of another.
  *
  * Every failure is a `StoreError`: the worker answers `502 store-unavailable`, and the widget keeps
  * the note and tries again.

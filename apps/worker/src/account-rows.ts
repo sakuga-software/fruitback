@@ -23,9 +23,8 @@ import {
 /**
  * A row of the accounts as the worker reads it, whatever database answered it (FRU-141).
  *
- * `accounts-sqlite.fixture.ts` and `accounts-postgres.ts` name their columns alike, so one parser reads
- * both. An instant is a number of milliseconds in both: the PostgreSQL adapter answers a `BIGINT` as
- * a number.
+ * The columns have the names of the SQLite file of before. An instant is a number of milliseconds: the
+ * PostgreSQL adapter answers a `BIGINT` as a number.
  */
 
 /** An opaque id with a prefix that says what it names, so a log line can be read. */

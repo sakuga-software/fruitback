@@ -136,6 +136,91 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(moved, []);
     });
 
+    it('reports no url, because there is no interface to open', async () => {
+      const { store } = await opened();
+
+      const created = await store.create(seedOf('sd_no_url', 'site_a'), undefined, POLICY);
+      const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      assert.equal(created.url, undefined);
+      assert.ok(found !== undefined);
+      assert.equal(found.url, undefined);
+    });
+
+    it('names no state, so the widget writes the stage in its own words (FRU-114)', async () => {
+      const { store } = await opened();
+      await store.create(seedOf('sd_no_state', 'site_a'), undefined, POLICY);
+
+      const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      assert.equal(found?.stage, 'seeded');
+      assert.equal(found?.stateName, '');
+    });
+
+    it('keeps each thread on its own seed', async () => {
+      const { database, store } = await opened();
+      await store.create(seedOf('first', 'site_a'), undefined, POLICY);
+      await store.create(seedOf('second', 'site_a'), undefined, POLICY);
+      await rowsOf(
+        database,
+        `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'pour la premiere', 1), (2, 'pour la seconde', 1)`,
+      );
+
+      const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      assert.deepEqual(
+        found.map((issue) => [issue.seed.id, issue.comments?.map((comment) => comment.body)]),
+        [
+          ['first', ['pour la premiere']],
+          ['second', ['pour la seconde']],
+        ],
+      );
+    });
+
+    it('leaves the author out when nobody signed it', async () => {
+      const { database, store } = await opened();
+      await store.create(seedOf('sd_unsigned', 'site_a'), undefined, POLICY);
+      await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'sans signature', 1)`);
+
+      const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      const comment = found?.comments?.[0];
+      assert.ok(comment !== undefined);
+      assert.ok(!('author' in comment), 'an unsigned reply must omit the field, not carry an empty name');
+    });
+
+    it('drops a row that parses but is not a seed', async () => {
+      const { database, store } = await opened();
+      await store.create(seedOf('sd_good', 'site_a'), undefined, POLICY);
+      await store.create(seedOf('sd_hello', 'site_a'), undefined, POLICY);
+      await rowsOf(database, `UPDATE seeds SET seed = '{ "hello": "world" }' WHERE id = 2`);
+
+      const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      assert.deepEqual(
+        found.map((issue) => issue.seed.id),
+        ['sd_good'],
+      );
+    });
+
+    it('drops a row whose column and seed disagree about which page it is on', async () => {
+      const { database, store } = await opened();
+      await store.create(seedOf('sd_here', 'site_a'), undefined, POLICY);
+      const elsewhere = seedOf('sd_elsewhere', 'site_a', {
+        page: { url: canonicalizePageUrl(`${SITE}/autre`), path: '/autre', title: 'Autre' },
+      });
+      await store.create(elsewhere, undefined, POLICY);
+      // The column says this page, and the seed in it says another.
+      await rowsOf(database, `UPDATE seeds SET page_url = '${PAGE}' WHERE id = 2`);
+
+      const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
+
+      assert.deepEqual(
+        found.map((issue) => issue.seed.id),
+        ['sd_here'],
+      );
+    });
+
     it('says when a note was written and changed, as dates', async () => {
       const { database, store } = await opened();
       await store.create(seedOf('sd_dated', 'site_a'), undefined, POLICY);
@@ -204,6 +289,40 @@ for (const { label, open, skip } of DATABASES) {
         ['FB-2'],
       );
       assert.deepEqual(await left(), { seeds: [1], replies: [1] });
+    });
+
+    it('finds the seeds signed with a name, whatever its case and the spaces around it', async () => {
+      const { database, store } = await opened();
+      await store.create(seedOf('sd_a', 'site_a', { reporter: { name: ' Alice ' } }), undefined, POLICY);
+      await store.create(seedOf('sd_b', 'site_a', { reporter: { name: 'Alicia' } }), undefined, POLICY);
+      await store.create(seedOf('sd_c', 'site_a'), undefined, POLICY);
+
+      const listed = await store.forget?.({ name: 'ALICE' }, { dryRun: true });
+
+      assert.deepEqual(
+        listed?.map((seed) => seed.identifier),
+        ['FB-1'],
+      );
+      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM seeds'), [{ n: 3 }]);
+    });
+
+    it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {
+      const { database, store } = await opened();
+      await store.create(
+        seedOf('sd_alice', 'site_a', { reporter: { name: 'Alice', email: 'alice@example.com' } }),
+        undefined,
+        POLICY,
+      );
+      await store.create(seedOf('sd_broken', 'site_a'), undefined, POLICY);
+      await rowsOf(database, `UPDATE seeds SET seed = '{not json' WHERE id = 2`);
+
+      const forgotten = await store.forget?.({ email: 'alice@example.com' }, { dryRun: false });
+
+      assert.equal(forgotten?.length, 1);
+      assert.deepEqual(
+        (await rowsOf(database, 'SELECT id FROM seeds')).map((row) => Number(row.id)),
+        [2],
+      );
     });
 
     it('is what `forget` of the command deletes, and a number that names no note deletes none', async () => {

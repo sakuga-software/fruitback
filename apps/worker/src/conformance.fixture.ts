@@ -30,41 +30,13 @@ export type Subject<Store> = {
   skip?: string;
 };
 
-/** What a module of a store on a file exports: the function that builds it, and the one that closes its files. */
-export type FileStoreModule<Store> = { create(path: string): Store; close(): void };
-
-/** A store on its own file in a new directory. The directory is removed after the case. */
-export function onFile<Store>(
-  label: string,
-  factory: string,
-  load: () => FileStoreModule<Store> | Promise<FileStoreModule<Store>>,
-): Subject<Store> {
-  let opened: { directory: string; module: FileStoreModule<Store> } | undefined;
-
-  return {
-    factory,
-    label,
-    async open() {
-      opened = { directory: mkdtempSync(join(tmpdir(), 'fruitback-conformance-')), module: await load() };
-
-      return opened.module.create(join(opened.directory, 'store.db'));
-    },
-    close() {
-      if (opened === undefined) return;
-      opened.module.close();
-      rmSync(opened.directory, { recursive: true, force: true });
-      opened = undefined;
-    },
-  };
-}
-
 /**
  * A change that breaks one rule.
  *
  * `replace` changes the source of the reference implementation: the first `from` after `after`, or
  * the only `from` of the file. `wrap` is for a rule that no change of that source breaks with an
- * assertion. A race: the reference is synchronous, so only a store that waits between its read and
- * its write loses one. A foreign key: without it the statement fails, and a store that throws proves
+ * assertion. A race: the reference runs on PGlite, one connection, so only a store that waits
+ * between its read and its write loses one. A foreign key: without it the statement fails, and a store that throws proves
  * nothing of the case.
  */
 export type Violation<Store> = {

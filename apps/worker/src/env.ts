@@ -1,10 +1,9 @@
-import { type FirstReviewer, readFirstReviewer } from './first-reviewer.ts';
 import { readFirstAdmin } from './first-admin.ts';
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
-import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
+import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
 import {
   DEFAULT_DATABASE_SCHEMA,
   DEV_DATABASE,
@@ -17,8 +16,9 @@ import { DEFAULT_STORE_PROVIDER, type StoreConfig, storeProviderFor } from './st
 import { readStoreConfig } from './stores.ts';
 
 /**
- * The worker of before FRU-225, for the tests of its code alone: no database, and the variables of
- * before (`FRUITBACK_CLIENTS`, `FRUITBACK_SESSION_PATH`, `FRUITBACK_STORE=sqlite`).
+ * The worker of before FRU-225, for the tests of its code alone: no database, and the sites in
+ * `FRUITBACK_CLIENTS`. The variables of a file of before stay refused for it too: their code went with
+ * FRU-226.
  *
  * **No environment can set it**: it is a symbol, and `process.env` holds strings. `server.ts`,
  * `main.ts` and `cli.ts` hand `process.env` to `readConfig`, so a deployed worker always has the
@@ -81,18 +81,13 @@ export type WorkerEnv = {
    */
   FRUITBACK_READ?: string;
   /**
-   * SQLite file holding the extension's sessions (FRU-42). Absent turns the `/session` endpoints
-   * off, which is every worker that has no extension pointed at it.
-   *
-   * **Not the seed store, whatever `FRUITBACK_STORE` says.** Seeds go wherever the team already
-   * tracks issues, and neither Linear nor GitHub is a place to keep credentials — so a worker on any
-   * store still keeps its sessions on a disk it owns. A separate file, with its own schema.
+   * The SQLite file of the sessions of the extension, until FRU-225. **Refused at boot**: the sessions
+   * are in PostgreSQL. It is read only to say so.
    */
   FRUITBACK_SESSION_PATH?: string;
   /**
-   * The first reviewer of a self-hosted worker (FRU-108): `Alice Martin`, or `Alice Martin
-   * <alice@acme.dev>`. Set, a worker that holds no session yet writes a pairing code for that person
-   * in its log when it starts. **The code is in the log in the clear**: see `first-reviewer.ts`.
+   * The first reviewer of a worker with no workspace, until FRU-225. **Refused at boot**: every worker
+   * has workspaces. It is read only to say so.
    */
   FRUITBACK_FIRST_REVIEWER?: string;
   /**
@@ -190,7 +185,7 @@ export type WorkerEnv = {
   FRUITBACK_TEAM_LOCALE?: string;
   /**
    * The SQLite file of the notes, until FRU-225. **Refused at boot**: the notes are in PostgreSQL,
-   * and `migrate-to-postgres --seeds` copies a file there. `sqlite.ts` reads it for the tests of before.
+   * and `migrate-to-postgres --seeds` copies a file there. It is read only to say so.
    */
   FRUITBACK_SQLITE_PATH?: string;
   /** See `WITHOUT_DATABASE`. Never in `process.env`. */
@@ -256,13 +251,6 @@ const configSchema = z.object({
    * team would be the leak in either direction.
    */
   clients: z.custom<ClientMap | undefined>().optional(),
-  /**
-   * Where the extension's sessions live (FRU-42). Absent means the `/session` endpoints answer
-   * `404`, exactly as they did before this feature existed.
-   */
-  sessionPath: z.string().min(1).optional(),
-  /** The person a worker with no session mints a pairing code for when it starts (FRU-108). */
-  firstReviewer: z.custom<FirstReviewer | undefined>().optional(),
   firstAdmin: z.string().optional(),
   /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
@@ -375,30 +363,35 @@ export const TRACKER_VARIABLES = [
 ] as const;
 
 /**
- * What a worker with no `WITHOUT_DATABASE` is refused for (FRU-225), in one start (FRU-217): no
- * database, what the console needs, and each variable of before that is set.
+ * What a worker is refused for since FRU-225, in one start (FRU-217): no database, what the console
+ * needs, and each variable of before that is set.
+ *
+ * `WITHOUT_DATABASE` turns off the refusals of the code that is still there: the database, the
+ * console and `FRUITBACK_CLIENTS`. The store `sqlite` and the files of before stay refused for it too,
+ * because their code went with FRU-226.
  */
 function postgresRefusals(env: WorkerEnv): string[] {
-  if (env[WITHOUT_DATABASE] === true) return [];
+  const withDatabase = env[WITHOUT_DATABASE] !== true;
   // Empty is absent, as everywhere in this file. A value of spaces is set, and refused as one (FRU-217).
   const set = (name: keyof WorkerEnv & string): boolean => (env[name] ?? '') !== '';
   const before = (
     ['FRUITBACK_CLIENTS', 'FRUITBACK_SESSION_PATH', 'FRUITBACK_SQLITE_PATH', 'FRUITBACK_FIRST_REVIEWER'] as const
   )
-    .filter(set)
+    .filter((name) => set(name) && (withDatabase || name !== 'FRUITBACK_CLIENTS'))
     .map((name) => REFUSED_SINCE_POSTGRES[name]);
 
   return [
     // A malformed address is said below, with its own reason.
-    ...(databaseUrlOf(env) === undefined && !set('FRUITBACK_DATABASE_URL') ? [DATABASE_REQUIRED] : []),
-    ...(Object.keys(REQUIRED_WITH_DATABASE) as (keyof typeof REQUIRED_WITH_DATABASE)[])
+    ...(withDatabase && databaseUrlOf(env) === undefined && !set('FRUITBACK_DATABASE_URL') ? [DATABASE_REQUIRED] : []),
+    ...(withDatabase ? (Object.keys(REQUIRED_WITH_DATABASE) as (keyof typeof REQUIRED_WITH_DATABASE)[]) : [])
       .filter((name) => !set(name))
       .map((name) => REQUIRED_WITH_DATABASE[name]),
     ...(storeProviderFor(env) === 'sqlite' ? [REFUSED_SINCE_POSTGRES.sqlite] : []),
     // Raised in review: the default moved from `linear` to `postgres`. A worker of before that named no
     // store and had a key of Linear would start on the database, and its pins would vanish from the
     // widget with no word. It is asked to name its store.
-    ...((env.FRUITBACK_STORE ?? '').trim() === '' &&
+    ...(withDatabase &&
+    (env.FRUITBACK_STORE ?? '').trim() === '' &&
     storeProviderFor(env) === DEFAULT_STORE_PROVIDER &&
     // The variables of GitHub are its store's own (`envNames`), so `WorkerEnv` does not name them.
     TRACKER_VARIABLES.some((name) => ((env as Record<string, string | undefined>)[name] ?? '') !== '')
@@ -484,8 +477,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // A malformed map is a misconfiguration, not a reason to quietly pool every client into one
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
-    sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
-    firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
     firstAdmin: readFirstAdmin(env.FRUITBACK_FIRST_ADMIN),
     databaseUrl: databaseUrlOf(env),
     // A name that is refused is reported below, with its reason. `public` only lets the rest be read.
@@ -553,14 +544,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       missing: ['FRUITBACK_DATABASE_URL (FRUITBACK_DATABASE_SCHEMA names a schema of that database)'],
     };
   }
-  // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
-  // would be a second place that nothing reads.
-  if (result.data.databaseUrl !== undefined && result.data.sessionPath !== undefined) {
-    return {
-      ok: false,
-      missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_DATABASE_URL is set, and the sessions are in that database)'],
-    };
-  }
   const sessions = hasSessions(result.data);
   const accounts = hasAccounts(result.data);
 
@@ -592,28 +575,12 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     };
   }
 
-  // Refused at boot for the same reason as the clause above: a session path with nothing to sign
-  // with mints no access token, so pairing would succeed and every call it enabled would fail.
+  // Refused at boot for the same reason as the clause above: a session with nothing to sign with
+  // mints no access token, so pairing would succeed and every call it enabled would fail.
   if (sessions && result.data.identitySecret === undefined) {
-    const where = result.data.sessionPath === undefined ? 'FRUITBACK_DATABASE_URL' : 'FRUITBACK_SESSION_PATH';
-
     return {
       ok: false,
-      missing: [`FRUITBACK_IDENTITY_SECRET (${where} is set, and a session signs its access token)`],
-    };
-  }
-
-  // On a mapped worker a session reaches the clients of its workspace and no other (FRU-95). A map in
-  // which no client declares a workspace leaves a session nothing to open: pairing would work, the
-  // reviewer would look signed in, and every read would answer 401. Refused loudly instead.
-  if (
-    result.data.sessionPath !== undefined &&
-    workspacesOf(result.data.clients).length === 0 &&
-    result.data.clients !== undefined
-  ) {
-    return {
-      ok: false,
-      missing: ['FRUITBACK_CLIENTS (FRUITBACK_SESSION_PATH is set, and no client declares a workspace for a session)'],
+      missing: ['FRUITBACK_IDENTITY_SECRET (FRUITBACK_DATABASE_URL is set, and a session signs its access token)'],
     };
   }
 
@@ -634,43 +601,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         ],
       };
     }
-  }
-
-  // FRU-108. Each refusal is a variable that would be set and do nothing, with the operator waiting
-  // for a line that never comes.
-  if (env.FRUITBACK_FIRST_REVIEWER) {
-    if (result.data.firstReviewer === undefined) {
-      return { ok: false, missing: ['FRUITBACK_FIRST_REVIEWER (a name, or a name and <an address>)'] };
-    }
-    if (!sessions) {
-      return {
-        ok: false,
-        missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_FIRST_REVIEWER is set, and pairing opens a session)'],
-      };
-    }
-    // A session of a worker with workspaces names one, and this variable names none.
-    if (accounts || workspacesOf(result.data.clients).length > 0) {
-      return {
-        ok: false,
-        missing: [
-          'FRUITBACK_FIRST_REVIEWER (it names no workspace: on a worker with workspaces, pair with `pair --workspace`, or from the console)',
-        ],
-      };
-    }
-  }
-
-  // WARNING: a client key equal to the worker key verifies every session token as the site's own,
-  // and the workspace check is skipped. A session of workspace A would then reach this client.
-  const sharedKey = Object.entries(result.data.clients ?? {}).filter(
-    ([, client]) => client.identitySecret !== undefined && client.identitySecret === result.data.identitySecret,
-  );
-  if (result.data.sessionPath !== undefined && sharedKey.length > 0) {
-    return {
-      ok: false,
-      missing: [
-        `FRUITBACK_CLIENTS (${sharedKey.map(([id]) => id).join(', ')} uses FRUITBACK_IDENTITY_SECRET as its own key)`,
-      ],
-    };
   }
 
   // A worker with accounts reads its clients from the database the console writes. Two sources for one
@@ -826,13 +756,9 @@ export function hasAccounts(config: Pick<WorkerConfig, 'databaseUrl'>): boolean 
   return config.databaseUrl !== undefined;
 }
 
-/**
- * Does this worker keep sessions, in a file or in the database (FRU-142)?
- *
- * Ask this and never `sessionPath`: a route that reads the field is off for a worker on a database.
- */
-export function hasSessions(config: Pick<WorkerConfig, 'sessionPath' | 'databaseUrl'>): boolean {
-  return config.sessionPath !== undefined || config.databaseUrl !== undefined;
+/** Does this worker keep sessions? In the database, since FRU-226 the one place (FRU-142). */
+export function hasSessions(config: Pick<WorkerConfig, 'databaseUrl'>): boolean {
+  return config.databaseUrl !== undefined;
 }
 
 /**

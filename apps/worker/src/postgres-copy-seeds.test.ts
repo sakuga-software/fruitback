@@ -17,21 +17,21 @@ import { parseMigrateArgs } from './cli.ts';
 import type { ClientPolicy } from './clients.ts';
 import { createMemoryKv } from './kv.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
-import { copySeedsFile } from './postgres-copy.ts';
+import { SEEDS_FILE_VERSION, copySeedsFile } from './postgres-copy.ts';
+import { closeFrozenFiles, frozenFile, issuesOfFile, writeSeed } from './postgres-copy.fixture.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { SEEDS_FILE_VERSION, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
 
 /**
  * The copy of the switch n° 1 bis (FRU-220): the notes of the SQLite file of a worker, into the
  * database of a worker of this image.
  *
- * The file is made by the SQLite store of the worker, and its connection stays open while the copy
- * runs: the rows are in the `-wal`, as on a worker that was just stopped. What no route writes yet,
- * a stage that is not the first and a reply, is written in the file with a statement.
+ * The file is the frozen file of `postgres-copy.fixture.ts`, and its connection stays open while the
+ * copy runs: the rows are in the `-wal`, as on a worker that was just stopped. A note is written as
+ * the SQLite store wrote it. A stage that is not the first and a reply are written with a statement.
  */
 
 const run = promisify(execFile);
@@ -42,7 +42,7 @@ const PAGES = ['/pricing', '/checkout'].map((path) => canonicalizePageUrl(`${SIT
 const folders: string[] = [];
 
 after(() => {
-  closeSqliteConnections();
+  closeFrozenFiles();
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
@@ -61,7 +61,7 @@ async function fileOfAWorker() {
   const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
   folders.push(folder);
   const seedsPath = join(folder, 'fb.db');
-  const store = createSqliteStore({ path: seedsPath });
+  const store = frozenFile(seedsPath, 'seeds');
   const notes: [string, string | undefined, string][] = [
     [PAGES[0] ?? '', 'acme', 'Le bouton « Commander » est trop petit'],
     [PAGES[0] ?? '', 'acme', 'Une note avec une apostrophe : l’été, et un emoji 🍓'],
@@ -72,7 +72,7 @@ async function fileOfAWorker() {
     [PAGES[1] ?? '', 'acme', 'La dernière'],
   ];
   for (const [index, [page, client, note]] of notes.entries()) {
-    await store.create(seedOf(`sd_${index + 1}`, page, client, note), undefined, POLICY);
+    writeSeed(store, seedOf(`sd_${index + 1}`, page, client, note));
   }
   // A second connection, as `sqlite3` beside a worker: the store keeps its own open.
   const file = new DatabaseSync(seedsPath);
@@ -91,19 +91,19 @@ async function fileOfAWorker() {
   file.prepare('DELETE FROM seeds WHERE id = 6').run();
   file.close();
 
-  return { folder, seedsPath, store };
+  return { folder, seedsPath };
 }
 
-/** What a reader of each page and each client gets, from a store. */
-async function everyRead(store: ReturnType<typeof createSqliteStore>, clients: readonly (string | undefined)[]) {
-  const read: Record<string, unknown> = {};
+type Read = (query: { url: string; clientId: string | undefined }) => Promise<unknown>;
+
+/** What a reader of each page and each client gets. */
+async function everyRead(read: Read, clients: readonly (string | undefined)[]) {
+  const answers: Record<string, unknown> = {};
   for (const url of PAGES) {
-    for (const clientId of clients) {
-      read[`${url} ${clientId ?? '(none)'}`] = await store.findForPage({ url, clientId }, undefined, POLICY);
-    }
+    for (const clientId of clients) answers[`${url} ${clientId ?? '(none)'}`] = await read({ url, clientId });
   }
 
-  return read;
+  return answers;
 }
 
 function fingerprint(folder: string): string {
@@ -146,18 +146,19 @@ for (const subject of SUBJECTS) {
     });
 
     it('gives each reader the notes the file gave, byte for byte, with their numbers, stages and replies', async () => {
-      const { seedsPath, store } = await fileOfAWorker();
+      const { seedsPath } = await fileOfAWorker();
       assert.ok(existsSync(`${seedsPath}-wal`), 'the rows are not in a journal: this case would prove less');
       database = await subject.open();
       const clients = ['acme', 'globex', undefined];
-      const before = await everyRead(store, clients);
+      const before = await everyRead(async (query) => issuesOfFile(seedsPath, query, POLICY), clients);
 
       const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
 
       assert.equal(outcome.ok, true, outcome.lines.join('\n'));
       assert.match(outcome.lines.join('\n'), /seeds\s+6\s+6\s+same/);
       assert.match(outcome.lines.join('\n'), /seed_comments\s+3\s+3\s+same/);
-      const after = await everyRead(createPostgresSeedStore(database), clients);
+      const store = createPostgresSeedStore(database);
+      const after = await everyRead((query) => store.findForPage(query, undefined, POLICY), clients);
       // The SQLite store gives a reader that names no client every note of the page, and the store of
       // the database gives it the notes that name none (FRU-218): that read is compared apart.
       for (const key of Object.keys(before).filter((key) => !key.endsWith('(none)'))) {
@@ -401,7 +402,7 @@ for (const subject of SUBJECTS) {
       ];
       for (const [label, change, clients, said] of cases) {
         const { seedsPath } = await fileOfAWorker();
-        closeSqliteConnections();
+        closeFrozenFiles();
         const file = new DatabaseSync(seedsPath);
         change(file);
         file.close();
@@ -421,8 +422,8 @@ for (const subject of SUBJECTS) {
       const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
       folders.push(folder);
       const seedsPath = join(folder, 'fb.db');
-      const empty = createSqliteStore({ path: seedsPath });
-      assert.deepEqual(await empty.findForPage({ url: PAGES[0] ?? '', clientId: undefined }, undefined, POLICY), []);
+      frozenFile(seedsPath, 'seeds');
+      assert.deepEqual(issuesOfFile(seedsPath, { url: PAGES[0] ?? '', clientId: undefined }, POLICY), []);
       database = await subject.open();
 
       const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
@@ -566,7 +567,7 @@ describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () =
     { skip: NO_REAL_POSTGRES, timeout: 60_000 },
     async () => {
       const { folder, seedsPath } = await fileOfAWorker();
-      closeSqliteConnections();
+      closeFrozenFiles();
       const own = await ownDatabase();
       try {
         const env = { PATH: process.env.PATH, FRUITBACK_DATABASE_URL: own.url };

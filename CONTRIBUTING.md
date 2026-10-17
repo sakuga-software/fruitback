@@ -147,7 +147,7 @@ widget depends on it. Treat a change there as breaking until you have shown it i
 
 ## Adding a connector
 
-A connector puts seeds in a store. Linear, SQLite and GitHub Issues exist, and a new one is the
+A connector puts seeds in a store. Linear, PostgreSQL and GitHub Issues exist, and a new one is the
 contribution we expect most often.
 
 1. Implement `SeedStore` from [`apps/worker/src/store.ts`](apps/worker/src/store.ts). `findForPage` says
@@ -170,8 +170,8 @@ contribution we expect most often.
 7. Add a row to the two store tables of [docs/self-hosting.md](docs/self-hosting.md), and to the store
    table of [SECURITY.md](SECURITY.md): where a seed lands, and who can read it there.
 
-[docs/decisions/worker.md](docs/decisions/worker.md) says what the SQLite and GitHub connectors changed
-in the interface, and why.
+[docs/decisions/worker.md](docs/decisions/worker.md) says what the SQLite connector (gone since FRU-226)
+and the GitHub connector changed in the interface, and why.
 
 ## Licences
 

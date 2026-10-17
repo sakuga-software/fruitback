@@ -39,11 +39,11 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
 WORKDIR /app
 
-# The `sqlite3` CLI, and only for the backup the README documents (FRU-31). The store itself uses
-# `node:sqlite` and needs nothing installed; what needs a binary is `.backup`, which is the one safe
-# way to copy a live database — `cp` misses the write-ahead log beside it. About 1.5 MB, and without
-# it "the database is the product" comes with a documented command that is not there. Alpine has no
-# curl either, which is why the healthcheck below probes with Node.
+# The `sqlite3` CLI. No store of the worker is on SQLite since FRU-226, and `migrate-to-postgres` reads
+# a file with `node:sqlite`. Two things of before still run it in this image: « Upgrading » of
+# docs/self-hosting.md restores the files of an old deployment with `.restore` before the copy, and
+# `cloud/snapshot.sh` makes its `.backup`. It goes with them. About 1.4 MB (measured on FRU-226).
+# Alpine has no curl either, which is why the healthcheck below probes with Node.
 # `upgrade` before `add`, and it is not belt-and-braces. The base image is rebuilt on its own
 # schedule, so it ships whatever Alpine packages it held on that day — measured here as openssl
 # 3.5.7-r0 against CVE-2026-14456, which Alpine had already fixed in 3.5.8-r0. The release gate
@@ -58,11 +58,11 @@ RUN apk upgrade --no-cache && apk add --no-cache sqlite
 # `apk upgrade` cannot reach (FRU-79). What is not in the image cannot hold a vulnerability.
 RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-*
 
-# The default home for FRUITBACK_SQLITE_PATH, and a mount point for the volume that outlives the
-# container. Created here and owned by `node`, because the process does not run as root and a store
-# that cannot write its own directory fails at the first note rather than at boot.
+# Where an instance of before kept its SQLite files, and where `migrate-to-postgres` reads them. The
+# worker writes nothing here since FRU-225, so the image declares no volume. The directory stays, owned
+# by `node`: an empty named volume takes this owner, and the restore of « Upgrading » writes there as
+# `node`.
 RUN mkdir -p /data && chown node:node /data
-VOLUME /data
 
 # The bundle carries its own dependencies, so the runtime image needs no node_modules at all.
 COPY --from=build /repo/apps/worker/dist/server.mjs ./server.mjs

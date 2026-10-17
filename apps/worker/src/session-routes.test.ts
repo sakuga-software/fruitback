@@ -1,39 +1,46 @@
-import { afterEach, describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { type WorkerEnv, readConfig } from './env.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
-import { createPairing } from './session.ts';
-import { handleRequest } from './app.ts';
+import { createPairing, type SessionStore } from './session.ts';
+import { type RequestContext, handleRequest } from './app.ts';
 import { verifyIdentityToken } from './identity.ts';
 import { LOOPBACK, runPair } from './cli.ts';
-import { readFileSync } from 'node:fs';
-import { sessionConnectionsOpened } from './session-sqlite.ts';
+import type { AccountStore } from './accounts.ts';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
+import { envWith as workerEnv } from './auth-worker.fixture.ts';
+import { createMemoryKv } from './kv.ts';
+import { createPgDatabase } from './postgres.ts';
+import { createPgliteDatabase } from './postgres.fixture.ts';
+import { createPostgresSessionStore } from './session-postgres.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
 const SECRET = 'a-worker-secret-of-exactly-enough';
 const ALICE = { subject: 'alice', name: 'Alice Martin', email: 'alice@acme.dev' };
 
-const directories: string[] = [];
+/**
+ * One database for the file, on PGlite: the accounts and the sessions of the worker. `postgres.fixture.ts`
+ * closes it after the file. The limiter of the worker counts every test of this file together, in one `Kv`.
+ */
+let accounts: AccountStore;
+let sessions: SessionStore;
+const kv = createMemoryKv();
 
-function sessionPath(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-routes-'));
-  directories.push(directory);
+before(async () => {
+  const database = await createPgliteDatabase();
+  accounts = createPostgresAccountStore(database);
+  sessions = createPostgresSessionStore(database);
+});
 
-  return join(directory, 'sessions.db');
+/** A worker with a database. Its stores are the ones of the file: see `contextFor`. */
+function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
+  return workerEnv({ ALLOWED_ORIGINS: '*', FRUITBACK_IDENTITY_SECRET: SECRET, ...overrides });
 }
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  return beforePostgres({
-    FRUITBACK_STORE: 'memory',
-    ALLOWED_ORIGINS: '*',
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SESSION_PATH: sessionPath(),
-    ...overrides,
-  });
+/** What the transport hands a worker with a database. A worker with none gets no store. */
+function contextFor(env: WorkerEnv, clientIp: string): Partial<RequestContext> & { clientIp: string } {
+  return env.FRUITBACK_DATABASE_URL ? { clientIp, accounts, sessionStore: sessions, kv } : { clientIp };
 }
 
 async function call(
@@ -49,26 +56,19 @@ async function call(
       ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
     }),
     env,
-    { clientIp: ip },
+    contextFor(env, ip),
   );
 }
 
-/** Mints a code straight against the same file the routes will use. */
-async function codeFor(env: WorkerEnv): Promise<string> {
-  const store = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-
-  return (await createPairing(store, ALICE)).code;
+/** Mints a code straight against the store the routes use. */
+async function codeFor(): Promise<string> {
+  return (await createPairing(sessions, ALICE)).code;
 }
-
-afterEach(() => {
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
 
 describe('POST /session/pair', () => {
   it('answers a session the read path already knows how to verify', async () => {
     const env = envWith();
-    const response = await call(env, '/session/pair', { code: await codeFor(env) });
+    const response = await call(env, '/session/pair', { code: await codeFor() });
 
     assert.equal(response.status, 200);
     const session = (await response.json()) as { accessToken: string; refreshToken: string; expiresIn: number };
@@ -100,7 +100,7 @@ describe('POST /session/pair', () => {
 describe('POST /session/refresh', () => {
   it('mints a fresh access token for a live session', async () => {
     const env = envWith();
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() })).json()) as {
       refreshToken: string;
     };
 
@@ -126,7 +126,7 @@ describe('POST /session/refresh', () => {
     // Its own address: the rate limiter is per process and shared by every test in this file, so a
     // case that makes several calls would otherwise push a later one into a `429`.
     const ip = '198.51.100.60';
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() }, 'POST', ip)).json()) as {
       refreshToken: string;
     };
 
@@ -147,7 +147,7 @@ describe('POST /session/refresh', () => {
   it('never echoes the token it was given', async () => {
     const env = envWith();
     const ip = '198.51.100.61';
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() }, 'POST', ip)).json()) as {
       refreshToken: string;
     };
 
@@ -160,7 +160,7 @@ describe('POST /session/refresh', () => {
   it('answers a replayed token the same 401 as one that never existed', async () => {
     const env = envWith();
     const ip = '198.51.100.62';
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() }, 'POST', ip)).json()) as {
       refreshToken: string;
     };
     const first = (await (
@@ -185,7 +185,7 @@ describe('POST /session/refresh', () => {
 describe('POST /session/revoke', () => {
   it('ends the session on the worker, not only in the extension', async () => {
     const env = envWith();
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor() })).json()) as {
       refreshToken: string;
     };
 
@@ -204,7 +204,7 @@ describe('POST /session/revoke', () => {
 describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
   const page = (env: WorkerEnv, path = '/pair', init: RequestInit = {}) =>
     // An address of its own: the limiter of this process counts every test of this file together.
-    handleRequest(new Request(`https://worker.test${path}`, init), env, { clientIp: '198.51.100.92' });
+    handleRequest(new Request(`https://worker.test${path}`, init), env, contextFor(env, '198.51.100.92'));
 
   it('answers a page with no script, that nothing keeps and that says nothing of where it came from', async () => {
     const response = await page(envWith());
@@ -262,7 +262,7 @@ describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 3; attempt += 1) {
       statuses.push(
-        (await handleRequest(new Request('https://worker.test/pair'), env, { clientIp: '198.51.100.44' })).status,
+        (await handleRequest(new Request('https://worker.test/pair'), env, contextFor(env, '198.51.100.44'))).status,
       );
     }
 
@@ -287,8 +287,8 @@ describe('a worker with no session store', () => {
 });
 
 describe('the boot guards', () => {
-  it('refuses a session path with no key to sign an access token with', () => {
-    const result = readConfig({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*', FRUITBACK_SESSION_PATH: '/tmp/s.db' });
+  it('refuses sessions with no key to sign an access token with', () => {
+    const result = readConfig(envWith({ FRUITBACK_IDENTITY_SECRET: undefined }));
 
     assert.equal(result.ok, false);
     assert.ok(
@@ -296,32 +296,12 @@ describe('the boot guards', () => {
       `expected the identity secret to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
     );
   });
-
-  /**
-   * On a mapped worker a session reaches the clients of its workspace (FRU-95). With no workspace in
-   * the map, pairing would work, the reviewer would look logged in, and every read would answer 401.
-   */
-  it('refuses sessions on a worker whose clients declare no workspace', () => {
-    const result = readConfig({
-      FRUITBACK_STORE: 'memory',
-      ALLOWED_ORIGINS: '*',
-      FRUITBACK_IDENTITY_SECRET: SECRET,
-      FRUITBACK_SESSION_PATH: '/tmp/s.db',
-      FRUITBACK_CLIENTS: '{"acme":{"teamId":"team_1","projectId":"proj_1","origins":["https://acme.test"]}}',
-    });
-
-    assert.equal(result.ok, false);
-    assert.ok(
-      result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')),
-      `expected the client map to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
-    );
-  });
 });
 
 describe('the pair command', () => {
   it('mints a code the pair route then accepts', async () => {
     const env = envWith();
-    const outcome = await runPair(['--subject', 'alice', '--name', 'Alice Martin'], env);
+    const outcome = await runPair(['--subject', 'alice', '--name', 'Alice Martin'], env, sessions);
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
     const code = outcome.lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
@@ -339,6 +319,7 @@ describe('the pair command', () => {
     const outcome = await runPair(
       ['--subject', 'alice', '--endpoint', 'https://feedback.acme.dev/fruitback/?x=1#y'],
       env,
+      sessions,
     );
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
@@ -351,7 +332,7 @@ describe('the pair command', () => {
   });
 
   it('prints the code alone, and how to get a link, when it is not told where the worker answers', async () => {
-    const outcome = await runPair(['--subject', 'alice'], envWith());
+    const outcome = await runPair(['--subject', 'alice'], envWith(), sessions);
 
     assert.ok(outcome.ok);
     assert.equal(
@@ -375,14 +356,14 @@ describe('the pair command', () => {
     assert.deepEqual([...LOOPBACK].sort(), ofTheExtension.filter((host) => host !== '::1').sort());
 
     for (const host of LOOPBACK) {
-      const outcome = await runPair(['--subject', 'alice', '--endpoint', `http://${host}:8789`], envWith());
+      const outcome = await runPair(['--subject', 'alice', '--endpoint', `http://${host}:8789`], envWith(), sessions);
       assert.ok(outcome.ok && outcome.lines.some((line) => line.includes(`http://${host}:8789/pair#`)), host);
     }
   });
 
   it('refuses an address a pairing code must not cross, and mints nothing', async () => {
     for (const endpoint of ['http://feedback.acme.dev', 'ftp://acme.dev', 'not a url', 'https://user:pw@acme.dev']) {
-      const outcome = await runPair(['--subject', 'alice', '--endpoint', endpoint], envWith());
+      const outcome = await runPair(['--subject', 'alice', '--endpoint', endpoint], envWith(), sessions);
 
       assert.equal(outcome.ok, false, endpoint);
       assert.equal(
@@ -392,12 +373,12 @@ describe('the pair command', () => {
       );
     }
     // Loopback is the dev loop, and it is not on a wire.
-    assert.ok((await runPair(['--subject', 'alice', '--endpoint', 'http://localhost:8789'], envWith())).ok);
+    assert.ok((await runPair(['--subject', 'alice', '--endpoint', 'http://localhost:8789'], envWith(), sessions)).ok);
   });
 
   /**
-   * A worker with no session path is a perfectly valid worker, so `readConfig` passes it — the
-   * command is what cannot run. It has to name the variable rather than fail on the database file.
+   * A worker of before with no database is valid for `readConfig` in a test, and the command is what
+   * cannot run. It has to name the variable.
    */
   it('names the variable when this worker keeps no sessions', async () => {
     const outcome = await runPair(
@@ -406,26 +387,19 @@ describe('the pair command', () => {
     );
 
     assert.equal(outcome.ok, false);
-    assert.ok(outcome.lines.join(' ').includes('FRUITBACK_SESSION_PATH'), outcome.lines.join('\n'));
+    assert.deepEqual(outcome.lines, ['FRUITBACK_DATABASE_URL is not set, so this worker keeps no sessions']);
   });
 
   it('reports a misconfigured worker rather than minting against it', async () => {
-    const outcome = await runPair(
-      ['--subject', 'alice'],
-      beforePostgres({
-        FRUITBACK_STORE: 'memory',
-        ALLOWED_ORIGINS: '*',
-        FRUITBACK_SESSION_PATH: '/tmp/never-opened.db',
-      }),
-    );
+    const outcome = await runPair(['--subject', 'alice'], envWith({ FRUITBACK_IDENTITY_SECRET: undefined }), sessions);
 
     assert.equal(outcome.ok, false);
-    // The boot guard: a session path with no key to sign with. Named, not discovered at runtime.
+    // The boot guard: sessions with no key to sign with. Named, not discovered at runtime.
     assert.ok(outcome.lines.join(' ').includes('FRUITBACK_IDENTITY_SECRET'), outcome.lines.join('\n'));
   });
 
   it('requires a subject, because that is what lands in reporter.id', async () => {
-    const outcome = await runPair(['--name', 'Alice Martin'], envWith());
+    const outcome = await runPair(['--name', 'Alice Martin'], envWith(), sessions);
 
     assert.equal(outcome.ok, false);
     assert.ok(outcome.lines.join(' ').includes('--subject'), outcome.lines.join('\n'));
@@ -433,7 +407,7 @@ describe('the pair command', () => {
 
   /** `--name=Alice Martin` is the spelling that silently drops the surname, so it is refused. */
   it('refuses --flag=value rather than half-supporting it', async () => {
-    const outcome = await runPair(['--subject=alice'], envWith());
+    const outcome = await runPair(['--subject=alice'], envWith(), sessions);
 
     assert.equal(outcome.ok, false);
   });
@@ -473,7 +447,7 @@ describe('the rate limit', () => {
     const ip = '198.51.100.13';
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const response = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: ip });
+      const response = await handleRequest(new Request('https://worker.test/health'), env, contextFor(env, ip));
       assert.equal(response.status, 200, `attempt ${attempt} answered ${response.status}`);
     }
   });
@@ -493,11 +467,11 @@ describe('who may call these routes', () => {
     const response = await handleRequest(
       new Request('https://worker.test/session/pair', {
         method: 'POST',
-        body: JSON.stringify({ code: await codeFor(env) }),
+        body: JSON.stringify({ code: await codeFor() }),
         headers: { 'Content-Type': 'application/json', Origin: extension },
       }),
       env,
-      { clientIp: '198.51.100.21' },
+      contextFor(env, '198.51.100.21'),
     );
 
     assert.equal(response.status, 200);
@@ -512,7 +486,7 @@ describe('who may call these routes', () => {
         headers: { Origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' },
       }),
       env,
-      { clientIp: '198.51.100.22' },
+      contextFor(env, '198.51.100.22'),
     );
 
     assert.equal(response.status, 204);
@@ -534,7 +508,7 @@ describe('who may call these routes', () => {
       handleRequest(
         new Request('https://worker.test/feedback?url=https://staging.acme.dev/', { headers: { Origin: origin } }),
         env,
-        { clientIp: '198.51.100.23' },
+        contextFor(env, '198.51.100.23'),
       );
 
     assert.equal((await from('https://evil.test')).status, 403);
@@ -549,30 +523,9 @@ describe('who may call these routes', () => {
   });
 });
 
-describe('the session connection', () => {
-  /**
-   * `handleSession` builds a store per request wherever the transport did not hand one over, which
-   * is production. Without the map that opens a database handle per call — the hazard FRU-29 was
-   * written to prevent, and one nothing observable reports.
-   *
-   * The assertion is on the counter and not `connections.size`: the map is keyed by path, so a
-   * `connect` that stopped reusing would overwrite the one entry and leave the size at one.
-   */
-  it('opens one handle however many requests arrive', async () => {
-    const env = envWith();
-    const before = sessionConnectionsOpened();
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await call(env, '/session/refresh', { refreshToken: 'invented' }, 'POST', '198.51.100.25');
-    }
-
-    assert.equal(sessionConnectionsOpened() - before, 1);
-  });
-});
-
 describe('a session store that cannot be opened', () => {
   /**
-   * A volume nobody mounted, a read-only disk, a file that is not a database.
+   * A database that does not answer.
    *
    * Answered like the seed path's outage rather than as a bare `500`, so the extension can tell
    * "retry later" from "this request was wrong" — and so the answer carries the CORS headers it
@@ -580,23 +533,28 @@ describe('a session store that cannot be opened', () => {
    * `handleSession` had nothing to map. It raises `StoreError` now, like the seed connector.
    */
   it('answers 502 store-unavailable, with the headers the extension can read', async () => {
-    // A path whose parent does not exist: `new DatabaseSync` cannot create the file.
-    const env = envWith({ FRUITBACK_SESSION_PATH: '/nonexistent-directory-for-this-test/sessions.db' });
+    const env = envWith();
     const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+    // Port 1 of this machine: nothing listens there.
+    const down = createPgDatabase('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
 
-    const response = await handleRequest(
-      new Request('https://worker.test/session/pair', {
-        method: 'POST',
-        body: JSON.stringify({ code: 'ZZZZ-ZZZZ-ZZZZ' }),
-        headers: { 'Content-Type': 'application/json', Origin: extension },
-      }),
-      env,
-      { clientIp: '198.51.100.31' },
-    );
+    try {
+      const response = await handleRequest(
+        new Request('https://worker.test/session/pair', {
+          method: 'POST',
+          body: JSON.stringify({ code: 'ZZZZ-ZZZZ-ZZZZ' }),
+          headers: { 'Content-Type': 'application/json', Origin: extension },
+        }),
+        env,
+        { ...contextFor(env, '198.51.100.31'), sessionStore: createPostgresSessionStore(down) },
+      );
 
-    assert.equal(response.status, 502);
-    assert.deepEqual(await response.json(), { error: 'store-unavailable' });
-    assert.equal(response.headers.get('Access-Control-Allow-Origin'), extension);
+      assert.equal(response.status, 502);
+      assert.deepEqual(await response.json(), { error: 'store-unavailable' });
+      assert.equal(response.headers.get('Access-Control-Allow-Origin'), extension);
+    } finally {
+      await down.close();
+    }
   });
 });
 
@@ -619,7 +577,7 @@ describe('the body cap', () => {
         headers: { 'Content-Type': 'application/json', 'Content-Length': String(70 * 1024) },
       }),
       env,
-      { clientIp: '198.51.100.32' },
+      contextFor(env, '198.51.100.32'),
     );
 
     assert.equal(response.status, 413);
@@ -637,7 +595,7 @@ describe('the body cap', () => {
 describe('the pair command, on a typo', () => {
   /** `--emali alice@acme.dev` used to mint a code whose session carried no address, silently. */
   it('refuses an unknown flag rather than dropping it', async () => {
-    const outcome = await runPair(['--subject', 'alice', '--emali', 'alice@acme.dev'], envWith());
+    const outcome = await runPair(['--subject', 'alice', '--emali', 'alice@acme.dev'], envWith(), sessions);
 
     assert.equal(outcome.ok, false);
     assert.ok(outcome.lines.join(' ').includes('--emali'), outcome.lines.join('\n'));
@@ -647,6 +605,7 @@ describe('the pair command, on a typo', () => {
     const outcome = await runPair(
       ['--subject', 'alice', '--name', 'Alice Martin', '--email', 'alice@acme.dev'],
       envWith(),
+      sessions,
     );
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));

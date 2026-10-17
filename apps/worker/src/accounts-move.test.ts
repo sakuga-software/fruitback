@@ -1,9 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import { after, afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'node:test';
 import { getMigrations } from 'better-auth/db/migration';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
@@ -12,9 +8,9 @@ import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import type { PgDatabase } from './postgres.ts';
 import { appliedDates, journalDates, journalTags, migrationsThrough, rowsOf } from './postgres.fixture.ts';
+import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing, refreshSession } from './session.ts';
 
 /**
@@ -37,47 +33,45 @@ const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 /** 2026-10-01 at noon, to the millisecond: a row of before holds an instant as this number. */
 const THEN = Date.UTC(2026, 9, 1, 12, 0, 0, 123);
 
-const folders: string[] = [];
-after(() => {
-  for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
-});
-
 const opened: PgDatabase[] = [];
 afterEach(async () => {
-  closeSessionConnections();
   for (const database of opened.splice(0)) await database.close();
 });
 
 /**
  * A session of the extension that was opened before the move: its tokens, and the rows that hold
- * their digests. `session.ts` makes them on a SQLite file, and the rows are put in the database as
- * they are: the tables of the sessions are the same in both, and the move does not touch them.
+ * their digests. `session.ts` makes them on a PGlite of its own, and the rows are put in the
+ * database of before with the columns that it has: the move does not touch the tables of the sessions.
  */
-async function sessionOfBefore(subject: string, workspace: string) {
-  const folder = mkdtempSync(join(tmpdir(), 'fruitback-move-'));
-  folders.push(folder);
-  const path = join(folder, 'sessions.db');
-  const sessions = createSqliteSessionStore(path);
+async function sessionOfBefore(subject: string, workspace: string, before: PgDatabase) {
+  const instance = newPglite();
+  const own = await databaseOn(instance);
+  const sessions = createPostgresSessionStore(own);
   const redeemed = await redeemPairing(sessions, (await createPairing(sessions, { subject, workspace })).code, SECRET);
   assert.ok(redeemed.ok);
-  closeSessionConnections();
 
-  const file = new DatabaseSync(path);
-  const rows = (table: string) => file.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
-  const statements = ['pairings', 'sessions'].flatMap((table) =>
-    rows(table).map((row) => {
-      const columns = Object.keys(row);
+  const statements: string[] = [];
+  for (const table of ['pairings', 'sessions']) {
+    const kept = new Set(
+      (
+        await rowsOf(
+          before,
+          `SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = '${table}'`,
+        )
+      ).map((row) => String(row.column_name)),
+    );
+    for (const row of await rowsOf(own, `SELECT * FROM ${table}`)) {
+      const columns = Object.keys(row).filter((column) => kept.has(column));
       const values = columns.map((column) => {
         const value = row[column];
         if (value === null) return 'NULL';
 
         return typeof value === 'number' ? String(value) : `'${String(value).replaceAll("'", "''")}'`;
       });
-
-      return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`;
-    }),
-  );
-  file.close();
+      statements.push(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})`);
+    }
+  }
+  await instance.close();
   assert.equal(statements.length, 2, 'one pairing that was spent, and one session');
 
   return { ...redeemed.session, statements };
@@ -96,7 +90,7 @@ async function databaseOfBefore(open: () => Promise<PgDatabase>) {
   const database = await open();
   opened.push(database);
   await migrate(database, migrationsThrough(BEFORE));
-  const session = await sessionOfBefore('acc_alice', 'ws_acme');
+  const session = await sessionOfBefore('acc_alice', 'ws_acme', database);
 
   const statements = [
     `INSERT INTO accounts (id, email, name, locale, created_at) VALUES

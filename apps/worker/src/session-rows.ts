@@ -3,7 +3,7 @@ import type { SessionIdentity } from './session.ts';
 /**
  * A row of the sessions as the worker reads it, whatever database answered it (FRU-142).
  *
- * `session-sqlite.ts` and `session-postgres.ts` name their columns alike, so one parser reads both.
+ * The columns have the names of the SQLite file of before, and `postgres-copy.ts` copies them as they are.
  */
 
 /**

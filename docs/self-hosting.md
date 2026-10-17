@@ -1036,7 +1036,7 @@ copies them into the database. The blocks below were measured before FRU-225; th
 second one starts a worker that refuses to serve until `.env` has the lines that section names.
 
 **If the old deployment kept SQLite seeds or extension sessions under `/data`, copy them out first.**
-The old file mounted no volume, so `/data` was an anonymous volume that the image declares. The new
+The old file mounted no volume, so `/data` was an anonymous volume that the image of before declared. The new
 file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
 gone. The old volume is not deleted, but nothing mounts it.
 

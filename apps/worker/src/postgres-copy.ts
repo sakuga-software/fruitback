@@ -17,15 +17,15 @@ import {
   site_destinations,
   sites,
 } from './postgres-schema.ts';
-import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
-import { SEEDS_FILE_VERSION } from './sqlite.ts';
 
 /**
- * The `user_version` of the accounts file of the last worker that kept its accounts in one (until
- * FRU-150): the one version this command copies. The store that wrote that file is a test fixture now
- * (`accounts-sqlite.fixture.ts`), and a test holds this number to it.
+ * The `user_version` of each file of the last worker that wrote one: the one version this command
+ * copies. The stores that wrote the files are gone (FRU-226). `postgres-copy.fixture.ts` writes the
+ * files as they left them, and a test holds these numbers to it.
  */
 export const ACCOUNTS_FILE_VERSION = 8;
+export const SESSIONS_FILE_VERSION = 3;
+export const SEEDS_FILE_VERSION = 1;
 
 /**
  * The accounts and the sessions of the two SQLite files, copied into PostgreSQL (FRU-145).
@@ -466,7 +466,7 @@ function readSeedsFile(
     if (found !== SEEDS_FILE_VERSION) {
       throw new Refused(
         `the seeds file is at version ${found}, and this worker reads version ${SEEDS_FILE_VERSION}: ` +
-          'it is not a file that the SQLite store of this worker wrote',
+          'it is not a file that the SQLite store of a worker of before FRU-225 wrote',
       );
     }
 

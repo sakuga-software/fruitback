@@ -42,7 +42,7 @@ body:
       label: Which store the worker runs on
       options:
         - linear
-        - sqlite
+        - postgres
         - github
         - memory
         - Not relevant

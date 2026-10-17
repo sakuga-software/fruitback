@@ -1,9 +1,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.fixture.ts';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import type { RequestContext } from './app.ts';
 import {
   type CallOptions,
@@ -24,6 +21,8 @@ import {
   readDomain,
   recheckDomains,
 } from './domain-proof.ts';
+import type { PgDatabase } from './postgres.ts';
+import { createPgliteDatabase } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
 /**
@@ -32,14 +31,13 @@ import { createPairing, redeemPairing } from './session.ts';
  */
 
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
-const directories: string[] = [];
+const databases: PgDatabase[] = [];
 
 const envWith = worlds();
 
-afterEach(() => {
-  closeAccountConnections();
+afterEach(async () => {
   mock.restoreAll();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+  for (const database of databases.splice(0)) await database.close();
 });
 
 /** A DNS that holds the `TXT` records of a map. A name it does not hold answers as `node:dns` does. */
@@ -149,15 +147,15 @@ describe('where a proof stands', () => {
 });
 
 describe('the proofs, asked again', () => {
-  function store() {
-    const directory = mkdtempSync(join(tmpdir(), 'fruitback-domains-'));
-    directories.push(directory);
+  async function store() {
+    const database = await createPgliteDatabase();
+    databases.push(database);
 
-    return createSqliteAccountStore(join(directory, 'accounts.db'));
+    return createPostgresAccountStore(database);
   }
 
   it('asks the proven domains not asked for a while, writes the loss once, and says it once', async () => {
-    const accounts = store();
+    const accounts = await store();
     const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });
     const workspace = await accounts.createWorkspace('Acme', alice.id);
     const acme = await accounts.addDomain(workspace.id, 'acme.dev', 0);
@@ -185,7 +183,7 @@ describe('the proofs, asked again', () => {
   });
 
   it('says once that a proof lapsed, when the DNS did not answer for the whole grace', async () => {
-    const accounts = store();
+    const accounts = await store();
     const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });
     const workspace = await accounts.createWorkspace('Acme', alice.id);
     const acme = await accounts.addDomain(workspace.id, 'acme.dev', 0);
@@ -245,7 +243,7 @@ describe('the proofs, asked again', () => {
   });
 
   it('changes nothing when the DNS does not answer', async () => {
-    const accounts = store();
+    const accounts = await store();
     const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });
     const workspace = await accounts.createWorkspace('Acme', alice.id);
     const acme = await accounts.addDomain(workspace.id, 'acme.dev', 0);
