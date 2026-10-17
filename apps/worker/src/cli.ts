@@ -2,7 +2,8 @@ import { appendFileSync, existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore } from './session.ts';
-import { adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
+import type { AccountStore } from './accounts.ts';
+import { accountStoreFor, adminLinksFor, createPairingCommand, noteIndexFor } from './app.ts';
 import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
 import type { IndexedNote, NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
@@ -122,14 +123,24 @@ function publicEndpoint(value: string | undefined): string | undefined | null {
  *
  * On a worker with workspaces, a session must name one: a session with none reaches no client. On a
  * worker with none, a workspace is a word that nothing reads, and the operator would believe it did.
+ *
+ * With a database, `declared` is the workspaces that have a site (FRU-277). Every site belongs to a
+ * workspace there, so a session with no workspace reads nothing, even before the first site.
  */
-export function checkWorkspace(workspace: string | undefined, declared: readonly string[]): string | undefined {
+export function checkWorkspace(
+  workspace: string | undefined,
+  declared: readonly string[],
+  database = false,
+): string | undefined {
+  if (database && declared.length === 0) {
+    return 'no workspace of this worker has a site yet: add a site in the console, then pair for its workspace';
+  }
   if (declared.length === 0) {
     return workspace === undefined ? undefined : '--workspace needs FRUITBACK_CLIENTS with a client that declares it';
   }
   if (workspace === undefined) return `--workspace is required: one of ${declared.join(', ')}`;
   if (!declared.includes(workspace))
-    return `no client declares the workspace ${workspace}: one of ${declared.join(', ')}`;
+    return `${database ? 'no site belongs to' : 'no client declares'} the workspace ${workspace}: one of ${declared.join(', ')}`;
 
   return undefined;
 }
@@ -145,6 +156,8 @@ export async function runPair(
   env: WorkerEnv,
   /** The store a test opened. Absent, the one of the environment. */
   held?: SessionStore,
+  /** The accounts a test opened. Absent, the ones of the environment. */
+  heldAccounts?: AccountStore,
 ): Promise<PairOutcome> {
   const parsed = parsePairArgs(argv);
   if (!parsed.ok) return { ok: false, lines: [parsed.error] };
@@ -152,8 +165,31 @@ export async function runPair(
   const config = readConfig(env);
   if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
 
-  const workspaceProblem = checkWorkspace(parsed.args.workspace, workspacesOf(config.config.clients));
+  // With a database, the workspaces are in it, and FRUITBACK_CLIENTS is refused (FRU-225, FRU-277).
+  const accounts = heldAccounts ?? accountStoreFor(config.config);
+  let declared: string[];
+  try {
+    declared = workspacesOf(accounts === undefined ? config.config.clients : await accounts.clientMap());
+  } catch (error) {
+    return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
+  }
+
+  const workspaceProblem = checkWorkspace(parsed.args.workspace, declared, accounts !== undefined);
   if (workspaceProblem !== undefined) return { ok: false, lines: [`${USAGE}\n${workspaceProblem}`] };
+
+  // The route ends a session whose person is not a member of its workspace (FRU-149). A code for
+  // somebody else is refused here, before it is printed: printed, it reads as a code that works.
+  if (accounts !== undefined && parsed.args.workspace !== undefined) {
+    const role = await accounts.role(parsed.args.workspace, parsed.args.subject);
+    if (role === undefined) {
+      return {
+        ok: false,
+        lines: [
+          `${USAGE}\n--subject must be the id of an account that is a member of the workspace ${parsed.args.workspace}`,
+        ],
+      };
+    }
+  }
 
   let minted: { code: string; expiresAt: number };
   try {

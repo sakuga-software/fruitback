@@ -95,9 +95,12 @@ browser » in the console. That is the operator's side, in
 **A pairing code is minted by an operator, on the container, never over HTTP:**
 
 ```bash
-docker compose exec worker node server.mjs pair --subject alex@acme.dev --name "Alex" \
+docker compose exec worker node server.mjs pair --subject <your account id> --workspace <id> --name "Alex" \
   --endpoint https://feedback.acme.dev
 ```
+
+The code is for one workspace you are a member of, and your account must exist: sign in to the console
+once before you ask for it.
 
 The name in that command is what your notes will be signed with. The worker vouches for it because
 an operator typed it; the browser never asserts its own identity, which is the whole reason the code

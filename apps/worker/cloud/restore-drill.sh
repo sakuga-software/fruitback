@@ -88,8 +88,17 @@ docker run -d --name "$P-worker" --network "$P" -v "$P-data:/data" \
   -e FRUITBACK_AUTH_SECRET=drill-not-a-real-secret-of-better-auth-0123 \
   -e "FRUITBACK_DATABASE_URL=postgres://fruitback:$PASSWORD@$P-source:5432/fruitback" \
   "$WORKER_IMAGE" >/dev/null
-# The worker makes its tables at the first call that needs the database. `pair` is one.
-docker exec "$P-worker" node server.mjs pair --subject drill >/dev/null
+# The worker makes its tables at the first call that needs the database. `pair` is one: it reads
+# the sites first, and on a database with no site it then refuses and mints nothing (FRU-277). Only
+# that refusal is expected: any other failure stops the drill.
+make_tables() {
+  PAIRED=$(docker exec "$1" node server.mjs pair --subject drill 2>&1) ||
+    case "$PAIRED" in
+      *'no workspace of this worker has a site yet'*) ;;
+      *) fail "pair did not make the tables of $1: $PAIRED" ;;
+    esac
+}
+make_tables "$P-worker"
 docker exec -i "$P-source" psql -U fruitback -d fruitback -q -v ON_ERROR_STOP=1 <"$HERE/drill-seed.sql"
 tables "$P-source" >"$WORK/source.txt"
 EMPTY=$(awk '$2 == 0 { printf "%s ", $1 }' "$WORK/source.txt")
@@ -146,7 +155,7 @@ docker run -d --name "$P-worker-shared" --network "$P" -v "$P-data-shared:/data"
   -e "FRUITBACK_DATABASE_URL=postgres://fruitback:$PASSWORD@$P-source:5432/shared" \
   -e "FRUITBACK_DATABASE_SCHEMA=$SCHEMA" \
   "$WORKER_IMAGE" >/dev/null
-docker exec "$P-worker-shared" node server.mjs pair --subject drill >/dev/null
+make_tables "$P-worker-shared"
 # The rows name no schema: they go where the search path says, as the statements of the worker do.
 docker exec -i -e "PGOPTIONS=-c search_path=$SCHEMA" "$P-source" \
   psql -U fruitback -d shared -q -v ON_ERROR_STOP=1 <"$HERE/drill-seed.sql"
