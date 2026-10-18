@@ -651,6 +651,18 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
     );
   });
 
+  it('names the place of a note whose connector was removed', async () => {
+    const { on, ana } = await notesOfTheInstance();
+    await rowsOf(on.database, `DELETE FROM connectors WHERE kind = 'linear'`);
+
+    const { answer } = await adminNotes(on, ana.token);
+
+    assert.deepEqual(
+      answer.notes.map((note) => note.place).filter((place) => place.kind !== 'fruitback'),
+      [{ kind: 'removed' }, { kind: 'removed' }, { kind: 'removed' }],
+    );
+  });
+
   it('answers 404 to the owner of a workspace, who reads the notes of their own workspace elsewhere', async () => {
     const { on, bob, zed } = await notesOfTheInstance();
 
