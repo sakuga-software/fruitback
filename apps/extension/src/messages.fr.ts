@@ -160,6 +160,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ce worker ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.':
     'Le workspace ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le worker dira que le domaine est prouvé.',
+  'This rule is too large for the account of this browser, which keeps at most 8 KB for one rule. It is not copied there, and it stays and works in this browser.':
+    'Cette règle est trop grande pour le compte de ce navigateur, qui garde au plus 8 Ko pour une règle. Elle n’y est pas copiée, et elle reste et fonctionne dans ce navigateur.',
   'A wildcard cannot serve team mode, so this rule runs nowhere. Remove it, and add one rule for each origin.':
     'Un joker ne peut pas servir le mode équipe, donc cette règle ne s’applique nulle part. Supprimez-la, et ajoutez une règle par origine.',
   'A team-mode rule must name one origin. A wildcard would lend your session to every site it covers.':

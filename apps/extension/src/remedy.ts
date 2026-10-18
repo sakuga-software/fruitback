@@ -1,5 +1,11 @@
 import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM } from './site-editor.ts';
-import { PATTERN_PROBLEM, PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
+import {
+  PATTERN_PROBLEM,
+  PREVIEWS_NOT_PROVEN,
+  STALE_TEAM_WILDCARD,
+  TOO_LARGE_FOR_ACCOUNT,
+  WILDCARD_TEAM_PROBLEM,
+} from './site-form.ts';
 import type { PairFailure } from './session.ts';
 import type { SitesImport } from './site-transfer.ts';
 
@@ -72,6 +78,11 @@ export const PROBLEMS: readonly Problem[] = [
     text: PREVIEWS_NOT_PROVEN,
     remedy: null,
     why: 'Only the DNS of the workspace changes it: the console says what to do.',
+  },
+  {
+    text: TOO_LARGE_FOR_ACCOUNT,
+    remedy: null,
+    why: 'The vendor of the browser sets the limit, and the rule works in this browser without the copy.',
   },
   { text: IMPORT_PROBLEM['not-json'], remedy: null, why: 'Only another file changes the answer.' },
   { text: IMPORT_PROBLEM['not-a-sites-file'], remedy: null, why: 'Only another file changes the answer.' },

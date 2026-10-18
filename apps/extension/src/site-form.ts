@@ -22,6 +22,10 @@ export const STALE_TEAM_WILDCARD =
 export const PREVIEWS_NOT_PROVEN =
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.';
 
+/** For a rule that `storage.sync` cannot keep (FRU-264). The options page shows it on the row while the copy is on. */
+export const TOO_LARGE_FOR_ACCOUNT =
+  'This rule is too large for the account of this browser, which keeps at most 8 KB for one rule. It is not copied there, and it stays and works in this browser.';
+
 export const WILDCARD_TEAM_PROBLEM =
   'A team-mode rule must name one origin. A wildcard would lend your session to every site it covers.';
 

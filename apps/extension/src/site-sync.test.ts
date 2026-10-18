@@ -3,7 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { previewsKey } from './proven-previews.ts';
 import { createSiteOwner } from './site-writes.ts';
-import { type SyncArea, createSiteSync, patternOf, rulesIn, syncKeyOf } from './site-sync.ts';
+import { TOO_LARGE_FOR_ACCOUNT } from './site-form.ts';
+import {
+  QUOTA_BYTES_PER_ITEM,
+  type SyncArea,
+  createSiteSync,
+  fits,
+  patternOf,
+  rulesIn,
+  syncKeyOf,
+} from './site-sync.ts';
 import type { SiteConfig, SiteMutation } from './sites.ts';
 
 /**
@@ -22,6 +31,20 @@ const TEAM: SiteConfig = {
 };
 
 type Change = Record<string, { newValue?: unknown }>;
+
+/** A rule whose label makes its item in `sync` exactly `bytes` long, key included. */
+function ruleOf(pattern: string, bytes: number): Extract<SiteConfig, { mode: 'private' }> & { label: string } {
+  const empty = {
+    mode: 'private',
+    endpoint: 'https://worker.test',
+    enabled: true,
+    clientId: 'acme',
+    label: '',
+  } as const;
+  const size = new TextEncoder().encode(`${syncKeyOf(pattern)}${JSON.stringify(empty)}`).length;
+
+  return { ...empty, label: 'x'.repeat(bytes - size) };
+}
 
 /** One `sync` area, and what each browser hears of its writes. */
 function account() {
@@ -47,6 +70,12 @@ function account() {
     return {
       get: async () => structuredClone(items),
       async set(entries) {
+        // As Chrome does: one item over the quota refuses the whole call, and nothing is written.
+        for (const [key, value] of Object.entries(entries)) {
+          if (new TextEncoder().encode(`${key}${JSON.stringify(value)}`).length > QUOTA_BYTES_PER_ITEM) {
+            throw new Error(`QUOTA_BYTES_PER_ITEM quota exceeded: ${key}`);
+          }
+        }
         const changes: Change = {};
         for (const [key, value] of Object.entries(entries)) {
           if (JSON.stringify(items[key]) === JSON.stringify(value)) continue;
@@ -474,6 +503,75 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
 
     assert.deepEqual(states, [false, true]);
     assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME });
+  });
+
+  // FRU-264: the account refuses a whole `set` for one item over its quota. An import of three rules
+  // with one large rule copied none of them, and marked none as known.
+  it('copies the other rules of a change when the account refuses one of them, and marks only those as known', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    const there = browserOn(shared);
+    const large = ruleOf('https://large.dev', QUOTA_BYTES_PER_ITEM + 1);
+
+    await here.change({
+      kind: 'write',
+      entries: { 'https://acme.dev': ACME, 'https://large.dev': large, 'https://globex.dev': GLOBEX },
+    });
+
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME, 'site:https://globex.dev': GLOBEX });
+    assert.deepEqual(here.self.known, ['https://acme.dev', 'https://globex.dev']);
+    assert.deepEqual(there.self.map, { 'https://acme.dev': ACME, 'https://globex.dev': GLOBEX });
+    // The rule stays here, and the options page tells it by its size.
+    assert.deepEqual(here.self.map['https://large.dev'], large);
+    assert.equal(fits('https://large.dev', large), false);
+
+    // The other direction: the same rule, made small enough, goes to the account.
+    const smaller = ruleOf('https://large.dev', QUOTA_BYTES_PER_ITEM);
+    await here.change({ kind: 'write', entries: { 'https://large.dev': smaller } });
+    assert.deepEqual(shared.items, {
+      'site:https://acme.dev': ACME,
+      'site:https://globex.dev': GLOBEX,
+      'site:https://large.dev': smaller,
+    });
+    assert.deepEqual(here.self.known, ['https://acme.dev', 'https://globex.dev', 'https://large.dev']);
+    assert.deepEqual(there.self.map, {
+      'https://acme.dev': ACME,
+      'https://globex.dev': GLOBEX,
+      'https://large.dev': smaller,
+    });
+  });
+
+  it('sends the other rules at a merge when one of them is too large for the account, and marks only those as known', async () => {
+    const shared = account();
+    const large = ruleOf('https://large.dev', QUOTA_BYTES_PER_ITEM + 1);
+    const here = browserOn(shared, {
+      'https://acme.dev': ACME,
+      'https://large.dev': large,
+      'https://globex.dev': GLOBEX,
+    });
+
+    await here.sync.merge();
+    await shared.idle();
+
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME, 'site:https://globex.dev': GLOBEX });
+    assert.deepEqual(here.self.known, ['https://acme.dev', 'https://globex.dev']);
+    assert.deepEqual(Object.keys(here.self.map).sort(), [
+      'https://acme.dev',
+      'https://globex.dev',
+      'https://large.dev',
+    ]);
+  });
+
+  it('measures a rule as the browser measures an item: the key and the JSON, in bytes', () => {
+    assert.equal(fits('https://acme.dev', ruleOf('https://acme.dev', QUOTA_BYTES_PER_ITEM)), true);
+    assert.equal(fits('https://acme.dev', ruleOf('https://acme.dev', QUOTA_BYTES_PER_ITEM + 1)), false);
+    // One « é » is two bytes: a count of characters would let this rule through.
+    const accented = ruleOf('https://acme.dev', QUOTA_BYTES_PER_ITEM);
+    assert.equal(fits('https://acme.dev', { ...accented, label: `é${accented.label.slice(1)}` }), false);
+    assert.ok(
+      TOO_LARGE_FOR_ACCOUNT.includes(`${QUOTA_BYTES_PER_ITEM / 1024} KB`),
+      'the options page must say the quota that the code applies',
+    );
   });
 
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {

@@ -214,6 +214,8 @@ signed it in with, and they reach your other browsers where the box is ticked to
 - **A browser where the box was off does not hear of the removals made meanwhile.** When you tick it
   there, the rules it still holds go back to the account, and to your other browsers: remove them
   again, or remove them in that browser before you tick the box.
+- The account keeps at most 8 KB for one rule. A larger rule, with a very long label for example,
+  stays and works in this browser, is not copied, and its row in the options page says so.
 - Firefox with no account keeps them on the machine, as before.
 
 ## What log out does, and what it cannot undo

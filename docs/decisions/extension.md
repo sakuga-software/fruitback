@@ -304,7 +304,18 @@ rule of 2026-10-12 (the orchestrator decides the current choices on Mathieu's de
   seen and done again, and a merge that removed a rule nobody removed would lose one silently.
 - **Turning the box off removes nothing from the account.** Removing there would remove the rules of
   the other browsers.
-- **A quota of `sync` that refuses a write** is logged, and the rule stays in `local`.
+- **A rule larger than the item quota of `sync` (8 KB, the key and the JSON) is not sent** (FRU-264).
+  The browser refuses a whole `set` for one larger item, so an import of three rules with one large
+  rule copied none, and marked none as known. `fits` measures each rule as the browser does, in
+  bytes, before the one `set` of a change or of a merge. The others go, and only they are marked as
+  known. The options page shows the reason on the row of a rule that does not fit, while the copy is
+  on: it calls the same `fits`, so no list of refused rules is stored. test:`copies the other rules of
+a change when the account refuses one of them, and marks only those as known`. One `set` for each
+  rule was not taken: the browser also counts the `set` calls (120 a minute in Chrome), and a large
+  import would then meet that quota. A rule that fits and is still refused (that quota, an account
+  that is away) is logged, stays in `local`, and the next merge sends it.
+- **A large rule that replaces a smaller one keeps the smaller one in the account.** Removing it there
+  would remove the rule in the other browsers, which know it.
 
 ## The picture of a note, taken by the browser (FRU-44)
 
