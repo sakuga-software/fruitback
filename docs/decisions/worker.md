@@ -2752,8 +2752,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The administrator is `role = 'admin'` and not banned**, read by `isInstanceAdmin` of the store of
   the accounts at each call. A list of roles (`admin,user`) is none, as `roleOf` reads a member.
 - **A trigger of the database makes the first account the administrator**: `fruitback_first_admin`,
-  `BEFORE INSERT ON "user"`, in `0016_first_admin`. A new account gets the role when no account has it,
-  in the statement that creates it. **Every way an account is made goes through it**: better-auth (a
+  `BEFORE INSERT ON "user"`, in `0016_first_admin`. A new account gets the role when the table of
+  accounts is empty, in the statement that creates it. **Every way an account is made goes through it**: better-auth (a
   link, GitHub, Google, the link of `FRUITBACK_FIRST_ADMIN`) and `signIn` of the store.
 - **The migration gives the role to the oldest account** (the least `createdAt`, then the least id)
   of a database that has accounts and no administrator: on the Cloud, the account of Mathieu.

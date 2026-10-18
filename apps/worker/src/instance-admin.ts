@@ -12,8 +12,8 @@ import { lastMailSentAt } from './mail.ts';
  * - **Who.** The account whose `role` of `user` is `admin`, and that is not banned. The column is the
  *   one of the admin plugin of better-auth, and the plugin is not mounted: see `REFUSED_PLUGINS` of
  *   `auth.ts`. No variable names an administrator.
- * - **How one becomes it.** The trigger of `0016_first_admin` gives the role to a new account when no
- *   account has it, in the transaction that creates the account. On a database that had accounts, the
+ * - **How one becomes it.** The trigger of `0016_first_admin` gives the role to the first account, in
+ *   the transaction that creates it, and to no later account. On a database that had accounts, the
  *   migration gives it to the oldest one. No route gives it or takes it away (FRU-274).
  * - **The guard.** `instanceAdminOf` of `console-api.ts` reads the cookie of the console and then the
  *   role in the database, at each call. Every other caller gets `404`, as for a path that does not
