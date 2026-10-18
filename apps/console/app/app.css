@@ -517,6 +517,48 @@ textarea {
   line-height: var(--text-hint--line-height);
 }
 
+/* A plain list of radios (`Radios`): the question at 15 px, each choice 8 px under the one before. */
+.kit-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kit-radios > .label {
+  margin-bottom: 8px;
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: normal;
+}
+
+.kit-radios__item {
+  margin: 0;
+}
+
+.kit-radios__item .radio__content {
+  gap: 10px;
+}
+
+/* Ink when it is chosen, as the switch: the accent is the red of an alert. */
+.kit-radios__item[data-selected] .radio__control {
+  background: var(--color-ink);
+}
+
+.kit-radios__item .label {
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: var(--text-body--line-height);
+}
+
+.kit-radios > .description {
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
 /* A box to tick: 16 px, the border of a control, ink when ticked; its words at 14 px, 8 px after. */
 .kit-checkbox {
   display: inline-flex;

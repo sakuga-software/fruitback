@@ -329,6 +329,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace stays at the bottom, for its owner: the mockup does not draw it, and it is nowhere else.
   `e2e/console-account.spec.ts` holds the screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
   which learns it at its next call, and « Sign out everywhere » ends every one.
+- **The administration of the instance is a frame of its own, read-only** (FRU-262, screen 17 of
+  the mockup of 2026-10-13, routes of FRU-261). `routes/admin.tsx` is the frame: the rail of a
+  workspace and the rail of the instance are one `RailFrame` with two sets of entries
+  (`routes/workspace.tsx`). Only `instanceAdmin: true` of `/console/me` opens it; any other account
+  goes to the front door, and sees no way to it. The worker answers `404` to them on every route of
+  the administration: the redirect of the console protects nothing alone. The rail of a workspace
+  shows « Administration » to the administrator only, in a second `nav` « Instance »: the mockup
+  draws no way in. **The rail names the host of the worker the console calls**, and « Fruitback
+  Cloud » when it is `api.fruitback.com` (`instanceOf` of `instance.ts`), else « Self-hosted
+  instance »: the build holds no flag of the Cloud, and the host is known before any read.
+  `routes/admin-instance.tsx` (`/admin`) reads `GET /console/admin/instance` and
+  `GET /console/admin/workspaces` and writes nothing. **Each setting comes from the environment**,
+  so each one says « Set by {variables} in the environment. », and the locked field and the radios
+  are described by that sentence. **The read of the workspaces leaves a trace** in each workspace
+  that the administrator is not a member of (FRU-261): its owners read it. **Not copied from the
+  mockup**: the switches, « Edit keys », the form of Google and « Turn on Google », « New workspace »,
+  the policy « Anyone with an address at … » that the worker does not have, « Backed up 4 h ago »
+  (no witness of a backup: « Not reported »), and the lead, which says that a setting is set in the
+  environment and not here. « Workspaces », « Users » and « Notes » of the rail come with their
+  screens. `e2e/console-admin.spec.ts` holds the screen, the other accounts, the absence of any
+  write, the states, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

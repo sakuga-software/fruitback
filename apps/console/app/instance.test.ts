@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { DEVELOPMENT_API, apiFrom } from './instance.ts';
+import { DEVELOPMENT_API, apiFrom, instanceOf } from './instance.ts';
 
 describe('the address of the worker of this instance (FRU-222)', () => {
   it('is what the container wrote when it started, before what the build holds', () => {
@@ -30,5 +30,17 @@ describe('the address of the worker of this instance (FRU-222)', () => {
     assert.match(root, /<head>[\s\S]*<script src="\/config\.js"><\/script>[\s\S]*<\/head>/);
     // The file of the repository sets nothing: `pnpm dev` and a console built for one worker.
     assert.doesNotMatch(written, /__FRUITBACK__\s*=/);
+  });
+});
+
+describe('the instance the console names in the frame of an administrator (FRU-262)', () => {
+  it('is Fruitback Cloud for the worker of the Cloud only', () => {
+    assert.deepEqual(instanceOf('https://api.fruitback.com'), { host: 'api.fruitback.com', cloud: true });
+    assert.deepEqual(instanceOf('https://feedback.acme.dev'), { host: 'feedback.acme.dev', cloud: false });
+    assert.deepEqual(instanceOf('https://api.fruitback.com.acme.dev'), {
+      host: 'api.fruitback.com.acme.dev',
+      cloud: false,
+    });
+    assert.deepEqual(instanceOf(DEVELOPMENT_API), { host: 'localhost:8788', cloud: false });
   });
 });

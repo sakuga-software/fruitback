@@ -22,6 +22,7 @@ import {
   PageHead,
   Pick,
   Problem,
+  Radios,
   STATUSES,
   SidePanel,
   Snippet,
@@ -166,6 +167,16 @@ export default function KitGallery() {
             { value: 'members', label: 'Members of Acme', detail: 'Visitors of the site see nothing.' },
             { value: 'public', label: 'Everyone who visits', detail: 'A public way to report a problem.' },
           ]}
+        />
+        <Radios
+          label="Who can make an account"
+          value="invited"
+          options={[
+            { value: 'invited', label: 'Only people invited to a workspace' },
+            { value: 'anyone', label: 'Anyone' },
+          ]}
+          disabled
+          hint="Set by FRUITBACK_SIGN_UP in the environment."
         />
       </section>
 
