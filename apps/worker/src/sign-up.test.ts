@@ -4,7 +4,7 @@ import { describe, it, mock } from 'node:test';
 import { SERVED_PATHS, authConfigOf } from './auth.ts';
 import { CONSOLE_URL, DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
-import { readConfig } from './env.ts';
+import { REQUIRED_WITH_DATABASE, readConfig } from './env.ts';
 import { adminLinkFor } from './first-admin.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -158,8 +158,9 @@ describe('the rule of who may create an account (FRU-278)', () => {
       assert.equal(config.ok, false, value);
       assert.deepEqual(config.ok ? [] : config.missing, ['FRUITBACK_SIGN_UP (invited, the default, or anyone)'], value);
     }
+    // With no secret of the sign-in, the worker refuses for that secret, which every database needs (FRU-225).
     const alone = readConfig(envWith({ FRUITBACK_SIGN_UP: 'anyone', FRUITBACK_AUTH_SECRET: undefined }));
-    assert.equal(alone.ok, false);
+    assert.deepEqual(alone.ok ? [] : alone.missing, [REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET]);
     // The controls: each of the two values starts, and so does no value at all.
     for (const value of ['invited', 'anyone', undefined, '']) {
       const config = readConfig(envWith({ FRUITBACK_SIGN_UP: value }));

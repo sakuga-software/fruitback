@@ -702,15 +702,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   if (env.FRUITBACK_AUTH_TRACK_IP !== undefined && !['', '1'].includes(env.FRUITBACK_AUTH_TRACK_IP)) {
     return { ok: false, missing: ['FRUITBACK_AUTH_TRACK_IP (1, or unset)'] };
   }
-  // FRU-278. As for the switch above: a value set where no account is made does nothing.
-  if (env.FRUITBACK_SIGN_UP?.trim() && authSecret === undefined) {
-    return {
-      ok: false,
-      missing: [
-        'FRUITBACK_AUTH_SECRET (FRUITBACK_SIGN_UP is set, and only the sign-in of the console makes an account)',
-      ],
-    };
-  }
   if (env.FRUITBACK_AUTH_TRACK_IP === '1' && authSecret === undefined) {
     return {
       ok: false,
