@@ -5,6 +5,7 @@ import { msg, t } from '../i18n';
 import {
   AnotherAddress,
   EmailForm,
+  INVITATION_NEEDED,
   ProviderButtons,
   SignInClosed,
   providerProblem,
@@ -27,7 +28,8 @@ import { useLocale } from '../use-locale';
  */
 type Stage =
   | { kind: 'loading' }
-  | { kind: 'form' }
+  /** `problem`: a link that was spent and opened no account (FRU-278). */
+  | { kind: 'form'; problem?: string }
   | { kind: 'sent'; email: string }
   /** The code of a link is being spent. */
   | { kind: 'landing' }
@@ -61,6 +63,8 @@ export default function SignIn() {
         if (redeemed.status === 0 || redeemed.status === 429 || redeemed.status >= 500) {
           return setStage({ kind: 'waiting', code });
         }
+        // The link worked, and this Fruitback creates no account for that address (FRU-278).
+        if (redeemed.error === 'invitation-required') return setStage({ kind: 'form', problem: INVITATION_NEEDED });
         setStage({ kind: 'expired' });
       });
     },
@@ -123,7 +127,7 @@ export default function SignIn() {
           email={email}
           onEmail={setEmail}
           onSent={(sent) => setStage({ kind: 'sent', email: sent })}
-          problem={providerProblem(search.get('error'))}
+          problem={stage.problem ?? providerProblem(search.get('error'))}
         />
       ) : null}
       {stage.kind === 'sent' ? (

@@ -686,6 +686,28 @@ nothing was written in another place.
 **Not tried:** any of this on the host. Measured on the image of the change, on a laptop: the refusals
 above, and `docker compose up` from an empty directory to a pin of a visitor.
 
+## Before the merge of FRU-278: `FRUITBACK_SIGN_UP=anyone`
+
+For the operator. **No agent sets it on the host, and no agent merges this change.** From the image
+of FRU-278, a worker creates an account for invited people only, unless its environment says
+`FRUITBACK_SIGN_UP=anyone`. Without it, **the Cloud closes to new clients at the deployment**: a
+person who signs in for the first time is refused, and the console tells them to ask for an
+invitation. The people who have an account sign in as before.
+
+**Before the merge**, in the environment of the worker in Dokploy (`saveEnvironment` replaces the whole
+environment: build it again from the Keychain entries, and add this line):
+
+```sh
+FRUITBACK_SIGN_UP=anyone
+```
+
+The image that runs before FRU-278 does not read the variable, so it can be set first, and the worker
+deployed again with no change. **After the deployment**, check: a sign-in by a link of the e-mail, for
+an address that has no account, opens the console on « Set up a workspace », and is not refused.
+
+A value that is neither `invited` nor `anyone` stops the worker at its start, with its sentence on
+`/health`.
+
 ## The OAuth applications
 
 Each sends a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.

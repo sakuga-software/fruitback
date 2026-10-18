@@ -14,6 +14,7 @@ import {
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import { DEFAULT_STORE_PROVIDER, type StoreConfig, storeProviderFor } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
+import { SIGN_UP_MODES, SIGN_UP_REFUSED, readSignUp } from './sign-up.ts';
 
 /**
  * The worker of before FRU-225, for the tests of its code alone: no database, and the sites in
@@ -176,6 +177,12 @@ export type WorkerEnv = {
    */
   FRUITBACK_AUTH_TRACK_IP?: string;
   /**
+   * Who may create an account (FRU-278): `invited`, the default, or `anyone`. See `sign-up.ts`. With
+   * `invited`, a sign-in that would create an account is refused, except for an address with an
+   * invitation that waits, the first account of the instance, and the link of `FRUITBACK_FIRST_ADMIN`.
+   */
+  FRUITBACK_SIGN_UP?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -274,6 +281,8 @@ const configSchema = z.object({
   authGithub: z.custom<OAuthClient | undefined>().optional(),
   /** Whether better-auth keeps the address and the user agent of a session, and limits by address (FRU-147). */
   authTrackIp: z.boolean(),
+  /** Who may create an account (FRU-278). FRU-261 and FRU-262 read it to show it. */
+  signUp: z.enum(SIGN_UP_MODES),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -461,6 +470,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     authSecret: env.FRUITBACK_AUTH_SECRET || undefined,
     authGithub: env.FRUITBACK_AUTH_GITHUB_OAUTH ? parseOAuthClient(env.FRUITBACK_AUTH_GITHUB_OAUTH) : undefined,
     authTrackIp: env.FRUITBACK_AUTH_TRACK_IP === '1',
+    signUp: readSignUp(env.FRUITBACK_SIGN_UP),
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
@@ -819,6 +829,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   identitySecret: 'FRUITBACK_IDENTITY_SECRET',
   secretsKey: 'FRUITBACK_SECRETS_KEY',
   authSecret: 'FRUITBACK_AUTH_SECRET',
+  signUp: SIGN_UP_REFUSED,
 };
 
 function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {

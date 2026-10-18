@@ -40,6 +40,8 @@ export async function cloudWorker(options: {
     FRUITBACK_PUBLIC_URL: options.publicUrl,
     RATE_LIMIT_PER_MINUTE: '2000',
     FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-for-a-browser-test',
+    // As on the Cloud: the specs sign several people in.
+    FRUITBACK_SIGN_UP: 'anyone',
   };
   const config = readConfig(env);
   if (!config.ok) throw new Error(`The worker of a test is misconfigured: ${config.missing.join(', ')}`);

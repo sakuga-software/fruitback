@@ -85,6 +85,7 @@ services:
       FRUITBACK_AUTH_SECRET: ${FRUITBACK_AUTH_SECRET:-}
       FRUITBACK_AUTH_GITHUB_OAUTH: ${FRUITBACK_AUTH_GITHUB_OAUTH:-}
       FRUITBACK_AUTH_TRACK_IP: ${FRUITBACK_AUTH_TRACK_IP:-}
+      FRUITBACK_SIGN_UP: ${FRUITBACK_SIGN_UP:-}
       # The variables of before FRU-150 and FRU-225, which the worker no longer takes. They are handed
       # over so that a `.env` that still sets one stops the worker with a sentence, and is not ignored.
       FRUITBACK_ACCOUNTS_PATH: ${FRUITBACK_ACCOUNTS_PATH:-}

@@ -35,6 +35,14 @@ const NO_VERIFIED_ADDRESS = msg(
   'The provider has no verified address for this account. Verify it there, or use an email link.',
 );
 
+/**
+ * The worker creates an account for invited people only (FRU-278), and this address has no
+ * invitation that waits. The link or the provider worked: the person asks for an invitation.
+ */
+export const INVITATION_NEEDED = msg(
+  'This Fruitback accepts invited people only. Ask an owner of a workspace for an invitation, then sign in with the address it went to.',
+);
+
 /** What the worker says when a sign-in with a provider comes back without a session (FRU-97, FRU-135). */
 const PROVIDER_PROBLEMS: Record<string, string> = {
   'google-declined': msg('Google did not sign you in: the access was declined. Try again, or use an email link.'),
@@ -56,6 +64,8 @@ const PROVIDER_PROBLEMS: Record<string, string> = {
   email_not_verified: NO_VERIFIED_ADDRESS,
   email_not_found: msg('The provider gave no address for this account. Use an email link.'),
   oauth_provider_not_found: msg('This way to sign in is not set up on this Fruitback. Use an email link.'),
+  // The code of the worker (FRU-278), and not one of better-auth.
+  INVITATION_REQUIRED: INVITATION_NEEDED,
 };
 
 /** Any other code that a sign-in sends back: it did not finish, and there is still a way in. */

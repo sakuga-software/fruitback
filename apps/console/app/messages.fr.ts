@@ -259,6 +259,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     "L'accès a été refusé. Réessayez, ou utilisez un lien par e-mail.",
   'The sign-in started in another browser, or too long ago. Start it again from here.':
     'La connexion a commencé dans un autre navigateur, ou il y a trop longtemps. Recommencez-la depuis cette page.',
+  'This Fruitback accepts invited people only. Ask an owner of a workspace for an invitation, then sign in with the address it went to.':
+    'Ce Fruitback n’accepte que les personnes invitées. Demandez une invitation au propriétaire d’un espace de travail, puis connectez-vous avec l’adresse qui l’a reçue.',
   'The provider has no verified address for this account. Verify it there, or use an email link.':
     "Le fournisseur n'a pas d'adresse vérifiée pour ce compte. Vérifiez-la chez lui, ou utilisez un lien par e-mail.",
   'The provider gave no address for this account. Use an email link.':
