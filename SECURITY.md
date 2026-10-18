@@ -660,6 +660,41 @@ worker ever writes it`).
 Empty the variable once the first workspace is made. Left in place it opens nothing while a
 workspace has an owner; on an instance whose last owner left, it would write a link again.
 
+**Who may create an account is `FRUITBACK_SIGN_UP`, and its default is `invited`** (FRU-278). A
+sign-in by a person who has an account works as before, with either value. With `invited`, a sign-in
+that would create an account is refused, except in three cases:
+
+- **the address has an invitation that waits**: one that a workspace made, that nobody cancelled, and
+  that did not end;
+- **the instance has no account at all**: the first account is the one of its administrator;
+- **the sign-in spends the link of `FRUITBACK_FIRST_ADMIN` or of `admin-link`**, which the operator
+  made for that address.
+
+With `anyone`, every person who signs in gets an account, as before FRU-278. The Fruitback Cloud runs
+with `anyone`. **One place decides**: the hook of better-auth that runs before it writes a row of
+`user` (`databaseHooks.user.create.before`). The link of the e-mail, GitHub, Google and every route of
+better-auth create an account through that hook, and it throws: no row is written, and the console
+says to ask for an invitation. test:`refuses to create the account of a person nobody invited, on an
+instance with no variable` drives each way, and test:`has a case for every way to sign in that the
+worker serves` fails on a provider that has no case. test:`writes a row of user only through
+better-auth, whose hook decides` fails on a file of the worker that writes a row of `user` by another
+way. The three cases are test:`creates the first account of an instance that has none, by every way`,
+test:`creates the account of an address that a workspace invited, by every way` and
+test:`creates the account of the first administrator by the link of the operator, though other
+accounts exist`. An invitation that ended or was cancelled opens nothing: test:`refuses an address
+whose invitation ended, or was cancelled`.
+
+What it does not hold:
+
+- **Two people who sign in to an empty instance at the same moment can both get an account.** The
+  hook counts the accounts before better-auth writes the row, and nothing locks the table between
+  the two. Whoever runs a new instance signs in first, before its address is given to anybody.
+- **The link of the operator is told to the hook in the process**, never in the request: a request
+  cannot claim to be that link.
+- **An invitation is for an address, and the sign-in proves that address**: a link of the e-mail, or a
+  provider that verified it. Whoever reads the mailbox of an invited address can create its account,
+  as they could accept the invitation.
+
 **`FRUITBACK_FIRST_REVIEWER` wrote a pairing code in the log** (FRU-108), on a worker with no
 workspace. FRU-225 refused it, and FRU-226 removed its code: the worker refuses the variable with what
 to do, and writes no code. The first administrator is `FRUITBACK_FIRST_ADMIN`, above, and a reviewer

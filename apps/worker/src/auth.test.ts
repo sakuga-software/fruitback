@@ -114,7 +114,8 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
   it('switches better-auth on with its secret and a database, and refuses a database without the secret (FRU-225)', () => {
     const on = configOf(envWith());
     assert.equal(hasAuth(on), true);
-    assert.deepEqual(authConfigOf(on), AUTH_CONFIG);
+    // No `FRUITBACK_SIGN_UP`: the default, `invited` (FRU-278). The cases of `AUTH_CONFIG` say `anyone`.
+    assert.deepEqual(authConfigOf(on), { ...AUTH_CONFIG, signUp: 'invited' });
 
     // An administrator can always sign in (FRU-225): the secret is asked for, and never made. An
     // empty value is an absent one, as for every variable of the compose file.

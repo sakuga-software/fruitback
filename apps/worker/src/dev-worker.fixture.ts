@@ -59,6 +59,8 @@ export function devEnvironment(given: WorkerEnv): WorkerEnv {
     // FRU-225: a worker with a database has its console and its sign-in, in development too. A value
     // of development as well, and not the identity secret: the worker refuses one secret for two jobs.
     FRUITBACK_AUTH_SECRET: 'dev-only-sign-in-secret-never-deployed',
+    // The seeded owner is the first account, so `invited` would refuse every other address of the specs.
+    FRUITBACK_SIGN_UP: 'anyone',
     // The address the console and a sign-in link call this worker at: its own port, on this machine.
     FRUITBACK_PUBLIC_URL: `http://localhost:${port}`,
     ...given,

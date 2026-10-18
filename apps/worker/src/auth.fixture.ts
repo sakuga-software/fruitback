@@ -26,6 +26,8 @@ export const AUTH_CONFIG: AuthConfig = {
   databaseUrl: DATABASE_URL,
   databaseSchema: 'public',
   trackIp: false,
+  // The behaviour before FRU-278, which most cases sign two people in with. `sign-up.test.ts` holds `invited`.
+  signUp: 'anyone',
 };
 
 /** The sessions of the extensions, for a case that removes nobody: it ends none, and says it was not asked. */

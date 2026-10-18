@@ -9,6 +9,7 @@ import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage, Mailer } from './mail.ts';
 import type { PgDatabase } from './postgres.ts';
 import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
+import type { SignUp } from './sign-up.ts';
 
 /**
  * A worker with better-auth on, as the tests of its routes call it (FRU-147, FRU-149): every case goes
@@ -65,6 +66,8 @@ export async function workerOf(
     handle?: typeof handleRequest;
     /** Where the limiter of better-auth counts. The `Kv` of the database by default, as in a worker. */
     limits?: Pick<Kv, 'incr'>;
+    /** Who may create an account. `anyone` by default, as in `AUTH_CONFIG`. */
+    signUp?: SignUp;
   } = {},
 ) {
   await make(database);
@@ -72,7 +75,13 @@ export async function workerOf(
   const sessions = createPostgresSessionStore(database);
   const connectStore = createPostgresConnectStore(database);
   const options = await authOptions(
-    { ...AUTH_CONFIG, github: GITHUB, google: GOOGLE, trackIp: more.trackIp === true },
+    {
+      ...AUTH_CONFIG,
+      github: GITHUB,
+      google: GOOGLE,
+      trackIp: more.trackIp === true,
+      signUp: more.signUp ?? AUTH_CONFIG.signUp,
+    },
     await database.pool(),
     sessions,
     more.limits ?? createPostgresKv(database),

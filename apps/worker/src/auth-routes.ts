@@ -11,6 +11,7 @@ import { UNKNOWN_BROWSER } from './browser-label.ts';
 import { adminLinkAt, endAdminLink } from './first-admin.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
+import { INVITATION_REQUIRED, asOperatorLink } from './sign-up.ts';
 
 /**
  * The console signs in with better-auth (FRU-147): since FRU-150, the one way.
@@ -295,6 +296,14 @@ async function sendLink(
   return json(202, { sent: true }, headers);
 }
 
+/** Whether better-auth refused to create the account of this sign-in: see `sign-up.ts`. */
+function refusedSignUp(answer: Response): boolean {
+  const location = answer.headers.get('Location');
+  if (location === null) return false;
+
+  return new URL(location, 'http://unused.invalid').searchParams.get('error') === INVITATION_REQUIRED;
+}
+
 async function redeemLink(
   request: Request,
   context: AuthRouteContext,
@@ -324,12 +333,20 @@ async function redeemLink(
   const auth = await context.auth;
   // No `callbackURL`: better-auth then answers JSON and does not redirect. A link that is spent or
   // that never was answers a redirect to an error, which is read as a refusal.
-  const answer = (await (auth.api as unknown as { magicLinkVerify(input: object): Promise<Response> }).magicLinkVerify({
-    query: { token },
-    headers: headersFor(request, context),
-    asResponse: true,
-  })) as Response;
-  if (answer.status !== 200) return json(401, { error: 'link-spent-or-expired' }, headers);
+  const verify = () =>
+    (auth.api as unknown as { magicLinkVerify(input: object): Promise<Response> }).magicLinkVerify({
+      query: { token },
+      headers: headersFor(request, context),
+      asResponse: true,
+    });
+  // FRU-278: the link of an operator creates the account of its address, whoever may sign up.
+  const answer = made.is === 'spend' ? await asOperatorLink(made.email, verify) : await verify();
+  if (answer.status !== 200) {
+    // The link is spent: better-auth spends it before it looks for the account.
+    if (refusedSignUp(answer)) return json(403, { error: 'invitation-required' }, headers);
+
+    return json(401, { error: 'link-spent-or-expired' }, headers);
+  }
 
   const opened = (await answer.json()) as { user?: { id?: unknown } };
   const id = typeof opened.user?.id === 'string' ? opened.user.id : undefined;

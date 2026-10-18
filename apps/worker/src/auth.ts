@@ -15,6 +15,7 @@ import type { OAuthClient } from './oauth-client.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
 import { kvOn, migrated, sessionStoreOn } from './postgres-stores.ts';
 import type { SessionStore } from './session.ts';
+import { INVITATION_REQUIRED, type SignUp, isOperatorLink, maySignUp } from './sign-up.ts';
 
 /**
  * better-auth (FRU-144), what it keeps in the database (FRU-181), and the console that signs in with
@@ -231,6 +232,8 @@ export type AuthConfig = {
   google?: OAuthClient;
   /** `FRUITBACK_AUTH_TRACK_IP`: keep the address and the user agent of a session, and limit by address. */
   trackIp: boolean;
+  /** `FRUITBACK_SIGN_UP`: who may create an account (FRU-278). */
+  signUp: SignUp;
 };
 
 /** The configuration of better-auth for this worker, or `undefined` when it is off. */
@@ -251,6 +254,7 @@ export function authConfigOf(config: WorkerConfig): AuthConfig | undefined {
     ...(config.authGithub === undefined ? {} : { github: config.authGithub }),
     ...(config.google === undefined ? {} : { google: config.google }),
     trackIp: config.authTrackIp,
+    signUp: config.signUp,
   };
 }
 
@@ -327,14 +331,21 @@ export async function authOptions(
   /** Where the limiter of better-auth counts: the `Kv` of the database, shared by every replica. */
   limits: Pick<Kv, 'incr'>,
 ): Promise<BetterAuthOptions> {
-  const [{ organization }, { magicLink }, { createAccessControl }, { defaultStatements }, { APIError }] =
-    await Promise.all([
-      import('better-auth/plugins/organization'),
-      import('better-auth/plugins/magic-link'),
-      import('better-auth/plugins/access'),
-      import('better-auth/plugins/organization/access'),
-      import('better-auth/api'),
-    ]);
+  const [
+    { organization },
+    { magicLink },
+    { createAccessControl },
+    { defaultStatements },
+    { APIError },
+    { getCurrentAdapter },
+  ] = await Promise.all([
+    import('better-auth/plugins/organization'),
+    import('better-auth/plugins/magic-link'),
+    import('better-auth/plugins/access'),
+    import('better-auth/plugins/organization/access'),
+    import('better-auth/api'),
+    import('better-auth'),
+  ]);
   // No picture: the accounts of before kept none, and a picture of GitHub is an address that says
   // when a page of the console was opened.
   const noPicture = () => ({ image: undefined });
@@ -460,7 +471,19 @@ export async function authOptions(
           // links no such address to an account that exists (measured), and it **creates** one for
           // it (measured on 1.7.7: a session opened, with `emailVerified` false). A link of the
           // e-mail proves its address, so it passes.
-          before: async (user: { emailVerified?: unknown }) => (user.emailVerified === true ? undefined : false),
+          before: async (user: { email?: unknown; emailVerified?: unknown }, context: HookContext) => {
+            if (user.emailVerified !== true) return false;
+            // FRU-278. A throw, and not `false`: better-auth puts the code of an `APIError` in the
+            // `?error=` of the way back, and turns `false` into `unable_to_create_user`.
+            if (!(await signUpAllowed(config.signUp, String(user.email ?? ''), context, getCurrentAdapter))) {
+              throw new APIError('FORBIDDEN', {
+                code: INVITATION_REQUIRED,
+                message: 'This Fruitback creates an account for invited people only',
+              });
+            }
+
+            return undefined;
+          },
         },
         // An account that is deleted keeps no extension, in any workspace (FRU-149). No route deletes
         // an account today: this holds for the day one does.
@@ -541,6 +564,46 @@ export async function authOptions(
       atRest(APIError),
     ],
   };
+}
+
+/** The second argument of a hook of better-auth: the call that writes, or `null` outside one. */
+type HookContext = { context?: { adapter?: unknown } } | null;
+
+type CountingAdapter = {
+  count(input: { model: string; where?: { field: string; value: unknown; operator?: string }[] }): Promise<number>;
+};
+
+/**
+ * Whether better-auth may create the account of `email` (FRU-278): see `sign-up.ts`.
+ *
+ * It reads through the adapter of the call, so a creation inside a transaction reads in that
+ * transaction. WARNING: without the context of a call, it reads nothing and refuses.
+ */
+async function signUpAllowed(
+  mode: SignUp,
+  email: string,
+  context: HookContext,
+  current: (adapter: never) => Promise<unknown>,
+): Promise<boolean> {
+  const byOperator = isOperatorLink(email);
+  // The two cases that need no read of the database.
+  if (maySignUp(mode, { firstAccount: false, invited: false, byOperator })) return true;
+  const base = context?.context?.adapter;
+  if (base === undefined) return false;
+  const adapter = (await current(base as never)) as CountingAdapter;
+  const firstAccount = (await adapter.count({ model: 'user' })) === 0;
+  const invited =
+    !firstAccount &&
+    (await adapter.count({
+      model: 'invitation',
+      where: [
+        { field: 'email', value: email },
+        { field: 'status', value: 'pending' },
+        { field: 'expiresAt', value: new Date(), operator: 'gt' },
+      ],
+    })) > 0;
+
+  return maySignUp(mode, { firstAccount, invited, byOperator });
 }
 
 /** Each refused plugin of these options, with its reason. Empty for options that may be built. */
