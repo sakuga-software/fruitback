@@ -1204,3 +1204,28 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - In the extension, a picture refused for its token (`401 identity-required`, a token minted before
   the worker names its session) renews the access once and is sent again (`renewAccess`); refused
   again, it is missed, and said.
+
+## A reply from the thread of a note (FRU-257)
+
+### The rules, in short
+
+- **The foot of a thread holds a field to reply when the worker says the reader may** (`canReply`
+  of the read, set from every answer like `identified`) and the host did not say never
+  (`replies: false`). Not under a note kept for later: it has no issue to answer.
+- **`ReplySeam` is the seam, like `onSubmit`**: the overlay does not know the worker. `embed.ts`
+  posts through `transportFor`, so the relay of the extension carries it.
+- **What a person typed is never lost.** A failure keeps the text and says why. The text lives in a
+  map by note too, because a resolve and a render build the thread again under it.
+- **A reply that the store kept is shown at once**, in the thread, with no read: a read draws the
+  pins again and closes the thread.
+- **Enter sends, Shift+Enter goes to the next line.** Escape closes the thread, as everywhere; the
+  text waits for it to open again.
+- **The name of a visitor is the one the reporter asked the widget to remember**, and none for a
+  reader the worker names: the worker would not read it.
+- **A reply from the page reads as a reply.** The worker writes a first line for the tracker
+  (« **Bob** via Fruitback · not verified ») and quotes the text: the thread shows the name as the
+  author, what the worker knows of the person beside it, and the text unquoted (`replyFromPage`).
+  Another comment is shown as it was written. Somebody who comments in the tracker can type the same
+  line and show another name on the page: they are people of the team of the site.
+- **Two « Send » can be on screen**, the one of the composer and this one: this one is named « Send
+  reply », and its visible word is in its name.

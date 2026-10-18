@@ -2,6 +2,7 @@ import {
   canonicalizePageUrl,
   offeredStages,
   type Seed,
+  type SeedComment,
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
@@ -32,7 +33,7 @@ import {
   offeredDestinations,
 } from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
-import { type Overlay, createOverlay } from './overlay.ts';
+import { type Overlay, type ReplyFailure, createOverlay } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
 import { linkedNote, withoutLinkedNote } from './page.ts';
 
@@ -142,6 +143,12 @@ export type FruitbackOptions = {
    * nothing, which is a stronger promise than one that hides itself.
    */
   transport?: FruitbackTransport;
+  /**
+   * Whether a thread offers a field to reply (FRU-257), when the worker says the reader may. `false`:
+   * never. The extension sets it on a site it mounts with no session: the worker cannot tell that
+   * reader from a visitor of the site, and the rule of the product says no.
+   */
+  replies?: boolean;
   document?: Document;
 };
 
@@ -288,13 +295,22 @@ export function init(options: FruitbackOptions): Fruitback {
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
     // the thread would have no row to give focus back to.
     onThread: () => sidebar.mark(),
+    ...(options.replies === false
+      ? {}
+      : {
+          reply: {
+            allowed: () => readerIdentity.canReply,
+            send: (issue: SeedIssue, body: string) =>
+              sendReply(options, view, issue, body, readerIdentity.identified ? undefined : config.get().reporterName),
+          },
+        }),
   });
 
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
-  const readerIdentity: { identified: boolean; batch?: BatchOffer | undefined } = { identified: false };
+  const readerIdentity: ReaderIdentity = { identified: false, canReply: false };
   // The notes kept for later, per tab (FRU-124). Next to the config, under its key.
   const drafts = createDraftStore({
     storage: sessionStorageOf(view),
@@ -605,7 +621,7 @@ function createReader(
   show: (issues: SeedIssue[]) => void,
   stages: OfferedStages,
   destinations: OfferedDestinations,
-  identity: { identified: boolean; batch?: BatchOffer | undefined },
+  identity: ReaderIdentity,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
 ): () => Promise<ReadOutcome> {
@@ -640,6 +656,7 @@ function createReader(
         destinations?: unknown;
         identified?: unknown;
         batch?: unknown;
+        canReply?: unknown;
       };
       if (mine !== generation) return 'stale';
 
@@ -652,6 +669,8 @@ function createReader(
       identity.identified = body.identified === true;
       // The same rule: a worker that stops offering a batch is sent one note at a time (FRU-124).
       identity.batch = offeredBatch(body.batch);
+      // The same rule (FRU-257): a reader the worker no longer lets reply gets no field.
+      identity.canReply = body.canReply === true;
       show(body.issues);
 
       return 'read';
@@ -754,6 +773,39 @@ function feedbackUrl(options: FruitbackOptions, destination: string | undefined)
   return destination === undefined
     ? `${options.endpoint}/feedback`
     : `${options.endpoint}/feedback?destination=${encodeURIComponent(destination)}`;
+}
+
+/** What the last read of the page said of this reader. */
+type ReaderIdentity = { identified: boolean; batch?: BatchOffer | undefined; canReply: boolean };
+
+/**
+ * A reply under a note (FRU-257), through the transport of the host like every call. The name is
+ * the one the reporter asked the widget to remember, and only for a reader the worker does not name.
+ */
+async function sendReply(
+  options: FruitbackOptions,
+  view: Window & typeof globalThis,
+  issue: SeedIssue,
+  body: string,
+  name: string | undefined,
+): Promise<SeedComment | ReplyFailure> {
+  const token = await options.identityToken?.();
+  const response = await transportFor(options)({
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/replies?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    headers: writeHeaders(token),
+    body: JSON.stringify({
+      url: canonicalizePageUrl(view.location.href),
+      body,
+      ...(name === undefined ? {} : { name }),
+    }),
+  });
+  if (response.status === 429) return 'wait';
+  if (response.status === 401) return 'signed-out';
+  if (!response.ok) return 'retry';
+  const comment = (JSON.parse(response.body) as { comment?: SeedComment }).comment;
+
+  return comment === undefined ? 'retry' : comment;
 }
 
 /** Never the token in the body: the seed is stored verbatim in a Linear description (FRU-9). */

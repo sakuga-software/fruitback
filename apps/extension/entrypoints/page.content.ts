@@ -241,8 +241,10 @@ export default defineContentScript({
         // The language of the reviewer's account. Left out, the widget reads the page's own.
         ...(message.locale !== undefined ? { locale: message.locale } : {}),
         // FRU-101: a site of a workspace, read and written through the reviewer's session. The
-        // background relays only for a site its own storage says is in team mode.
-        ...(message.relay === true ? { transport: api.transport } : {}),
+        // background relays only for a site its own storage says is in team mode. With no relay, the
+        // reviewer has no session here, and the rule of FRU-257 gives them no field to reply: the
+        // worker cannot tell them from a visitor of the site.
+        ...(message.relay === true ? { transport: api.transport } : { replies: false }),
         // FRU-44: offered here, and off until the reviewer turns it on in the settings of the widget.
         captureScreenshot,
       });

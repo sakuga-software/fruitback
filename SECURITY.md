@@ -579,15 +579,15 @@ request and the answer.
 That makes the extension something that will make a call for a page, so the background refuses more
 than it accepts. It sends nothing unless all of the following are true:
 
-|              |                                                                                               |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| The origin   | comes from the sender the browser reports, never from the message                             |
-| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode             |
-| The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected** |
-| The path     | is `/feedback`, the one path the widget calls                                                 |
-| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                |
-| The session  | is open for that endpoint — with no session there is no call at all                           |
-| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection           |
+|              |                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| The origin   | comes from the sender the browser reports, never from the message                                |
+| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode                |
+| The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected**    |
+| The path     | is `/feedback`, or `/feedback/<id>/replies` under one note (FRU-257): the paths the widget calls |
+| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                   |
+| The session  | is open for that endpoint — with no session there is no call at all                              |
+| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection              |
 
 The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
 to name its own endpoint could ask for a call to a _different_ worker that reviewer has paired with,
