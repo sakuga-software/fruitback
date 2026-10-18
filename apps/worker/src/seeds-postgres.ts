@@ -4,6 +4,7 @@ import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { seed_comments, seeds } from './postgres-schema.ts';
 import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+import { replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 
 /**
@@ -140,6 +141,34 @@ export function createPostgresSeedStore(database: Database): SeedStore {
             .filter((issue): issue is SeedIssue => issue !== null)
         );
       }),
+    // A reply in the table of the replies, under a note of this client only (FRU-257). The table has
+    // no author for it: the name is in the text, as in a tracker.
+    reply: (target, reply, _client, policy) =>
+      through('keep the reply', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [note] = await tx
+            .select({ id: seeds.id })
+            .from(seeds)
+            .where(
+              and(
+                eq(seeds.id, id),
+                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (note === undefined) return undefined;
+          const now = Date.now();
+          const [row] = await tx
+            .insert(seed_comments)
+            .values({ seed_id: id, author: null, body: replyText(reply, policy.locale), created_at: now })
+            .returning({ id: seed_comments.id, body: seed_comments.body });
+          if (row === undefined) throw new StoreError('PostgreSQL kept a reply and answered no number for it');
+
+          return { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() };
+        }),
+      ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.
     // The rows are read and deleted in one transaction, and the replies go with their note: the
     // foreign key deletes them.

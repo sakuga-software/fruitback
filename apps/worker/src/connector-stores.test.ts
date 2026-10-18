@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
-import { createConnectorStores } from './connectors.ts';
+import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { createMemoryStore } from './linear-memory.ts';
+import { type SeedStore, StoreError, takesReplies } from './store.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const opened = worlds();
@@ -424,5 +425,54 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
       showComments: false,
       stages: {},
     });
+  });
+});
+
+describe('the sites that take a reply, by where their notes go (FRU-257)', () => {
+  const policy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' } as ClientPolicy;
+
+  /** One connector of each shape, as `sealedKey` answers them. */
+  const accounts = {
+    sealedKey: async (connector: string) => {
+      const shapes: Record<string, { kind: 'linear' | 'rest'; showComments: boolean }> = {
+        con_linear: { kind: 'linear', showComments: true },
+        con_quiet: { kind: 'linear', showComments: false },
+        con_rest: { kind: 'rest', showComments: true },
+      };
+      const shape = shapes[connector];
+
+      return shape === undefined
+        ? undefined
+        : {
+            kind: shape.kind,
+            sealed: seal('lin_api_a_key_of_the_test', SECRETS_KEY),
+            workspaceId: 'ws_a',
+            settings: { ...DEFAULT_CONNECTOR_SETTINGS, showComments: shape.showComments },
+          };
+    },
+    enqueueDelivery: async () => 'dlv_1',
+  } as unknown as AccountStore;
+  const routed = createRoutedStore(createMemoryStore(), createConnectorStores(accounts, SECRETS_KEY));
+  const site = (connector?: string) =>
+    ({ workspace: 'ws_a', ...(connector === undefined ? {} : { connector }) }) as ClientConfig;
+
+  it('a site with no destination, and a tracker that shows its replies', async () => {
+    assert.equal(await takesReplies(routed, site()), true);
+    assert.equal(await takesReplies(routed, site('con_linear')), true);
+  });
+
+  it('never a tracker whose replies are hidden, nor an address that only receives, though it keeps the notes', async () => {
+    assert.equal(await takesReplies(routed, site('con_quiet')), false);
+    assert.equal(await takesReplies(routed, site('con_rest')), false);
+
+    const reply = { body: 'Seen.', author: { kind: 'visitor' as const } };
+    for (const connector of ['con_quiet', 'con_rest']) {
+      await assert.rejects(
+        routed.reply?.({ issue: 'dev_issue_1', clientId: 'site_a' }, reply, site(connector), policy) ??
+          Promise.reject(),
+        StoreError,
+        connector,
+      );
+    }
   });
 });

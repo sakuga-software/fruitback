@@ -102,6 +102,21 @@ function fakeLinear({ refuseLabels = false } = {}): { node(id: string): IssueNod
       return json(200, { data: { issueCreate: { success: true, issue } } });
     }
 
+    if (operation === 'FruitbackCreateComment') {
+      const input = variables.input as { issueId: string; body: string };
+      const issue = issues.find((each) => each.node.id === input.issueId);
+      if (issue === undefined) return json(200, { errors: [{ message: 'Entity not found' }] });
+      const comment = {
+        id: `comment_${input.issueId}_${issue.node.comments?.nodes.length ?? 0}`,
+        body: input.body,
+        createdAt: '2026-09-15T11:00:00.000Z',
+        user: { name: 'Fruitback' },
+      };
+      issue.node.comments = { nodes: [comment, ...(issue.node.comments?.nodes ?? [])] };
+
+      return json(200, { data: { commentCreate: { success: true, comment } } });
+    }
+
     if (operation === 'FruitbackIssues') {
       const filter = variables.filter as {
         team: { id: { eq: string } };
@@ -402,6 +417,8 @@ const SUBJECTS: ConformanceSubject[] = [
   },
   {
     provider: 'github',
+    noReply:
+      'GitHub is a store of the environment and no connector of a workspace yet (FRU-188): no route writes to it',
     writtenStage: DEFAULT_SEED_STAGE,
     replyCap: GITHUB_REPLY_CAP,
     otherTenant: { repository: 'acme/other' },

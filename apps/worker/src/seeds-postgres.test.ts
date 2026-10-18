@@ -57,6 +57,22 @@ for (const { label, open, skip } of DATABASES) {
       );
     });
 
+    it('writes a reply under a note of its site only, and under no number that is not a note (FRU-257)', async () => {
+      const { database, store } = await opened();
+      const ours = await store.create(seedOf('sd_ours', 'site_a'), undefined, POLICY);
+      const reply = { body: 'Seen.', author: { kind: 'visitor' as const } };
+
+      assert.equal(await store.reply?.({ issue: ours.id, clientId: 'site_b' }, reply, undefined, POLICY), undefined);
+      assert.equal(await store.reply?.({ issue: ours.id, clientId: undefined }, reply, undefined, POLICY), undefined);
+      assert.equal(await store.reply?.({ issue: '999', clientId: 'site_a' }, reply, undefined, POLICY), undefined);
+      assert.equal(await store.reply?.({ issue: 'FB-1', clientId: 'site_a' }, reply, undefined, POLICY), undefined);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seed_comments'), []);
+
+      const written = await store.reply?.({ issue: ours.id, clientId: 'site_a' }, reply, undefined, POLICY);
+      assert.ok(written !== undefined);
+      assert.equal((await rowsOf(database, 'SELECT id FROM seed_comments')).length, 1);
+    });
+
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
       const { store } = await opened();
       await store.create(seedOf('sd_site', 'site_a'), undefined, POLICY);

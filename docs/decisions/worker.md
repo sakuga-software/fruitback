@@ -2864,6 +2864,31 @@ under a client that is not a site looks the same. `forget` deletes them.
 - **The author is a kind, never a name.** The name of a member is for the people of the workspace.
 - **The trace names the workspaces of the page**, as every list (`notes` in `admin_reads`).
 
+## A reply from the page, the store half (FRU-257)
+
+**The rules, in short:**
+
+- **`SeedStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
+  Linear (`commentCreate`), the database (`seed_comments`) and the store of the dev loop take one.
+  GitHub does not: it is a store of the environment, and no connector of a workspace yet (FRU-188).
+- **A site takes no reply when nobody would read it back**: an address that only receives (REST),
+  though the worker keeps its notes, and a tracker whose workspace hides its replies (FRU-102).
+  `withSettings` and `receivingStore` take `reply` off, and the routed store asks the store of the
+  client (`repliesFor`).
+- **The text says who wrote it, on a line that the reply cannot imitate** (`reply-text.ts`). A
+  tracker writes under the identity of its key: the app of Fruitback for OAuth, the owner of a
+  personal key. So the first line names the person, and says « member of {workspace} » or « not
+  verified ». Every line that the person wrote is quoted, so a forged line is a line of the quote.
+  test:`never lets what somebody wrote pass for the line that says who wrote it`. The line is in the
+  language of the team, like a description (FRU-39).
+- **The database writes a reply under a note of the client only**, and answers `undefined` for
+  another: test:`writes a reply under a note of its site only, and under no number that is not a note (FRU-257)`.
+  Linear takes the id of an issue: the route checks that the issue is one of the page of the site
+  before it asks the store (the route half).
+
+Decided for Mathieu on 2026-10-18: the identity of the connector with the name in the text, a guest
+replies, and on a public site mounted by the extension with no session, only the field is hidden.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is

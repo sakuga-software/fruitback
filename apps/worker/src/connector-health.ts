@@ -81,5 +81,13 @@ export function watchedStore(
     createBatch: (seeds, client, policy, memory) =>
       watched(client?.connector, () => createAll(store, seeds, client, policy, memory)),
     findForPage: (query, client, policy) => watched(client?.connector, () => store.findForPage(query, client, policy)),
+    ...(store.reply === undefined
+      ? {}
+      : {
+          reply: (target, reply, client, policy) =>
+            watched(client?.connector, () =>
+              (store.reply as NonNullable<SeedStore['reply']>)(target, reply, client, policy),
+            ),
+        }),
   };
 }

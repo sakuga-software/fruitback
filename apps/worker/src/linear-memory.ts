@@ -1,8 +1,16 @@
-import { type Seed, type SeedIssue, buildIssueDescription, buildIssueLabels, buildIssueTitle } from '@fruitback/shared';
+import {
+  type Seed,
+  type SeedComment,
+  type SeedIssue,
+  buildIssueDescription,
+  buildIssueLabels,
+  buildIssueTitle,
+} from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
 import { type IssueNode, toSeedIssue } from './linear.ts';
-import type { CreatedIssue, SeedIssueQuery, SeedStore } from './store.ts';
+import { replyText } from './reply-text.ts';
+import type { CreatedIssue, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -109,6 +117,26 @@ async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Pro
   );
 }
 
+/** A reply under an issue of this client (FRU-257), as Linear would keep it: the dev author is the key's. */
+async function createReply(
+  id: string,
+  reply: NewReply,
+  clientId: string | undefined,
+  locale?: string,
+): Promise<SeedComment | undefined> {
+  const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
+  if (issue === undefined) return undefined;
+  const comment = {
+    id: `dev_reply_${issue.id}_${issue.comments?.nodes.length ?? 0}`,
+    body: replyText(reply, locale),
+    createdAt: new Date().toISOString(),
+    user: { name: 'Fruitback' },
+  };
+  issue.comments = { nodes: [comment, ...(issue.comments?.nodes ?? [])] };
+
+  return { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name };
+}
+
 /** Test seam, and what makes each playground run start from an empty page. */
 export function resetMemoryLinear(): void {
   issues.length = 0;
@@ -144,6 +172,7 @@ export function createMemoryStore(): SeedStore {
     scope: () => 'memory',
     create: (seed, _client, policy) => createSeedIssue(seed, policy.locale),
     findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
+    reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
   };
 }
 
