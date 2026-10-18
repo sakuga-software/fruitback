@@ -2889,6 +2889,24 @@ under a client that is not a site looks the same. `forget` deletes them.
 Decided for Mathieu on 2026-10-18: the identity of the connector with the name in the text, a guest
 replies, and on a public site mounted by the extension with no session, only the field is hidden.
 
+## A reply from the page, the route half (FRU-257)
+
+**The rules, in short:**
+
+- **`POST /feedback/<id>/replies?client=<site>`, body `{ url, body, name? }`.** `replyAuthorFor`
+  holds the rule of Mathieu: a session of the workspace of the site replies on any site, named by
+  its account and its workspace; no token replies on an `everyone` site only, under the name typed.
+- **The note is found before it is answered.** The route reads the page for the site, in each of its
+  places (FRU-123), and replies only in the place where the id is a note. Linear takes any id it
+  knows: this read is what keeps a site from replying under the note of another.
+- **`canReply` is the reader's**: added after the cache, like `identified`, and absent where the
+  store of the site takes no reply or the worker hides the replies.
+- **The limit of 5 anonymous replies a minute counts in its own key** (`checkReplyLimit`), after the
+  reply is one the worker would take, so a refusal costs no reply of the minute. The limit of all
+  requests still applies above it.
+- **The page is read again by everybody after a reply** (`invalidatePages`): a reply that the widget
+  does not see at once reads as lost.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is
