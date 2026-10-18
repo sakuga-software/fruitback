@@ -122,3 +122,8 @@ INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage
 -- The day a member was last seen in the workspace (FRU-249).
 INSERT INTO last_seen (member_id, day) VALUES
   ('mem_drill1', '2026-10-11');
+
+-- A read of an administrator in a workspace they are not a member of (FRU-261): its trace, which the
+-- owners of the workspace read.
+INSERT INTO admin_reads (id, workspace_id, admin_account_id, admin_email, what, at) VALUES
+  ('read_drill1', 'ws_drill1', 'acc_drill1', 'alice@acme.dev', 'workspace', 1760000000000);

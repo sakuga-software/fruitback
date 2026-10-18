@@ -199,7 +199,24 @@ export const REFUSED_PLUGINS: Readonly<Record<string, string>> = {
   jwt: 'it is a second way to verify a token, beside the one path of identity.ts',
   'device-authorization':
     'it ends in a session token of better-auth, and the extension keeps its own session, which rotates',
+  admin:
+    'it serves fifteen routes under /admin, among them one that signs in as another person, one that makes ' +
+    'an account and one that names an administrator. And its hook writes `role: user` on each new account, ' +
+    'over the trigger that makes the first account the administrator (FRU-261). The worker keeps its four ' +
+    'columns only: see INSTANCE_ADMIN_FIELDS',
 };
+
+/**
+ * The columns of the admin plugin of better-auth 1.7.7 on `user`, as its `schema.mjs` declares them
+ * (FRU-261). The worker keeps them so that a later lot can mount the plugin on this schema. The fifth
+ * column of the plugin, `session.impersonatedBy`, is not here: no route signs in as another person.
+ */
+export const INSTANCE_ADMIN_FIELDS = {
+  role: { type: 'string', required: false, input: false },
+  banned: { type: 'boolean', defaultValue: false, required: false, input: false },
+  banReason: { type: 'string', required: false, input: false },
+  banExpires: { type: 'date', required: false, input: false },
+} as const;
 
 /**
  * The code of the refusal of a role that is not one of the four of `ROLES`, or that is several
@@ -443,7 +460,15 @@ export async function authOptions(
     emailAndPassword: { enabled: false },
     // The language a person chose (FRU-146), which the worker writes mail in. `input: false`: a
     // sign-up cannot give it, the routes of the worker set it.
-    user: { additionalFields: { locale: { type: 'string', required: false, input: false } } },
+    // The four columns of the admin plugin, as it declares them (FRU-261), with no route of the plugin:
+    // see `REFUSED_PLUGINS`. `input: false`: no request gives them. The migration and the trigger of
+    // `0016_first_admin` write `role`, and `instance-admin.ts` reads it.
+    user: {
+      additionalFields: {
+        locale: { type: 'string', required: false, input: false },
+        ...INSTANCE_ADMIN_FIELDS,
+      },
+    },
     // Off, the limit of the worker is the only one. It counts above the dispatch, for every route,
     // with the address `resolveClientIp` read. On (`FRUITBACK_AUTH_TRACK_IP`), better-auth counts too,
     // with the same address: the worker hands it in `CLIENT_IP_HEADER`, and better-auth reads no

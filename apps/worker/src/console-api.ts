@@ -1,6 +1,8 @@
 import { handleNotes } from './console-notes.ts';
+import { type InstanceAdminReads, type InstanceFacts, handleInstanceAdmin, isAdminPath } from './instance-admin.ts';
 import { type NoteIndex, noNotes } from './notes-index.ts';
 import {
+  type Account,
   type AccountStore,
   type Action,
   type Connector,
@@ -86,6 +88,8 @@ export type ConsoleApiContext = {
    * reached.
    */
   renameWorkspace?: (request: Request, workspace: string, name: string) => Promise<Workspace>;
+  /** What the administrator of the instance reads (FRU-261). Absent: every route of the administrator answers `404`. */
+  instance?: { reads?: InstanceAdminReads; facts: InstanceFacts };
 };
 
 /** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
@@ -352,6 +356,20 @@ async function callerOf(
 }
 
 /**
+ * The account of the cookie when it is the administrator of the instance (FRU-261), or `undefined`.
+ * The role is read in the database at this call: an account whose role was taken away a second ago
+ * is refused at once, with its session still open.
+ */
+export async function instanceAdminOf(request: Request, context: ConsoleApiContext): Promise<Account | undefined> {
+  const identified = await callerOf(request, context);
+  if (!identified.ok) return undefined;
+  const account = await context.accounts.account(identified.subject);
+  if (account === undefined) return undefined;
+
+  return (await context.accounts.isInstanceAdmin(account.id)) ? account : undefined;
+}
+
+/**
  * The console's routes under `/console/`, except the session ones, or `undefined` for a path that is
  * not one of them.
  */
@@ -361,6 +379,21 @@ export async function handleConsoleApi(
   context: ConsoleApiContext,
   headers: Record<string, string>,
 ): Promise<Response | undefined> {
+  // The administrator of the instance (FRU-261): its guard runs before anything else of the path.
+  if (isAdminPath(pathname)) {
+    return handleInstanceAdmin(
+      request,
+      pathname,
+      {
+        admin: () => instanceAdminOf(request, context),
+        ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
+        ...(context.instance === undefined ? {} : { facts: context.instance.facts }),
+        ...(context.now === undefined ? {} : { now: context.now }),
+      },
+      headers,
+    );
+  }
+
   const isApi =
     pathname === '/console/me' ||
     pathname === '/console/me/locale' ||
@@ -377,11 +410,14 @@ export async function handleConsoleApi(
 
   if (pathname === '/console/me') {
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-    const memberships = await context.accounts.memberships(account.id);
+    const [memberships, instanceAdmin] = await Promise.all([
+      context.accounts.memberships(account.id),
+      context.accounts.isInstanceAdmin(account.id),
+    ]);
 
     return json(
       200,
-      { account, workspaces: memberships.map(({ workspace, role }) => ({ ...workspace, role })) },
+      { account, instanceAdmin, workspaces: memberships.map(({ workspace, role }) => ({ ...workspace, role })) },
       headers,
     );
   }
@@ -437,6 +473,16 @@ export async function handleConsoleApi(
     if (!allowed('manage-members')) return forbidden();
 
     return json(200, { seen: await context.accounts.lastSeen(workspaceId as string) }, headers);
+  }
+
+  // The reads of an administrator of the instance in this workspace (FRU-261): its owners read them.
+  if (rest === '/admin-reads') {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (role !== 'owner') return forbidden();
+    const reads = context.instance?.reads;
+    if (reads === undefined) return json(404, { error: 'not-found' }, headers);
+
+    return json(200, { reads: await reads.reads(workspaceId as string) }, headers);
   }
 
   // The notes of the workspace, and « Send again » (FRU-244): `console-notes.ts`.

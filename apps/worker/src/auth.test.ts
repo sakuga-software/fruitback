@@ -771,11 +771,12 @@ describe('the plugins of better-auth (FRU-144)', () => {
     const { bearer } = await import('better-auth/plugins/bearer');
     const { jwt } = await import('better-auth/plugins/jwt');
     const { deviceAuthorization } = await import('better-auth/plugins/device-authorization');
-    const ids = [bearer().id, jwt().id, deviceAuthorization().id];
+    const { admin } = await import('better-auth/plugins/admin');
+    const ids = [bearer().id, jwt().id, deviceAuthorization().id, admin().id];
 
     // A plugin that changes its id in a later version would pass a list of the old names.
     assert.deepEqual(ids.toSorted(), Object.keys(REFUSED_PLUGINS).toSorted());
-    for (const plugin of [bearer(), jwt(), deviceAuthorization()]) {
+    for (const plugin of [bearer(), jwt(), deviceAuthorization(), admin()]) {
       assert.equal(refusedPlugins({ plugins: [plugin] }).length, 1, plugin.id);
     }
     for (const allowed of AUTH_PLUGINS) assert.equal(Object.hasOwn(REFUSED_PLUGINS, allowed), false);

@@ -310,6 +310,11 @@ export type AccountStore = {
     locale?: string;
   }): Promise<Account>;
   account(id: string): Promise<Account | undefined>;
+  /**
+   * Whether this account is the administrator of the instance (FRU-261), read in the database at each
+   * call: `role` of `user` is `admin`, and the account is not banned. `instance-admin.ts` says why.
+   */
+  isInstanceAdmin(account: string): Promise<boolean>;
   /** The language the person chose. `undefined` removes the choice. */
   setLocale(account: string, locale: string | undefined): Promise<void>;
   /**

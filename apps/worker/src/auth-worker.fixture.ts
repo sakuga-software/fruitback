@@ -8,6 +8,7 @@ import { type Kv, createMemoryKv } from './kv.ts';
 import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage, Mailer } from './mail.ts';
 import type { PgDatabase } from './postgres.ts';
+import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
 import type { SignUp } from './sign-up.ts';
 
@@ -74,6 +75,7 @@ export async function workerOf(
   const accounts = createPostgresAccountStore(database);
   const sessions = createPostgresSessionStore(database);
   const connectStore = createPostgresConnectStore(database);
+  const instanceAdmin = createPostgresInstanceAdmin(database);
   const options = await authOptions(
     {
       ...AUTH_CONFIG,
@@ -116,6 +118,7 @@ export async function workerOf(
         accounts,
         sessionStore: sessions,
         connectStore,
+        instanceAdmin,
         mailer: mail,
         kv,
         auth,
@@ -141,7 +144,21 @@ export async function workerOf(
     return cookieOf(answer);
   };
 
-  return { database, auth, accounts, sessions, connectStore, mail, kv, env, received, call, lastToken, signIn };
+  return {
+    database,
+    auth,
+    accounts,
+    sessions,
+    connectStore,
+    instanceAdmin,
+    mail,
+    kv,
+    env,
+    received,
+    call,
+    lastToken,
+    signIn,
+  };
 }
 
 export function cookieOf(answer: Response): string {

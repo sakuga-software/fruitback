@@ -1685,6 +1685,48 @@ writes the address it gets back in the seed. The setting is off until the review
 What the picture shows is whatever the element showed on the screen, the open composer of the
 widget included when it covers the element.
 
+### The administrator of the instance (FRU-261)
+
+Mathieu, 2026-10-18: « le premier compte utilisateur est forcèment admin lors de sa création sur
+l'interface, géré par better-auth avec le flag admin en base ». The Cloud runs the same code.
+
+- **Who.** The account whose `role` of `user` is `admin`, and that is not banned. No variable names an
+  administrator, and no route gives the role or takes it away (that is FRU-274). A role that holds a
+  list (`admin,user`) is no administrator.
+- **How one becomes it.** The first account of the instance, in the transaction that creates it: a
+  trigger of the database (`0016_first_admin`) gives the role to a new account when the table of
+  accounts is empty, under an advisory lock, so two first sign-ins at the same moment make one administrator
+  (test:`makes one administrator: the second account waits for the first to commit`, and its control
+  without the lock). On a database that had accounts, the migration gives it to the oldest one. In
+  self-hosting the first account is the one of the link of `FRUITBACK_FIRST_ADMIN` when nobody signed
+  up before it. **A later account never becomes the administrator**, also when no account has the
+  role: an instance that loses its last administrator has none until its operator writes the role in
+  the database. FRU-274 must keep one. An instance whose accounts are all deleted is empty again, and
+  its next account is its first: no route deletes an account, so only the operator can get there.
+- **The admin plugin of better-auth is not mounted, and the worker refuses to start with it**
+  (`REFUSED_PLUGINS`): it serves fifteen routes under `/console/auth/admin/`, one of which signs in as
+  another person. The worker keeps its four columns of `user` only. Each route of the plugin answers
+  `404`: test:`closes every route of the admin plugin of better-auth, which the worker does not mount`.
+- **The guard.** The routes under `/console/admin/` read the cookie of the console, then the role, in
+  the database, **on every call**: a role taken away a second ago is refused at the next call, with
+  the session still open. Any other caller gets `404`, as for a path that does not exist, whatever the
+  method. `ADMIN_ROUTES` of `instance-admin.ts` is the one table, read after the guard:
+  test:`answers 404 on every route of the table to an account without the role, and to nobody, and 200 to the administrator`.
+- **What they read.** The configuration of the instance by the names of its variables (whether each
+  means of sign-in is on, the public address, the sender of the mail, the schema of the database and
+  never its address), the connectors that need attention, every workspace (owners, members and roles,
+  sites and their visibility, destinations, counts of notes by stage and of deliveries that did not
+  arrive), and every account (workspaces and roles, ways to sign in, last day seen, invitations that
+  wait). **No answer holds a secret, a token, a digest, a key of a connector or the text of a note**,
+  not even masked: test:`answers no secret, no token, no digest, no key and no text of a note, on any route`.
+  No route of the administrator writes anything but the trace.
+- **The trace.** Each read that names a workspace the administrator is not a member of writes one row
+  in `admin_reads` (who, which read, when) before the answer leaves, and a row that cannot be written
+  fails the read. A list traces the workspaces of the rows it answers, at most 100: its `total`
+  counts the matches of a search beyond that page with no row. `GET /console/workspaces/<id>/admin-reads` answers the rows to an owner of that
+  workspace, `403` to another member and `404` to anybody else. **The trace is written by the worker,
+  in its own database**: whoever runs the database can read it without the console and leaves no row.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user

@@ -447,6 +447,14 @@ their session, and never makes another owner` and exit code 1. A link made befor
 on, and the sessions that are open stay open. The log of the worker gets a line that says a link was
 made, for whom, and when: never the link.
 
+**The first account of the instance is its administrator** (FRU-261): the account of this link, when
+nobody signed up before it. The worker gives the role in the database, when the account is made, and
+no variable names an administrator. On a database that had accounts before this version, the oldest
+account gets the role. The administrator reads every workspace of the instance under
+`/console/admin/`, and each read in a workspace they are not a member of leaves a row that the owners
+of that workspace read: [SECURITY.md](../SECURITY.md#the-administrator-of-the-instance-fru-261) says
+what they see and what they do not. No route names a second administrator yet.
+
 The other people of a workspace are invited from the console, on « Members ». An instance with no
 e-mail gives no message to them: the console shows the invitation, and the person who invites passes
 it on.

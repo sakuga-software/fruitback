@@ -111,7 +111,8 @@ export type Delivery = {
   lastError?: string;
 };
 export type Team = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
-export type Me = { account: Account; workspaces: Workspace[] };
+/** `instanceAdmin`: the person administers this instance (FRU-261). Absent from a worker of before. */
+export type Me = { account: Account; workspaces: Workspace[]; instanceAdmin?: boolean };
 
 export type Answer<T> =
   | { ok: true; data: T }

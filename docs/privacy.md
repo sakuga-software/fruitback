@@ -222,6 +222,31 @@ search reads these columns only. The name of an author is the name of a member's
 now, read from the account at each request and not kept in the index; a member who left the
 workspace is shown with no name.
 
+### The administrator of the instance, and what each of their reads leaves (FRU-261)
+
+**Whoever runs a worker reads its database, and needs no console for it.** On the Cloud that is
+Sakuga, the operator. What follows is what the console gives the administrator of the instance, and
+what it writes each time.
+
+- **Who.** The first account of the instance, and nobody it did not name: `role` of `user` says it.
+  On the Cloud it is the account of the operator. Since FRU-261 the database keeps four more columns
+  for each person: `role` (`admin` for the administrator, empty for the others), `banned`,
+  `banReason` and `banExpires`, which no route writes yet.
+- **What the console shows them, of every workspace**: its name and its owners, the name, the address
+  and the role of each member, the day each was last seen, the ways each person signs in, the sites
+  and who sees them, where each site sends its notes, the label of each connector and whether it
+  needs attention, the invitations that wait, and the **counts** of the notes by stage and of the
+  deliveries that did not arrive. Never a key of a connector, a token, a digest or the text of a note.
+- **What it will show them** (FRU-272): the index of the notes of a workspace, the excerpt of
+  64 characters, and the text of the notes that Fruitback keeps in its own store. This document says
+  so now, before the screen exists.
+- **Each read in a workspace the administrator is not a member of leaves a row** in `admin_reads`:
+  the workspace, the account and the address of the administrator, which read (`instance`,
+  `workspaces`, `workspace` or `users`) and its moment. The read does not answer when the row cannot
+  be written. **The owners of the workspace read these rows**, and nobody else: no other member, and
+  not the administrator. A row goes with its workspace; it keeps the address of the administrator
+  after their account goes.
+
 ### What stays in the reporter's browser
 
 Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.

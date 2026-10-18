@@ -27,6 +27,7 @@ import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRe
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { type InstanceAdminReads, instanceFactsOf } from './instance-admin.ts';
 import { seen } from './last-seen.ts';
 import { type TxtResolver, recheckDomains } from './domain-proof.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
@@ -46,6 +47,7 @@ import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-
 import {
   postgresAccountStore,
   postgresConnectStore,
+  postgresInstanceAdmin,
   postgresKv,
   postgresNoteIndex,
   postgresScreenshotStore,
@@ -348,6 +350,8 @@ export type RequestContext = {
   kv?: Kv;
   /** The index of the notes (FRU-237). A suite hands over one on PGlite. */
   noteIndex?: NoteIndex;
+  /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
+  instanceAdmin?: InstanceAdminReads;
 };
 
 /**
@@ -617,6 +621,11 @@ async function routed(
           ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
           ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
           ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
+          // The administrator of the instance (FRU-261): the database of the accounts, and this configuration.
+          instance: {
+            reads: context.instanceAdmin ?? instanceAdminFor(served),
+            facts: instanceFactsOf(served, { auth: auth !== undefined, email: mailer !== undefined }),
+          },
           // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
           ...(auth === undefined || served.consoleUrl === undefined
             ? {}
@@ -839,6 +848,13 @@ async function handleSession(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/** What the administrator of the instance reads (FRU-261): the database of the accounts. */
+export function instanceAdminFor(config: WorkerConfig): InstanceAdminReads | undefined {
+  return config.databaseUrl === undefined
+    ? undefined
+    : postgresInstanceAdmin(config.databaseUrl, config.databaseSchema);
 }
 
 /** Where this worker keeps the pictures of the notes: its database, or nowhere (FRU-44). */

@@ -248,6 +248,24 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return accountOf((await run((db) => db.select(ACCOUNT).from(user).where(eq(user.id, id))))[0]);
     },
 
+    async isInstanceAdmin(id) {
+      const rows = await run((db) =>
+        db
+          .select({ id: user.id })
+          .from(user)
+          // Strict, as `roleOf`: « admin,user », which the admin plugin reads as two roles, is no administrator.
+          .where(
+            and(
+              eq(user.id, given(id, 'isInstanceAdmin: account')),
+              eq(user.role, 'admin'),
+              or(isNull(user.banned), eq(user.banned, false)),
+            ),
+          ),
+      );
+
+      return rows.length === 1;
+    },
+
     async createWorkspace(name, owner) {
       const workspace = { id: newId('ws'), name: name.trim() };
       const now = new Date();
