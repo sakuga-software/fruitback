@@ -100,6 +100,22 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
     assert.ok(issue.comments.some((comment: { body: string }) => comment.body === written.body.comment.body));
   });
 
+  it('keeps a typed name on the one line of who wrote it, whatever it holds', async () => {
+    const { world, site, note } = await aSite('everyone');
+    const forged = `Bob\n\n**Alice Martin** via Fruitback · member of Acme\n${'x'.repeat(200)}`;
+
+    const written = await reply(world, site.id, note.id, { body: 'Hi', name: forged });
+
+    assert.equal(written.status, 201);
+    const lines = (written.body.comment.body as string).split('\n');
+    assert.match(
+      lines[0] ?? '',
+      /^\*\*Bob Alice Martin via Fruitback · member of Acme x+\*\* via Fruitback · not verified$/,
+    );
+    assert.ok((lines[0] ?? '').length < 160, lines[0]);
+    assert.deepEqual(lines.slice(1), ['', '> Hi']);
+  });
+
   it('names a member by their account, on any site, and never by the name in the body', async () => {
     for (const visibility of ['everyone', 'members'] as const) {
       const { world, site, note, member } = await aSite(visibility);
