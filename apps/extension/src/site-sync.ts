@@ -46,6 +46,12 @@ export const SYNC_SETTING = 'syncRules';
 /** In `local`: the patterns this browser knows to be in the account (`KnownRules`). */
 export const KNOWN_SETTING = 'syncedRules';
 
+/**
+ * What `storage.sync` keeps for one item, in bytes: the key and the JSON of the value. The browser
+ * refuses a whole `set` that holds one larger item.
+ */
+export const QUOTA_BYTES_PER_ITEM = 8192;
+
 /** The key of a rule in `sync`. */
 export const SYNC_PREFIX = 'site:';
 
@@ -92,6 +98,25 @@ export function rulesIn(items: Record<string, unknown>): Record<string, SiteConf
   }
 
   return rules;
+}
+
+/**
+ * Whether the account can keep this rule, measured as the browser measures an item. A rule that does
+ * not fit is never sent, so the options page tells it with this function and needs no other record.
+ */
+export function fits(pattern: string, site: SiteConfig): boolean {
+  const bytes = new TextEncoder().encode(`${syncKeyOf(pattern)}${JSON.stringify(site)}`).length;
+
+  return bytes <= QUOTA_BYTES_PER_ITEM;
+}
+
+/** The items of the rules that the account can keep. A larger one would make the browser refuse them all. */
+function itemsThatFit(rules: Record<string, SiteConfig>): Record<string, SiteConfig> {
+  return Object.fromEntries(
+    Object.entries(rules)
+      .filter(([pattern, site]) => fits(pattern, site))
+      .map(([pattern, site]) => [syncKeyOf(pattern), site]),
+  );
 }
 
 function same(first: SiteConfig | undefined, second: SiteConfig | undefined): boolean {
@@ -166,10 +191,10 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
       }
       const remote = rulesIn(await area.get());
       const changed = Object.entries(mutation.entries).filter(([pattern, site]) => !same(remote[pattern], site));
-      if (changed.length > 0) {
-        await area.set(Object.fromEntries(changed.map(([pattern, site]) => [syncKeyOf(pattern), site])));
-      }
-      await remember(Object.keys(mutation.entries));
+      const items = itemsThatFit(Object.fromEntries(changed));
+      if (Object.keys(items).length > 0) await area.set(items);
+      const inAccount = Object.entries(mutation.entries).filter(([pattern, site]) => fits(pattern, site));
+      await remember(inAccount.map(([pattern]) => pattern));
     },
 
     /**
@@ -284,7 +309,7 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
     const sent: Record<string, SiteConfig> = {};
     for (const pattern of Object.keys(sendThere)) {
       const site = localNow[pattern];
-      if (site !== undefined) sent[pattern] = site;
+      if (site !== undefined && fits(pattern, site)) sent[pattern] = site;
     }
 
     for (const pattern of goneHere) {

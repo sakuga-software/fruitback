@@ -1,11 +1,11 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored, createEditor, latestOnly } from '../../src/site-editor.ts';
-import { PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
+import { PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD, TOO_LARGE_FOR_ACCOUNT } from '../../src/site-form.ts';
 import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
-import { SYNC_SETTING } from '../../src/site-sync.ts';
+import { SYNC_SETTING, fits } from '../../src/site-sync.ts';
 import { exportSites, importSites } from '../../src/site-transfer.ts';
 import {
   type SiteConfig,
@@ -78,14 +78,19 @@ if (app !== null) {
 void renderList();
 // Only the list is drawn again, so a change from the popup does not clear what somebody is typing.
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.sites !== undefined || touchesPreviews(Object.keys(changes)))) void renderList();
+  const drawn = changes.sites !== undefined || changes[SYNC_SETTING] !== undefined;
+  if (area === 'local' && (drawn || touchesPreviews(Object.keys(changes)))) void renderList();
 });
 browser.permissions.onAdded.addListener(() => void renderList());
 browser.permissions.onRemoved.addListener(() => void renderList());
 
 async function renderList(): Promise<void> {
   const isLatest = beginRender();
-  const [sites, proven] = await Promise.all([readAll(), readFreshPreviews()]);
+  const [sites, proven, copied] = await Promise.all([
+    readAll(),
+    readFreshPreviews(),
+    browser.storage.local.get(SYNC_SETTING).then((stored) => stored[SYNC_SETTING] === true),
+  ]);
   const patterns = Object.keys(sites)
     .filter((pattern) => parseSitePattern(pattern) === pattern)
     .sort();
@@ -94,7 +99,7 @@ async function renderList(): Promise<void> {
   rows.className = 'rules';
   for (const pattern of patterns) {
     const site = sites[pattern];
-    if (site !== undefined) rows.append(await row(pattern, site, proven));
+    if (site !== undefined) rows.append(await row(pattern, site, proven, copied));
   }
 
   if (!isLatest()) return;
@@ -107,7 +112,7 @@ async function renderList(): Promise<void> {
   );
 }
 
-async function row(pattern: string, site: SiteConfig, proven: FreshPreviews): Promise<HTMLElement> {
+async function row(pattern: string, site: SiteConfig, proven: FreshPreviews, copied: boolean): Promise<HTMLElement> {
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
   const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
@@ -140,6 +145,8 @@ async function row(pattern: string, site: SiteConfig, proven: FreshPreviews): Pr
       ? element('span', t(previews ? PREVIEWS_NOT_PROVEN : STALE_TEAM_WILDCARD), 'problem')
       : access(granted, site.enabled),
   );
+  // FRU-264: the background does not send this rule to the account, and the reviewer must know why.
+  if (copied && !fits(pattern, site)) item.append(element('span', t(TOO_LARGE_FOR_ACCOUNT), 'problem'));
 
   return item;
 }
