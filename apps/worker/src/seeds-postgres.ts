@@ -140,7 +140,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
             .filter((issue): issue is SeedIssue => issue !== null)
         );
       }),
-    // The notes of the whole instance, whatever their site (FRU-194 decides what a site may delete).
+    // The notes of the whole instance, whatever their site: the command of whoever runs the worker.
     // The rows are read and deleted in one transaction, and the replies go with their note: the
     // foreign key deletes them.
     forget: (which, options) =>

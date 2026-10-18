@@ -431,8 +431,9 @@ export const kv = pgTable(
  *
  * - `id` is the number of the note, `FB-<id>`. An identity that takes a value when one is given: the
  *   copy of a SQLite file (FRU-220) keeps the numbers that people already quoted.
- * - `client_id` is the id of the site. **It holds no foreign key**: what becomes of the notes of a
- *   site that is removed is not decided (FRU-194), and a key would decide it.
+ * - `client_id` is the id of the site. **It holds no foreign key**: the copy of a SQLite file
+ *   (FRU-220) writes ids of clients that are not sites. The notes of a site that is removed go with
+ *   it by `removeSite` of `accounts-postgres.ts` (FRU-194).
  * - `seed` is the note as JSON, in a `TEXT`: the reader parses a row and never trusts it, as for a
  *   file. `JSONB` refuses the `\u0000` that a note may hold, and `TEXT` holds its six characters.
  * - **It holds what a person wrote, in the clear**: a name, sometimes an address, the note.
@@ -457,7 +458,7 @@ export const seeds = pgTable(
   },
   (table) => [
     index('seeds_by_page').using('hash', table.page_url),
-    // Every note of one site: what FRU-194 will delete or keep, and the read by site.
+    // Every note of one site: what a removed site deletes (FRU-194), and the read by site.
     index('seeds_by_client').on(table.client_id),
   ],
 );
@@ -488,7 +489,7 @@ export const seed_comments = pgTable(
  * the text of a note**: `excerpt`, and nothing else of the text.
  *
  * A row goes with its site and with its workspace (`cascade`): the index of a site that is removed
- * is removed, whatever becomes of the notes themselves (FRU-194). `connector_id` is `set null` when
+ * is removed, with the notes themselves (FRU-194). `connector_id` is `set null` when
  * the connector goes, and `place` then still says that the note went to one.
  */
 export const note_index = pgTable(

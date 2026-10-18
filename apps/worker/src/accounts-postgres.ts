@@ -29,6 +29,7 @@ import {
   domains,
   invitation_sites,
   last_seen,
+  seeds,
   site_destinations,
   site_shares,
   sites,
@@ -136,6 +137,30 @@ function rowLimit(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`dueDeliveries: limit must be a positive integer`);
 
   return limit;
+}
+
+/**
+ * The notes that the worker keeps for these sites, their replies, and the deliveries that wait to
+ * send them (FRU-194). A site that goes takes them with it: nothing reads them after, and a site
+ * that is added again gets a new id. `note_index` goes by its own foreign key; `seeds` has none,
+ * because a copy from SQLite writes the ids of clients that are not sites. A delivery names its site
+ * in its body only, as `pendingOf` of `notes-index-postgres.ts` reads it.
+ */
+async function dropKeptNotes(db: Db, workspace: string, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.delete(seeds).where(inArray(seeds.client_id, [...ids]));
+  const site = sql`(CASE WHEN pg_input_is_valid(${deliveries.body}, 'jsonb') THEN ${deliveries.body}::jsonb -> 'site' ->> 'id' END)`;
+  await db
+    .delete(deliveries)
+    .where(
+      and(
+        inArray(site, [...ids]),
+        inArray(
+          deliveries.connector_id,
+          db.select({ id: connectors.id }).from(connectors).where(eq(connectors.workspace_id, workspace)),
+        ),
+      ),
+    );
 }
 
 export function createPostgresAccountStore(database: Database): AccountStore {
@@ -519,12 +544,19 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async removeSite(workspace, site) {
-      const removed = await run((db) =>
-        db
+      const removed = await transaction(async (db) => {
+        const rows = await db
           .delete(sites)
           .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
-          .returning({ id: sites.id }),
-      );
+          .returning({ id: sites.id });
+        await dropKeptNotes(
+          db,
+          workspace,
+          rows.map((row) => row.id),
+        );
+
+        return rows;
+      });
 
       return removed.length === 1;
     },
@@ -794,8 +826,17 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async deleteWorkspace(workspace) {
       // The foreign keys take its members, its invitations, its sites and their destinations, its
-      // connectors and their deliveries with it.
-      await run((db) => db.delete(organization).where(eq(organization.id, workspace)));
+      // connectors and their deliveries with it. The notes that the worker keeps go first, while the
+      // sites still name them.
+      await transaction(async (db) => {
+        const ids = await db.select({ id: sites.id }).from(sites).where(eq(sites.workspace_id, workspace));
+        await dropKeptNotes(
+          db,
+          workspace,
+          ids.map((row) => row.id),
+        );
+        await db.delete(organization).where(eq(organization.id, workspace));
+      });
     },
 
     async addDomain(workspace, domain, now) {

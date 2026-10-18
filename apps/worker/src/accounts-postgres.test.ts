@@ -378,3 +378,88 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
     assert.deepEqual(await snapshot(), before);
   });
 });
+
+describe('the notes that the worker keeps go with their site (FRU-194)', () => {
+  let database: Database | undefined;
+
+  afterEach(async () => {
+    await database?.close();
+    database = undefined;
+  });
+
+  /**
+   * Two workspaces. Acme has two sites, Globex one. Each site has a note that the worker keeps, with
+   * a reply, and a delivery that waits to send it.
+   */
+  async function twoWorkspaces() {
+    database = await createPgliteDatabase();
+    const on = database;
+    const accounts = createPostgresAccountStore(on);
+    const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+    const gus = await accounts.signIn({ provider: 'email', subject: 'gus@globex.dev', email: 'gus@globex.dev' });
+    const acme = await accounts.createWorkspace('Acme', alice.id);
+    const globex = await accounts.createWorkspace('Globex', gus.id);
+    const sites = {
+      acme: await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' }),
+      blog: await accounts.addSite(acme.id, { origin: 'https://blog.acme.dev', visibility: 'members' }),
+      globex: await accounts.addSite(globex.id, { origin: 'https://globex.dev', visibility: 'members' }),
+    };
+    const hooks = {
+      acme: await accounts.addConnector(acme.id, { kind: 'rest', label: 'hooks.acme.test', sealed: 'x' }),
+      globex: await accounts.addConnector(globex.id, { kind: 'rest', label: 'hooks.globex.test', sealed: 'x' }),
+    };
+    for (const [name, site] of Object.entries(sites)) {
+      const [row] = await rowsOf(
+        on,
+        `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+           VALUES ('${site.id}', '${site.origin}/', 'seeded', '{"id":"sd_${name}","note":"A note of ${name}"}', 1, 1)
+         RETURNING id`,
+      );
+      await rowsOf(on, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (${row?.id}, 'A reply', 1)`);
+      const hook = name === 'globex' ? hooks.globex : hooks.acme;
+      await accounts.enqueueDelivery(
+        hook.id,
+        JSON.stringify({ identifier: `FB-${row?.id}`, site: { id: site.id } }),
+        1,
+      );
+    }
+
+    const kept = async () =>
+      (await rowsOf(on, 'SELECT client_id FROM seeds ORDER BY client_id')).map((row) => String(row.client_id));
+    const left = async (table: string) => Number((await rowsOf(on, `SELECT count(*)::int AS n FROM ${table}`))[0]?.n);
+
+    return { accounts, acme, globex, sites, hooks, kept, left };
+  }
+
+  it('removes the notes, the replies and the deliveries of a site that goes, and of no other site', async () => {
+    const { accounts, acme, globex, sites, hooks, kept, left } = await twoWorkspaces();
+
+    // The control: a workspace that does not hold the site removes nothing.
+    assert.equal(await accounts.removeSite(globex.id, sites.acme.id), false);
+    assert.equal(await left('seeds'), 3);
+
+    // A body is text that the worker wrote, but it is read as JSON here: a delivery of another
+    // workspace that names this site is not one of its own.
+    await accounts.enqueueDelivery(
+      hooks.globex.id,
+      JSON.stringify({ identifier: 'FB-99', site: { id: sites.acme.id } }),
+      1,
+    );
+
+    assert.equal(await accounts.removeSite(acme.id, sites.acme.id), true);
+
+    assert.deepEqual(await kept(), [sites.blog.id, sites.globex.id].toSorted());
+    assert.equal(await left('seed_comments'), 2);
+    assert.equal(await left('deliveries'), 3);
+  });
+
+  it('removes the notes of every site of a workspace that goes, and of no other workspace', async () => {
+    const { accounts, acme, sites, kept, left } = await twoWorkspaces();
+
+    await accounts.deleteWorkspace(acme.id);
+
+    assert.deepEqual(await kept(), [sites.globex.id]);
+    assert.equal(await left('seed_comments'), 1);
+    assert.equal(await left('deliveries'), 1);
+  });
+});
