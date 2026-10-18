@@ -865,24 +865,17 @@ async function postReply(
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
-  const who = await replyAuthorFor(request, route.policy, route.client?.workspace, name, context.accounts);
-  if (!who.ok) return json(who.status, { error: 'identity-required', reason: who.reason }, corsHeaders);
-  if (who.account) {
-    const ended = await endedSession(context.stillWrites, corsHeaders);
-    if (ended !== undefined) return ended;
-  }
-  // Counted only once the reply is one the worker would take: a refusal costs no reply of the minute.
-  if (who.author.kind === 'visitor') {
-    try {
-      if (!(await checkReplyLimit(kv, context.clientIp))) return json(429, { error: 'rate-limited' }, corsHeaders);
-    } catch (error) {
-      if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
-      throw error;
-    }
-  }
   if (!route.policy.showComments) return json(403, { error: 'replies-not-taken' }, corsHeaders);
 
   try {
+    // The accounts are read here: a store that does not answer is `502`, as for the reply itself.
+    const who = await replyAuthorFor(request, route.policy, route.client?.workspace, name, context.accounts);
+    if (!who.ok) return json(who.status, { error: 'identity-required', reason: who.reason }, corsHeaders);
+    if (who.account) {
+      const ended = await endedSession(context.stillWrites, corsHeaders);
+      if (ended !== undefined) return ended;
+    }
+
     const places = route.client?.destinations ?? [];
     const targets =
       route.client === undefined || places.length < 2
@@ -892,6 +885,10 @@ async function postReply(
       const found = await store.findForPage({ url, clientId }, target, route.policy);
       if (!found.some((each) => each.id === issue)) continue;
       if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+      // Counted once the reply is one the worker would take: a refusal costs no reply of the minute.
+      if (who.author.kind === 'visitor' && !(await checkReplyLimit(kv, context.clientIp))) {
+        return json(429, { error: 'rate-limited' }, corsHeaders);
+      }
       const comment = await store.reply?.({ issue, clientId }, { body, author: who.author }, target, route.policy);
       if (comment === undefined) break;
       await invalidatePages(kv, [url]);
@@ -902,6 +899,7 @@ async function postReply(
     return json(404, { error: 'not-found' }, corsHeaders);
   } catch (error) {
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
     throw error;
   }
 }
