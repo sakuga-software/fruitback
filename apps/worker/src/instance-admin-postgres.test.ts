@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { ADMIN_PAGE } from './instance-admin.ts';
 import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, migrationsThrough, ownDatabase, rowsOf } from './postgres.fixture.ts';
@@ -94,6 +95,26 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await admins(database), ['second@acme.dev']);
     });
 
+    it('counts every connector that needs attention, beyond the page it lists', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+      const workspace = await accounts.createWorkspace('Beta', bob.id);
+      for (let index = 0; index <= ADMIN_PAGE; index += 1) {
+        const connector = await accounts.addConnector(workspace.id, {
+          kind: 'rest',
+          label: `Hook ${index}`,
+          sealed: 'x',
+        });
+        await accounts.noteConnector(connector.id, 'key-refused', 1_000 + index);
+      }
+
+      const attention = await reads.attention();
+      assert.equal(attention.connectors.length, ADMIN_PAGE);
+      assert.equal(attention.total, ADMIN_PAGE + 1);
+    });
+
     it('reads the instants of a connector and of a trace as the numbers that were written', async () => {
       const database = await opening(open);
       const accounts = createPostgresAccountStore(database);
@@ -107,15 +128,18 @@ for (const { label, open, skip } of DATABASES) {
       await accounts.noteConnector(connector.id, 'key-refused', instant);
       await reads.trace(ana, [workspace.id, workspace.id], 'workspace', instant);
 
-      assert.deepEqual(await reads.attention(), [
-        {
-          id: connector.id,
-          kind: 'rest',
-          label: 'Hook',
-          attention: { reason: 'key-refused', since: new Date(instant).toISOString() },
-          workspace: { id: workspace.id, name: 'Beta' },
-        },
-      ]);
+      assert.deepEqual(await reads.attention(), {
+        total: 1,
+        connectors: [
+          {
+            id: connector.id,
+            kind: 'rest',
+            label: 'Hook',
+            attention: { reason: 'key-refused', since: new Date(instant).toISOString() },
+            workspace: { id: workspace.id, name: 'Beta' },
+          },
+        ],
+      });
       assert.deepEqual(await reads.reads(workspace.id), [
         { admin: { email: 'ana@acme.dev' }, what: 'workspace', at: new Date(instant).toISOString() },
       ]);

@@ -125,7 +125,8 @@ export type TracedRead = { admin: { email: string; name?: string }; what: AdminR
 /** What the administrator reads in the database. `instance-admin-postgres.ts` is the one store. */
 export type InstanceAdminReads = {
   counts(): Promise<{ workspaces: number; accounts: number; admins: number }>;
-  attention(): Promise<AttentionConnector[]>;
+  /** The connectors that need attention, at most `ADMIN_PAGE`, and how many there are in all. */
+  attention(): Promise<{ connectors: AttentionConnector[]; total: number }>;
   workspaces(query: AdminQuery<(typeof WORKSPACE_FILTERS)[number]>): Promise<{
     workspaces: AdminWorkspace[];
     total: number;
@@ -237,7 +238,7 @@ export async function handleInstanceAdmin(
   switch (route.read) {
     case 'instance': {
       const [counts, attention] = await Promise.all([reads.counts(), reads.attention()]);
-      await traced(attention.map((connector) => connector.workspace.id));
+      await traced(attention.connectors.map((connector) => connector.workspace.id));
 
       return json(
         200,
@@ -245,7 +246,7 @@ export async function handleInstanceAdmin(
           ...facts,
           mail: { ...facts.mail, lastSentAt: lastMailSentAt() ?? null },
           counts,
-          attention: { count: attention.length, connectors: attention },
+          attention: { count: attention.total, connectors: attention.connectors },
         },
         headers,
       );

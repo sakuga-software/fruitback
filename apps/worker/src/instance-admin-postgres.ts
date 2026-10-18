@@ -148,7 +148,11 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
     async attention() {
       const rows = await run((db) =>
         db
-          .select({ ...CONNECTOR_COLUMNS, workspace_name: organization.name })
+          .select({
+            ...CONNECTOR_COLUMNS,
+            workspace_name: organization.name,
+            total: sql<number>`count(*) OVER ()::int`,
+          })
           .from(connectors)
           .innerJoin(organization, eq(organization.id, connectors.workspace_id))
           .where(isNotNull(connectors.attention))
@@ -156,12 +160,16 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           .limit(ADMIN_PAGE),
       );
 
-      return rows.flatMap((row): AttentionConnector[] => {
-        const connector = connectorFrom(row);
-        if (connector?.attention === undefined) return [];
+      // The page holds at most `ADMIN_PAGE` rows: the count of all of them comes with each row.
+      return {
+        total: number(rows[0]?.total),
+        connectors: rows.flatMap((row): AttentionConnector[] => {
+          const connector = connectorFrom(row);
+          if (connector?.attention === undefined) return [];
 
-        return [{ ...connector, workspace: { id: String(row.workspace_id), name: String(row.workspace_name) } }];
-      });
+          return [{ ...connector, workspace: { id: String(row.workspace_id), name: String(row.workspace_name) } }];
+        }),
+      };
     },
 
     async workspaces({ q, show }) {
