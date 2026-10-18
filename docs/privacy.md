@@ -103,6 +103,14 @@ session of its workspace and nobody else, which is what a site added with no vis
 - In the Cloud, the switch « Show Linear comments as replies » of a connector does the same for the
   sites that send there. It cannot show what the worker hides.
 
+### A reply to a note (FRU-257)
+
+A reply written from the page goes where its note went: the tracker of the workspace, or the
+database for a site that sends nowhere. It holds what the person wrote, quoted, under one line: the
+name of their account and the workspace for a member, the name they typed (or « Visitor ») and « not
+verified » for anybody else. The worker keeps no copy of a reply that went to a tracker. In Linear
+the comment is shown under the app of Fruitback, or under the owner of a personal key.
+
 ### What the worker keeps besides the note
 
 - **No access log.** The worker writes to its output at boot, on a configuration problem and on a

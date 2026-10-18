@@ -35,12 +35,20 @@ import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type BatchAnswer, type BatchMemory, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import {
+  type BatchAnswer,
+  type BatchMemory,
+  type CreatedIssue,
+  type ReplyAuthor,
+  type SeedStore,
+  StoreError,
+  takesReplies,
+} from './store.ts';
 import { createAll } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH, pairPage } from './pair-page.ts';
-import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
+import { chargeRateLimit, checkRateLimit, checkReplyLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
 import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
@@ -733,7 +741,8 @@ async function routed(
     }
   }
 
-  if (pathname !== '/feedback') {
+  const replyTo = REPLY_PATH.exec(pathname)?.[1];
+  if (pathname !== '/feedback' && replyTo === undefined) {
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
@@ -745,12 +754,156 @@ async function routed(
       ? own
       : createRoutedStore(own, createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth));
 
+  if (replyTo !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postReply(request, replyTo, served, watchedStore(store, accounts), kv, cors.headers, {
+      clientIp: context.clientIp,
+      accounts,
+      stillWrites: () => sessionWrites(request, served, context).then((session) => session !== undefined),
+    });
+  }
+
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
     ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
     : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex, () =>
         sessionWrites(request, served, context).then((session) => session !== undefined),
       );
+}
+
+/** `POST /feedback/<id>/replies`: the id of the issue of a note, as a read answers it (FRU-257). */
+const REPLY_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/replies$/;
+
+/** The longest reply, in characters. A longer one is refused, never cut. */
+export const REPLY_LENGTH = 2000;
+
+/**
+ * Who writes a reply, or why nobody may (FRU-257, the rule of Mathieu of 2026-10-13).
+ *
+ * - A session of the workspace of the site, by the relay of the extension: a member, named by their
+ *   account, on any site. A name in the body is not read.
+ * - No token: a visitor, on a site that everybody reads (`read: 'public'`) only. The name they typed
+ *   is their word, and the text says « not verified ».
+ * - A token that does not verify is refused, as on a note.
+ */
+async function replyAuthorFor(
+  request: Request,
+  policy: ClientPolicy,
+  workspace: string | undefined,
+  typed: string | undefined,
+  accounts: AccountStore | undefined,
+): Promise<{ ok: true; author: ReplyAuthor; account: boolean } | { ok: false; status: number; reason: string }> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) {
+    if (policy.read !== 'public') return { ok: false, status: 401, reason: 'identity-required' };
+
+    return { ok: true, author: { kind: 'visitor', ...(typed === undefined ? {} : { name: typed }) }, account: false };
+  }
+
+  const verified = await verifyForClient(token, policy);
+  if (verified === undefined) return { ok: false, status: 401, reason: 'identity-not-configured' };
+  if (!verified.ok) return { ok: false, status: 401, reason: verified.reason };
+  // A token that the site signed names a person of the site, not of the workspace: the worker
+  // vouches for no membership, so the text says « not verified » with the name the site gave.
+  if (verified.session !== true || accounts === undefined || workspace === undefined) {
+    const name = verified.reporter.name;
+
+    return { ok: true, author: { kind: 'visitor', ...(name === undefined ? {} : { name }) }, account: false };
+  }
+
+  const id = verified.reporter.id;
+  const [account, memberships] =
+    id === undefined ? [undefined, []] : await Promise.all([accounts.account(id), accounts.memberships(id)]);
+  const membership = memberships.find((each) => each.workspace.id === workspace);
+  if (account === undefined || membership === undefined) return { ok: false, status: 401, reason: 'invalid-claims' };
+
+  return {
+    ok: true,
+    author: { kind: 'member', name: account.name ?? account.email, workspace: membership.workspace.name },
+    account: verified.account === true,
+  };
+}
+
+/**
+ * `POST /feedback/<id>/replies?client=<site>` with `{ url, body, name? }` (FRU-257).
+ *
+ * The note must be one that a read of that page answers for that site: the id alone names an issue
+ * of a tracker, which can be of another site. The reply goes to the place where the note was found,
+ * and the page is read again by everybody after it.
+ */
+async function postReply(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: { clientIp: string; accounts: AccountStore | undefined; stillWrites: () => Promise<boolean> },
+): Promise<Response> {
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const {
+    url: requested,
+    body,
+    name,
+  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
+  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  if (typeof body !== 'string' || body.trim() === '' || [...body].length > REPLY_LENGTH) {
+    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
+  }
+  if (name !== undefined && typeof name !== 'string') return json(400, { error: 'invalid-name' }, corsHeaders);
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  const who = await replyAuthorFor(request, route.policy, route.client?.workspace, name, context.accounts);
+  if (!who.ok) return json(who.status, { error: 'identity-required', reason: who.reason }, corsHeaders);
+  if (who.account) {
+    const ended = await endedSession(context.stillWrites, corsHeaders);
+    if (ended !== undefined) return ended;
+  }
+  // Counted only once the reply is one the worker would take: a refusal costs no reply of the minute.
+  if (who.author.kind === 'visitor') {
+    try {
+      if (!(await checkReplyLimit(kv, context.clientIp))) return json(429, { error: 'rate-limited' }, corsHeaders);
+    } catch (error) {
+      if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+      throw error;
+    }
+  }
+  if (!route.policy.showComments) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+
+  try {
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    for (const target of targets) {
+      const found = await store.findForPage({ url, clientId }, target, route.policy);
+      if (!found.some((each) => each.id === issue)) continue;
+      if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+      const comment = await store.reply?.({ issue, clientId }, { body, author: who.author }, target, route.policy);
+      if (comment === undefined) break;
+      await invalidatePages(kv, [url]);
+
+      return json(201, { comment }, corsHeaders);
+    }
+
+    return json(404, { error: 'not-found' }, corsHeaders);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    throw error;
+  }
 }
 
 /**
@@ -1405,6 +1558,9 @@ async function getFeedback(
         ...offered,
         // Asked at each request like the places, and absent for a reader the worker cannot name.
         ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
+        // FRU-257: whether this reader may write a reply here. A reader of a site that not everybody
+        // reads is one the worker let in above. Never in the cached answer: it is the reader's.
+        ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
         ...batchOffer(config),
       },
       // No browser cache, deliberately. The read cache above is what protects the Linear

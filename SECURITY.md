@@ -1652,6 +1652,30 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   sites, the members and the extensions that are paired do not move: they name the id.
   test:`moves nothing else: the id, the sites, the members, and the extensions that are paired`.
 
+### A reply to a note, from the page (FRU-257)
+
+`POST /feedback/<id>/replies?client=<site>` writes a reply into the tracker of a workspace, or into
+the database for a site with no destination.
+
+- **Who.** A session of the workspace of the site, by the relay of the extension, on any site: the
+  reply is named by the account, and a name in the body is not read. With no token, a visitor, on a
+  site that everybody reads (`everyone`) only: the name they typed is their word, and the text says
+  « not verified ». A token that does not verify is `401`, and so is no token on a site of the
+  members. test:`refuses a reply with no session on a site of the members, and a session of another workspace`.
+- **Under which identity.** The tracker writes the comment under its key: the app of Fruitback for a
+  connection by OAuth, **the owner of a personal key** for a key. The first line of the text names
+  the person and says whether the worker vouches for them, and every line they wrote is quoted, so a
+  forged first line is a line of the quote.
+  test:`never lets what somebody wrote pass for the line that says who wrote it`.
+- **Which note.** The id names an issue of a tracker, which can be of another site. The worker reads
+  the page for the site first and writes only under a note that the read answers, else `404`.
+  test:`answers 404 for a note of another site on the same page, and writes nothing`.
+- **Where not.** An address that only receives (REST), and a tracker whose workspace hides its
+  replies, take none: `403 replies-not-taken`, and `GET /feedback` answers no `canReply` there.
+- **How much.** 1 to 2 000 characters, refused beyond and never cut. **5 replies a minute with no
+  session from one address**, counted apart from the requests and in the same database; a member is
+  not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
+
 ### The picture of a note, taken by the extension (FRU-44)
 
 The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the
