@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { getMigrations } from 'better-auth/db/migration';
 import { sql } from 'drizzle-orm';
-import { authId, type authOptions, startAuth } from './auth.ts';
+import { INSTANCE_ADMIN_FIELDS, authId, type authOptions, startAuth } from './auth.ts';
 import {
   DATABASES,
   EMPTY,
@@ -325,7 +325,29 @@ for (const { label, open, skip } of DATABASES) {
 
         assert.deepEqual(options.user?.additionalFields, {
           locale: { type: 'string', required: false, input: false },
+          ...INSTANCE_ADMIN_FIELDS,
         });
+      });
+
+      it('keeps the four columns of the admin plugin on user, as the plugin declares them (FRU-261)', async () => {
+        const { admin } = await import('better-auth/plugins/admin');
+        const declared = (admin() as unknown as { schema: { user: { fields: Record<string, unknown> } } }).schema.user
+          .fields;
+        const { options } = await optionsOn(await opening(open));
+
+        assert.deepEqual(INSTANCE_ADMIN_FIELDS, declared);
+        for (const field of Object.values(INSTANCE_ADMIN_FIELDS)) assert.equal(field.input, false);
+        assert.equal(
+          (options.plugins ?? []).some((plugin) => plugin.id === 'admin'),
+          false,
+        );
+      });
+
+      // The control: the columns are ones that better-auth asks for, so a migration that lost one is reported.
+      it('reports a column of the administrator of the instance when the migration lost it', async () => {
+        const lost = plantedAfterTheMigrations('ALTER TABLE "user" DROP COLUMN "role"');
+
+        assert.deepEqual(await plan(await opening(open), lost), { ...NOTHING, add: ['user.role'] });
       });
 
       // The control: the column is one that better-auth asks for, so a migration that lost it is reported.

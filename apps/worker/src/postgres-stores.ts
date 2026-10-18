@@ -1,5 +1,6 @@
 import type { AccountStore } from './accounts.ts';
 import type { Kv } from './kv.ts';
+import type { InstanceAdminReads } from './instance-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
@@ -62,6 +63,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
   return later(async () => (await import('./accounts-postgres.ts')).createPostgresAccountStore(database), {
     signIn: true,
     account: true,
+    isInstanceAdmin: true,
     setLocale: true,
     setName: true,
     localeOf: true,
@@ -194,6 +196,21 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     forget: true,
     list: true,
     deliveryOf: true,
+  });
+}
+
+/** What the administrator of the instance reads (FRU-261): `instance-admin-postgres.ts`, loaded at the first call. */
+export function postgresInstanceAdmin(url: string, schema: string): InstanceAdminReads {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./instance-admin-postgres.ts')).createPostgresInstanceAdmin(database), {
+    counts: true,
+    attention: true,
+    workspaces: true,
+    workspace: true,
+    users: true,
+    trace: true,
+    reads: true,
   });
 }
 

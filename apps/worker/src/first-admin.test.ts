@@ -109,6 +109,17 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
     assert.equal(await world.accounts.role(workspace, (opened.body.account as { id: string }).id), 'owner');
   });
 
+  it('makes the administrator of the instance: the link opens the first account (FRU-261)', async () => {
+    const world = await envOf();
+
+    const opened = await open(world, tokenIn(await firstAdminLines(linksOf(world), ADMIN)));
+    assert.equal(opened.status, 200, JSON.stringify(opened.body));
+
+    const answer = await callOn(world, 'GET', '/console/me', { token: opened.cookie });
+    assert.equal(((await answer.json()) as { instanceAdmin: boolean }).instanceAdmin, true);
+    assert.equal((await callOn(world, 'GET', '/console/admin/instance', { token: opened.cookie })).status, 200);
+  });
+
   it('writes nothing once a workspace has an owner: the variable left in the environment opens nothing', async () => {
     const world = await envOf();
     const first = await open(world, tokenIn(await firstAdminLines(linksOf(world), ADMIN)));

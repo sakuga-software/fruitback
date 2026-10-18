@@ -53,6 +53,7 @@ export function worlds(): (more?: { env?: Partial<WorkerEnv> }) => Promise<World
         mailer: worker.mail,
         kv: worker.kv,
         auth: worker.auth,
+        instanceAdmin: worker.instanceAdmin,
         // FRU-237: the index of the notes, on the database of the world.
         noteIndex: createPostgresNoteIndex(worker.database),
       },

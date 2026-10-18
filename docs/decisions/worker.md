@@ -1371,7 +1371,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-five columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-six columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1461,7 +1461,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1474,7 +1474,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-five BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty-six BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2732,6 +2732,83 @@ everything. FRU-95 lifted it, below.
   provider (`betterAuth` with the three `false`), in place of a form whose link is never sent.
 - **Played backwards**: see the pull request for each check that was taken away and the tests that
   then fail.
+
+## The administrator of the instance (FRU-261)
+
+Mathieu, 2026-10-18 (FRU-260): « le premier compte utilisateur est forcèment admin lors de sa
+création sur l'interface, géré par better-auth avec le flag admin en base ». No list of
+administrators in the environment. The Cloud has the same administration: no « `404` for everyone on
+the Cloud ». Each read of an administrator in a workspace they are not a member of is traced, and
+its owners see it (D2). No OAuth key in any answer (D4).
+
+### The rules, in short
+
+- **The flag is `role` of `user`, the column of the admin plugin of better-auth, and the plugin is
+  not mounted.** `auth-schema.ts` keeps its four columns of `user` (`role`, `banned`, `banReason`,
+  `banExpires`), and `authOptions` declares them as additional fields, with `input: false`, exactly as
+  the plugin of 1.7.7 declares them (test:`keeps the four columns of the admin plugin on user, as the plugin declares them (FRU-261)`).
+  `admin` is in `REFUSED_PLUGINS`. A later lot can mount the plugin on this schema; it then adds
+  `session.impersonatedBy`, the fifth column of the plugin, which is not here.
+- **The administrator is `role = 'admin'` and not banned**, read by `isInstanceAdmin` of the store of
+  the accounts at each call. A list of roles (`admin,user`) is none, as `roleOf` reads a member.
+- **A trigger of the database makes the first account the administrator**: `fruitback_first_admin`,
+  `BEFORE INSERT ON "user"`, in `0016_first_admin`. A new account gets the role when no account has it,
+  in the statement that creates it. **Every way an account is made goes through it**: better-auth (a
+  link, GitHub, Google, the link of `FRUITBACK_FIRST_ADMIN`) and `signIn` of the store.
+- **The migration gives the role to the oldest account** (the least `createdAt`, then the least id)
+  of a database that has accounts and no administrator: on the Cloud, the account of Mathieu.
+- **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
+  the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
+  path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
+- **Four reads, and no write** (FRU-274 writes): `instance`, `workspaces` (`q`, `show` of `all`,
+  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`). A list
+  answers 100 rows at most and its `total`. `/console/me` answers `instanceAdmin`.
+- **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
+  not a member of it, written in one statement before the answer leaves. A failed write fails the
+  read (`502`). `GET /console/workspaces/<id>/admin-reads` answers the 200 newest rows to an owner.
+- **The policy of sign-up is `signUpPolicyOf` of `instance-admin.ts`**: « anyone » today, and the one
+  place FRU-278 changes. `GET /console/admin/instance` answers what it says.
+
+### The reasons, and what was measured
+
+- **Why no plugin.** The admin plugin of 1.7.7 serves fifteen routes under `/admin/`: among them
+  `impersonate-user`, `create-user`, `set-user-password`, `set-role`, `ban-user` and `remove-user`.
+  Mounting it and closing them one by one makes every route of a later version open until somebody
+  closes it; not mounting it leaves nothing to close. And its hook writes `role: 'user'` on every new
+  account, over the rule of the first administrator. Each of its routes answers `404`, through the
+  worker and to better-auth itself: test:`closes every route of the admin plugin of better-auth, which the worker does not mount`.
+- **Why a trigger, and not a hook of better-auth.** A hook of better-auth runs before its insert, in
+  another statement and often on another connection: two first sign-ins both read « no administrator ».
+  Only the database sees both inserts. The trigger takes `pg_advisory_xact_lock` when it sees no
+  administrator, and asks again: the second insert waits for the first transaction, and its next
+  statement reads what the first committed. **This holds in READ COMMITTED**, the isolation of every
+  writer of `user`; under REPEATABLE READ the second would read its old snapshot. A unique partial
+  index was not taken: it would forbid the second administrator that FRU-274 names.
+  test:`makes one administrator: the second account waits for the first to commit`, and
+  test:`makes two administrators without the lock of the trigger` is its control: the same function
+  with no lock gives two (measured on PostgreSQL 17).
+- **`SET search_path FROM CURRENT`**: the function reads `"user"` in the schema of the migration,
+  the schema of the worker (FRU-219), whatever the search path of the connection that inserts.
+- **A new account becomes the administrator whenever no account has the role**, not only the very
+  first one. The decision says « if no admin exists yet ». So an instance whose last administrator
+  loses the role gives it to the next sign-up: FRU-274 must refuse to take the role from the last one.
+- **The trace is written by the worker, before the answer.** « Each read is traced » is a promise
+  only if a read cannot leave without its row. It traces nothing that the operator does in the
+  database itself: the trace is of the console.
+- **A `BIGINT` is read through the schema**, as in every store: the connectors and the rows of the
+  trace. The raw statements of `instance-admin-postgres.ts` count, and read a `timestamptz` of
+  better-auth as milliseconds. test:`reads the instants of a connector and of a trace as the numbers that were written`
+  holds both past 2^32 on a real server.
+- **The source names a path of the administrator in `instance-admin.ts` only**:
+  test:`names every path of the administrator in the table that the guard reads, and nowhere else`
+  fails on a route written elsewhere, which could skip the guard.
+
+### What it does not do
+
+- No write: naming or removing an administrator, suspending, deleting (FRU-274). The columns
+  `banned`, `banReason` and `banExpires` are written by nobody; the guard reads `banned`.
+- No note: the index, the excerpt and the text are FRU-272. No screen of the console.
+- `lastSentAt` of the mail is of this process: another replica has its own.
 
 ## The first reviewer, named in the environment (FRU-108)
 

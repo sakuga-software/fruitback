@@ -48,6 +48,13 @@ export const user = pgTable(
       .notNull(),
     // The language a person chose (FRU-146): an additional field of `user` in `authOptions`.
     locale: text('locale'),
+    // The administrator of the instance (FRU-261): `role` is `admin` for one, NULL for the others.
+    // The four columns are the ones of the admin plugin of better-auth, which the worker does not
+    // mount: additional fields of `user` in `authOptions`. `instance-admin.ts` says who reads them.
+    role: text('role'),
+    banned: boolean('banned'),
+    banReason: text('banReason'),
+    banExpires: instant('banExpires'),
   },
   (table) => [unique('user_email_key').on(table.email)],
 );

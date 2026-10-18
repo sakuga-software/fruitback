@@ -548,3 +548,36 @@ export const note_index = pgTable(
     ),
   ],
 );
+
+/**
+ * The reads of an administrator of the instance in a workspace they are not a member of (FRU-261):
+ * who, which read, and when. The owners of the workspace read them (`instance-admin.ts`).
+ *
+ * `admin_email` keeps the address of the administrator at the moment of the read, so a row still says
+ * who after their account goes (`set null`). A row goes with its workspace.
+ */
+export const admin_reads = pgTable(
+  'admin_reads',
+  {
+    id: text('id').primaryKey(),
+    workspace_id: text('workspace_id').notNull(),
+    admin_account_id: text('admin_account_id'),
+    admin_email: text('admin_email').notNull(),
+    what: text('what').notNull(),
+    at: instant('at').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'admin_reads_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'admin_reads_admin_account_id_fkey',
+      columns: [table.admin_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    index('admin_reads_by_workspace').on(table.workspace_id, table.at.desc()),
+    index('admin_reads_by_admin').on(table.admin_account_id),
+  ],
+);

@@ -23,6 +23,17 @@ export function parseTemCredentials(value: string): { projectId: string; secretK
   return { projectId: value.slice(0, separator).trim(), secretKey: value.slice(separator + 1).trim() };
 }
 
+/**
+ * When this process last sent a message that the provider took (FRU-261), for the administrator of
+ * the instance. In the memory of this process: another replica has its own.
+ */
+let lastSentAt: number | undefined;
+
+/** The instant of the last message this process sent, as ISO 8601, or `undefined` for none yet. */
+export function lastMailSentAt(): string | undefined {
+  return lastSentAt === undefined ? undefined : new Date(lastSentAt).toISOString();
+}
+
 /** A bounded call: a provider that accepts the connection and never answers must not hold a route. */
 const SEND_TIMEOUT_MS = 10_000;
 
@@ -53,6 +64,7 @@ export function createTemMailer(settings: TemSettings, fetcher: typeof fetch = f
 
       // The body of a refusal names the reason, and never the key: it is safe to log.
       if (!response.ok) throw new MailError(`The mail provider refused the message: ${response.status}`);
+      lastSentAt = Date.now();
     },
   };
 }
