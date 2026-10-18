@@ -446,7 +446,7 @@ function SiteRows({
                 <Confirmation
                   confirmLabel={t('Remove {site}', { site: host })}
                   consequence={t(
-                    'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.',
+                    'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.',
                     { site: host },
                   )}
                   onConfirm={onRemove}

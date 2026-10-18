@@ -152,8 +152,8 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       'removes the members, the sites, the connectors and the deliveries of a workspace it deletes, and only those',
     by: 'removes the row of the workspace alone',
     replace: {
-      from: 'await run((db) => db.delete(organization).where(eq(organization.id, workspace)));',
-      to: 'await transaction(async (tx) => { await tx.execute(sql`SET LOCAL session_replication_role = replica`); await tx.delete(organization).where(eq(organization.id, workspace)); });',
+      from: 'await db.delete(organization).where(eq(organization.id, workspace));',
+      to: 'await db.execute(sql`SET LOCAL session_replication_role = replica`); await db.delete(organization).where(eq(organization.id, workspace));',
     },
   },
   {

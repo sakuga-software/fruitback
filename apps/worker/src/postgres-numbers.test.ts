@@ -401,15 +401,15 @@ describe('why the type of an instant matters (FRU-180)', () => {
       assert.equal(source.includes('.execute('), false, `${file} sends a raw statement: its BIGINT is a string`);
       assert.match(source, /from '\.\/postgres-schema\.ts'/, `${file} no longer reads the schema`);
     }
-    // A raw fragment is a string too when it is selected. Each one of today is in a `where` or a `set`,
-    // but three of the browsers of an account (FRU-238): `max` of a text, and `min` and `max` of an
+    // A raw fragment is a string too when it is selected. Each one of today is in a `where` or a `set`
+    // (the site of a delivery, FRU-194, is one), but three of the browsers of an account (FRU-238): `max` of a text, and `min` and `max` of an
     // instant, read through `mapWith` of the column, which test:`lists the browsers of an account by
     // their instants, on each side of 2^32` holds. Read a new one, then change its count here.
     // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238).
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 5, sessions: 9 },
+      { accounts: 6, sessions: 9 },
     );
   });
 });

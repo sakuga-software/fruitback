@@ -350,8 +350,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Preview builds': 'Previews',
   'More for {site}': 'Plus pour {site}',
   'Install on {site}': 'Installer sur {site}',
-  'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
-    'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
+  'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.':
+    'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes que Fruitback garde pour lui sont supprimées. Les notes déjà dans un tracker y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
   'Connect a tracker once. Every site of {workspace} can then send its notes there.':
     'Connectez un tracker une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',

@@ -147,7 +147,9 @@ notes. What keeps one workspace from the notes of another is the read itself, wh
 test:`never gives a site of one workspace the notes of a site of another, on one page of one address`,
 test:`gives a read that names no site the notes that name none, and never the notes of a site`.
 `node server.mjs forget` deletes across every site of the worker: it is the command of whoever runs
-the worker. The notes of a site that is removed stay in the table (FRU-194 will decide).
+the worker. **The notes of a site that is removed are deleted with it**, and those of every site of a
+workspace that is deleted (FRU-194):
+test:`removes the notes, the replies and the deliveries of a site that goes, and of no other site`.
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
@@ -176,9 +178,9 @@ keeps the workspaces apart by what each read names, never by a wall in the datab
 that another application uses, a schema of its own is a place for names and not a wall: see below.
 The connection is encrypted only when the address asks for it (`sslmode`), and only then.
 
-**How long**: as long as the row exists. Fruitback deletes no note on its own: a site removed from
-its workspace leaves its notes in the table (FRU-194 will decide), and `node server.mjs forget`
-deletes them, as [docs/privacy.md](docs/privacy.md) says. A session of the extension ends after
+**How long**: as long as the row exists, and no longer than its site: a site removed from its
+workspace takes its notes with it (FRU-194), and `node server.mjs forget` deletes them before, as
+[docs/privacy.md](docs/privacy.md) says. A session of the extension ends after
 30 days at most; a row of `kv` goes after its two minutes, as requests come. **A dump keeps all of it
 for as long as the dump is kept**, and the four secrets that the dump lacks
 (`FRUITBACK_POSTGRES_PASSWORD`, `FRUITBACK_AUTH_SECRET`, `FRUITBACK_IDENTITY_SECRET`,

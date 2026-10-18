@@ -139,7 +139,8 @@ session of its workspace and nobody else, which is what a site added with no vis
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
   tracker it connected, encrypted (FRU-121), and where each site sends its notes; its name, its members and their roles, and the address
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
-  members and its sites; the notes already in a tracker stay there.
+  members, its sites and the notes that Fruitback keeps for them; the notes already in a tracker stay
+  there.
 
 - **The tables of better-auth, in the same PostgreSQL database** (FRU-144). Since FRU-146 the
   accounts above are in four of them (`user`, `account`, `organization`, `member`): the same things,
@@ -206,8 +207,8 @@ the first read of its page, with what that read says.
 the anchor, the environment, the picture, the replies. Those stay where the note went. So **a
 visitor's typed name is in the tracker and never in the index**: the console shows « Visitor ».
 
-**It goes with its site and its workspace**: removing a site removes its rows at once, whatever
-becomes of the notes themselves (FRU-194). **`forget` removes the rows of the notes it deletes**,
+**It goes with its site and its workspace**: removing a site removes its rows at once, with the
+notes that Fruitback keeps for the site (FRU-194). **`forget` removes the rows of the notes it deletes**,
 before it deletes them and again after, so a read of their page during the command does not leave
 one behind. **A note that went to a tracker** is not found by an address or a name, since the index
 keeps neither: `forget --seed <id>`, with the `id` of the seed that its issue holds, removes its row,
@@ -287,13 +288,15 @@ Since FRU-119 an account also holds the language its person reads, taken from th
 
 ## How long a note is kept
 
-As long as the issue or the row exists. Fruitback deletes nothing on its own.
+As long as the issue or the row exists, and in Fruitback no longer than its site (FRU-194).
 
 - **Linear and GitHub:** the retention of your workspace or repository. Closing an issue does not
   delete it.
 - **PostgreSQL:** yours, and the dumps of the database are part of it. A dump kept for a year keeps
-  every note for a year. The notes of a site stay
-  when the site is removed from its workspace: nothing deletes them but the command below.
+  every note for a year. **Removing a site deletes the notes that Fruitback keeps for it**: their
+  text, their replies and the deliveries that wait to send them. Deleting a workspace does the same
+  for each of its sites. A site added again gets a new id, and nothing gives it the old notes back.
+  The notes already in a tracker stay there.
 
 ## Deleting a reporter's notes
 

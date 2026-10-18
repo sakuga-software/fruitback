@@ -1617,8 +1617,9 @@ SQLite out while the notes have no other home: this is that home. It is a store 
   names no site gets the notes that name none, where `sqlite.ts` answers the whole page. The
   conformance suite takes the reason from the subject (`readWithNoClient`) and reports that case as
   skipped, not passed.
-- **`client_id` holds no foreign key to `sites`.** What becomes of the notes of a site that is
-  removed is FRU-194, not decided: a key would decide it, by a cascade or by a refusal.
+- **`client_id` holds no foreign key to `sites`.** The copy of a SQLite file (FRU-220) writes ids of
+  clients that are not sites, and a key would refuse it. The notes of a site that is removed go by
+  code instead (FRU-194, below).
 - **The note is a `TEXT`, parsed and never trusted**, as for a file. `JSONB` was not taken: it
   refuses the `\u0000` that a note may hold (`TEXT` holds its six characters), and a row that is
   wrong must cost one pin, which a reader of text decides.
@@ -1629,8 +1630,8 @@ SQLite out while the notes have no other home: this is that home. It is a store 
 - **The numbers are an identity that takes a value when one is given**: the copy of a SQLite file
   (FRU-220) keeps the `FB-<n>` that people quoted, and then moves the sequence.
 - **`forget` reads the notes of the whole instance**, in one transaction with the deletion, and
-  filters on the rows: a note is text. It is the command of whoever runs the worker. A filter by
-  site comes with FRU-194.
+  filters on the rows: a note is text. It is the command of whoever runs the worker. A site that goes
+  takes its notes by itself (FRU-194), so `forget` has no filter by site.
 - **A batch is one transaction**: every note, or none and a `StoreError`. No parent: a row is not
   an issue of a tracker.
 - **The store is loaded at its first call** (`postgresSeedStore` in `postgres-stores.ts`), like the
@@ -2816,6 +2817,28 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
 
+## The notes of a site that goes (FRU-194)
+
+**The rules, in short:**
+
+- **A site that is removed takes the notes that the worker keeps for it**: its rows of `seeds`, their
+  replies (`seed_comments`, by their key), and the deliveries that wait to send them. A workspace that
+  is deleted does the same for each of its sites. The notes already in a tracker stay there.
+- **One transaction**: `removeSite` deletes the site and `dropKeptNotes` in it, so a site that is still
+  there keeps its notes, and a site that is gone keeps none. `deleteWorkspace` reads its sites, then
+  deletes their notes and the workspace.
+- **A delivery names its site in its body only**, as `pendingOf` reads it. The deletion reads the body
+  the same way, and only among the connectors of the workspace: a delivery of another workspace that
+  names the site is not one of its own.
+  test:`removes the notes, the replies and the deliveries of a site that goes, and of no other site`,
+  test:`removes the notes of every site of a workspace that goes, and of no other workspace`.
+
+**Why delete.** Removing a site has no undo (FRU-165), and a site added again gets a new id, so it
+would never read the old notes. A note that nobody can read is personal data kept for no reason. The
+console says it before the click: « The notes that Fruitback keeps for it are deleted. » The notes of
+sites removed before this change stay: no migration deletes them, because a note copied from SQLite
+under a client that is not a site looks the same. `forget` deletes them.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is
@@ -2859,9 +2882,8 @@ refused by its sentence. What follows is the history.
   more is asked of the browser.
 - **The index never fails a note**: `indexed` logs and goes on. **An index that does not answer
   costs the counts of the list of the sites, never the list.**
-- **A row goes with its site and its workspace** (foreign keys `cascade`). The notes of the worker's
-  own store stay when a site goes, as `seeds-postgres.ts` decided pending FRU-194; their index does
-  not. **`forget` removes the rows of the notes it deletes, before it deletes them**: an index that
+- **A row goes with its site and its workspace** (foreign keys `cascade`), and the notes of the
+  worker's own store go too (FRU-194). **`forget` removes the rows of the notes it deletes, before it deletes them**: an index that
   does not answer stops the command with nothing deleted. **And again after**: a read of their page
   that asked the store before the deletion may have written a row back in between (found in the
   review of #300, test:`leaves no row of a forgotten note that a read of its page wrote back during
