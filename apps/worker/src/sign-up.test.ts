@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it, mock } from 'node:test';
 import { SERVED_PATHS, authConfigOf } from './auth.ts';
+import { refusedSignUp } from './auth-routes.ts';
 import { CONSOLE_URL, DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import { REQUIRED_WITH_DATABASE, readConfig } from './env.ts';
@@ -255,6 +256,16 @@ for (const { label, open, skip } of DATABASES) {
       ]);
     });
 
+    it('creates the account of an invited address that a provider gives with capitals', async () => {
+      const worker = await workerOn(open, 'invited');
+      await invitedBy(worker, ['guest-github@client.dev', 'guest-google@client.dev']);
+
+      for (const provider of ['github', 'google']) {
+        const guest = await byProvider(worker, provider, `Guest-${provider.toUpperCase()}@Client.dev`);
+        assert.equal(guest.error, null, provider);
+      }
+    });
+
     it('refuses an address whose invitation ended, or was cancelled', async () => {
       const worker = await workerOn(open, 'invited');
       await invitedBy(worker, ['late@client.dev', 'cancelled@client.dev', 'waiting@client.dev']);
@@ -316,6 +327,19 @@ function writesOfUser(source: string): string[] {
 
   return patterns.flatMap((pattern) => [...source.matchAll(pattern)].map((match) => match[0]));
 }
+
+describe('the refusal of a sign-in by a link (FRU-278)', () => {
+  it('reads the code in the redirect of better-auth, and in an answer in JSON', async () => {
+    const redirect = new Response(null, { status: 302, headers: { Location: `/setup?error=${INVITATION_REQUIRED}` } });
+    assert.equal(await refusedSignUp(redirect), true);
+    assert.equal(await refusedSignUp(Response.json({ code: INVITATION_REQUIRED }, { status: 403 })), true);
+    // The controls: a link that is spent is not a refusal of the rule.
+    const spent = new Response(null, { status: 302, headers: { Location: '/setup?error=INVALID_TOKEN' } });
+    assert.equal(await refusedSignUp(spent), false);
+    assert.equal(await refusedSignUp(Response.json({ code: 'INVALID_TOKEN' }, { status: 401 })), false);
+    assert.equal(await refusedSignUp(new Response('not json', { status: 500 })), false);
+  });
+});
 
 describe('the places that create an account (FRU-278)', () => {
   /** Each file of the worker that may write a row of `user` outside better-auth, with its reason. */

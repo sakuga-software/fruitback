@@ -597,7 +597,8 @@ async function signUpAllowed(
     (await adapter.count({
       model: 'invitation',
       where: [
-        { field: 'email', value: email },
+        // better-auth writes the address of an invitation in lower case. A provider can give capitals.
+        { field: 'email', value: email.toLowerCase() },
         { field: 'status', value: 'pending' },
         { field: 'expiresAt', value: new Date(), operator: 'gt' },
       ],

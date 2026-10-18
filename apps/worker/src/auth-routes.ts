@@ -296,12 +296,21 @@ async function sendLink(
   return json(202, { sent: true }, headers);
 }
 
-/** Whether better-auth refused to create the account of this sign-in: see `sign-up.ts`. */
-function refusedSignUp(answer: Response): boolean {
+/**
+ * Whether better-auth refused to create the account of this sign-in: see `sign-up.ts`. 1.7.7 puts
+ * the code in the `error` of the redirect. An answer in JSON carries it as `code`: both are read, so
+ * a refusal never reads as a link that is spent.
+ */
+export async function refusedSignUp(answer: Response): Promise<boolean> {
   const location = answer.headers.get('Location');
-  if (location === null) return false;
-
-  return new URL(location, 'http://unused.invalid').searchParams.get('error') === INVITATION_REQUIRED;
+  if (location !== null) {
+    return new URL(location, 'http://unused.invalid').searchParams.get('error') === INVITATION_REQUIRED;
+  }
+  try {
+    return ((await answer.clone().json()) as { code?: unknown } | null)?.code === INVITATION_REQUIRED;
+  } catch {
+    return false;
+  }
 }
 
 async function redeemLink(
@@ -343,7 +352,7 @@ async function redeemLink(
   const answer = made.is === 'spend' ? await asOperatorLink(made.email, verify) : await verify();
   if (answer.status !== 200) {
     // The link is spent: better-auth spends it before it looks for the account.
-    if (refusedSignUp(answer)) return json(403, { error: 'invitation-required' }, headers);
+    if (await refusedSignUp(answer)) return json(403, { error: 'invitation-required' }, headers);
 
     return json(401, { error: 'link-spent-or-expired' }, headers);
   }
