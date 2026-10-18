@@ -1701,7 +1701,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   self-hosting the first account is the one of the link of `FRUITBACK_FIRST_ADMIN` when nobody signed
   up before it. **A later account never becomes the administrator**, also when no account has the
   role: an instance that loses its last administrator has none until its operator writes the role in
-  the database. FRU-274 must keep one.
+  the database. FRU-274 must keep one. An instance whose accounts are all deleted is empty again, and
+  its next account is its first: no route deletes an account, so only the operator can get there.
 - **The admin plugin of better-auth is not mounted, and the worker refuses to start with it**
   (`REFUSED_PLUGINS`): it serves fifteen routes under `/console/auth/admin/`, one of which signs in as
   another person. The worker keeps its four columns of `user` only. Each route of the plugin answers

@@ -2794,7 +2794,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
   role set to `NULL`, `Admin` or `admin,user` then gave the instance to the next person who signed up
   (measured by a review on a worker, FRU-261). The decision of Mathieu says « le premier compte ». An
   instance with no administrator gets one from its operator in the database, and FRU-274 must refuse
-  to take the role from the last one.
+  to take the role from the last one. A table of accounts emptied again gives the role to the next
+  account: no route deletes an account, and a mark that the instance was set up once was not taken.
   test:`gives the role to no later account, after the role is taken away or written another way`.
 - **The trace is written by the worker, before the answer.** « Each read is traced » is a promise
   only if a read cannot leave without its row. It traces nothing that the operator does in the
