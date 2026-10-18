@@ -15,6 +15,7 @@ import {
   make,
 } from './auth.fixture.ts';
 import { KvError, createMemoryKv } from './kv.ts';
+import { createPostgresKv } from './kv-postgres.ts';
 import { MailError } from './mail.ts';
 import { GITHUB, GOOGLE, SESSION_COOKIE, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
@@ -713,6 +714,7 @@ for (const { label, open, skip } of DATABASES) {
         { ...AUTH_CONFIG, github: GITHUB, trackIp: false },
         await database.pool(),
         NO_SESSIONS,
+        createPostgresKv(database),
       );
       const auth = await startAuth({ ...options, databaseHooks: { ...options.databaseHooks, user: {} } });
       const start = await auth.handler(
@@ -988,6 +990,7 @@ for (const { label, open, skip } of DATABASES) {
         { ...AUTH_CONFIG, github: GITHUB, trackIp: false },
         await database.pool(),
         NO_SESSIONS,
+        createPostgresKv(database),
       );
       const auth = await startAuth(options);
       const through = (path: string, instance: Auth) =>

@@ -1933,6 +1933,15 @@ path of before » is how the two lived together until then.
   `databaseHooks.session.create` empties both columns. On, the worker writes the address that
   `resolveClientIp` read in `x-fruitback-client-ip`, over anything the caller sent, and that header
   is the only one better-auth reads (`ipAddressHeaders`).
+- **The limit of better-auth counts in the `Kv` of the database** (FRU-229), through
+  `rateLimit.customStorage`: `rateLimitStorageOn` of `auth.ts`. Left to itself, 1.7.7 counts in a
+  `Map` of its module, because the worker refuses `secondaryStorage`: N replicas let N times its
+  ceilings through. The interface of 1.7.7 is one `consume(key, rule)`, and one `incr` answers it,
+  as better-auth answers it on a secondary storage. `storage: "database"` was not taken: a table and
+  a migration more, and two or three statements for each request. The window is fixed. **A
+  `KvError` is not caught**: better-call calls the limiter outside its `try`, so it goes up through
+  `auth.handler`, and `handleRequest` answers `503 limiter-unavailable`. Two instances in one process
+  share the `Map` too, so the test reads the count in the table: on the code of before it holds none.
 - **A sign-in that fails goes back to `<console>/setup?error=<code of better-auth>`**
   (`onAPIError.errorURL`). The console gives each code its sentence (FRU-148).
 - **A sign-in with a provider starts by a navigation**: `GET /console/auth/start/<github|google>`
