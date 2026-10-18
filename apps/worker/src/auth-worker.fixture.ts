@@ -5,6 +5,7 @@ import { type Auth, authOptions, startAuth } from './auth.ts';
 import { AUTH_CONFIG, AUTH_SECRET, CONSOLE_URL, PUBLIC_URL, make } from './auth.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
+import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage, Mailer } from './mail.ts';
 import type { PgDatabase } from './postgres.ts';
 import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
@@ -62,6 +63,8 @@ export async function workerOf(
     env?: Partial<WorkerEnv>;
     /** Another `handleRequest`: the one of a changed `app.ts`, for a planted violation. */
     handle?: typeof handleRequest;
+    /** Where the limiter of better-auth counts. The `Kv` of the database by default, as in a worker. */
+    limits?: Pick<Kv, 'incr'>;
   } = {},
 ) {
   await make(database);
@@ -72,6 +75,7 @@ export async function workerOf(
     { ...AUTH_CONFIG, github: GITHUB, google: GOOGLE, trackIp: more.trackIp === true },
     await database.pool(),
     sessions,
+    more.limits ?? createPostgresKv(database),
   );
   const auth: Auth = await startAuth(options);
   const mail = inbox();

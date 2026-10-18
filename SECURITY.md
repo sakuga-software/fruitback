@@ -213,6 +213,14 @@ turns it on. What follows from it:
   rather than letting it through: a limiter that opens when its store stops is a limiter anybody can
   open. That holds below the limiter too: the count of the links and the ticket of the way to Linear
   answer the same `503`. `/health` reads no count.
+- **The limit of better-auth counts there too** (FRU-229), and it is off unless
+  `FRUITBACK_AUTH_TRACK_IP=1`. On, better-auth counts its own routes under `/console/auth/`, by
+  address and by route, with its own rules, in the same table: its replicas share one ceiling, where
+  each one kept its own count in its memory before.
+  test:`makes two instances on one database share the ceiling of a route`. A database that does not
+  answer refuses those requests with the same `503`:
+  test:`refuses with 503 limiter-unavailable when the Kv does not answer, and lets nothing through`.
+  Its window is fixed, and starts at the first request of an address on a route.
 - **A write of that table does not wait for the disk.** The limiter writes once for each request of
   the widget, and the wait was the whole cost of a count. If the server of the database crashes, the
   writes of its last few hundred milliseconds can be lost: a caller gets a few requests more in that
@@ -1102,7 +1110,8 @@ token alone` keeps both measured.
 caller writes`. Left alone, better-auth takes an `X-Forwarded-For` that holds one value as the
   caller wrote it (measured). **With `FRUITBACK_AUTH_TRACK_IP=1`** (decision of 2026-10-11) it keeps
   both and counts by address too, with the address the worker read: the worker writes it in a
-  header of its own, over anything the caller sent, and better-auth reads no other one.
+  header of its own, over anything the caller sent, and better-auth reads no other one. It counts in
+  the table `kv` of the database, as the limit of the worker does (FRU-229, above).
   test:`keeps the address that the worker read, and not one that the caller wrote, when it is on`.
 - **No password.** The sign-up with a password is off, and the accounts hold none.
 - **The session of the extension does not change.** It is not a session of better-auth, and it keeps

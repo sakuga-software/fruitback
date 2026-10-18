@@ -5,6 +5,7 @@ import { authConfigOf, authOptions, startAuth } from './auth.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { firstAdminLines } from './first-admin.ts';
 import { createMemoryKv } from './kv.ts';
+import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage } from './mail.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
@@ -47,7 +48,9 @@ export async function cloudWorker(options: {
   const sessions = createPostgresSessionStore(database);
   const connectStore = createPostgresConnectStore(database);
   const auth =
-    settings === undefined ? undefined : await startAuth(await authOptions(settings, await database.pool(), sessions));
+    settings === undefined
+      ? undefined
+      : await startAuth(await authOptions(settings, await database.pool(), sessions, createPostgresKv(database)));
   const kv = createMemoryKv();
   const sent: MailMessage[] = [];
   const received: { method: string; path: string; authorization: boolean; cookie: boolean }[] = [];

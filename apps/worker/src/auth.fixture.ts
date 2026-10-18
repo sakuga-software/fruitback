@@ -5,6 +5,7 @@ import { type AuthConfig, authOptions } from './auth.ts';
 import type { PgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
+import { createPostgresKv } from './kv-postgres.ts';
 
 /**
  * What the tests of `auth.ts` share (FRU-144): the database of a case with its pool, and a way to get
@@ -71,7 +72,7 @@ export async function optionsOn(
   made: Made = MIGRATED,
 ): Promise<{ options: BetterAuthOptions; said: Said }> {
   await make(database, made);
-  const options = await authOptions(AUTH_CONFIG, await database.pool(), NO_SESSIONS);
+  const options = await authOptions(AUTH_CONFIG, await database.pool(), NO_SESSIONS, createPostgresKv(database));
   const said: Said = [];
 
   return {

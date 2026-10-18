@@ -165,17 +165,21 @@ export function postgresKv(url: string, schema: string): Kv {
   const key = `${schema} ${url}`;
   let kv = kvs.get(key);
   if (kv === undefined) {
-    const database = databaseFor(url, schema);
-    kv = later(async () => (await import('./kv-postgres.ts')).createPostgresKv(database), {
-      get: true,
-      set: true,
-      incr: true,
-      close: true,
-    });
+    kv = kvOn(databaseFor(url, schema));
     kvs.set(key, kv);
   }
 
   return kv;
+}
+
+/** The `Kv` of this database. The limiter of better-auth counts there too (FRU-229). */
+export function kvOn(database: Database): Kv {
+  return later(async () => (await import('./kv-postgres.ts')).createPostgresKv(database), {
+    get: true,
+    set: true,
+    incr: true,
+    close: true,
+  });
 }
 
 /** The index of the notes of this database (FRU-237): `notes-index-postgres.ts`, loaded at the first call. */

@@ -6,13 +6,14 @@ import { ACTIONS, ROLES } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { browserLabel } from './browser-label.ts';
+import type { Kv } from './kv.ts';
 import { forgetSeenOf } from './last-seen.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import type { OAuthClient } from './oauth-client.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
-import { migrated, sessionStoreOn } from './postgres-stores.ts';
+import { kvOn, migrated, sessionStoreOn } from './postgres-stores.ts';
 import type { SessionStore } from './session.ts';
 
 /**
@@ -285,6 +286,32 @@ export function authId(model: string): string {
   return newId(prefix);
 }
 
+type RateLimitStorage = NonNullable<NonNullable<BetterAuthOptions['rateLimit']>['customStorage']>;
+
+/** The prefix of the counts of better-auth in the `Kv`. The counts of the worker are under `fruitback:rate:`. */
+const AUTH_RATE_PREFIX = 'fruitback:auth-rate:';
+
+/**
+ * The limiter of better-auth counts in the `Kv` of the worker (FRU-229), the one of the database. So
+ * every replica counts against one ceiling. In its memory, N replicas let N times the ceiling pass.
+ *
+ * The count is one `incr`, which is atomic: two replicas that count at the same moment get two counts.
+ * The window is fixed and starts at the first request, as with the secondary storage of better-auth.
+ * A refused request is counted too, and does not move the end of the window.
+ *
+ * WARNING: a `KvError` goes up through `auth.handler`, because better-call calls the limiter outside
+ * its `try`. `handleRequest` answers it `503 limiter-unavailable`: the limiter refuses, it never opens.
+ */
+export function rateLimitStorageOn(kv: Pick<Kv, 'incr'>): RateLimitStorage {
+  return {
+    async consume(key, rule) {
+      const count = await kv.incr(`${AUTH_RATE_PREFIX}${key}`, rule.window * 1000);
+
+      return count <= rule.max ? { allowed: true, retryAfter: null } : { allowed: false, retryAfter: rule.window };
+    },
+  };
+}
+
 /**
  * The options better-auth is built with. An option that closes something is written even when it is
  * the default of 1.7.7: a default that changes in a later version then changes nothing here.
@@ -297,6 +324,8 @@ export async function authOptions(
   pool: PgPool,
   /** The sessions of the extensions: a member who is removed keeps none for the workspace (FRU-149). */
   sessions: Pick<SessionStore, 'endSessionsOf'>,
+  /** Where the limiter of better-auth counts: the `Kv` of the database, shared by every replica. */
+  limits: Pick<Kv, 'incr'>,
 ): Promise<BetterAuthOptions> {
   const [{ organization }, { magicLink }, { createAccessControl }, { defaultStatements }, { APIError }] =
     await Promise.all([
@@ -408,8 +437,9 @@ export async function authOptions(
     // with the address `resolveClientIp` read. On (`FRUITBACK_AUTH_TRACK_IP`), better-auth counts too,
     // with the same address: the worker hands it in `CLIENT_IP_HEADER`, and better-auth reads no
     // other header. Left to itself, it reads `X-Forwarded-For`, takes a lone value as the caller wrote
-    // it, and refuses a chain (measured).
-    rateLimit: { enabled: config.trackIp },
+    // it, and refuses a chain (measured). It counts in `limits`, and never in the memory of the
+    // process (FRU-229).
+    rateLimit: { enabled: config.trackIp, customStorage: rateLimitStorageOn(limits) },
     // The session is read in the database at each call, so a session that is revoked stops at once.
     session: {
       cookieCache: { enabled: false },
@@ -610,7 +640,7 @@ export function authFor(
   if (started !== undefined && started.database === database && started.key === key) return started.auth;
 
   const starting = migrated(database).then(async () =>
-    startAuth(await authOptions(auth, await database.pool(), sessionStoreOn(database))),
+    startAuth(await authOptions(auth, await database.pool(), sessionStoreOn(database), kvOn(database))),
   );
   const mine = { key, database, auth: starting };
   started = mine;
