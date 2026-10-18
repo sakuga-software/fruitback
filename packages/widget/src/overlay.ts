@@ -475,20 +475,47 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   // The text of each reply not sent yet, by note: a thread is built again on each resolve and each
   // render, and the text of a person must outlive it (FRU-257).
   const replyTexts = new Map<string, string>();
+  const repliesInFlight = new Set<string>();
+  const replySaid = new Map<string, string>();
+  /** Shows the end of a reply in the thread of its note, if that thread is open now. */
+  const replySettled = (issue: SeedIssue, answer: SeedComment | ReplyFailure): void => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.seed.id) return;
+    // A read may have drawn the note again since: the reply goes on the issue that is on screen too.
+    if (typeof answer !== 'string' && !(entry.issue.comments ?? []).some((each) => each.id === answer.id)) {
+      entry.issue.comments = [...(entry.issue.comments ?? []), answer];
+    }
+    const focused = threadHasFocus();
+    reopenThread(entry);
+    const field = thread?.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    if (focused) field?.focus();
+  };
   const replyFor = (issue: SeedIssue): ReplyFooter | undefined =>
     options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
       ? undefined
-      : { seam: options.reply, texts: replyTexts };
+      : { seam: options.reply, texts: replyTexts, inFlight: repliesInFlight, said: replySaid, settled: replySettled };
 
   /** Re-render the open thread against a resolution that has just changed under it. */
   function reopenThread(entry: Placed): void {
     const focused = threadHasFocus();
+    // A person who types a reply keeps the field, the caret and the selection (FRU-257): the page
+    // can change under the thread at any keystroke, and focus on Close would take the next ones.
+    const active = deepActiveElement(document);
+    const typing =
+      isElement(active) && active.classList.contains('fruitback-thread-reply-field')
+        ? (active as HTMLTextAreaElement)
+        : undefined;
+    const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
     thread?.remove();
     thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin, t.direction);
-    if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
+    const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    if (caret !== undefined && field !== null) {
+      field.focus();
+      field.setSelectionRange(caret[0], caret[1]);
+    } else if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
   }
 
   function openThread(entry: Placed): void {
@@ -509,6 +536,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function closeThread(restoreFocus = true): void {
     const focused = restoreFocus && threadHasFocus();
+    // The last word of a reply is said once: a thread opened again starts with an empty status.
+    replySaid.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     thread?.remove();
@@ -850,7 +879,17 @@ function buildThread(
   return thread;
 }
 
-type ReplyFooter = { seam: ReplySeam; texts: Map<string, string> };
+/**
+ * What the forms of the replies share, by note: a form is built again with its thread, and the state
+ * of a reply outlives it. `said` is the last word of the status line.
+ */
+type ReplyFooter = {
+  seam: ReplySeam;
+  texts: Map<string, string>;
+  inFlight: Set<string>;
+  said: Map<string, string>;
+  settled: (issue: SeedIssue, answer: SeedComment | ReplyFailure) => void;
+};
 
 /**
  * A reply written from the page, as the worker writes it in a tracker (FRU-257): a first line with
@@ -908,10 +947,15 @@ function replyForm(document: Document, issue: SeedIssue, t: Translator, reply: R
   status.className = 'fruitback-thread-reply-status';
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
+  // A thread built again while its reply is in flight shows the send, and takes no second one.
+  const inFlight = reply.inFlight.has(issue.id);
+  send.disabled = inFlight;
+  field.readOnly = inFlight;
+  status.textContent = inFlight ? t.text('reply.sending') : (reply.said.get(issue.id) ?? '');
 
-  let sending = false;
   field.addEventListener('input', () => {
     reply.texts.set(issue.id, field.value);
+    reply.said.delete(issue.id);
     status.textContent = '';
   });
   field.addEventListener('keydown', (event) => {
@@ -922,8 +966,8 @@ function replyForm(document: Document, issue: SeedIssue, t: Translator, reply: R
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const body = field.value;
-    if (sending || body.trim() === '') return;
-    sending = true;
+    if (reply.inFlight.has(issue.id) || body.trim() === '') return;
+    reply.inFlight.add(issue.id);
     send.disabled = true;
     field.readOnly = true;
     status.textContent = t.text('reply.sending');
@@ -931,24 +975,16 @@ function replyForm(document: Document, issue: SeedIssue, t: Translator, reply: R
       .send(issue, body)
       .catch((): ReplyFailure => 'retry')
       .then((answer) => {
-        sending = false;
-        send.disabled = false;
-        field.readOnly = false;
+        reply.inFlight.delete(issue.id);
         if (typeof answer === 'string') {
-          status.textContent = t.text(REPLY_FAILURES[answer]);
-          field.focus();
-
-          return;
+          reply.said.set(issue.id, t.text(REPLY_FAILURES[answer]));
+        } else {
+          issue.comments = [...(issue.comments ?? []), answer];
+          reply.texts.delete(issue.id);
+          reply.said.set(issue.id, t.text('reply.sent'));
         }
-        issue.comments = [...(issue.comments ?? []), answer];
-        reply.texts.delete(issue.id);
-        field.value = '';
-        // The thread shows the reply at once: the next read of the page has it too.
-        form.parentElement?.querySelector('.fruitback-thread-answers')?.replaceWith(...replies(document, issue, t));
-        if (form.parentElement?.querySelector('.fruitback-thread-answers') === null) {
-          form.before(...replies(document, issue, t));
-        }
-        status.textContent = t.text('reply.sent');
+        // The thread of this note as it is now, which may be another than the one that sent.
+        reply.settled(issue, answer);
       });
   });
 

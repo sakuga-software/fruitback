@@ -110,8 +110,9 @@ describe('the field to reply to a note (FRU-257)', () => {
     const page = mounted();
     const { seam, sent, answer } = answered();
     const thread = open(page, anIssue(), seam);
-    const field = thread.field() as HTMLTextAreaElement;
-    type(field, 'Same on the phone.');
+    // Read again at each step: the end of a reply builds the thread again.
+    const field = () => thread.field() as HTMLTextAreaElement;
+    type(field(), 'Same on the phone.');
 
     for (const [failure, words] of [
       ['wait', /Too many replies/],
@@ -120,11 +121,11 @@ describe('the field to reply to a note (FRU-257)', () => {
     ] as const) {
       thread.submit();
       assert.equal(thread.status(), 'sending…');
-      assert.equal(field.readOnly, true);
+      assert.equal(field().readOnly, true);
       answer(failure);
       await settle();
-      assert.equal(field.value, 'Same on the phone.', failure);
-      assert.equal(field.readOnly, false);
+      assert.equal(field().value, 'Same on the phone.', failure);
+      assert.equal(field().readOnly, false);
       assert.match(thread.status(), words);
     }
 
@@ -136,7 +137,7 @@ describe('the field to reply to a note (FRU-257)', () => {
     });
     await settle();
 
-    assert.equal(field.value, '');
+    assert.equal(field().value, '');
     assert.equal(thread.status(), 'sent');
     // As a reply, not as the text of the tracker: the name is the author, and the quote is the text.
     assert.deepEqual(thread.replies(), ['Same on the phone.']);
@@ -227,5 +228,50 @@ describe('the field to reply to a note (FRU-257)', () => {
     assert.equal(bodies[0], 'On it.\n\nTomorrow.');
     assert.match(who[1] ?? '', /^Linear user · /);
     assert.equal(bodies[1], '**Ana Martin** via Fruitback · member of Acme\nNo quote.');
+  });
+
+  it('takes no second send while a reply is in flight under a thread built again, and shows it there', async () => {
+    const page = mounted();
+    const issue = anIssue();
+    const { seam, sent, answer } = answered();
+    const thread = open(page, issue, seam);
+    type(thread.field() as HTMLTextAreaElement, 'Only once.');
+    thread.submit();
+
+    // The page changes under the thread while the reply is in flight: the thread is built again.
+    overlay?.resolve();
+    overlay?.render([issue]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.equal(thread.field()?.readOnly, true);
+    assert.equal((page.document.querySelector('.fruitback-thread-reply-send') as HTMLButtonElement).disabled, true);
+    thread.submit();
+    assert.equal(sent.length, 1);
+
+    answer({ id: 'c1', body: 'Only once.', createdAt: new Date().toISOString() });
+    await settle();
+
+    assert.deepEqual(thread.replies(), ['Only once.']);
+    assert.equal(thread.field()?.value, '');
+    assert.equal(thread.status(), 'sent');
+  });
+
+  it('keeps the focus and the caret in the field when the page changes under the thread', () => {
+    const page = mounted();
+    const thread = open(page, anIssue(), answered().seam);
+    const before = thread.field() as HTMLTextAreaElement;
+    type(before, 'Half a sentence');
+    before.focus();
+    before.setSelectionRange(4, 9);
+
+    // What a single page application does at any keystroke: the element is replaced.
+    const button = page.query('button');
+    button.replaceWith(button.cloneNode(true));
+    overlay?.resolve();
+
+    const after = thread.field() as HTMLTextAreaElement;
+    assert.ok(after !== before, 'the thread was not built again; this case proves nothing');
+    const active = page.document.activeElement?.shadowRoot?.activeElement ?? page.document.activeElement;
+    assert.ok(active === after, 'the focus left the field');
+    assert.deepEqual([after.selectionStart, after.selectionEnd, after.value], [4, 9, 'Half a sentence']);
   });
 });

@@ -99,7 +99,7 @@ describe('a reply from the page, through init (FRU-257)', () => {
     const posted = requests.find((request) => request.method === 'POST') as TransportRequest;
     assert.equal(posted.url, `${ENDPOINT}/feedback/issue_42/replies?client=acme`);
     assert.deepEqual(JSON.parse(posted.body ?? '{}'), { url: 'https://preview.acme.test/pricing', body: 'Same here.' });
-    assert.equal(field.value, '');
+    assert.equal((root.querySelector('.fruitback-thread-reply-field') as HTMLTextAreaElement).value, '');
   });
 
   it('signs a reply with the name the reporter kept, for a reader the worker does not name only', async () => {
