@@ -215,7 +215,7 @@ function placeView(place: ListedNote['place']) {
   return { kind: place.connector.kind, connector: place.connector.id, label: place.connector.label };
 }
 
-function pageOf(url: string): { url: string; host: string; path: string } {
+export function pageOf(url: string): { url: string; host: string; path: string } {
   try {
     const parsed = new URL(url);
 

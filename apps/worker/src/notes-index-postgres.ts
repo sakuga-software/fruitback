@@ -354,7 +354,7 @@ async function pendingOf(db: Db, workspace: string): Promise<Map<string, Pending
 }
 
 /** The rows of one place: `fruitback`, a connector id, or `removed`. */
-function placeIs(place: string) {
+export function placeIs(place: string) {
   if (place === 'fruitback') return eq(note_index.place, 'fruitback');
   if (place === 'removed') return and(eq(note_index.place, 'connector'), isNull(note_index.connector_id));
 
@@ -396,7 +396,7 @@ function filtered(workspace: string, query: NoteQuery) {
 }
 
 /** The words of a search: each must be found, in any of the fields. At most eight. */
-function wordsOf(q: string | undefined): string[] {
+export function wordsOf(q: string | undefined): string[] {
   return (q ?? '').trim().split(/\s+/u).filter(Boolean).slice(0, 8);
 }
 

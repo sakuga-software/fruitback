@@ -1,7 +1,9 @@
 import type { SeedStage } from '@fruitback/shared';
 import type { Account, ConnectorAttention, ConnectorKind, Role, Visibility } from './accounts.ts';
+import { cursorOf, noteIdOf, pageOf, queryOf as noteQueryOf } from './console-notes.ts';
 import type { WorkerConfig } from './env.ts';
 import { lastMailSentAt } from './mail.ts';
+import type { AuthorKind, Channel, NoteCursor, NoteQuery } from './notes-index.ts';
 import type { SignUp } from './sign-up.ts';
 
 /**
@@ -23,15 +25,19 @@ import type { SignUp } from './sign-up.ts';
  * - **The trace.** A read that names a workspace the administrator is not a member of writes one row
  *   for that workspace in `admin_reads`, before the answer leaves. A trace that cannot be written
  *   fails the read. The owners of the workspace read the rows.
- * - **What an answer never holds**: a secret, a token, a digest, a key of a connector, an address of
- *   the database, or the text of a note. Counts, names and labels only.
+ * - **What an answer never holds**: a secret, a token, a digest, a key of a connector, or an address of
+ *   the database. Counts, names and labels only, except on `notes`.
+ * - **The notes** (FRU-272): every note of the index, with its excerpt of 64 characters. The whole
+ *   text only for a note that the worker keeps in its own table, matched by its site and by the id
+ *   that the widget gave it. A note that went to a tracker has its excerpt only: the worker does not
+ *   call the tracker of a client to read more.
  */
 
 /** Where the routes of the administrator of the instance are. */
 export const ADMIN_PATH = '/console/admin';
 
 /** The reads that an administrator does, as the trace names them. */
-export const ADMIN_READS = ['instance', 'workspaces', 'workspace', 'users'] as const;
+export const ADMIN_READS = ['instance', 'workspaces', 'workspace', 'users', 'notes'] as const;
 export type AdminRead = (typeof ADMIN_READS)[number];
 
 /**
@@ -47,6 +53,7 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
     example: '/console/admin/workspaces/ws_00000000000000000000',
   },
   { read: 'users', pattern: /^\/console\/admin\/users$/, example: '/console/admin/users' },
+  { read: 'notes', pattern: /^\/console\/admin\/notes$/, example: '/console/admin/notes' },
 ];
 
 /** Whether a path is one of the administrator of the instance, known or not. */
@@ -120,6 +127,30 @@ export type AdminUser = {
 /** A connector that needs attention, with its workspace. */
 export type AttentionConnector = AdminConnector & { workspace: WorkspaceName };
 
+/** What the list of the notes of the instance filters on: the list of a workspace, less `author`. */
+export type AdminNoteQuery = Omit<NoteQuery, 'author' | 'sites' | 'searchesReference'> & { workspace?: string };
+
+/** What the list of the notes of the instance searches, in the order the console names them. */
+export const ADMIN_NOTES_SEARCHED = ['excerpt', 'page', 'site', 'workspace', 'stage', 'reference'] as const;
+
+/** One note of the instance, as the index keeps it. `text`: only for a note that the worker keeps. */
+export type AdminNote = {
+  workspace: WorkspaceName;
+  site: { id: string; origin: string };
+  seed: string;
+  pageUrl: string;
+  excerpt: string;
+  text?: string;
+  stage: string;
+  channel: Channel | null;
+  author: AuthorKind;
+  place: { kind: 'fruitback' } | { kind: 'connector'; connector?: { id: string; kind: string; label: string } };
+  reference?: string;
+  referenceUrl?: string;
+  createdAt: number;
+  checkedAt: number;
+};
+
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
@@ -134,6 +165,8 @@ export type InstanceAdminReads = {
   }>;
   workspace(id: string): Promise<AdminWorkspaceDetail | undefined>;
   users(query: AdminQuery<(typeof USER_FILTERS)[number]>): Promise<{ users: AdminUser[]; total: number }>;
+  /** One page of the notes of the instance, the newest first, and how many the filter has. */
+  notes(query: AdminNoteQuery): Promise<{ notes: AdminNote[]; total: number; next?: NoteCursor }>;
   /** Writes one row for each of `workspaces` that `admin` is not a member of, in one statement. */
   trace(
     admin: Pick<Account, 'id' | 'email'>,
@@ -207,6 +240,48 @@ function queryOf<Show extends string>(url: URL, filters: readonly Show[]): Admin
   return { show: show as Show, ...(q === '' ? {} : { q }) };
 }
 
+const ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+type ParsedNotes = { ok: true; query: AdminNoteQuery } | { ok: false; error: string };
+
+/** The query of `notes`: the query of the list of a workspace, plus `workspace`, less `mine`. */
+function notesQueryOf(params: URLSearchParams): ParsedNotes {
+  if (params.has('mine')) return { ok: false, error: 'invalid-mine' };
+  const workspace = params.get('workspace') ?? undefined;
+  if (workspace !== undefined && !ID.test(workspace)) return { ok: false, error: 'invalid-workspace' };
+  const parsed = noteQueryOf(params, '');
+  if (!parsed.ok) return parsed;
+
+  return { ok: true, query: { ...parsed.query, ...(workspace === undefined ? {} : { workspace }) } };
+}
+
+/** Where a note went: the worker's store, a connector, or a connector that was removed since. */
+function placeView(place: AdminNote['place']) {
+  if (place.kind === 'fruitback') return { kind: 'fruitback' };
+  if (place.connector === undefined) return { kind: 'removed' };
+
+  return { kind: place.connector.kind, connector: place.connector.id, label: place.connector.label };
+}
+
+function adminNoteView(note: AdminNote) {
+  return {
+    id: noteIdOf(note.site.id, note.seed),
+    workspace: note.workspace,
+    site: note.site,
+    page: pageOf(note.pageUrl),
+    excerpt: note.excerpt,
+    ...(note.text === undefined ? {} : { text: note.text }),
+    stage: note.stage,
+    channel: note.channel,
+    author: { kind: note.author },
+    place: placeView(note.place),
+    ...(note.reference === undefined ? {} : { ref: note.reference }),
+    ...(note.referenceUrl === undefined ? {} : { url: note.referenceUrl }),
+    createdAt: new Date(note.createdAt).toISOString(),
+    checkedAt: new Date(note.checkedAt).toISOString(),
+  };
+}
+
 /**
  * The routes under `ADMIN_PATH`, or `undefined` for a path that is not one. The guard runs first,
  * for every path under `ADMIN_PATH`: a caller who is not the administrator learns nothing, not even
@@ -277,6 +352,23 @@ export async function handleInstanceAdmin(
       );
 
       return json(200, found, headers);
+    }
+    case 'notes': {
+      const query = notesQueryOf(url.searchParams);
+      if (!query.ok) return json(400, { error: query.error }, headers);
+      const found = await reads.notes(query.query);
+      await traced(found.notes.map((note) => note.workspace.id));
+
+      return json(
+        200,
+        {
+          notes: found.notes.map(adminNoteView),
+          total: found.total,
+          searched: ADMIN_NOTES_SEARCHED,
+          ...(found.next === undefined ? {} : { next: cursorOf(found.next) }),
+        },
+        headers,
+      );
     }
   }
 }
