@@ -2,6 +2,7 @@ import type { SeedStage } from '@fruitback/shared';
 import type { Account, ConnectorAttention, ConnectorKind, Role, Visibility } from './accounts.ts';
 import type { WorkerConfig } from './env.ts';
 import { lastMailSentAt } from './mail.ts';
+import type { SignUp } from './sign-up.ts';
 
 /**
  * The administrator of the instance, and what they read (FRU-261).
@@ -147,12 +148,9 @@ export type InstanceAdminReads = {
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
 const STARTED_AT = Date.now();
 
-/**
- * Who may make an account on this instance. FRU-278 reads it from a variable: until then, anybody
- * whose address is proven, which is what better-auth does today.
- */
-export function signUpPolicyOf(_config: WorkerConfig): { policy: 'anyone'; variable?: string } {
-  return { policy: 'anyone' };
+/** Who may make an account on this instance, and the variable that says it (FRU-278). */
+export function signUpPolicyOf(config: WorkerConfig): { policy: SignUp; variable: 'FRUITBACK_SIGN_UP' } {
+  return { policy: config.signUp, variable: 'FRUITBACK_SIGN_UP' };
 }
 
 /**

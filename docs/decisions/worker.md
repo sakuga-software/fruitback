@@ -2766,8 +2766,9 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
   read: `502` when the database does not answer, `500` when it refuses the row. `GET /console/workspaces/<id>/admin-reads` answers the 200 newest rows to an owner.
-- **The policy of sign-up is `signUpPolicyOf` of `instance-admin.ts`**: « anyone » today, and the one
-  place FRU-278 changes. `GET /console/admin/instance` answers what it says.
+- **The policy of sign-up is `signUpPolicyOf` of `instance-admin.ts`**: the value of
+  `FRUITBACK_SIGN_UP` (FRU-278), with the name of the variable. `GET /console/admin/instance` answers
+  what it says.
 
 ### The reasons, and what was measured
 

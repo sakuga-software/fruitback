@@ -220,7 +220,7 @@ describe('what the administrator reads (FRU-261)', () => {
       google: { on: true, variables: ['FRUITBACK_GOOGLE_OAUTH'] },
     });
     assert.deepEqual(body.publicUrl, { value: 'https://api.fruitback.test', variable: 'FRUITBACK_PUBLIC_URL' });
-    assert.deepEqual(body.signUp, { policy: 'anyone' });
+    assert.deepEqual(body.signUp, { policy: 'invited', variable: 'FRUITBACK_SIGN_UP' });
     assert.deepEqual(body.counts, { workspaces: 2, accounts: 3, admins: 1 });
     assert.equal(body.attention.count, 1);
     assert.deepEqual(body.attention.connectors, [
@@ -233,6 +233,16 @@ describe('what the administrator reads (FRU-261)', () => {
       },
     ]);
     assert.ok(Number.isFinite(Date.parse(body.startedAt)));
+  });
+
+  it('reads the policy of sign-up from FRUITBACK_SIGN_UP, in both of its values', async () => {
+    for (const policy of ['anyone', 'invited'] as const) {
+      const on = await envOf({ env: { FRUITBACK_SIGN_UP: policy } });
+      const ana = await signInTo(on, 'ana@acme.dev');
+      const answer = await get(on, `${ADMIN_PATH}/instance`, ana.token);
+
+      assert.deepEqual(JSON.parse(answer.text).signUp, { policy, variable: 'FRUITBACK_SIGN_UP' }, policy);
+    }
   });
 
   it('lists the workspaces with their owner, their counts, their destinations and what did not arrive', async () => {
