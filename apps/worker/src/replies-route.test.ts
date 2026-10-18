@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import type { Visibility } from './accounts.ts';
+import type { AccountStore, Visibility } from './accounts.ts';
 import { REPLY_LENGTH } from './app.ts';
 import { type World, callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
@@ -112,7 +112,7 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
       lines[0] ?? '',
       /^\*\*Bob Alice Martin via Fruitback · member of Acme x+\*\* via Fruitback · not verified$/,
     );
-    assert.ok((lines[0] ?? '').length < 160, lines[0]);
+    assert.ok((lines[0] ?? '').length < 160, lines[0] ?? '');
     assert.deepEqual(lines.slice(1), ['', '> Hi']);
   });
 
@@ -192,6 +192,37 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
     }
     assert.equal((await reply(world, site.id, note.id, { body: 'One more' }, { ip })).status, 429);
     assert.equal((await reply(world, site.id, note.id, { body: 'A member' }, { ip, token: member })).status, 201);
+  });
+
+  it('spends no reply of the minute on a refusal', async () => {
+    const { world, site, note } = await aSite('everyone');
+    const ip = '198.51.100.8';
+
+    for (let index = 0; index < REPLY_LIMIT + 1; index += 1) {
+      assert.equal((await reply(world, site.id, 'dev_issue_404', { body: 'Hi' }, { ip })).status, 404);
+    }
+    assert.equal((await reply(world, site.id, note.id, { body: 'Hi' }, { ip })).status, 201);
+  });
+
+  it('answers 502 when the accounts do not answer while the worker names a member', async () => {
+    const { world, site, note, member } = await aSite('members');
+    const accounts = world.context.accounts as AccountStore;
+    const down: AccountStore = {
+      ...accounts,
+      memberships: async () => {
+        throw new StoreError('the database did not answer');
+      },
+    };
+
+    const refused = await callOn(
+      world,
+      'POST',
+      `/feedback/${note.id}/replies?client=${site.id}`,
+      { origin: 'https://acme.dev', token: member, body: { url: PAGE, body: 'Hi' } },
+      { accounts: down },
+    );
+
+    assert.equal(refused.status, 502, await refused.clone().text());
   });
 
   it('answers 502 when the store does not answer, so the widget keeps the text', async () => {
