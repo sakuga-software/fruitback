@@ -405,6 +405,27 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
     }
   });
 
+  it('traces the workspace of an invitation that the list of the accounts shows', async () => {
+    const { on, ana, bob, beta } = await anInstance();
+    const eve = await signInTo(on, 'eve@nowhere.dev');
+    await rowsOf(
+      on.database,
+      `INSERT INTO invitation (id, "organizationId", email, role, status, "expiresAt", "inviterId")
+         VALUES ('inv_eve', '${beta}', 'eve@nowhere.dev', 'member', 'pending', now() + interval '1 day', '${bob.id}')`,
+    );
+
+    // Eve is a member of nothing: Beta is in the answer by her invitation only.
+    const answer = await get(on, `${ADMIN_PATH}/users?q=eve`, ana.token);
+    assert.equal(answer.status, 200, answer.text);
+    assert.deepEqual(
+      (JSON.parse(answer.text) as { users: { id: string }[] }).users.map((each) => each.id),
+      [eve.id],
+    );
+
+    const rows = await rowsOf(on.database, `SELECT workspace_id, what FROM admin_reads`);
+    assert.deepEqual(rows, [{ workspace_id: beta, what: 'users' }]);
+  });
+
   it('is read by an owner only: a member is refused, and somebody of another workspace finds nothing', async () => {
     const { on, ana, bob, carl, beta } = await anInstance();
     await get(on, `${ADMIN_PATH}/workspaces/${beta}`, ana.token);

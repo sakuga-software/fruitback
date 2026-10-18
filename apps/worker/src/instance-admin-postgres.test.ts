@@ -84,15 +84,17 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await admins(database), ['first@acme.dev']);
     });
 
-    it('makes a new account the administrator whenever no account has the role', async () => {
-      const database = await opening(open);
-      await migrate(database);
-      await rowsOf(database, person('acc_1', 'first@acme.dev'));
-      await rowsOf(database, `UPDATE "user" SET role = 'user' WHERE id = 'acc_1'`);
+    it('gives the role to no later account, after the role is taken away or written another way', async () => {
+      for (const role of ['NULL', `'Admin'`, `'admin,user'`]) {
+        const database = await opening(open);
+        await migrate(database);
+        await rowsOf(database, person('acc_1', 'first@acme.dev'));
+        await rowsOf(database, `UPDATE "user" SET role = ${role} WHERE id = 'acc_1'`);
 
-      await rowsOf(database, person('acc_2', 'second@acme.dev'));
+        await rowsOf(database, person('acc_2', 'second@acme.dev'));
 
-      assert.deepEqual(await admins(database), ['second@acme.dev']);
+        assert.deepEqual(await admins(database), [], role);
+      }
     });
 
     it('counts every connector that needs attention, beyond the page it lists', async () => {

@@ -2765,7 +2765,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
   answers 100 rows at most and its `total`. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
-  read (`502`). `GET /console/workspaces/<id>/admin-reads` answers the 200 newest rows to an owner.
+  read: `502` when the database does not answer, `500` when it refuses the row. `GET /console/workspaces/<id>/admin-reads` answers the 200 newest rows to an owner.
 - **The policy of sign-up is `signUpPolicyOf` of `instance-admin.ts`**: « anyone » today, and the one
   place FRU-278 changes. `GET /console/admin/instance` answers what it says.
 
@@ -2789,9 +2789,13 @@ its owners see it (D2). No OAuth key in any answer (D4).
   with no lock gives two (measured on PostgreSQL 17).
 - **`SET search_path FROM CURRENT`**: the function reads `"user"` in the schema of the migration,
   the schema of the worker (FRU-219), whatever the search path of the connection that inserts.
-- **A new account becomes the administrator whenever no account has the role**, not only the very
-  first one. The decision says « if no admin exists yet ». So an instance whose last administrator
-  loses the role gives it to the next sign-up: FRU-274 must refuse to take the role from the last one.
+- **Only the first account becomes the administrator**, never a later one, also if no account has the
+  role. The ticket said « if no admin exists yet », and the first version read it as at any time: a
+  role set to `NULL`, `Admin` or `admin,user` then gave the instance to the next person who signed up
+  (measured by a review on a worker, FRU-261). The decision of Mathieu says « le premier compte ». An
+  instance with no administrator gets one from its operator in the database, and FRU-274 must refuse
+  to take the role from the last one.
+  test:`gives the role to no later account, after the role is taken away or written another way`.
 - **The trace is written by the worker, before the answer.** « Each read is traced » is a promise
   only if a read cannot leave without its row. It traces nothing that the operator does in the
   database itself: the trace is of the console.

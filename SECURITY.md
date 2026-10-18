@@ -1694,14 +1694,14 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   administrator, and no route gives the role or takes it away (that is FRU-274). A role that holds a
   list (`admin,user`) is no administrator.
 - **How one becomes it.** The first account of the instance, in the transaction that creates it: a
-  trigger of the database (`0016_first_admin`) gives the role to a new account when no account has
-  it, under an advisory lock, so two first sign-ins at the same moment make one administrator
+  trigger of the database (`0016_first_admin`) gives the role to a new account when the table of
+  accounts is empty, under an advisory lock, so two first sign-ins at the same moment make one administrator
   (test:`makes one administrator: the second account waits for the first to commit`, and its control
   without the lock). On a database that had accounts, the migration gives it to the oldest one. In
   self-hosting the first account is the one of the link of `FRUITBACK_FIRST_ADMIN` when nobody signed
-  up before it. **A new account becomes the administrator whenever no account has the role**: an
-  instance that loses its last administrator gives the role to the next sign-up. FRU-274 must keep
-  one.
+  up before it. **A later account never becomes the administrator**, also when no account has the
+  role: an instance that loses its last administrator has none until its operator writes the role in
+  the database. FRU-274 must keep one.
 - **The admin plugin of better-auth is not mounted, and the worker refuses to start with it**
   (`REFUSED_PLUGINS`): it serves fifteen routes under `/console/auth/admin/`, one of which signs in as
   another person. The worker keeps its four columns of `user` only. Each route of the plugin answers
@@ -1721,7 +1721,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   No route of the administrator writes anything but the trace.
 - **The trace.** Each read that names a workspace the administrator is not a member of writes one row
   in `admin_reads` (who, which read, when) before the answer leaves, and a row that cannot be written
-  fails the read. `GET /console/workspaces/<id>/admin-reads` answers the rows to an owner of that
+  fails the read. A list traces the workspaces of the rows it answers, at most 100: its `total`
+  counts the matches of a search beyond that page with no row. `GET /console/workspaces/<id>/admin-reads` answers the rows to an owner of that
   workspace, `403` to another member and `404` to anybody else. **The trace is written by the worker,
   in its own database**: whoever runs the database can read it without the console and leaves no row.
 
