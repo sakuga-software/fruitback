@@ -115,6 +115,21 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(attention.total, ADMIN_PAGE + 1);
     });
 
+    it('leaves out of the count and of the filter a trouble that this version does not know', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+      const workspace = await accounts.createWorkspace('Beta', bob.id);
+      const connector = await accounts.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'x' });
+      await accounts.noteConnector(connector.id, 'key-refused', 1_000);
+      // A value that a later version writes, read by this one.
+      await rowsOf(database, `UPDATE connectors SET attention = 'quota-reached' WHERE id = '${connector.id}'`);
+
+      assert.deepEqual(await reads.attention(), { total: 0, connectors: [] });
+      assert.deepEqual((await reads.workspaces({ show: 'attention' })).workspaces, []);
+    });
+
     it('reads the instants of a connector and of a trace as the numbers that were written', async () => {
       const database = await opening(open);
       const accounts = createPostgresAccountStore(database);

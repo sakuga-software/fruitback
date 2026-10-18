@@ -1,6 +1,7 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
-import { type SQL, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { type SQL, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { connectorOf } from './account-rows.ts';
+import { CONNECTOR_TROUBLES } from './accounts.ts';
 import { organization, user } from './auth-schema.ts';
 import type {
   AdminConnector,
@@ -86,6 +87,15 @@ const CONNECTOR_COLUMNS = {
   settings: connectors.settings,
 };
 
+/**
+ * A connector needs attention only for a trouble that this version knows: `connectorOf` drops another
+ * value, so the count and the filter must drop it too.
+ */
+const TROUBLED = sql`c.attention IN (${sql.join(
+  CONNECTOR_TROUBLES.map((trouble) => sql`${trouble}`),
+  sql`, `,
+)})`;
+
 export function createPostgresInstanceAdmin(database: Database): InstanceAdminReads {
   const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
     await migrated(database);
@@ -155,7 +165,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           })
           .from(connectors)
           .innerJoin(organization, eq(organization.id, connectors.workspace_id))
-          .where(isNotNull(connectors.attention))
+          .where(inArray(connectors.attention, [...CONNECTOR_TROUBLES]))
           .orderBy(desc(connectors.attention_at), asc(connectors.id))
           .limit(ADMIN_PAGE),
       );
@@ -182,7 +192,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                      AND (u.email ILIKE ${containing(q)} OR u.name ILIKE ${containing(q)})))`;
       const shown = {
         all: sql`true`,
-        attention: sql`(EXISTS (SELECT 1 FROM connectors c WHERE c.workspace_id = o.id AND c.attention IS NOT NULL)
+        attention: sql`(EXISTS (SELECT 1 FROM connectors c WHERE c.workspace_id = o.id AND ${TROUBLED})
                     OR EXISTS (SELECT 1 FROM deliveries d JOIN connectors c ON c.id = d.connector_id
                                 WHERE c.workspace_id = o.id))`,
         empty: sql`NOT EXISTS (SELECT 1 FROM sites s WHERE s.workspace_id = o.id)`,
