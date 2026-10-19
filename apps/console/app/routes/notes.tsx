@@ -211,20 +211,7 @@ export default function Notes() {
 
       {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
 
-      {shown === 'failed' ? (
-        <div
-          role="alert"
-          className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
-        >
-          <div>
-            <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The notes did not load')}</h2>
-            <p className="text-body text-muted">{t('Fruitback did not answer. Your notes are safe.')}</p>
-          </div>
-          <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
-            {t('Try again')}
-          </Button>
-        </div>
-      ) : null}
+      {shown === 'failed' ? <NotesFailed onRetry={() => void read()} /> : null}
 
       {typeof shown === 'object' && shown.counts.all === 0 && !filtered ? (
         <p className="max-w-[640px] text-body text-muted">
@@ -338,31 +325,14 @@ export default function Notes() {
                   </tbody>
                 </DataTable>
               </div>
-              <nav
-                aria-label={t('Pages of notes')}
-                className="mt-[16px] flex flex-wrap items-center justify-between gap-[12px] text-small text-muted"
-              >
-                <span className="tabular-nums">
-                  {t('{from} to {to} of {total}', {
-                    from,
-                    to: from + shown.notes.length - 1,
-                    total: shown.total,
-                  })}
-                </span>
-                <span className="flex gap-[8px]">
-                  <Button tone="outline" inset={14} disabled={cursor === ''} onClick={() => page('previous', shown)}>
-                    {t('Previous')}
-                  </Button>
-                  <Button
-                    tone="outline"
-                    inset={14}
-                    disabled={shown.next === undefined}
-                    onClick={() => page('next', shown)}
-                  >
-                    {t('Next')}
-                  </Button>
-                </span>
-              </nav>
+              <NotePages
+                from={from}
+                shown={shown.notes.length}
+                total={shown.total}
+                first={cursor === ''}
+                last={shown.next === undefined}
+                onPage={(to) => page(to, shown)}
+              />
             </>
           )}
         </>
@@ -554,33 +524,94 @@ function Place({
   return (
     <>
       <span className="block font-semibold">{name}</span>
-      {reference !== undefined && address !== undefined ? (
-        // The reference reads at 400, as the mockup draws it: a link of the kit is at 600, for an action.
-        <a
-          href={address}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-[4px] text-hint text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
-        >
-          {reference}
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[12px] w-[12px]">
-            <path
-              d="M8 16L16 8M9.5 8H16v6.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </a>
-      ) : null}
-      {reference !== undefined && address === undefined ? (
-        <span className="block text-hint text-muted">{reference}</span>
-      ) : null}
+      <Reference reference={reference} address={address} />
       {host === undefined ? null : (
         <span className="block text-hint text-muted">{t('Delivered to {host}', { host })}</span>
       )}
     </>
+  );
+}
+
+/** The reference of a note in a tracker: a link to its issue when the worker knows its address. */
+export function Reference({ reference, address }: { reference: string | undefined; address: string | undefined }) {
+  if (reference === undefined) return null;
+  if (address === undefined) return <span className="block text-hint text-muted">{reference}</span>;
+
+  return (
+    // The reference reads at 400, as the mockup draws it: a link of the kit is at 600, for an action.
+    <a
+      href={address}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-[4px] text-hint text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
+    >
+      {reference}
+      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[12px] w-[12px]">
+        <path
+          d="M8 16L16 8M9.5 8H16v6.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </a>
+  );
+}
+
+/** A read of the notes that failed: the alert of the Sites screen, never « No note yet ». */
+export function NotesFailed({ onRetry }: { onRetry: () => void }) {
+  useLocale();
+
+  return (
+    <div
+      role="alert"
+      className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]"
+    >
+      <div>
+        <h2 className="mb-[4px] text-step leading-auto font-semibold">{t('The notes did not load')}</h2>
+        <p className="text-body text-muted">{t('Fruitback did not answer. Your notes are safe.')}</p>
+      </div>
+      <Button tone="outline" size="page" inset={18} onClick={onRetry}>
+        {t('Try again')}
+      </Button>
+    </div>
+  );
+}
+
+/** Where the page is in the list, and the way to the page before and after it. */
+export function NotePages({
+  from,
+  shown,
+  total,
+  first,
+  last,
+  onPage,
+}: {
+  from: number;
+  shown: number;
+  total: number;
+  first: boolean;
+  last: boolean;
+  onPage: (to: 'next' | 'previous') => void;
+}) {
+  useLocale();
+
+  return (
+    <nav
+      aria-label={t('Pages of notes')}
+      className="mt-[16px] flex flex-wrap items-center justify-between gap-[12px] text-small text-muted"
+    >
+      <span className="tabular-nums">{t('{from} to {to} of {total}', { from, to: from + shown - 1, total })}</span>
+      <span className="flex gap-[8px]">
+        <Button tone="outline" inset={14} disabled={first} onClick={() => onPage('previous')}>
+          {t('Previous')}
+        </Button>
+        <Button tone="outline" inset={14} disabled={last} onClick={() => onPage('next')}>
+          {t('Next')}
+        </Button>
+      </span>
+    </nav>
   );
 }
