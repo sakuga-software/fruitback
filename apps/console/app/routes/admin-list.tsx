@@ -73,8 +73,15 @@ export function useListAddress() {
  * The answer of a read, read again when `ask` changes. A read again keeps the rows on the screen
  * until its answer replaces them: only the first read says « Loading… ». An answer to a question
  * that is no longer asked is dropped.
+ *
+ * `patch` changes the answer on the screen with what a write answered. A read again would write a
+ * trace in each workspace of the list (FRU-261) for a change of one row.
  */
-export function useRead<T>(ask: () => Promise<T | 'failed'>): { shown: T | 'loading' | 'failed'; again: () => void } {
+export function useRead<T>(ask: () => Promise<T | 'failed'>): {
+  shown: T | 'loading' | 'failed';
+  again: () => void;
+  patch: (change: (shown: T) => T) => void;
+} {
   const [shown, setShown] = useState<T | 'loading' | 'failed'>('loading');
   const asked = useRef(0);
   const again = useCallback(() => {
@@ -91,8 +98,11 @@ export function useRead<T>(ask: () => Promise<T | 'failed'>): { shown: T | 'load
     askedFor.current = again;
     again();
   }, [again]);
+  const patch = useCallback((change: (shown: T) => T) => {
+    setShown((current) => (current === 'loading' || current === 'failed' ? current : change(current)));
+  }, []);
 
-  return { shown, again };
+  return { shown, again, patch };
 }
 
 /** The search and the filter above a list, as the mockup draws them: the field, then the list. */

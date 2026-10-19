@@ -30,8 +30,8 @@ import { KINDS } from './connector-parts';
 
 /**
  * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263),
- * read-only: who owns each one, its notes, and where they go. The actions of the mockup come with
- * FRU-274, so the screen has no button that changes a workspace.
+ * read-only: who owns each one, its notes, and where they go. The actions of the mockup on a
+ * workspace come with FRU-274, so the screen has no button that changes a workspace.
  *
  * WARNING: each read writes a trace in each workspace of the answer that the administrator is not a
  * member of (FRU-261). The panel reads its workspace again, and leaves one more trace there.

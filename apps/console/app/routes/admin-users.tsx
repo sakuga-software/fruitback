@@ -1,7 +1,9 @@
-import { Fragment, useCallback, useRef } from 'react';
-import { type AdminUser, adminUsers } from '../api';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { type AdminQuery, type AdminUser, adminUsers, setInstanceAdmin } from '../api';
+import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
-import { Button, DataTable, Initial, PageHead, Problem } from '../ui';
+import { problemOf } from '../problems';
+import { Button, DataTable, Initial, PageHead, Problem, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { useWide } from '../wide';
 import {
@@ -17,12 +19,14 @@ import {
   useListAddress,
   useRead,
 } from './admin-list';
+import { useAdmin } from './admin';
 import { seenOn } from './members';
 
 /**
- * The people of the instance, as screen 19 of the mockup of 2026-10-13 draws them (FRU-263),
- * read-only: their workspaces, how they sign in, and whether they administer the instance. The
- * actions of the mockup come with FRU-274, so the screen has no button that changes a person.
+ * The people of the instance, as screen 19 of the mockup of 2026-10-13 draws them (FRU-263): their
+ * workspaces, how they sign in, and whether they administer the instance. The switch « Instance
+ * admin » of the panel names and removes an administrator (FRU-280). The other actions of the
+ * mockup come with FRU-274.
  *
  * The panel is the row: the worker has no route for one person. It lists accounts only, so somebody
  * invited who never signed in is not a row.
@@ -54,7 +58,8 @@ const PROVIDERS: Readonly<Record<string, string>> = {
   google: 'Google',
 };
 
-type Listed = { users: AdminUser[]; total: number };
+/** A list of the people, with the search and the filter that it answers. */
+type Listed = { users: AdminUser[]; total: number; asked: AdminQuery };
 
 type Status = 'admin' | 'active' | 'invited';
 
@@ -77,6 +82,24 @@ function roleOf(role: string | undefined): string {
   return ROLES[role] === undefined ? role : t(ROLES[role] as string);
 }
 
+/** The two refusals of the worker, which are also the reasons why a switch is held. */
+const SELF_REMOVAL = msg('You cannot take this role from yourself. Another instance admin can.');
+const LAST_ADMIN = msg('The last instance admin keeps the role. Name another admin first.');
+
+const ROLE_PROBLEMS: Readonly<Record<string, string>> = { 'self-removal': SELF_REMOVAL, 'last-admin': LAST_ADMIN };
+const ROLE_NOT_CHANGED = msg('The role did not change. Try again.');
+
+/**
+ * Why the switch of a person cannot change, before the worker is asked. `admins` is the count of
+ * administrators, or `undefined` when the list does not hold all of them: then the worker answers.
+ * The list does not say which account is banned, so the worker can count fewer administrators.
+ */
+function heldBy(user: AdminUser, me: string, admins: number | undefined): string | undefined {
+  if (user.id === me) return SELF_REMOVAL;
+
+  return user.instanceAdmin && admins === 1 ? LAST_ADMIN : undefined;
+}
+
 function providerOf(provider: string): string {
   const name = PROVIDERS[provider];
 
@@ -93,19 +116,38 @@ export default function AdminUsers() {
   const ask = useCallback(async (): Promise<Listed | 'failed'> => {
     const answer = await adminUsers({ q, show });
 
-    return answer.ok && Array.isArray(answer.data?.users) ? answer.data : 'failed';
+    return answer.ok && Array.isArray(answer.data?.users) ? { ...answer.data, asked: { q, show } } : 'failed';
   }, [q, show]);
-  const { shown, again } = useRead(ask);
+  const { shown, again, patch } = useRead(ask);
+  const { me } = useAdmin();
 
   const rows = typeof shown === 'object' ? shown.users : [];
+  // Only a list with no search, of everybody or of the administrators, and not cut, holds them all.
+  // The rows of a read before stay while the next read is on its way: the count reads their question.
+  const whole =
+    typeof shown === 'object' && shown.asked.q === '' && shown.asked.show !== 'alone' && shown.total === rows.length;
+  const admins = whole ? rows.filter((user) => user.instanceAdmin).length : undefined;
   const chosen = rows.find((user) => user.id === open);
   const close = () => {
     change({ open: '' }, true);
     if (chosen !== undefined) document.getElementById(rowId(chosen.id))?.focus();
   };
+  const changed = (id: string, instanceAdmin: boolean) =>
+    patch((listed) => ({
+      ...listed,
+      users: listed.users.map((user) => (user.id === id ? { ...user, instanceAdmin } : user)),
+    }));
   const panel =
     chosen === undefined ? null : (
-      <Panel key={chosen.id} user={chosen} wide={wide} takesFocus={opening} onClose={close} />
+      <Panel
+        key={chosen.id}
+        user={chosen}
+        held={heldBy(chosen, me.account.id, admins)}
+        wide={wide}
+        takesFocus={opening}
+        onClose={close}
+        onRole={(instanceAdmin) => changed(chosen.id, instanceAdmin)}
+      />
     );
 
   return (
@@ -257,14 +299,18 @@ function Seen({ user }: { user: AdminUser }) {
 /** The panel of a person, from their row: their workspaces, how they sign in, and their role here. */
 function Panel({
   user,
+  held,
   wide,
   takesFocus,
   onClose,
+  onRole,
 }: {
   user: AdminUser;
+  held: string | undefined;
   wide: boolean;
   takesFocus: { current: boolean };
   onClose: () => void;
+  onRole: (instanceAdmin: boolean) => void;
 }) {
   useLocale();
   const rows = [
@@ -305,13 +351,96 @@ function Panel({
         )}
       </PanelSection>
 
-      <div className="flex items-center justify-between gap-[16px] text-small">
-        <span>
-          <span className="block font-semibold">{t('Instance admin')}</span>
-          <span className="block text-hint text-muted">{t('Sees this admin and every workspace.')}</span>
-        </span>
-        <span className="font-semibold">{user.instanceAdmin ? t('Yes') : t('No')}</span>
-      </div>
+      <AdminRole user={user} held={held} onRole={onRole} />
     </AdminPanel>
+  );
+}
+
+/**
+ * The switch « Instance admin ». A press asks first, and only the button of the confirmation sends.
+ * The switch shows the role of the list, and the list changes after a `200` only: a refusal leaves
+ * it as it was. After the answer, focus goes back to the switch, where the gesture started.
+ */
+function AdminRole({
+  user,
+  held,
+  onRole,
+}: {
+  user: AdminUser;
+  held: string | undefined;
+  onRole: (instanceAdmin: boolean) => void;
+}) {
+  useLocale();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  // A second press of the button that sends comes before React draws the first one as busy.
+  const sending = useRef(false);
+  const back = useRef(false);
+  const box = useRef<HTMLDivElement>(null);
+  const name = user.name ?? user.email;
+  const naming = !user.instanceAdmin;
+
+  // The confirmation and a refusal appear under the switch, and can appear under the screen on a phone.
+  useEffect(() => {
+    if (asking || problem !== undefined) box.current?.scrollIntoView({ block: 'nearest' });
+  }, [asking, problem]);
+
+  useEffect(() => {
+    if (!back.current || asking || busy) return;
+    back.current = false;
+    box.current?.querySelector<HTMLElement>('[role="switch"]')?.focus();
+  }, [asking, busy]);
+
+  const keep = () => {
+    back.current = true;
+    setAsking(false);
+  };
+
+  async function send() {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setProblem(undefined);
+    const answer = await setInstanceAdmin(user.id, naming);
+    sending.current = false;
+    if (answer.ok) onRole(answer.data.user.instanceAdmin);
+    else setProblem(problemOf(answer, ROLE_PROBLEMS, ROLE_NOT_CHANGED));
+    back.current = true;
+    setAsking(false);
+    setBusy(false);
+  }
+
+  return (
+    <div ref={box} className="flex flex-col gap-[12px]">
+      <Toggle
+        strong
+        label={t('Instance admin')}
+        hint={t('Sees this admin and every workspace.')}
+        value={user.instanceAdmin}
+        disabled={busy || held !== undefined}
+        onChange={() => setAsking(true)}
+      />
+      {held === undefined ? null : <p className="text-hint text-muted">{t(held)}</p>}
+      {asking ? (
+        <Confirmation
+          confirmLabel={naming ? t('Name {name} admin', { name }) : t('Remove {name} as admin', { name })}
+          consequence={
+            naming
+              ? t(
+                  '{name} sees this admin and every workspace, and can name and remove admins. Every instance admin reads that you made this change.',
+                  { name },
+                )
+              : t(
+                  '{name} no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.',
+                  { name },
+                )
+          }
+          onConfirm={() => void send()}
+          onKeep={keep}
+        />
+      ) : null}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+    </div>
   );
 }

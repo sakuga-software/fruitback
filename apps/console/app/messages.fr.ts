@@ -802,6 +802,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not signed in yet': 'Jamais connecté',
   'In no workspace.': 'Dans aucun workspace.',
   'Sees this admin and every workspace.': 'Voit cette administration et chaque workspace.',
-  Yes: 'Oui',
-  No: 'Non',
+  'You cannot take this role from yourself. Another instance admin can.':
+    'Vous ne pouvez pas vous retirer ce rôle. Un autre administrateur de l’instance le peut.',
+  'The last instance admin keeps the role. Name another admin first.':
+    'Le dernier administrateur de l’instance garde le rôle. Nommez d’abord un autre administrateur.',
+  'The role did not change. Try again.': 'Le rôle n’a pas changé. Réessayez.',
+  'Name {name} admin': 'Nommer {name} administrateur',
+  'Remove {name} as admin': 'Retirer le rôle à {name}',
+  '{name} sees this admin and every workspace, and can name and remove admins. Every instance admin reads that you made this change.':
+    '{name} voit cette administration et chaque workspace, et peut nommer et retirer des administrateurs. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+  '{name} no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.':
+    '{name} ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
 };

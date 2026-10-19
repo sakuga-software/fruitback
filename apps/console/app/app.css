@@ -655,6 +655,10 @@ textarea {
   line-height: var(--text-small--line-height);
 }
 
+.kit-toggle--strong .label {
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .kit-toggle .switch__control,
   .kit-toggle .switch__thumb {
