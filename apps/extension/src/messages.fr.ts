@@ -45,7 +45,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'On this page': 'Sur cette page',
   '1 note': '1 note',
   '{count} notes': '{count} notes',
-  'Leave feedback': 'Laisser un feedback',
+  'Leave feedback': 'Laisser une note',
   'Show every note of the page': 'Voir toutes les notes de la page',
   'Your browser': 'Votre navigateur',
   'A note is being written on the page. Send it or close it first.':

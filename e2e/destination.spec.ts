@@ -208,7 +208,7 @@ test('a place the worker refuses keeps the note, and the line says where the not
   const note = 'A note that took time to write';
   await send(page, note);
 
-  await expect(composer(page)).toContainText(/did not go through/);
+  await expect(composer(page)).toContainText(/Did not go through/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   await expect(composer(page)).toContainText('Sending to Linear · Design is no longer possible.');
   await expect(line(page)).toHaveText('Send to: Linear · Web');

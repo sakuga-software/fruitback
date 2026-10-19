@@ -535,7 +535,7 @@ describe('the catalogs in the bundle (FRU-38)', () => {
     const t = createTranslator({ language: 'fr-FR' });
 
     assert.equal(t.lang, 'fr');
-    assert.equal(t.text('launch.label'), 'Laisser un feedback');
+    assert.equal(t.text('launch.label'), 'Laisser une note');
     assert.equal(t.plural('orphans.count', 2), '2 notes détachées');
   });
 
@@ -555,6 +555,40 @@ describe('the catalogs in the bundle (FRU-38)', () => {
       const expected = placeholders(typeof english === 'string' ? english : english.other);
       const forms = typeof french === 'string' ? [french] : Object.values(french);
       for (const form of forms) assert.deepEqual(placeholders(form), expected, `${key}: ${form}`);
+    }
+  });
+
+  // FRU-287: the console and the list say « note ». The widget said « feedback » in six places.
+  it('says « note » in French, never « feedback »', () => {
+    const forms = Object.values(FRENCH).flatMap((message) =>
+      typeof message === 'string' ? [message] : Object.values(message),
+    );
+
+    assert.deepEqual(
+      forms.filter((form) => /feedback/i.test(form)),
+      [],
+    );
+  });
+
+  // FRU-287: a status stands alone under the text, so it starts with a capital letter.
+  it('starts every status of a send with a capital letter', () => {
+    const statuses = [
+      'composer.sending',
+      'composer.sent',
+      'composer.sentWithoutPicture',
+      'composer.kept',
+      'composer.keptWithoutPicture',
+      'composer.failed',
+      'reply.sending',
+      'reply.sent',
+      'reply.failed',
+    ] as const;
+
+    for (const catalog of [ENGLISH, FRENCH]) {
+      for (const key of statuses) {
+        const status = catalog[key];
+        assert.ok(typeof status === 'string' && /^\p{Lu}/u.test(status), `${key}: ${String(status)}`);
+      }
     }
   });
 });

@@ -153,7 +153,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'failed');
     assert.equal(field().value, 'A note on its way');
-    assert.match(statusText(), /did not go through/);
+    assert.match(statusText(), /Did not go through/);
   });
 
   it('closes on the cross like on Cancel, and gives the note up', () => {
@@ -175,7 +175,7 @@ describe('what the popover looks like (FRU-36)', () => {
     sendButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(statusText(), 'sent');
+    assert.equal(statusText(), 'Sent');
   });
 
   it('says when a note kept for later has no picture, and not that it was sent (FRU-238)', async () => {
@@ -189,7 +189,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(composer?.state(), 'kept');
-    assert.equal(statusText(), 'kept for later, without the picture');
+    assert.equal(statusText(), 'Kept for later, without the picture');
   });
 
   it('says when the note went without the picture it asked for (FRU-238)', async () => {
@@ -201,7 +201,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(composer?.state(), 'sent');
-    assert.equal(statusText(), 'sent, without the picture');
+    assert.equal(statusText(), 'Sent, without the picture');
   });
 });
 
@@ -248,13 +248,13 @@ describe('createComposer', () => {
     sendButton().click();
     await Promise.resolve();
     assert.equal(composer?.state(), 'sending');
-    assert.match(statusText(), /sending/);
+    assert.match(statusText(), /Sending/);
 
     release();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'sent');
     // The word the product uses, not "sent".
-    assert.match(statusText(), /^sent$/);
+    assert.match(statusText(), /^Sent$/);
   });
 
   it('refuses to plant the same note twice', async () => {
@@ -314,7 +314,7 @@ describe('createComposer', () => {
       composer = null;
     }
 
-    assert.equal(said.retry, 'did not go through — your text is kept, try again');
+    assert.equal(said.retry, 'Did not go through — your text is kept, try again');
     assert.match(said.wait ?? '', /in a minute/);
     assert.match(said.refused ?? '', /tell the team of the site/);
     assert.match(said['too-large'] ?? '', /shorten it/);
@@ -1301,7 +1301,7 @@ describe('keep for later (FRU-124)', () => {
     keepButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'kept');
-    assert.equal(statusText(), 'kept for later');
+    assert.equal(statusText(), 'Kept for later');
     assert.equal(sendButton().disabled, true);
     assert.equal(keepButton().disabled, true);
     assert.deepEqual(kept, ['Pour plus tard', 'Pour plus tard']);

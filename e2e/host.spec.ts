@@ -118,7 +118,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
       sent = read.text;
       return read.status;
     })
-    .toBe('sent');
+    .toBe('Sent');
   seen.push(sent);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 

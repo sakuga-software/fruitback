@@ -520,7 +520,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The last step of the setup, and the example page of its preview (FRU-242).
   'An example page. Pins show the same way on your site.':
     'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
-  'Leave feedback': 'Laisser un feedback',
+  'Leave feedback': 'Laisser une note',
   'Click Leave feedback, then any part of the page.':
     'Cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
   'Use one, or both.': 'Utilisez l’un, ou les deux.',

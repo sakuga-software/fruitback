@@ -104,9 +104,9 @@ test.describe('on a touch screen at 390 px', () => {
 
     await mount(page, 'touch-label-fr', 'fr-FR');
     const lancer = page.locator('[data-fruitback-host-launch]');
-    await expect(lancer).toHaveText('Laisser un feedback');
+    await expect(lancer).toHaveText('Laisser une note');
     await lancer.tap();
-    await expect(lancer).toHaveText('Laisser un feedback');
+    await expect(lancer).toHaveText('Laisser une note');
     const bandeau = page.locator('[data-fruitback-host-banner]');
     await expect(bandeau).toHaveText('Touchez la partie de la page dont parle votre note' + 'Arrêter');
     await expect(bandeau).not.toHaveText(/Esc|Échap/);

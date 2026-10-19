@@ -117,10 +117,10 @@ describe('the field to reply to a note (FRU-257)', () => {
     for (const [failure, words] of [
       ['wait', /Too many replies/],
       ['signed-out', /session has ended/],
-      ['retry', /did not go through/],
+      ['retry', /Did not go through/],
     ] as const) {
       thread.submit();
-      assert.equal(thread.status(), 'sending…');
+      assert.equal(thread.status(), 'Sending…');
       assert.equal(field().readOnly, true);
       answer(failure);
       await settle();
@@ -138,7 +138,7 @@ describe('the field to reply to a note (FRU-257)', () => {
     await settle();
 
     assert.equal(field().value, '');
-    assert.equal(thread.status(), 'sent');
+    assert.equal(thread.status(), 'Sent');
     // As a reply, not as the text of the tracker: the name is the author, and the quote is the text.
     assert.deepEqual(thread.replies(), ['Same on the phone.']);
     assert.match(
@@ -252,7 +252,7 @@ describe('the field to reply to a note (FRU-257)', () => {
 
     assert.deepEqual(thread.replies(), ['Only once.']);
     assert.equal(thread.field()?.value, '');
-    assert.equal(thread.status(), 'sent');
+    assert.equal(thread.status(), 'Sent');
   });
 
   it('keeps the focus and the caret in the field when the page changes under the thread', () => {
