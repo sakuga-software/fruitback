@@ -1,56 +1,122 @@
 /*
-  The tokens of the design (the mock-up of 2026-10-13, FRU-233), which are the tokens of the widget
-  (packages/widget/src/theme.ts). A stylesheet of an extension page cannot import them, so they are
-  copied here, and src/design-tokens.test.ts compares each one with the widget and measures each pair
-  of text and background (FRU-170). The options page loads this file first.
+  The tokens of the mock-up of 2026-10-20 (FRU-292). The greys, the statuses, the shadows and the
+  radii are those of the widget (packages/widget/src/theme.ts); the accent is the extension's own
+  (#c2410c), where the widget keeps its red: one accent per surface. A stylesheet of an extension
+  page cannot import the widget, so the shared values are copied here, and
+  src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
+  background. The options page loads this file first.
 */
 :root {
   color-scheme: light dark;
   --surface: #fff;
-  --surface-raised: #fafafa;
-  --surface-sunken: #f4f4f5;
-  --text: #18181b;
-  --muted: #6b6b74;
-  --subtle: #52525b;
-  --line: #e4e4e7;
-  --line-strong: #8a8a93;
-  --accent: #dd2c27;
-  --accent-strong: #b91c1c;
+  /* A quiet block, and the background of the page of the extension. */
+  --surface-raised: #fafaf9;
+  --surface-sunken: #f5f5f4;
+  /* A mono block, and the row that is open. */
+  --surface-warm: #fffdf9;
+  --text: #1c1917;
+  /* #78716c in the mock-up, one step darker so that it holds 4.5:1 on the sunken surface too. */
+  --muted: #756e69;
+  /* The secondary text of the extension. */
+  --subtle: #57534e;
+  --line: #e7e5e4;
+  /* The rule between the rows of a table. */
+  --line-row: #f0efed;
+  /* The edge of a field: 3.49:1 on the surface. */
+  --line-strong: #8f8883;
+  /*
+    The edge of a secondary button and of a key. 2.52:1 on the surface: the label of the button says
+    what it is, so the edge is not the only cue. A field takes --line-strong.
+  */
+  --line-control: #a8a29e;
+  /* The search field of the page, and a switch that is off. */
+  --line-soft: #d6d3d1;
+  --accent: #c2410c;
+  --accent-strong: #9a3412;
   --on-accent: #fff;
-  --chip: #3f3f46;
+  --chip: #44403c;
   --on-chip: #fff;
-  --success: #15803d;
-  /* The five statuses of a note, as the widget draws them on the page (FRU-233). */
-  --stage-seeded: #dd2c27;
-  --stage-green: #2563eb;
-  --stage-ripening: #f59e0b;
-  --stage-ripe: #15803d;
-  --stage-composted: #64748b;
+  /* The capture capsule and the Save button. */
+  --ink: #1c1917;
+  --on-ink-muted: #d6d3d1;
+  --success: #3f6421;
+  /* The edge of « Looks fixed », and the dot that says a session is attached. */
+  --success-line: #4e7d2a;
+  /* A problem and its remedy. */
+  --alert-surface: #fff7ed;
+  --alert-line: #fdba74;
+  --alert-text: #9a3412;
+  /* The block « Ready to check ». */
+  --ready-surface: #fffaf5;
+  --ready-line: #fed7aa;
+  --ready-divider: #fde4c8;
+  --selection: #fed7aa;
+  /* The tile of a site that is on. */
+  --tile-on: #2f4f3a;
+  --on-tile: #fff;
+  /* The five statuses of a note, as the widget draws them on the page. */
+  --stage-seeded: #6a7950;
+  --stage-green: #56802e;
+  --stage-ripening: #ac5f00;
+  --stage-ripe: #dd2c27;
+  --stage-composted: #8d6e63;
+  /* The tab that is chosen; the popup; the side panel. */
+  --shadow-xs: 0 1px 3px rgba(28, 25, 23, 0.15);
+  --shadow-popup: 0 8px 28px rgba(28, 25, 23, 0.14);
+  --shadow-panel: -8px 0 24px rgba(28, 25, 23, 0.06);
   --radius-control: 6px;
   --radius-field: 8px;
-  /* A main action of the popup in the mock-up of 2026-10-13. The screens of the popup take it (FRU-251). */
+  /* A main action and a tile. */
   --radius-action: 10px;
+  /* The high action, an alert, a card of the page. */
+  --radius-card: 12px;
+  --radius-panel: 14px;
   --radius-pill: 999px;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/*
+  The mock-up draws no dark scheme. This one is derived: the stone scale from its other end (900,
+  800, 700), an orange lighter than the accent under dark text, every pair measured by the test.
+*/
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #18181b;
-    --surface-raised: #27272a;
-    --surface-sunken: #2e2e33;
-    --text: #f4f4f5;
-    --muted: #a1a1aa;
-    --subtle: #d4d4d8;
-    --line: #3f3f46;
-    --line-strong: #71717a;
-    /* No red holds white text at 4.5:1 and is also readable on a dark surface: the dark scheme has
-       a lighter fill with dark text on it, as the widget has (FRU-93). */
-    --accent: #ec6a65;
-    --accent-strong: #f28b87;
-    --on-accent: #18181b;
-    --chip: #52525b;
-    --success: #4ade80;
+    --surface: #1c1917;
+    --surface-raised: #292524;
+    --surface-sunken: #312c29;
+    --surface-warm: #221e1b;
+    --text: #f5f5f4;
+    --muted: #a8a29e;
+    --subtle: #d6d3d1;
+    --line: #44403c;
+    --line-row: #292524;
+    --line-strong: #8f8883;
+    --line-control: #78716c;
+    --line-soft: #57534e;
+    /* No orange holds white text at 4.5:1 and is also readable on a dark surface: a lighter fill with dark text on it. */
+    --accent: #fb923c;
+    --accent-strong: #fdba74;
+    --on-accent: #1c1917;
+    --chip: #57534e;
+    --success: #9bc46a;
+    --success-line: #9bc46a;
+    --alert-surface: #431407;
+    --alert-line: #9a3412;
+    --alert-text: #fdba74;
+    --ready-surface: #2a1d14;
+    --ready-line: #7c2d12;
+    --ready-divider: #431407;
+    --selection: #7c2d12;
+    --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-popup: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --shadow-panel: -8px 0 24px rgba(0, 0, 0, 0.4);
   }
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--text);
 }
 
 body {
@@ -75,13 +141,13 @@ h1 {
   font-weight: 600;
 }
 
-/* The pin of the widget beside the name, as the boards draw it. The red of the mark, in both schemes. */
+/* The drop of the mark beside the name, in the accent of the light scheme in both schemes, as the mock-up of 2026-10-20 draws it. */
 h1::before {
   content: '';
   flex: none;
   width: 14px;
   height: 14px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z' fill='%23dd2c27'/%3E%3C/svg%3E")
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z' fill='%23c2410c'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
 

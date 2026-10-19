@@ -162,7 +162,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
     'line-height': '21px',
   });
   expect(await page.locator('[data-fruitback-composer]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
-    'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
+    'rgba(28, 25, 23, 0.22) 0px 14px 40px 0px',
   );
   // Above the element: it ends 40 px over its top, on the edge of the frame, 6 px off the element.
   const target = (await button.boundingBox())!;
@@ -189,7 +189,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   expect(await read('.fruitback-composer-about', ['font-size', 'color', 'white-space', 'text-overflow'])).toMatchObject(
     {
       'font-size': '12px',
-      color: 'rgb(107, 107, 116)',
+      color: 'rgb(117, 110, 105)',
       'white-space': 'nowrap',
       'text-overflow': 'ellipsis',
     },
@@ -199,7 +199,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
     width: 32,
     height: 32,
     'border-radius': '8px',
-    color: 'rgb(107, 107, 116)',
+    color: 'rgb(117, 110, 105)',
   });
   expect(await read('.fruitback-composer-body', ['padding'])).toMatchObject({ padding: '0px 16px 12px' });
   expect(
@@ -209,7 +209,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
     height: 83,
     width: 328,
     'border-top-width': '1px',
-    'border-top-color': 'rgb(138, 138, 147)',
+    'border-top-color': 'rgb(143, 136, 131)',
     'border-radius': '8px',
     padding: '9px 12px',
     resize: 'vertical',
@@ -220,7 +220,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
     padding: '10px 12px 12px 16px',
     gap: '8px',
     'border-top-width': '1px',
-    'border-top-color': 'rgb(228, 228, 231)',
+    'border-top-color': 'rgb(231, 229, 228)',
   });
   expect(
     await read('[data-fruitback-cancel]', ['padding', 'border-radius', 'color', 'font-size', 'font-weight']),
@@ -228,7 +228,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
     height: 36,
     padding: '0px 12px',
     'border-radius': '999px',
-    color: 'rgb(107, 107, 116)',
+    color: 'rgb(117, 110, 105)',
     'font-size': '13px',
     'font-weight': '600',
   });
@@ -250,11 +250,11 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   });
   await page.locator('[data-fruitback-cancel]').hover();
   expect(await read('[data-fruitback-cancel]', ['background-color'])).toMatchObject({
-    'background-color': 'rgb(244, 244, 245)',
+    'background-color': 'rgb(245, 245, 244)',
   });
   await cross.hover();
   expect(await read('.fruitback-composer-close', ['background-color'])).toMatchObject({
-    'background-color': 'rgb(244, 244, 245)',
+    'background-color': 'rgb(245, 245, 244)',
   });
 
   // The cross closes without sending, and the frame goes with the composer.

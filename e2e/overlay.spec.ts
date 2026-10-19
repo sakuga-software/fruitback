@@ -81,7 +81,7 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   assertDistinct(stages);
 });
 
-test('each of the five statuses has the colour of the mock-up, and the amber is written dark (FRU-233)', async ({
+test('each of the five statuses has the colour of the mock-up of 2026-10-20, and every number is white (FRU-292)', async ({
   page,
 }) => {
   // The in-memory Linear gives five notes in a row the five states of its workflow.
@@ -112,12 +112,12 @@ test('each of the five statuses has the colour of the mock-up, and the amber is 
   const white = 'rgb(255, 255, 255)';
   const status = (fill: string, text = white) => ({ fill, text, frame: fill });
   expect(drawn).toEqual({
-    seeded: status('rgb(221, 44, 39)'),
-    green: status('rgb(37, 99, 235)'),
-    // White on this amber is 2.15:1. The ink is 8.25:1.
-    ripening: status('rgb(245, 158, 11)', 'rgb(24, 24, 27)'),
-    ripe: status('rgb(21, 128, 61)'),
-    composted: status('rgb(100, 116, 139)'),
+    seeded: status('rgb(106, 121, 80)'),
+    green: status('rgb(86, 128, 46)'),
+    // The amber of 2026-10-20 holds white, 4.78:1 (FRU-292).
+    ripening: status('rgb(172, 95, 0)'),
+    ripe: status('rgb(221, 44, 39)'),
+    composted: status('rgb(141, 110, 99)'),
   });
 });
 
@@ -185,7 +185,7 @@ test('a pin and its frame have the measures of the mock-up, at each of the five 
       drop: [26, 26],
       corner: [-2, -2],
       shape: '50% 0px',
-      shadow: 'rgba(24, 24, 27, 0.28) 0px 3px 10px 0px',
+      shadow: 'rgba(28, 25, 23, 0.28) 0px 3px 10px 0px',
       number: String(index + 1),
       font: '13px 600',
       expanded: 'false',

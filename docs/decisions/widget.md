@@ -219,7 +219,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   `theme.ts`.
   - **« In progress » is written dark.** White on the amber is 2.15:1, the ink is 8.25:1.
     `onStageToken` gives a stage its foreground, and `color-on-stage` stays the white of the four
-    others, so a host that set that one token keeps it. test:`writes « in progress » dark on its
+    others, so a host that set that one token keeps it. Until FRU-292: gone-test:`writes « in progress » dark on its
 amber, where white cannot be read (FRU-233)`.
   - **The amber is 2.15:1 on white, under the 3:1 of a drawing, and it stays**: it is the colour
     the mock-up gives that status. A status is never said by its colour alone: the list names it,
@@ -233,6 +233,49 @@ amber, where white cannot be read (FRU-233)`.
   - **`color-warning` is not in the mock-up.** Its brown belonged to the stone palette. It is the
     amber of the mock-up darkened until it holds as text, 5.02:1.
   - `e2e/overlay.spec.ts` reads the five colours on five real pins, and the ink on the amber one.
+
+- **FRU-292 changes them again: the mock-up of 2026-10-20.** It brings the warm stone greys back,
+  gives the five stages new colours, and gives **each surface its own accent**: the widget keeps the
+  red `#dd2c27` on the page of a host, the extension paints its own pages in `#c2410c`. The greys,
+  the statuses, the shadows and the radii are shared, and `apps/extension/src/design-tokens.test.ts`
+  compares them; the accent is checked against its own value on each side. Going back to one accent
+  is a change of one line, and of that test. The values are read in the CSS of the mock-up:
+
+  | Token                         | 2026-10-13 (FRU-233)      | 2026-10-20 (FRU-292)    |
+  | ----------------------------- | ------------------------- | ----------------------- |
+  | `color-text`                  | `#18181b`                 | `#1c1917`               |
+  | `color-text-muted`            | `#6b6b74`                 | `#756e69`               |
+  | `color-text-subtle`           | `#52525b`                 | `#57534e`               |
+  | `color-surface-raised`        | `#fafafa`                 | `#fafaf9`               |
+  | `color-surface-sunken`        | `#f4f4f5`                 | `#f5f5f4`               |
+  | `color-surface-warm` (new)    | —                         | `#fffdf9`               |
+  | `color-border`                | `#e4e4e7`                 | `#e7e5e4`               |
+  | `color-border-strong`         | `#8a8a93`                 | `#8f8883`               |
+  | `color-chip`                  | `#3f3f46`                 | `#44403c`               |
+  | `color-ink`                   | `#18181b`                 | `#1c1917`               |
+  | `color-on-ink-muted`          | `#a1a1aa`                 | `#d6d3d1`               |
+  | `color-success`               | `#15803d`                 | `#3f6421`               |
+  | `color-unplaced`              | `#d97706`                 | `#8d6e63`               |
+  | `stage-seeded`, new           | `#dd2c27`                 | `#6a7950`               |
+  | `stage-green`, to do          | `#2563eb`                 | `#56802e`               |
+  | `stage-ripening`, in progress | `#f59e0b`, written in ink | `#ac5f00`, in white     |
+  | `stage-ripe`, done            | `#15803d`                 | `#dd2c27`               |
+  | `stage-composted`, closed     | `#64748b`                 | `#8d6e63`               |
+  | `shadow-xs`                   | `rgba(24, 24, 27, .12)`   | `rgba(28, 25, 23, .15)` |
+  | `shadow-sm`, `shadow-xl`      | tinted `24, 24, 27`       | tinted `28, 25, 23`     |
+  - **The muted text is one step darker than the mock-up.** Its `#78716c` is 4.40:1 on the sunken
+    surface, where the open note of the list writes its byline. `#756e69` is 4.59:1 there and
+    4.98:1 on the surface: the smallest step that holds 4.5:1 everywhere it is painted.
+  - **Every stage holds white**, from 4.62:1 (closed) to 4.78:1 (in progress), and is 4.62:1 or
+    more on the surface. `contrast.test.ts` has no known failure any more. `color-on-stage-ripening`
+    stays, because a host may have set it, and holds white.
+  - **The dark scheme is derived, and Mathieu validates it on the captures of the PR**: stone 900,
+    800 and 700 (`#1c1917` surface, `#292524` raised, `#312c29` sunken, `#44403c` border), `#f5f5f4`
+    text, `#a8a29e` muted, `#8f8883` for the edge of a field (5.01:1 on the surface, 3.95:1 on the
+    sunken one). The red of the accent stays `#ec6a65` under dark text (5.68:1 on the surface,
+    4.92:1 on the raised one). The five stages keep their values: 3.66:1 or more on the dark surface.
+  - `color-warning` keeps its amber: the mock-up draws none. The dock of FRU-303 paints the detached
+    notes in the brown of « closed ».
 
 - **The pins, their frame and the dock have the measures of the mock-up** (FRU-252, screens 14 to
   16). Read in its CSS, held by `e2e/overlay.spec.ts` and `e2e/host.spec.ts` on computed styles.
