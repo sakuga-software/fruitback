@@ -9,6 +9,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The shell and the sign-in (FRU-251).
   'Signed in as {name}': 'Connecté en tant que {name}',
   'Settings and every site': 'Réglages et tous les sites',
+  // The kit (FRU-293).
+  'Account and settings': 'Compte et réglages',
   'Open the console': 'Ouvrir la console',
   'Running your own Fruitback?': 'Vous hébergez votre propre Fruitback ?',
   'Connect it in settings': 'Connectez-le dans les réglages',

@@ -17,6 +17,7 @@ import { describe, it } from 'node:test';
 
 const sheet = readFileSync(new URL('../entrypoints/popup/style.css', import.meta.url), 'utf8');
 const optionsSheet = readFileSync(new URL('../entrypoints/options/style.css', import.meta.url), 'utf8');
+const kitSheet = readFileSync(new URL('./kit.css', import.meta.url), 'utf8');
 const widget = readFileSync(new URL('../../../packages/widget/src/theme.ts', import.meta.url), 'utf8');
 
 /** The token of the widget that each shared property of the stylesheet copies. */
@@ -150,6 +151,17 @@ const PAIRS = [
   { foreground: 'subtle', background: 'ready-surface', minimum: 4.5, where: 'the words of « Ready to check »' },
   { foreground: 'text', background: 'selection', minimum: 4.5, where: 'a selected text' },
   { foreground: 'on-tile', background: 'tile-on', minimum: 4.5, where: 'the initial of a site that is on' },
+  // The kit (FRU-293).
+  { foreground: 'on-avatar', background: 'avatar-surface', minimum: 4.5, where: 'the initial of the account' },
+  { foreground: 'alert-body', background: 'alert-surface', minimum: 4.5, where: 'the words of a problem' },
+  { foreground: 'line-strong', background: 'surface', minimum: 3, where: 'the track of a switch that is off' },
+  { foreground: 'line-strong', background: 'surface-raised', minimum: 3, where: 'a switch of the page that is off' },
+  ...(['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map((stage) => ({
+    foreground: 'on-stage',
+    background: `stage-${stage}`,
+    minimum: 4.5,
+    where: `the number of a drop (${stage})`,
+  })),
   // A drawing, not text: 1.4.11 asks for 3:1. A status is also named in words.
   ...(['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map((stage) => ({
     foreground: `stage-${stage}`,
@@ -211,9 +223,9 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292)', (
 
   it('writes no colour outside the tokens, but the drop of the mark', () => {
     const body = sheet.slice(sheet.indexOf('\nbody {'));
-    const written = [...`${body}\n${optionsSheet}`.matchAll(/#[0-9a-f]{3,8}\b|%23[0-9a-f]{3,8}\b|rgba?\(/gi)].map(
-      ([colour]) => colour.toLowerCase(),
-    );
+    const written = [
+      ...`${body}\n${optionsSheet}\n${kitSheet}`.matchAll(/#[0-9a-f]{3,8}\b|%23[0-9a-f]{3,8}\b|rgba?\(/gi),
+    ].map(([colour]) => colour.toLowerCase());
 
     // The drop beside the name: the accent of the light scheme, in both schemes.
     assert.deepEqual(written, [`%23${ACCENTS.extension.slice(1)}`]);
