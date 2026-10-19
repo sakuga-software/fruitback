@@ -33,6 +33,16 @@ export function identifierFor(id: number): string {
 }
 
 /**
+ * The number of the row that `identifierFor` named, or `undefined`. A tracker can name an issue
+ * `FB-12` too: the number is a row to look at, never proof that the row is this note.
+ */
+export function rowOfIdentifier(identifier: string): number | undefined {
+  const id = /^FB-([1-9][0-9]{0,15})$/.exec(identifier)?.[1];
+
+  return id === undefined || !Number.isSafeInteger(Number(id)) ? undefined : Number(id);
+}
+
+/**
  * The states are ours, so there is nothing to project.
  *
  * Linear needs `stageForLinearState` because its vocabulary is its own and the contract's is the

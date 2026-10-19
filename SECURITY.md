@@ -1719,9 +1719,21 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   never its address), the connectors that need attention, every workspace (owners, members and roles,
   sites and their visibility, destinations, counts of notes by stage and of deliveries that did not
   arrive), and every account (workspaces and roles, ways to sign in, last day seen, invitations that
-  wait). **No answer holds a secret, a token, a digest, a key of a connector or the text of a note**,
-  not even masked: test:`answers no secret, no token, no digest, no key and no text of a note, on any route`.
+  wait). **No answer holds a secret, a token, a digest or a key of a connector**, not even masked,
+  and only `notes` holds a note:
+  test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
   No route of the administrator writes anything but the trace.
+- **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
+  its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
+  of its author and never a name, where it went, the reference and the link in the tracker, and **the
+  excerpt of 64 characters**. **The whole text only for a note that the worker keeps** in `seeds`:
+  the site of the row and the id that the widget gave the note must be the ones of the index, because
+  a tracker can name an issue `FB-12` too and a page writes the ids of its notes. A note that went to
+  a tracker has its excerpt and nothing more: **the worker calls no tracker to read more**, with the
+  key of a client, for somebody that client did not give it to.
+  test:`answers the text of a note the worker keeps, and of a note of a tracker its excerpt only`,
+  test:`calls no tracker to read the notes, and the control sees the call of a read of Linear`. The
+  same on the Cloud and in self-hosting.
 - **The trace.** Each read that names a workspace the administrator is not a member of writes one row
   in `admin_reads` (who, which read, when) before the answer leaves, and a row that cannot be written
   fails the read. A list traces the workspaces of the rows it answers, at most 100: its `total`

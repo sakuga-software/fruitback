@@ -1,10 +1,11 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
-import { type SQL, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { connectorOf } from './account-rows.ts';
 import { CONNECTOR_TROUBLES } from './accounts.ts';
 import { organization, user } from './auth-schema.ts';
 import type {
   AdminConnector,
+  AdminNote,
   AdminUser,
   AdminWorkspace,
   AdminWorkspaceDetail,
@@ -16,15 +17,19 @@ import type {
 import { ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { admin_reads, connectors } from './postgres-schema.ts';
+import type { AuthorKind } from './notes-index.ts';
+import { placeIs, wordsOf } from './notes-index-postgres.ts';
+import { admin_reads, connectors, note_index, seeds, sites } from './postgres-schema.ts';
+import { noteOf, rowOfIdentifier, seedIdOf } from './seed-rows.ts';
 
 /**
  * What the administrator of the instance reads, in the database of the worker (FRU-261). See
  * `instance-admin.ts`.
  *
  * WARNING: a statement here selects its columns by name. `connectors.sealed`, the digests of
- * `session` and `verification`, the token columns of `account`, `note_index.excerpt` and the
- * `seeds` table are never selected: an answer of the administrator holds none of them.
+ * `session` and `verification`, and the token columns of `account` are never selected: an answer of
+ * the administrator holds none of them. Only `notes` selects `note_index.excerpt` and `seeds.seed`,
+ * and it answers the text of a row of `seeds` only for the note that the row is (`keptTexts`).
  *
  * A `BIGINT` is read through the schema, as in every store (FRU-180): the raw statements here count,
  * and read an instant of better-auth as milliseconds (`EPOCH_MS`).
@@ -95,6 +100,56 @@ const TROUBLED = sql`c.attention IN (${sql.join(
   CONNECTOR_TROUBLES.map((trouble) => sql`${trouble}`),
   sql`, `,
 )})`;
+
+/** The columns of `note_index` that `notes` answers: not `author_account_id`. */
+const NOTE_COLUMNS = {
+  site_id: note_index.site_id,
+  seed_id: note_index.seed_id,
+  workspace_id: note_index.workspace_id,
+  page_url: note_index.page_url,
+  excerpt: note_index.excerpt,
+  stage: note_index.stage,
+  channel: note_index.channel,
+  author_kind: note_index.author_kind,
+  place: note_index.place,
+  reference: note_index.reference,
+  reference_url: note_index.reference_url,
+  created_at: note_index.created_at,
+  checked_at: note_index.checked_at,
+};
+
+type NoteRow = { site_id: string; seed_id: string; reference: string | null };
+
+const keyOf = (row: { site_id: string; seed_id: string }): string => JSON.stringify([row.site_id, row.seed_id]);
+
+/**
+ * The text of each note of a page that the worker keeps in `seeds`, by its key. The reference gives
+ * the number of a row only: a tracker can name an issue `FB-12` too. The row is the note when its site
+ * and the id that the widget gave it are the ones of the index. A row that does not parse is no note.
+ */
+async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, string>> {
+  const ids = [
+    ...new Set(rows.flatMap((row) => (row.reference === null ? [] : [rowOfIdentifier(row.reference) ?? []].flat()))),
+  ];
+  if (ids.length === 0) return new Map();
+  const kept = await db
+    .select({ id: seeds.id, client_id: seeds.client_id, seed: seeds.seed })
+    .from(seeds)
+    .where(inArray(seeds.id, ids));
+  const byId = new Map(kept.map((row) => [Number(row.id), row]));
+
+  const texts = new Map<string, string>();
+  for (const row of rows) {
+    const id = row.reference === null ? undefined : rowOfIdentifier(row.reference);
+    const seed = id === undefined ? undefined : byId.get(id);
+    if (seed === undefined || seed.client_id !== row.site_id) continue;
+    const widgetId = seedIdOf(seed.seed);
+    if (widgetId === '' || widgetId !== row.seed_id) continue;
+    texts.set(keyOf(row), noteOf(seed.seed));
+  }
+
+  return texts;
+}
 
 export function createPostgresInstanceAdmin(database: Database): InstanceAdminReads {
   const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
@@ -377,6 +432,101 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           }),
         ),
       };
+    },
+
+    async notes(query) {
+      return run(async (db) => {
+        const words = wordsOf(query.q).map((word) => {
+          const like = containing(word);
+
+          return or(
+            ilike(note_index.excerpt, like),
+            ilike(note_index.page_url, like),
+            ilike(sites.origin, like),
+            ilike(organization.name, like),
+            ilike(note_index.workspace_id, like),
+            ilike(note_index.stage, like),
+            ilike(note_index.reference, like),
+          );
+        });
+        const filtered = and(
+          query.workspace === undefined ? undefined : eq(note_index.workspace_id, query.workspace),
+          query.site === undefined ? undefined : eq(note_index.site_id, query.site),
+          query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
+          query.place === undefined ? undefined : placeIs(query.place),
+          ...words,
+        );
+        const after =
+          query.after === undefined
+            ? filtered
+            : and(
+                filtered,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.seed_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+              );
+
+        const [page, [counted]] = await Promise.all([
+          db
+            .select({
+              row: NOTE_COLUMNS,
+              origin: sites.origin,
+              workspaceName: organization.name,
+              connector: { id: connectors.id, kind: connectors.kind, label: connectors.label },
+            })
+            .from(note_index)
+            .innerJoin(sites, eq(sites.id, note_index.site_id))
+            .innerJoin(organization, eq(organization.id, note_index.workspace_id))
+            .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+            .where(after)
+            .orderBy(
+              sql`${note_index.created_at} DESC NULLS LAST`,
+              sql`${note_index.site_id} COLLATE "C" DESC`,
+              sql`${note_index.seed_id} COLLATE "C" DESC`,
+            )
+            .limit(query.limit + 1),
+          db
+            .select({ notes: count() })
+            .from(note_index)
+            .innerJoin(sites, eq(sites.id, note_index.site_id))
+            .innerJoin(organization, eq(organization.id, note_index.workspace_id))
+            .where(filtered),
+        ]);
+        const shown = page.slice(0, query.limit);
+        const texts = await keptTexts(
+          db,
+          shown.map(({ row }) => row),
+        );
+        const last = shown.at(-1);
+
+        return {
+          notes: shown.map(({ row, origin, workspaceName, connector }): AdminNote => {
+            const text = texts.get(keyOf(row));
+
+            return {
+              workspace: { id: row.workspace_id, name: workspaceName },
+              site: { id: row.site_id, origin },
+              seed: row.seed_id,
+              pageUrl: row.page_url,
+              excerpt: row.excerpt,
+              ...(text === undefined ? {} : { text }),
+              stage: row.stage,
+              channel: row.channel === 'script' || row.channel === 'extension' ? row.channel : null,
+              author: row.author_kind as AuthorKind,
+              place:
+                row.place === 'fruitback'
+                  ? { kind: 'fruitback' }
+                  : { kind: 'connector', ...(connector === null ? {} : { connector }) },
+              ...(row.reference === null ? {} : { reference: row.reference }),
+              ...(row.reference_url === null ? {} : { referenceUrl: row.reference_url }),
+              createdAt: Number(row.created_at),
+              checkedAt: Number(row.checked_at),
+            };
+          }),
+          total: number(counted?.notes),
+          ...(page.length > query.limit && last !== undefined
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.seed_id } }
+            : {}),
+        };
+      });
     },
 
     async trace(admin, workspaces, what, now) {

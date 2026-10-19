@@ -2761,9 +2761,10 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Four reads, and no write** (FRU-274 writes): `instance`, `workspaces` (`q`, `show` of `all`,
-  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`). A list
-  answers 100 rows at most and its `total`. `/console/me` answers `instanceAdmin`.
+- **Five reads, and no write** (FRU-274 writes): `instance`, `workspaces` (`q`, `show` of `all`,
+  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`), and
+  `notes` (FRU-272). A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+  workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
   read: `502` when the database does not answer, `500` when it refuses the row. `GET /console/workspaces/<id>/admin-reads` answers the 200 newest rows to an owner.
@@ -2838,6 +2839,30 @@ would never read the old notes. A note that nobody can read is personal data kep
 console says it before the click: « The notes that Fruitback keeps for it are deleted. » The notes of
 sites removed before this change stay: no migration deletes them, because a note copied from SQLite
 under a client that is not a site looks the same. `forget` deletes them.
+
+## The notes of the instance, for its administrator (FRU-272)
+
+**The rules, in short:**
+
+- **`GET /console/admin/notes` is the list of the notes of a workspace for the whole instance**: the
+  query of `console-notes.ts` (`site`, `stage`, `place`, `q`, `cursor`, `limit`) plus `workspace`,
+  less `mine`. Each row names its workspace. No counts by place and no delivery: the screen of the
+  instance lists, and « Send again » is for the people of the workspace.
+- **`text` is there only for a note that the worker keeps in `seeds`**, and `excerpt` always.
+  `keptTexts` of `instance-admin-postgres.ts` reads the number of the row from the reference
+  (`rowOfIdentifier`), then takes the text only when the site of the row and the id that the widget
+  gave the note are the ones of the index. The reference alone is not enough: a tracker can name an
+  issue `FB-12` (a team of Linear keyed `FB`), and a page writes the ids of its notes, so another site
+  can reuse one. test:`answers the text of a note the worker keeps, and of a note of a tracker its excerpt only`
+  plants both, and fails without either check.
+- **No gate on the place.** A note sent to a receiving address (REST) is kept in `seeds` first
+  (FRU-122), and the administrator reads its text. A note of `fruitback` on a worker whose store is
+  Linear has no row in `seeds`, and gets no text.
+- **No call to a tracker.** The route reads the database and nothing else:
+  test:`calls no tracker to read the notes, and the control sees the call of a read of Linear`, whose
+  control is a read of a Linear store under the same stub.
+- **The author is a kind, never a name.** The name of a member is for the people of the workspace.
+- **The trace names the workspaces of the page**, as every list (`notes` in `admin_reads`).
 
 ## The first reviewer, named in the environment (FRU-108)
 

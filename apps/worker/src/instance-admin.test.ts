@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
+import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { AUTH_BASE_PATH } from './auth.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
 import { GITHUB, GOOGLE, IDENTITY_SECRET, SESSION_COOKIE } from './auth-worker.fixture.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { ADMIN_PATH, ADMIN_ROUTES, type InstanceAdminReads, isAdminPath } from './instance-admin.ts';
+import { createLinearStore } from './linear.ts';
+import type { Place } from './notes-index.ts';
+import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { StoreError } from './store.ts';
 
@@ -58,15 +62,17 @@ async function anInstance() {
   await on.accounts.noteConnector(connector.id, 'key-refused', Date.UTC(2026, 9, 17));
   await on.accounts.setDestinations(beta, site.id, [{ connector: connector.id, label: 'REST API · Hook of Beta' }]);
   await on.accounts.enqueueDelivery(connector.id, DELIVERY_BODY, Date.now());
-  await rowsOf(
+  // The REST connector keeps the note in the worker's store first (FRU-122): its row is `FB-<id>`.
+  const [kept] = await rowsOf(
     on.database,
-    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, created_at, checked_at)
-       VALUES ('${site.id}', 'sd_1', '${beta}', 'https://staging.beta.dev/', '${NOTE_TEXT.slice(0, 64)}', 'ripe', 'visitor', 'connector', '${connector.id}', 1, 1)`,
+    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+       VALUES ('${site.id}', 'https://staging.beta.dev/', 'seeded', '{"id":"sd_1","note":"${NOTE_TEXT}"}', 1, 1)
+     RETURNING id`,
   );
   await rowsOf(
     on.database,
-    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
-       VALUES ('${site.id}', 'https://staging.beta.dev/', 'seeded', '{"note":"${NOTE_TEXT}"}', 1, 1)`,
+    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
+       VALUES ('${site.id}', 'sd_1', '${beta}', 'https://staging.beta.dev/', '${NOTE_TEXT.slice(0, 64)}', 'ripe', 'visitor', 'connector', '${connector.id}', 'FB-${kept?.id}', 1, 1)`,
   );
   await rowsOf(
     on.database,
@@ -349,7 +355,7 @@ describe('what the administrator reads (FRU-261)', () => {
     assert.deepEqual(await emails('show=alone'), ['eve@nowhere.dev']);
   });
 
-  it('answers no secret, no token, no digest, no key and no text of a note, on any route', async () => {
+  it('answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only', async () => {
     const { on, ana, bob, beta } = await anInstance();
     const cookieValues = [ana.token, bob.token].map((cookie) => cookie.slice(`${SESSION_COOKIE}=`.length));
     const secrets = [
@@ -361,7 +367,6 @@ describe('what the administrator reads (FRU-261)', () => {
       GOOGLE.clientSecret,
       'not-a-password',
       SEALED,
-      NOTE_TEXT.slice(0, 20),
       DELIVERY_BODY,
       ...cookieValues,
       ...cookieValues.map((value) => decodeURIComponent(value).split('.')[0] as string),
@@ -370,15 +375,19 @@ describe('what the administrator reads (FRU-261)', () => {
     assert.ok(digests.length >= 2);
 
     for (const path of pathsOf(beta)) {
+      const notes = path === `${ADMIN_PATH}/notes`;
       const { status, text } = await get(on, path, ana.token);
       assert.equal(status, 200, path);
-      for (const secret of [...secrets, ...digests])
+      for (const secret of [...secrets, ...digests, ...(notes ? [] : [NOTE_TEXT.slice(0, 20)])])
         assert.equal(text.includes(secret), false, `${path} holds ${secret}`);
       assert.doesNotMatch(text, /[0-9a-f]{40,}/i, `${path} holds something that looks like a digest`);
       const keys = [...text.matchAll(/"([^"]+)":/g)].map((match) => match[1] as string);
       for (const key of keys) {
-        assert.doesNotMatch(key, /token|secret|sealed|hash|digest|password|excerpt|^note$|^text$|^body$|^seed$/i, path);
+        assert.doesNotMatch(key, /token|secret|sealed|hash|digest|password|^body$|^seed$/i, path);
+        if (!notes) assert.doesNotMatch(key, /excerpt|^note$|^text$/i, path);
       }
+      // The control: the route of the notes holds the note, so the loop above reads an answer that has one.
+      if (notes) assert.ok(text.includes(NOTE_TEXT), path);
     }
   });
 });
@@ -396,7 +405,7 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
         .filter((row) => row.workspace_id === beta)
         .map((row) => row.what)
         .toSorted(),
-      ['instance', 'users', 'workspace', 'workspaces'],
+      ['instance', 'notes', 'users', 'workspace', 'workspaces'],
     );
     assert.equal(
       rows.some((row) => row.workspace_id === alpha),
@@ -408,7 +417,7 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
     const answer = await get(on, `/console/workspaces/${beta}/admin-reads`, bob.token);
     assert.equal(answer.status, 200, answer.text);
     const { reads } = JSON.parse(answer.text) as { reads: { admin: { email: string }; what: string; at: string }[] };
-    assert.equal(reads.length, 4);
+    assert.equal(reads.length, 5);
     for (const read of reads) {
       assert.deepEqual(read.admin, { email: 'ana@acme.dev' });
       assert.ok(Date.parse(read.at) >= at - 1000, read.at);
@@ -475,6 +484,192 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
       const text = await answer.text();
       assert.equal(answer.status, 502, `${path}: ${text}`);
       assert.deepEqual(JSON.parse(text), { error: 'store-unavailable' });
+    }
+  });
+});
+
+/** A note of more than `EXCERPT_LENGTH` characters: what follows the 64th is nowhere in the index. */
+const LONG = (head: string) => `${head.padEnd(64, '.')}AFTER-THE-64TH-CHARACTER of ${head}`;
+
+/**
+ * Two workspaces of other people (FRU-272). Beta keeps a note in the worker's store. Gamma sent
+ * three notes to Linear:
+ * - one named like an issue of Linear;
+ * - one whose reference and widget id are the ones of the note of Beta, as a team of Linear keyed
+ *   `FB` and a page that reuses an id would make them;
+ * - one whose reference names the row of a note that Gamma keeps, with another widget id.
+ */
+async function notesOfTheInstance() {
+  const on = await world();
+  const ana = await signInTo(on, 'ana@acme.dev');
+  const bob = await signInTo(on, 'bob@beta.dev');
+  const zed = await signInTo(on, 'zed@gamma.dev');
+  const beta = await workspaceIn(on, bob.token, 'Beta');
+  const gamma = await workspaceIn(on, zed.token, 'Gamma');
+  const betaSite = await on.accounts.addSite(beta, { origin: 'https://beta.dev', visibility: 'members' });
+  const gammaSite = await on.accounts.addSite(gamma, { origin: 'https://gamma.dev', visibility: 'members' });
+  const linear = await on.accounts.addConnector(gamma, { kind: 'linear', label: 'Linear GAM', sealed: 'x' });
+  const index = createPostgresNoteIndex(on.database);
+
+  const keep = async (site: string, seed: string, note: string): Promise<string> => {
+    const [row] = await rowsOf(
+      on.database,
+      `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+         VALUES ('${site}', 'https://${site}.test/', 'seeded', '${JSON.stringify({ id: seed, note })}', 1, 1)
+       RETURNING id`,
+    );
+
+    return `FB-${row?.id}`;
+  };
+  const entry = (workspace: string, site: string, id: string, note: string, place: Place, reference: string) => ({
+    workspace,
+    site,
+    seed: seedFixture({ id, note }),
+    channel: 'script' as const,
+    author: { kind: 'visitor' as const },
+    place,
+    issue: { identifier: reference, url: `https://tracker.test/${reference}` },
+    stage: 'seeded' as const,
+  });
+
+  const keptNote = LONG('The note that Beta keeps');
+  const betaRow = await keep(betaSite.id, 'sd_kept', keptNote);
+  const gammaRow = await keep(gammaSite.id, 'sd_gamma_kept', LONG('The note that Gamma keeps'));
+  const toLinear = { kind: 'connector', connector: linear.id } as const;
+  await index.record([entry(beta, betaSite.id, 'sd_kept', keptNote, { kind: 'fruitback' }, betaRow)], 1_000);
+  await index.record([entry(gamma, gammaSite.id, 'sd_linear', LONG('A note of Linear'), toLinear, 'GAM-7')], 2_000);
+  await index.record(
+    // The widget id of the note of Beta: a page writes the id of its notes, so another site can reuse it.
+    [entry(gamma, gammaSite.id, 'sd_kept', LONG('A note of Linear named FB'), toLinear, betaRow)],
+    3_000,
+  );
+  await index.record(
+    [entry(gamma, gammaSite.id, 'sd_same_site', LONG('A note of Linear on the site'), toLinear, gammaRow)],
+    4_000,
+  );
+
+  return { on, ana, bob, zed, beta, gamma, keptNote };
+}
+
+type AdminNotes = {
+  notes: {
+    id: string;
+    workspace: { id: string; name: string };
+    excerpt: string;
+    text?: string;
+    place: { kind: string };
+  }[];
+  total: number;
+  searched: string[];
+  next?: string;
+};
+
+async function adminNotes(on: World, token: string, query = ''): Promise<{ answer: AdminNotes; raw: string }> {
+  const { status, text } = await get(on, `${ADMIN_PATH}/notes${query}`, token);
+  assert.equal(status, 200, text);
+
+  return { answer: JSON.parse(text) as AdminNotes, raw: text };
+}
+
+describe('the notes of the instance, for its administrator (FRU-272)', () => {
+  it('answers the text of a note the worker keeps, and of a note of a tracker its excerpt only', async () => {
+    const { on, ana, keptNote } = await notesOfTheInstance();
+
+    const { answer, raw } = await adminNotes(on, ana.token);
+
+    assert.equal(answer.total, 4);
+    const byExcerpt = new Map(answer.notes.map((note) => [note.excerpt.slice(0, 20), note]));
+    assert.equal(byExcerpt.get('The note that Beta k')?.text, keptNote);
+    for (const note of answer.notes) {
+      assert.ok([...note.excerpt].length <= 64, note.excerpt);
+      if (note.place.kind === 'linear') assert.equal(note.text, undefined, note.excerpt);
+    }
+    // No character after the 64th of a note of Linear: not as a text, not in the excerpt.
+    for (const head of ['A note of Linear', 'A note of Linear named FB', 'A note of Linear on the site']) {
+      assert.equal(raw.includes(`AFTER-THE-64TH-CHARACTER of ${head}`), false, head);
+    }
+    assert.deepEqual(answer.searched, ['excerpt', 'page', 'site', 'workspace', 'stage', 'reference']);
+  });
+
+  it('calls no tracker to read the notes, and the control sees the call of a read of Linear', async () => {
+    const { on, ana } = await notesOfTheInstance();
+    const fetched = mock.method(globalThis, 'fetch', async () => Response.json({ data: { issues: { nodes: [] } } }));
+    try {
+      await adminNotes(on, ana.token);
+      await adminNotes(on, ana.token, '?q=Linear&place=fruitback');
+      assert.equal(fetched.mock.callCount(), 0);
+
+      const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_gamma', projectId: undefined });
+      // The answer of the stub is not one Linear gives: only the call counts here.
+      await store
+        .findForPage({ url: 'https://gamma.dev/', clientId: undefined }, undefined, {
+          showComments: false,
+          identitySecret: undefined,
+          read: 'public',
+          locale: 'en',
+        })
+        .catch(() => []);
+      assert.ok(fetched.mock.callCount() > 0);
+    } finally {
+      mock.restoreAll();
+    }
+  });
+
+  it('filters by workspace, searches the name of a workspace, and pages with a cursor', async () => {
+    const { on, ana, beta, gamma } = await notesOfTheInstance();
+
+    const ofBeta = (await adminNotes(on, ana.token, `?workspace=${beta}`)).answer;
+    assert.deepEqual(
+      ofBeta.notes.map((note) => note.workspace),
+      [{ id: beta, name: 'Beta' }],
+    );
+    const named = (await adminNotes(on, ana.token, '?q=gamma')).answer;
+    assert.equal(named.total, 3);
+    assert.ok(named.notes.every((note) => note.workspace.id === gamma));
+
+    const first = (await adminNotes(on, ana.token, '?limit=8')).answer;
+    assert.equal(first.next, undefined);
+    assert.equal(first.notes.length, 4);
+    assert.equal((await get(on, `${ADMIN_PATH}/notes?mine=1`, ana.token)).status, 400);
+    assert.equal((await get(on, `${ADMIN_PATH}/notes?workspace=a%20b`, ana.token)).status, 400);
+  });
+
+  it('traces the workspaces of the notes it answers, and none of the notes of the administrator', async () => {
+    const { on, ana, bob, beta, gamma } = await notesOfTheInstance();
+    await memberOf(on, gamma, ana.id, 'member');
+
+    await adminNotes(on, ana.token);
+
+    const rows = await rowsOf(on.database, `SELECT workspace_id, what FROM admin_reads ORDER BY workspace_id`);
+    assert.deepEqual(rows, [{ workspace_id: beta, what: 'notes' }]);
+    const { reads } = JSON.parse((await get(on, `/console/workspaces/${beta}/admin-reads`, bob.token)).text) as {
+      reads: { what: string }[];
+    };
+    assert.deepEqual(
+      reads.map((read) => read.what),
+      ['notes'],
+    );
+  });
+
+  it('names the place of a note whose connector was removed', async () => {
+    const { on, ana } = await notesOfTheInstance();
+    await rowsOf(on.database, `DELETE FROM connectors WHERE kind = 'linear'`);
+
+    const { answer } = await adminNotes(on, ana.token);
+
+    assert.deepEqual(
+      answer.notes.map((note) => note.place).filter((place) => place.kind !== 'fruitback'),
+      [{ kind: 'removed' }, { kind: 'removed' }, { kind: 'removed' }],
+    );
+  });
+
+  it('answers 404 to the owner of a workspace, who reads the notes of their own workspace elsewhere', async () => {
+    const { on, bob, zed } = await notesOfTheInstance();
+
+    for (const token of [bob.token, zed.token]) {
+      const { status, text } = await get(on, `${ADMIN_PATH}/notes`, token);
+      assert.equal(status, 404);
+      assert.deepEqual(JSON.parse(text), { error: 'not-found' });
     }
   });
 });

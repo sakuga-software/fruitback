@@ -237,13 +237,18 @@ what it writes each time.
   and the role of each member, the day each was last seen, the ways each person signs in, the sites
   and who sees them, where each site sends its notes, the label of each connector and whether it
   needs attention, the invitations that wait, and the **counts** of the notes by stage and of the
-  deliveries that did not arrive. Never a key of a connector, a token, a digest or the text of a note.
-- **What it will show them** (FRU-272): the index of the notes of a workspace, the excerpt of
-  64 characters, and the text of the notes that Fruitback keeps in its own store. This document says
-  so now, before the screen exists.
+  deliveries that did not arrive. Never a key of a connector, a token or a digest.
+- **The notes of every workspace** (FRU-272), the same on the Cloud and in self-hosting:
+  - of each note: its workspace and its site, the address of its page, its stage, its date, by which
+    way it came, whether its author was a visitor, a member or the site, where it went, its reference
+    and its link in the tracker, and **its first 64 characters**. Never the name of its author;
+  - **the whole text of a note that Fruitback keeps in its own store**: a site that sends nowhere, or
+    a receiving address (REST), which keeps the note before it sends it;
+  - **of a note that went to a tracker** (Linear, GitHub), the 64 characters and nothing more. The
+    worker does not ask the tracker of a workspace for the rest of a note, or for its replies.
 - **Each read in a workspace the administrator is not a member of leaves a row** in `admin_reads`:
   the workspace, the account and the address of the administrator, which read (`instance`,
-  `workspaces`, `workspace` or `users`) and its moment. The read does not answer when the row cannot
+  `workspaces`, `workspace`, `users` or `notes`) and its moment. The read does not answer when the row cannot
   be written. **The owners of the workspace read these rows**, and nobody else: no other member, and
   not the administrator. A row goes with its workspace; it keeps the address of the administrator
   after their account goes.

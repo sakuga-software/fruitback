@@ -209,6 +209,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     workspaces: true,
     workspace: true,
     users: true,
+    notes: true,
     trace: true,
     reads: true,
   });
