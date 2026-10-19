@@ -568,6 +568,9 @@ test('the switch is the one of the mockup, and a keyboard turns it (FRU-232)', a
   await expect(off).toBeChecked();
   await expect.poll(() => place('Attach a picture')).toEqual({ left: 19, top: 3, size: [18, 18] });
   await expectStyle(track('Attach a picture'), 'switch, turned on', { backgroundColor: INK });
+  // A pointer turns it from its track too, and not only from its words.
+  await track('Show Linear comments').click();
+  await expect(on).not.toBeChecked();
 
   const disabled = toggles.getByRole('switch', { name: 'A setting that cannot change' });
   await expect(disabled).toBeDisabled();

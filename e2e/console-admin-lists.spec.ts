@@ -6,7 +6,7 @@ import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWr
 /**
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
  * browser against screens 18 and 19 of the mockup of 2026-10-13 (`18-admin-workspaces.html`,
- * `19-admin-users.html`), read-only. The worker is answered by stubs with the shapes of
+ * `19-admin-users.html`), and the switch « Instance admin » of a person (FRU-280). The worker is answered by stubs with the shapes of
  * `instance-admin.ts`, and the stubs filter by `q` and `show` as the worker does: a search that the
  * stub did not filter would prove nothing.
  *
@@ -192,8 +192,8 @@ function workspacesOf(q: string, show: string) {
   );
 }
 
-function usersOf(q: string, show: string) {
-  return USERS.filter(
+function usersOf(users: typeof USERS, q: string, show: string) {
+  return users.filter(
     (user) =>
       (q === '' || has(user.name, q) || has(user.email, q)) &&
       (show !== 'admins' || user.instanceAdmin) &&
@@ -210,16 +210,28 @@ type Options = {
   hold?: Promise<void>;
   workspaces?: typeof WORKSPACES;
   users?: typeof USERS;
+  /** The account of the administrator, `a1` by default, who is not in `USERS`. */
+  self?: string;
+  /** How many more people the worker counts than it lists: a list cut at its page. */
+  cut?: number;
+  /** A refusal that the role answers instead of a `200`, until it is set to `undefined`. */
+  refusing?: { status: number; error: string } | undefined;
+  /** Holds every answer of the role until it resolves. */
+  holdRole?: Promise<void>;
+  /** Each write of the role that the page sent. */
+  posted?: Posted[];
 };
+
+type Posted = { path: string; body: unknown };
 
 type Asked = { path: string; q: string | null; show: string | null };
 
 /** The worker of an administrator, or of somebody else, and what the lists were asked. */
 async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
-  const { admin = true, locale = 'en', failing, hold } = options;
+  const { admin = true, locale = 'en', failing, hold, self = 'a1', cut = 0 } = options;
   const asked: Asked[] = [];
   const me = {
-    account: { id: 'a1', email: 'ana@acme.dev', name: 'Ana', locale },
+    account: { id: self, email: 'ana@acme.dev', name: 'Ana', locale },
     workspaces: [{ id: 'w1', name: 'Acme', role: 'owner' }],
     instanceAdmin: admin,
   };
@@ -228,6 +240,8 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (!pathname.startsWith('/console/admin')) return undefined;
     // The worker answers `404` to anybody else, as for a path that does not exist (FRU-261).
     if (!admin) return route.fulfill({ status: 404, json: { error: 'not-found' } });
+    const role = /^\/console\/admin\/users\/([^/]+)\/instance-admin$/.exec(pathname);
+    if (role !== null && route.request().method() === 'POST') return answerRole(role[1] as string, route);
     const url = new URL(route.request().url());
     const q = url.searchParams.get('q');
     const show = url.searchParams.get('show');
@@ -248,11 +262,20 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (pathname.startsWith('/console/admin/workspaces/'))
       return reply({ ...DETAIL, id: pathname.split('/').pop(), members: [], sites: [], destinations: [] });
     if (pathname === '/console/admin/users') {
-      const found = usersOf(q ?? '', show ?? 'all').filter((each) => (options.users ?? USERS).includes(each));
-      return reply({ users: found, total: found.length });
+      const found = usersOf(options.users ?? USERS, q ?? '', show ?? 'all');
+      return reply({ users: found, total: found.length + cut });
     }
 
     return route.fulfill({ status: 404, json: { error: 'not-found' } });
+  };
+  const answerRole = async (id: string, route: Route): Promise<void> => {
+    const body = route.request().postDataJSON() as { admin: boolean };
+    options.posted?.push({ path: new URL(route.request().url()).pathname, body });
+    await (options.holdRole ?? Promise.resolve());
+    const refused = options.refusing;
+    if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+
+    return route.fulfill({ json: { user: { id, instanceAdmin: body.admin }, changed: true } });
   };
   await stubWorker(page, { locale, answer });
 
@@ -270,6 +293,10 @@ function watched(page: Page): string[] {
 }
 
 const main = (page: Page) => page.locator('main');
+/** The switch « Instance admin » of the open panel. */
+const adminSwitch = (page: Page) => page.locator('#admin-panel').getByRole('switch', { name: /^Instance admin/ });
+/** The track of the switch of the open panel, which a pointer presses: the input under it is hidden. */
+const track = (page: Page) => page.locator('#admin-panel .kit-toggle .switch__control');
 const rows = (page: Page) => main(page).locator('table tbody tr:not(:has(#admin-panel))');
 const panel = (page: Page) => page.locator('#admin-panel');
 const search = (page: Page, name: string) => page.getByRole('searchbox', { name });
@@ -337,13 +364,17 @@ async function expectPanel(page: Page): Promise<void> {
   });
 }
 
-/** No gesture of FRU-274 is drawn, not even disabled, and nothing switches. */
-async function expectNoAction(page: Page): Promise<void> {
+/**
+ * No gesture of FRU-274 is drawn, not even disabled. Nothing switches but « Instance admin » in the
+ * panel of a person (FRU-280), when `switches` is 1.
+ */
+async function expectNoAction(page: Page, switches: 0 | 1 = 0): Promise<void> {
   for (const name of ACTIONS) {
     await expect(page.getByRole('button', { name })).toHaveCount(0);
     await expect(page.getByRole('link', { name })).toHaveCount(0);
   }
-  await expect(main(page).getByRole('switch')).toHaveCount(0);
+  await expect(main(page).getByRole('switch')).toHaveCount(switches);
+  await expect(panel(page).getByRole('switch')).toHaveCount(switches);
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).locator('form')).toHaveCount(0);
 }
@@ -619,11 +650,17 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
     'Acme webMember',
     'Email linktom@acme.dev',
   ]);
-  await expect(panel(page)).toContainText('Instance adminSees this admin and every workspace.No');
+  await expect(adminSwitch(page)).not.toBeChecked();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).toContainText('Sees this admin and every workspace.');
+  // The words of the mockup: the label in bold, and the line under it.
+  expect
+    .soft(await styles(panel(page).locator('.kit-toggle .label'), ['font-weight']))
+    .toEqual({ 'font-weight': '600' });
   // « Browsers signed in » of the mockup: the worker does not say it.
   await expect(panel(page)).not.toContainText('Browsers signed in');
   await expectPanel(page);
-  await expectNoAction(page);
+  await expectNoAction(page, 1);
   await axe(page, 'the panel of a person at 1440 px');
 
   await page.keyboard.press('Escape');
@@ -632,7 +669,7 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
 
   // The administrator, and somebody invited who has no workspace yet.
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
-  await expect(panel(page)).toContainText('Instance adminSees this admin and every workspace.Yes');
+  await expect(adminSwitch(page)).toBeChecked();
   await expect(panel(page).getByRole('listitem')).toHaveText([
     'Acme webOwner',
     'Acme supportMember',
@@ -823,4 +860,228 @@ test('in French, every sentence of both screens is French', async ({ page }) => 
       'member',
     ].filter((sentence) => usersText.includes(sentence)),
   ).toEqual([]);
+});
+
+const SELF_REMOVAL = 'You cannot take this role from yourself. Another instance admin can.';
+const LAST_ADMIN = 'The last instance admin keeps the role. Name another admin first.';
+const NAMES_TOM = 'Name Tom Marchal admin';
+const REMOVES_TOM = 'Remove Tom Marchal as admin';
+const REMOVES_NADIA = 'Remove Nadia Benali as admin';
+/** The second time of the gesture, by the button that sends. */
+const confirmation = (page: Page, name: string) => panel(page).getByRole('group', { name });
+const statusOf = (page: Page, row: number) => rows(page).nth(row).getByRole('cell').nth(3).locator('span').first();
+
+test('Users: an admin names a person after a confirmation, then removes them the same way (FRU-280)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1040 });
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a3', 'Users');
+  await expect(adminSwitch(page)).not.toBeChecked();
+
+  await track(page).click();
+  const naming = confirmation(page, NAMES_TOM);
+  await expect(naming).toContainText(
+    'Tom Marchal sees this admin and every workspace, and can name and remove admins. Every instance admin reads that you made this change.',
+  );
+  await expect(naming.getByRole('button', { name: 'Keep it' })).toBeFocused();
+  // The press asks: the switch still shows the role of the list, and nothing left.
+  await expect(adminSwitch(page)).not.toBeChecked();
+  expect(posted).toEqual([]);
+  await axe(page, 'the confirmation of a new admin');
+
+  await naming.getByRole('button', { name: NAMES_TOM }).click();
+  await expect(naming).toHaveCount(0);
+  await expect(adminSwitch(page)).toBeChecked();
+  await expect(adminSwitch(page)).toBeFocused();
+  await expect(statusOf(page, 1)).toHaveText('Instance admin');
+  expect(posted).toEqual([{ path: '/console/admin/users/a3/instance-admin', body: { admin: true } }]);
+  // Two admins now: the one of before is no longer the last one.
+  await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await track(page).click();
+  const removing = confirmation(page, REMOVES_TOM);
+  await expect(removing).toContainText(
+    'Tom Marchal no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.',
+  );
+  expect(posted).toHaveLength(1);
+  await removing.getByRole('button', { name: REMOVES_TOM }).click();
+  await expect(adminSwitch(page)).not.toBeChecked();
+  await expect(statusOf(page, 1)).toHaveText('Active');
+  expect(posted.at(-1)).toEqual({ path: '/console/admin/users/a3/instance-admin', body: { admin: false } });
+  await expect(main(page).getByRole('alert')).toHaveCount(0);
+});
+
+test('Users: « Keep it » and Escape send nothing, and give focus back to the switch (FRU-280)', async ({ page }) => {
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a3', 'Users');
+
+  await track(page).click();
+  await confirmation(page, NAMES_TOM).getByRole('button', { name: 'Keep it' }).click();
+  await expect(confirmation(page, NAMES_TOM)).toHaveCount(0);
+  await expect(adminSwitch(page)).toBeFocused();
+  await expect(adminSwitch(page)).not.toBeChecked();
+
+  // Space presses the switch, and Escape steps back from the confirmation and leaves the panel open.
+  await page.keyboard.press('Space');
+  await expect(confirmation(page, NAMES_TOM).getByRole('button', { name: 'Keep it' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(confirmation(page, NAMES_TOM)).toHaveCount(0);
+  await expect(panel(page)).toBeVisible();
+  await expect(adminSwitch(page)).toBeFocused();
+  await page.waitForTimeout(200);
+  expect(posted).toEqual([]);
+});
+
+test('Users: the switch is held on yourself and on the last admin, and says why (FRU-280)', async ({ page }) => {
+  const posted: Posted[] = [];
+  // The administrator is Nadia, who also is the last one: the worker checks the caller first.
+  await stub(page, { posted, self: 'a2' });
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(adminSwitch(page)).toBeChecked();
+  await expect(adminSwitch(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(SELF_REMOVAL);
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+  await track(page).click({ force: true });
+  await expect(panel(page).getByRole('group')).toHaveCount(0);
+  // Another person of the list is not held.
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(SELF_REMOVAL);
+  expect(posted).toEqual([]);
+});
+
+test('Users: the last admin is held only when the list holds every admin (FRU-280)', async ({ page }) => {
+  await stub(page);
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(adminSwitch(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(LAST_ADMIN);
+  await axe(page, 'the switch of the last admin');
+
+  // The filter of the admins holds them all too.
+  await page.goto(`${CONSOLE}/admin/users?show=admins&open=a2`);
+  await expect(adminSwitch(page)).toBeDisabled();
+
+  // A search holds some of them: the console does not guess, and the worker answers.
+  await page.goto(`${CONSOLE}/admin/users?q=nadia&open=a2`);
+  await expect(adminSwitch(page)).toBeChecked();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+});
+
+test('Users: a list cut at its page does not guess the last admin', async ({ page }) => {
+  await stub(page, { cut: 150 });
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+});
+
+test('Users: each refusal of the worker is said, and the switch shows the role it has (FRU-280)', async ({ page }) => {
+  const posted: Posted[] = [];
+  const refusing: { status: number; error: string } = { status: 409, error: 'last-admin' };
+  const options: Options = { posted, cut: 150, refusing };
+  await stub(page, options);
+  await visit(page, '/admin/users?open=a2', 'Users');
+
+  const refused = async (sentence: string) => {
+    await track(page).click();
+    await confirmation(page, REMOVES_NADIA).getByRole('button', { name: REMOVES_NADIA }).click();
+    await expect(panel(page).getByRole('alert')).toHaveText(sentence);
+    await expect(adminSwitch(page)).toBeChecked();
+    await expect(adminSwitch(page)).toBeEnabled();
+    await expect(adminSwitch(page)).toBeFocused();
+    await expect(statusOf(page, 0)).toHaveText('Instance admin');
+  };
+
+  await refused(LAST_ADMIN);
+  await axe(page, 'a refusal of the role');
+  options.refusing = { status: 409, error: 'self-removal' };
+  await refused(SELF_REMOVAL);
+  options.refusing = { status: 500, error: 'down' };
+  await refused('Fruitback did not answer. Try again.');
+  options.refusing = { status: 404, error: 'not-found' };
+  await refused('The role did not change. Try again.');
+  expect(posted).toHaveLength(4);
+
+  options.refusing = undefined;
+  await track(page).click();
+  // The sentence of the refusal stays until the next answer: no error path clears what it says.
+  await expect(panel(page).getByRole('alert')).toHaveText('The role did not change. Try again.');
+  await confirmation(page, REMOVES_NADIA).getByRole('button', { name: REMOVES_NADIA }).click();
+  await expect(adminSwitch(page)).not.toBeChecked();
+  await expect(panel(page).getByRole('alert')).toHaveCount(0);
+});
+
+test('Users: the switch is busy while the worker answers, and a second press sends nothing (FRU-280)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  let release = () => {};
+  const holdRole = new Promise<void>((resolve) => (release = resolve));
+  await stub(page, { posted, holdRole });
+  await visit(page, '/admin/users?open=a3', 'Users');
+
+  await track(page).click();
+  const send = confirmation(page, NAMES_TOM).getByRole('button', { name: NAMES_TOM });
+  await send.dblclick();
+  await expect(adminSwitch(page)).toBeDisabled();
+  await send.click();
+  await track(page).click({ force: true });
+  await page.waitForTimeout(200);
+  expect(posted).toHaveLength(1);
+  await expect(adminSwitch(page)).not.toBeChecked();
+
+  release();
+  await expect(adminSwitch(page)).toBeChecked();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(confirmation(page, NAMES_TOM)).toHaveCount(0);
+  expect(posted).toHaveLength(1);
+});
+
+test('Users: the switch and its confirmation in French, and at 390 px (FRU-280)', async ({ page }) => {
+  const refusing = { status: 409, error: 'last-admin' };
+  const options: Options = { locale: 'fr', cut: 150, refusing };
+  await stub(page, options);
+  await page.goto(`${CONSOLE}/admin/users?open=a2`);
+  const role = panel(page).getByRole('switch', { name: /^Administrateur de l’instance/ });
+  await expect(role).toBeChecked();
+  await track(page).click();
+  const asking = panel(page).getByRole('group', { name: 'Retirer le rôle à Nadia Benali' });
+  await expect(asking).toContainText(
+    'Nadia Benali ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+  );
+  await expect(asking.getByRole('button', { name: 'Le garder' })).toBeVisible();
+  await asking.getByRole('button', { name: /^Retirer/ }).click();
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'Le dernier administrateur de l’instance garde le rôle. Nommez d’abord un autre administrateur.',
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${CONSOLE}/admin/users?open=a3`);
+  await expect(panel(page).getByRole('switch', { name: /^Administrateur de l’instance/ })).not.toBeChecked();
+  await track(page).click();
+  const naming = panel(page).getByRole('group', { name: 'Nommer Tom Marchal administrateur' });
+  await expect(naming).toContainText('Tom Marchal voit cette administration et chaque workspace');
+  await expect(naming.getByRole('button', { name: /^Nommer/ })).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the confirmation at 390 px');
+  const text = (await panel(page).innerText()).replaceAll('\n', ' ');
+  expect(
+    ['Instance admin', 'Keep it', 'sees this admin', 'Every instance admin', 'Name Tom'].filter((sentence) =>
+      text.includes(sentence),
+    ),
+  ).toEqual([]);
+
+  // A person's own switch says why in French.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await stub(page, { locale: 'fr', self: 'a2' });
+  await page.goto(`${CONSOLE}/admin/users?open=a2`);
+  await expect(panel(page)).toContainText(
+    'Vous ne pouvez pas vous retirer ce rôle. Un autre administrateur de l’instance le peut.',
+  );
 });

@@ -332,7 +332,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace stays at the bottom, for its owner: the mockup does not draw it, and it is nowhere else.
   `e2e/console-account.spec.ts` holds the screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
   which learns it at its next call, and « Sign out everywhere » ends every one.
-- **The administration of the instance is a frame of its own, read-only** (FRU-262, screen 17 of
+- **The administration of the instance is a frame of its own** (FRU-262, screen 17 of
   the mockup of 2026-10-13, routes of FRU-261). `routes/admin.tsx` is the frame: the rail of a
   workspace and the rail of the instance are one `RailFrame` with two sets of entries
   (`routes/workspace.tsx`). Only `instanceAdmin: true` of `/console/me` opens it; any other account
@@ -371,7 +371,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and « page · workspace » under a note, which is a column « Workspace » here.
   `e2e/console-admin-notes.spec.ts` holds both kinds of note, the address, the other accounts, the
   absence of any write, the states, French, 390 px and axe.
-- **« Workspaces » and « Users » of the administration are read-only, and read only what is asked**
+- **« Workspaces » and « Users » of the administration read only what is asked**
   (FRU-263, screens 18 and 19, routes of FRU-261). `routes/admin-workspaces.tsx` and
   `routes/admin-users.tsx` share `routes/admin-list.tsx`. Opening a screen is an explicit read, so it
   reads its list when it opens; each read leaves a trace with the owners of the workspaces it names,
@@ -387,12 +387,30 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   « Manage in Users » searches the address of the first owner: the search of the people does not
   match a workspace. « Last seen » is a day, as on Members. **Not copied from the mockup**: every
   action (« New workspace », « Invite someone », « Send them again », « Suspend », « Delete »,
-  « Restore access », « Add to a workspace », the role lists, the switch « Instance admin », which is
-  « Yes » or « No ») until FRU-274; the filters « Suspended » and « Invited »; the counts of the
+  « Restore access », « Add to a workspace », the role lists) until FRU-274; the filters
+  « Suspended » and « Invited »; the counts of the
   options; « Active now » and « 2 h ago » (no hour); « The address answered 503 at … » and
   « Browsers signed in » (no data); a row for somebody invited who has no account (the worker lists
   accounts). `e2e/console-admin-lists.spec.ts` holds both screens, the debounce, the filters, the
   panels, the other accounts, the absence of any write, the states, French, 390 px and axe.
+- **The switch « Instance admin » of a person names and removes an administrator, after a
+  confirmation** (FRU-280, route of FRU-280). A press asks: the confirmation says what the role gives
+  (« sees this admin and every workspace, and can name and remove admins ») and that every
+  administrator reads the change, and only its button sends. Removing asks the same way. **The
+  switch shows the role of the list, never the role asked**: a `200` changes the row in place, and a
+  refusal leaves it as it was. The list is not read again, because each read leaves a trace in each
+  of its workspaces. During the call the switch is disabled, and a second press of the button sends
+  nothing. After the answer, focus goes back to the switch. **The switch is held, with a line that
+  says why, on yourself** (`/console/me`), **and on the last administrator**, counted only from a
+  list that holds them all: no search, the filter « All people » or « Instance admins », and `total`
+  equal to its rows. On any other list the console does not guess, and the worker answers
+  `409 last-admin`. The list does not say who is banned, so the worker can count fewer. **Each
+  refusal is said in the panel**: `self-removal` and `last-admin` in their words, a `5xx` as
+  « Fruitback did not answer », anything else as « The role did not change ». **Not done**: a list
+  of the recent actions (`GET /console/admin/actions`) on « Instance ». The switch of the kit takes
+  a press on its track since FRU-280: before, only its words turned it.
+  `e2e/console-admin-lists.spec.ts` holds the request, the confirmation and « Keep it », the two
+  holds, each refusal, the busy switch, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

@@ -468,6 +468,10 @@ export function Radios<Value extends string>({
 
 type ToggleProps = {
   label: string;
+  /** A line under the label. */
+  hint?: string;
+  /** The label in bold, as a row of a panel draws it. */
+  strong?: boolean;
   value: boolean;
   onChange: (value: boolean) => void;
   disabled?: boolean;
@@ -492,21 +496,28 @@ export function Checkbox({ label, checked, onChange }: CheckboxProps) {
   );
 }
 
-/** A setting that is on or off, as the switch of HeroUI: the label first, the switch at the end of the row. */
-export function Toggle({ label, value, onChange, disabled = false }: ToggleProps) {
+/**
+ * A setting that is on or off, as the switch of HeroUI: the label first, the switch at the end of the
+ * row. The track is inside the label of HeroUI, so a press on it turns the switch too. `hint` is a
+ * second line under the label, inside the label as the mockup writes it.
+ */
+export function Toggle({ label, hint, strong = false, value, onChange, disabled = false }: ToggleProps) {
   return (
     <Switch
       isSelected={value}
       isDisabled={disabled}
       onChange={onChange}
-      className="kit-toggle flex w-full flex-row-reverse items-center justify-between gap-4"
+      className={`kit-toggle w-full ${strong ? 'kit-toggle--strong' : ''}`}
     >
-      {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. */}
-      <Switch.Control>
-        <Switch.Thumb />
-      </Switch.Control>
-      <Switch.Content>
-        <Label>{label}</Label>
+      <Switch.Content className="flex w-full flex-row-reverse items-center justify-between gap-4">
+        {/* Ink when it is on, as the mockup draws it: the accent is the red of an alert. */}
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+        <span className="min-w-0">
+          <Label>{label}</Label>
+          {hint === undefined ? null : <span className="block text-hint text-muted">{hint}</span>}
+        </span>
       </Switch.Content>
     </Switch>
   );

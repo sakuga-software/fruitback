@@ -813,3 +813,15 @@ export function adminWorkspace(id: string): Promise<Answer<AdminWorkspaceDetail>
 export function adminUsers(query: AdminQuery): Promise<Answer<{ users: AdminUser[]; total: number }>> {
   return call('GET', adminList('/console/admin/users', query));
 }
+
+/**
+ * Gives the role of administrator of the instance to an account, or takes it away (FRU-280). The
+ * worker refuses with `409 self-removal` and `409 last-admin`. `changed` is false when the account
+ * already had the role that was asked. Each change writes a row that the administrators read.
+ */
+export function setInstanceAdmin(
+  id: string,
+  admin: boolean,
+): Promise<Answer<{ user: { id: string; instanceAdmin: boolean }; changed: boolean }>> {
+  return call('POST', `/console/admin/users/${encodeURIComponent(id)}/instance-admin`, { admin });
+}
