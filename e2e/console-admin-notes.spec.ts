@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
-import { sideScroll, stubWorker } from './console-workspace.ts';
+import { sideScroll, stubWorker, typeDuringTheWrite } from './console-workspace.ts';
 
 /**
  * The notes of the instance (FRU-273), against screen 20 of the mockup of 2026-10-13
@@ -203,8 +203,12 @@ test('the workspace of the address is chosen, the filters read the list again, a
   // No list of the workspaces is read: it would leave a trace in every workspace of the instance.
   expect(sent.filter((request) => request.includes('/console/admin/workspaces'))).toEqual([]);
 
-  // The search reads the list again; a filter that keeps nothing says so, and clears.
-  await main(page).getByRole('searchbox', { name: 'Search notes' }).fill('nothing');
+  // The search reads the list again; a filter that keeps nothing says so, and clears. A key typed
+  // while the search is written in the address stays in the field (FRU-279).
+  const field = main(page).getByRole('searchbox', { name: 'Search notes' });
+  await typeDuringTheWrite(field, 'nothin', 'g');
+  await expect(page).toHaveURL(/[?&]q=nothing(&|$)/);
+  await expect(field).toHaveValue('nothing');
   await expect(main(page)).toContainText('No note matches.');
   await main(page).getByRole('button', { name: 'Clear the filters' }).click();
   await expect(rows(page)).toHaveCount(3);

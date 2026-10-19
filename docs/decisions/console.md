@@ -271,7 +271,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   gets no chip, no reference and no « Send again », as the worker sends a guest none of them. **The
   filters live in the address** (`place`, `site`, `stage`, `mine`, `q`, `cursor`, `from`): a reload
   keeps the view, the search reads 300 ms after the last key, and a filter goes back to the first
-  page. The route pages by a cursor: the screen keeps the cursors of the pages before for
+  page. **A search field takes the address only on a navigation** (`app/typed-search.ts`,
+  FRU-279): a key can come after the field writes the address and before the screen draws it, and
+  a field that took every new address lost that key. The three search fields of the console, here,
+  on Notes of the instance and on the lists of the administration, use it. The route pages by a cursor: the screen keeps the cursors of the pages before for
   « Previous », and a reload starts that list again. **A read again keeps the rows on the screen**
   until its answer replaces them: only the first read says « Loading… », and nothing a pointer can
   reach moves meanwhile. A workspace with no note says so, a filter that keeps nothing says so with

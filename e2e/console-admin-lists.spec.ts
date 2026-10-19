@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, type Route, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
-import { contrast, painted, rgb, sideScroll, stubWorker, styles } from './console-workspace.ts';
+import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWrite } from './console-workspace.ts';
 
 /**
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
@@ -534,6 +534,18 @@ test('Workspaces: the search reads once, 300 ms after the last key, and lives in
   await main(page).getByRole('button', { name: 'Clear the filters' }).click();
   await expect(rows(page)).toHaveCount(4);
   await expect(page).not.toHaveURL(/[?&](q|show)=/);
+});
+
+test('a key typed while the search is written in the address stays in the field (FRU-279)', async ({ page }) => {
+  const asked = await stub(page);
+  await visit(page, '/admin/workspaces', 'Workspaces');
+  const field = search(page, 'Search workspaces');
+
+  await typeDuringTheWrite(field, 'acm', 'e');
+
+  await expect(page).toHaveURL(/[?&]q=acme(&|$)/);
+  await expect(field).toHaveValue('acme');
+  expect(asked.filter((each) => each.path === '/console/admin/workspaces').at(-1)?.q).toBe('acme');
 });
 
 test('Users: the table, the panel of a person, and the values of the mockup', async ({ page }) => {
