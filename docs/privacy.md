@@ -282,6 +282,15 @@ what it writes each time.
   restoration serves them again. While it lasts, the widget takes no note on its sites, and no
   delivery goes to its receiving addresses. Its owner can delete the workspace, which deletes all of
   it as for any workspace.
+- **An administrator of the instance can delete any workspace** (FRU-284), after typing its name.
+  The deletion is at once and nothing undoes it. It deletes what the deletion by its owner deletes:
+  its members, its invitations, its sites, its connectors, the deliveries that wait, and the notes
+  that Fruitback kept for its sites with their replies. The accounts of its people stay. **The issues
+  stay in the tracker of the client**: Fruitback only revokes its own access to Linear. The deletion
+  leaves one row in `admin_actions` (`workspace-deleted`): the account and the address of the
+  administrator, the moment, the id and the **name** of the workspace, and how many sites, members,
+  invitations, connectors and kept notes went. The row stays as long as the database, and the
+  administrators of the instance read it; no owner does, as the workspace is gone.
 
 ### What stays in the reporter's browser
 

@@ -395,6 +395,11 @@ export async function handleConsoleApi(
       {
         admin: () => instanceAdminOf(request, context),
         endSessionsOf: (account, now) => context.sessions.endSessionsOf({ subject: account }, now),
+        // As the deletion by its owner, below: Linear revokes its tokens, and its extensions stop (FRU-284).
+        afterDeletion: {
+          revoke: (sealed) => revokeLinear(sealed, context.secretsKey),
+          endWorkspaceSessions: (workspace, now) => context.sessions.endSessionsOf({ workspace }, now),
+        },
         ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
         ...(context.instance === undefined ? {} : { facts: context.instance.facts }),
         ...(context.now === undefined ? {} : { now: context.now }),
