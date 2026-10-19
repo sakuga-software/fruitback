@@ -699,6 +699,7 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
 
   // The administrator, and somebody invited who has no workspace yet.
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(adminSwitch(page)).toBeChecked();
   await expect(panel(page).getByRole('listitem')).toHaveText([
     'Acme webOwner',
@@ -799,6 +800,7 @@ test('the workspaces of « Instance » lead to the panel of each one', async ({ 
   await visit(page, '/admin', 'Instance');
   await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   await main(page).getByRole('link', { name: 'Acme support' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
   await expect(page).toHaveURL(`${CONSOLE}/admin/workspaces?open=w9`);
   await expect(panel(page)).toHaveAccessibleName('Acme support');
   // A panel that a link of another screen opened takes no focus: nobody pressed its row.
@@ -810,6 +812,7 @@ test('under 1280 px the panel opens under its row, and at 390 px nothing scrolls
   await stub(page);
   await visit(page, '/admin/workspaces', 'Workspaces');
   await main(page).getByRole('link', { name: 'Acme support' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
   await expect(panel(page)).toBeFocused();
   await expect(page.locator('table #admin-panel')).toHaveCount(1);
   // The row right under « Acme support » holds the panel.
@@ -932,10 +935,12 @@ test('Users: an admin names a person after a confirmation, then removes them the
   expect(posted).toEqual([{ path: '/console/admin/users/a3/instance-admin', body: { admin: true } }]);
   // Two admins now: the one of before is no longer the last one.
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(adminSwitch(page)).toBeEnabled();
   await expect(panel(page)).not.toContainText(LAST_ADMIN);
 
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await track(page).click();
   const removing = confirmation(page, REMOVES_TOM);
   await expect(removing).toContainText(
@@ -984,6 +989,7 @@ test('Users: the switch is held on yourself and on the last admin, and says why 
   await expect(panel(page).getByRole('group')).toHaveCount(0);
   // Another person of the list is not held.
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await expect(adminSwitch(page)).toBeEnabled();
   await expect(panel(page)).not.toContainText(SELF_REMOVAL);
   expect(posted).toEqual([]);
@@ -1173,6 +1179,7 @@ test('Users: a suspended person reads « Suspended », in the row and in the pan
   expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
 
   await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await expect(panel(page)).toBeFocused();
   // On the chosen row, the red of the mockup is 4.28:1: the row takes the darker red of the kit.
   expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT_STRONG));
@@ -1258,6 +1265,7 @@ test('Users: « Keep it » and Escape send nothing, and give focus back to « Su
   await expect(statusOf(page, 1)).toHaveText('Active');
 
   await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: 'Keep it' }).click();
   await expect(restore(page)).toBeFocused();
@@ -1284,6 +1292,7 @@ test('Users: « Suspend » is held on yourself and on the last admin, and a susp
   await suspend(page).click({ force: true });
   await expect(panel(page).getByRole('group')).toHaveCount(0);
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await expect(suspend(page)).toBeEnabled();
   await expect(panel(page)).not.toContainText(SELF_SUSPENSION);
 
@@ -1295,30 +1304,36 @@ test('Users: « Suspend » is held on yourself and on the last admin, and a susp
 
   // Tom is named admin: Nadia is no longer the last one.
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await track(page).click();
   await confirmation(page, NAMES_TOM).getByRole('button', { name: NAMES_TOM }).click();
   await expect(statusOf(page, 1)).toHaveText('Instance admin');
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(suspend(page)).toBeEnabled();
   // Tom is suspended: a suspended admin is no admin, and Nadia is the last one again.
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await suspend(page).click();
   await confirmation(page, SUSPENDS_TOM).getByRole('button', { name: SUSPENDS_TOM }).click();
   await expect(statusOf(page, 1)).toHaveText('Suspended');
   await expect(adminSwitch(page)).not.toBeChecked();
   await expect(panel(page)).toContainText(ROLE_OF_SUSPENDED);
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(suspend(page)).toBeDisabled();
   await expect(panel(page)).toContainText(LAST_SUSPENSION);
   await expect(adminSwitch(page)).toBeDisabled();
   await expect(panel(page)).toContainText(LAST_ADMIN);
   // Tom is restored: his role of before shows again, and Nadia is not the last one.
   await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Tom Marchal');
   await restore(page).click();
   await confirmation(page, RESTORES_TOM).getByRole('button', { name: RESTORES_TOM }).click();
   await expect(statusOf(page, 1)).toHaveText('Instance admin');
   await expect(adminSwitch(page)).toBeChecked();
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(suspend(page)).toBeEnabled();
 
   // A search holds some admins: the console does not guess, and the worker answers.
@@ -1341,6 +1356,7 @@ test('Users: after the restoration of an account read as suspended, the last adm
 
   // The worker does not say the role of a suspended account: Hugo can be an admin again.
   await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
   await expect(statusOf(page, 4)).toHaveText('Active');
@@ -1348,6 +1364,7 @@ test('Users: after the restoration of an account read as suspended, the last adm
   await expect(adminSwitch(page)).toBeDisabled();
   await expect(panel(page)).toContainText(ROLE_AFTER_RESTORE);
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Nadia Benali');
   await expect(suspend(page)).toBeEnabled();
   await expect(adminSwitch(page)).toBeEnabled();
   await expect(panel(page)).not.toContainText(LAST_SUSPENSION);
@@ -1387,6 +1404,7 @@ test('Users: each refusal of a suspension is said, and the row keeps its true st
   // A refused restoration leaves the account suspended.
   options.refusingSuspension = { status: 502, error: 'down' };
   await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Hugo Petit');
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
   await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
