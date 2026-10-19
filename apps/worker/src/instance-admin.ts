@@ -818,7 +818,13 @@ async function deleteWorkspace(
 
     return json(status, { error }, headers);
   }
-  for (const sealed of deletion.revoke) await after.revoke(sealed);
+  // A revocation is best effort, as `revokeLinear` says: a key that cannot be opened, or a call that
+  // throws, is written in the log and must not leave the extensions of the deleted workspace alive.
+  for (const sealed of deletion.revoke) {
+    await after.revoke(sealed).catch((error: unknown) => {
+      console.error(`[fruitback] a Linear token of a deleted workspace was not revoked: ${String(error)}`);
+    });
+  }
   // Nobody is a member of it any more: the extensions that were paired for it stop.
   await after.endWorkspaceSessions(workspace, now);
 

@@ -11,7 +11,7 @@ import {
   workspaceIn,
   worlds,
 } from './console-world.fixture.ts';
-import { ADMIN_PATH } from './instance-admin.ts';
+import { ADMIN_PATH, type InstanceAdminReads, handleInstanceAdmin } from './instance-admin.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createMemoryScreenshotStore } from './screenshots.ts';
 import { seal } from './secrets.ts';
@@ -350,5 +350,46 @@ describe('the trace of a deletion of a workspace (FRU-284)', () => {
       ['workspace-deleted', 'workspace-suspended'],
     );
     assert.equal(await count(on, `admin_reads WHERE workspace_id = '${on.globex}' AND what = 'actions'`), 1);
+  });
+});
+
+describe('what follows the commit of a deletion (FRU-284)', () => {
+  it('ends the sessions of the extension even when a revocation throws, and writes it in the log', async () => {
+    const ended: string[] = [];
+    const reads = {
+      deleteWorkspace: async () => ({
+        ok: true as const,
+        workspace: { id: 'ws_1', name: 'Acme' },
+        gone: { sites: 0, members: 1, invitations: 0, connectors: 1, keptNotes: 0 },
+        revoke: ['sealed-1', 'sealed-2'],
+      }),
+    } as unknown as InstanceAdminReads;
+    const revoked: string[] = [];
+    const logged = mock.method(console, 'error', () => undefined);
+    const answer = await handleInstanceAdmin(
+      new Request(`http://worker.test${ADMIN_PATH}/workspaces/ws_1/deletion`, {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Acme' }),
+      }),
+      `${ADMIN_PATH}/workspaces/ws_1/deletion`,
+      {
+        admin: async () => ({ id: 'acc_root', email: 'root@instance.dev' }),
+        reads,
+        facts: {} as never,
+        afterDeletion: {
+          revoke: async (sealed) => {
+            revoked.push(sealed);
+            if (sealed === 'sealed-1') throw new Error('the key could not be read');
+          },
+          endWorkspaceSessions: async (workspace) => void ended.push(workspace),
+        },
+      },
+      {},
+    );
+
+    assert.equal(answer?.status, 200);
+    assert.deepEqual(revoked, ['sealed-1', 'sealed-2'], 'the second key is revoked after the first one failed');
+    assert.deepEqual(ended, ['ws_1']);
+    assert.equal(logged.mock.callCount(), 1);
   });
 });
