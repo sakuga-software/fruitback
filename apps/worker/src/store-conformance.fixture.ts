@@ -7,6 +7,7 @@ import { resetCacheState } from './cache.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
+import { replyText } from './reply-text.ts';
 import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -61,6 +62,8 @@ export type ConformanceSubject = {
    * can write another number, but at least two, stored newest first.
    */
   plantReplies(store: SeedStore, seed: Seed, count: number): Promise<void>;
+  /** Why this store takes no reply (FRU-257). Absent: it takes one, and a read shows it. */
+  noReply?: string;
   /** A store whose provider answers every call with an error. It replaces the double of `open`. */
   broken: (() => SeedStore) | string;
   /** A store whose provider cannot be reached, so every call rejects. It replaces the double of `open`. */
@@ -244,6 +247,30 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         assert.ok(times.length >= 2, 'the seed has fewer than two replies');
         assert.deepEqual(times, [...times].sort());
         assert.notEqual(times[0], times.at(-1));
+      });
+
+      it(
+        'writes a reply that a read shows under its note, after the line of who wrote it',
+        { skip: subject.noReply ?? false },
+        async () => {
+          assert.ok(store.reply !== undefined, 'the store takes no reply and says no reason');
+          const created = await store.create(seedFor('sd_answered', PAGE, 'acme'), undefined, POLICY);
+          const reply = { body: 'Seen on the phone too.', author: { kind: 'visitor' as const, name: 'Bob' } };
+
+          const written = await store.reply({ issue: created.id, clientId: 'acme' }, reply, undefined, POLICY);
+
+          const text = replyText(reply, POLICY.locale);
+          assert.equal(written?.body, text);
+          const [found] = await find(PAGE, 'acme');
+          assert.deepEqual(
+            found?.comments?.map((comment) => comment.body),
+            [text],
+          );
+        },
+      );
+
+      it('says no reply it takes when it gives a reason', { skip: subject.noReply === undefined }, () => {
+        assert.equal(store.reply, undefined);
       });
 
       it('leaves the replies out when the client hides them', async () => {

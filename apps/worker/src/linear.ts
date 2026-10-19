@@ -17,11 +17,13 @@ import {
   type BatchAnswer,
   type BatchMemory,
   type CreatedIssue,
+  type NewReply,
   type SeedIssueQuery,
   type SeedStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
+import { replyText } from './reply-text.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
@@ -136,6 +138,37 @@ const CREATE_ISSUE_MUTATION = `
     }
   }
 `;
+
+const CREATE_COMMENT_MUTATION = `
+  mutation FruitbackCreateComment($input: CommentCreateInput!) {
+    commentCreate(input: $input) {
+      success
+      comment { id body createdAt user { name } }
+    }
+  }
+`;
+
+type CreateCommentResult = { commentCreate: { success: boolean; comment: CommentNode | null } };
+
+/**
+ * A reply under an issue (FRU-257), written with the key of the connector: Linear shows it as a
+ * comment of the app, or of the owner of a personal key. `replyText` puts the name of the person in
+ * the text. The scope `write` of OAuth and a personal key both allow it.
+ */
+export async function createReply(
+  config: LinearConfig,
+  issueId: string,
+  reply: NewReply,
+  locale?: string,
+): Promise<SeedComment> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: replyText(reply, locale) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+
+  return seedCommentOf(comment);
+}
 
 type TeamLabelsResult = { team: { labels: { nodes: { id: string; name: string }[] } } | null };
 type CreateLabelResult = { issueLabelCreate: { issueLabel: { id: string; name: string } | null } };
@@ -445,14 +478,16 @@ function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIss
 function toSeedComments(node: IssueNode): SeedComment[] | undefined {
   if (node.comments == null) return undefined;
 
-  return node.comments.nodes
-    .map((comment) => ({
-      id: comment.id,
-      body: comment.body,
-      createdAt: comment.createdAt,
-      ...(comment.user?.name ? { author: comment.user.name } : {}),
-    }))
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return node.comments.nodes.map(seedCommentOf).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+function seedCommentOf(comment: CommentNode): SeedComment {
+  return {
+    id: comment.id,
+    body: comment.body,
+    createdAt: comment.createdAt,
+    ...(comment.user?.name ? { author: comment.user.name } : {}),
+  };
 }
 
 /**
@@ -675,6 +710,7 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
       createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>
       fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
+    reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
   };
 }
 

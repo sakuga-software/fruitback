@@ -5,7 +5,7 @@ import type { ClientConfig } from './clients.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type SeedStore, StoreError, takesReplies } from './store.ts';
 
 /**
  * The store of a request on a worker whose workspaces connect their own trackers (FRU-121).
@@ -33,9 +33,11 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (apiKey: string, settings
 function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore {
   if (settings.showComments) return store;
   const quiet = <P extends { showComments: boolean }>(policy: P): P => ({ ...policy, showComments: false });
+  // A reply that nobody reads back on the page is a reply lost for its author (FRU-257).
+  const { reply: _reply, ...noReply } = store;
 
   return {
-    ...store,
+    ...noReply,
     create: (seed, client, policy) => store.create(seed, client, quiet(policy)),
     ...(store.createBatch === undefined
       ? {}
@@ -60,8 +62,11 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  * is a note that is kept and never sent, which is logged.
  */
 function receivingStore(own: SeedStore, accounts: AccountStore, connector: string, now: () => number): SeedStore {
+  // An address only receives: it sends no reply back, so a site of it takes none (FRU-257).
+  const { reply: _reply, ...noReply } = own;
+
   return {
-    ...own,
+    ...noReply,
     async create(seed, client, policy) {
       const created = await own.create(seed, client, policy);
       try {
@@ -141,5 +146,12 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     createBatch: async (seeds, client, policy, memory) => createAll(await pick(client), seeds, client, policy, memory),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),
     ...(base.forget === undefined ? {} : { forget: base.forget }),
+    repliesFor: async (client) => takesReplies(await pick(client), client),
+    async reply(target, reply, client, policy) {
+      const store = await pick(client);
+      if (store.reply === undefined) throw new StoreError('The store of this site takes no reply');
+
+      return store.reply(target, reply, client, policy);
+    },
   };
 }

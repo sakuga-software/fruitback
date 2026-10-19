@@ -1,4 +1,4 @@
-import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
+import type { Seed, SeedComment, SeedIssue, SeedStage } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 
 /**
@@ -102,7 +102,40 @@ export type SeedStore = {
    * workspace, and the team deletes them there. `node server.mjs forget` refuses a store without it.
    */
   forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenSeed[]>;
+  /**
+   * Write a reply under one note (FRU-257), as the text of `replyText`, and answer it as a read will
+   * show it. `undefined`: this store holds no such note for this client. Absent: this store takes no
+   * reply. A tracker writes it under the identity of its key.
+   */
+  reply?(
+    target: ReplyTarget,
+    reply: NewReply,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+  ): Promise<SeedComment | undefined>;
+  /**
+   * Whether the store of this client takes a reply, for a store that routes by client. Absent: the
+   * answer is whether `reply` is there.
+   */
+  repliesFor?(client: ClientConfig | undefined): Promise<boolean>;
 };
+
+/**
+ * Who writes a reply, as the worker knows it (FRU-257). A member is a session of the workspace of the
+ * site, named by its account. A visitor is anybody else, and the name they typed is their word.
+ */
+export type ReplyAuthor = { kind: 'member'; name: string; workspace: string } | { kind: 'visitor'; name?: string };
+
+/** The note a reply goes under: the `id` of its issue, and the client whose note it must be. */
+export type ReplyTarget = { issue: string; clientId: string | undefined };
+
+/** A reply to write: what somebody typed, and who they are. */
+export type NewReply = { body: string; author: ReplyAuthor };
+
+/** Whether a store takes a reply for this client. */
+export async function takesReplies(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+  return store.repliesFor === undefined ? store.reply !== undefined : store.repliesFor(client);
+}
 
 /**
  * Which seeds to forget.

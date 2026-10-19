@@ -222,7 +222,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
  */
 export function postgresSeedStore(url: string, schema: string): SeedStore {
   const database = databaseFor(url, schema);
-  type Calls = Required<Pick<SeedStore, 'create' | 'createBatch' | 'findForPage' | 'forget'>>;
+  type Calls = Required<Pick<SeedStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply'>>;
   const store = later<Calls>(
     async () => (await import('./seeds-postgres.ts')).createPostgresSeedStore(database) as Calls,
     {
@@ -230,6 +230,7 @@ export function postgresSeedStore(url: string, schema: string): SeedStore {
       createBatch: true,
       findForPage: true,
       forget: true,
+      reply: true,
     },
   );
 
