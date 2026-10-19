@@ -160,6 +160,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No access while it is off': 'Aucun accès tant qu’il est désactivé',
   Sites: 'Sites',
   'Add rule': 'Ajouter la règle',
+  // FRU-291: the key that starts a note.
+  'Leave feedback shortcut: {shortcut}.': 'Raccourci pour laisser une note : {shortcut}.',
+  'Leave feedback shortcut: none set.': 'Raccourci pour laisser une note : aucun.',
+  'Change the shortcut': 'Changer le raccourci',
+  'Keyboard shortcut': 'Raccourci clavier',
+  'Change it in Add-ons, Manage Extension Shortcuts.':
+    'Changez-le dans Modules complémentaires, Gérer les raccourcis d’extensions.',
   'Add a rule': 'Ajouter une règle',
   'Export rules': 'Exporter les règles',
   'Import a rules file': 'Importer un fichier de règles',

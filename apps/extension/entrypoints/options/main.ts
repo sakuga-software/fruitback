@@ -33,6 +33,7 @@ import {
   sitesTable,
 } from '../../src/site-page.ts';
 import { storedLanguage } from '../../src/language.ts';
+import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -112,6 +113,8 @@ if (app !== null) {
   share.id = 'share';
   const prefs = await synchronise();
   prefs.id = 'prefs';
+  // FRU-291: the key that starts a note, where the mock-up of 2026-10-20 puts it, in the preferences.
+  prefs.append(element('h3', t('Keyboard shortcut')), await shortcutLine());
   const content = element('main', '', 'page-content');
   content.append(sites, share, prefs);
   const frame = element('div', '', 'page');
@@ -530,6 +533,43 @@ function button(text: string, onClick: () => void, className?: string): HTMLButt
   node.addEventListener('click', onClick);
 
   return node;
+}
+
+/**
+ * The key that starts a note, and the way to change it (FRU-291). One line, on its own, so the
+ * page of the extension that replaces this one can take it whole.
+ *
+ * The key is the browser's, read from `commands.getAll()`: the person may have changed it, and a
+ * browser installs the command with no key when another extension holds the one suggested.
+ */
+async function shortcutLine(): Promise<HTMLElement> {
+  const line = element('p', '', 'state');
+  const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
+  line.append(
+    shortcut === undefined
+      ? t('Leave feedback shortcut: none set.')
+      : t('Leave feedback shortcut: {shortcut}.', { shortcut }),
+    ' ',
+  );
+
+  // Firefox 137 opens its own page. Chromium browsers have one, at an address the extension may open.
+  // An older Firefox has neither, so the line says where to look.
+  const commands = browser.commands as typeof browser.commands & { openShortcutSettings?: () => Promise<void> };
+  let open: (() => Promise<unknown> | undefined) | undefined;
+  if (typeof commands.openShortcutSettings === 'function') open = () => commands.openShortcutSettings?.();
+  else if (!import.meta.env.FIREFOX) open = () => browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
+  if (open === undefined) {
+    line.append(t('Change it in Add-ons, Manage Extension Shortcuts.'));
+
+    return line;
+  }
+  // The small outlined button that sits beside a sentence, as a remedy does: no new style.
+  const change = element('button', t('Change the shortcut'), 'remedy');
+  change.type = 'button';
+  change.addEventListener('click', () => void open());
+  line.append(change);
+
+  return line;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
