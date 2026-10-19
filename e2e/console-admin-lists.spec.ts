@@ -1150,6 +1150,7 @@ test('Users: the switch and its confirmation in French, and at 390 px (FRU-280)'
 const SELF_SUSPENSION = 'You cannot suspend your own account. Another instance admin can.';
 const LAST_SUSPENSION = 'The last instance admin cannot be suspended. Name another admin first.';
 const ROLE_OF_SUSPENDED = 'A suspended account is not an instance admin. Restore access first.';
+const ROLE_AFTER_RESTORE = 'Its role shows when you open Users again.';
 const SUSPENDS_TOM = 'Suspend Tom Marchal';
 const SUSPENDS_NADIA = 'Suspend Nadia Benali';
 const RESTORES_TOM = 'Restore access for Tom Marchal';
@@ -1343,6 +1344,9 @@ test('Users: after the restoration of an account read as suspended, the last adm
   await restore(page).click();
   await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
   await expect(statusOf(page, 4)).toHaveText('Active');
+  // Nor does a restore: the switch of Hugo does not say « No » for a role the console does not know.
+  await expect(adminSwitch(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(ROLE_AFTER_RESTORE);
   await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
   await expect(suspend(page)).toBeEnabled();
   await expect(adminSwitch(page)).toBeEnabled();

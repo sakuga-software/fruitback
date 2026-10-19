@@ -814,6 +814,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{name} no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.':
     '{name} ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
   Suspended: 'Suspendu',
+  'Its role shows when you open Users again.': 'Son rôle s’affiche quand vous rouvrez Utilisateurs.',
   'A suspended account is not an instance admin. Restore access first.':
     'Un compte suspendu n’est pas administrateur de l’instance. Rétablissez d’abord son accès.',
   'You cannot suspend your own account. Another instance admin can.':
