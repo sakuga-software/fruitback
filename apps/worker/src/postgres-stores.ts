@@ -69,6 +69,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     localeOf: true,
     createWorkspace: true,
     memberships: true,
+    suspension: true,
     owners: true,
     role: true,
     reach: true,
@@ -217,6 +218,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     isSuspended: true,
     setSuspended: true,
     actionsIn: true,
+    setWorkspaceSuspended: true,
   });
 }
 

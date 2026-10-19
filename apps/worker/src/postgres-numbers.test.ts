@@ -121,6 +121,16 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO admin_actions (id, at, actor_account_id, actor_email, action, target_account_id, target_email)
        VALUES ('ada_1', 1, 'acc_alice', 'alice@acme.dev', 'admin-named', 'acc_alice', 'alice@acme.dev')`,
   );
+  // FRU-282: one workspace that an administrator of the instance suspended. Not `ws_acme`: its
+  // deliveries would wait, and a case below reads them.
+  await rowsOf(
+    database,
+    `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_unpaid', 'Unpaid', 'ws_unpaid', now())`,
+  );
+  await rowsOf(
+    database,
+    `INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES ('ws_unpaid', 1, 'impayé')`,
+  );
 
   return database;
 }
@@ -130,7 +140,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-seven BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-eight BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'admin_actions.at',
     'admin_reads.at',
@@ -169,6 +179,7 @@ it('knows the thirty-seven BIGINT columns of the worker, and that better-auth ha
     'sessions.rotated_at',
     'site_shares.created_at',
     'sites.created_at',
+    'workspace_suspensions.since',
   ]);
   // better-auth reads its tables on the same pool, with no parser of ours: it has no BIGINT to read.
   assert.deepEqual(bigintsOf(authSchema), []);

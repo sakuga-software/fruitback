@@ -628,3 +628,27 @@ export const admin_actions = pgTable(
     index('admin_actions_by_target').on(table.target_account_id),
   ],
 );
+
+/**
+ * The workspaces that an administrator of the instance suspended (FRU-282): one row for each, from
+ * the suspension to the restoration. A restoration deletes the row. Who suspended, and who restored,
+ * is in `admin_actions`, with the reason in `detail`.
+ *
+ * `reason` is the text of the administrator, or empty. Every member of the workspace reads it.
+ */
+export const workspace_suspensions = pgTable(
+  'workspace_suspensions',
+  {
+    workspace_id: text('workspace_id').notNull(),
+    since: instant('since').notNull(),
+    reason: text('reason'),
+  },
+  (table) => [
+    primaryKey({ name: 'workspace_suspensions_pkey', columns: [table.workspace_id] }),
+    foreignKey({
+      name: 'workspace_suspensions_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+  ],
+);

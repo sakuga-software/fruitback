@@ -1745,8 +1745,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   wait). **No answer holds a secret, a token, a digest or a key of a connector**, not even masked,
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
-  No route of the administrator writes anything but the trace, except the role and the suspension
-  below.
+  No route of the administrator writes anything but the trace, except the role, the suspension of
+  an account and the suspension of a workspace below.
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
@@ -1810,6 +1810,40 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   workspace, and **the owners of each workspace read their rows beside the reads**, also after the
   account leaves or goes:
   test:`writes one row for each workspace of the account, and the owners of each read it beside the reads`.
+
+- **Who suspends a workspace, and what a suspended workspace does** (FRU-282, « Lecture seule, avec
+  un bandeau »). An administrator only, with `POST /console/admin/workspaces/<id>/suspension` and
+  `{ suspended: true | false, reason? }`, behind the same guard. The reason is one line of 200
+  characters at most, and every member of the workspace reads it. An administrator can suspend a
+  workspace that they are a member of. While a workspace is suspended:
+  - **its sites answer the widget and the extension as sites that do not exist**: the same status,
+    the same headers and the same bytes, on `GET /feedback`, `POST /feedback`, the replies and
+    `POST /screenshot`, from the origin of the site, from another origin and with none:
+    test:`answers every route of the widget that takes a site, for a site of a suspended workspace, with the bytes of an unknown site`.
+    The origin of a site stops being allowed, unless a site of another workspace has the same one:
+    test:`stops allowing the origin of a site that no other workspace has, as an origin that no site has`.
+    `GET /session/sites` answers as if the workspace were deleted, `POST /session/sites` as for a
+    workspace that does not exist, and a picture as one that does not exist. **No note is taken, and
+    the notes that the worker keeps stay** in its database;
+  - **its members sign in and read everything in the console**, and `/console/me` says the suspension;
+  - **every write of the workspace is refused with `409 workspace-suspended`**, by one guard, after
+    the role of the caller is read: a person who is not a member still gets the `404` of a workspace
+    that does not exist. The guard covers every `POST` and `DELETE` under `/console/workspaces/<id>/`
+    and every `POST` of the organization plugin that names the workspace, the acceptance of an
+    invitation included:
+    test:`refuses every write of the console API with 409 and writes nothing, and each one works after the restoration`,
+    test:`refuses every POST of the organization plugin that changes the workspace, and lets a member leave`,
+    test:`names every route of the console API that writes, and the guard comes before each one`.
+    The way back from Linear keeps no connector. Two writes stay allowed: a member leaves the
+    workspace, and its owner deletes it;
+  - **its deliveries wait**: no attempt and no count, and the next pass after the restoration sends
+    them: test:`sends nothing while suspended, counts no attempt, and sends after the restoration`.
+
+  Each change writes one row in `admin_actions` (`workspace-suspended`, `workspace-restored`) with the
+  workspace and the reason, in the transaction of the change, and **the owners read it beside the
+  reads**. A call that changes nothing writes no row, and a suspended workspace keeps its first
+  reason. The tokens of the extension stay valid: they reach no site of the workspace. A session that
+  a suspension leaves is ended by nothing, so a restoration gives it back its sites.
 
 ### Personal data
 

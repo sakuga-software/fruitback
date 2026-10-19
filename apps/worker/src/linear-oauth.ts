@@ -339,6 +339,8 @@ async function callback(request: Request, context: LinearOAuthContext): Promise<
   // Asked again here: ten minutes passed, and a role can change in ten minutes.
   const role = await context.accounts.role(workspace, account);
   if (role === undefined || !can(role, 'manage-workspace')) return back(context, workspace, 'forbidden');
+  // A flow that started before a suspension keeps no connector after it (FRU-282).
+  if ((await context.accounts.suspension(workspace)) !== undefined) return back(context, workspace, 'suspended');
 
   const now = context.now ?? Date.now();
   const answer = await askTokens(

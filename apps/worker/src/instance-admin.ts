@@ -1,5 +1,6 @@
 import type { SeedStage } from '@fruitback/shared';
-import type { Account, ConnectorAttention, ConnectorKind, Role, Visibility } from './accounts.ts';
+import type { Account, ConnectorAttention, ConnectorKind, Role, Visibility, WorkspaceSuspension } from './accounts.ts';
+import { type SuspensionFields, suspensionView } from './workspace-suspension.ts';
 import { cursorOf, noteIdOf, pageOf, queryOf as noteQueryOf } from './console-notes.ts';
 import type { WorkerConfig } from './env.ts';
 import { lastMailSentAt } from './mail.ts';
@@ -43,6 +44,9 @@ import type { SignUp } from './sign-up.ts';
  *   console in the transaction of the change, the sessions of the extension after it. A restored
  *   account signs in again, and its old sessions stay ended. The rules of the role apply: nobody
  *   suspends themselves, and nobody suspends the last administrator.
+ * - **Suspension of a workspace** (FRU-282): `POST /console/admin/workspaces/<id>/suspension` writes a
+ *   row of `workspace_suspensions`, and a restoration deletes it. `workspace-suspension.ts` says what
+ *   a suspended workspace does.
  */
 
 /** Where the routes of the administrator of the instance are. */
@@ -69,8 +73,8 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
   { read: 'actions', pattern: /^\/console\/admin\/actions$/, example: '/console/admin/actions' },
 ];
 
-/** The writes that an administrator does (FRU-280, FRU-281). */
-export const ADMIN_WRITES = ['instance-admin', 'suspension'] as const;
+/** The writes that an administrator does (FRU-280, FRU-281, FRU-282). */
+export const ADMIN_WRITES = ['instance-admin', 'suspension', 'workspace-suspension'] as const;
 export type AdminWrite = (typeof ADMIN_WRITES)[number];
 
 /**
@@ -88,10 +92,22 @@ export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; 
     pattern: /^\/console\/admin\/users\/([A-Za-z0-9_-]{1,80})\/suspension$/,
     example: '/console/admin/users/acc_00000000000000000000/suspension',
   },
+  {
+    write: 'workspace-suspension',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/suspension$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/suspension',
+  },
 ];
 
 /** The kinds of action that `admin_actions` keeps. */
-export const ADMIN_ACTIONS = ['admin-named', 'admin-removed', 'account-suspended', 'account-restored'] as const;
+export const ADMIN_ACTIONS = [
+  'admin-named',
+  'admin-removed',
+  'account-suspended',
+  'account-restored',
+  'workspace-suspended',
+  'workspace-restored',
+] as const;
 export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
 
 /** One action of an administrator, as the administrators of the instance read it. */
@@ -128,6 +144,20 @@ export type SuspensionChange =
   | { ok: true; changed: boolean; suspended: boolean }
   | { ok: false; refused: 'unknown-account' | 'self-suspension' | 'last-admin' | 'not-admin' };
 
+/**
+ * What a suspension or a restoration of a workspace gives (FRU-282):
+ * - `changed` false: the workspace was already in the state that was asked, and no row was written;
+ * - `suspension`: the suspension that holds after the call, absent for a workspace that is not suspended;
+ * - `unknown-workspace`: no workspace has this id;
+ * - `not-admin`: the account that asked is no longer an administrator.
+ */
+export type WorkspaceSuspensionChange =
+  | { ok: true; changed: boolean; suspension?: WorkspaceSuspension }
+  | { ok: false; refused: 'unknown-workspace' | 'not-admin' };
+
+/** The longest reason of a suspension of a workspace, in characters. A longer one is refused, never cut. */
+export const SUSPENSION_REASON_LENGTH = 200;
+
 /** Whether a path is one of the administrator of the instance, known or not. */
 export function isAdminPath(pathname: string): boolean {
   return pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`);
@@ -157,30 +187,32 @@ export type AdminConnector = {
   attention?: ConnectorAttention;
 };
 
-export type AdminWorkspace = WorkspaceName & {
-  createdAt: string;
-  owners: { id: string; name?: string; email: string }[];
-  members: number;
-  sites: number;
-  notes: StageCounts;
-  destinations: AdminConnector[];
-  pendingDeliveries: number;
-};
-
-export type AdminWorkspaceDetail = WorkspaceName & {
-  createdAt: string;
-  members: { id: string; name?: string; email: string; role: Role | string; lastSeen?: string }[];
-  sites: {
-    id: string;
-    origin: string;
-    visibility: Visibility | string;
-    destinations: { connector: string; label?: string }[];
+export type AdminWorkspace = WorkspaceName &
+  SuspensionFields & {
+    createdAt: string;
+    owners: { id: string; name?: string; email: string }[];
+    members: number;
+    sites: number;
     notes: StageCounts;
-  }[];
-  destinations: (AdminConnector & { createdAt: string })[];
-  pendingDeliveries: number;
-  pendingInvitations: number;
-};
+    destinations: AdminConnector[];
+    pendingDeliveries: number;
+  };
+
+export type AdminWorkspaceDetail = WorkspaceName &
+  SuspensionFields & {
+    createdAt: string;
+    members: { id: string; name?: string; email: string; role: Role | string; lastSeen?: string }[];
+    sites: {
+      id: string;
+      origin: string;
+      visibility: Visibility | string;
+      destinations: { connector: string; label?: string }[];
+      notes: StageCounts;
+    }[];
+    destinations: (AdminConnector & { createdAt: string })[];
+    pendingDeliveries: number;
+    pendingInvitations: number;
+  };
 
 export type AdminUser = {
   id: string;
@@ -228,12 +260,17 @@ export type AdminNote = {
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
-/** One action of an administrator on a member of a workspace, as its owners read it (FRU-281). */
+/**
+ * One action of an administrator on a member of a workspace (FRU-281), or on the workspace itself
+ * (FRU-282), as its owners read it. `target` is the member, absent for an action on the workspace.
+ * `reason` is the reason of a suspension or a restoration of the workspace.
+ */
 export type TracedAction = {
   action: AdminActionKind;
   at: string;
   admin: { email: string; name?: string };
-  target: { email: string; name?: string };
+  target?: { email: string; name?: string };
+  reason?: string;
 };
 
 /** What the administrator reads and writes in the database. `instance-admin-postgres.ts` is the one store. */
@@ -284,8 +321,23 @@ export type InstanceAdminReads = {
     suspended: boolean,
     now: number,
   ): Promise<SuspensionChange>;
-  /** The actions of the administrators on the members of a workspace, the newest first (FRU-281). */
+  /**
+   * The actions of the administrators on the members of a workspace (FRU-281) and on the workspace
+   * (FRU-282), the newest first.
+   */
   actionsIn(workspace: string): Promise<TracedAction[]>;
+  /**
+   * Suspends a workspace, or restores it (FRU-282), and writes the action in `admin_actions`, with
+   * `reason` in its `detail`. A call that changes nothing writes nothing: a suspended workspace keeps
+   * its first reason. The checks and the writes are in one transaction.
+   */
+  setWorkspaceSuspended(
+    actor: Pick<Account, 'id' | 'email'>,
+    workspace: string,
+    suspended: boolean,
+    reason: string | undefined,
+    now: number,
+  ): Promise<WorkspaceSuspensionChange>;
 };
 
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
@@ -450,6 +502,58 @@ async function changeSuspension(
   return json(200, { user: { id: target, suspended: change.suspended }, changed: change.changed }, headers);
 }
 
+/** What `refused` of a `WorkspaceSuspensionChange` answers. */
+const WORKSPACE_REFUSED: Record<
+  Extract<WorkspaceSuspensionChange, { ok: false }>['refused'],
+  { status: number; error: string }
+> = {
+  'unknown-workspace': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+};
+
+/** The reason of a body: `undefined` for none, `false` for a value that is refused. One line, trimmed. */
+function reasonOf(value: unknown): string | undefined | false {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') return false;
+  const reason = value.replace(/\s+/g, ' ').trim();
+  if ([...reason].length > SUSPENSION_REASON_LENGTH) return false;
+
+  return reason === '' ? undefined : reason;
+}
+
+/**
+ * `POST /console/admin/workspaces/<id>/suspension`, body `{ suspended: true | false, reason? }`
+ * (FRU-282). The administrator can be a member of the workspace: they then read it as every member
+ * does, and restore it from here.
+ */
+async function changeWorkspaceSuspension(
+  request: Request,
+  workspace: string,
+  admin: Account,
+  reads: InstanceAdminReads,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const body: unknown = await request.json().catch(() => undefined);
+  const fields = typeof body === 'object' && body !== null ? (body as { suspended?: unknown; reason?: unknown }) : {};
+  if (typeof fields.suspended !== 'boolean') return json(400, { error: 'invalid-suspended' }, headers);
+  const reason = reasonOf(fields.reason);
+  if (reason === false) return json(400, { error: 'invalid-reason', maxLength: SUSPENSION_REASON_LENGTH }, headers);
+
+  const change = await reads.setWorkspaceSuspended(admin, workspace, fields.suspended, reason, now);
+  if (!change.ok) {
+    const { status, error } = WORKSPACE_REFUSED[change.refused];
+
+    return json(status, { error }, headers);
+  }
+
+  return json(
+    200,
+    { workspace: { id: workspace, ...suspensionView(change.suspension) }, changed: change.changed },
+    headers,
+  );
+}
+
 /** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
 async function changeRole(
   request: Request,
@@ -505,6 +609,8 @@ export async function handleInstanceAdmin(
         if (context.endSessionsOf === undefined) return notFound();
 
         return changeSuspension(request, target, admin, reads, context.endSessionsOf, now, headers);
+      case 'workspace-suspension':
+        return changeWorkspaceSuspension(request, target, admin, reads, now, headers);
     }
   }
 

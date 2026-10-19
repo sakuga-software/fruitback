@@ -140,7 +140,7 @@ for (const { label, open, skip } of DATABASES) {
         { activeOrganizationId: null },
       ]);
       const me = (await (await as(worker, alice, '/console/me')).json()) as { workspaces: unknown[] };
-      assert.deepEqual(me.workspaces, [{ id: workspace.id, name: 'Acme Studio', role: 'owner' }]);
+      assert.deepEqual(me.workspaces, [{ id: workspace.id, name: 'Acme Studio', role: 'owner', suspended: false }]);
 
       // The name is still read by the worker, before the plugin: the plugin takes any text.
       assert.equal((await as(worker, alice, '/console/workspaces', { body: { name: ' ' } })).status, 400);
@@ -962,7 +962,7 @@ for (const { label, open, skip } of DATABASES) {
         { role: 'member' },
       ]);
       const me = (await (await as(worker, paul, '/console/me')).json()) as { workspaces: unknown[] };
-      assert.deepEqual(me.workspaces, [{ id: acme.workspace, name: 'acme', role: 'member' }]);
+      assert.deepEqual(me.workspaces, [{ id: acme.workspace, name: 'acme', role: 'member', suspended: false }]);
       assert.equal((await as(worker, paul, `/console/workspaces/${acme.workspace}/sites`)).status, 200);
       // Spent: it is no longer theirs to read, and a second acceptance is refused.
       assert.deepEqual(await theirInvitations(worker, paul), []);

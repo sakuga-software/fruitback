@@ -234,6 +234,87 @@ for (const { label, open, skip } of DATABASES) {
       ]);
     });
   });
+
+  describe(`a suspended workspace in the database, on ${label} (FRU-282)`, { skip }, () => {
+    it('leaves its sites out of the client map and its deliveries out of the due ones, and gives both back', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+      const acme = await accounts.createWorkspace('Acme', ana.id);
+      const globex = await accounts.createWorkspace('Globex', ana.id);
+      const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' });
+      const kept = await accounts.addSite(globex.id, { origin: 'https://globex.dev', visibility: 'members' });
+      const hook = await accounts.addConnector(acme.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+      const other = await accounts.addConnector(globex.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+      const waits = await accounts.enqueueDelivery(hook.id, '{"n":1}', 10);
+      const goes = await accounts.enqueueDelivery(other.id, '{"n":2}', 10);
+      const instant = 2 ** 32 + 1;
+
+      assert.deepEqual(await reads.setWorkspaceSuspended(ana, acme.id, true, 'impayé', instant), {
+        ok: true,
+        changed: true,
+        suspension: { since: instant, reason: 'impayé' },
+      });
+
+      assert.deepEqual(Object.keys(await accounts.clientMap()), [kept.id]);
+      assert.deepEqual(
+        (await accounts.dueDeliveries(100, 10)).map((delivery) => delivery.id),
+        [goes],
+      );
+      assert.deepEqual(await accounts.suspension(acme.id), { since: instant, reason: 'impayé' });
+      assert.equal(await accounts.suspension(globex.id), undefined);
+      assert.deepEqual(await accounts.memberships(ana.id), [
+        { workspace: acme, role: 'owner', suspension: { since: instant, reason: 'impayé' } },
+        { workspace: globex, role: 'owner' },
+      ]);
+      // The members read the sites of the workspace, and its deliveries, as before.
+      assert.deepEqual(
+        (await accounts.sites(acme.id)).map((each) => each.id),
+        [site.id],
+      );
+      assert.equal((await accounts.deliveries(acme.id, hook.id)).length, 1);
+
+      assert.deepEqual(await reads.setWorkspaceSuspended(ana, acme.id, false, undefined, instant + 1), {
+        ok: true,
+        changed: true,
+      });
+      assert.deepEqual(Object.keys(await accounts.clientMap()).toSorted(), [site.id, kept.id].toSorted());
+      assert.deepEqual(
+        (await accounts.dueDeliveries(100, 10)).map((delivery) => delivery.id).toSorted(),
+        [waits, goes].toSorted(),
+      );
+      assert.deepEqual(
+        (await rowsOf(database, 'SELECT action, at, workspace_id, detail FROM admin_actions ORDER BY at')).map(
+          (row) => [row.action, Number(row.at), row.workspace_id, row.detail],
+        ),
+        [
+          ['workspace-suspended', instant, acme.id, '{"reason":"impayé"}'],
+          ['workspace-restored', instant + 1, acme.id, null],
+        ],
+      );
+    });
+
+    it('refuses an account that is no longer an administrator, and a workspace that does not exist', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+      const acme = await accounts.createWorkspace('Acme', ana.id);
+
+      assert.deepEqual(await reads.setWorkspaceSuspended(bob, acme.id, true, undefined, 1), {
+        ok: false,
+        refused: 'not-admin',
+      });
+      assert.deepEqual(await reads.setWorkspaceSuspended(ana, 'ws_nobody', true, undefined, 1), {
+        ok: false,
+        refused: 'unknown-workspace',
+      });
+      assert.deepEqual(await rowsOf(database, 'SELECT workspace_id FROM workspace_suspensions'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM admin_actions'), []);
+    });
+  });
 }
 
 describe('the first account in a schema of its own (FRU-219, FRU-261)', () => {
@@ -472,6 +553,65 @@ describe(
         const unsuspended = await rowsOf(first, `SELECT email FROM "user" WHERE role = 'admin' AND banned IS NOT TRUE`);
         assert.equal(unsuspended.length, 1);
         assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM admin_actions'))[0]?.n), 1);
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);
+
+describe(
+  'two administrators who suspend one workspace at the same moment, on a real server (FRU-282)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    it('suspends it once: one call changes it and writes one action, and the other changes nothing', async () => {
+      const own = await ownDatabase();
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+        const acme = await accounts.createWorkspace('Acme', ana.id);
+
+        // Each suspension writes its action last: while the table is held, the one that wrote the row waits there.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const calls = [
+          createPostgresInstanceAdmin(first).setWorkspaceSuspended(ana, acme.id, true, 'by ana', 1),
+          createPostgresInstanceAdmin(second).setWorkspaceSuspended(bob, acme.id, true, 'by bob', 2),
+        ].map((call) => call.finally(() => settled.push('settled')));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither call ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+        const outcomes = await Promise.all(calls);
+
+        assert.deepEqual(outcomes.map((outcome) => (outcome.ok ? outcome.changed : outcome.refused)).toSorted(), [
+          false,
+          true,
+        ]);
+        assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM admin_actions'))[0]?.n), 1);
+        assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM workspace_suspensions'))[0]?.n), 1);
       } finally {
         release();
         await Promise.all([first, second, holder].map((database) => database.close()));

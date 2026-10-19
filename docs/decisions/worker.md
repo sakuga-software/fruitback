@@ -1371,7 +1371,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-seven columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-eight columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1461,7 +1461,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1474,7 +1474,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-seven BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty-eight BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2761,10 +2761,10 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Six reads, and two writes** (FRU-280, FRU-281): `instance`, `workspaces` (`q`, `show` of `all`,
+- **Six reads, and three writes** (FRU-280, FRU-281, FRU-282): `instance`, `workspaces` (`q`, `show` of `all`,
   `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
-  `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator and the
-  suspension of an account, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+  `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator, the
+  suspension of an account and the suspension of a workspace, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
   workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
@@ -2814,8 +2814,9 @@ its owners see it (D2). No OAuth key in any answer (D4).
 
 ### What it does not do
 
-- No write but the role (FRU-280) and the suspension (FRU-281): deleting is a later ticket. The
-  suspension writes `banned`, and empties `banReason` and `banExpires`.
+- No write but the role (FRU-280), the suspension of an account (FRU-281) and the suspension of a
+  workspace (FRU-282): deleting is a later ticket. The suspension of an account writes `banned`, and
+  empties `banReason` and `banExpires`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
 
@@ -2969,6 +2970,123 @@ sessions end. A restored account signs in again, and its old sessions stay ended
 - **The lock.** Two administrators who suspend each other at the same moment leave one:
   test:`suspends one of them: the other gets « last-admin », and one administrator stays`, on a real
   server, with the table of the actions held by a third connection.
+
+## An administrator suspends and restores a workspace (FRU-282)
+
+D3 of FRU-260, and the decision 4 of 2026-10-19: « Lecture seule, avec un bandeau ». For an unpaid
+workspace too: the reason is free text, « impayé » for example.
+
+### The rules, in short
+
+- **`POST /console/admin/workspaces/<id>/suspension`, body `{ suspended: true | false, reason? }`**,
+  behind `instanceAdminOf`, in `ADMIN_WRITE_ROUTES`. `200 { workspace: { id, suspended,
+suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
+  `400 invalid-suspended`. A `reason` that is not text, or longer than `SUSPENSION_REASON_LENGTH`
+  (200 characters) once it is one line, answers `400 invalid-reason` with `maxLength`. An empty
+  reason is none. A workspace that does not exist answers `404 not-found`.
+- **No change, no row.** A suspension of a suspended workspace, or a restoration of an active one,
+  answers `changed: false` and writes nothing. The first reason stays: a second click with another
+  reason does not change it. To change the reason, restore, then suspend again.
+- **The administrator can be a member of the workspace.** Nothing breaks: they read it as every
+  member does, and restore it from `/console/admin`, which the guard of the workspace does not cover.
+- **The storage is `workspace_suspensions`** of `0018_workspace_suspensions`: `workspace_id` (the
+  key, and a foreign key to `organization` that cascades), `since` (a `BIGINT` of milliseconds) and
+  `reason`. A row is a suspension; the restoration deletes it. Who suspended, and who restored, is in
+  `admin_actions`.
+- **One transaction** (`setWorkspaceSuspended` of `instance-admin-postgres.ts`): the workspace exists
+  (`FOR KEY SHARE`, so a deletion waits), the caller is still an administrator (`404` if not), then
+  `INSERT … ON CONFLICT DO NOTHING RETURNING` or `DELETE … RETURNING`. A row back means a change, and
+  only a change writes its action. Two administrators who suspend one workspace at the same moment
+  write one row and one action:
+  test:`suspends it once: one call changes it and writes one action, and the other changes nothing`.
+- **A site of a suspended workspace answers as a site that does not exist.** `clientMap` of the
+  store leaves it out, so every route that resolves a `client` finds nothing, and its origin leaves
+  the list of CORS too, unless a site of another workspace has it. The routes of the extension that
+  take no `client` read the suspension themselves:
+
+  | Route                                   | What a suspended workspace gives                                  |
+  | --------------------------------------- | ----------------------------------------------------------------- |
+  | `GET /feedback`, `POST /feedback`       | the answer of an unknown `client`, by `clientMap`                 |
+  | `POST /feedback/<id>/replies`           | the answer of an unknown `client`, by `clientMap`                 |
+  | `POST /screenshot`                      | the answer of an unknown `client`, by `clientMap`                 |
+  | `GET /screenshot/<id>`                  | `404`, as a picture that does not exist (`memberOf`)              |
+  | `GET /session/sites`, account session   | the workspace and its sites are not listed, as after its deletion |
+  | `GET /session/sites`, workspace session | `401 not-a-member`, as after its deletion                         |
+  | `POST /session/sites`                   | `404 not-found`, as for a workspace that does not exist           |
+  | the `pair` command                      | the workspace is not one that the command knows                   |
+
+  test:`answers every route of the widget that takes a site, for a site of a suspended workspace, with the bytes of an unknown site`
+  compares the status, the headers and the body, from no `Origin`, from the origin of the site (kept
+  allowed by a site of another workspace) and from another one, and counts no new note.
+
+- **The members read.** They sign in, and every `GET` of the console answers as before. `/console/me`
+  says `suspended` for each workspace, and `suspendedAt` and `reason` for a suspended one, for the
+  banner. The lists and the detail of `/console/admin/workspaces` say the same three fields.
+- **One guard refuses every write**: `refusedWhileSuspended` of `workspace-suspension.ts`, which
+  answers `409 workspace-suspended` with `suspendedAt` and `reason`. Two dispatchers ask it, before
+  their routes and after the role of the caller:
+  - `handleConsoleApi`, for every method that is not `GET`, `HEAD` or `OPTIONS` under
+    `/console/workspaces/<id>/`: the sites and their destinations, the domains, the connectors and
+    their settings, « Send again » of a delivery and of a note, the pairing code, the name of the
+    workspace, and a path that no route serves;
+  - `handleOrganizationRoutes`, for every `POST` that names the workspace (the role of a member, a
+    removal, an invitation and its cancellation), and for the acceptance of an invitation of the
+    workspace.
+
+  The way back from Linear reads the suspension too, and keeps no connector (`linear=suspended`; the
+  console has no message for this word yet). The guard test enumerates every write:
+  test:`refuses every write of the console API with 409 and writes nothing, and each one works after the restoration`
+  and test:`refuses every POST of the organization plugin that changes the workspace, and lets a member leave`.
+  test:`names every route of the console API that writes, and the guard comes before each one` reads
+  the routes in `console-api.ts` and `console-notes.ts`, fails on a route that no case names, and on a
+  route above the guard.
+  test:`serves the paths of the workspaces in console-api.ts only, so no route of a workspace skips the guard`
+  fails on a path of a workspace in any other file, `app.ts` included.
+
+- **What stays allowed** is `ALLOWED_WHILE_SUSPENDED`, each with its reason:
+  - **a member leaves** (`/organization/leave`): nobody is kept in a workspace they do not want;
+  - **its owner deletes it** (`DELETE /console/workspaces/<id>`): see the reasons;
+  - the refusal of an invitation names no workspace, so the guard does not see it;
+  - the writes of the administrator of the instance (FRU-283, FRU-284) are not built. They are under
+    `/console/admin`, which this guard does not cover.
+- **The deliveries wait.** `dueDeliveries` leaves out a delivery whose connector is of a suspended
+  workspace, so no attempt is made and no failure is counted. Its `next_at` stays, so the next pass of
+  the timer after the restoration sends it, and `dropAbandonedDeliveries` keeps it, because it reads
+  `next_at IS NULL` only:
+  test:`sends nothing while suspended, counts no attempt, and sends after the restoration`,
+  test:`keeps the count of a delivery that failed before the suspension, and goes on from it after`.
+- **The trace is `admin_actions`**: `workspace-suspended` and `workspace-restored`, with
+  `workspace_id`, no target, and `{ "reason": … }` in `detail` when the call gave one. The owners read
+  it in `actions` of `GET /console/workspaces/<id>/admin-reads`, each `{ action, at, admin, reason? }`
+  with no `target`; `TracedAction.target` is optional since this ticket.
+
+### The reasons, and what was measured
+
+- **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
+  `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
+  its columns with the ones that better-auth makes, and
+  test:`knows the thirty-eight BIGINT columns of the worker, and that better-auth has none` says that
+  better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
+  both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
+  and makes « changed » one statement.
+- **Why `clientMap`, and not a check in each route.** Every route of the widget reads the client map
+  of the request, and so does the list of CORS. A site that is not in the map is unknown by
+  construction, on the routes of today and on the next one. The cost is one `NOT EXISTS` on a key, in
+  the statement that every request already runs.
+- **Why `409`, and not `423`.** Every refusal of the console that a person can understand is a `409`
+  with its code (`self-removal`, `last-admin`, `too-many-domains`). The console reads the code.
+- **Why the guard comes after the role.** A person who is not a member must get the `404` of a
+  workspace that does not exist, and not learn that one is suspended:
+  test:`refuses a write to a member who is not a member of the workspace with 404, not with the suspension`.
+- **Why the owner deletes a suspended workspace.** Read-only is about the use of the service, and a
+  deletion uses none. A person whose data is kept must be able to have it deleted, paid or not, and
+  the trace of the suspension stays in `admin_actions` after the workspace goes (`set null`):
+  test:`lets the owner delete a suspended workspace, the one write of the console API that it allows`.
+- **Why the sessions of the extension are not ended.** They reach no site of the workspace while it is
+  suspended, and a restoration gives them back their sites. A person who leaves, or a workspace that
+  is deleted, ends them as before.
+- **The reason is for the members.** A guest reads it too, in `/console/me`. `docs/privacy.md` says to
+  write nothing in it that a member must not read.
 
 ## The notes of a site that goes (FRU-194)
 

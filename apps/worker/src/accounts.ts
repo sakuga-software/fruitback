@@ -57,6 +57,12 @@ export function readLocaleTag(value: unknown): string | undefined {
 export type Workspace = { id: string; name: string };
 
 /**
+ * A workspace that an administrator of the instance suspended (FRU-282): since when, in milliseconds,
+ * and the reason they wrote, if any. `workspace-suspension.ts` says what it does.
+ */
+export type WorkspaceSuspension = { since: number; reason?: string };
+
+/**
  * The four roles of the design (board « My account »).
  *
  * - `owner`: everything, and the only one who can delete the workspace.
@@ -326,8 +332,13 @@ export type AccountStore = {
   /** The language of the account behind this address, if there is one and it has one. */
   localeOf(email: string): Promise<string | undefined>;
   createWorkspace(name: string, owner: string): Promise<Workspace>;
-  /** Every workspace this account belongs to, with its role there, oldest first. */
-  memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;
+  /**
+   * Every workspace this account belongs to, with its role there, oldest first. `suspension`: an
+   * administrator of the instance suspended the workspace (FRU-282).
+   */
+  memberships(account: string): Promise<{ workspace: Workspace; role: Role; suspension?: WorkspaceSuspension }[]>;
+  /** The suspension of a workspace (FRU-282), or `undefined` for one that is not suspended or does not exist. */
+  suspension(workspace: string): Promise<WorkspaceSuspension | undefined>;
   /**
    * The role of `account` in `workspace`, or `undefined` for somebody who is not a member. A suspended
    * account (FRU-281) has no role: every caller asks it of the account that acts.
@@ -410,7 +421,10 @@ export type AccountStore = {
    * as it is sent, so each attempt sends the same bytes.
    */
   enqueueDelivery(connector: string, body: string, now: number): Promise<string>;
-  /** The deliveries to attempt now, oldest first. */
+  /**
+   * The deliveries to attempt now, oldest first. A delivery of a suspended workspace (FRU-282) is not
+   * one: it waits, with its count, until the workspace is restored.
+   */
   dueDeliveries(now: number, limit: number): Promise<DueDelivery[]>;
   /**
    * What an attempt answered. A delivery that arrived is removed: its body holds a note, and nothing
@@ -455,7 +469,10 @@ export type AccountStore = {
   setPreviews(workspace: string, domain: string, site: string | undefined): Promise<boolean>;
   /** Removes the workspace, its members and its sites. Notes already in a tracker stay there. */
   deleteWorkspace(workspace: string): Promise<void>;
-  /** Every site, as the client map the routing reads. */
+  /**
+   * Every site, as the client map the routing reads. A site of a suspended workspace (FRU-282) is not
+   * in it: the widget and the extension find it as a site that does not exist.
+   */
   clientMap(): Promise<ClientMap>;
 };
 

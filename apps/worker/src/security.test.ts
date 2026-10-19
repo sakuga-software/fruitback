@@ -29,6 +29,8 @@ import {
 } from './connect.ts';
 import { DATABASE_REQUIRED, readConfig } from './env.ts';
 import { clientOf } from './accounts.ts';
+import { SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
+import { SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -163,6 +165,16 @@ describe('SECURITY.md states what the code does', () => {
     ]) {
       const loose = sentence.replace(/\s+/g, ' ');
       assert.ok(SECURITY.replace(/\s+/g, ' ').includes(loose), `SECURITY.md does not say: ${sentence}`);
+    }
+  });
+
+  it('quotes the longest reason of a suspension of a workspace, and the refusal of its writes (FRU-282)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    for (const sentence of [
+      `The reason is one line of ${SUSPENSION_REASON_LENGTH} characters at most`,
+      `refused with \`${SUSPENDED_STATUS} ${SUSPENDED_ERROR}\``,
+    ]) {
+      assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }
   });
 

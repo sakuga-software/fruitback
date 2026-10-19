@@ -19,13 +19,23 @@ import type {
   SuspensionChange,
   TracedAction,
   TracedRead,
+  WorkspaceSuspensionChange,
 } from './instance-admin.ts';
 import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
+import { suspensionView } from './workspace-suspension.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import type { AuthorKind } from './notes-index.ts';
 import { placeIs, wordsOf } from './notes-index-postgres.ts';
-import { admin_actions, admin_reads, connectors, note_index, seeds, sites } from './postgres-schema.ts';
+import {
+  admin_actions,
+  admin_reads,
+  connectors,
+  note_index,
+  seeds,
+  sites,
+  workspace_suspensions,
+} from './postgres-schema.ts';
 import { noteOf, rowOfIdentifier, seedIdOf } from './seed-rows.ts';
 
 /**
@@ -82,6 +92,24 @@ const iso = (value: unknown): string => new Date(Number(value)).toISOString();
 const EPOCH_MS = (column: SQL) => sql`(extract(epoch FROM ${column}) * 1000)::float8`;
 const number = (value: unknown): number => Number(value ?? 0);
 const named = (value: unknown): { name?: string } => (typeof value === 'string' && value !== '' ? { name: value } : {});
+
+/** The suspension of a workspace in a raw row (FRU-282): `since` and `reason`, or `NULL` for none. */
+const suspensionIn = (row: Row) =>
+  suspensionView(
+    row.since === null || row.since === undefined
+      ? undefined
+      : {
+          since: number(row.since),
+          ...(typeof row.reason === 'string' && row.reason !== '' ? { reason: row.reason } : {}),
+        },
+  );
+
+/** The reason that `detail` of an action holds, for its owners (FRU-282). */
+const reasonIn = (detail: string | null): { reason?: string } => {
+  const reason = detailOf(detail)?.reason;
+
+  return typeof reason === 'string' && reason !== '' ? { reason } : {};
+};
 
 function noStages(): StageCounts {
   return Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])) as StageCounts;
@@ -290,8 +318,10 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                    (SELECT count(*)::int FROM sites s WHERE s.workspace_id = o.id) AS sites,
                    (SELECT count(*)::int FROM deliveries d JOIN connectors c ON c.id = d.connector_id
                      WHERE c.workspace_id = o.id) AS pending,
+                   w.since, w.reason,
                    count(*) OVER ()::int AS total
               FROM organization o
+              LEFT JOIN workspace_suspensions w ON w.workspace_id = o.id
              WHERE ${search} AND ${shown}
              ORDER BY o."createdAt" DESC, o.id
              LIMIT ${ADMIN_PAGE}`,
@@ -316,6 +346,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           (row): AdminWorkspace => ({
             id: String(row.id),
             name: String(row.name),
+            ...suspensionIn(row),
             createdAt: iso(row.created_at),
             owners: owners
               .filter((owner) => owner.workspace === row.id)
@@ -336,8 +367,11 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                    (SELECT count(*)::int FROM deliveries d JOIN connectors c ON c.id = d.connector_id
                      WHERE c.workspace_id = o.id) AS pending,
                    (SELECT count(*)::int FROM invitation i
-                     WHERE i."organizationId" = o.id AND i.status = 'pending' AND i."expiresAt" > now()) AS invited
-              FROM organization o WHERE o.id = ${id}`,
+                     WHERE i."organizationId" = o.id AND i.status = 'pending' AND i."expiresAt" > now()) AS invited,
+                   w.since, w.reason
+              FROM organization o
+              LEFT JOIN workspace_suspensions w ON w.workspace_id = o.id
+             WHERE o.id = ${id}`,
       );
       if (found === undefined) return undefined;
 
@@ -366,6 +400,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       const detail: AdminWorkspaceDetail = {
         id: String(found.id),
         name: String(found.name),
+        ...suspensionIn(found),
         createdAt: iso(found.created_at),
         members: members.map((row) => ({
           id: String(row.id),
@@ -707,6 +742,59 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       });
     },
 
+    async setWorkspaceSuspended(actor, workspace, suspended, reason, now) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<WorkspaceSuspensionChange> => {
+        const [found] = await db
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, workspace))
+          // A deletion of the workspace waits for this transaction, and the rows below find it.
+          .for('key share');
+        if (found === undefined) return { ok: false, refused: 'unknown-workspace' };
+        const [asking] = rowsOf(
+          await db.execute(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`),
+        );
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+
+        // WARNING: the write says whether it changed something, in one statement. Of two calls at the
+        // same moment, one writes the row, and the other finds it and writes no action.
+        const written = suspended
+          ? await db
+              .insert(workspace_suspensions)
+              .values({ workspace_id: workspace, since: now, reason: reason ?? null })
+              .onConflictDoNothing()
+              .returning({ since: workspace_suspensions.since })
+          : await db
+              .delete(workspace_suspensions)
+              .where(eq(workspace_suspensions.workspace_id, workspace))
+              .returning({ since: workspace_suspensions.since });
+        const [held] = await db
+          .select({ since: workspace_suspensions.since, reason: workspace_suspensions.reason })
+          .from(workspace_suspensions)
+          .where(eq(workspace_suspensions.workspace_id, workspace));
+        const suspension =
+          held === undefined
+            ? undefined
+            : { since: held.since, ...(held.reason === null ? {} : { reason: held.reason }) };
+        if (written.length === 0)
+          return { ok: true, changed: false, ...(suspension === undefined ? {} : { suspension }) };
+
+        await db.insert(admin_actions).values({
+          id: newId('ada'),
+          at: now,
+          actor_account_id: actor.id,
+          actor_email: actor.email,
+          action: suspended ? 'workspace-suspended' : 'workspace-restored',
+          workspace_id: workspace,
+          detail: reason === undefined ? null : JSON.stringify({ reason }),
+        });
+
+        return { ok: true, changed: true, ...(suspension === undefined ? {} : { suspension }) };
+      });
+    },
+
     async actionsIn(workspace) {
       const actor = alias(user, 'actor');
       const target = alias(user, 'target');
@@ -721,6 +809,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             target_email: admin_actions.target_email,
             target_now: target.email,
             target_name: target.name,
+            detail: admin_actions.detail,
           })
           .from(admin_actions)
           .leftJoin(actor, eq(actor.id, admin_actions.actor_account_id))
@@ -731,15 +820,19 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       );
 
       return rows.flatMap((row): TracedAction[] => {
+        if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action)) return [];
         const targetEmail = row.target_now ?? row.target_email;
-        if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action) || targetEmail === null) return [];
+        // An action on the workspace (FRU-282) has no member as its target, and says its reason.
+        const onTheWorkspace = row.action === 'workspace-suspended' || row.action === 'workspace-restored';
+        if (!onTheWorkspace && targetEmail === null) return [];
 
         return [
           {
             action: row.action as AdminActionKind,
             at: iso(row.at),
             admin: { email: row.actor_now ?? row.actor_email, ...named(row.actor_name) },
-            target: { email: targetEmail, ...named(row.target_name) },
+            ...(targetEmail === null ? {} : { target: { email: targetEmail, ...named(row.target_name) } }),
+            ...(onTheWorkspace ? reasonIn(row.detail) : {}),
           },
         ];
       });

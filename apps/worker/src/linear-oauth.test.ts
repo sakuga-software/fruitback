@@ -416,6 +416,29 @@ describe('the Linear of one person, and the workspace of another (FRU-134)', () 
     assert.deepEqual(await env.accounts.connectors(world.workspace.id), []);
   });
 
+  it('keeps no connector for a workspace that was suspended while the person was at Linear (FRU-282)', async () => {
+    const env = await envWith();
+    const linear = fakeLinear();
+    const world = await acme(env);
+    const left = await leave(env, world);
+    await rowsOf(
+      env.database,
+      `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${world.workspace.id}', ${Date.now()})`,
+    );
+
+    const back = await comeBack(env, linear, left);
+
+    assert.match(back.headers.get('Location') ?? '', /linear=suspended$/);
+    assert.deepEqual(await env.accounts.connectors(world.workspace.id), []);
+    // The control: the same way back, after the restoration, keeps the connector.
+    await rowsOf(env.database, `DELETE FROM workspace_suspensions`);
+    assert.match(
+      (await comeBack(env, linear, await leave(env, world))).headers.get('Location') ?? '',
+      /linear=connected$/,
+    );
+    assert.equal((await env.accounts.connectors(world.workspace.id)).length, 1);
+  });
+
   it('goes back with a word, and keeps nothing, when the person says no or the code is wrong', async () => {
     const env = await envWith();
     const linear = fakeLinear();
