@@ -376,8 +376,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   under the `StrictMode` of development. The search, the filter and the chosen row live in the
   address (`q`, `show`, `open`). The panel of a row follows the rules of FRU-161 and FRU-197: beside
   the table from 1280 px, under its row below, focus on a press, Escape back to the row. The panel
-  of a workspace reads `GET /console/admin/workspaces/<id>`; the panel of a person is its row, as the
-  worker has no route for one person. **The filters are the worker's** (`attention`, `empty`;
+  of a workspace shows `GET /console/admin/workspaces/<id>`, which the page reads once for each
+  workspace while the screen is open: the panel moves at 1280 px, and a move or a second opening
+  is no new trace. The panel of a person is its row, as the worker has no route for one person.
+  Both screens say under their lead that the owners see the read. **The filters are the worker's** (`attention`, `empty`;
   `admins`, `alone`), with no count on an option: the worker counts the filter it answers only.
   « Manage in Users » searches the address of the first owner: the search of the people does not
   match a workspace. « Last seen » is a day, as on Members. **Not copied from the mockup**: every
