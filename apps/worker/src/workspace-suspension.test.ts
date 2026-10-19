@@ -482,6 +482,14 @@ describe('the trace of a suspension of a workspace (FRU-282)', () => {
         { action: 'workspace-suspended', admin: { email: 'root@instance.dev' }, reason: 'impayé', target: undefined },
       ],
     );
+    // The shape of `TracedAction` for an action on the workspace: no `target` key at all, not even null.
+    assert.deepEqual(
+      traced.actions.map((each) => Object.keys(each).toSorted()),
+      [
+        ['action', 'admin', 'at', 'reason'],
+        ['action', 'admin', 'at', 'reason'],
+      ],
+    );
     const ofGlobex = (await (
       await on.call('GET', `/console/workspaces/${on.globex}/admin-reads`, { token: on.alice.token })
     ).json()) as { actions: unknown[] };

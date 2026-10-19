@@ -18,10 +18,11 @@ import type {
   StageCounts,
   SuspensionChange,
   TracedAction,
+  WorkspaceActionKind,
   TracedRead,
   WorkspaceSuspensionChange,
 } from './instance-admin.ts';
-import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
+import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS, isWorkspaceAction } from './instance-admin.ts';
 import { suspensionView } from './workspace-suspension.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -821,18 +822,20 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
 
       return rows.flatMap((row): TracedAction[] => {
         if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action)) return [];
-        const targetEmail = row.target_now ?? row.target_email;
+        const admin = { email: row.actor_now ?? row.actor_email, ...named(row.actor_name) };
         // An action on the workspace (FRU-282) has no member as its target, and says its reason.
-        const onTheWorkspace = row.action === 'workspace-suspended' || row.action === 'workspace-restored';
-        if (!onTheWorkspace && targetEmail === null) return [];
+        if (isWorkspaceAction(row.action)) {
+          return [{ action: row.action, at: iso(row.at), admin, ...reasonIn(row.detail) }];
+        }
+        const targetEmail = row.target_now ?? row.target_email;
+        if (targetEmail === null) return [];
 
         return [
           {
-            action: row.action as AdminActionKind,
+            action: row.action as Exclude<AdminActionKind, WorkspaceActionKind>,
             at: iso(row.at),
-            admin: { email: row.actor_now ?? row.actor_email, ...named(row.actor_name) },
-            ...(targetEmail === null ? {} : { target: { email: targetEmail, ...named(row.target_name) } }),
-            ...(onTheWorkspace ? reasonIn(row.detail) : {}),
+            admin,
+            target: { email: targetEmail, ...named(row.target_name) },
           },
         ];
       });

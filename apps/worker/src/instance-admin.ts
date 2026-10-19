@@ -260,18 +260,33 @@ export type AdminNote = {
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
+/** The kinds of action on a workspace itself (FRU-282). They have no member as their target. */
+export const WORKSPACE_ACTIONS = ['workspace-suspended', 'workspace-restored'] as const;
+export type WorkspaceActionKind = (typeof WORKSPACE_ACTIONS)[number];
+
+/** Whether an action is on a workspace itself, and not on one of its members. */
+export function isWorkspaceAction(action: string): action is WorkspaceActionKind {
+  return (WORKSPACE_ACTIONS as readonly string[]).includes(action);
+}
+
 /**
- * One action of an administrator on a member of a workspace (FRU-281), or on the workspace itself
- * (FRU-282), as its owners read it. `target` is the member, absent for an action on the workspace.
- * `reason` is the reason of a suspension or a restoration of the workspace.
+ * One action of an administrator, as the owners of the workspace read it. The `action` tells the shape:
+ * - an action on a member (FRU-281) always has `target`, the member;
+ * - an action on the workspace (FRU-282) has no `target`, and has the `reason` of the suspension if one was given.
  */
-export type TracedAction = {
-  action: AdminActionKind;
-  at: string;
-  admin: { email: string; name?: string };
-  target?: { email: string; name?: string };
-  reason?: string;
-};
+export type TracedAction =
+  | {
+      action: Exclude<AdminActionKind, WorkspaceActionKind>;
+      at: string;
+      admin: { email: string; name?: string };
+      target: { email: string; name?: string };
+    }
+  | {
+      action: WorkspaceActionKind;
+      at: string;
+      admin: { email: string; name?: string };
+      reason?: string;
+    };
 
 /** What the administrator reads and writes in the database. `instance-admin-postgres.ts` is the one store. */
 export type InstanceAdminReads = {
