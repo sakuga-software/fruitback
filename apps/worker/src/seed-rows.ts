@@ -49,7 +49,7 @@ export function rowOfIdentifier(identifier: string): number | undefined {
  * contract's. Here the column *is* a `SeedStage`, and the only translation left is the one the
  * contract already owns: an unrecognised value colours the pin rather than hiding someone's note.
  */
-function stageOf(value: string): SeedStage {
+export function stageOf(value: string): SeedStage {
   return (SEED_STAGES as readonly string[]).includes(value) ? (value as SeedStage) : DEFAULT_SEED_STAGE;
 }
 

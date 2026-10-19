@@ -3,8 +3,8 @@ import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { seed_comments, seeds } from './postgres-schema.ts';
-import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, threadsOf, toSeedIssue } from './seed-rows.ts';
-import { replyText } from './reply-text.ts';
+import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, stageOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+import { checkText, replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 
 /**
@@ -167,6 +167,40 @@ export function createPostgresSeedStore(database: Database): SeedStore {
           if (row === undefined) throw new StoreError('PostgreSQL kept a reply and answered no number for it');
 
           return { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() };
+        }),
+      ),
+    // A verdict (FRU-294): « wrong » puts the note back to `seeded`, and the reply is written in the
+    // same transaction. Both, or neither.
+    check: (target, check, _client, policy) =>
+      through('keep the verdict', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id)) return undefined;
+          const [note] = await tx
+            .select({ id: seeds.id, stage: seeds.stage })
+            .from(seeds)
+            .where(
+              and(
+                eq(seeds.id, id),
+                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+              ),
+            )
+            .for('update');
+          if (note === undefined) return undefined;
+          const now = Date.now();
+          if (check.verdict === 'wrong') {
+            await tx.update(seeds).set({ stage: DEFAULT_SEED_STAGE, updated_at: now }).where(eq(seeds.id, id));
+          }
+          const [row] = await tx
+            .insert(seed_comments)
+            .values({ seed_id: id, author: null, body: checkText(check, policy.locale), created_at: now })
+            .returning({ id: seed_comments.id, body: seed_comments.body });
+          if (row === undefined) throw new StoreError('PostgreSQL kept a verdict and answered no number for it');
+
+          return {
+            comment: { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() },
+            stage: check.verdict === 'wrong' ? DEFAULT_SEED_STAGE : stageOf(note.stage),
+          };
         }),
       ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.

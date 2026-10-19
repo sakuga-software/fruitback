@@ -7,7 +7,7 @@ import { resetCacheState } from './cache.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
-import { replyText } from './reply-text.ts';
+import { checkText, replyText } from './reply-text.ts';
 import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -64,6 +64,10 @@ export type ConformanceSubject = {
   plantReplies(store: SeedStore, seed: Seed, count: number): Promise<void>;
   /** Why this store takes no reply (FRU-257). Absent: it takes one, and a read shows it. */
   noReply?: string;
+  /** Why this store takes no verdict (FRU-294). Absent: it takes one, and a read shows it. */
+  noCheck?: string;
+  /** Mark a stored seed done, as the team would in the store. */
+  markDone: ((created: CreatedIssue) => void | Promise<void>) | string;
   /** A store whose provider answers every call with an error. It replaces the double of `open`. */
   broken: (() => SeedStore) | string;
   /** A store whose provider cannot be reached, so every call rejects. It replaces the double of `open`. */
@@ -271,6 +275,55 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it('says no reply it takes when it gives a reason', { skip: subject.noReply === undefined }, () => {
         assert.equal(store.reply, undefined);
+      });
+
+      const CHECKER = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+
+      it(
+        'keeps a note done on « fixed », with a marked reply that a read shows under it',
+        { skip: subject.noCheck ?? skipReason(subject.markDone) },
+        async () => {
+          assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
+          const created = await store.create(seedFor('sd_fixed', PAGE, 'acme'), undefined, POLICY);
+          if (typeof subject.markDone === 'function') await subject.markDone(created);
+          const check = { verdict: 'fixed' as const, author: CHECKER };
+
+          const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
+
+          assert.equal(written?.stage, 'ripe');
+          assert.equal(written?.comment.body, checkText(check, POLICY.locale));
+          const [found] = await find(PAGE, 'acme');
+          assert.equal(found?.stage, 'ripe');
+          assert.deepEqual(
+            found?.comments?.map((comment) => comment.body),
+            [checkText(check, POLICY.locale)],
+          );
+        },
+      );
+
+      it(
+        'reopens a note on « wrong », with a marked reply, and a read shows the stage it answered',
+        { skip: subject.noCheck ?? skipReason(subject.markDone) },
+        async () => {
+          assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
+          const created = await store.create(seedFor('sd_wrong', PAGE, 'acme'), undefined, POLICY);
+          if (typeof subject.markDone === 'function') await subject.markDone(created);
+          const check = { verdict: 'wrong' as const, author: CHECKER, body: 'Still grey.' };
+
+          const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
+
+          assert.equal(written?.stage, 'seeded');
+          const [found] = await find(PAGE, 'acme');
+          assert.equal(found?.stage, 'seeded');
+          assert.deepEqual(
+            found?.comments?.map((comment) => comment.body),
+            [checkText(check, POLICY.locale)],
+          );
+        },
+      );
+
+      it('says no verdict it takes when it gives a reason', { skip: subject.noCheck === undefined }, () => {
+        assert.equal(store.check, undefined);
       });
 
       it('leaves the replies out when the client hides them', async () => {

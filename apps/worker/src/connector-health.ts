@@ -89,5 +89,13 @@ export function watchedStore(
               (store.reply as NonNullable<SeedStore['reply']>)(target, reply, client, policy),
             ),
         }),
+    ...(store.check === undefined
+      ? {}
+      : {
+          check: (target, check, client, policy) =>
+            watched(client?.connector, () =>
+              (store.check as NonNullable<SeedStore['check']>)(target, check, client, policy),
+            ),
+        }),
   };
 }

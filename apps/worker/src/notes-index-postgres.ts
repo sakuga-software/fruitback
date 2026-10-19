@@ -104,6 +104,25 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
+    async authors(workspace, site, seeds) {
+      if (seeds.length === 0) return new Map();
+      const rows = await run((db) =>
+        db
+          .select({ seed: note_index.seed_id, account: note_index.author_account_id })
+          .from(note_index)
+          .where(
+            and(
+              eq(note_index.workspace_id, workspace),
+              eq(note_index.site_id, site),
+              eq(note_index.author_kind, 'member'),
+              inArray(note_index.seed_id, [...new Set(seeds)]),
+            ),
+          ),
+      );
+
+      return new Map(rows.flatMap((row) => (row.account === null ? [] : [[row.seed, row.account] as const])));
+    },
+
     async summary(workspace) {
       const rows = await run((db) =>
         db

@@ -58,6 +58,8 @@ export type LinearStubOptions = {
   issuesPageSize?: number;
   /** Make the `issues` query fail the way an outage would. */
   failIssueQuery?: boolean;
+  /** The workflow states of the team of every issue, for « Still wrong » (FRU-294). */
+  teamStates?: { id: string; name: string; type: string; position: number }[];
 };
 
 /** A stored issue built from a seed, the way `POST /feedback` would have written it. */
@@ -129,6 +131,45 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
           issues: {
             pageInfo: { hasNextPage: next < stored.length, endCursor: String(next) },
             nodes,
+          },
+        },
+      });
+    }
+
+    if (operation === 'FruitbackIssueStates') {
+      return jsonResponse({
+        data: { issue: { id: variables.id, team: { id: 'team_1', states: { nodes: options.teamStates ?? [] } } } },
+      });
+    }
+
+    if (operation === 'FruitbackReopenIssue') {
+      const { stateId } = variables.input as { stateId: string };
+      const state = (options.teamStates ?? []).find((each) => each.id === stateId);
+      if (state === undefined) return jsonResponse({ errors: [{ message: 'Entity not found: WorkflowState' }] });
+
+      return jsonResponse({
+        data: {
+          issueUpdate: {
+            success: true,
+            issue: { id: variables.id, state: { id: state.id, name: state.name, type: state.type } },
+          },
+        },
+      });
+    }
+
+    if (operation === 'FruitbackCreateComment') {
+      const { body } = variables.input as { body: string };
+
+      return jsonResponse({
+        data: {
+          commentCreate: {
+            success: true,
+            comment: {
+              id: `comment_${calls.length}`,
+              body,
+              createdAt: '2026-10-20T10:00:00.000Z',
+              user: { name: 'Fruitback' },
+            },
           },
         },
       });

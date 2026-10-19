@@ -3177,6 +3177,32 @@ replies, and on a public site mounted by the extension with no session, only the
 - **The page is read again by everybody after a reply** (`invalidatePages`): a reply that the widget
   does not see at once reads as lost.
 
+## « Looks fixed » and « Still wrong » (FRU-294)
+
+**The rules, in short:**
+
+- **One route, `POST /feedback/<id>/check?client=<site>`, body `{ url, verdict, body? }`**, and not
+  `/check` and `/reopen`: the guards, the read of the note and the answer are the same, and only the
+  store call differs. `verdict` is `fixed` or `wrong`.
+- **`SeedStore.check` writes the verdict; `takesChecks` says where.** Linear, the database and the
+  store of the dev loop take one. GitHub does not, as for a reply. A store with `check` has `reply`:
+  a site that takes no reply (`withSettings`, `receivingStore`) takes no verdict.
+- **« wrong » moves the note first, then writes the reply** (Linear: `reopenStateOf`, the first
+  state of type `triage`, else `backlog`, else `unstarted`, first of the board). A reply that says
+  « reopened » is never left on an issue that did not move. The database does both in one
+  transaction.
+- **The verdict lives in the replies of the note, never in a second model.** `checkText` writes the
+  line of who wrote it, then the line of the verdict; `verdictOf` reads it back, in either language
+  of a team; `checkedOf` takes the newest verdict, and a « wrong » after a « fixed » undoes it. So a
+  note reopened and done again can be checked again.
+- **Who: the author the index keeps, or `manage-sites`** (arbitration of 2026-10-20, option A). The
+  author is `NoteIndex.authors`, the account of a member that a session of the extension planted;
+  nothing that the page or the seed claims.
+- **The stage is read for the request, never from the cache**, and must be `ripe`. The cache of the
+  page is emptied after the verdict, and the index gets the stage that the store answered.
+- **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
+  the replies hidden says none; `mine` is the reader's.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is
