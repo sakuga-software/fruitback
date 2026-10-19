@@ -40,7 +40,7 @@ export async function chargeRateLimit(
   kv: Kv,
   clientIp: string,
   amount: number,
-  options: { limit?: number; now?: number } = {},
+  options: { limit?: number; now?: number; counter?: (clientIp: string, window: number) => string } = {},
 ): Promise<boolean> {
   const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
   // A batch of one note has nothing more to count, and `incr` takes no amount below one.
@@ -48,10 +48,11 @@ export async function chargeRateLimit(
   const window = Math.floor(now / WINDOW_MS);
   const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
 
+  const key = options.counter ?? windowKey;
   // Two windows of expiry, so the previous count is still there for the whole current window.
   const [current, previous] = await Promise.all([
-    kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS, amount),
-    kv.get(windowKey(clientIp, window - 1)),
+    kv.incr(key(clientIp, window), 2 * WINDOW_MS, amount),
+    kv.get(key(clientIp, window - 1)),
   ]);
 
   return Number(previous ?? 0) * overlap + current <= limit;
@@ -71,6 +72,18 @@ export function maxBatch(limit: number = DEFAULT_LIMIT): number {
 /** JSON, because an IPv6 address contains the separator a plain join would use. */
 function windowKey(clientIp: string, window: number): string {
   return `fruitback:rate:${JSON.stringify([clientIp, window])}`;
+}
+
+/** The replies one address writes with no session in a minute (FRU-257), counted apart from the requests. */
+export const REPLY_LIMIT = 5;
+
+/** Whether this address may write one more reply with no session now. It counts in its own key. */
+export function checkReplyLimit(kv: Kv, clientIp: string, now: number = Date.now()): Promise<boolean> {
+  return chargeRateLimit(kv, clientIp, 1, {
+    limit: REPLY_LIMIT,
+    now,
+    counter: (ip, window) => `fruitback:rate:reply:${JSON.stringify([ip, window])}`,
+  });
 }
 
 /**
