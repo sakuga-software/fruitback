@@ -582,3 +582,49 @@ export const admin_reads = pgTable(
     index('admin_reads_by_admin').on(table.admin_account_id),
   ],
 );
+
+/**
+ * The actions of an administrator of the instance (FRU-280): who, which action, on whom, and when. The
+ * administrators of the instance read them (`instance-admin.ts`).
+ *
+ * - `actor_email` and `target_email` keep the addresses at the moment of the action, so a row still
+ *   says who after an account goes (`set null`).
+ * - `workspace_id` is empty for an action on the instance, as naming an administrator. A row stays
+ *   after its workspace goes (`set null`).
+ * - `detail` is JSON, or empty: what an action needs beyond its kind and its target.
+ */
+export const admin_actions = pgTable(
+  'admin_actions',
+  {
+    id: text('id').primaryKey(),
+    at: instant('at').notNull(),
+    actor_account_id: text('actor_account_id'),
+    actor_email: text('actor_email').notNull(),
+    action: text('action').notNull(),
+    target_account_id: text('target_account_id'),
+    target_email: text('target_email'),
+    workspace_id: text('workspace_id'),
+    detail: text('detail'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'admin_actions_actor_account_id_fkey',
+      columns: [table.actor_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    foreignKey({
+      name: 'admin_actions_target_account_id_fkey',
+      columns: [table.target_account_id],
+      foreignColumns: [user.id],
+    }).onDelete('set null'),
+    foreignKey({
+      name: 'admin_actions_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('set null'),
+    index('admin_actions_by_date').on(table.at.desc()),
+    index('admin_actions_by_workspace').on(table.workspace_id, table.at.desc()),
+    index('admin_actions_by_actor').on(table.actor_account_id),
+    index('admin_actions_by_target').on(table.target_account_id),
+  ],
+);

@@ -17,14 +17,21 @@ import type { SignUp } from './sign-up.ts';
  *   `auth.ts`. No variable names an administrator.
  * - **How one becomes it.** The trigger of `0016_first_admin` gives the role to the first account, in
  *   the transaction that creates it, and to no later account. On a database that had accounts, the
- *   migration gives it to the oldest one. No route gives it or takes it away (FRU-274).
+ *   migration gives it to the oldest one. Then an administrator names another one, or takes the role
+ *   away, with `POST /console/admin/users/<id>/instance-admin` (FRU-280).
+ * - **One administrator stays.** The route refuses to take the role from the last administrator, and
+ *   refuses an administrator who takes it from themselves. The check and the write are in one
+ *   transaction, under the advisory lock of the trigger of `0016_first_admin`.
  * - **The guard.** `instanceAdminOf` of `console-api.ts` reads the cookie of the console and then the
  *   role in the database, at each call. Every other caller gets `404`, as for a path that does not
- *   exist. `handleInstanceAdmin` asks the guard before it reads `ADMIN_ROUTES`, so a route of the
- *   table cannot skip it.
+ *   exist. `handleInstanceAdmin` asks the guard before it reads `ADMIN_ROUTES` and
+ *   `ADMIN_WRITE_ROUTES`, so a route of the tables cannot skip it.
  * - **The trace.** A read that names a workspace the administrator is not a member of writes one row
  *   for that workspace in `admin_reads`, before the answer leaves. A trace that cannot be written
  *   fails the read. The owners of the workspace read the rows.
+ * - **The actions.** Each action that changes something writes one row in `admin_actions`, in the
+ *   transaction of the change. An action that changes nothing writes no row. The administrators of the
+ *   instance read the rows with `GET /console/admin/actions`.
  * - **What an answer never holds**: a secret, a token, a digest, a key of a connector, or an address of
  *   the database. Counts, names and labels only, except on `notes`.
  * - **The notes** (FRU-272): every note of the index, with its excerpt of 64 characters. The whole
@@ -37,7 +44,7 @@ import type { SignUp } from './sign-up.ts';
 export const ADMIN_PATH = '/console/admin';
 
 /** The reads that an administrator does, as the trace names them. */
-export const ADMIN_READS = ['instance', 'workspaces', 'workspace', 'users', 'notes'] as const;
+export const ADMIN_READS = ['instance', 'workspaces', 'workspace', 'users', 'notes', 'actions'] as const;
 export type AdminRead = (typeof ADMIN_READS)[number];
 
 /**
@@ -54,7 +61,50 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
   },
   { read: 'users', pattern: /^\/console\/admin\/users$/, example: '/console/admin/users' },
   { read: 'notes', pattern: /^\/console\/admin\/notes$/, example: '/console/admin/notes' },
+  { read: 'actions', pattern: /^\/console\/admin\/actions$/, example: '/console/admin/actions' },
 ];
+
+/** The writes that an administrator does (FRU-280). */
+export const ADMIN_WRITES = ['instance-admin'] as const;
+export type AdminWrite = (typeof ADMIN_WRITES)[number];
+
+/**
+ * Every route under `ADMIN_PATH` that writes, each one a `POST`. The dispatcher reads this table only
+ * after the guard, as `ADMIN_ROUTES`.
+ */
+export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; example: string }[] = [
+  {
+    write: 'instance-admin',
+    pattern: /^\/console\/admin\/users\/([A-Za-z0-9_-]{1,80})\/instance-admin$/,
+    example: '/console/admin/users/acc_00000000000000000000/instance-admin',
+  },
+];
+
+/** The kinds of action that `admin_actions` keeps. */
+export const ADMIN_ACTIONS = ['admin-named', 'admin-removed'] as const;
+export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
+
+/** One action of an administrator, as the administrators of the instance read it. */
+export type AdminAction = {
+  action: AdminActionKind;
+  at: string;
+  actor: { id?: string; email: string; name?: string };
+  target?: { id?: string; email: string; name?: string };
+  workspace?: { id: string; name: string };
+  detail?: Record<string, unknown>;
+};
+
+/**
+ * What a change of the role of administrator gives:
+ * - `changed` false: the account already had the role that was asked, and no row was written;
+ * - `unknown-account`: no account has this id;
+ * - `self-removal`: the administrator asked to take the role from themselves;
+ * - `last-admin`: the account is the last administrator of the instance;
+ * - `not-admin`: the account that asked is no longer an administrator.
+ */
+export type RoleChange =
+  | { ok: true; changed: boolean; instanceAdmin: boolean }
+  | { ok: false; refused: 'unknown-account' | 'self-removal' | 'last-admin' | 'not-admin' };
 
 /** Whether a path is one of the administrator of the instance, known or not. */
 export function isAdminPath(pathname: string): boolean {
@@ -154,7 +204,7 @@ export type AdminNote = {
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
-/** What the administrator reads in the database. `instance-admin-postgres.ts` is the one store. */
+/** What the administrator reads and writes in the database. `instance-admin-postgres.ts` is the one store. */
 export type InstanceAdminReads = {
   counts(): Promise<{ workspaces: number; accounts: number; admins: number }>;
   /** The connectors that need attention, at most `ADMIN_PAGE`, and how many there are in all. */
@@ -176,6 +226,18 @@ export type InstanceAdminReads = {
   ): Promise<void>;
   /** The reads in a workspace, the newest first. */
   reads(workspace: string): Promise<TracedRead[]>;
+  /**
+   * Gives the role of administrator of the instance to `target`, or takes it away (FRU-280), and
+   * writes the action in `admin_actions`. The checks and the writes are in one transaction, under a lock.
+   */
+  setInstanceAdmin(
+    actor: Pick<Account, 'id' | 'email'>,
+    target: string,
+    admin: boolean,
+    now: number,
+  ): Promise<RoleChange>;
+  /** The actions of the administrators, the newest first. */
+  actions(): Promise<AdminAction[]>;
 };
 
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
@@ -282,6 +344,37 @@ function adminNoteView(note: AdminNote) {
   };
 }
 
+/** What `refused` of a `RoleChange` answers. An account that is gone, or no longer an administrator, finds nothing. */
+const REFUSED: Record<Extract<RoleChange, { ok: false }>['refused'], { status: number; error: string }> = {
+  'unknown-account': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+  'self-removal': { status: 409, error: 'self-removal' },
+  'last-admin': { status: 409, error: 'last-admin' },
+};
+
+/** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
+async function changeRole(
+  request: Request,
+  target: string,
+  admin: Account,
+  reads: InstanceAdminReads,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const body: unknown = await request.json().catch(() => undefined);
+  const asked = typeof body === 'object' && body !== null ? (body as { admin?: unknown }).admin : undefined;
+  if (typeof asked !== 'boolean') return json(400, { error: 'invalid-admin' }, headers);
+
+  const change = await reads.setInstanceAdmin(admin, target, asked, now);
+  if (!change.ok) {
+    const { status, error } = REFUSED[change.refused];
+
+    return json(status, { error }, headers);
+  }
+
+  return json(200, { user: { id: target, instanceAdmin: change.instanceAdmin }, changed: change.changed }, headers);
+}
+
 /**
  * The routes under `ADMIN_PATH`, or `undefined` for a path that is not one. The guard runs first,
  * for every path under `ADMIN_PATH`: a caller who is not the administrator learns nothing, not even
@@ -299,13 +392,21 @@ export async function handleInstanceAdmin(
   const admin = await context.admin();
   if (admin === undefined) return notFound();
 
-  const route = ADMIN_ROUTES.find((each) => each.pattern.test(pathname));
   const { reads, facts } = context;
+  const now = context.now ?? Date.now();
+  const write = ADMIN_WRITE_ROUTES.find((each) => each.pattern.test(pathname));
+  if (write !== undefined) {
+    if (reads === undefined || facts === undefined) return notFound();
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+
+    return changeRole(request, write.pattern.exec(pathname)?.[1] as string, admin, reads, now, headers);
+  }
+
+  const route = ADMIN_ROUTES.find((each) => each.pattern.test(pathname));
   if (route === undefined || reads === undefined || facts === undefined) return notFound();
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
 
   const url = new URL(request.url);
-  const now = context.now ?? Date.now();
   const traced = (workspaces: readonly string[]) => reads.trace(admin, workspaces, route.read, now);
 
   switch (route.read) {
@@ -369,6 +470,12 @@ export async function handleInstanceAdmin(
         },
         headers,
       );
+    }
+    case 'actions': {
+      const actions = await reads.actions();
+      await traced(actions.flatMap((action) => (action.workspace === undefined ? [] : [action.workspace.id])));
+
+      return json(200, { actions }, headers);
     }
   }
 }

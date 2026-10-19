@@ -115,6 +115,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO admin_reads (id, workspace_id, admin_account_id, admin_email, what, at)
        VALUES ('adr_1', 'ws_acme', 'acc_alice', 'alice@acme.dev', 'workspace', 1)`,
   );
+  // FRU-280: one action of an administrator of the instance.
+  await rowsOf(
+    database,
+    `INSERT INTO admin_actions (id, at, actor_account_id, actor_email, action, target_account_id, target_email)
+       VALUES ('ada_1', 1, 'acc_alice', 'alice@acme.dev', 'admin-named', 'acc_alice', 'alice@acme.dev')`,
+  );
 
   return database;
 }
@@ -124,8 +130,9 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-six BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-seven BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
+    'admin_actions.at',
     'admin_reads.at',
     'connect_requests.answered_at',
     'connect_requests.claimed_at',

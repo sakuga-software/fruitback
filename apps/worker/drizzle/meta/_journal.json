@@ -120,6 +120,13 @@
       "when": 1792347642035,
       "tag": "0016_first_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792416807652,
+      "tag": "0017_admin_actions",
+      "breakpoints": true
     }
   ]
 }
