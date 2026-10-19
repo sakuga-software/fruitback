@@ -21,8 +21,14 @@ import type { SiteConfig } from './sites.ts';
  * and a gate that is never exercised is a gate nobody can trust.
  */
 
-/** The one path the widget calls, on both directions of the seed (`embed.ts`). */
+/** The path the widget calls, on both directions of the seed (`embed.ts`). */
 export const FEEDBACK_PATH = '/feedback';
+
+/**
+ * The path of a reply under one note (FRU-257), after the endpoint: `FEEDBACK_PATH`, the id of the
+ * issue, then `/replies`. The id has the characters that the worker takes, and no other.
+ */
+export const REPLY_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/replies$/;
 
 export type RelaySeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
@@ -135,8 +141,9 @@ function isTimeout(error: unknown): boolean {
 /**
  * The one URL this origin's widget is allowed to ask for.
  *
- * An allowlist of a single path, so a route the widget grows later is refused here until somebody
- * adds it — rather than the relay becoming a way to reach anything on that worker. The origin and
+ * An allowlist of two paths, the notes and a reply under one note, so a route the widget grows
+ * later is refused here until somebody adds it — rather than the relay becoming a way to reach
+ * anything on that worker. The origin and
  * the path are compared apart because an endpoint may carry a path of its own
  * (`https://example.com/fruitback`), and the query is deliberately not compared: `?url=…&client=…`
  * is the widget's, and it is the site's own client id in it.
@@ -146,7 +153,11 @@ function targets(url: string, endpoint: string): boolean {
     const target = new URL(url);
     const worker = new URL(`${endpoint}${FEEDBACK_PATH}`);
 
-    return target.origin === worker.origin && target.pathname === worker.pathname;
+    if (target.origin !== worker.origin) return false;
+    if (target.pathname === worker.pathname) return true;
+    const base = worker.pathname.slice(0, -FEEDBACK_PATH.length);
+
+    return target.pathname.startsWith(base) && REPLY_PATH.test(target.pathname.slice(base.length));
   } catch {
     return false;
   }

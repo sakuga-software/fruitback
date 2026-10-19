@@ -1361,9 +1361,14 @@ CORS headers on the refusal for an extension origin.
   name.** `ALLOWED_HEADERS` in `protocol.ts` is an allowlist of one, and `relay.ts` writes the
   credential name by name rather than spreading — two spellings of one header reach `fetch` as a
   combined value.
-- **One path, `/feedback`.** `relay.test.ts` reads `packages/widget/src/embed.ts` and asserts the
-  widget calls that path and names no header the relay would drop, so a call the widget grows later
-  fails the suite instead of being dropped silently on a reviewer's page.
+- **Two paths: `/feedback`, and `/feedback/<id>/replies` under one note** (FRU-257, `REPLY_PATH`).
+  `relay.test.ts` reads `packages/widget/src/embed.ts` and asserts the widget calls those paths and
+  names no header the relay would drop, so a call the widget grows later fails the suite instead of
+  being dropped silently on a reviewer's page. The id of a note takes the characters the worker takes,
+  and no other: `..` and `/` cannot reach a route around it.
+- **A widget the extension mounts with no relay offers no field to reply** (`replies: false`,
+  FRU-257). The rule of Mathieu says no for « the extension in anonymous », and the worker cannot tell
+  that reader from a visitor of the site: the field is hidden, and the pins stay, as public as before.
 - **Two deadlines, and the shorter one aborts.** The composer disables its send button in flight, so
   a promise that never settles leaves a reviewer with a dead button and a written note inside it.
   `RELAY_CALL_TIMEOUT_MS` aborts the background fetch — merely giving up would leave the request in

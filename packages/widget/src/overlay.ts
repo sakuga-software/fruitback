@@ -1,4 +1,4 @@
-import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { type SeedBounds, type SeedComment, type SeedIssue } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { onStageToken, stageToken } from './theme.ts';
@@ -104,6 +104,20 @@ export type OverlayOptions = {
   onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+  /** How a reader replies to a note from its thread (FRU-257). Left out: no thread has a field. */
+  reply?: ReplySeam;
+};
+
+/** Why a reply did not go. The text stays in its field in every case. */
+export type ReplyFailure = 'retry' | 'wait' | 'signed-out';
+
+/**
+ * A seam like `onSubmit` of the composer (FRU-257): the overlay does not know the worker. `allowed`
+ * is asked when a thread is built, and `send` answers the reply as the store wrote it.
+ */
+export type ReplySeam = {
+  allowed(issue: SeedIssue): boolean;
+  send(issue: SeedIssue, body: string): Promise<SeedComment | ReplyFailure>;
 };
 
 export type Overlay = {
@@ -458,15 +472,50 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     );
   }
 
+  // The text of each reply not sent yet, by note: a thread is built again on each resolve and each
+  // render, and the text of a person must outlive it (FRU-257).
+  const replyTexts = new Map<string, string>();
+  const repliesInFlight = new Set<string>();
+  const replySaid = new Map<string, string>();
+  /** Shows the end of a reply in the thread of its note, if that thread is open now. */
+  const replySettled = (issue: SeedIssue, answer: SeedComment | ReplyFailure): void => {
+    const entry = placed.find((candidate) => candidate.issue.id === issue.id);
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.seed.id) return;
+    // A read may have drawn the note again since: the reply goes on the issue that is on screen too.
+    if (typeof answer !== 'string' && !(entry.issue.comments ?? []).some((each) => each.id === answer.id)) {
+      entry.issue.comments = [...(entry.issue.comments ?? []), answer];
+    }
+    const focused = threadHasFocus();
+    reopenThread(entry);
+    const field = thread?.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    if (focused) field?.focus();
+  };
+  const replyFor = (issue: SeedIssue): ReplyFooter | undefined =>
+    options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
+      ? undefined
+      : { seam: options.reply, texts: replyTexts, inFlight: repliesInFlight, said: replySaid, settled: replySettled };
+
   /** Re-render the open thread against a resolution that has just changed under it. */
   function reopenThread(entry: Placed): void {
     const focused = threadHasFocus();
+    // A person who types a reply keeps the field, the caret and the selection (FRU-257): the page
+    // can change under the thread at any keystroke, and focus on Close would take the next ones.
+    const active = deepActiveElement(document);
+    const typing =
+      isElement(active) && active.classList.contains('fruitback-thread-reply-field')
+        ? (active as HTMLTextAreaElement)
+        : undefined;
+    const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
     thread?.remove();
-    thread = buildThread(document, entry.issue, entry.resolution, t);
+    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin, t.direction);
-    if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
+    const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    if (caret !== undefined && field !== null) {
+      field.focus();
+      field.setSelectionRange(caret[0], caret[1]);
+    } else if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
   }
 
   function openThread(entry: Placed): void {
@@ -475,7 +524,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     entry.pin.dataset.fruitbackOpen = '';
     entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
-    thread = buildThread(document, entry.issue, entry.resolution, t);
+    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin, t.direction);
@@ -487,6 +536,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function closeThread(restoreFocus = true): void {
     const focused = restoreFocus && threadHasFocus();
+    // The last word of a reply is said once: a thread opened again starts with an empty status.
+    replySaid.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
     thread?.remove();
@@ -710,20 +761,22 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
   for (const comment of issue.comments) {
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
+    const fromPage = replyFromPage(comment.body);
     item.append(
       byline(
         document,
         'p',
         'fruitback-thread-reply-who',
-        comment.author ?? t.text('thread.team'),
+        fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name,
         comment.createdAt,
         t,
         // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
         'fruitback-thread-reply-name',
+        fromPage?.who,
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
-      element(document, 'p', 'fruitback-thread-reply-body', comment.body),
+      element(document, 'p', 'fruitback-thread-reply-body', fromPage?.text ?? comment.body),
     );
     list.append(item);
   }
@@ -769,7 +822,13 @@ function stateLabel(issue: SeedIssue, t: Translator): string {
 }
 
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
-function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
+function buildThread(
+  document: Document,
+  issue: SeedIssue,
+  resolution: AnchorResolution,
+  t: Translator,
+  reply: ReplyFooter | undefined,
+): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
   thread.dataset.fruitbackThread = issue.seed.id;
@@ -814,9 +873,124 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
       ...uncertaintyNote(document, resolution, t),
     ]),
     ...replies(document, issue, t),
+    ...(reply === undefined ? [] : [replyForm(document, issue, t, reply)]),
   );
 
   return thread;
+}
+
+/**
+ * What the forms of the replies share, by note: a form is built again with its thread, and the state
+ * of a reply outlives it. `said` is the last word of the status line.
+ */
+type ReplyFooter = {
+  seam: ReplySeam;
+  texts: Map<string, string>;
+  inFlight: Set<string>;
+  said: Map<string, string>;
+  settled: (issue: SeedIssue, answer: SeedComment | ReplyFailure) => void;
+};
+
+/**
+ * A reply written from the page, as the worker writes it in a tracker (FRU-257): a first line with
+ * the name and what the worker knows of the person, then the text, quoted. The page shows the name
+ * as the author and the text as it was typed. Any other comment is shown as it is.
+ *
+ * WARNING: a person who comments in the tracker can type the same first line. The page then shows
+ * the name they typed: they are people of the team of the site, who can change the issue too.
+ */
+const FROM_PAGE = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n\n((?:>(?: [^\n]*)?(?:\n|$))+)$/u;
+
+function replyFromPage(body: string): { name: string; who: string; text: string } | undefined {
+  const match = FROM_PAGE.exec(body);
+  if (match === null) return undefined;
+  const text = (match[3] ?? '')
+    .replace(/\n$/u, '')
+    .split('\n')
+    .map((line) => line.replace(/^> ?/u, ''))
+    .join('\n');
+
+  return { name: match[1] ?? '', who: match[2] ?? '', text };
+}
+
+const REPLY_FAILURES = {
+  retry: 'reply.failed',
+  wait: 'reply.failedWait',
+  'signed-out': 'reply.failedSignedOut',
+} as const;
+
+/**
+ * The foot of a thread, where a reader replies (FRU-257). Enter sends, and Shift+Enter goes to the
+ * next line.
+ *
+ * WARNING: nothing here clears the field but a reply that the store kept. A failure keeps the text
+ * and says why. The text lives in `texts` too, so a thread built again shows it again.
+ */
+function replyForm(document: Document, issue: SeedIssue, t: Translator, reply: ReplyFooter): HTMLElement {
+  const form = document.createElement('form');
+  form.className = 'fruitback-thread-reply-form';
+  const field = document.createElement('textarea');
+  field.className = 'fruitback-thread-reply-field';
+  field.rows = 1;
+  field.setAttribute('aria-label', t.text('reply.label'));
+  const author = issue.seed.reporter?.name;
+  field.placeholder =
+    author === undefined ? t.text('reply.placeholderAnonymous') : t.text('reply.placeholder', { name: author });
+  field.value = reply.texts.get(issue.id) ?? '';
+  const send = document.createElement('button');
+  send.type = 'submit';
+  send.className = 'fruitback-thread-reply-send';
+  send.textContent = t.text('reply.send');
+  // The visible word is in the name: a second « Send » can be on screen, the one of the composer.
+  send.setAttribute('aria-label', t.text('reply.sendLabel'));
+  const status = document.createElement('span');
+  status.className = 'fruitback-thread-reply-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  // A thread built again while its reply is in flight shows the send, and takes no second one.
+  const inFlight = reply.inFlight.has(issue.id);
+  send.disabled = inFlight;
+  field.readOnly = inFlight;
+  status.textContent = inFlight ? t.text('reply.sending') : (reply.said.get(issue.id) ?? '');
+
+  field.addEventListener('input', () => {
+    reply.texts.set(issue.id, field.value);
+    reply.said.delete(issue.id);
+    status.textContent = '';
+  });
+  field.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    form.requestSubmit();
+  });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const body = field.value;
+    if (reply.inFlight.has(issue.id) || body.trim() === '') return;
+    reply.inFlight.add(issue.id);
+    send.disabled = true;
+    field.readOnly = true;
+    status.textContent = t.text('reply.sending');
+    void reply.seam
+      .send(issue, body)
+      .catch((): ReplyFailure => 'retry')
+      .then((answer) => {
+        reply.inFlight.delete(issue.id);
+        if (typeof answer === 'string') {
+          reply.said.set(issue.id, t.text(REPLY_FAILURES[answer]));
+        } else {
+          issue.comments = [...(issue.comments ?? []), answer];
+          reply.texts.delete(issue.id);
+          reply.said.set(issue.id, t.text('reply.sent'));
+        }
+        // The thread of this note as it is now, which may be another than the one that sent.
+        reply.settled(issue, answer);
+      });
+  });
+
+  form.append(field, send, status);
+
+  return form;
 }
 
 function uncertaintyNote(document: Document, resolution: AnchorResolution, t: Translator): HTMLElement[] {
@@ -877,6 +1051,7 @@ function byline(
   written: string,
   t: Translator,
   nameClass?: string,
+  qualifier?: string,
 ): HTMLElement {
   const date = new Date(written);
   const when = Number.isNaN(date.getTime()) ? written : t.relative(date);
@@ -884,7 +1059,7 @@ function byline(
     nameClass === undefined
       ? element(document, tag, className, `${who} · ${when}`)
       : element(document, tag, className, [element(document, 'span', nameClass, who)]);
-  if (nameClass !== undefined) node.append(` · ${when}`);
+  if (nameClass !== undefined) node.append(`${qualifier === undefined ? '' : ` · ${qualifier}`} · ${when}`);
   if (!Number.isNaN(date.getTime())) node.title = t.date(date);
 
   return node;
@@ -1180,8 +1355,51 @@ const STYLES = `
   A thumb, not a pointer (FRU-157). The cross stays 15 px and its button grows to 44 px. The negative
   margins give the extra size back to the padding of the head, so the head keeps its height.
 */
+/* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
+.fruitback-thread-reply-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 12px 16px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-thread-reply-field {
+  flex: 1 1 160px;
+  min-height: 36px;
+  max-height: 120px;
+  resize: none;
+  field-sizing: content;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-field);
+  padding: 7px 10px;
+  font: 14px/1.4 var(--fruitback-font-sans);
+  background: var(--fruitback-color-surface);
+  color: inherit;
+  caret-color: var(--fruitback-color-accent);
+}
+.fruitback-thread-reply-field:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-thread-reply-send {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 600 13px/1 var(--fruitback-font-sans);
+  letter-spacing: -0.006em;
+  cursor: pointer;
+}
+.fruitback-thread-reply-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
+.fruitback-thread-reply-send[disabled] { opacity: 0.55; cursor: default; }
+.fruitback-thread-reply-status { flex-basis: 100%; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-reply-status:empty { display: none; }
 @media (pointer: coarse) {
   .fruitback-thread-close { min-width: 44px; min-height: 44px; margin-block: -6px; margin-inline-end: -6px; }
   .fruitback-thread-link { display: inline-flex; align-items: center; min-height: 32px; }
+  .fruitback-thread-reply-field { font-size: 16px; }
+  .fruitback-thread-reply-send { min-height: 44px; }
 }
 `;

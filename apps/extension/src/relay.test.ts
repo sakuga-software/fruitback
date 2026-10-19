@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { FEEDBACK_PATH, type RelaySeams, createRelay } from './relay.ts';
+import { FEEDBACK_PATH, REPLY_PATH, type RelaySeams, createRelay } from './relay.ts';
 import { type RelayRequest, type RelayResponse, parseRelayRequest } from './protocol.ts';
 import { resolveSite } from './site-patterns.ts';
 import type { SiteConfig } from './sites.ts';
@@ -120,11 +120,37 @@ describe('the relay refuses before it sends', () => {
     assert.deepEqual(sent, []);
   });
 
-  /** One path, so a route the worker grows later is refused here until somebody adds it. */
+  it('relays a reply under one note, with the credential of the session, under an endpoint with a path too (FRU-257)', async () => {
+    for (const endpoint of ['https://worker.test', 'https://worker.test/fruitback']) {
+      const { relay, sent } = harness({ readSite: async () => ({ ...TEAM, endpoint }) });
+      const url = `${endpoint}/feedback/issue_1/replies?client=acme`;
+
+      const answer = await relay(
+        { ...WRITE, url, body: '{"url":"https://acme.dev/","body":"Seen."}' },
+        'https://acme.dev',
+      );
+
+      assert.partialDeepStrictEqual(answer, { ok: true }, endpoint);
+      assert.equal(sent[0]?.url, url);
+      assert.equal(sent[0]?.headers.Authorization, 'Bearer access.1');
+    }
+  });
+
+  /** Two paths, so a route the worker grows later is refused here until somebody adds it. */
   it('refuses a path that is not the one the widget calls', async () => {
     const { relay, sent } = harness();
 
-    for (const path of ['/session/refresh', '/health', '/feedback/../session/pair', '/']) {
+    for (const path of [
+      '/session/refresh',
+      '/health',
+      '/feedback/../session/pair',
+      '/',
+      // A reply goes under one note, and nowhere around it (FRU-257).
+      '/feedback/issue_1/replies/../../../session/pair',
+      '/feedback/issue_1/replies/x',
+      '/feedback//replies',
+      '/feedback/a.b/replies',
+    ]) {
       const answer = await relay({ ...READ, url: `https://worker.test${path}` }, 'https://acme.dev');
       assert.partialDeepStrictEqual(answer, { ok: false, body: 'endpoint-not-declared-for-this-site' }, path);
     }
@@ -312,11 +338,14 @@ describe('the relay sends what the background decided, never what the page asked
 describe('what the widget sends is what the relay allows', () => {
   const embed = readFileSync(fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)), 'utf8');
 
-  it('calls one path, and it is the one the relay allows', () => {
+  it('calls the paths the relay allows, and no other', () => {
     const paths = [...embed.matchAll(/\$\{options\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
 
     assert.ok(paths.length > 0, 'embed.ts no longer builds a URL from options.endpoint; this guard reads nothing');
-    for (const path of paths) assert.equal(path, FEEDBACK_PATH);
+    // The id of a note is a value of the widget: an id the relay takes stands in for it.
+    const resolved = paths.map((path) => path?.replace(/\$\{[^}]+\}/g, 'issue_1'));
+    assert.ok(resolved.includes('/feedback/issue_1/replies'), 'the guard no longer sees the path of a reply');
+    for (const path of resolved) assert.ok(path === FEEDBACK_PATH || REPLY_PATH.test(path ?? ''), path ?? '');
   });
 
   it('names no header the relay would drop in silence', () => {

@@ -232,8 +232,9 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     'font-size': '12px',
     'line-height': '18px',
   });
-  // Nothing to answer with: that part of the mock-up waits for a decision.
-  await expect(thread.locator('form, textarea')).toHaveCount(0);
+  // The foot of the mock-up: a field to reply, since FRU-257 decided who may (this worker lets everybody).
+  await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveCount(1);
+  await expect(thread.getByRole('button', { name: 'Send reply' })).toHaveCount(1);
 
   // Beside the frame, as the mock-up places it: 26 px past its edge and 32 px above its top, which
   // is 30 and 36 px from the element.

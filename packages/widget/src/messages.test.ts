@@ -1,6 +1,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGES } from '@fruitback/shared';
+import { SEED_STAGES, type SeedComment } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import {
   BUNDLED_CATALOGS,
@@ -19,7 +19,7 @@ import { createConfigPanel } from './panel.ts';
 import { type ReadState, createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
-import { createOverlay } from './overlay.ts';
+import { type ReplyFailure, createOverlay } from './overlay.ts';
 import { globalNavigatorSpeaks, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
 
 describe('createTranslator', () => {
@@ -265,11 +265,14 @@ describe('every word the widget shows', () => {
     cleanup.push(() => composer.destroy());
     // The first issue is drawn as a note kept for later, not sent (FRU-124).
     let draftIssue: unknown;
+    // Each reply waits for the answer that the case gives it (FRU-257).
+    const replyAnswers: ((answer: SeedComment | ReplyFailure) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
       translator,
       isDraft: (issue) => issue === draftIssue,
+      reply: { allowed: () => true, send: () => new Promise((resolve) => replyAnswers.push(resolve)) },
     });
     cleanup.push(() => overlay.destroy());
 
@@ -280,6 +283,8 @@ describe('every word the widget shows', () => {
       seed: seedFixture({
         id: 'sd_found',
         note: 'NOTE ONE',
+        // A name, so that its field of reply names the author (FRU-257).
+        reporter: { name: 'REPORTER' },
         anchor: {
           selector: '[data-testid="cta"]',
           tag: 'button',
@@ -382,6 +387,22 @@ describe('every word the widget shows', () => {
       badge.click();
       snapshots.push(...shown(host.root));
     }
+    // A reply from the open thread: in flight, then each cause of a failure, then kept (FRU-257).
+    const settleReply = () => new Promise((resolve) => setTimeout(resolve, 0));
+    overlay.select(found.seed.id);
+    const replyForm = host.root.querySelector('.fruitback-thread-reply-form') as HTMLFormElement;
+    (host.root.querySelector('.fruitback-thread-reply-field') as HTMLTextAreaElement).value = 'REPLY';
+    for (const answer of ['wait', 'signed-out', 'retry'] as const) {
+      replyForm.requestSubmit();
+      snapshots.push(...shown(host.root));
+      replyAnswers.shift()?.(answer);
+      await settleReply();
+      snapshots.push(...shown(host.root));
+    }
+    replyForm.requestSubmit();
+    replyAnswers.shift()?.({ id: 'c3', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' });
+    await settleReply();
+    snapshots.push(...shown(host.root));
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     snapshots.push(...shown(host.root));
     // A read takes the places away under the open popover, and the composer says so.
@@ -481,6 +502,7 @@ describe('every word the widget shows', () => {
       'ID-2',
       'ID-3',
       'BODY',
+      'REPORTER',
       'https://…',
       // The address under the title of the list (FRU-259). Before « acme », which is a part of it.
       'preview.acme.test',

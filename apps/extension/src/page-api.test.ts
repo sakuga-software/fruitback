@@ -31,3 +31,15 @@ describe('the names a team-mode site is told to use', () => {
     assert.ok(snippet?.includes(`'${EXTENSION_EVENT}'`), `the snippet does not listen for ${EXTENSION_EVENT}`);
   });
 });
+
+/**
+ * The mount of a site with no session (FRU-257). An entrypoint binds `browser` and `window` at
+ * import, so the option is asserted on the source, as `worlds.test.ts` reads the worlds.
+ */
+describe('the widget that the extension mounts with no session', () => {
+  const page = readFileSync(fileURLToPath(new URL('../entrypoints/page.content.ts', import.meta.url)), 'utf8');
+
+  it('offers no field to reply, and a widget with the relay gets the transport instead', () => {
+    assert.match(page, /message\.relay === true \? \{ transport: api\.transport \} : \{ replies: false \}/);
+  });
+});
