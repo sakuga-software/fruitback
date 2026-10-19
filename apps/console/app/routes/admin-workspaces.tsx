@@ -5,13 +5,17 @@ import {
   type AdminWorkspaceDetail,
   STAGES,
   type StageCounts,
+  addMemberAsAdmin,
   adminWorkspace,
   adminWorkspaces,
+  createWorkspaceAsAdmin,
   deleteWorkspaceAsAdmin,
+  inviteAsAdmin,
+  setOwnerAsAdmin,
 } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
-import { Button, DataTable, Field, LinkButton, PageHead, Problem, StatusBar } from '../ui';
+import { Button, Choice, DataTable, Field, LinkButton, PageHead, Problem, StatusBar } from '../ui';
 import { useLocale } from '../use-locale';
 import { useWide } from '../wide';
 import { dayOf } from './admin-instance';
@@ -28,12 +32,14 @@ import {
   useListAddress,
   useRead,
 } from './admin-list';
+import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from './admin-writes';
 import { KINDS } from './connector-parts';
 
 /**
  * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263):
  * who owns each one, its notes, and where they go. « Delete the workspace » in the foot of a panel
- * deletes it after its name is typed (FRU-284). The other actions of the mockup come with FRU-274.
+ * deletes it after its name is typed (FRU-284). « New workspace », and in a panel « Add someone »,
+ * « Invite someone » and « Change the owner », write at once, and the owners read it (FRU-283).
  *
  * WARNING: each read writes a trace in each workspace of the answer that the administrator is not a
  * member of (FRU-261). The panel reads its workspace again, and leaves one more trace there.
@@ -72,12 +78,12 @@ export default function AdminWorkspaces() {
   }, [q, show]);
   const { shown, again } = useRead(ask);
   // The name of the workspace that was just deleted: the page says it, where its row was.
-  const [deleted, setDeleted] = useState<string | undefined>();
-  const said = useRef<HTMLParagraphElement>(null);
-  // Focus goes to the sentence: the panel and the button that had it are gone.
+  const [said, setSaid] = useState<Saying | undefined>();
+  const statusLine = useRef<HTMLParagraphElement>(null);
+  // Focus goes to the sentence: the panel or the form, and the button that had it, are gone.
   useEffect(() => {
-    if (deleted !== undefined) said.current?.focus();
-  }, [deleted]);
+    if (said !== undefined) statusLine.current?.focus();
+  }, [said]);
 
   const rows = typeof shown === 'object' ? shown.workspaces : [];
   const chosen = rows.find((workspace) => workspace.id === open);
@@ -113,8 +119,18 @@ export default function AdminWorkspaces() {
         onClose={close}
         onDeleted={(name) => {
           known.current.delete(chosen.id);
-          setDeleted(name);
+          setSaid(
+            saying(msg('{workspace} was deleted. Every instance admin reads it on the page Instance.'), {
+              workspace: name,
+            }),
+          );
           change({ open: '' }, true);
+          again();
+        }}
+        onChanged={() => {
+          // The detail is read again, and the row: an owner or a count of people changed.
+          known.current.delete(chosen.id);
+          readAgain();
           again();
         }}
       />
@@ -130,9 +146,24 @@ export default function AdminWorkspaces() {
       <p className="mb-[24px] max-w-[64ch] text-small text-muted">
         {t('The owners of each workspace see that you read its list, with your address and the day.')}
       </p>
-      {deleted === undefined ? null : (
-        <p role="status" tabIndex={-1} ref={said} className="mb-[16px] text-small font-semibold">
-          {t('{workspace} was deleted. Every instance admin reads it on the page Instance.', { workspace: deleted })}
+      <div className="mb-[20px] max-w-[520px]">
+        <NewWorkspace
+          onMade={(made) => {
+            setSaid(
+              saying(msg('{workspace} was made, owned by {email}.'), {
+                workspace: made.workspace.name,
+                email: made.owner.email,
+              }),
+            );
+            setTyped('');
+            change({ q: '', show: 'all', open: made.workspace.id });
+            again();
+          }}
+        />
+      </div>
+      {said === undefined ? null : (
+        <p role="status" tabIndex={-1} ref={statusLine} className="mb-[16px] text-small font-semibold">
+          {t(said.sentence, said.values)}
         </p>
       )}
       <ListBar
@@ -329,6 +360,7 @@ function Panel({
   takesFocus,
   onClose,
   onDeleted,
+  onChanged,
 }: {
   workspace: AdminWorkspace;
   detail: AdminWorkspaceDetail | 'loading' | 'failed';
@@ -337,6 +369,7 @@ function Panel({
   takesFocus: { current: boolean };
   onClose: () => void;
   onDeleted: (name: string) => void;
+  onChanged: () => void;
 }) {
   useLocale();
   const owners = ownersOf(workspace);
@@ -363,12 +396,12 @@ function Panel({
           </Button>
         </div>
       ) : null}
-      {typeof detail === 'object' ? <Detail workspace={detail} /> : null}
+      {typeof detail === 'object' ? <Detail workspace={detail} onChanged={onChanged} /> : null}
     </AdminPanel>
   );
 }
 
-function Detail({ workspace }: { workspace: AdminWorkspaceDetail }) {
+function Detail({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onChanged: () => void }) {
   useLocale();
   const owners = workspace.members.filter((member) => member.role === 'owner');
   const manage = owners[0] === undefined ? '/admin/users' : `/admin/users?q=${encodeURIComponent(owners[0].email)}`;
@@ -413,6 +446,8 @@ function Detail({ workspace }: { workspace: AdminWorkspaceDetail }) {
         <div className="mt-[2px]">
           <LinkButton to={manage}>{t('Manage in Users')}</LinkButton>
         </div>
+        <AddPerson workspace={workspace} onChanged={onChanged} />
+        <InvitePerson workspace={workspace} onChanged={onChanged} />
       </PanelSection>
 
       <PanelSection title={t('Sites · {count}', { count: workspace.sites.length })}>
@@ -435,6 +470,7 @@ function Detail({ workspace }: { workspace: AdminWorkspaceDetail }) {
             {owner.name === undefined ? owner.email : `${owner.name}, ${owner.email}`}
           </p>
         ))}
+        <ChangeOwner workspace={workspace} onChanged={onChanged} />
       </PanelSection>
     </>
   );
@@ -547,5 +583,275 @@ function Deletion({ workspace, onDeleted }: { workspace: AdminWorkspace; onDelet
       )}
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </div>
+  );
+}
+
+/**
+ * A sentence that a write said, kept in English with its values and translated where it is shown,
+ * so it follows a change of language.
+ */
+type Saying = { sentence: string; values: Readonly<Record<string, string>> };
+
+/** `sentence` is a `msg`, so the check of the words finds it. */
+function saying(sentence: string, values: Readonly<Record<string, string>> = {}): Saying {
+  return { sentence, values };
+}
+
+/** A sentence that a write said, under its form, until the next one (FRU-283). */
+function Said({ children }: { children: Saying | undefined }) {
+  useLocale();
+  if (children === undefined) return null;
+
+  return (
+    <p role="status" className="text-small font-semibold [overflow-wrap:anywhere]">
+      {t(children.sentence, children.values)}
+    </p>
+  );
+}
+
+/** « Add someone » (FRU-283): an account that exists, by its address, with a role. */
+function AddPerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onChanged: () => void }) {
+  useLocale();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('member');
+  const [said, setSaid] = useState<Saying | undefined>();
+  const address = email.trim();
+  const roleName = t((GIVEN_ROLES.find((each) => each.value === role) ?? GIVEN_ROLES[0]).label);
+
+  return (
+    <>
+      <AdminWrite
+        label={t('Add someone')}
+        name={t('Add someone to {workspace}', { workspace: workspace.name })}
+        fields={
+          <>
+            <Field
+              label={t('Address of their account')}
+              type="email"
+              autoComplete="off"
+              compact
+              autoFocus
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <Choice
+              label={t('Role')}
+              compact
+              value={role}
+              onChange={setRole}
+              options={GIVEN_ROLES.map((each) => ({ value: each.value, label: t(each.label) }))}
+            />
+          </>
+        }
+        consequence={t('{email} joins {workspace} as {role} at once. The owners of {workspace} see that you did it.', {
+          email: address === '' ? t('This person') : address,
+          workspace: workspace.name,
+          role: roleName,
+        })}
+        confirmLabel={t('Add to {workspace}', { workspace: workspace.name })}
+        ready={address.includes('@')}
+        send={() => addMemberAsAdmin(workspace.id, address, role)}
+        problems={{
+          'unknown-account': msg('No account has this address. Use « Invite someone » for a person with no account.'),
+          'already-member': msg('This person is a member of the workspace already.'),
+          'invalid-email': msg('This is not an e-mail address.'),
+        }}
+        notDone={msg('Nobody was added. Try again.')}
+        onDone={(data) => {
+          setSaid(
+            saying(msg('{email} was added to {workspace}.'), { email: data.member.email, workspace: workspace.name }),
+          );
+          setEmail('');
+          onChanged();
+        }}
+        onClose={() => setEmail('')}
+      />
+      <Said>{said}</Said>
+    </>
+  );
+}
+
+/** « Invite someone » (FRU-283): an address with no account, as an invitation of a member. */
+function InvitePerson({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onChanged: () => void }) {
+  useLocale();
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('member');
+  const [said, setSaid] = useState<Saying | undefined>();
+  const address = email.trim();
+  const roleName = t((INVITED_ROLES.find((each) => each.value === role) ?? INVITED_ROLES[0]).label);
+
+  return (
+    <>
+      <AdminWrite
+        label={t('Invite someone')}
+        name={t('Invite someone to {workspace}', { workspace: workspace.name })}
+        fields={
+          <>
+            <Field
+              label={t('Their e-mail address')}
+              type="email"
+              autoComplete="off"
+              compact
+              autoFocus
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <Choice
+              label={t('Role')}
+              compact
+              value={role}
+              onChange={setRole}
+              options={INVITED_ROLES.map((each) => ({ value: each.value, label: t(each.label) }))}
+            />
+          </>
+        }
+        consequence={t(
+          '{email} is invited to {workspace} as {role}, for 7 days, in your name. The owners of {workspace} see that you did it.',
+          { email: address === '' ? t('This person') : address, workspace: workspace.name, role: roleName },
+        )}
+        confirmLabel={t('Send the invitation')}
+        ready={address.includes('@')}
+        send={() => inviteAsAdmin(workspace.id, address, role)}
+        problems={{
+          'has-account': msg('This address has an account. Use « Add someone » instead.'),
+          'already-member': msg('This person is a member of the workspace already.'),
+          'already-invited': msg('This address is invited to the workspace already.'),
+          'invalid-email': msg('This is not an e-mail address.'),
+        }}
+        notDone={msg('Nobody was invited. Try again.')}
+        onDone={(data) => {
+          const link = `${globalThis.location?.origin ?? ''}/invitations`;
+          setSaid(
+            data.invitation.mailed
+              ? saying(msg('An invitation was sent to {email}.'), { email: data.invitation.email })
+              : saying(msg('{email} is invited. No message left: send them {link}'), {
+                  email: data.invitation.email,
+                  link,
+                }),
+          );
+          setEmail('');
+          onChanged();
+        }}
+        onClose={() => setEmail('')}
+      />
+      <Said>{said}</Said>
+    </>
+  );
+}
+
+/** « Change the owner » (FRU-283): the owners of before become admins, and keep the workspace. */
+function ChangeOwner({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onChanged: () => void }) {
+  useLocale();
+  const [email, setEmail] = useState('');
+  const [said, setSaid] = useState<Saying | undefined>();
+  const address = email.trim();
+
+  return (
+    <>
+      <AdminWrite
+        label={t('Change the owner')}
+        name={t('Change the owner of {workspace}', { workspace: workspace.name })}
+        fields={
+          <Field
+            label={t('Address of the new owner')}
+            type="email"
+            autoComplete="off"
+            compact
+            autoFocus
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        }
+        consequence={t(
+          '{email} becomes the owner of {workspace} at once. The owners of before become admins: they keep the workspace. The owners see that you did it.',
+          { email: address === '' ? t('This person') : address, workspace: workspace.name },
+        )}
+        confirmLabel={t('Make them the owner')}
+        ready={address.includes('@')}
+        send={() => setOwnerAsAdmin(workspace.id, address)}
+        problems={{
+          'unknown-account': msg('No account has this address. Invite them first, then make them the owner.'),
+          'suspended-account': msg('This account is suspended. Restore its access first.'),
+          'invalid-email': msg('This is not an e-mail address.'),
+        }}
+        notDone={msg('The owner did not change. Try again.')}
+        onDone={(data) => {
+          setSaid(
+            data.changed
+              ? saying(msg('{email} owns {workspace} now.'), { email: data.owner.email, workspace: workspace.name })
+              : saying(msg('{email} owned {workspace} already.'), {
+                  email: data.owner.email,
+                  workspace: workspace.name,
+                }),
+          );
+          setEmail('');
+          onChanged();
+        }}
+        onClose={() => setEmail('')}
+      />
+      <Said>{said}</Said>
+    </>
+  );
+}
+
+/** « New workspace » (FRU-283): a workspace whose owner is an account that exists. */
+function NewWorkspace({
+  onMade,
+}: {
+  onMade: (made: { workspace: { id: string; name: string }; owner: { email: string } }) => void;
+}) {
+  useLocale();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const address = email.trim();
+  const named = name.replace(/\s+/g, ' ').trim();
+
+  return (
+    <AdminWrite
+      label={t('New workspace')}
+      name={t('New workspace')}
+      fields={
+        <>
+          <Field
+            label={t('Name of the workspace')}
+            compact
+            autoFocus
+            maxLength={80}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Field
+            label={t('Address of its owner')}
+            type="email"
+            autoComplete="off"
+            compact
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </>
+      }
+      consequence={t('The workspace is made at once, and {email} owns it. They see that you made it.', {
+        email: address === '' ? t('its owner') : address,
+      })}
+      confirmLabel={t('Make the workspace')}
+      ready={named !== '' && address.includes('@')}
+      send={() => createWorkspaceAsAdmin(named, address)}
+      problems={{
+        'unknown-account': msg('No account has this address. The owner signs in once first.'),
+        'suspended-account': msg('This account is suspended. Restore its access first.'),
+        'invalid-name': msg('A workspace needs a name of one line, up to 80 characters.'),
+        'invalid-email': msg('This is not an e-mail address.'),
+      }}
+      notDone={msg('The workspace was not made. Try again.')}
+      onDone={(data) => {
+        setName('');
+        setEmail('');
+        onMade(data);
+      }}
+      onClose={() => {
+        setName('');
+        setEmail('');
+      }}
+    />
   );
 }

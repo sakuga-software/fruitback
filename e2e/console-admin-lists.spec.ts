@@ -7,7 +7,8 @@ import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWr
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
  * browser against screens 18 and 19 of the mockup of 2026-10-13 (`18-admin-workspaces.html`,
  * `19-admin-users.html`), the switch « Instance admin » of a person (FRU-280), the suspension of
- * an account (FRU-281), and the deletion of a workspace (FRU-284). The worker is answered by stubs with the shapes of
+ * an account (FRU-281), the deletion of a workspace (FRU-284), and the writes of an administrator in
+ * a workspace (FRU-283). The worker is answered by stubs with the shapes of
  * `instance-admin.ts`, and the stubs filter by `q` and `show` as the worker does: a search that the
  * stub did not filter would prove nothing.
  *
@@ -27,7 +28,8 @@ const ACCENT_STRONG = '#b91c1c';
 
 /**
  * The gestures of the mockup that come with FRU-274: none of them is on these screens, except
- * « Suspend » and « Restore access » of a person (FRU-281), and « Delete the workspace » (FRU-284).
+ * « Suspend » and « Restore access » of a person (FRU-281), « Delete the workspace » (FRU-284), and
+ * « New workspace », « Invite someone » and « Add to a workspace » (FRU-283).
  */
 const ACTIONS = [
   'New workspace',
@@ -238,6 +240,10 @@ type Options = {
   refusingDeletion?: { status: number; error: string } | undefined;
   /** Holds every answer of a deletion until it resolves. */
   holdDeletion?: Promise<void>;
+  /** A refusal that every write in a workspace answers (FRU-283), until it is set to `undefined`. */
+  refusingWrite?: { status: number; error: string } | undefined;
+  /** Whether the message of an invitation left (FRU-283). */
+  mailed?: boolean;
 };
 
 type Posted = { path: string; body: unknown };
@@ -263,6 +269,13 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     const suspension = /^\/console\/admin\/users\/([^/]+)\/suspension$/.exec(pathname);
     if (suspension !== null && route.request().method() === 'POST')
       return answerSuspension(suspension[1] as string, route);
+    if (
+      route.request().method() === 'POST' &&
+      /^\/console\/admin\/(new-workspace|workspaces\/[^/]+\/(members(\/[^/]+\/role)?|owner|invitations))$/.test(
+        pathname,
+      )
+    )
+      return answerWrite(pathname, route);
     const deletion = /^\/console\/admin\/workspaces\/([^/]+)\/deletion$/.exec(pathname);
     if (deletion !== null && route.request().method() === 'POST') return answerDeletion(deletion[1] as string, route);
     const url = new URL(route.request().url());
@@ -276,9 +289,12 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
       return route.fulfill({ json: body });
     };
     if (pathname === '/console/admin/workspaces') {
-      const found = workspacesOf(q ?? '', show ?? 'all').filter(
-        (each) => (options.workspaces ?? WORKSPACES).includes(each) && !gone.has(each.id),
-      );
+      const found = [
+        ...workspacesOf(q ?? '', show ?? 'all').filter(
+          (each) => (options.workspaces ?? WORKSPACES).includes(each) && !gone.has(each.id),
+        ),
+        ...made,
+      ];
       return reply({ workspaces: found, total: found.length });
     }
     if (pathname === '/console/admin/workspaces/w9') return reply(DETAIL);
@@ -302,6 +318,49 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
   };
   // The workspaces that a deletion took away: the lists leave them out after it, as the worker does.
   const gone = new Set<string>();
+  // The workspaces that « New workspace » made: the list answers them after it, as the worker does.
+  const made: (typeof WORKSPACES)[number][] = [];
+  /** The writes of an administrator in a workspace (FRU-283), with the shapes of `instance-admin.ts`. */
+  const answerWrite = async (path: string, route: Route): Promise<void> => {
+    const body = route.request().postDataJSON() as Record<string, string>;
+    options.posted?.push({ path, body });
+    const refused = options.refusingWrite;
+    if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+    if (path === '/console/admin/new-workspace') {
+      const workspace = {
+        ...WORKSPACES[2],
+        id: 'w20',
+        name: body.name ?? '',
+        owners: [{ id: 'a5', email: body.owner ?? '' }],
+      };
+      made.push(workspace as (typeof WORKSPACES)[number]);
+
+      return route.fulfill({
+        status: 201,
+        json: { workspace: { id: 'w20', name: body.name }, owner: { id: 'a5', email: body.owner } },
+      });
+    }
+    if (path.endsWith('/role'))
+      return route.fulfill({ json: { member: { id: path.split('/')[6], role: body.role }, changed: true } });
+    if (path.endsWith('/owner'))
+      return route.fulfill({
+        json: { owner: { id: 'a5', email: body.email }, previous: ['tom@acme.dev'], changed: true },
+      });
+    if (path.endsWith('/invitations'))
+      return route.fulfill({
+        json: {
+          invitation: {
+            id: 'inv_1',
+            email: body.email,
+            role: body.role,
+            expiresAt: '2026-10-27T00:00:00.000Z',
+            mailed: options.mailed ?? true,
+          },
+        },
+      });
+
+    return route.fulfill({ json: { member: { id: 'a5', email: body.email ?? 'ines@acme.dev', role: body.role } } });
+  };
   const answerDeletion = async (id: string, route: Route): Promise<void> => {
     const body = route.request().postDataJSON() as { name: string };
     options.posted?.push({ path: new URL(route.request().url()).pathname, body });
@@ -529,7 +588,7 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   );
   await expect(panel(page)).toContainText('Tom Marchal, tom@acme.dev');
   await expectPanel(page);
-  await expectNoAction(page, 0, ['Delete the workspace']);
+  await expectNoAction(page, 0, ['Delete the workspace', 'New workspace', 'Invite someone']);
   await expect(panel(page).locator('.kit-panel__foot').getByRole('button')).toHaveText(['Delete the workspace']);
   await axe(page, 'the panel of a workspace at 1440 px');
 
@@ -717,7 +776,7 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
   await expect(
     panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspend', exact: true }),
   ).toBeEnabled();
-  await expectNoAction(page, 1, ['Suspend']);
+  await expectNoAction(page, 1, ['Suspend', 'Add to a workspace']);
   await axe(page, 'the panel of a person at 1440 px');
 
   await page.keyboard.press('Escape');
@@ -1671,4 +1730,190 @@ test('Workspaces: the deletion in French, and at 390 px (FRU-284)', async ({ pag
   );
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the workspaces after a deletion at 390 px');
+});
+
+/** The group of a write of the open panel, or of the page, by its name (FRU-283). */
+const group = (page: Page, name: string) => page.getByRole('group', { name });
+
+test('Workspaces: an admin changes the owner after a confirmation that says the owners see it (FRU-283)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  const sent = watched(page);
+  await stub(page, { posted });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await expect(panel(page)).toContainText('Tom Marchal, tom@acme.dev');
+
+  const first = panel(page).getByRole('button', { name: 'Change the owner' });
+  await first.click();
+  const asking = group(page, 'Change the owner of Acme support');
+  const field = asking.getByRole('textbox', { name: 'Address of the new owner' });
+  await expect(field).toBeFocused();
+  await expect(asking.getByRole('button', { name: 'Make them the owner' })).toBeDisabled();
+  await field.fill('ines@acme.dev');
+  await expect(asking).toContainText(
+    'ines@acme.dev becomes the owner of Acme support at once. The owners of before become admins: they keep the workspace. The owners see that you did it.',
+  );
+  await axe(page, 'the change of the owner at 1440 px');
+  expect(posted).toEqual([]);
+
+  await asking.getByRole('button', { name: 'Make them the owner' }).click();
+  await expect(panel(page).getByRole('status')).toHaveText('ines@acme.dev owns Acme support now.');
+  await expect(first).toBeFocused();
+  expect(posted).toEqual([{ path: '/console/admin/workspaces/w9/owner', body: { email: 'ines@acme.dev' } }]);
+  // The panel reads its workspace again: its owner changed.
+  await expect.poll(() => sent.filter((request) => request === 'GET /console/admin/workspaces/w9').length).toBe(2);
+});
+
+test('Workspaces: « Keep it » and Escape send nothing and keep the panel; a refusal is said and keeps the address (FRU-283)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const options: Options = { posted: [] };
+  await stub(page, options);
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  const first = panel(page).getByRole('button', { name: 'Add someone' });
+
+  await first.click();
+  await group(page, 'Add someone to Acme support').getByRole('textbox').fill('nobody@acme.dev');
+  await page.keyboard.press('Escape');
+  await expect(first).toBeFocused();
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
+  await first.click();
+  await expect(group(page, 'Add someone to Acme support').getByRole('textbox')).toHaveValue('');
+  await group(page, 'Add someone to Acme support').getByRole('button', { name: 'Keep it' }).click();
+  await expect(first).toBeFocused();
+  expect(options.posted).toEqual([]);
+
+  for (const [refusal, sentence] of [
+    [
+      { status: 409, error: 'unknown-account' },
+      'No account has this address. Use « Invite someone » for a person with no account.',
+    ],
+    [{ status: 409, error: 'already-member' }, 'This person is a member of the workspace already.'],
+    [{ status: 409, error: 'workspace-suspended' }, 'This workspace is suspended. Restore it first.'],
+    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+  ] as const) {
+    options.refusingWrite = refusal;
+    if ((await group(page, 'Add someone to Acme support').count()) === 0) await first.click();
+    const asking = group(page, 'Add someone to Acme support');
+    await asking.getByRole('textbox').fill('nobody@acme.dev');
+    await asking.getByRole('button', { name: 'Add to Acme support' }).click();
+    await expect(panel(page)).toContainText(sentence);
+    await expect(asking.getByRole('textbox')).toHaveValue('nobody@acme.dev');
+  }
+  expect(options.posted).toHaveLength(4);
+  expect(options.posted?.[0]).toEqual({
+    path: '/console/admin/workspaces/w9/members',
+    body: { email: 'nobody@acme.dev', role: 'member' },
+  });
+});
+
+test('Workspaces: an admin invites an address, and is told to send the link when no message left (FRU-283)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  await stub(page, { posted, mailed: false });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await panel(page).getByRole('button', { name: 'Invite someone' }).click();
+  const asking = group(page, 'Invite someone to Acme support');
+  await asking.getByRole('textbox', { name: 'Their e-mail address' }).fill('paul@acme.dev');
+  await expect(asking).toContainText(
+    'paul@acme.dev is invited to Acme support as Member, for 7 days, in your name. The owners of Acme support see that you did it.',
+  );
+  await asking.getByRole('button', { name: 'Send the invitation' }).click();
+  await expect(panel(page).getByRole('status')).toHaveText(
+    'paul@acme.dev is invited. No message left: send them http://localhost:5178/invitations',
+  );
+  expect(posted).toEqual([
+    { path: '/console/admin/workspaces/w9/invitations', body: { email: 'paul@acme.dev', role: 'member' } },
+  ]);
+});
+
+test('Workspaces: « New workspace » makes one for an account, and its panel opens (FRU-283)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/workspaces', 'Workspaces');
+  await main(page).getByRole('button', { name: 'New workspace' }).click();
+  const asking = group(page, 'New workspace');
+  await expect(asking.getByRole('textbox', { name: 'Name of the workspace' })).toBeFocused();
+  await asking.getByRole('textbox', { name: 'Name of the workspace' }).fill('  Ines   studio ');
+  await expect(asking.getByRole('button', { name: 'Make the workspace' })).toBeDisabled();
+  await asking.getByRole('textbox', { name: 'Address of its owner' }).fill('ines@acme.dev');
+  await expect(asking).toContainText(
+    'The workspace is made at once, and ines@acme.dev owns it. They see that you made it.',
+  );
+  await asking.getByRole('button', { name: 'Make the workspace' }).click();
+
+  await expect(main(page).getByRole('status').first()).toHaveText('Ines studio was made, owned by ines@acme.dev.');
+  await expect(page).toHaveURL(/[?&]open=w20(&|$)/);
+  await expect(panel(page)).toHaveAccessibleName('Ines studio');
+  expect(posted).toEqual([
+    { path: '/console/admin/new-workspace', body: { name: 'Ines studio', owner: 'ines@acme.dev' } },
+  ]);
+});
+
+test('Users: an admin changes a role and adds a person to a workspace, and the panel says it (FRU-283)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a5', 'Users');
+  await expect(panel(page).getByRole('listitem').first()).toHaveText('Acme webAdmin');
+
+  await panel(page).getByRole('button', { name: 'Change a role' }).click();
+  const role = group(page, 'Change the role of Inès Roux');
+  await role.getByRole('button', { name: /New role/ }).click();
+  await page.getByRole('option', { name: 'Member' }).click();
+  await expect(role).toContainText(
+    'Inès Roux becomes Member of Acme web at once. The owners of Acme web see that you did it.',
+  );
+  await role.getByRole('button', { name: 'Change the role' }).click();
+  await expect(panel(page).getByRole('listitem').first()).toHaveText('Acme webMember');
+
+  await panel(page).getByRole('button', { name: 'Add to a workspace' }).click();
+  const add = group(page, 'Add Inès Roux to a workspace');
+  await expect(add).toContainText('The owners of each workspace listed here see that you read the list.');
+  await expect(add.getByRole('button', { name: /Workspace/ })).toContainText('Acme support');
+  await add.getByRole('button', { name: 'Add to the workspace' }).click();
+  await expect(panel(page).getByRole('listitem').nth(1)).toHaveText('Acme supportMember');
+  expect(posted).toEqual([
+    { path: '/console/admin/workspaces/w1/members/a5/role', body: { role: 'member' } },
+    { path: '/console/admin/workspaces/w9/members', body: { email: 'ines@acme.dev', role: 'member' } },
+  ]);
+});
+
+test('the writes of FRU-283 in French, and at 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr' });
+  await page.goto(`${CONSOLE}/admin/workspaces?open=w9`);
+  await expect(panel(page)).toContainText('Où vont les notes');
+  await panel(page).getByRole('button', { name: 'Changer le propriétaire' }).click();
+  const asking = group(page, 'Changer le propriétaire de Acme support');
+  await asking.getByRole('textbox', { name: 'Adresse du nouveau propriétaire' }).fill('ines@acme.dev');
+  await expect(asking).toContainText(
+    'ines@acme.dev devient propriétaire de Acme support tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent le workspace. Les propriétaires voient que vous l’avez fait.',
+  );
+  await expect(asking.getByRole('button')).toHaveText(['Le garder', 'En faire le propriétaire']);
+  await expect(asking.getByRole('button', { name: 'En faire le propriétaire' })).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the change of the owner at 390 px');
+  await asking.getByRole('button', { name: 'Le garder' }).click();
+
+  await panel(page).getByRole('button', { name: 'Inviter quelqu’un' }).click();
+  await expect(group(page, 'Inviter quelqu’un dans Acme support')).toContainText('pour 7 jours, en votre nom');
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'an invitation at 390 px');
+
+  await page.goto(`${CONSOLE}/admin/users?open=a5`);
+  await panel(page).getByRole('button', { name: 'Ajouter à un workspace' }).click();
+  await expect(group(page, 'Ajouter Inès Roux à un workspace')).toContainText(
+    'Les propriétaires de chaque workspace de cette liste voient que vous l’avez lue.',
+  );
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'an addition to a workspace at 390 px');
 });

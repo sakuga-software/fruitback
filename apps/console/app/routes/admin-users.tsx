@@ -20,14 +20,15 @@ import {
   useRead,
 } from './admin-list';
 import { useAdmin } from './admin';
+import { AddToWorkspace, ChangeRole } from './admin-user-workspaces';
 import { seenOn } from './members';
 
 /**
  * The people of the instance, as screen 19 of the mockup of 2026-10-13 draws them (FRU-263): their
  * workspaces, how they sign in, and whether they administer the instance. The switch « Instance
  * admin » of the panel names and removes an administrator (FRU-280). « Suspend » and « Restore
- * access » suspend and restore the account (FRU-281). The other actions of the mockup come with
- * FRU-274.
+ * access » suspend and restore the account (FRU-281). « Change a role » and « Add to a workspace »
+ * write in a workspace at once, and its owners read it (FRU-283).
  *
  * The panel is the row: the worker has no route for one person. It lists accounts only, so somebody
  * invited who never signed in is not a row.
@@ -207,6 +208,7 @@ export default function AdminUsers() {
         onClose={close}
         onRole={(instanceAdmin) => changed(chosen.id, { instanceAdmin })}
         onSuspended={(suspended) => changed(chosen.id, { suspended })}
+        onWorkspaces={(workspaces) => changed(chosen.id, { workspaces })}
       />
     );
 
@@ -366,6 +368,7 @@ function Panel({
   onClose,
   onRole,
   onSuspended,
+  onWorkspaces,
 }: {
   user: AdminUser;
   held: string | undefined;
@@ -375,6 +378,7 @@ function Panel({
   onClose: () => void;
   onRole: (instanceAdmin: boolean) => void;
   onSuspended: (suspended: boolean) => void;
+  onWorkspaces: (workspaces: AdminUser['workspaces']) => void;
 }) {
   useLocale();
   const rows = [
@@ -411,6 +415,8 @@ function Panel({
         ) : (
           <PanelRows rows={rows.map((row) => ({ ...row, name: <span className="font-semibold">{row.name}</span> }))} />
         )}
+        <ChangeRole user={user} onChanged={onWorkspaces} />
+        <AddToWorkspace user={user} onChanged={onWorkspaces} />
       </PanelSection>
 
       <PanelSection title={t('Sign-in')}>
