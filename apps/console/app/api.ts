@@ -697,3 +697,38 @@ export function instanceFacts(): Promise<Answer<InstanceFacts>> {
 export function instanceWorkspaces(): Promise<Answer<{ workspaces: InstanceWorkspace[]; total: number }>> {
   return call('GET', '/console/admin/workspaces');
 }
+
+/**
+ * A note of the instance, as its administrator lists it (FRU-272). `text` comes only for a note that
+ * Fruitback keeps; `excerpt`, its first 64 characters, always. `author` has no name.
+ */
+export type InstanceNote = {
+  id: string;
+  workspace: { id: string; name: string };
+  site: { id: string; origin: string };
+  page: { url: string; host: string; path: string };
+  excerpt: string;
+  text?: string;
+  stage: string;
+  channel: 'script' | 'extension' | null;
+  author: { kind: 'visitor' | 'site' | 'member' | 'verified' };
+  place: { kind: 'fruitback' } | { kind: 'removed' } | { kind: string; connector: string; label: string };
+  ref?: string;
+  url?: string;
+  createdAt: string;
+  checkedAt: string;
+};
+
+export type InstanceNotes = { notes: InstanceNote[]; total: number; searched: string[]; next?: string };
+
+/**
+ * One page of the notes of the instance, the newest first.
+ *
+ * WARNING: the worker writes a trace of this read in each workspace of the answer that the
+ * administrator is not a member of. The owners of the workspace read it.
+ */
+export function instanceNotes(query: URLSearchParams): Promise<Answer<InstanceNotes>> {
+  const asked = query.toString();
+
+  return call('GET', `/console/admin/notes${asked === '' ? '' : `?${asked}`}`);
+}

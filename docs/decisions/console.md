@@ -349,9 +349,25 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup**: the switches, « Edit keys », the form of Google and « Turn on Google », « New workspace »,
   the policy « Anyone with an address at … » that the worker does not have, « Backed up 4 h ago »
   (no witness of a backup: « Not reported »), and the lead, which says that a setting is set in the
-  environment and not here. « Workspaces », « Users » and « Notes » of the rail come with their
-  screens. `e2e/console-admin.spec.ts` holds the screen, the other accounts, the absence of any
+  environment and not here. « Workspaces » and « Users » of the rail come with their screens.
+  `e2e/console-admin.spec.ts` holds the screen, the other accounts, the absence of any
   write, the states, French, 390 px and axe.
+- **The notes of the instance are the table of the Notes page, with their workspace** (FRU-273,
+  screen 20 of the mockup of 2026-10-13, route of FRU-272). `routes/admin-notes.tsx`
+  (`/admin/notes`) reads `GET /console/admin/notes` when it opens: to open « Notes » is to ask for
+  them. Each read leaves a trace in each workspace of the page that the administrator is not a member
+  of, and the screen says so under its lead. **A note that Fruitback keeps shows its text**, on two
+  lines; **a note that went to a tracker shows its 64 characters** (`excerptOf`, « … » when cut) and
+  « Kept in {tool}. Fruitback keeps the first 64 characters. »: the worker sends no text for it, and
+  the screen invents none. `?workspace=<id>` chooses the workspace, for the Workspaces screen.
+  **The filter « Workspace » lists the workspaces the answers named**, and the one of the address:
+  `GET /console/admin/workspaces` would leave a trace in every workspace of the instance. The
+  search, the status, the pages and the four states are those of the Notes page (`NotePages`,
+  `NotesFailed`, `Reference` of `notes.tsx`). **Not copied from the mockup**: the chips (the answer
+  counts no place), « Send again » (read-only), the names of the authors (the worker sends a kind),
+  and « page · workspace » under a note, which is a column « Workspace » here.
+  `e2e/console-admin-notes.spec.ts` holds both kinds of note, the address, the other accounts, the
+  absence of any write, the states, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

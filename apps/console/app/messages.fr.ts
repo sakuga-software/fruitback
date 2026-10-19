@@ -736,4 +736,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The owners of each workspace see that you read its list, with your address and the day.':
     'Les propriétaires de chaque workspace voient que vous avez lu sa liste, avec votre adresse et le jour.',
   'Show the workspaces': 'Afficher les workspaces',
+  // Notes of the instance (FRU-273).
+  'Every note left on this instance, and where it is stored now.':
+    'Chaque note laissée sur cette instance, et où elle est gardée maintenant.',
+  'The owners of each workspace see that you read its notes, with your address and the day.':
+    'Les propriétaires de chaque workspace voient que vous avez lu ses notes, avec votre adresse et le jour.',
+  'No note on this instance yet.': 'Aucune note sur cette instance pour l’instant.',
+  'Search the text, the page, the site, the workspace, the status or the reference':
+    'Chercher le texte, la page, le site, le workspace, le statut ou la référence',
+  'Every workspace': 'Tous les workspaces',
+  'Notes of the instance': 'Notes de l’instance',
+  'Stored in': 'Gardée dans',
+  Verified: 'Vérifié',
+  'Kept in {tool}. Fruitback keeps the first 64 characters.':
+    'Gardée dans {tool}. Fruitback garde les 64 premiers caractères.',
+  'Kept in a source that was removed. Fruitback keeps the first 64 characters.':
+    'Gardée dans une source retirée. Fruitback garde les 64 premiers caractères.',
 };
