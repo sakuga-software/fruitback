@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { ADMIN_PAGE } from './instance-admin.ts';
-import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
+import { ADMIN_ROLE_LOCK, createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, migrationsThrough, ownDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate, migrated } from './postgres-migrate.ts';
@@ -36,6 +37,14 @@ const OF_BEFORE = [
 ];
 
 for (const { label, open, skip } of DATABASES) {
+  it('takes the lock of the trigger of the first account, so a change of the role waits for it (FRU-280)', () => {
+    const trigger = readFileSync(new URL('../drizzle/0016_first_admin.sql', import.meta.url), 'utf8');
+    const keys = [...trigger.matchAll(/pg_advisory_xact_lock\((\d+)\)/gu)].map((match) => Number(match[1]));
+
+    assert.ok(keys.length > 0, 'the trigger takes no lock: this test proves nothing');
+    assert.deepEqual([...new Set(keys)], [ADMIN_ROLE_LOCK]);
+  });
+
   describe(`the first account is the administrator of the instance, on ${label} (FRU-261)`, { skip }, () => {
     it('makes the first account of an empty database the administrator, and no account after it', async () => {
       const database = await opening(open);

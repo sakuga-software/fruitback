@@ -51,7 +51,7 @@ const ACTIONS_SHOWN = 200;
  * The advisory lock of the role of administrator: the key that the trigger of `0016_first_admin`
  * takes. A change of the role waits for another change, and for the first account.
  */
-const ADMIN_ROLE_LOCK = 1179796036;
+export const ADMIN_ROLE_LOCK = 1179796036;
 
 /** The administrators of the instance: `role` is `admin`, and the account is not banned. */
 const IS_ADMIN = sql`role = 'admin' AND banned IS NOT TRUE`;
