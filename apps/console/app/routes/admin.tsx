@@ -23,11 +23,12 @@ export function useAdmin(): AdminContext {
 
 /**
  * The screens of the administration, in the order of the mockup. The rail shows an entry only for a
- * screen that exists: « Workspaces » and « Users » of the mockup come with their screens, before
- * « Notes ». `layout` is a whole class name, so Tailwind finds it.
+ * screen that exists. `layout` is a whole class name, so Tailwind finds it.
  */
 const SCREENS = [
   { path: '/admin', label: msg('Instance'), layout: 'max-w-[1040px] flex flex-col gap-[44px]' },
+  { path: '/admin/workspaces', label: msg('Workspaces'), layout: 'max-w-[1240px]' },
+  { path: '/admin/users', label: msg('Users'), layout: 'max-w-[1240px]' },
   { path: '/admin/notes', label: msg('Notes'), layout: 'max-w-[1240px]' },
 ];
 

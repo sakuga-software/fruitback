@@ -126,7 +126,7 @@ test('an administrator reads every note: the text of a kept note, the excerpt an
   await open(page);
 
   const nav = page.getByRole('navigation', { name: 'Instance' });
-  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Notes', 'My workspaces']);
+  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Workspaces', 'Users', 'Notes', 'My workspaces']);
   await expect(nav.getByRole('link', { name: 'Notes' })).toHaveAttribute('aria-current', 'page');
   await expect(main(page).locator('header')).toContainText(
     'Every note left on this instance, and where it is stored now.',

@@ -58,7 +58,7 @@ function setBy(variables: readonly string[]): string {
 }
 
 /** The day a workspace was made, with its year when it is not this year. */
-function dayOf(iso: string): string {
+export function dayOf(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
 
@@ -329,7 +329,11 @@ function Workspaces() {
             <tbody className="tabular-nums">
               {rows.map((workspace) => (
                 <tr key={workspace.id}>
-                  <td className="font-semibold">{workspace.name}</td>
+                  <td>
+                    <LinkButton to={`/admin/workspaces?open=${encodeURIComponent(workspace.id)}`}>
+                      {workspace.name}
+                    </LinkButton>
+                  </td>
                   <td>{workspace.owners.map((owner) => owner.email).join(', ')}</td>
                   <td data-align="end">{workspace.members}</td>
                   <td data-align="end">{workspace.sites}</td>

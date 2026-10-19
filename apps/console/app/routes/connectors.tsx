@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Site, call, placesOf } from '../api';
 import { type Listed, known, listedOf } from '../listed';
@@ -10,6 +10,7 @@ import { AddLinear, AddRest } from './connector-add';
 import { LinearPanel } from './connector-linear';
 import { KEY_PROBLEMS, KINDS, SourceMark, siteCount, sourceLine } from './connector-parts';
 import { RestPanel } from './connector-rest';
+import { useWide } from '../wide';
 
 /**
  * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
@@ -394,22 +395,6 @@ function State({ connector, late, chosen }: { connector: Connector; late: number
 
 /** The id of the open panel, which its row names in `aria-controls`. */
 const PANEL = 'source-panel';
-/** The width from which the panel has its column beside the list, as on the mockup. */
-const WIDE = '(min-width: 80rem)';
-
-/** Whether the screen is wide enough for the column of the panel. The console is built wide. */
-function useWide(): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      const query = window.matchMedia(WIDE);
-      query.addEventListener('change', listener);
-
-      return () => query.removeEventListener('change', listener);
-    },
-    () => window.matchMedia(WIDE).matches,
-    () => true,
-  );
-}
 
 /** The id of the row of a source, which takes focus back when its panel closes. */
 function rowId(connector: string): string {

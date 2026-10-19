@@ -659,6 +659,8 @@ type SidePanelProps = {
   /** For a panel that takes focus when somebody opens it (FRU-197). */
   panelRef?: Ref<HTMLElement>;
   onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
+  /** The space between the parts of the panel: 24 px, or 22 px (« tight ») for the panels of the administration. */
+  spacing?: 'normal' | 'tight';
   className?: string;
   children: ReactNode;
 };
@@ -673,6 +675,7 @@ export function SidePanel({
   foot,
   panelRef,
   onKeyDown,
+  spacing = 'normal',
   className = '',
   children,
 }: SidePanelProps) {
@@ -684,6 +687,7 @@ export function SidePanel({
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
       className={`kit-panel ${className}`}
+      data-spacing={spacing}
     >
       <div className="kit-panel__head">
         <h2 id={id} className="kit-panel__title">
