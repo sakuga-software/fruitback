@@ -113,8 +113,11 @@ export default function AdminUsers() {
       <PageHead
         title={t('Users')}
         lead={t('Everyone who can sign in to this instance, and in which workspaces.')}
-        className="mb-[24px]"
+        className="mb-[8px]"
       />
+      <p className="mb-[24px] max-w-[64ch] text-small text-muted">
+        {t('The owners of each workspace see that you read its people, with your address and the day.')}
+      </p>
       <ListBar
         label={t('Search people')}
         placeholder={t('Search by name or address')}

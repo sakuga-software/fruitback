@@ -399,6 +399,9 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   expect.soft(await styles(alert, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   await expectLayout(page, 'Search workspaces', 'Workspaces of the instance', '680px');
   await expect(panel(page)).toHaveCount(0);
+  await expect(main(page)).toContainText(
+    'The owners of each workspace see that you read its list, with your address and the day.',
+  );
   await axe(page, 'the workspaces at 1440 px');
 
   // A press of a row opens its panel, which takes focus.
@@ -452,10 +455,23 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   await expect(page).not.toHaveURL(/open=/);
   await expect(link).toBeFocused();
 
+  // The panel moves under its row below 1280 px, and a workspace opened again is not read again.
+  await main(page).getByRole('link', { name: 'Acme web' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Acme web');
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await expect(panel(page)).toHaveAccessibleName('Acme web');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await link.click();
+  await expect(panel(page)).toContainText('Owned by tom@acme.dev · created 18 Sep');
+  await expect(panel(page).getByRole('heading', { level: 3 }).first()).toHaveText('Where notes go');
+  await page.keyboard.press('Escape');
+
   // The control of the watch below: the screen did read the worker.
   expect(sent).toContain('GET /console/admin/workspaces');
-  // One trace in the workspace for one opening of its panel.
-  expect(sent.filter((request) => request === 'GET /console/admin/workspaces/w9')).toHaveLength(1);
+  // One trace in a workspace for all the openings of its panel.
+  const reads = sent.filter((request) => request.startsWith('GET /console/admin/workspaces/'));
+  expect(reads.filter((request) => request === 'GET /console/admin/workspaces/w9')).toHaveLength(1);
+  expect(reads).toHaveLength(2);
   expect(sent.filter((request) => !request.startsWith('GET ') && !request.startsWith('OPTIONS '))).toEqual([]);
 });
 
@@ -570,6 +586,9 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
     expect.soft(await styles(status(row), ['font-weight'])).toEqual({ 'font-weight': '600' });
   }
   await expectLayout(page, 'Search people', 'People of the instance', '700px');
+  await expect(main(page)).toContainText(
+    'The owners of each workspace see that you read its people, with your address and the day.',
+  );
   await axe(page, 'the people at 1440 px');
 
   const link = main(page).getByRole('link', { name: 'Tom Marchal' });

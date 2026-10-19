@@ -53,6 +53,9 @@ const ROLES: Readonly<Record<string, string>> = {
 
 type Listed = { workspaces: AdminWorkspace[]; total: number };
 
+/** The read of one workspace, with the id it answers, so that a panel never shows another one. */
+type Read = { id: string; detail: AdminWorkspaceDetail | 'failed' } | 'none';
+
 export default function AdminWorkspaces() {
   useLocale();
   const { q, show, open, typed, setTyped, change, openTo } = useListAddress();
@@ -69,13 +72,37 @@ export default function AdminWorkspaces() {
 
   const rows = typeof shown === 'object' ? shown.workspaces : [];
   const chosen = rows.find((workspace) => workspace.id === open);
+  // The page reads the chosen workspace, not its panel, and reads each one once: the panel moves
+  // between two places at 1280 px, and each read leaves a trace with the owners.
+  const chosenId = chosen?.id ?? '';
+  const known = useRef(new Map<string, AdminWorkspaceDetail>());
+  const askDetail = useCallback(async (): Promise<Read> => {
+    if (chosenId === '') return 'none';
+    const kept = known.current.get(chosenId);
+    if (kept !== undefined) return { id: chosenId, detail: kept };
+    const answer = await adminWorkspace(chosenId);
+    if (!answer.ok || !Array.isArray(answer.data?.members)) return { id: chosenId, detail: 'failed' };
+    known.current.set(chosenId, answer.data);
+
+    return { id: chosenId, detail: answer.data };
+  }, [chosenId]);
+  const { shown: read, again: readAgain } = useRead(askDetail);
+  const detail = typeof read === 'object' && read.id === chosenId ? read.detail : 'loading';
   const close = () => {
     change({ open: '' }, true);
     if (chosen !== undefined) document.getElementById(rowId(chosen.id))?.focus();
   };
   const panel =
     chosen === undefined ? null : (
-      <Panel key={chosen.id} workspace={chosen} wide={wide} takesFocus={opening} onClose={close} />
+      <Panel
+        key={chosen.id}
+        workspace={chosen}
+        detail={detail}
+        onRetry={readAgain}
+        wide={wide}
+        takesFocus={opening}
+        onClose={close}
+      />
     );
 
   return (
@@ -83,8 +110,11 @@ export default function AdminWorkspaces() {
       <PageHead
         title={t('Workspaces')}
         lead={t('Every workspace on this instance, who owns it and where its notes go.')}
-        className="mb-[24px]"
+        className="mb-[8px]"
       />
+      <p className="mb-[24px] max-w-[64ch] text-small text-muted">
+        {t('The owners of each workspace see that you read its list, with your address and the day.')}
+      </p>
       <ListBar
         label={t('Search workspaces')}
         placeholder={t('Search by name or owner')}
@@ -269,27 +299,24 @@ function Alert({ workspace, chosen }: { workspace: AdminWorkspace; chosen: boole
 
 /**
  * The panel of a workspace: where its notes go, its people and its sites. Its head is the row, so it
- * shows at once; the rest is the read of the workspace.
+ * shows at once; the rest is the read of the workspace, which the page does.
  */
 function Panel({
   workspace,
+  detail,
+  onRetry,
   wide,
   takesFocus,
   onClose,
 }: {
   workspace: AdminWorkspace;
+  detail: AdminWorkspaceDetail | 'loading' | 'failed';
+  onRetry: () => void;
   wide: boolean;
   takesFocus: { current: boolean };
   onClose: () => void;
 }) {
   useLocale();
-  const ask = useCallback(async (): Promise<AdminWorkspaceDetail | 'failed'> => {
-    const answer = await adminWorkspace(workspace.id);
-
-    return answer.ok && Array.isArray(answer.data?.members) ? answer.data : 'failed';
-  }, [workspace.id]);
-  const { shown: detail, again } = useRead(ask);
-
   const owners = ownersOf(workspace);
 
   return (
@@ -308,7 +335,7 @@ function Panel({
       {detail === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
           <Problem>{t('This workspace could not be read. Fruitback did not answer.')}</Problem>
-          <Button tone="outline" onClick={again}>
+          <Button tone="outline" onClick={onRetry}>
             {t('Try again')}
           </Button>
         </div>

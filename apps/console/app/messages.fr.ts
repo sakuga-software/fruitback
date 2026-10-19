@@ -781,6 +781,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Users: 'Utilisateurs',
   'Everyone who can sign in to this instance, and in which workspaces.':
     'Toutes les personnes qui peuvent se connecter à cette instance, et dans quels workspaces.',
+  'The owners of each workspace see that you read its people, with your address and the day.':
+    'Les propriétaires de chaque workspace voient que vous avez lu ses personnes, avec votre adresse et le jour.',
   'Search people': 'Chercher une personne',
   'Search by name or address': 'Chercher par nom ou adresse',
   'All people': 'Toutes les personnes',
