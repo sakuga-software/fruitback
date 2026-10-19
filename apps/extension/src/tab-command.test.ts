@@ -14,6 +14,14 @@ describe('a command of the popup to the widget of its tab (FRU-254)', () => {
     }
   });
 
+  // FRU-291: the key of the manifest is caught by the background, which sends what the popup sends.
+  // The background is no tab, and its URL is on the origin of the extension in both browsers.
+  it('is taken from the background of this extension, which the shortcut runs in', () => {
+    for (const url of [`${ORIGIN}background.js`, `${ORIGIN}_generated_background_page.html`]) {
+      assert.equal(acceptedCommand(tabCommand('leave-feedback'), { id: ID, url }, ID, ORIGIN), 'leave-feedback');
+    }
+  });
+
   it('is refused from a content script, from another extension, and in any other shape', () => {
     // The planted violation: the bridge of a reviewed tab posting for its page.
     assert.equal(
