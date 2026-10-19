@@ -286,7 +286,10 @@ test('an administrator sees the frame and the instance, with the values of the m
   expect.soft(await painted(address, 'color')).toEqual(rgb(INK_SOFT));
   expect.soft((await address.boundingBox())?.width ?? 0).toBeLessThanOrEqual(520);
 
-  // The workspaces of the instance.
+  // The workspaces of the instance, read on a click only: each read leaves a trace with their owners.
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(main(page)).toContainText('The owners of each workspace see that you read its list');
+  await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   const table = page.getByRole('table');
   await expect(table.getByRole('columnheader')).toHaveText(['Name', 'Owner', 'Members', 'Sites', 'Created']);
   await expect(table.getByRole('row').nth(1).getByRole('cell')).toHaveText([
@@ -314,6 +317,10 @@ test('no field is editable, nothing changes a setting, and no write request leav
   const sent = watched(page);
   await stub(page);
   await open(page);
+  // No visit reads the workspaces: their owners would see a read nobody asked for (Mathieu, 2026-10-19).
+  await expect(fact(page, 'Worker').value).toHaveText('Answering');
+  expect(sent).not.toContain('GET /console/admin/workspaces');
+  await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 
   // Every field is read-only, every radio disabled, and there is no switch nor any button of a form.
@@ -429,7 +436,7 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
   await expect(main(page).getByRole('alert')).toHaveText('The instance could not be read. Fruitback did not answer.');
   await expect(health(page)).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Instance' })).toBeVisible();
-  await expect(page.getByRole('table')).toBeVisible();
+  await expect(main(page).getByRole('button', { name: 'Show the workspaces' })).toBeVisible();
   await axe(page, 'a read that failed');
 
   status = undefined;
@@ -455,6 +462,8 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   await stub(page, { locale: 'fr' });
   await page.goto(`${CONSOLE}/admin`);
   await expect(main(page).getByRole('heading', { level: 1, name: 'Instance' })).toBeVisible();
+  await expect(main(page)).toContainText('Les propriétaires de chaque workspace voient que vous avez lu sa liste');
+  await main(page).getByRole('button', { name: 'Afficher les workspaces' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 
   await expect(main(page).locator('header p')).toHaveText(
@@ -500,6 +509,7 @@ test('at 390 px the document does not scroll sideways, and axe finds nothing', a
   await page.setViewportSize({ width: 390, height: 844 });
   await stub(page);
   await open(page);
+  await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
   await expect(page.getByRole('table')).toBeVisible();
 
   expect(await sideScroll(page)).toBe(0);

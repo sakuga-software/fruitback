@@ -259,10 +259,15 @@ function Redirect({ address }: { address: string }) {
   );
 }
 
+/**
+ * The workspaces of the instance, read on a click only (Mathieu, 2026-10-19). Each read writes a
+ * trace in each workspace of the answer that the administrator is not a member of, and its owners
+ * read it: a visit to see the health of the server must not tell them that their workspace was read.
+ */
 function Workspaces() {
   useLocale();
-  const [listed, setListed] = useState<{ rows: Listed<InstanceWorkspace>; total: number }>({
-    rows: 'loading',
+  const [listed, setListed] = useState<{ rows: Listed<InstanceWorkspace> | 'asked-for-none'; total: number }>({
+    rows: 'asked-for-none',
     total: 0,
   });
 
@@ -274,8 +279,6 @@ function Workspaces() {
     setListed({ rows, total });
   }, []);
 
-  useEffect(() => void read(), [read]);
-
   const { rows, total } = listed;
 
   return (
@@ -283,6 +286,16 @@ function Workspaces() {
       <h2 id="workspaces-title" className="mb-[12px] text-section font-bold">
         {t('Workspaces')}
       </h2>
+      {rows === 'asked-for-none' ? (
+        <div className="flex flex-col items-start gap-[12px]">
+          <p className="max-w-[64ch] text-small text-muted">
+            {t('The owners of each workspace see that you read its list, with your address and the day.')}
+          </p>
+          <Button tone="outline" onClick={() => void read()}>
+            {t('Show the workspaces')}
+          </Button>
+        </div>
+      ) : null}
       {rows === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {rows === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">

@@ -342,8 +342,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `routes/admin-instance.tsx` (`/admin`) reads `GET /console/admin/instance` and
   `GET /console/admin/workspaces` and writes nothing. **Each setting comes from the environment**,
   so each one says « Set by {variables} in the environment. », and the locked field and the radios
-  are described by that sentence. **The read of the workspaces leaves a trace** in each workspace
-  that the administrator is not a member of (FRU-261): its owners read it. **Not copied from the
+  are described by that sentence. **The workspaces are read on a click only** (« Show the workspaces »,
+  Mathieu, 2026-10-19): the read leaves a trace in each workspace that the administrator is not a
+  member of (FRU-261), and a visit to see the health of the server must not tell its owners that
+  their workspace was read. The screen says so above the button. **Not copied from the
   mockup**: the switches, « Edit keys », the form of Google and « Turn on Google », « New workspace »,
   the policy « Anyone with an address at … » that the worker does not have, « Backed up 4 h ago »
   (no witness of a backup: « Not reported »), and the lead, which says that a setting is set in the

@@ -733,4 +733,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Created: 'Créé',
   'Every workspace of the instance': 'Tous les workspaces de l’instance',
   'The first {count} of {total} workspaces.': 'Les {count} premiers des {total} workspaces.',
+  'The owners of each workspace see that you read its list, with your address and the day.':
+    'Les propriétaires de chaque workspace voient que vous avez lu sa liste, avec votre adresse et le jour.',
+  'Show the workspaces': 'Afficher les workspaces',
 };
