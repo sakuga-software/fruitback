@@ -3,7 +3,7 @@ import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'dr
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId } from './account-rows.ts';
 import { CONNECTOR_TROUBLES } from './accounts.ts';
-import { organization, user } from './auth-schema.ts';
+import { organization, session, user } from './auth-schema.ts';
 import type {
   AdminAction,
   AdminActionKind,
@@ -16,6 +16,8 @@ import type {
   InstanceAdminReads,
   RoleChange,
   StageCounts,
+  SuspensionChange,
+  TracedAction,
   TracedRead,
 } from './instance-admin.ts';
 import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
@@ -405,6 +407,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       const rows = await query(
         sql`SELECT u.id, u.name, u.email, ${EPOCH_MS(sql`u."createdAt"`)} AS created_at,
                    (u.role = 'admin' AND u.banned IS NOT TRUE) AS admin,
+                   (u.banned IS TRUE) AS suspended,
                    (SELECT max(s.day) FROM last_seen s JOIN member m ON m.id = s.member_id
                      WHERE m."userId" = u.id) AS seen,
                    count(*) OVER ()::int AS total
@@ -448,6 +451,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             email: String(row.email),
             createdAt: iso(row.created_at),
             instanceAdmin: row.admin === true,
+            suspended: row.suspended === true,
             workspaces: of(memberships, row.id).map((each) => ({
               id: String(each.id),
               name: String(each.name),
@@ -641,6 +645,103 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         const [after] = await rowsIn(sql`SELECT (${IS_ADMIN}) AS admin FROM "user" WHERE id = ${target}`);
 
         return { ok: true, changed: true, instanceAdmin: after?.admin === true };
+      });
+    },
+
+    async isSuspended(account) {
+      const [row] = await query(sql`SELECT (banned IS TRUE) AS suspended FROM "user" WHERE id = ${account}`);
+
+      return row?.suspended === true;
+    },
+
+    async setSuspended(actor, target, suspended, now) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<SuspensionChange> => {
+        const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+        // WARNING: the lock comes before every read, as in `setInstanceAdmin`: a suspension changes
+        // who counts as an administrator, so it waits for a change of the role, and the other way.
+        await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+
+        const [row] = await rowsIn(
+          sql`SELECT email, (banned IS TRUE) AS suspended, (${IS_ADMIN}) AS admin FROM "user" WHERE id = ${target}`,
+        );
+        if (row === undefined) return { ok: false, refused: 'unknown-account' };
+        if (suspended && target === actor.id) return { ok: false, refused: 'self-suspension' };
+        if ((row.suspended === true) === suspended) return { ok: true, changed: false, suspended };
+        if (suspended && row.admin === true) {
+          const [counted] = await rowsIn(sql`SELECT count(*)::int AS n FROM "user" WHERE ${IS_ADMIN}`);
+          if (number(counted?.n) <= 1) return { ok: false, refused: 'last-admin' };
+        }
+        const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+
+        // `banReason` and `banExpires` stay empty: a suspension has no reason in the console, and
+        // ends when an administrator restores the account.
+        await db
+          .update(user)
+          .set({ banned: suspended, banReason: null, banExpires: null, updatedAt: new Date(now) })
+          .where(eq(user.id, target));
+        // Both ways. A suspended account has no session that it may keep: one that a sign-in opened
+        // while this transaction ran is not given back with the account.
+        await db.delete(session).where(eq(session.userId, target));
+        // The owners of each workspace of the account read the action: one row for each workspace
+        // that the account is a member of now, and one row with no workspace for an account in none.
+        const workspaces = await rowsIn(sql`SELECT "organizationId" AS id FROM member WHERE "userId" = ${target}`);
+        const action: AdminActionKind = suspended ? 'account-suspended' : 'account-restored';
+        const each = (workspace: string | null) => ({
+          id: newId('ada'),
+          at: now,
+          actor_account_id: actor.id,
+          actor_email: actor.email,
+          action,
+          target_account_id: target,
+          target_email: String(row.email),
+          workspace_id: workspace,
+        });
+        await db
+          .insert(admin_actions)
+          .values(workspaces.length === 0 ? [each(null)] : workspaces.map((workspace) => each(String(workspace.id))));
+
+        return { ok: true, changed: true, suspended };
+      });
+    },
+
+    async actionsIn(workspace) {
+      const actor = alias(user, 'actor');
+      const target = alias(user, 'target');
+      const rows = await run((db) =>
+        db
+          .select({
+            action: admin_actions.action,
+            at: admin_actions.at,
+            actor_email: admin_actions.actor_email,
+            actor_now: actor.email,
+            actor_name: actor.name,
+            target_email: admin_actions.target_email,
+            target_now: target.email,
+            target_name: target.name,
+          })
+          .from(admin_actions)
+          .leftJoin(actor, eq(actor.id, admin_actions.actor_account_id))
+          .leftJoin(target, eq(target.id, admin_actions.target_account_id))
+          .where(eq(admin_actions.workspace_id, workspace))
+          .orderBy(desc(admin_actions.at), asc(admin_actions.id))
+          .limit(ACTIONS_SHOWN),
+      );
+
+      return rows.flatMap((row): TracedAction[] => {
+        const targetEmail = row.target_now ?? row.target_email;
+        if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action) || targetEmail === null) return [];
+
+        return [
+          {
+            action: row.action as AdminActionKind,
+            at: iso(row.at),
+            admin: { email: row.actor_now ?? row.actor_email, ...named(row.actor_name) },
+            target: { email: targetEmail, ...named(row.target_name) },
+          },
+        ];
       });
     },
 

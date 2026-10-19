@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { BetterAuthOptions } from 'better-auth';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { type Auth, authOptions, startAuth } from './auth.ts';
@@ -69,6 +70,8 @@ export async function workerOf(
     limits?: Pick<Kv, 'incr'>;
     /** Who may create an account. `anyone` by default, as in `AUTH_CONFIG`. */
     signUp?: SignUp;
+    /** Changes the options of better-auth before it is built: a control takes a check out. */
+    changed?: (options: BetterAuthOptions) => BetterAuthOptions;
   } = {},
 ) {
   await make(database);
@@ -88,7 +91,7 @@ export async function workerOf(
     sessions,
     more.limits ?? createPostgresKv(database),
   );
-  const auth: Auth = await startAuth(options);
+  const auth: Auth = await startAuth(more.changed === undefined ? options : more.changed(options));
   const mail = inbox();
   const kv: Kv = createMemoryKv();
   const env = envWith({ ...(more.trackIp === true ? { FRUITBACK_AUTH_TRACK_IP: '1' } : {}), ...more.env });

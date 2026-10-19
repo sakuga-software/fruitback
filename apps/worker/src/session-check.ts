@@ -18,7 +18,8 @@ import type { SessionIdentity, SessionStore } from './session.ts';
  *   chain was in it names none and is refused: the extension refreshes, and its next token names it;
  * - a token of that chain is live and not expired: the session did not end;
  * - the session is the one the token says: the same person, and the same workspace or the same account;
- * - the person is still a member of the workspace of the session, or the account is still there.
+ * - the person is still a member of the workspace of the session, or the account is still there;
+ *   and the account is not suspended (FRU-281).
  *
  * The role for the action is the route's to read: this says who the session is, now.
  */
@@ -29,8 +30,11 @@ export type SessionCheck = {
   secret: string;
   /** The role of an account in a workspace. Absent on a worker with no accounts. */
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
-  /** Whether an account is still there. Absent on a worker with no accounts: no session of an account is. */
-  accountExists?: (account: string) => Promise<boolean>;
+  /**
+   * Whether an account is still there, and not suspended (FRU-281). Absent on a worker with no
+   * accounts: no session of an account is.
+   */
+  accountActive?: (account: string) => Promise<boolean>;
   now?: number;
 };
 
@@ -51,7 +55,7 @@ export async function sessionStillValid(token: string, check: SessionCheck): Pro
   }
 
   if (identity.account === true) {
-    return check.accountExists !== undefined && (await check.accountExists(identity.subject)) ? identity : undefined;
+    return check.accountActive !== undefined && (await check.accountActive(identity.subject)) ? identity : undefined;
   }
   if (identity.workspace !== undefined && check.roleIn !== undefined) {
     return (await check.roleIn(identity.workspace, identity.subject)) === undefined ? undefined : identity;

@@ -1015,8 +1015,8 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, built on `sessionWrites`, which reads the
   membership and the session in one call. `verifyForClient` drops `account` and `chain` from a token
   that the key of a site verified: a site writes the claims it likes.
-- **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
-  `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
+- **The refresh ends a session of an account whose account is gone or suspended** (`stillOfTheWorkspace`,
+  through `accountActive`, FRU-281). A member removed from a workspace keeps the session: it reads that workspace no
   more, at the next call.
 - **The store decides each rule in one statement that reads what it changes**: an answer is
   `UPDATE … WHERE outcome IS NULL`, a claim is `UPDATE … WHERE claimed_at IS NULL` with the session
@@ -2761,9 +2761,10 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Six reads, and one write** (FRU-280): `instance`, `workspaces` (`q`, `show` of `all`,
+- **Six reads, and two writes** (FRU-280, FRU-281): `instance`, `workspaces` (`q`, `show` of `all`,
   `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
-  `notes` (FRU-272) and `actions` (FRU-280). The write is the role of administrator, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+  `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator and the
+  suspension of an account, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
   workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
@@ -2813,8 +2814,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
 
 ### What it does not do
 
-- No write but the role (FRU-280): suspending and deleting are later tickets. The columns
-  `banned`, `banReason` and `banExpires` are written by nobody; the guard reads `banned`.
+- No write but the role (FRU-280) and the suspension (FRU-281): deleting is a later ticket. The
+  suspension writes `banned`, and empties `banReason` and `banExpires`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
 
@@ -2860,13 +2861,114 @@ Mathieu, 2026-10-19: « Oui, sauf le dernier ».
   the second gets `last-admin` and not `404`, because that is the reason the console can explain.
 - **Why a table of its own, and not `admin_reads`.** A read names one workspace, and its row goes
   with it. An action can name no workspace (this one), names a person, and must stay after the
-  workspace goes (a later deletion). The owners of a workspace can read the rows that name it beside
-  the reads, by `admin_actions_by_workspace`; no action names a workspace yet, so their route does
-  not read the table.
+  workspace goes (a later deletion). The owners of a workspace read the rows that name it beside the
+  reads, by `admin_actions_by_workspace`: since FRU-281 a suspension names each workspace of its
+  account.
 - **Why no row for a call that changes nothing.** Two clicks on « Name administrator » are one
   action. The trace says what changed, and a row for nothing would make « who did it » ambiguous.
 - **Why `self-removal`.** An administrator who removes themselves by mistake has no way back in the
   console. Another administrator removes them.
+
+## An administrator suspends and restores an account (FRU-281)
+
+D3 of FRU-260, decided on 2026-10-19 in FRU-274: a suspended account signs in by no way, and its
+sessions end. A restored account signs in again, and its old sessions stay ended.
+
+### The rules, in short
+
+- **`POST /console/admin/users/<id>/suspension`, body `{ suspended: true | false }`**, behind
+  `instanceAdminOf`, in `ADMIN_WRITE_ROUTES`. `200 { user: { id, suspended }, changed }`. A body
+  that is not this answers `400 invalid-suspended`, an account that does not exist `404 not-found`.
+- **Two refusals, each a `409` with its code**: `self-suspension` when `suspended: true` names the
+  caller, also when another administrator stays, and `last-admin` when the account is the last
+  administrator that is not suspended. The caller is checked first, so `last-admin` comes from a
+  race only, or from a caller who lost the role: test:`refuses to suspend the last administrator, whoever asks`.
+- **No change, no row.** A suspension of a suspended account, or a restoration of an active one,
+  answers `200` with `changed: false` and writes nothing. The role stays as it is: a suspended
+  administrator keeps `role = 'admin'`, and `IS_ADMIN` does not count them while they are suspended.
+- **The flag is `banned` of `user`**, the column of the admin plugin, which the worker still does not
+  mount. `banReason` and `banExpires` stay empty: no reason is asked, and no suspension ends by
+  itself. `Account.suspended` reads `banned`, and `AdminUser.suspended` says it to the console.
+- **One transaction, under `ADMIN_ROLE_LOCK`** (`setSuspended` of `instance-admin-postgres.ts`),
+  because a suspension changes who counts as an administrator. The lock comes first. Then, in this
+  order: the target exists, it is not the caller, the state changes, the target is not the last
+  administrator, the caller is still an administrator, the write of `banned`, **the deletion of every
+  session of better-auth of the account** (in both directions), and the rows of the action.
+- **The sessions of the extension end outside that transaction**, by `endSessionsOf({ subject })` of
+  the session store, which opens its own transaction. A suspension ends them after its commit. A
+  restoration of a suspended account ends them before its commit. A suspension that changes nothing
+  ends them again. See the reasons.
+- **The trace is `admin_actions`** (`account-suspended`, `account-restored`): **one row for each
+  workspace that the account is a member of at that moment**, with its `workspace_id`, or one row
+  with no workspace for an account in none. `GET /console/workspaces/<id>/admin-reads` answers
+  `{ reads, actions }` to an owner. `actions` are the 200 newest rows that name the workspace, each
+  `{ action, at, admin: { email, name? }, target: { email, name? } }`. `GET /console/admin/actions`
+  answers every row, so one action shows once for each workspace.
+- **Each entry point refuses a suspended account with its own check**, so a session that a race left
+  live is refused too:
+
+  | Entry point                                                                                   | Check                                                 |
+  | --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+  | a new session of better-auth: the link of an e-mail, the link of the operator, GitHub, Google | the hook `session.create.before` of `authOptions`     |
+  | the cookie of the console, on every route that reads it                                       | `sessionOfCookie` reads `user.banned` of `getSession` |
+  | the console API                                                                               | `callerOf` reads `Account.suspended`                  |
+  | an access token of a session of a workspace                                                   | `role` and `reach` of the account store               |
+  | an access token of a session of an account                                                    | `reach`, `accountActive`, and `GET /session/sites`    |
+  | a refresh, and a pairing code at `/session/pair`                                              | `stillOfTheWorkspace`: `role`, or `accountActive`     |
+  | a claim of an approval of the console (FRU-238)                                               | `open` of `connect-routes.ts`                         |
+  | the `pair` command                                                                            | `runPair` reads `Account.suspended`                   |
+
+  The guard test `the places that turn a token into an account (FRU-281)` lists the files that read
+  a cookie, verify a token of the worker key, or open a session of better-auth. It fails on a new
+  one, and its control plants one.
+
+### The reasons, and what was measured
+
+- **The ban of better-auth is the admin plugin, and the worker does not mount it.** Read in
+  `plugins/admin/admin.mjs` of 1.7.7: the plugin refuses a banned account in a hook
+  `session.create.before` (`BANNED_USER`), and its route `ban-user` deletes the sessions of the
+  account. Neither runs here. Measured through `handleRequest`, with the checks of the worker taken
+  out: `getSession` answers the session of a banned account, with `banned: true` in its user, and the
+  link of an e-mail, GitHub and Google each sign it in again:
+  test:`signs a banned account in by every way, and keeps its session, without the checks of the worker`.
+  With the checks: test:`signs a suspended account in by no way, and opens no session for it`.
+- **Why `banned`, and no column of our own.** `IS_ADMIN` reads it, the list of the accounts of
+  FRU-261 reads it, and a later lot that mounts the plugin finds its own column. Who suspended the
+  account, and when, is in `admin_actions`: a `suspended_by` column would say it twice.
+- **Why a hook of the worker, and not the plugin.** The reasons of FRU-261 stand: fifteen routes, and
+  a hook that writes `role: 'user'` on each new account. The hook of the worker reads `banned` through
+  the adapter of the call, as `signUpAllowed` does, and refuses when it has no context of a call.
+  Each way to sign in gave the hook its context (measured). The way back from a provider brings
+  `?error=ACCOUNT_SUSPENDED` to the console, and the link of an e-mail answers `403 account-suspended`.
+  The person who opens a link learns why: the link went to the mailbox of the account.
+- **Why a check at each entry point, and not only the deletion of the sessions.** A sign-in that read
+  `banned` before the commit of the suspension can open its session after the deletion. And nothing
+  reaches an access token after it is minted, for its ten minutes. So each place that turns a token
+  into an account reads the ban at each call:
+  test:`refuses the cookie on every route that reads it, and every token of the extension` writes the
+  ban in the database alone, ends no session, and each check refuses.
+- **Why the account store, for the tokens of the extension.** Every path of a token of the worker key
+  reads `role` or `reach`: `verifyForClient` through `reaches`, `sessionStillValid`,
+  `stillOfTheWorkspace`, `memberOf` and `GET /session/sites`. Every caller asks them of the account
+  that acts, so a suspended account has no role. It costs one join on `user`, and no more reads.
+- **Why the sessions of the extension end outside the transaction.** `endSessionsOf` holds the chains
+  in its own transaction, and on a database of one connection (PGlite) a second transaction waits for
+  ever. So the order carries the rule. A refusal ends nothing, because the suspension commits before
+  it ends them. A session that a failed end left live is refused by the checks above, then ended by
+  the next click or by the restoration, before the account can act again:
+  test:`ends a session of the extension that a failed suspension left live, before it restores the account`.
+- **What a restoration does not end**: an access token minted before the suspension reads again for
+  the rest of its ten minutes, as the token of a member who was removed (`SECURITY.md`). It refreshes
+  nothing and writes nothing: test:`restores an account: it signs in again, and its old sessions stay ended`.
+- **Why one row for each workspace, and not one row that the read joins to the memberships.** A join
+  through the memberships of today hides the suspension from the owners of a workspace that the
+  account left, and shows it to the owners of a workspace that it joins later. A row for each
+  workspace says what was true at the moment of the action, also after the account leaves and after
+  it goes (the row keeps `target_email`):
+  test:`keeps the action for the owners after the account leaves the workspace, and after the account goes`.
+- **The lock.** Two administrators who suspend each other at the same moment leave one:
+  test:`suspends one of them: the other gets « last-admin », and one administrator stays`, on a real
+  server, with the table of the actions held by a third connection.
 
 ## The notes of a site that goes (FRU-194)
 

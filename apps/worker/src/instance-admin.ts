@@ -38,6 +38,11 @@ import type { SignUp } from './sign-up.ts';
  *   text only for a note that the worker keeps in its own table, matched by its site and by the id
  *   that the widget gave it. A note that went to a tracker has its excerpt only: the worker does not
  *   call the tracker of a client to read more.
+ * - **Suspension** (FRU-281): `POST /console/admin/users/<id>/suspension` writes `banned` of `user`.
+ *   A suspended account signs in by no way, and every session it held ends: the sessions of the
+ *   console in the transaction of the change, the sessions of the extension after it. A restored
+ *   account signs in again, and its old sessions stay ended. The rules of the role apply: nobody
+ *   suspends themselves, and nobody suspends the last administrator.
  */
 
 /** Where the routes of the administrator of the instance are. */
@@ -64,8 +69,8 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
   { read: 'actions', pattern: /^\/console\/admin\/actions$/, example: '/console/admin/actions' },
 ];
 
-/** The writes that an administrator does (FRU-280). */
-export const ADMIN_WRITES = ['instance-admin'] as const;
+/** The writes that an administrator does (FRU-280, FRU-281). */
+export const ADMIN_WRITES = ['instance-admin', 'suspension'] as const;
 export type AdminWrite = (typeof ADMIN_WRITES)[number];
 
 /**
@@ -78,10 +83,15 @@ export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; 
     pattern: /^\/console\/admin\/users\/([A-Za-z0-9_-]{1,80})\/instance-admin$/,
     example: '/console/admin/users/acc_00000000000000000000/instance-admin',
   },
+  {
+    write: 'suspension',
+    pattern: /^\/console\/admin\/users\/([A-Za-z0-9_-]{1,80})\/suspension$/,
+    example: '/console/admin/users/acc_00000000000000000000/suspension',
+  },
 ];
 
 /** The kinds of action that `admin_actions` keeps. */
-export const ADMIN_ACTIONS = ['admin-named', 'admin-removed'] as const;
+export const ADMIN_ACTIONS = ['admin-named', 'admin-removed', 'account-suspended', 'account-restored'] as const;
 export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
 
 /** One action of an administrator, as the administrators of the instance read it. */
@@ -105,6 +115,18 @@ export type AdminAction = {
 export type RoleChange =
   | { ok: true; changed: boolean; instanceAdmin: boolean }
   | { ok: false; refused: 'unknown-account' | 'self-removal' | 'last-admin' | 'not-admin' };
+
+/**
+ * What a suspension or a restoration gives (FRU-281):
+ * - `changed` false: the account was already in the state that was asked, and no row was written;
+ * - `unknown-account`: no account has this id;
+ * - `self-suspension`: the administrator asked to suspend themselves;
+ * - `last-admin`: the account is the last administrator of the instance;
+ * - `not-admin`: the account that asked is no longer an administrator.
+ */
+export type SuspensionChange =
+  | { ok: true; changed: boolean; suspended: boolean }
+  | { ok: false; refused: 'unknown-account' | 'self-suspension' | 'last-admin' | 'not-admin' };
 
 /** Whether a path is one of the administrator of the instance, known or not. */
 export function isAdminPath(pathname: string): boolean {
@@ -166,6 +188,8 @@ export type AdminUser = {
   email: string;
   createdAt: string;
   instanceAdmin: boolean;
+  /** An administrator of the instance suspended the account (FRU-281). */
+  suspended: boolean;
   workspaces: (WorkspaceName & { role: string })[];
   /** The ways the person signed in: `email`, `github`, `google`. */
   providers: string[];
@@ -204,6 +228,14 @@ export type AdminNote = {
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
+/** One action of an administrator on a member of a workspace, as its owners read it (FRU-281). */
+export type TracedAction = {
+  action: AdminActionKind;
+  at: string;
+  admin: { email: string; name?: string };
+  target: { email: string; name?: string };
+};
+
 /** What the administrator reads and writes in the database. `instance-admin-postgres.ts` is the one store. */
 export type InstanceAdminReads = {
   counts(): Promise<{ workspaces: number; accounts: number; admins: number }>;
@@ -238,6 +270,22 @@ export type InstanceAdminReads = {
   ): Promise<RoleChange>;
   /** The actions of the administrators, the newest first. */
   actions(): Promise<AdminAction[]>;
+  /** Whether the account is suspended (FRU-281). `false` for an id that no account has. */
+  isSuspended(account: string): Promise<boolean>;
+  /**
+   * Suspends `target`, or restores it (FRU-281), and writes the action in `admin_actions`: one row
+   * for each workspace of the account at this moment, or one row with no workspace. A suspension
+   * deletes the sessions of the console of the account. The checks and the writes are in one
+   * transaction, under the lock of `setInstanceAdmin`.
+   */
+  setSuspended(
+    actor: Pick<Account, 'id' | 'email'>,
+    target: string,
+    suspended: boolean,
+    now: number,
+  ): Promise<SuspensionChange>;
+  /** The actions of the administrators on the members of a workspace, the newest first (FRU-281). */
+  actionsIn(workspace: string): Promise<TracedAction[]>;
 };
 
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
@@ -281,6 +329,11 @@ export type InstanceAdminContext = {
   admin: () => Promise<Account | undefined>;
   /** Absent: a worker with no database of accounts. Every route then answers `404`. */
   reads?: InstanceAdminReads;
+  /**
+   * Ends every session of the extension of an account, and its codes that nobody redeemed (FRU-281).
+   * Absent: the route of the suspension answers `404`.
+   */
+  endSessionsOf?: (account: string, now: number) => Promise<void>;
   facts?: InstanceFacts;
   now?: number;
 };
@@ -352,6 +405,51 @@ const REFUSED: Record<Extract<RoleChange, { ok: false }>['refused'], { status: n
   'last-admin': { status: 409, error: 'last-admin' },
 };
 
+/** What `refused` of a `SuspensionChange` answers, as `REFUSED` for the role. */
+const SUSPENSION_REFUSED: Record<
+  Extract<SuspensionChange, { ok: false }>['refused'],
+  { status: number; error: string }
+> = {
+  'unknown-account': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+  'self-suspension': { status: 409, error: 'self-suspension' },
+  'last-admin': { status: 409, error: 'last-admin' },
+};
+
+/**
+ * `POST /console/admin/users/<id>/suspension`, body `{ suspended: true | false }` (FRU-281).
+ *
+ * WARNING: the sessions of the extension are in another transaction, so the order is the rule:
+ * - a suspension commits first, then ends the sessions of the extension. A refusal ends nothing;
+ * - a restoration ends them first, then commits. A session that a failed suspension left live is
+ *   ended before the account can act again;
+ * - a suspension that changes nothing ends them again: a click after a failure finishes the work.
+ */
+async function changeSuspension(
+  request: Request,
+  target: string,
+  admin: Account,
+  reads: InstanceAdminReads,
+  endSessionsOf: (account: string, now: number) => Promise<void>,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const body: unknown = await request.json().catch(() => undefined);
+  const asked = typeof body === 'object' && body !== null ? (body as { suspended?: unknown }).suspended : undefined;
+  if (typeof asked !== 'boolean') return json(400, { error: 'invalid-suspended' }, headers);
+
+  if (!asked && (await reads.isSuspended(target))) await endSessionsOf(target, now);
+  const change = await reads.setSuspended(admin, target, asked, now);
+  if (!change.ok) {
+    const { status, error } = SUSPENSION_REFUSED[change.refused];
+
+    return json(status, { error }, headers);
+  }
+  if (change.suspended) await endSessionsOf(target, now);
+
+  return json(200, { user: { id: target, suspended: change.suspended }, changed: change.changed }, headers);
+}
+
 /** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
 async function changeRole(
   request: Request,
@@ -398,8 +496,16 @@ export async function handleInstanceAdmin(
   if (write !== undefined) {
     if (reads === undefined || facts === undefined) return notFound();
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const target = write.pattern.exec(pathname)?.[1] as string;
 
-    return changeRole(request, write.pattern.exec(pathname)?.[1] as string, admin, reads, now, headers);
+    switch (write.write) {
+      case 'instance-admin':
+        return changeRole(request, target, admin, reads, now, headers);
+      case 'suspension':
+        if (context.endSessionsOf === undefined) return notFound();
+
+        return changeSuspension(request, target, admin, reads, context.endSessionsOf, now, headers);
+    }
   }
 
   const route = ADMIN_ROUTES.find((each) => each.pattern.test(pathname));

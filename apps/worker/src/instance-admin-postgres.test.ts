@@ -416,3 +416,67 @@ describe(
     });
   },
 );
+
+describe(
+  'two administrators who suspend each other at the same moment, on a real server (FRU-281)',
+  {
+    skip: NO_REAL_POSTGRES,
+  },
+  () => {
+    it('suspends one of them: the other gets « last-admin », and one administrator stays', async () => {
+      const own = await ownDatabase();
+      // Two replicas of one connection each, and a third connection that holds the table of the actions.
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+        assert.deepEqual(await admins(first), ['ana@acme.dev', 'bob@acme.dev']);
+
+        // Each suspension writes its action last: while the table is held, a suspension that counted waits there.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const suspensions = [
+          createPostgresInstanceAdmin(first).setSuspended(ana, bob.id, true, 1),
+          createPostgresInstanceAdmin(second).setSuspended(bob, ana.id, true, 1),
+        ].map((suspension) => suspension.finally(() => settled.push('settled')));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither suspension ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+        const outcomes = await Promise.all(suspensions);
+
+        assert.deepEqual(outcomes.map((outcome) => (outcome.ok ? 'suspended' : outcome.refused)).toSorted(), [
+          'last-admin',
+          'suspended',
+        ]);
+        // A suspended administrator keeps the role and counts no more.
+        const unsuspended = await rowsOf(first, `SELECT email FROM "user" WHERE role = 'admin' AND banned IS NOT TRUE`);
+        assert.equal(unsuspended.length, 1);
+        assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM admin_actions'))[0]?.n), 1);
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);

@@ -4,7 +4,7 @@ import { describe, it, mock } from 'node:test';
 import { sql } from 'drizzle-orm';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { ADAPTER_MEMBERS, type AdapterOfAuth, DIGESTED, DROPPED, keepAtRest, unknownMembers } from './auth-at-rest.ts';
-import { AT_REST_PLUGIN, DISABLED_PATHS, closedPath, startAuth } from './auth.ts';
+import { AT_REST_PLUGIN, DISABLED_PATHS, closedPath, sendLinkThrough, startAuth } from './auth.ts';
 import {
   AUTH_SECRET,
   CONSOLE_URL,
@@ -141,10 +141,24 @@ for (const { label, open, skip } of DATABASES) {
       const { options } = await optionsOn(database);
       const auth = await startAuth(withTestSignUp(options));
       const { cookie: first } = await signUp(auth, 'alice@acme.dev');
-      // A second session of the same person, as a second browser would hold it.
-      const context = await auth.$context;
-      const alice = String((await rowsOf(database, 'SELECT "id" FROM "user"'))[0]?.id);
-      const second = signed(String((await context.internalAdapter.createSession(alice)).token), AUTH_SECRET);
+      // A second session of the same person, as a second browser would hold it. A call opens it: the
+      // hook of a new session refuses a session that no call opens (FRU-281).
+      let link = '';
+      await sendLinkThrough(auth, 'alice@acme.dev', new Headers(), async (token) => {
+        link = token;
+      });
+      const again = await (
+        auth.api as unknown as { magicLinkVerify(input: object): Promise<Response> }
+      ).magicLinkVerify({
+        query: { token: link },
+        headers: new Headers(),
+        asResponse: true,
+      });
+      assert.equal(again.status, 200, await again.clone().text());
+      const second = again.headers
+        .getSetCookie()
+        .map((each) => each.split(';')[0])
+        .join('; ');
       const { cookie: other } = await signUp(auth, 'bob@acme.dev');
       const count = async (): Promise<number> =>
         Number((await rowsOf(database, 'SELECT count(*) AS n FROM "session"'))[0]?.n);

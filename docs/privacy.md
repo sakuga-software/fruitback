@@ -241,7 +241,8 @@ what it writes each time.
   `role` of `user` says it.
   On the Cloud it is the account of the operator. Since FRU-261 the database keeps four more columns
   for each person: `role` (`admin` for the administrator, empty for the others), `banned`,
-  `banReason` and `banExpires`. Only `role` has a route that writes it.
+  `banReason` and `banExpires`. `role` has a route that writes it, and `banned` too since FRU-281:
+  it says that an administrator suspended the account. `banReason` and `banExpires` stay empty.
 - **What the console shows them, of every workspace**: its name and its owners, the name, the address
   and the role of each member, the day each was last seen, the ways each person signs in, the sites
   and who sees them, where each site sends its notes, the label of each connector and whether it
@@ -262,11 +263,14 @@ what it writes each time.
   not the administrator. A row goes with its workspace; it keeps the address of the administrator
   after their account goes.
 - **Each action of an administrator that changes something leaves a row** in `admin_actions`
-  (FRU-280): the account and the address of the administrator who acted, which action (`admin-named`
-  or `admin-removed`), the account and the address of the person it touched, the workspace when the
-  action is in one, a detail when the action needs one, and its moment. **The administrators of the
-  instance read these rows.** A row keeps both addresses after the accounts go, and stays after its
-  workspace goes. Nothing deletes a row: it lives as long as the database.
+  (FRU-280): the account and the address of the administrator who acted, which action (`admin-named`,
+  `admin-removed`, and since FRU-281 `account-suspended` or `account-restored`), the account and the
+  address of the person it touched, the workspace when the action is in one, a detail when the action
+  needs one, and its moment. **The administrators of the instance read these rows.** A suspension or
+  a restoration writes one row for each workspace that the person is a member of at that moment, and
+  **the owners of that workspace read it**, with the address of the administrator and of the person,
+  beside the reads. A row keeps both addresses after the accounts go, and stays after its workspace
+  goes. Nothing deletes a row: it lives as long as the database.
 
 ### What stays in the reporter's browser
 

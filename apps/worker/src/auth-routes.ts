@@ -1,5 +1,6 @@
 import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import {
+  ACCOUNT_SUSPENDED,
   AUTH_BASE_PATH,
   type Auth,
   CLIENT_IP_HEADER,
@@ -176,7 +177,10 @@ export function withRenewedCookie(request: Request, answer: Response): Response 
  * The person and the session of the cookie of this request, or `undefined`.
  *
  * better-auth reads the session in the database at each call, through the layer of `auth-at-rest.ts`:
- * a session that was ended is refused at the next call.
+ * a session that was ended is refused at the next call. A session of a suspended account is refused
+ * too (FRU-281): better-auth reads `banned` with the session, and checks nothing with it.
+ *
+ * WARNING: every route of the worker that reads the cookie reads it here. A guard test holds it.
  */
 export async function sessionOfCookie(
   auth: Auth | Promise<Auth>,
@@ -184,7 +188,7 @@ export async function sessionOfCookie(
 ): Promise<{ userId: string; sessionId: string } | undefined> {
   // No cookie of a session, no call: a request that names nobody reads no database here.
   if (!(request.headers.get('Cookie') ?? '').includes('fruitback.session_token=')) return undefined;
-  type Found = { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+  type Found = { user?: { id?: unknown; banned?: unknown }; session?: { id?: unknown } } | null;
   let read: { headers?: Headers; response?: Found } | null;
   try {
     // `returnHeaders`: the headers better-auth would set on its own route, beside what it answers.
@@ -195,6 +199,7 @@ export async function sessionOfCookie(
   const userId = read?.response?.user?.id;
   const sessionId = read?.response?.session?.id;
   if (typeof userId !== 'string' || typeof sessionId !== 'string') return undefined;
+  if (read?.response?.user?.banned === true) return undefined;
   // Only the cookie of the session, and only for a session that is there: nothing else better-auth
   // sets on a reading goes to the browser by this way.
   const renewed = (read?.headers?.getSetCookie() ?? []).filter((each) => SESSION_SET_COOKIE.test(each));
@@ -297,20 +302,23 @@ async function sendLink(
 }
 
 /**
- * Whether better-auth refused to create the account of this sign-in: see `sign-up.ts`. 1.7.7 puts
- * the code in the `error` of the redirect. An answer in JSON carries it as `code`: both are read, so
- * a refusal never reads as a link that is spent.
+ * Whether better-auth refused this sign-in with `code`. 1.7.7 puts the code in the `error` of the
+ * redirect. An answer in JSON carries it as `code`: both are read, so a refusal never reads as a link
+ * that is spent.
  */
-export async function refusedSignUp(answer: Response): Promise<boolean> {
+async function refusedWith(answer: Response, code: string): Promise<boolean> {
   const location = answer.headers.get('Location');
-  if (location !== null) {
-    return new URL(location, 'http://unused.invalid').searchParams.get('error') === INVITATION_REQUIRED;
-  }
+  if (location !== null) return new URL(location, 'http://unused.invalid').searchParams.get('error') === code;
   try {
-    return ((await answer.clone().json()) as { code?: unknown } | null)?.code === INVITATION_REQUIRED;
+    return ((await answer.clone().json()) as { code?: unknown } | null)?.code === code;
   } catch {
     return false;
   }
+}
+
+/** Whether better-auth refused to create the account of this sign-in: see `sign-up.ts`. */
+export function refusedSignUp(answer: Response): Promise<boolean> {
+  return refusedWith(answer, INVITATION_REQUIRED);
 }
 
 async function redeemLink(
@@ -353,6 +361,9 @@ async function redeemLink(
   if (answer.status !== 200) {
     // The link is spent: better-auth spends it before it looks for the account.
     if (await refusedSignUp(answer)) return json(403, { error: 'invitation-required' }, headers);
+    // FRU-281: the hook of a new session refuses a suspended account. The person who holds the link
+    // learns why, because the link went to the mailbox of the account.
+    if (await refusedWith(answer, ACCOUNT_SUSPENDED)) return json(403, { error: 'account-suspended' }, headers);
 
     return json(401, { error: 'link-spent-or-expired' }, headers);
   }

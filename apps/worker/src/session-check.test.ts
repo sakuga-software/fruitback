@@ -43,7 +43,7 @@ async function world() {
     sessions,
     secret: SECRET,
     roleIn: async (workspace, account) => roles.get(`${workspace} ${account}`),
-    accountExists: async (account) => accounts.has(account),
+    accountActive: async (account) => accounts.has(account),
     now,
   });
 
@@ -159,7 +159,7 @@ const SCENARIOS: Scenario[] = [
   {
     holds: 'a session of an account that is gone writes nothing',
     change: {
-      from: 'return check.accountExists !== undefined && (await check.accountExists(identity.subject)) ? identity : undefined;',
+      from: 'return check.accountActive !== undefined && (await check.accountActive(identity.subject)) ? identity : undefined;',
       to: 'return identity;',
     },
     async run(valid, { accounts, check, ofAccount }) {

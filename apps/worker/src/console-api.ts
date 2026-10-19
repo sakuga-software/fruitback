@@ -340,19 +340,27 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
  * none. The browser sends the cookie with a request of any page of the same site as the worker
  * (`demo.fruitback.com` is one), whatever `SameSite` says. `consoleCors` refuses another origin
  * before this; a request with no `Origin` reaches this line, and is refused here.
+ *
+ * **The account is read at each call**, and a suspended one is refused (FRU-281) as an account that
+ * is gone. `sessionOfCookie` refuses its cookie first: this is the second lock, for a cookie that
+ * another function reads.
  */
 async function callerOf(
   request: Request,
   context: ConsoleApiContext,
-): Promise<{ ok: true; subject: string } | { ok: false; status: number; body: Record<string, string> }> {
+): Promise<{ ok: true; account: Account } | { ok: false; status: number; body: Record<string, string> }> {
   const subject = context.cookieSession === undefined ? undefined : await context.cookieSession(request);
   if (subject === undefined) return { ok: false, status: 401, body: { error: 'identity-required' } };
   const origin = context.consoleUrl === undefined ? undefined : new URL(context.consoleUrl).origin;
   if (!SAFE_METHODS.has(request.method) && (origin === undefined || request.headers.get('Origin') !== origin)) {
     return { ok: false, status: 403, body: { error: 'origin-not-allowed' } };
   }
+  const account = await context.accounts.account(subject);
+  if (account === undefined || account.suspended === true) {
+    return { ok: false, status: 401, body: { error: 'identity-required', reason: 'no-account' } };
+  }
 
-  return { ok: true, subject };
+  return { ok: true, account };
 }
 
 /**
@@ -363,8 +371,7 @@ async function callerOf(
 export async function instanceAdminOf(request: Request, context: ConsoleApiContext): Promise<Account | undefined> {
   const identified = await callerOf(request, context);
   if (!identified.ok) return undefined;
-  const account = await context.accounts.account(identified.subject);
-  if (account === undefined) return undefined;
+  const { account } = identified;
 
   return (await context.accounts.isInstanceAdmin(account.id)) ? account : undefined;
 }
@@ -386,6 +393,7 @@ export async function handleConsoleApi(
       pathname,
       {
         admin: () => instanceAdminOf(request, context),
+        endSessionsOf: (account, now) => context.sessions.endSessionsOf({ subject: account }, now),
         ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
         ...(context.instance === undefined ? {} : { facts: context.instance.facts }),
         ...(context.now === undefined ? {} : { now: context.now }),
@@ -404,9 +412,7 @@ export async function handleConsoleApi(
 
   const identified = await callerOf(request, context);
   if (!identified.ok) return json(identified.status, identified.body, headers);
-  const subject = identified.subject;
-  const account = await context.accounts.account(subject);
-  if (account === undefined) return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
+  const { account } = identified;
 
   if (pathname === '/console/me') {
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
@@ -475,14 +481,19 @@ export async function handleConsoleApi(
     return json(200, { seen: await context.accounts.lastSeen(workspaceId as string) }, headers);
   }
 
-  // The reads of an administrator of the instance in this workspace (FRU-261): its owners read them.
+  // The reads of an administrator of the instance in this workspace (FRU-261), and their actions on
+  // its members (FRU-281): its owners read them.
   if (rest === '/admin-reads') {
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
     if (role !== 'owner') return forbidden();
     const reads = context.instance?.reads;
     if (reads === undefined) return json(404, { error: 'not-found' }, headers);
+    const [traced, actions] = await Promise.all([
+      reads.reads(workspaceId as string),
+      reads.actionsIn(workspaceId as string),
+    ]);
 
-    return json(200, { reads: await reads.reads(workspaceId as string) }, headers);
+    return json(200, { reads: traced, actions }, headers);
   }
 
   // The notes of the workspace, and « Send again » (FRU-244): `console-notes.ts`.

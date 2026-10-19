@@ -154,8 +154,9 @@ export async function handleExtensionConnect(
     expiresAt: now + REFRESH_TTL_SECONDS * 1000,
     open: async (id) => {
       const account = await context.accounts.account(id);
+      // An account suspended after the approval opens nothing (FRU-281).
       person =
-        account === undefined
+        account === undefined || account.suspended === true
           ? undefined
           : {
               ...(account.name === undefined || account.name === '' ? {} : { name: account.name }),
@@ -212,7 +213,9 @@ export async function handleConsoleConnect(
     return json(403, { error: 'origin-not-allowed' }, headers);
   }
   const account = await context.accounts.account(subject);
-  if (account === undefined) return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
+  if (account === undefined || account.suspended === true) {
+    return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
+  }
 
   if (pathname === BROWSERS_PATH) {
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);

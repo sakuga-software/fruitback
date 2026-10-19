@@ -214,6 +214,9 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     reads: true,
     setInstanceAdmin: true,
     actions: true,
+    isSuspended: true,
+    setSuspended: true,
+    actionsIn: true,
   });
 }
 

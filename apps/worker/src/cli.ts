@@ -180,6 +180,10 @@ export async function runPair(
   // The route ends a session whose person is not a member of its workspace (FRU-149). A code for
   // somebody else is refused here, before it is printed: printed, it reads as a code that works.
   if (accounts !== undefined && parsed.args.workspace !== undefined) {
+    // A suspended account has no role (FRU-281): the operator reads why, and gets no code.
+    if ((await accounts.account(parsed.args.subject))?.suspended === true) {
+      return { ok: false, lines: [`The account ${parsed.args.subject} is suspended: it gets no pairing code`] };
+    }
     const role = await accounts.role(parsed.args.workspace, parsed.args.subject);
     if (role === undefined) {
       return {
