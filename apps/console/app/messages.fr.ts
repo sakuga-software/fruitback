@@ -522,7 +522,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
   'Leave feedback': 'Laisser une note',
   'Click Leave feedback, then any part of the page.':
-    'Cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+    'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
   'Use one, or both.': 'Utilisez l’un, ou les deux.',
   'Browser extension': 'Extension de navigateur',
   "Nothing to deploy. Right for a client's site you cannot touch.":
@@ -536,7 +536,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Avant la balise body fermante. Chaque visiteur voit les pins.',
   'Copy script': 'Copier le script',
   'Open the site, click Leave feedback, then any part of the page.':
-    'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+    'Ouvrez le site, cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
   'Open the console': 'Ouvrir la console',
   // The first note of the setup (FRU-242).
   'Waiting for your first note.': 'En attente de votre première note.',

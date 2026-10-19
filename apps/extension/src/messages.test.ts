@@ -180,3 +180,13 @@ describe('the language of a reviewer', () => {
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');
   });
 });
+
+// FRU-287: the extension mounts the widget, whose button is « Laisser une note ».
+describe('the French of the extension says « note »', () => {
+  it('holds no « feedback » in a French sentence', () => {
+    assert.deepEqual(
+      Object.values(FRENCH).filter((sentence) => /feedback/i.test(sentence)),
+      [],
+    );
+  });
+});
