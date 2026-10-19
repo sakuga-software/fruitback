@@ -120,6 +120,28 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
     'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
   'Delete the workspace': 'Supprimer le workspace',
+  '{workspace} was deleted. Every instance admin reads it on the page Instance.':
+    '{workspace} a été supprimé. Chaque administrateur de l’instance le lit sur la page Instance.',
+  'This is not the name of the workspace. Type it as it is written, capitals included.':
+    'Ce n’est pas le nom du workspace. Tapez-le tel qu’il est écrit, majuscules comprises.',
+  'This workspace no longer exists. Another admin or its owner may have deleted it.':
+    'Ce workspace n’existe plus. Un autre administrateur ou son propriétaire l’a peut-être supprimé.',
+  '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.':
+    '{workspace} est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
+  'Type {workspace} to confirm': 'Tapez {workspace} pour confirmer',
+  'Deleted workspaces': 'Workspaces supprimés',
+  'Deleted by an instance admin. Their owners cannot read this: the workspace is gone.':
+    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : le workspace n’existe plus.',
+  'The deleted workspaces could not be read. Fruitback did not answer.':
+    'Les workspaces supprimés n’ont pas pu être lus. Fruitback n’a pas répondu.',
+  'No workspace was deleted.': 'Aucun workspace n’a été supprimé.',
+  'Workspaces deleted by an instance admin': 'Workspaces supprimés par un administrateur de l’instance',
+  'Deleted by': 'Supprimé par',
+  'What went': 'Ce qui a disparu',
+  Deleted: 'Supprimé le',
+  'A workspace': 'Un workspace',
+  '1 kept note': '1 note gardée',
+  '{count} kept notes': '{count} notes gardées',
   'Sites, members and pin positions go. Items already in your sources stay there.':
     'Les sites, les membres et la position des pins disparaissent. Les éléments déjà dans vos sources y restent.',
   'Keep it': 'Le garder',

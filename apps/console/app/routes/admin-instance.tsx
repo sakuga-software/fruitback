@@ -1,9 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   API,
+  type DeletedWorkspace,
   type InstanceFacts,
   type InstanceSignIn,
   type InstanceWorkspace,
+  deletedWorkspaces,
   instanceFacts,
   instanceWorkspaces,
 } from '../api';
@@ -20,6 +22,10 @@ import { useLocale } from '../use-locale';
  *
  * Each setting comes from the environment of the worker, so the screen has no switch, no form and
  * no button that changes one: it names the variable that sets it. The screen sends no write.
+ *
+ * « Deleted workspaces » (FRU-284) lists the workspaces that an administrator deleted: their owners
+ * have no workspace left to read the trace in. Those rows name no workspace that exists, so the read
+ * at each visit leaves no trace with any owner.
  */
 
 const MINUTE = 60_000;
@@ -107,6 +113,7 @@ export default function AdminInstance() {
       ) : null}
 
       <Workspaces />
+      <Deleted />
     </>
   );
 }
@@ -350,6 +357,84 @@ function Workspaces() {
             </p>
           ) : null}
         </>
+      ) : null}
+    </section>
+  );
+}
+
+/** « 2 sites · 3 people · 5 kept notes »: what went with a deleted workspace. */
+function goneOf(deleted: DeletedWorkspace): string {
+  const gone = deleted.detail?.gone ?? {};
+  const sites = gone.sites ?? 0;
+  const people = gone.members ?? 0;
+  const notes = gone.keptNotes ?? 0;
+
+  return [
+    sites === 1 ? t('1 site') : t('{count} sites', { count: sites }),
+    people === 1 ? t('1 person') : t('{count} people', { count: people }),
+    notes === 1 ? t('1 kept note') : t('{count} kept notes', { count: notes }),
+  ].join(' · ');
+}
+
+/** The workspaces that an administrator deleted (FRU-284), the newest first. */
+function Deleted() {
+  useLocale();
+  const [rows, setRows] = useState<Listed<DeletedWorkspace>>('loading');
+
+  const read = useCallback(async () => {
+    setRows('loading');
+    setRows(listedOf(await deletedWorkspaces(), (data) => data.actions));
+  }, []);
+
+  useEffect(() => void read(), [read]);
+
+  return (
+    <section aria-labelledby="deleted-title">
+      <h2 id="deleted-title" className="mb-[4px] text-section font-bold">
+        {t('Deleted workspaces')}
+      </h2>
+      <p className="mb-[12px] max-w-[64ch] text-small text-muted">
+        {t('Deleted by an instance admin. Their owners cannot read this: the workspace is gone.')}
+      </p>
+      {rows === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+      {rows === 'failed' ? (
+        <div className="flex flex-col items-start gap-[12px]">
+          <Problem>{t('The deleted workspaces could not be read. Fruitback did not answer.')}</Problem>
+          <Button tone="outline" onClick={() => void read()}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
+      {typeof rows !== 'string' && rows.length === 0 ? (
+        <p className="text-small text-muted">{t('No workspace was deleted.')}</p>
+      ) : null}
+      {typeof rows !== 'string' && rows.length > 0 ? (
+        <DataTable label={t('Workspaces deleted by an instance admin')} minWidth={620}>
+          <thead>
+            <tr>
+              <th scope="col">{t('Name')}</th>
+              <th scope="col">{t('Deleted by')}</th>
+              <th scope="col">{t('What went')}</th>
+              <th scope="col" data-align="end">
+                {t('Deleted')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {rows.map((deleted, index) => (
+              <tr key={`${deleted.workspace?.id ?? ''}-${deleted.at}-${index}`}>
+                <td className="font-semibold [overflow-wrap:anywhere]">
+                  {deleted.workspace?.name ?? t('A workspace')}
+                </td>
+                <td className="[overflow-wrap:anywhere]">{deleted.actor.email}</td>
+                <td className="text-muted">{goneOf(deleted)}</td>
+                <td data-align="end" className="text-muted">
+                  {dayOf(deleted.at)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </DataTable>
       ) : null}
     </section>
   );

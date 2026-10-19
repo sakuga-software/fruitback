@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useRef } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
   type AdminConnector,
   type AdminWorkspace,
@@ -7,9 +7,11 @@ import {
   type StageCounts,
   adminWorkspace,
   adminWorkspaces,
+  deleteWorkspaceAsAdmin,
 } from '../api';
 import { msg, t } from '../i18n';
-import { Button, DataTable, LinkButton, PageHead, Problem, StatusBar } from '../ui';
+import { problemOf } from '../problems';
+import { Button, DataTable, Field, LinkButton, PageHead, Problem, StatusBar } from '../ui';
 import { useLocale } from '../use-locale';
 import { useWide } from '../wide';
 import { dayOf } from './admin-instance';
@@ -29,9 +31,9 @@ import {
 import { KINDS } from './connector-parts';
 
 /**
- * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263),
- * read-only: who owns each one, its notes, and where they go. The actions of the mockup on a
- * workspace come with FRU-274, so the screen has no button that changes a workspace.
+ * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263):
+ * who owns each one, its notes, and where they go. « Delete the workspace » in the foot of a panel
+ * deletes it after its name is typed (FRU-284). The other actions of the mockup come with FRU-274.
  *
  * WARNING: each read writes a trace in each workspace of the answer that the administrator is not a
  * member of (FRU-261). The panel reads its workspace again, and leaves one more trace there.
@@ -69,6 +71,13 @@ export default function AdminWorkspaces() {
     return answer.ok && Array.isArray(answer.data?.workspaces) ? answer.data : 'failed';
   }, [q, show]);
   const { shown, again } = useRead(ask);
+  // The name of the workspace that was just deleted: the page says it, where its row was.
+  const [deleted, setDeleted] = useState<string | undefined>();
+  const said = useRef<HTMLParagraphElement>(null);
+  // Focus goes to the sentence: the panel and the button that had it are gone.
+  useEffect(() => {
+    if (deleted !== undefined) said.current?.focus();
+  }, [deleted]);
 
   const rows = typeof shown === 'object' ? shown.workspaces : [];
   const chosen = rows.find((workspace) => workspace.id === open);
@@ -102,6 +111,12 @@ export default function AdminWorkspaces() {
         wide={wide}
         takesFocus={opening}
         onClose={close}
+        onDeleted={(name) => {
+          known.current.delete(chosen.id);
+          setDeleted(name);
+          change({ open: '' }, true);
+          again();
+        }}
       />
     );
 
@@ -115,6 +130,11 @@ export default function AdminWorkspaces() {
       <p className="mb-[24px] max-w-[64ch] text-small text-muted">
         {t('The owners of each workspace see that you read its list, with your address and the day.')}
       </p>
+      {deleted === undefined ? null : (
+        <p role="status" tabIndex={-1} ref={said} className="mb-[16px] text-small font-semibold">
+          {t('{workspace} was deleted. Every instance admin reads it on the page Instance.', { workspace: deleted })}
+        </p>
+      )}
       <ListBar
         label={t('Search workspaces')}
         placeholder={t('Search by name or owner')}
@@ -308,6 +328,7 @@ function Panel({
   wide,
   takesFocus,
   onClose,
+  onDeleted,
 }: {
   workspace: AdminWorkspace;
   detail: AdminWorkspaceDetail | 'loading' | 'failed';
@@ -315,6 +336,7 @@ function Panel({
   wide: boolean;
   takesFocus: { current: boolean };
   onClose: () => void;
+  onDeleted: (name: string) => void;
 }) {
   useLocale();
   const owners = ownersOf(workspace);
@@ -324,6 +346,7 @@ function Panel({
       wide={wide}
       takesFocus={takesFocus}
       onClose={onClose}
+      foot={<Deletion workspace={workspace} onDeleted={onDeleted} />}
       title={workspace.name}
       detail={
         owners === ''
@@ -414,5 +437,115 @@ function Detail({ workspace }: { workspace: AdminWorkspaceDetail }) {
         ))}
       </PanelSection>
     </>
+  );
+}
+
+/** What the worker refuses when a workspace is deleted (FRU-284). */
+const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
+  'name-mismatch': msg('This is not the name of the workspace. Type it as it is written, capitals included.'),
+  'not-found': msg('This workspace no longer exists. Another admin or its owner may have deleted it.'),
+};
+const NOT_DELETED = msg('The workspace was not deleted. Try again.');
+
+/**
+ * « Delete the workspace » (FRU-284), in the foot of the panel. It cannot be undone, so it asks for
+ * the name of the workspace, as the worker does: the button that deletes stays held until the name
+ * is typed as it is written. The confirmation says what goes and what stays in the tracker. « Keep
+ * it » and Escape put the first button back, with focus on it, and send nothing.
+ */
+function Deletion({ workspace, onDeleted }: { workspace: AdminWorkspace; onDeleted: (name: string) => void }) {
+  useLocale();
+  const [asking, setAsking] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  // A second press of the button that deletes comes before React draws the first one as busy.
+  const sending = useRef(false);
+  const back = useRef(false);
+  const box = useRef<HTMLDivElement>(null);
+  const name = workspace.name;
+  const matches = typed.trim() === name;
+
+  // The confirmation is in the foot of the panel, and can appear under the screen on a phone.
+  useEffect(() => {
+    if (asking || problem !== undefined) box.current?.scrollIntoView({ block: 'nearest' });
+  }, [asking, problem]);
+
+  useEffect(() => {
+    if (!back.current || asking) return;
+    back.current = false;
+    box.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [asking]);
+
+  const keep = () => {
+    back.current = true;
+    setTyped('');
+    setProblem(undefined);
+    setAsking(false);
+  };
+
+  async function send() {
+    if (sending.current || !matches) return;
+    sending.current = true;
+    setBusy(true);
+    setProblem(undefined);
+    const answer = await deleteWorkspaceAsAdmin(workspace.id, typed.trim());
+    sending.current = false;
+    setBusy(false);
+    // The typed name stays after a refusal: the person corrects it, and does not type it again.
+    if (answer.ok) onDeleted(answer.data.workspace.name);
+    else setProblem(problemOf(answer, DELETION_PROBLEMS, NOT_DELETED));
+  }
+
+  return (
+    <div ref={box} className="flex w-full flex-col gap-[10px] text-small">
+      {asking ? (
+        <div
+          role="group"
+          aria-label={t('Delete {workspace}', { workspace: name })}
+          className="flex flex-col gap-[10px]"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            // The panel closes on Escape too: this one only steps back from the deletion.
+            event.preventDefault();
+            event.stopPropagation();
+            keep();
+          }}
+        >
+          <p>
+            {t(
+              '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.',
+              { workspace: name },
+            )}
+          </p>
+          <Field
+            label={t('Type {workspace} to confirm', { workspace: name })}
+            value={typed}
+            compact
+            autoFocus
+            autoComplete="off"
+            onChange={(event) => {
+              setTyped(event.target.value);
+              setProblem(undefined);
+            }}
+          />
+          <span className="flex flex-wrap gap-[8px]">
+            <Button tone="quiet" onClick={keep}>
+              {t('Keep it')}
+            </Button>
+            <Button tone="danger" disabled={busy || !matches} onClick={() => void send()}>
+              {t('Delete {workspace}', { workspace: name })}
+            </Button>
+          </span>
+        </div>
+      ) : (
+        <div>
+          <Button tone="outline" onClick={() => setAsking(true)}>
+            {t('Delete the workspace')}
+          </Button>
+        </div>
+      )}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+    </div>
   );
 }
