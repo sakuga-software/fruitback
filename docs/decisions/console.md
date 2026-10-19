@@ -386,9 +386,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `admins`, `alone`), with no count on an option: the worker counts the filter it answers only.
   « Manage in Users » searches the address of the first owner: the search of the people does not
   match a workspace. « Last seen » is a day, as on Members. **Not copied from the mockup**: every
-  action (« New workspace », « Invite someone », « Send them again », « Suspend », « Delete »,
-  « Restore access », « Add to a workspace », the role lists) until FRU-274; the filters
-  « Suspended » and « Invited »; the counts of the
+  action (« New workspace », « Invite someone », « Send them again », « Suspend » of a workspace,
+  « Delete », « Add to a workspace », the role lists) until FRU-274; the filters « Suspended » and
+  « Invited », which the worker does not have (`USER_FILTERS` is `all`, `admins`, `alone`); the counts of the
   options; « Active now » and « 2 h ago » (no hour); « The address answered 503 at … » and
   « Browsers signed in » (no data); a row for somebody invited who has no account (the worker lists
   accounts). `e2e/console-admin-lists.spec.ts` holds both screens, the debounce, the filters, the
@@ -411,6 +411,30 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a press on its track since FRU-280: before, only its words turned it.
   `e2e/console-admin-lists.spec.ts` holds the request, the confirmation and « Keep it », the two
   holds, each refusal, the busy switch, French, 390 px and axe.
+- **« Suspend » and « Restore access » of a person suspend and restore the account, after a
+  confirmation** (FRU-281, route of FRU-281). They follow the switch of FRU-280: a press asks, only
+  the button of the confirmation sends, « Keep it » and Escape send nothing, the button is disabled
+  during the call and a second press sends nothing, a `200` changes the row in place and a refusal
+  leaves it as it was. The confirmation of a suspension says that the person signs in by no way,
+  that their sessions of the console and of the extension end, that their notes stay, and that the
+  owners of each of their workspaces see it. The one of a restoration says that they sign in again
+  and that their old sessions stay ended. **A suspended account reads « Suspended »** in its row and
+  at the top of its panel, with « Restore access », as screen 19 draws it; an active one has
+  « Suspend » in the foot of its panel, as screen 18 draws it for a workspace. The red of the mockup
+  (`accent`) is 4.28:1 on the tint of the chosen row, so the chosen row and the panel take
+  `accent-strong` (#b91c1c), over 4.5:1 on each. After the answer, focus goes to the button that says
+  the state now. **« Suspend » is held on yourself and on the last administrator**, with the rule of
+  FRU-280: counted from a list that holds them all, and **a suspended administrator is no
+  administrator**, as the worker counts. **The switch « Instance admin » is held on a suspended
+  account** (« Restore access first »): the worker answers `instanceAdmin: false` for it whatever its
+  role, so a change of the role would not show. For the same reason, after the restoration of an
+  account that the read answered as suspended, its role is unknown, and the console no longer counts
+  the administrators until the next read: the worker answers. **Each refusal is said in the panel**:
+  `self-suspension` and `last-admin` in their words, a `5xx` as « Fruitback did not answer », anything
+  else as « Nothing changed ». **Not copied from the mockup**: the filter « Suspended » (the worker has
+  none), and « on 30 Sep by Nadia Benali » (the list says neither). `e2e/console-admin-lists.spec.ts`
+  holds the status and its contrast, the request, both confirmations, « Keep it » and Escape, the
+  holds, each refusal, the busy button, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

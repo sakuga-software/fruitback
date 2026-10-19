@@ -6,7 +6,8 @@ import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWr
 /**
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
  * browser against screens 18 and 19 of the mockup of 2026-10-13 (`18-admin-workspaces.html`,
- * `19-admin-users.html`), and the switch « Instance admin » of a person (FRU-280). The worker is answered by stubs with the shapes of
+ * `19-admin-users.html`), the switch « Instance admin » of a person (FRU-280), and the suspension of
+ * an account (FRU-281). The worker is answered by stubs with the shapes of
  * `instance-admin.ts`, and the stubs filter by `q` and `show` as the worker does: a search that the
  * stub did not filter would prove nothing.
  *
@@ -24,7 +25,10 @@ const DONE = '#15803d';
 const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
 
-/** The gestures of the mockup that come with FRU-274: none of them is on these screens. */
+/**
+ * The gestures of the mockup that come with FRU-274: none of them is on these screens, except
+ * « Suspend » and « Restore access » of a person (FRU-281).
+ */
 const ACTIONS = [
   'New workspace',
   'Invite someone',
@@ -125,6 +129,7 @@ const USERS = [
     email: 'nadia@acme.dev',
     createdAt: '2026-09-03T10:00:00.000Z',
     instanceAdmin: true,
+    suspended: false,
     workspaces: [
       { id: 'w1', name: 'Acme web', role: 'owner' },
       { id: 'w9', name: 'Acme support', role: 'member' },
@@ -139,6 +144,7 @@ const USERS = [
     email: 'tom@acme.dev',
     createdAt: '2026-09-18T10:00:00.000Z',
     instanceAdmin: false,
+    suspended: false,
     workspaces: [
       { id: 'w9', name: 'Acme support', role: 'owner' },
       { id: 'w1', name: 'Acme web', role: 'member' },
@@ -153,6 +159,7 @@ const USERS = [
     email: 'ines@acme.dev',
     createdAt: '2026-09-20T10:00:00.000Z',
     instanceAdmin: false,
+    suspended: false,
     workspaces: [{ id: 'w1', name: 'Acme web', role: 'admin' }],
     providers: ['google'],
     lastSeen: daysAgo(4),
@@ -163,6 +170,7 @@ const USERS = [
     email: 'sara@acme.dev',
     createdAt: '2026-10-10T10:00:00.000Z',
     instanceAdmin: false,
+    suspended: false,
     workspaces: [],
     providers: [],
     pendingInvitations: [{ workspace: { id: 'w9', name: 'Acme support' }, role: 'member' }],
@@ -172,7 +180,9 @@ const USERS = [
     name: 'Hugo Petit',
     email: 'hugo@acme.dev',
     createdAt: '2026-10-11T10:00:00.000Z',
+    // Suspended, as the mockup draws him: the worker answers `instanceAdmin: false` for a suspended account.
     instanceAdmin: false,
+    suspended: true,
     workspaces: [],
     providers: ['email'],
     pendingInvitations: [],
@@ -218,8 +228,12 @@ type Options = {
   refusing?: { status: number; error: string } | undefined;
   /** Holds every answer of the role until it resolves. */
   holdRole?: Promise<void>;
-  /** Each write of the role that the page sent. */
+  /** Each write of the role and of a suspension that the page sent. */
   posted?: Posted[];
+  /** A refusal that a suspension answers instead of a `200`, until it is set to `undefined`. */
+  refusingSuspension?: { status: number; error: string } | undefined;
+  /** Holds every answer of a suspension until it resolves. */
+  holdSuspension?: Promise<void>;
 };
 
 type Posted = { path: string; body: unknown };
@@ -242,6 +256,9 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (!admin) return route.fulfill({ status: 404, json: { error: 'not-found' } });
     const role = /^\/console\/admin\/users\/([^/]+)\/instance-admin$/.exec(pathname);
     if (role !== null && route.request().method() === 'POST') return answerRole(role[1] as string, route);
+    const suspension = /^\/console\/admin\/users\/([^/]+)\/suspension$/.exec(pathname);
+    if (suspension !== null && route.request().method() === 'POST')
+      return answerSuspension(suspension[1] as string, route);
     const url = new URL(route.request().url());
     const q = url.searchParams.get('q');
     const show = url.searchParams.get('show');
@@ -276,6 +293,15 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
 
     return route.fulfill({ json: { user: { id, instanceAdmin: body.admin }, changed: true } });
+  };
+  const answerSuspension = async (id: string, route: Route): Promise<void> => {
+    const body = route.request().postDataJSON() as { suspended: boolean };
+    options.posted?.push({ path: new URL(route.request().url()).pathname, body });
+    await (options.holdSuspension ?? Promise.resolve());
+    const refused = options.refusingSuspension;
+    if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+
+    return route.fulfill({ json: { user: { id, suspended: body.suspended }, changed: true } });
   };
   await stubWorker(page, { locale, answer });
 
@@ -365,11 +391,11 @@ async function expectPanel(page: Page): Promise<void> {
 }
 
 /**
- * No gesture of FRU-274 is drawn, not even disabled. Nothing switches but « Instance admin » in the
- * panel of a person (FRU-280), when `switches` is 1.
+ * No gesture of FRU-274 is drawn, not even disabled, but those of `drawn`. Nothing switches but
+ * « Instance admin » in the panel of a person (FRU-280), when `switches` is 1.
  */
-async function expectNoAction(page: Page, switches: 0 | 1 = 0): Promise<void> {
-  for (const name of ACTIONS) {
+async function expectNoAction(page: Page, switches: 0 | 1 = 0, drawn: readonly string[] = []): Promise<void> {
+  for (const name of ACTIONS.filter((action) => typeof action !== 'string' || !drawn.includes(action))) {
     await expect(page.getByRole('button', { name })).toHaveCount(0);
     await expect(page.getByRole('link', { name })).toHaveCount(0);
   }
@@ -660,7 +686,11 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
   // « Browsers signed in » of the mockup: the worker does not say it.
   await expect(panel(page)).not.toContainText('Browsers signed in');
   await expectPanel(page);
-  await expectNoAction(page, 1);
+  // « Suspend » of FRU-281, in the foot of an active account.
+  await expect(
+    panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspend', exact: true }),
+  ).toBeEnabled();
+  await expectNoAction(page, 1, ['Suspend']);
   await axe(page, 'the panel of a person at 1440 px');
 
   await page.keyboard.press('Escape');
@@ -858,6 +888,9 @@ test('in French, every sentence of both screens is French', async ({ page }) => 
       'Linked',
       'owner',
       'member',
+      'Suspended',
+      'Restore access',
+      'cannot be suspended',
     ].filter((sentence) => usersText.includes(sentence)),
   ).toEqual([]);
 });
@@ -1111,5 +1144,335 @@ test('Users: the switch and its confirmation in French, and at 390 px (FRU-280)'
   await page.goto(`${CONSOLE}/admin/users?open=a2`);
   await expect(panel(page)).toContainText(
     'Vous ne pouvez pas vous retirer ce rôle. Un autre administrateur de l’instance le peut.',
+  );
+});
+
+const SELF_SUSPENSION = 'You cannot suspend your own account. Another instance admin can.';
+const LAST_SUSPENSION = 'The last instance admin cannot be suspended. Name another admin first.';
+const ROLE_OF_SUSPENDED = 'A suspended account is not an instance admin. Restore access first.';
+const SUSPENDS_TOM = 'Suspend Tom Marchal';
+const SUSPENDS_NADIA = 'Suspend Nadia Benali';
+const RESTORES_TOM = 'Restore access for Tom Marchal';
+const RESTORES_HUGO = 'Restore access for Hugo Petit';
+/** « Suspend » of the open panel, and not the button of its confirmation. */
+const suspend = (page: Page) => panel(page).getByRole('button', { name: 'Suspend', exact: true });
+const restore = (page: Page) => panel(page).getByRole('button', { name: 'Restore access', exact: true });
+
+test('Users: a suspended person reads « Suspended », in the row and in the panel (FRU-281)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1040 });
+  const sent = watched(page);
+  await stub(page);
+  await visit(page, '/admin/users', 'Users');
+
+  await expect(statusOf(page, 4)).toHaveText('Suspended');
+  // The red of the mockup on a row that is not chosen, in its weight.
+  expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT));
+  expect.soft(await styles(statusOf(page, 4), ['font-weight'])).toEqual({ 'font-weight': '600' });
+  expect(contrast(await painted(statusOf(page, 4), 'color'), rgb('#ffffff'))).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
+
+  await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await expect(panel(page)).toBeFocused();
+  // On the chosen row, the red of the mockup is 4.28:1: the row takes the darker red of the kit.
+  expect.soft(await painted(statusOf(page, 4), 'color')).toEqual(rgb(ACCENT_STRONG));
+  expect(contrast(await painted(statusOf(page, 4), 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+
+  const notice = panel(page).getByRole('status');
+  await expect(notice).toHaveText('SuspendedHugo Petit cannot sign in, and every session they had ended.');
+  const word = notice.locator('span').first();
+  expect.soft(await styles(word, ['font-weight'])).toEqual({ 'font-weight': '600' });
+  expect(contrast(await painted(word, 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
+  await expect(restore(page)).toBeEnabled();
+  await expect(suspend(page)).toHaveCount(0);
+  // The worker counts a suspended admin as no admin: the switch is held, and says why.
+  await expect(adminSwitch(page)).not.toBeChecked();
+  await expect(adminSwitch(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(ROLE_OF_SUSPENDED);
+  await axe(page, 'the panel of a suspended person');
+
+  expect(sent.filter((request) => !request.startsWith('GET ') && !request.startsWith('OPTIONS '))).toEqual([]);
+});
+
+test('Users: an admin suspends a person after a confirmation, then restores them (FRU-281)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1040 });
+  const posted: Posted[] = [];
+  const asked = await stub(page, { posted });
+  await visit(page, '/admin/users?open=a3', 'Users');
+
+  await suspend(page).click();
+  const suspending = confirmation(page, SUSPENDS_TOM);
+  await expect(suspending).toContainText(
+    'Tom Marchal cannot sign in by any method, and their sessions of the console and of the extension end at once. Their notes stay. The owners of each of their workspaces see that you did it.',
+  );
+  await expect(suspending.getByRole('button', { name: 'Keep it' })).toBeFocused();
+  // The press asks: the row still shows the state of the list, and nothing left.
+  await expect(statusOf(page, 1)).toHaveText('Active');
+  expect(posted).toEqual([]);
+  await axe(page, 'the confirmation of a suspension');
+
+  await suspending.getByRole('button', { name: SUSPENDS_TOM }).click();
+  await expect(suspending).toHaveCount(0);
+  await expect(statusOf(page, 1)).toHaveText('Suspended');
+  await expect(panel(page).getByRole('status')).toContainText('Tom Marchal cannot sign in');
+  await expect(suspend(page)).toHaveCount(0);
+  await expect(restore(page)).toBeFocused();
+  expect(posted).toEqual([{ path: '/console/admin/users/a3/suspension', body: { suspended: true } }]);
+
+  await restore(page).click();
+  const restoring = confirmation(page, RESTORES_TOM);
+  await expect(restoring).toContainText(
+    'Tom Marchal can sign in again. Their old sessions stay ended. The owners of each of their workspaces see that you did it.',
+  );
+  await expect(restoring.getByRole('button', { name: 'Keep it' })).toBeFocused();
+  expect(posted).toHaveLength(1);
+  await axe(page, 'the confirmation of a restoration');
+  await restoring.getByRole('button', { name: RESTORES_TOM }).click();
+  await expect(statusOf(page, 1)).toHaveText('Active');
+  await expect(restore(page)).toHaveCount(0);
+  await expect(suspend(page)).toBeFocused();
+  expect(posted.at(-1)).toEqual({ path: '/console/admin/users/a3/suspension', body: { suspended: false } });
+  await expect(main(page).getByRole('alert')).toHaveCount(0);
+  // The row changed in place: each read leaves a trace, and the list was read once.
+  expect(asked.filter((each) => each.path === '/console/admin/users')).toHaveLength(1);
+});
+
+test('Users: « Keep it » and Escape send nothing, and give focus back to « Suspend » and « Restore access » (FRU-281)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a3', 'Users');
+
+  await suspend(page).click();
+  await confirmation(page, SUSPENDS_TOM).getByRole('button', { name: 'Keep it' }).click();
+  await expect(confirmation(page, SUSPENDS_TOM)).toHaveCount(0);
+  await expect(suspend(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(confirmation(page, SUSPENDS_TOM).getByRole('button', { name: 'Keep it' })).toBeFocused();
+  // Escape steps back from the confirmation and leaves the panel open.
+  await page.keyboard.press('Escape');
+  await expect(confirmation(page, SUSPENDS_TOM)).toHaveCount(0);
+  await expect(panel(page)).toBeVisible();
+  await expect(suspend(page)).toBeFocused();
+  await expect(statusOf(page, 1)).toHaveText('Active');
+
+  await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await restore(page).click();
+  await confirmation(page, RESTORES_HUGO).getByRole('button', { name: 'Keep it' }).click();
+  await expect(restore(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(confirmation(page, RESTORES_HUGO).getByRole('button', { name: 'Keep it' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(confirmation(page, RESTORES_HUGO)).toHaveCount(0);
+  await expect(restore(page)).toBeFocused();
+  await expect(statusOf(page, 4)).toHaveText('Suspended');
+  await page.waitForTimeout(200);
+  expect(posted).toEqual([]);
+});
+
+test('Users: « Suspend » is held on yourself and on the last admin, and a suspended admin is no admin (FRU-281)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  // The administrator is Nadia, who also is the last one: the worker checks the caller first.
+  await stub(page, { posted, self: 'a2' });
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(suspend(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(SELF_SUSPENSION);
+  await expect(panel(page)).not.toContainText(LAST_SUSPENSION);
+  await suspend(page).click({ force: true });
+  await expect(panel(page).getByRole('group')).toHaveCount(0);
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await expect(suspend(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(SELF_SUSPENSION);
+
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(suspend(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(LAST_SUSPENSION);
+  await axe(page, 'the suspension of the last admin');
+
+  // Tom is named admin: Nadia is no longer the last one.
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await track(page).click();
+  await confirmation(page, NAMES_TOM).getByRole('button', { name: NAMES_TOM }).click();
+  await expect(statusOf(page, 1)).toHaveText('Instance admin');
+  await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(suspend(page)).toBeEnabled();
+  // Tom is suspended: a suspended admin is no admin, and Nadia is the last one again.
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await suspend(page).click();
+  await confirmation(page, SUSPENDS_TOM).getByRole('button', { name: SUSPENDS_TOM }).click();
+  await expect(statusOf(page, 1)).toHaveText('Suspended');
+  await expect(adminSwitch(page)).not.toBeChecked();
+  await expect(panel(page)).toContainText(ROLE_OF_SUSPENDED);
+  await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(suspend(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(LAST_SUSPENSION);
+  await expect(adminSwitch(page)).toBeDisabled();
+  await expect(panel(page)).toContainText(LAST_ADMIN);
+  // Tom is restored: his role of before shows again, and Nadia is not the last one.
+  await main(page).getByRole('link', { name: 'Tom Marchal' }).click();
+  await restore(page).click();
+  await confirmation(page, RESTORES_TOM).getByRole('button', { name: RESTORES_TOM }).click();
+  await expect(statusOf(page, 1)).toHaveText('Instance admin');
+  await expect(adminSwitch(page)).toBeChecked();
+  await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(suspend(page)).toBeEnabled();
+
+  // A search holds some admins: the console does not guess, and the worker answers.
+  await page.goto(`${CONSOLE}/admin/users?q=nadia&open=a2`);
+  await expect(suspend(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_SUSPENSION);
+  expect(posted.map((each) => each.path)).toEqual([
+    '/console/admin/users/a3/instance-admin',
+    '/console/admin/users/a3/suspension',
+    '/console/admin/users/a3/suspension',
+  ]);
+});
+
+test('Users: after the restoration of an account read as suspended, the last admin is not guessed (FRU-281)', async ({
+  page,
+}) => {
+  await stub(page);
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(suspend(page)).toBeDisabled();
+
+  // The worker does not say the role of a suspended account: Hugo can be an admin again.
+  await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await restore(page).click();
+  await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
+  await expect(statusOf(page, 4)).toHaveText('Active');
+  await main(page).getByRole('link', { name: 'Nadia Benali' }).click();
+  await expect(suspend(page)).toBeEnabled();
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_SUSPENSION);
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+});
+
+test('Users: each refusal of a suspension is said, and the row keeps its true state (FRU-281)', async ({ page }) => {
+  const posted: Posted[] = [];
+  const options: Options = { posted, cut: 150, refusingSuspension: { status: 409, error: 'last-admin' } };
+  await stub(page, options);
+  await visit(page, '/admin/users?open=a2', 'Users');
+
+  const refused = async (sentence: string) => {
+    await suspend(page).click();
+    await confirmation(page, SUSPENDS_NADIA).getByRole('button', { name: SUSPENDS_NADIA }).click();
+    await expect(panel(page).getByRole('alert')).toHaveText(sentence);
+    await expect(confirmation(page, SUSPENDS_NADIA)).toHaveCount(0);
+    await expect(statusOf(page, 0)).toHaveText('Instance admin');
+    await expect(restore(page)).toHaveCount(0);
+    await expect(suspend(page)).toBeEnabled();
+    await expect(suspend(page)).toBeFocused();
+    await expect(adminSwitch(page)).toBeChecked();
+  };
+
+  await refused(LAST_SUSPENSION);
+  await axe(page, 'a refusal of a suspension');
+  options.refusingSuspension = { status: 409, error: 'self-suspension' };
+  await refused(SELF_SUSPENSION);
+  options.refusingSuspension = { status: 500, error: 'down' };
+  await refused('Fruitback did not answer. Try again.');
+  options.refusingSuspension = { status: 404, error: 'not-found' };
+  await refused('Nothing changed. Try again.');
+  options.refusingSuspension = { status: 400, error: 'invalid-suspended' };
+  await refused('Nothing changed. Try again.');
+  expect(posted).toHaveLength(5);
+
+  // A refused restoration leaves the account suspended.
+  options.refusingSuspension = { status: 502, error: 'down' };
+  await main(page).getByRole('link', { name: 'Hugo Petit' }).click();
+  await restore(page).click();
+  await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await expect(statusOf(page, 4)).toHaveText('Suspended');
+  await expect(restore(page)).toBeFocused();
+
+  options.refusingSuspension = undefined;
+  await restore(page).click();
+  // The sentence of the refusal stays until the next answer: no error path clears what it says.
+  await expect(panel(page).getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+  await confirmation(page, RESTORES_HUGO).getByRole('button', { name: RESTORES_HUGO }).click();
+  await expect(statusOf(page, 4)).toHaveText('Active');
+  await expect(panel(page).getByRole('alert')).toHaveCount(0);
+});
+
+test('Users: « Suspend » is busy while the worker answers, and a second press sends nothing (FRU-281)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  let release = () => {};
+  const holdSuspension = new Promise<void>((resolve) => (release = resolve));
+  await stub(page, { posted, holdSuspension });
+  await visit(page, '/admin/users?open=a3', 'Users');
+
+  await suspend(page).click();
+  const send = confirmation(page, SUSPENDS_TOM).getByRole('button', { name: SUSPENDS_TOM });
+  await send.dblclick();
+  await expect(suspend(page)).toBeDisabled();
+  await send.click();
+  await suspend(page).click({ force: true });
+  await page.waitForTimeout(200);
+  expect(posted).toHaveLength(1);
+  await expect(statusOf(page, 1)).toHaveText('Active');
+
+  release();
+  await expect(statusOf(page, 1)).toHaveText('Suspended');
+  await expect(restore(page)).toBeEnabled();
+  await expect(confirmation(page, SUSPENDS_TOM)).toHaveCount(0);
+  expect(posted).toHaveLength(1);
+});
+
+test('Users: the suspension and its confirmations in French, and at 390 px (FRU-281)', async ({ page }) => {
+  const options: Options = { locale: 'fr', cut: 150, refusingSuspension: { status: 409, error: 'last-admin' } };
+  await stub(page, options);
+  await page.goto(`${CONSOLE}/admin/users?open=a9`);
+  await expect(statusOf(page, 4)).toHaveText('Suspendu');
+  await expect(panel(page).getByRole('status')).toHaveText(
+    'SuspenduHugo Petit ne peut plus se connecter, et chacune de ses sessions a pris fin.',
+  );
+  await expect(panel(page)).toContainText(
+    'Un compte suspendu n’est pas administrateur de l’instance. Rétablissez d’abord son accès.',
+  );
+  await panel(page).getByRole('button', { name: 'Rétablir l’accès', exact: true }).click();
+  await expect(panel(page).getByRole('group', { name: 'Rétablir l’accès de Hugo Petit' })).toContainText(
+    'Hugo Petit peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+  );
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${CONSOLE}/admin/users?open=a2`);
+  await panel(page).getByRole('button', { name: 'Suspendre', exact: true }).click();
+  const asking = panel(page).getByRole('group', { name: 'Suspendre Nadia Benali' });
+  await expect(asking).toContainText(
+    'Nadia Benali ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+  );
+  await expect(asking.getByRole('button', { name: 'Le garder' })).toBeFocused();
+  await expect(asking.getByRole('button', { name: 'Suspendre Nadia Benali' })).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the confirmation of a suspension at 390 px');
+  const text = (await panel(page).innerText()).replaceAll('\n', ' ');
+  expect(
+    ['Suspend ', 'Keep it', 'cannot sign in', 'Their notes', 'owners'].filter((sentence) => text.includes(sentence)),
+  ).toEqual([]);
+  await asking.getByRole('button', { name: 'Suspendre Nadia Benali' }).click();
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'Le dernier administrateur de l’instance ne peut pas être suspendu. Nommez d’abord un autre administrateur.',
+  );
+  await expect(panel(page).getByRole('alert')).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'a refusal of a suspension at 390 px');
+
+  await page.goto(`${CONSOLE}/admin/users?open=a9`);
+  await expect(panel(page).getByRole('status')).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'a suspended person at 390 px');
+
+  // A person's own « Suspend » says why in French.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await stub(page, { locale: 'fr', self: 'a2' });
+  await page.goto(`${CONSOLE}/admin/users?open=a2`);
+  await expect(panel(page)).toContainText(
+    'Vous ne pouvez pas suspendre votre propre compte. Un autre administrateur de l’instance le peut.',
   );
 });

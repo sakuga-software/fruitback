@@ -196,6 +196,7 @@ export function AdminPanel({
   onClose,
   title,
   detail,
+  foot,
   children,
 }: {
   wide: boolean;
@@ -204,6 +205,8 @@ export function AdminPanel({
   onClose: () => void;
   title: string;
   detail?: string;
+  /** Under a rule at the bottom of the panel. */
+  foot?: ReactNode;
   children: ReactNode;
 }) {
   const held = useRef<HTMLElement>(null);
@@ -225,6 +228,7 @@ export function AdminPanel({
       panelRef={held}
       title={title}
       {...(detail === undefined ? {} : { detail })}
+      {...(foot === undefined ? {} : { foot })}
       spacing="tight"
       className={`scroll-mt-4 ${wide ? 'flex-[1_1_340px]' : ''}`}
       onKeyDown={(event) => {
