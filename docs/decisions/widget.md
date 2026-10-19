@@ -219,8 +219,9 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   `theme.ts`.
   - **« In progress » is written dark.** White on the amber is 2.15:1, the ink is 8.25:1.
     `onStageToken` gives a stage its foreground, and `color-on-stage` stays the white of the four
-    others, so a host that set that one token keeps it. Until FRU-292: gone-test:`writes « in progress » dark on its
-amber, where white cannot be read (FRU-233)`.
+    others, so a host that set that one token keeps it. FRU-292 replaced the test that held it,
+    gone-test:`writes « in progress » dark on its amber, where white cannot be read (FRU-233)`, by
+    test:`writes « in progress » white on its amber, like the four others (FRU-292)`.
   - **The amber is 2.15:1 on white, under the 3:1 of a drawing, and it stays**: it is the colour
     the mock-up gives that status. A status is never said by its colour alone: the list names it,
     a thread names it, a pin carries a number. `contrast.test.ts` names that one pair, and fails
