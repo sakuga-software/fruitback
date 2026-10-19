@@ -352,8 +352,7 @@ test('the rail lists the screens of the administration in the order of the mocku
   await stub(page);
   await visit(page, '/admin/workspaces', 'Workspaces');
   const nav = page.getByRole('navigation', { name: 'Instance' });
-  // « Notes » of the mockup comes with its own screen: this list holds the ones that exist.
-  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Workspaces', 'Users', 'My workspaces']);
+  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Workspaces', 'Users', 'Notes', 'My workspaces']);
   await expect(nav.getByRole('link', { name: 'Workspaces', exact: true })).toHaveAttribute('aria-current', 'page');
   await nav.getByRole('link', { name: 'Users' }).click();
   await expect(main(page).getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
