@@ -41,6 +41,7 @@ export function accountOf(row: Record<string, unknown> | undefined): Account | u
     email: row.email,
     ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
     ...(typeof row.locale === 'string' && row.locale !== '' ? { locale: row.locale } : {}),
+    ...(row.banned === true ? { suspended: true as const } : {}),
   };
 }
 

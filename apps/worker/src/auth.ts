@@ -226,6 +226,12 @@ export const INSTANCE_ADMIN_FIELDS = {
 export const ROLE_REFUSED = 'ROLE_IS_NOT_ONE_OF_THE_FOUR';
 
 /**
+ * The code of the refusal of a session for a suspended account (FRU-281). better-auth puts it in the
+ * `?error=` of the way back from a provider, and in the answer of the link of an e-mail.
+ */
+export const ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED';
+
+/**
  * The code of an invitation that nobody stands behind any more (FRU-209): whoever made it was
  * removed from the workspace, left it, or may no longer invite there.
  */
@@ -520,7 +526,13 @@ export async function authOptions(
         create: {
           // Off, no address and no user agent in the row: the decision of 2026-10-11. The short label
           // of the browser, read once here from the user agent (FRU-249, Q7), is kept either way.
-          before: async (session: Record<string, unknown>) => {
+          before: async (session: Record<string, unknown>, context: HookContext) => {
+            // FRU-281. Every way to sign in opens its session here: the link of an e-mail, the link
+            // of the operator, GitHub and Google. The admin plugin refuses a banned account at this
+            // point, and the worker does not mount the plugin, so the worker refuses it here.
+            if (await suspendedAccount(String(session.userId ?? ''), context, getCurrentAdapter)) {
+              throw new APIError('FORBIDDEN', { code: ACCOUNT_SUSPENDED, message: 'This account is suspended' });
+            }
             const browser = browserLabel(session.userAgent);
 
             return {
@@ -630,6 +642,32 @@ async function signUpAllowed(
     })) > 0;
 
   return maySignUp(mode, { firstAccount, invited, byOperator });
+}
+
+type ReadingAdapter = {
+  findOne(input: {
+    model: string;
+    where: { field: string; value: unknown }[];
+  }): Promise<Record<string, unknown> | null>;
+};
+
+/**
+ * Whether the account of a new session is suspended (FRU-281): `banned` of `user` is true.
+ *
+ * It reads through the adapter of the call, as `signUpAllowed` does. WARNING: without the context of
+ * a call, it reads nothing and answers `true`: the session is refused.
+ */
+async function suspendedAccount(
+  account: string,
+  context: HookContext,
+  current: (adapter: never) => Promise<unknown>,
+): Promise<boolean> {
+  const base = context?.context?.adapter;
+  if (base === undefined || account === '') return true;
+  const adapter = (await current(base as never)) as ReadingAdapter;
+  const row = await adapter.findOne({ model: 'user', where: [{ field: 'id', value: account }] });
+
+  return row?.banned === true;
 }
 
 /** Each refused plugin of these options, with its reason. Empty for options that may be built. */

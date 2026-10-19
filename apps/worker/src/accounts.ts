@@ -16,7 +16,8 @@ import type { ClientMap } from './clients.ts';
 
 /** An account is a person, known by an address a provider or a link proved they read. */
 /** `locale` is the language the person reads: their e-mails are written in it (FRU-119). */
-export type Account = { id: string; email: string; name?: string; locale?: string };
+/** `suspended`: an administrator of the instance suspended the account (FRU-281). It acts nowhere. */
+export type Account = { id: string; email: string; name?: string; locale?: string; suspended?: true };
 
 /** The longest name a person gives themself (FRU-249): the same bound as a workspace name. */
 export const MAX_PERSON_NAME = 80;
@@ -327,11 +328,15 @@ export type AccountStore = {
   createWorkspace(name: string, owner: string): Promise<Workspace>;
   /** Every workspace this account belongs to, with its role there, oldest first. */
   memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;
+  /**
+   * The role of `account` in `workspace`, or `undefined` for somebody who is not a member. A suspended
+   * account (FRU-281) has no role: every caller asks it of the account that acts.
+   */
   role(workspace: string, account: string): Promise<Role | undefined>;
   /**
    * The role of `account` in `workspace` and the sites it reads there (FRU-250), in one read, or
-   * `undefined` for somebody who is not a member. Every route that answers a thing of one site asks
-   * this, and `readsSite` reads it.
+   * `undefined` for somebody who is not a member, and for a suspended account (FRU-281). Every route
+   * that answers a thing of one site asks this, and `readsSite` reads it.
    */
   reach(workspace: string, account: string): Promise<Reach | undefined>;
   /**

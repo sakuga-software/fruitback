@@ -101,7 +101,10 @@ const DOMAIN = {
 };
 
 /** A person as `accountOf` reads one: a row of `user`. */
-const ACCOUNT = { id: user.id, email: user.email, name: user.name, locale: user.locale };
+const ACCOUNT = { id: user.id, email: user.email, name: user.name, locale: user.locale, banned: user.banned };
+
+/** The account of the row is not suspended (FRU-281): `banned` of `user` is not true. */
+const NOT_SUSPENDED = or(isNull(user.banned), eq(user.banned, false));
 
 /** The sites of these rows in the order of the rows, each with its destinations in that order. */
 function sitesFrom(rows: readonly Record<string, unknown>[]): Site[] {
@@ -279,13 +282,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .select({ id: user.id })
           .from(user)
           // Strict, as `roleOf`: « admin,user », which the admin plugin reads as two roles, is no administrator.
-          .where(
-            and(
-              eq(user.id, given(id, 'isInstanceAdmin: account')),
-              eq(user.role, 'admin'),
-              or(isNull(user.banned), eq(user.banned, false)),
-            ),
-          ),
+          .where(and(eq(user.id, given(id, 'isInstanceAdmin: account')), eq(user.role, 'admin'), NOT_SUSPENDED)),
       );
 
       return rows.length === 1;
@@ -376,7 +373,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .select({ role: member.role })
           .from(member)
-          .where(and(eq(member.organizationId, workspace), eq(member.userId, person))),
+          .innerJoin(user, eq(user.id, member.userId))
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person), NOT_SUSPENDED)),
       );
 
       // Strict: « guest,admin », which better-auth reads as two roles, is no role of the worker.
@@ -389,11 +387,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .select({ role: member.role, site: site_shares.site_id })
           .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
           .leftJoin(
             site_shares,
             and(eq(site_shares.workspace_id, member.organizationId), eq(site_shares.account_id, member.userId)),
           )
-          .where(and(eq(member.organizationId, workspace), eq(member.userId, person))),
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person), NOT_SUSPENDED)),
       );
       const role = roleOf(rows[0]?.role);
       if (role === undefined) return undefined;

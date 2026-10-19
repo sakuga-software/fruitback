@@ -181,7 +181,11 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
     reachIn: (workspace, account) => accounts.reach(workspace, account),
-    accountExists: async (account) => (await accounts.account(account)) !== undefined,
+    accountActive: async (account) => {
+      const found = await accounts.account(account);
+
+      return found !== undefined && found.suspended !== true;
+    },
     seenIn: (workspace, account) => seen(accounts, workspace, account),
   };
 }
@@ -196,8 +200,11 @@ type Served = WorkerConfig & {
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
   /** The role and the sites of a person in a workspace (FRU-250). Absent on a worker with no accounts. */
   reachIn?: (workspace: string, account: string) => Promise<Reach | undefined>;
-  /** Whether an account is still there (FRU-238). Absent on a worker with no accounts. */
-  accountExists?: (account: string) => Promise<boolean>;
+  /**
+   * Whether an account is still there (FRU-238), and not suspended (FRU-281). Absent on a worker with
+   * no accounts.
+   */
+  accountActive?: (account: string) => Promise<boolean>;
   /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
   seenIn?: (workspace: string, account: string) => Promise<void>;
 };
@@ -1113,7 +1120,7 @@ export async function sessionWrites(
     sessions,
     secret: config.identitySecret,
     ...(config.roleIn === undefined ? {} : { roleIn: config.roleIn }),
-    ...(config.accountExists === undefined ? {} : { accountExists: config.accountExists }),
+    ...(config.accountActive === undefined ? {} : { accountActive: config.accountActive }),
   });
 }
 
@@ -1239,7 +1246,7 @@ async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): P
   // A session of an account (FRU-238) lives as long as its account: it reads what the account is a
   // member of today, and nothing when that is nothing. An account that is gone ends it here.
   if (identity.account === true)
-    return config.accountExists !== undefined && (await config.accountExists(identity.subject));
+    return config.accountActive !== undefined && (await config.accountActive(identity.subject));
   if (config.roleIn === undefined || identity.workspace === undefined) return true;
 
   return (await config.roleIn(identity.workspace, identity.subject)) !== undefined;

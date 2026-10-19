@@ -64,8 +64,12 @@ export async function handleSessionSites(
   if (!verified.ok) return json(401, { error: 'identity-required', reason: verified.reason }, headers);
 
   const subject = verified.reporter.id;
-  // A session of an account (FRU-238): the sites of every workspace it is a member of today.
+  // A session of an account (FRU-238): the sites of every workspace it is a member of today. A
+  // suspended account (FRU-281) reads nothing: its session gets `401`, as a session that ended.
   if (verified.account === true && subject !== undefined) {
+    if ((await accounts.account(subject))?.suspended === true) {
+      return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
+    }
     return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now(), noteIndex), headers);
   }
   const workspaceId = verified.workspace;

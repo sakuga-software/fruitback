@@ -1745,7 +1745,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   wait). **No answer holds a secret, a token, a digest or a key of a connector**, not even masked,
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
-  No route of the administrator writes anything but the trace, except the role below.
+  No route of the administrator writes anything but the trace, except the role and the suspension
+  below.
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
@@ -1784,6 +1785,31 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   test:`changes no role when its action cannot be written`. A call that changes nothing (the role is
   already the one asked) writes no row. The administrators of the instance read the rows with
   `GET /console/admin/actions`; an action on the instance names no workspace, so no owner reads it.
+
+- **Who suspends an account, and what a suspension ends** (FRU-281). An administrator only, with
+  `POST /console/admin/users/<id>/suspension` and `{ suspended: true | false }`, behind the same
+  guard. The route refuses with `409` in two cases: `self-suspension`, and `last-admin` for the last
+  administrator that is not suspended. The checks and the write are in one transaction, under the
+  lock of the role: test:`suspends one of them: the other gets « last-admin », and one administrator stays`.
+  **A suspended account signs in by no way**: the link of an e-mail, the link of the operator,
+  GitHub and Google all open their session in one hook of better-auth, and the hook refuses it:
+  test:`signs a suspended account in by no way, and opens no session for it`. Without that hook a ban
+  does nothing in better-auth 1.7.7, because its admin plugin is not mounted:
+  test:`signs a banned account in by every way, and keeps its session, without the checks of the worker`.
+  **Every session of the account ends**: the sessions of the console are deleted in the transaction,
+  and the sessions of the extension and their codes are ended after it. **Each token is refused at
+  its next call, whatever ended or not**: the cookie, the console API, an access token of either kind
+  of session, a refresh, a pairing code, an approval in the console that was not claimed yet, and
+  the `pair` command each read the ban at each call:
+  test:`refuses the cookie on every route that reads it, and every token of the extension`.
+  **A restored account signs in again, and its old sessions stay ended**, on one condition: an access
+  token minted before the suspension reads for the rest of its ten minutes, as the token of a member
+  who was removed. It refreshes nothing and writes nothing:
+  test:`restores an account: it signs in again, and its old sessions stay ended`. Each change writes
+  one row in `admin_actions` for each workspace of the account at that moment, or one row with no
+  workspace, and **the owners of each workspace read their rows beside the reads**, also after the
+  account leaves or goes:
+  test:`writes one row for each workspace of the account, and the owners of each read it beside the reads`.
 
 ### Personal data
 
