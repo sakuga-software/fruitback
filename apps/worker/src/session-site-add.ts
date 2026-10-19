@@ -13,7 +13,8 @@ import type { Kv } from './kv.ts';
  *   a reader;
  * - an `Origin` that is an extension's, or none: a page of a site cannot hide its own;
  * - the **role** of the account in the workspace named, read now: `manage-sites` (owner, admin). Not
- *   a member answers like a workspace that does not exist (`404`), as the console does;
+ *   a member answers like a workspace that does not exist (`404`), as the console does, and so does a
+ *   suspended workspace (FRU-282);
  * - an origin over https, or on the loopback (the dev loop): a staging site on plain http is added
  *   from the console, where a person reads what they type;
  * - **`members` whatever the body says**: the popup says that visitors see nothing. `visibility` and
@@ -56,7 +57,10 @@ export async function addSessionSite(request: Request, context: SiteAddContext):
   if (site === undefined) return { status: 400, body: { error: 'invalid-url' } };
 
   const role = await context.accounts.role(workspace, context.account);
-  if (role === undefined) return { status: 404, body: { error: 'not-found' } };
+  // A suspended workspace (FRU-282) answers as one that does not exist: `GET /session/sites` does not list it.
+  if (role === undefined || (await context.accounts.suspension(workspace)) !== undefined) {
+    return { status: 404, body: { error: 'not-found' } };
+  }
   if (!can(role, 'manage-sites')) return { status: 403, body: { error: 'forbidden', role } };
 
   const existing = (await context.accounts.sites(workspace)).find((each) => each.origin === site);

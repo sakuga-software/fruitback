@@ -187,6 +187,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
       return found !== undefined && found.suspended !== true;
     },
     seenIn: (workspace, account) => seen(accounts, workspace, account),
+    suspendedIn: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
   };
 }
 
@@ -207,6 +208,8 @@ type Served = WorkerConfig & {
   accountActive?: (account: string) => Promise<boolean>;
   /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
   seenIn?: (workspace: string, account: string) => Promise<void>;
+  /** Whether an administrator of the instance suspended a workspace (FRU-282). Absent on a worker with no accounts. */
+  suspendedIn?: (workspace: string) => Promise<boolean>;
 };
 
 /** The client as it routes when its notes go to this place, and not to its first one. */
@@ -1089,6 +1092,8 @@ async function memberOf(
   if (config.identitySecret === undefined || reachIn === undefined) return undefined;
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return undefined;
+  // The extension knows no suspended workspace (FRU-282): its pictures answer as pictures that do not exist.
+  if (config.suspendedIn !== undefined && (await config.suspendedIn(workspace))) return undefined;
   const reaches = async (account: string) => readsSite(await reachIn(workspace, account), site);
   const verified = await verifyForClient(token, {
     showComments: false,

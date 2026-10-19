@@ -16,6 +16,9 @@ import type { SessionIdentity } from './session.ts';
  * Only a session that names a workspace gets an answer, and only while its person is still a member
  * of it: the role is read here, as the console's routes read it. A guest reads the sites shared with
  * them and no other (FRU-250): the extension offers no site it could not write on.
+ *
+ * A suspended workspace (FRU-282) is not here: the extension reads it as a workspace that the person
+ * is not a member of, and its sites as sites that do not exist.
  */
 export const SESSION_SITES_PATH = '/session/sites';
 
@@ -78,9 +81,12 @@ export async function handleSessionSites(
   }
 
   const reach = await accounts.reach(workspaceId, subject);
-  if (reach === undefined) return json(401, { error: 'identity-required', reason: 'not-a-member' }, headers);
+  const membership = (await accounts.memberships(subject)).find((each) => each.workspace.id === workspaceId);
+  if (reach === undefined || membership?.suspension !== undefined) {
+    return json(401, { error: 'identity-required', reason: 'not-a-member' }, headers);
+  }
 
-  const workspace = (await accounts.memberships(subject)).find((each) => each.workspace.id === workspaceId)?.workspace;
+  const workspace = membership?.workspace;
   const sites = readableSites(await accounts.sites(workspaceId), reach);
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
@@ -131,7 +137,7 @@ async function previewsIn(accounts: AccountStore, workspace: string, now: number
  * nothing of a session it does not know.
  */
 async function sitesOfAccount(accounts: AccountStore, account: string, now: number, noteIndex?: NoteIndex) {
-  const memberships = await accounts.memberships(account);
+  const memberships = (await accounts.memberships(account)).filter((each) => each.suspension === undefined);
   const locale = (await accounts.account(account))?.locale;
   const sites = [];
   for (const { workspace } of memberships) {

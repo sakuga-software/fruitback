@@ -131,3 +131,7 @@ INSERT INTO admin_reads (id, workspace_id, admin_account_id, admin_email, what, 
 -- An action of an administrator of the instance (FRU-280): its trace, which the administrators read.
 INSERT INTO admin_actions (id, at, actor_account_id, actor_email, action, target_account_id, target_email, workspace_id, detail) VALUES
   ('ada_drill1', 1760000000000, 'acc_drill1', 'alice@acme.dev', 'admin-named', 'acc_drill2', 'bob@acme.dev', NULL, NULL);
+
+-- A workspace that an administrator of the instance suspended (FRU-282). Its sites answer as unknown.
+INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES
+  ('ws_drill1', 1760000000000, 'impayé');

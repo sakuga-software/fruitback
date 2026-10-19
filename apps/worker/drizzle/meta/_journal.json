@@ -127,6 +127,13 @@
       "when": 1792416807652,
       "tag": "0017_admin_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792429159675,
+      "tag": "0018_workspace_suspensions",
+      "breakpoints": true
     }
   ]
 }

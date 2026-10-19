@@ -45,6 +45,7 @@ import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } fro
 import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
+import { refusedWhileSuspended, suspensionView } from './workspace-suspension.ts';
 
 /**
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
@@ -423,7 +424,16 @@ export async function handleConsoleApi(
 
     return json(
       200,
-      { account, instanceAdmin, workspaces: memberships.map(({ workspace, role }) => ({ ...workspace, role })) },
+      {
+        account,
+        instanceAdmin,
+        // FRU-282: each workspace says whether it is suspended, since when and why, for the banner.
+        workspaces: memberships.map(({ workspace, role, suspension }) => ({
+          ...workspace,
+          role,
+          ...suspensionView(suspension),
+        })),
+      },
       headers,
     );
   }
@@ -472,6 +482,17 @@ export async function handleConsoleApi(
   const forbidden = (): Response => json(403, { error: 'forbidden', role }, headers);
   // A member who calls the console in their workspace is seen there today (FRU-249).
   await seen(context.accounts, workspaceId as string, account.id);
+
+  // The one guard of the writes of a suspended workspace (FRU-282), before every route below.
+  if (!SAFE_METHODS.has(request.method)) {
+    const refused = await refusedWhileSuspended(
+      context.accounts,
+      workspaceId as string,
+      { method: request.method, rest },
+      headers,
+    );
+    if (refused !== undefined) return refused;
+  }
 
   // « Last seen » of the members (FRU-249): the day of each, for an owner or an admin only.
   if (rest === '/members/seen') {

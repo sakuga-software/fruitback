@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
@@ -16,6 +16,7 @@ import {
   DEFAULT_CONNECTOR_SETTINGS,
   type SharedSite,
   type Site,
+  type WorkspaceSuspension,
   clientOf,
   normalizeEmail,
 } from './accounts.ts';
@@ -33,6 +34,7 @@ import {
   site_destinations,
   site_shares,
   sites,
+  workspace_suspensions,
 } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
@@ -77,6 +79,13 @@ import { StoreError } from './store.ts';
  */
 
 /** A site beside one of its destinations. With a `LEFT JOIN`, a site that has none is one row. */
+/** A row of `workspace_suspensions`, or of a join that found none. */
+function suspensionOf(row: { since: number | null; reason: string | null }): WorkspaceSuspension | undefined {
+  if (row.since === null) return undefined;
+
+  return { since: row.since, ...(row.reason === null || row.reason === '' ? {} : { reason: row.reason }) };
+}
+
 const SITE_WITH_DESTINATION = {
   id: sites.id,
   workspace_id: sites.workspace_id,
@@ -308,9 +317,16 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     async memberships(person) {
       const rows = await run((db) =>
         db
-          .select({ id: organization.id, name: organization.name, role: member.role })
+          .select({
+            id: organization.id,
+            name: organization.name,
+            role: member.role,
+            since: workspace_suspensions.since,
+            reason: workspace_suspensions.reason,
+          })
           .from(member)
           .innerJoin(organization, eq(organization.id, member.organizationId))
+          .leftJoin(workspace_suspensions, eq(workspace_suspensions.workspace_id, organization.id))
           .where(eq(member.userId, person))
           .orderBy(member.createdAt, organization.id),
       );
@@ -318,9 +334,22 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return rows.flatMap((row) => {
         const workspace = workspaceOf(row);
         const role = roleOf(row.role);
+        const suspension = suspensionOf(row);
+        if (workspace === undefined || role === undefined) return [];
 
-        return workspace === undefined || role === undefined ? [] : [{ workspace, role }];
+        return [{ workspace, role, ...(suspension === undefined ? {} : { suspension }) }];
       });
+    },
+
+    async suspension(workspace) {
+      const [row] = await run((db) =>
+        db
+          .select({ since: workspace_suspensions.since, reason: workspace_suspensions.reason })
+          .from(workspace_suspensions)
+          .where(eq(workspace_suspensions.workspace_id, workspace)),
+      );
+
+      return row === undefined ? undefined : suspensionOf(row);
     },
 
     async owners() {
@@ -727,7 +756,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             attempts: deliveries.attempts,
           })
           .from(deliveries)
-          .where(and(isNotNull(deliveries.next_at), lte(deliveries.next_at, now)))
+          .where(
+            and(
+              isNotNull(deliveries.next_at),
+              lte(deliveries.next_at, now),
+              // A delivery of a suspended workspace waits, and its count stays (FRU-282).
+              notExists(
+                db
+                  .select({ id: connectors.id })
+                  .from(connectors)
+                  .innerJoin(workspace_suspensions, eq(workspace_suspensions.workspace_id, connectors.workspace_id))
+                  .where(eq(connectors.id, deliveries.connector_id)),
+              ),
+            ),
+          )
           .orderBy(deliveries.next_at, deliveries.created_at)
           .limit(limit),
       );
@@ -946,6 +988,15 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .select(SITE_WITH_DESTINATION)
           .from(sites)
           .leftJoin(site_destinations, eq(site_destinations.site_id, sites.id))
+          // A site of a suspended workspace is no client (FRU-282): it answers as a site that does not exist.
+          .where(
+            notExists(
+              db
+                .select({ id: workspace_suspensions.workspace_id })
+                .from(workspace_suspensions)
+                .where(eq(workspace_suspensions.workspace_id, sites.workspace_id)),
+            ),
+          )
           .orderBy(site_destinations.position),
       );
       const map: ClientMap = {};

@@ -21,6 +21,7 @@ import { type Kv, KvError } from './kv.ts';
 import { MailError, type Mailer, invitationMessage } from './mail.ts';
 import type { SessionStore } from './session.ts';
 import { forgetSeenOf } from './last-seen.ts';
+import { refusedWhileSuspended } from './workspace-suspension.ts';
 
 /**
  * The routes of the organization plugin of better-auth, under `/console/auth/organization/` (FRU-149).
@@ -64,6 +65,7 @@ export type OrganizationRouteContext = Pick<AuthRouteContext, 'consoleUrl' | 'cl
     | 'shareOnAcceptance'
     | 'sharedIn'
     | 'unshare'
+    | 'suspension'
   >;
   sessions: Pick<SessionStore, 'endSessionsOf'>;
   /**
@@ -180,6 +182,20 @@ async function inviterStillInvites(adapter: InvitationAdapter, invitationId: str
   const role = roleOf(member?.role);
 
   return role !== undefined && can(role, 'manage-members');
+}
+
+/** Whether an invitation was sent to the address of `person` (FRU-282). */
+async function isInvitedPerson(
+  context: Pick<OrganizationRouteContext, 'accounts'>,
+  adapter: InvitationAdapter,
+  person: string,
+  invitationId: string,
+): Promise<boolean> {
+  const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
+  if (invitation === null) return false;
+  const account = await context.accounts.account(person);
+
+  return account !== undefined && String(invitation.email).toLowerCase() === account.email.toLowerCase();
 }
 
 /**
@@ -318,14 +334,13 @@ export async function handleOrganizationRoutes(
   if (!read.ok) return json(400, { error: 'invalid-request', field: read.field }, headers);
   // A route of the person names no workspace: better-auth reads the address of the session.
   const workspace = rule.scope === 'person' ? undefined : String(read.input.organizationId);
-  const call: Call = { request, path, rule, input: read.input, workspace, auth, mine };
-
   // A call that changes a workspace runs alone in it (FRU-209): see `oneAtATime`. An acceptance
   // names no workspace, and changes the one of its invitation: two « Join » of one guest at the same
   // moment wrote and removed the same shares (FRU-250, raised by the heavy review of #334).
   const changed =
     workspace ??
     (path === '/organization/accept-invitation' ? await workspaceOfInvitation(auth, read.input) : undefined);
+  const call: Call = { request, path, rule, input: read.input, workspace, changed, auth, mine };
 
   return changed !== undefined && rule.method === 'POST'
     ? oneAtATime(changed, () => answerOrganizationCall(call, context, headers))
@@ -353,6 +368,8 @@ type Call = {
   rule: OrganizationRule;
   input: Record<string, OrganizationValue>;
   workspace: string | undefined;
+  /** The workspace that a `POST` changes: the one it names, or the one of the invitation it accepts. */
+  changed: string | undefined;
   auth: Auth;
   mine: { userId: string };
 };
@@ -462,6 +479,20 @@ async function answerOrganizationCall(
       // whose invitation is past its end: the id it answers says which (heavy review of #334).
       waiting = waits === null ? undefined : String((waits as { id?: unknown }).id);
     }
+  }
+
+  // The guard of the writes of a suspended workspace (FRU-282), after the role is read. An acceptance
+  // names no workspace, so no role is read: the guard tells the suspension to the person of the
+  // invitation only. Anybody else who holds its id gets the refusal of better-auth, as before.
+  const accepting = path === '/organization/accept-invitation';
+  if (
+    rule.method === 'POST' &&
+    call.changed !== undefined &&
+    (!accepting || (await isInvitedPerson(context, adapter, mine.userId, String(read.input.invitationId))))
+  ) {
+    const asker = accepting ? 'invited' : 'member';
+    const refused = await refusedWhileSuspended(context.accounts, call.changed, { organization: path }, headers, asker);
+    if (refused !== undefined) return refused;
   }
 
   if (
