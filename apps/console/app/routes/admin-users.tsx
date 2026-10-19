@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { type AdminUser, adminUsers, setInstanceAdmin } from '../api';
+import { type AdminQuery, type AdminUser, adminUsers, setInstanceAdmin } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -58,7 +58,8 @@ const PROVIDERS: Readonly<Record<string, string>> = {
   google: 'Google',
 };
 
-type Listed = { users: AdminUser[]; total: number };
+/** A list of the people, with the search and the filter that it answers. */
+type Listed = { users: AdminUser[]; total: number; asked: AdminQuery };
 
 type Status = 'admin' | 'active' | 'invited';
 
@@ -115,14 +116,16 @@ export default function AdminUsers() {
   const ask = useCallback(async (): Promise<Listed | 'failed'> => {
     const answer = await adminUsers({ q, show });
 
-    return answer.ok && Array.isArray(answer.data?.users) ? answer.data : 'failed';
+    return answer.ok && Array.isArray(answer.data?.users) ? { ...answer.data, asked: { q, show } } : 'failed';
   }, [q, show]);
   const { shown, again, patch } = useRead(ask);
   const { me } = useAdmin();
 
   const rows = typeof shown === 'object' ? shown.users : [];
   // Only a list with no search, of everybody or of the administrators, and not cut, holds them all.
-  const whole = typeof shown === 'object' && q === '' && show !== 'alone' && shown.total === rows.length;
+  // The rows of a read before stay while the next read is on its way: the count reads their question.
+  const whole =
+    typeof shown === 'object' && shown.asked.q === '' && shown.asked.show !== 'alone' && shown.total === rows.length;
   const admins = whole ? rows.filter((user) => user.instanceAdmin).length : undefined;
   const chosen = rows.find((user) => user.id === open);
   const close = () => {

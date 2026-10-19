@@ -981,6 +981,34 @@ test('Users: a list cut at its page does not guess the last admin', async ({ pag
   await expect(panel(page)).not.toContainText(LAST_ADMIN);
 });
 
+test('Users: while a list is read again, the last admin is counted on the question of the rows shown (FRU-280)', async ({
+  page,
+}) => {
+  // Two administrators: Nadia is never the last one.
+  const users = USERS.map((user) => (user.id === 'a3' ? { ...user, instanceAdmin: true } : user));
+  await stub(page, { users });
+  await visit(page, '/admin/users?q=nadia&open=a2', 'Users');
+  await expect(rows(page)).toHaveCount(1);
+  await expect(adminSwitch(page)).toBeEnabled();
+
+  // The next list waits: the rows of the search stay, under an address with no search.
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/console/admin/users', async (route) => {
+    await gate;
+    await route.fallback();
+  });
+  await search(page, 'Search people').fill('');
+  await expect(page).not.toHaveURL(/q=/);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(adminSwitch(page)).toBeEnabled();
+  await expect(panel(page)).not.toContainText(LAST_ADMIN);
+
+  release();
+  await expect(rows(page)).toHaveCount(users.length);
+  await expect(adminSwitch(page)).toBeEnabled();
+});
+
 test('Users: each refusal of the worker is said, and the switch shows the role it has (FRU-280)', async ({ page }) => {
   const posted: Posted[] = [];
   const refusing: { status: number; error: string } = { status: 409, error: 'last-admin' };
