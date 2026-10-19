@@ -78,6 +78,7 @@ export default function WorkspaceFrame() {
         sections={sections}
         current={current?.path}
         onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`)}
+        admin={context.me.instanceAdmin === true}
       />
       <div className="min-w-0 flex-[999_1_640px]">
         <main className={`box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.width ?? ''}`}>
@@ -96,15 +97,55 @@ type RailProps = {
   /** The `path` of the section on screen. */
   current: string | undefined;
   onWorkspace: (id: string) => void;
+  /** The person administers the instance (FRU-262): the rail leads to the administration. */
+  admin?: boolean;
 };
 
+/** An entry of the rail: where it leads, its words, and whether its screen is the one shown. */
+export type RailEntry = { to: string; label: string; current: boolean };
+
+/** The classes of the box at the top of the rail: what the rail is of. */
+export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-white';
+
 /**
- * The rail: the workspace, its sections, and the way to the documentation.
+ * The dark rail of the mockup, for a workspace or for the instance (FRU-262): what it is of, its
+ * entries, what more the frame puts under them, and a foot with the way to the documentation.
  *
- * `kit-rail` gives every control in it the focus ring of the rail. The sections are links, and the
- * one on screen has `aria-current="page"`.
+ * `kit-rail` gives every control in it the focus ring of the rail.
  */
-export function Rail({ workspace, workspaces, sections, current, onWorkspace }: RailProps) {
+export function RailFrame({
+  head,
+  children,
+  foot,
+}: {
+  head: ReactNode;
+  children: ReactNode;
+  foot: { href: string; label: string };
+}) {
+  return (
+    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col gap-[20px] bg-rail px-[12px] py-[16px] text-white">
+      {head}
+      {children}
+      <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
+        <a
+          href={foot.href}
+          target="_blank"
+          rel="noreferrer"
+          className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
+        >
+          {foot.label}
+        </a>
+        <Logo on="rail" />
+      </div>
+    </aside>
+  );
+}
+
+/**
+ * The rail of a workspace: the workspace, its sections, and the way to the documentation. The
+ * sections are links, and the one on screen has `aria-current="page"`.
+ */
+export function Rail({ workspace, workspaces, sections, current, onWorkspace, admin = false }: RailProps) {
   useLocale();
   const name = (
     <>
@@ -120,47 +161,46 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace }: 
       </span>
     </>
   );
-  const box = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-white';
+  const head =
+    workspaces.length > 1 ? (
+      <Menu
+        triggerClassName={`${RAIL_HEAD} hover:bg-rail-active`}
+        chosen={workspace.id}
+        onAction={(chosen) => {
+          if (chosen !== workspace.id) onWorkspace(chosen);
+        }}
+        items={workspaces.map((each) => ({ id: each.id, label: each.name, detail: t(ROLE_WORDS[each.role]) }))}
+      >
+        {name}
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none text-rail-muted">
+          <path
+            d="M8 10l4-4 4 4M8 14l4 4 4-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </Menu>
+    ) : (
+      <div className={RAIL_HEAD}>{name}</div>
+    );
 
   return (
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col gap-[20px] bg-rail px-[12px] py-[16px] text-white">
-      {workspaces.length > 1 ? (
-        <Menu
-          triggerClassName={`${box} hover:bg-rail-active`}
-          chosen={workspace.id}
-          onAction={(chosen) => {
-            if (chosen !== workspace.id) onWorkspace(chosen);
-          }}
-          items={workspaces.map((each) => ({ id: each.id, label: each.name, detail: t(ROLE_WORDS[each.role]) }))}
-        >
-          {name}
-          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none text-rail-muted">
-            <path
-              d="M8 10l4-4 4 4M8 14l4 4 4-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </Menu>
-      ) : (
-        <div className={box}>{name}</div>
-      )}
-      <Sections workspace={workspace.id} sections={sections} current={current} />
-      <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
-        <a
-          href="https://fruitback.com"
-          target="_blank"
-          rel="noreferrer"
-          className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
-        >
-          {t('Help and docs')}
-        </a>
-        <Logo on="rail" />
-      </div>
-    </aside>
+    <RailFrame head={head} foot={{ href: 'https://fruitback.com', label: t('Help and docs') }}>
+      <RailNav
+        label={t('Workspace')}
+        entries={sections.map((section) => ({
+          to: `/w/${workspace.id}/${section.path}`,
+          label: t(section.label),
+          current: section.path === current,
+        }))}
+      />
+      {admin ? (
+        <RailNav label={t('Instance')} entries={[{ to: '/admin', label: t('Administration'), current: false }]} />
+      ) : null}
+    </RailFrame>
   );
 }
 
@@ -208,7 +248,7 @@ function reveal(link: HTMLElement): void {
 }
 
 /**
- * The sections of the rail. At 900 px and under they are one row, which scrolls in the rail when it
+ * The entries of the rail. At 900 px and under they are one row, which scrolls in the rail when it
  * is wider than the screen: the page never scrolls sideways (the mockup does, at 390 px). An edge of
  * the row that hides a section fades. The section on screen, and the section that takes focus, are
  * scrolled into view, clear of the fade.
@@ -216,32 +256,32 @@ function reveal(link: HTMLElement): void {
  * The row scrolls, so it clips: its padding leaves room for the focus ring of a section, and its
  * negative margin gives the padding back, so a section stays where the mockup draws it.
  */
-function Sections({ workspace, sections, current }: Pick<RailProps, 'sections' | 'current'> & { workspace: string }) {
-  useLocale();
+export function RailNav({ label, entries }: { label: string; entries: readonly RailEntry[] }) {
   const row = useRef<HTMLElement>(null);
   const more = useMore(row);
+  const shown = entries.find((entry) => entry.current)?.to;
   useEffect(() => {
     const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
     if (link !== null && link !== undefined) reveal(link);
-  }, [current]);
+  }, [shown]);
 
   return (
     <nav
       ref={row}
-      aria-label={t('Workspace')}
+      aria-label={label}
       // Measured in Chromium: focus alone does not scroll the row to a section that is half hidden.
       onFocus={(event) => reveal(event.target)}
       data-more-start={more.start}
       data-more-end={more.end}
       className="flex min-w-0 flex-col gap-[2px] [--fade-end:0px] [--fade-start:0px] [scrollbar-width:none] max-[900px]:-m-[4px] max-[900px]:flex-row max-[900px]:overflow-x-auto max-[900px]:p-[4px] max-[900px]:[mask-image:linear-gradient(to_right,transparent,black_var(--fade-start),black_calc(100%_-_var(--fade-end)),transparent)] max-[900px]:data-[more-end=true]:[--fade-end:40px] max-[900px]:data-[more-start=true]:[--fade-start:40px]"
     >
-      {sections.map((section) => {
-        const active = section.path === current;
+      {entries.map((entry) => {
+        const active = entry.current;
 
         return (
           <Link
-            key={section.path}
-            to={`/w/${workspace}/${section.path}`}
+            key={entry.to}
+            to={entry.to}
             {...(active ? { 'aria-current': 'page' as const } : {})}
             className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-box text-body leading-auto whitespace-nowrap ${
               active
@@ -250,7 +290,7 @@ function Sections({ workspace, sections, current }: Pick<RailProps, 'sections' |
             }`}
           >
             {active ? <span aria-hidden="true" className="kit-drop bg-rail-accent" data-size="9" /> : null}
-            {t(section.label)}
+            {entry.label}
           </Link>
         );
       })}

@@ -23,3 +23,21 @@ export function apiFrom(written: unknown, built: string | undefined): string {
 
   return chosen.replace(/\/+$/, '');
 }
+
+/** The host of the worker of Fruitback Cloud. */
+export const CLOUD_API_HOST = 'api.fruitback.com';
+
+/**
+ * The host of the worker at `api`, and whether it is Fruitback Cloud (FRU-262). The build holds no
+ * flag for the Cloud, and the console knows its worker before any read: so the host decides.
+ */
+export function instanceOf(api: string): { host: string; cloud: boolean } {
+  let host: string;
+  try {
+    host = new URL(api).host;
+  } catch {
+    host = api;
+  }
+
+  return { host, cloud: host === CLOUD_API_HOST };
+}

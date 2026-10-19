@@ -643,3 +643,57 @@ export function setPlaces(base: string, site: Site, places: readonly Destination
     })),
   });
 }
+
+/** A way to sign in on the instance (FRU-261): whether it is on, and the variables that turn it on. */
+export type InstanceSignIn = { on: boolean; variables: string[] };
+
+/** A connector that needs somebody, with its workspace (FRU-261). */
+export type AttentionConnector = {
+  id: string;
+  kind: string;
+  label: string;
+  attention?: ConnectorAttention;
+  workspace: { id: string; name: string };
+};
+
+/**
+ * What the worker says of the instance, to its administrator (FRU-261): its configuration and its
+ * health, with no secret. `GET /console/admin/instance` answers it; any other account gets `404`.
+ */
+export type InstanceFacts = {
+  startedAt: string;
+  store: string;
+  database: { kind: string; schema?: string | null };
+  mail: { provider: string | null; sender: string | null; variables: string[]; lastSentAt: string | null };
+  signIn: { email: InstanceSignIn; github: InstanceSignIn; google: InstanceSignIn };
+  publicUrl: { value: string | null; variable: string };
+  consoleUrl: { value: string | null; variable: string };
+  signUp: { policy: 'invited' | 'anyone'; variable: string };
+  counts: { workspaces: number; accounts: number; admins: number };
+  attention: { count: number; connectors: AttentionConnector[] };
+};
+
+/** A workspace of the instance, as its administrator lists it (FRU-261). */
+export type InstanceWorkspace = {
+  id: string;
+  name: string;
+  createdAt: string;
+  owners: { id: string; name?: string; email: string }[];
+  members: number;
+  sites: number;
+};
+
+/** The facts of the instance. Only its administrator reads them. */
+export function instanceFacts(): Promise<Answer<InstanceFacts>> {
+  return call<InstanceFacts>('GET', '/console/admin/instance');
+}
+
+/**
+ * The workspaces of the instance, at most a page of the worker; `total` says how many there are.
+ *
+ * WARNING: the worker writes a trace of this read in each workspace of the answer that the
+ * administrator is not a member of. The owners of the workspace read it.
+ */
+export function instanceWorkspaces(): Promise<Answer<{ workspaces: InstanceWorkspace[]; total: number }>> {
+  return call('GET', '/console/admin/workspaces');
+}

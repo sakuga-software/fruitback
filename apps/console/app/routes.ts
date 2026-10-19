@@ -29,5 +29,6 @@ export default [
     route('w/:workspace/members', 'routes/members.tsx'),
     route('w/:workspace/account', 'routes/account.tsx'),
   ]),
+  layout('routes/admin.tsx', [route('admin', 'routes/admin-instance.tsx')]),
   ...kit,
 ] satisfies RouteConfig;

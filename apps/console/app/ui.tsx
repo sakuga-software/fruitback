@@ -423,6 +423,49 @@ export function Pick<Value extends string>({ label, value, onChange, options }: 
   );
 }
 
+type RadiosProps<Value extends string> = {
+  label: string;
+  value: Value;
+  onChange?: (value: Value) => void;
+  options: readonly { value: Value; label: string }[];
+  /** The choice is made elsewhere: the radios show it, and take no press. */
+  disabled?: boolean;
+  /** Under the radios, and the description of the group for a screen reader. */
+  hint?: string;
+};
+
+/** One choice among a few, as a plain list of radios: « Who can make an account ». */
+export function Radios<Value extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  disabled = false,
+  hint,
+}: RadiosProps<Value>) {
+  return (
+    <RadioGroup
+      value={value}
+      isDisabled={disabled}
+      onChange={(chosen) => onChange?.(chosen as Value)}
+      className="kit-radios"
+    >
+      <Label>{label}</Label>
+      {options.map((option) => (
+        <Radio key={option.value} value={option.value} className="kit-radios__item">
+          <Radio.Content>
+            <Radio.Control>
+              <Radio.Indicator />
+            </Radio.Control>
+            <Label>{option.label}</Label>
+          </Radio.Content>
+        </Radio>
+      ))}
+      {hint === undefined ? null : <Description>{hint}</Description>}
+    </RadioGroup>
+  );
+}
+
 type ToggleProps = {
   label: string;
   value: boolean;
