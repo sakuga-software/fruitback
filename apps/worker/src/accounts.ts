@@ -544,3 +544,18 @@ export function normalizeEmail(value: string): string | undefined {
 
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254 ? email : undefined;
 }
+
+/** The longest name of a workspace, in characters. */
+const MAX_NAME = 80;
+
+/**
+ * The name of a workspace as a person typed it: one line, its spaces made one, 80 characters at
+ * most. `undefined` for a value that is not one. The console API and the administrator of the
+ * instance (FRU-283) read a name with this.
+ */
+export function workspaceName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const name = value.replace(/\s+/g, ' ').trim();
+
+  return name === '' || name.length > MAX_NAME ? undefined : name;
+}

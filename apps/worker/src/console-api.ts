@@ -1,5 +1,11 @@
 import { handleNotes } from './console-notes.ts';
-import { type InstanceAdminReads, type InstanceFacts, handleInstanceAdmin, isAdminPath } from './instance-admin.ts';
+import {
+  type InstanceAdminContext,
+  type InstanceAdminReads,
+  type InstanceFacts,
+  handleInstanceAdmin,
+  isAdminPath,
+} from './instance-admin.ts';
 import { type NoteIndex, noNotes } from './notes-index.ts';
 import {
   type Account,
@@ -24,6 +30,7 @@ import {
   readLocaleTag,
   readPersonName,
   readableSites,
+  workspaceName,
 } from './accounts.ts';
 import { seen } from './last-seen.ts';
 import {
@@ -90,7 +97,12 @@ export type ConsoleApiContext = {
    */
   renameWorkspace?: (request: Request, workspace: string, name: string) => Promise<Workspace>;
   /** What the administrator of the instance reads (FRU-261). Absent: every route of the administrator answers `404`. */
-  instance?: { reads?: InstanceAdminReads; facts: InstanceFacts };
+  instance?: {
+    reads?: InstanceAdminReads;
+    facts: InstanceFacts;
+    /** What the writes of an administrator in a workspace use beside the database (FRU-283). */
+    writes?: Pick<InstanceAdminContext, 'mailInvitation' | 'oneAtATime'>;
+  };
 };
 
 /** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
@@ -143,16 +155,6 @@ async function readBody(request: Request): Promise<Record<string, unknown> | und
   } catch {
     return undefined;
   }
-}
-
-/** A workspace name is a label a person reads: one line, and short. */
-const MAX_NAME = 80;
-
-function workspaceName(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const name = value.replace(/\s+/g, ' ').trim();
-
-  return name === '' || name.length > MAX_NAME ? undefined : name;
 }
 
 function visibilityOf(value: unknown): Visibility | undefined {
@@ -402,6 +404,7 @@ export async function handleConsoleApi(
         },
         ...(context.instance?.reads === undefined ? {} : { reads: context.instance.reads }),
         ...(context.instance === undefined ? {} : { facts: context.instance.facts }),
+        ...context.instance?.writes,
         ...(context.now === undefined ? {} : { now: context.now }),
       },
       headers,

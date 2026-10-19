@@ -2761,10 +2761,11 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Six reads, and four writes** (FRU-280, FRU-281, FRU-282, FRU-284): `instance`, `workspaces` (`q`, `show` of `all`,
+- **Six reads, and nine writes** (FRU-280 to FRU-284): `instance`, `workspaces` (`q`, `show` of `all`,
   `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
   `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator, the
-  suspension of an account, the suspension of a workspace and its deletion, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+  suspension of an account, the suspension of a workspace, its deletion and the five writes in a
+  workspace, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
   workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
@@ -2815,7 +2816,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
 ### What it does not do
 
 - No write but the role (FRU-280), the suspension of an account (FRU-281), the suspension of a
-  workspace (FRU-282) and its deletion (FRU-284). The suspension of an account writes `banned`, and
+  workspace (FRU-282), its deletion (FRU-284) and the writes in a workspace (FRU-283). The suspension of an account writes `banned`, and
   empties `banReason` and `banExpires`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
@@ -3120,6 +3121,38 @@ connectors, keptNotes } }`. A `name` that is not text, or is blank, answers `400
   for another word. The page Instance asks `kind=workspace-deleted` at each visit: those rows name no
   workspace that exists, so the visit leaves no trace with an owner, as Mathieu asked of that page on
   2026-10-19.
+
+## An administrator writes in a workspace (FRU-283)
+
+Decision 2 of 2026-10-19: « Directes, tracées ».
+
+### The rules, in short
+
+- **Five `POST` routes in `ADMIN_WRITE_ROUTES`**, each read by `writeInWorkspace` of
+  `instance-admin.ts`: the role of a member, a member added, the owner, an invitation, a new
+  workspace. A person is named by the address of their account (`normalizeEmail`), not by an id: the
+  console types an address. The new workspace is `POST /console/admin/new-workspace`, because
+  `POST /console/admin/workspaces` would share the path of the list.
+- **The rules of the routes of the members, not new ones**: `GIVEN_ROLES` for a role (`guest` is
+  made by an invitation that names sites, and an administrator does not make one), `admin` or
+  `member` for an invitation, `workspaceName` (moved to `accounts.ts`) for a name, a workspace that
+  keeps an owner, the invitations of a person whose role no longer invites cancelled, the sites of a
+  guest gone with the role of a guest.
+- **One transaction for each write** (`inWorkspace` of `instance-admin-postgres.ts`): the lock of the
+  role, the workspace `FOR UPDATE`, the caller still an administrator, the workspace not suspended,
+  then the rule, the write and the action. The route runs it in `oneAtATime` of
+  `auth-organization.ts`, so a call of the plugin on the same workspace in this process waits.
+- **The owner.** The account becomes the owner; every other owner becomes an admin. The ticket says
+  « changer le propriétaire », and removing nobody is the choice that can be undone. A suspended
+  account (FRU-281) is refused: it could not open the workspace it owns.
+- **The invitation** is the row that the plugin writes, with the administrator as `inviterId`.
+  `inviterStillInvites` takes it while that account is an administrator (`role` is `admin`, not
+  banned), and refuses it after. An address that has an account is refused with `has-account`: it is
+  added, not invited. Its message is `mailAdminInvitation` of `auth-organization.ts`, under the
+  windows of `mayMail`, after the commit; `mailed` is kept on the row as for a member.
+- **The trace** is one row of `admin_actions` for each change, with `workspace_id`, the person and
+  `{ role }` in `detail` (and `previous` for the owner). The owners read it in `actions` of
+  `/admin-reads`, with `role`.
 
 ## The notes of a site that goes (FRU-194)
 

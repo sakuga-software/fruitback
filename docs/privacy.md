@@ -291,6 +291,14 @@ what it writes each time.
   administrator, the moment, the id and the **name** of the workspace, and how many sites, members,
   invitations, connectors and kept notes went. The row stays as long as the database, and the
   administrators of the instance read it; no owner does, as the workspace is gone.
+- **An administrator of the instance writes in any workspace** (FRU-283): the role of a member, a
+  member added by the address of their account, a new owner (the owners of before become admins),
+  an invitation of an address that has no account, and a new workspace for an account. Each write
+  leaves one row in `admin_actions`: the administrator, the moment, the workspace, the address of the
+  person and the role given, and for a new owner the addresses of the owners of before. **The owners
+  of the workspace read these rows** beside the reads. An invitation by an administrator is an
+  invitation like any other: its address, its role, its end, and its message when the instance sends
+  mail. It names the administrator as the one who invites.
 
 ### What stays in the reporter's browser
 

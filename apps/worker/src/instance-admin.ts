@@ -1,5 +1,14 @@
 import type { SeedStage } from '@fruitback/shared';
-import type { Account, ConnectorAttention, ConnectorKind, Role, Visibility, WorkspaceSuspension } from './accounts.ts';
+import {
+  type Account,
+  type ConnectorAttention,
+  type ConnectorKind,
+  type Role,
+  type Visibility,
+  type WorkspaceSuspension,
+  normalizeEmail,
+  workspaceName,
+} from './accounts.ts';
 import { type SuspensionFields, suspensionView } from './workspace-suspension.ts';
 import { cursorOf, noteIdOf, pageOf, queryOf as noteQueryOf } from './console-notes.ts';
 import type { WorkerConfig } from './env.ts';
@@ -51,6 +60,11 @@ import type { SignUp } from './sign-up.ts';
  *   `{ name }`, deletes the workspace by the path of its owner, when `name` is its name. It is at once,
  *   and nothing undoes it. Its action keeps the id and the name of the workspace in `detail`, so it
  *   stays readable after the workspace goes.
+ * - **Writes in a workspace** (FRU-283, « Directes, tracées »): the role of a member, a member added,
+ *   the owner, an invitation, a new workspace for an account. Each is written at once, in one
+ *   transaction under the lock of the role, and leaves an action that the owners of the workspace
+ *   read. The rules of the routes of the members hold: a workspace keeps an owner, a role is one of
+ *   `GIVEN_ROLES`, an invitation one of `admin` and `member`, and a suspended workspace refuses them.
  */
 
 /** Where the routes of the administrator of the instance are. */
@@ -78,7 +92,17 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
 ];
 
 /** The writes that an administrator does (FRU-280, FRU-281, FRU-282, FRU-284). */
-export const ADMIN_WRITES = ['instance-admin', 'suspension', 'workspace-suspension', 'workspace-deletion'] as const;
+export const ADMIN_WRITES = [
+  'instance-admin',
+  'suspension',
+  'workspace-suspension',
+  'workspace-deletion',
+  'member-role',
+  'member-add',
+  'owner',
+  'invitation',
+  'new-workspace',
+] as const;
 export type AdminWrite = (typeof ADMIN_WRITES)[number];
 
 /**
@@ -106,6 +130,28 @@ export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; 
     pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/deletion$/,
     example: '/console/admin/workspaces/ws_00000000000000000000/deletion',
   },
+  {
+    write: 'member-role',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/members\/([A-Za-z0-9_-]{1,80})\/role$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/members/acc_00000000000000000000/role',
+  },
+  {
+    write: 'member-add',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/members$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/members',
+  },
+  {
+    write: 'owner',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/owner$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/owner',
+  },
+  {
+    write: 'invitation',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/invitations$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/invitations',
+  },
+  // Not `POST /console/admin/workspaces`: that path is the list, which a `GET` reads.
+  { write: 'new-workspace', pattern: /^\/console\/admin\/new-workspace$/, example: '/console/admin/new-workspace' },
 ];
 
 /** The kinds of action that `admin_actions` keeps. */
@@ -117,6 +163,11 @@ export const ADMIN_ACTIONS = [
   'workspace-suspended',
   'workspace-restored',
   'workspace-deleted',
+  'member-role-changed',
+  'member-added',
+  'owner-changed',
+  'member-invited',
+  'workspace-created',
 ] as const;
 export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
 
@@ -186,6 +237,54 @@ export type WorkspaceGone = {
 export type WorkspaceDeletion =
   | { ok: true; workspace: WorkspaceName; gone: WorkspaceGone; revoke: string[] }
   | { ok: false; refused: 'unknown-workspace' | 'not-admin' | 'name-mismatch' };
+
+/** The roles an administrator gives a member (FRU-283): the ones of `update-member-role`, never `guest`. */
+export const ADMIN_GIVEN_ROLES = ['owner', 'admin', 'member'] as const;
+export type AdminGivenRole = (typeof ADMIN_GIVEN_ROLES)[number];
+
+/**
+ * The roles of an invitation by an administrator (FRU-283): `admin` or `member`. Not `guest`, which
+ * names its sites, and not `owner`, which no invitation gives.
+ */
+export const ADMIN_INVITED_ROLES = ['admin', 'member'] as const;
+export type AdminInvitedRole = (typeof ADMIN_INVITED_ROLES)[number];
+
+/** What refuses every write of an administrator in a workspace (FRU-283). */
+type InWorkspaceRefusal = 'unknown-workspace' | 'not-admin' | 'workspace-suspended';
+
+/**
+ * What a write of an administrator in a workspace gives (FRU-283). `changed` false: the workspace
+ * was already as asked, and no action was written.
+ * - `not-a-member`: the account is not a member of the workspace;
+ * - `last-owner`: the change would leave the workspace with no owner;
+ * - `unknown-account`: no account has this address;
+ * - `already-member`: the account is a member already, so it is not added again;
+ * - `suspended-account`: the account is suspended (FRU-281), and cannot own a workspace it cannot open;
+ * - `has-account`: an account has this address, so it is added, not invited;
+ * - `already-invited`: an invitation of this address waits in the workspace.
+ */
+export type MemberRoleChange =
+  | { ok: true; changed: boolean; role: AdminGivenRole }
+  | { ok: false; refused: InWorkspaceRefusal | 'not-a-member' | 'last-owner' };
+export type MemberAddition =
+  | { ok: true; member: { id: string; email: string; role: AdminGivenRole } }
+  | { ok: false; refused: InWorkspaceRefusal | 'unknown-account' | 'already-member' };
+export type OwnerChange =
+  | { ok: true; changed: boolean; owner: { id: string; email: string }; previous: string[] }
+  | { ok: false; refused: InWorkspaceRefusal | 'unknown-account' | 'suspended-account' };
+export type AdminInvitation =
+  | {
+      ok: true;
+      invitation: { id: string; email: string; role: AdminInvitedRole; expiresAt: number };
+      workspace: WorkspaceName;
+    }
+  | { ok: false; refused: InWorkspaceRefusal | 'has-account' | 'already-invited' | 'already-member' };
+export type WorkspaceCreation =
+  | { ok: true; workspace: WorkspaceName; owner: { id: string; email: string } }
+  | { ok: false; refused: 'not-admin' | 'unknown-account' | 'suspended-account' };
+
+/** How long an invitation of an administrator waits, as one of a member (`INVITATION_SECONDS` of `auth.ts`). */
+export const ADMIN_INVITATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The longest reason of a suspension of a workspace, in characters. A longer one is refused, never cut. */
 export const SUSPENSION_REASON_LENGTH = 200;
@@ -315,6 +414,8 @@ export type TracedAction =
       at: string;
       admin: { email: string; name?: string };
       target: { email: string; name?: string };
+      /** The role that the action gave (FRU-283): a role changed, a member added, an invitation. */
+      role?: string;
     }
   | {
       action: WorkspaceActionKind;
@@ -400,6 +501,44 @@ export type InstanceAdminReads = {
     name: string,
     now: number,
   ): Promise<WorkspaceDeletion>;
+  /** Gives `account` another role in `workspace` (FRU-283). The workspace keeps an owner. */
+  setMemberRole(
+    actor: Pick<Account, 'id' | 'email'>,
+    workspace: string,
+    account: string,
+    role: AdminGivenRole,
+    now: number,
+  ): Promise<MemberRoleChange>;
+  /** Adds the account of `email` to `workspace` with `role` (FRU-283). */
+  addMember(
+    actor: Pick<Account, 'id' | 'email'>,
+    workspace: string,
+    email: string,
+    role: AdminGivenRole,
+    now: number,
+  ): Promise<MemberAddition>;
+  /**
+   * Makes the account of `email` the owner of `workspace` (FRU-283), a member already or not. Each
+   * other owner becomes an admin: they keep their access, and one owner stays.
+   */
+  setOwner(actor: Pick<Account, 'id' | 'email'>, workspace: string, email: string, now: number): Promise<OwnerChange>;
+  /** Invites an address that has no account into `workspace` (FRU-283), as an invitation of a member. */
+  invite(
+    actor: Pick<Account, 'id' | 'email'>,
+    workspace: string,
+    email: string,
+    role: AdminInvitedRole,
+    now: number,
+  ): Promise<AdminInvitation>;
+  /** Whether a message of an invitation left (FRU-269), as the route of a member keeps it. */
+  noteMailed(invitation: string, mailed: boolean): Promise<void>;
+  /** Makes a workspace whose owner is the account of `email` (FRU-283). */
+  createWorkspace(
+    actor: Pick<Account, 'id' | 'email'>,
+    name: string,
+    email: string,
+    now: number,
+  ): Promise<WorkspaceCreation>;
 };
 
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
@@ -457,6 +596,23 @@ export type InstanceAdminContext = {
     revoke: (sealed: string) => Promise<void>;
     endWorkspaceSessions: (workspace: string, now: number) => Promise<void>;
   };
+  /**
+   * Sends the message of an invitation of an administrator (FRU-283), under the windows of the
+   * invitations of a member. Answers whether it left. Absent: no message, and the console gives the
+   * link by hand, as for a member on a worker with no mail.
+   */
+  mailInvitation?: (invitation: {
+    to: string;
+    role: string;
+    workspace: WorkspaceName;
+    inviter: Pick<Account, 'id' | 'email' | 'name' | 'locale'>;
+  }) => Promise<boolean>;
+  /**
+   * One write at a time in a workspace, in this process, with the routes of the organization plugin
+   * (`oneAtATime` of `auth-organization.ts`): better-auth counts the owners, then writes, in no
+   * transaction. Absent: the write runs as it comes.
+   */
+  oneAtATime?: <T>(workspace: string, run: () => Promise<T>) => Promise<T>;
   facts?: InstanceFacts;
   now?: number;
 };
@@ -669,6 +825,130 @@ async function deleteWorkspace(
   return json(200, { workspace: deletion.workspace, gone: deletion.gone }, headers);
 }
 
+/**
+ * What a refusal of a write in a workspace answers (FRU-283). A workspace that does not exist, and a
+ * caller who is no longer an administrator, find nothing. The rest is a `409` that the console says.
+ */
+const IN_WORKSPACE_REFUSED: Readonly<Record<string, { status: number; error: string }>> = {
+  'unknown-workspace': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+  'workspace-suspended': { status: 409, error: 'workspace-suspended' },
+  'not-a-member': { status: 409, error: 'not-a-member' },
+  'last-owner': { status: 409, error: 'last-owner' },
+  'unknown-account': { status: 409, error: 'unknown-account' },
+  'already-member': { status: 409, error: 'already-member' },
+  'suspended-account': { status: 409, error: 'suspended-account' },
+  'has-account': { status: 409, error: 'has-account' },
+  'already-invited': { status: 409, error: 'already-invited' },
+};
+
+function refusedIn(refused: string, headers: Record<string, string>): Response {
+  const { status, error } = IN_WORKSPACE_REFUSED[refused] ?? { status: 409, error: refused };
+
+  return json(status, { error }, headers);
+}
+
+/** The fields of a body, or `{}` for one that is not an object. */
+async function fieldsOf(request: Request): Promise<Record<string, unknown>> {
+  const body: unknown = await request.json().catch(() => undefined);
+
+  return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+}
+
+function oneOf<T extends string>(value: unknown, among: readonly T[]): T | undefined {
+  return (among as readonly unknown[]).includes(value) ? (value as T) : undefined;
+}
+
+/**
+ * The writes of an administrator in a workspace (FRU-283): the role of a member, a member added, the
+ * owner, an invitation, a new workspace. Each body is read here; the store checks the workspace, the
+ * role of the caller and the rules of the members in one transaction, and writes the action.
+ */
+async function writeInWorkspace(
+  write: 'member-role' | 'member-add' | 'owner' | 'invitation' | 'new-workspace',
+  request: Request,
+  match: RegExpExecArray,
+  admin: Account,
+  context: InstanceAdminContext,
+  reads: InstanceAdminReads,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const fields = await fieldsOf(request);
+  const workspace = match[1] as string;
+  const serial = context.oneAtATime ?? (<T>(_: string, run: () => Promise<T>) => run());
+
+  switch (write) {
+    case 'member-role': {
+      const role = oneOf(fields.role, ADMIN_GIVEN_ROLES);
+      if (role === undefined) return json(400, { error: 'invalid-role', roles: ADMIN_GIVEN_ROLES }, headers);
+      const change = await serial(workspace, () =>
+        reads.setMemberRole(admin, workspace, match[2] as string, role, now),
+      );
+      if (!change.ok) return refusedIn(change.refused, headers);
+
+      return json(200, { member: { id: match[2], role: change.role }, changed: change.changed }, headers);
+    }
+    case 'member-add': {
+      const email = typeof fields.email === 'string' ? normalizeEmail(fields.email) : undefined;
+      if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+      const role = oneOf(fields.role, ADMIN_GIVEN_ROLES);
+      if (role === undefined) return json(400, { error: 'invalid-role', roles: ADMIN_GIVEN_ROLES }, headers);
+      const added = await serial(workspace, () => reads.addMember(admin, workspace, email, role, now));
+      if (!added.ok) return refusedIn(added.refused, headers);
+
+      return json(200, { member: added.member }, headers);
+    }
+    case 'owner': {
+      const email = typeof fields.email === 'string' ? normalizeEmail(fields.email) : undefined;
+      if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+      const change = await serial(workspace, () => reads.setOwner(admin, workspace, email, now));
+      if (!change.ok) return refusedIn(change.refused, headers);
+
+      return json(200, { owner: change.owner, previous: change.previous, changed: change.changed }, headers);
+    }
+    case 'invitation': {
+      const email = typeof fields.email === 'string' ? normalizeEmail(fields.email) : undefined;
+      if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+      const role = oneOf(fields.role, ADMIN_INVITED_ROLES);
+      if (role === undefined) return json(400, { error: 'invalid-role', roles: ADMIN_INVITED_ROLES }, headers);
+      const invited = await serial(workspace, () => reads.invite(admin, workspace, email, role, now));
+      if (!invited.ok) return refusedIn(invited.refused, headers);
+      // After the commit, as for a member: the invitation exists whether its message leaves or not,
+      // and the answer says which, so the console gives the link by hand when it did not.
+      let mailed = false;
+      if (context.mailInvitation !== undefined) {
+        mailed = await context.mailInvitation({ to: email, role, workspace: invited.workspace, inviter: admin });
+      }
+      await reads.noteMailed(invited.invitation.id, mailed);
+
+      return json(
+        200,
+        {
+          invitation: {
+            id: invited.invitation.id,
+            email,
+            role,
+            expiresAt: new Date(invited.invitation.expiresAt).toISOString(),
+            mailed,
+          },
+        },
+        headers,
+      );
+    }
+    case 'new-workspace': {
+      const name = workspaceName(fields.name);
+      if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
+      const email = typeof fields.owner === 'string' ? normalizeEmail(fields.owner) : undefined;
+      if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+      const made = await reads.createWorkspace(admin, name, email, now);
+      if (!made.ok) return refusedIn(made.refused, headers);
+
+      return json(201, { workspace: made.workspace, owner: made.owner }, headers);
+    }
+  }
+}
+
 /** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
 async function changeRole(
   request: Request,
@@ -715,7 +995,8 @@ export async function handleInstanceAdmin(
   if (write !== undefined) {
     if (reads === undefined || facts === undefined) return notFound();
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    const target = write.pattern.exec(pathname)?.[1] as string;
+    const match = write.pattern.exec(pathname) as RegExpExecArray;
+    const target = match[1] as string;
 
     switch (write.write) {
       case 'instance-admin':
@@ -730,6 +1011,12 @@ export async function handleInstanceAdmin(
         if (context.afterDeletion === undefined) return notFound();
 
         return deleteWorkspace(request, target, admin, reads, context.afterDeletion, now, headers);
+      case 'member-role':
+      case 'member-add':
+      case 'owner':
+      case 'invitation':
+      case 'new-workspace':
+        return writeInWorkspace(write.write, request, match, admin, context, reads, now, headers);
     }
   }
 

@@ -101,8 +101,9 @@ export const INVITER_WINDOW_MS = 60 * 60 * 1000;
 
 /** The adapter of better-auth, to read which workspace an invitation is of, and who made it. */
 type InvitationAdapter = {
-  findOne(input: { model: 'invitation' | 'member'; where: { field: string; value: string }[] }): Promise<{
+  findOne(input: { model: 'invitation' | 'member' | 'user'; where: { field: string; value: string }[] }): Promise<{
     organizationId?: unknown;
+    banned?: unknown;
     inviterId?: unknown;
     role?: unknown;
     status?: unknown;
@@ -180,8 +181,17 @@ async function inviterStillInvites(adapter: InvitationAdapter, invitationId: str
     ],
   });
   const role = roleOf(member?.role);
+  if (role !== undefined && can(role, 'manage-members')) return true;
+  // An administrator of the instance invites into a workspace they are not a member of (FRU-283).
+  // Their word stands while they are one: `role` is `admin`, and the account is not banned, as
+  // `IS_ADMIN` of `instance-admin-postgres.ts` reads it. An administrator removed or suspended since
+  // stands behind nothing.
+  const inviter = await adapter.findOne({
+    model: 'user',
+    where: [{ field: 'id', value: String(invitation.inviterId) }],
+  });
 
-  return role !== undefined && can(role, 'manage-members');
+  return inviter?.role === 'admin' && inviter.banned !== true;
 }
 
 /** Whether an invitation was sent to the address of `person` (FRU-282). */
@@ -388,7 +398,7 @@ const waiting = new Map<string, Promise<unknown>>();
  * WARNING: this holds for one process. Two replicas of the worker do not share it, as they do not
  * share the `Kv`.
  */
-async function oneAtATime<T>(workspace: string, run: () => Promise<T>): Promise<T> {
+export async function oneAtATime<T>(workspace: string, run: () => Promise<T>): Promise<T> {
   const before = waiting.get(workspace) ?? Promise.resolve();
   const mine = before.then(run, run);
   const settled = mine.catch(() => undefined);
@@ -698,7 +708,7 @@ async function answerOrganizationCall(
  * step, and the message goes only when none came back over: of two calls at the same moment, the
  * one that goes over sends nothing. Only that call, in a race, spends a count for no message.
  */
-async function mayMail(kv: Kv, sent: { workspace: string; invited: string; inviter: string }): Promise<boolean> {
+export async function mayMail(kv: Kv, sent: { workspace: string; invited: string; inviter: string }): Promise<boolean> {
   const windows: [string, number, number][] = [
     // By mailbox: `carol+1@…` and `carol+2@…` are one, and six of them were six messages in it.
     [`fruitback:invitation:${sent.workspace}:${mailboxOf(sent.invited)}`, EMAIL_LINK_WINDOW_MS, INVITATIONS_PER_WINDOW],
@@ -742,6 +752,55 @@ async function messageOf(
     },
     locale,
   );
+}
+
+/**
+ * Sends the message of an invitation that an administrator of the instance made (FRU-283), as the
+ * route of a member sends one: under the same three windows (`mayMail`), in the language of the
+ * person invited when their address says one, else of the administrator. Answers whether it left.
+ * A count or a mail that does not answer sends nothing, and says so: the invitation waits all the
+ * same, and the console gives its link by hand.
+ */
+export async function mailAdminInvitation(
+  context: { kv: Kv; mailer: Mailer; consoleUrl: string; accounts: Pick<AccountStore, 'localeOf'> },
+  invitation: {
+    to: string;
+    role: string;
+    workspace: { id: string; name: string };
+    inviter: { id: string; email: string; name?: string; locale?: string };
+  },
+): Promise<boolean> {
+  try {
+    if (
+      !(await mayMail(context.kv, {
+        workspace: invitation.workspace.id,
+        invited: invitation.to,
+        inviter: invitation.inviter.id,
+      }))
+    )
+      return false;
+    const locale = (await context.accounts.localeOf(invitation.to)) ?? invitation.inviter.locale ?? 'en';
+    await context.mailer.send(
+      invitationMessage(
+        invitation.to,
+        {
+          inviter: invitation.inviter.name || invitation.inviter.email,
+          workspace: invitation.workspace.name,
+          role: invitation.role,
+          link: `${new URL(context.consoleUrl).origin}/invitations`,
+          days: INVITATION_DAYS,
+        },
+        locale,
+      ),
+    );
+
+    return true;
+  } catch (error) {
+    if (!(error instanceof KvError) && !(error instanceof MailError)) throw error;
+    console.error(`[fruitback] the invitation of an administrator was not mailed: ${error.message}`);
+
+    return false;
+  }
 }
 
 /**

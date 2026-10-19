@@ -21,7 +21,13 @@ import {
 import { type AccountStore, type Reach, type Role, can, readsSite } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
-import { createWorkspaceWithPlugin, handleOrganizationRoutes, renameWorkspaceWithPlugin } from './auth-organization.ts';
+import {
+  createWorkspaceWithPlugin,
+  handleOrganizationRoutes,
+  mailAdminInvitation,
+  oneAtATime,
+  renameWorkspaceWithPlugin,
+} from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
@@ -643,6 +649,20 @@ async function routed(
           instance: {
             reads: context.instanceAdmin ?? instanceAdminFor(served),
             facts: instanceFactsOf(served, { auth: auth !== undefined, email: mailer !== undefined }),
+            // The writes in a workspace (FRU-283): one at a time with the plugin, and the message of
+            // an invitation as a member's, when this worker sends mail.
+            writes: {
+              oneAtATime,
+              ...(mailer === undefined || served.consoleUrl === undefined
+                ? {}
+                : {
+                    mailInvitation: (invitation) =>
+                      mailAdminInvitation(
+                        { kv, mailer, consoleUrl: served.consoleUrl as string, accounts },
+                        invitation,
+                      ),
+                  }),
+            },
           },
           // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
           ...(auth === undefined || served.consoleUrl === undefined
