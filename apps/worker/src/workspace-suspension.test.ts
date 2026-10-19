@@ -375,6 +375,27 @@ describe('a site of a suspended workspace answers as a site that does not exist 
     assert.equal(suspended.workspace.status, 401);
   });
 
+  it('keeps the sessions of the extension: the same tokens read the sites again after the restoration', async () => {
+    const on = await anInstance();
+    const ofAccount = await accountSession(on.world, on.alice);
+    const ofAcme = on.member;
+    const sitesOf = async (token: string) =>
+      bytesOf(await on.call('GET', '/session/sites', { token, origin: EXTENSION }));
+    const before = { account: await sitesOf(ofAccount), workspace: await sitesOf(ofAcme) };
+    assert.equal(before.workspace.status, 200);
+    assert.ok(before.account.body.includes(on.site.id), 'the control: the site of Acme is listed');
+
+    await suspend(on, on.acme, 'impayé');
+    // The answer of a workspace that does not exist, which the extension reads as no answer: it ends
+    // a session only on a refusal of `/session/refresh` (`apps/extension/src/session.ts`).
+    assert.equal((await sitesOf(ofAcme)).status, 401);
+    assert.ok(!(await sitesOf(ofAccount)).body.includes(on.site.id));
+
+    await restore(on, on.acme);
+    assert.deepEqual(await sitesOf(ofAcme), before.workspace);
+    assert.deepEqual(await sitesOf(ofAccount), before.account);
+  });
+
   it('refuses POST /session/sites into a suspended workspace as into a workspace that does not exist', async () => {
     const on = await anInstance();
     const ofAccount = await accountSession(on.world, on.alice);
@@ -828,6 +849,37 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       ).workspaces.length,
       0,
     );
+  });
+
+  it('tells the suspension to the person of an invitation only, not to another account that holds its id', async () => {
+    const on = await anInstance();
+    const { database } = on.world;
+    const fay = await signInTo(on.world, 'fay@client.fr');
+    const mallory = await signInTo(on.world, 'mallory@elsewhere.dev');
+    const id = newId('inv');
+    await rowsOf(
+      database,
+      `INSERT INTO invitation (id, "organizationId", email, role, status, "expiresAt", "inviterId")
+         VALUES ('${id}', '${on.acme}', 'fay@client.fr', 'member', 'pending', now() + interval '1 day', '${on.alice.id}')`,
+    );
+    const accept = async (token: string) => {
+      const answer = await on.call('POST', `${ORG}/accept-invitation`, { token, body: { invitationId: id } });
+
+      return { status: answer.status, body: (await answer.json()) as Record<string, unknown> };
+    };
+    const members = async () => rowsOf(database, `SELECT "userId" FROM member ORDER BY id`);
+    // The control: with the workspace not suspended, better-auth refuses another account.
+    const before = await accept(mallory.token);
+    assert.notEqual(before.status, 200);
+    const membersBefore = await members();
+
+    await suspend(on, on.acme, 'impayé');
+    const ofMallory = await accept(mallory.token);
+    assert.deepEqual(ofMallory, before, 'another account reads the refusal of better-auth, not the suspension');
+    assert.notEqual(ofMallory.body.error, SUSPENDED_ERROR);
+    // The person of the invitation reads the suspension, without its reason.
+    assert.deepEqual(await accept(fay.token), { status: SUSPENDED_STATUS, body: { error: SUSPENDED_ERROR } });
+    assert.deepEqual(await members(), membersBefore);
   });
 
   it('refuses a write to a member who is not a member of the workspace with 404, not with the suspension', async () => {

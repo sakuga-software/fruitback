@@ -184,6 +184,20 @@ async function inviterStillInvites(adapter: InvitationAdapter, invitationId: str
   return role !== undefined && can(role, 'manage-members');
 }
 
+/** Whether an invitation was sent to the address of `person` (FRU-282). */
+async function isInvitedPerson(
+  context: Pick<OrganizationRouteContext, 'accounts'>,
+  adapter: InvitationAdapter,
+  person: string,
+  invitationId: string,
+): Promise<boolean> {
+  const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
+  if (invitation === null) return false;
+  const account = await context.accounts.account(person);
+
+  return account !== undefined && String(invitation.email).toLowerCase() === account.email.toLowerCase();
+}
+
 /**
  * Whether a message of this invitation left (FRU-269), kept on the invitation so that the list says it
  * after a reload. A message that left stays left: a « Resend » that sent nothing does not take it back.
@@ -467,9 +481,16 @@ async function answerOrganizationCall(
     }
   }
 
-  // The guard of the writes of a suspended workspace (FRU-282), after the role is read.
-  if (rule.method === 'POST' && call.changed !== undefined) {
-    const asker = path === '/organization/accept-invitation' ? 'invited' : 'member';
+  // The guard of the writes of a suspended workspace (FRU-282), after the role is read. An acceptance
+  // names no workspace, so no role is read: the guard tells the suspension to the person of the
+  // invitation only. Anybody else who holds its id gets the refusal of better-auth, as before.
+  const accepting = path === '/organization/accept-invitation';
+  if (
+    rule.method === 'POST' &&
+    call.changed !== undefined &&
+    (!accepting || (await isInvitedPerson(context, adapter, mine.userId, String(read.input.invitationId))))
+  ) {
+    const asker = accepting ? 'invited' : 'member';
     const refused = await refusedWhileSuspended(context.accounts, call.changed, { organization: path }, headers, asker);
     if (refused !== undefined) return refused;
   }

@@ -1846,7 +1846,11 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   workspace and the reason, in the transaction of the change, and **the owners read it beside the
   reads**. A call that changes nothing writes no row, and a suspended workspace keeps its first
   reason. The tokens of the extension stay valid: they reach no site of the workspace. A session that
-  a suspension leaves is ended by nothing, so a restoration gives it back its sites.
+  a suspension leaves is ended by nothing, so a restoration gives it back its sites:
+  test:`keeps the sessions of the extension: the same tokens read the sites again after the restoration`.
+  An acceptance of an invitation tells the suspension to the person of the invitation only, without
+  its reason. Another account that holds the id of the invitation gets the refusal of better-auth:
+  test:`tells the suspension to the person of an invitation only, not to another account that holds its id`.
 
 ### Personal data
 
