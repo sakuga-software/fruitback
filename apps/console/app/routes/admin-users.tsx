@@ -66,8 +66,8 @@ type Listed = {
   asked: AdminQuery;
   /** The accounts that the read answered as suspended. The worker does not say their role. */
   suspendedWhenRead: readonly string[];
-  /** One of them was restored since the read: it can be an admin again, and the list does not say. */
-  roleUnknown: boolean;
+  /** Those of them restored since the read: each can be an admin again, and the list does not say. */
+  restoredSinceRead: readonly string[];
 };
 
 type Status = 'admin' | 'active' | 'invited' | 'suspended';
@@ -116,6 +116,8 @@ const ROLE_PROBLEMS: Readonly<Record<string, string>> = {
 const ROLE_NOT_CHANGED = msg('The role did not change. Try again.');
 /** The worker counts a suspended admin as no admin, and a change of the role would not show. */
 const ROLE_OF_SUSPENDED = msg('A suspended account is not an instance admin. Restore access first.');
+/** The worker does not say the role of a suspended account, and a restore does not either. */
+const ROLE_AFTER_RESTORE = msg('Its role shows when you open Users again.');
 
 /** The two refusals of a suspension, which are also the reasons why « Suspend » is held. */
 const SUSPENSION_HOLDS: Holds = {
@@ -158,7 +160,7 @@ export default function AdminUsers() {
     if (!answer.ok || !Array.isArray(answer.data?.users)) return 'failed';
     const suspendedWhenRead = answer.data.users.filter((user) => user.suspended).map((user) => user.id);
 
-    return { ...answer.data, asked: { q, show }, suspendedWhenRead, roleUnknown: false };
+    return { ...answer.data, asked: { q, show }, suspendedWhenRead, restoredSinceRead: [] };
   }, [q, show]);
   const { shown, again, patch } = useRead(ask);
   const { me } = useAdmin();
@@ -171,7 +173,7 @@ export default function AdminUsers() {
     shown.asked.q === '' &&
     shown.asked.show !== 'alone' &&
     shown.total === rows.length &&
-    !shown.roleUnknown;
+    shown.restoredSinceRead.length === 0;
   const admins = whole ? rows.filter((user) => user.instanceAdmin && !user.suspended).length : undefined;
   const chosen = rows.find((user) => user.id === open);
   const close = () => {
@@ -181,15 +183,24 @@ export default function AdminUsers() {
   const changed = (id: string, change: Partial<AdminUser>) =>
     patch((listed) => ({
       ...listed,
-      roleUnknown: listed.roleUnknown || (change.suspended === false && listed.suspendedWhenRead.includes(id)),
+      restoredSinceRead:
+        change.suspended === false && listed.suspendedWhenRead.includes(id)
+          ? [...new Set([...listed.restoredSinceRead, id])]
+          : listed.restoredSinceRead,
       users: listed.users.map((user) => (user.id === id ? { ...user, ...change } : user)),
     }));
+  const roleHeld = (user: AdminUser): string | undefined => {
+    if (user.suspended) return ROLE_OF_SUSPENDED;
+    if (typeof shown === 'object' && shown.restoredSinceRead.includes(user.id)) return ROLE_AFTER_RESTORE;
+
+    return heldBy(user, me.account.id, admins, ROLE_HOLDS);
+  };
   const panel =
     chosen === undefined ? null : (
       <Panel
         key={chosen.id}
         user={chosen}
-        held={chosen.suspended ? ROLE_OF_SUSPENDED : heldBy(chosen, me.account.id, admins, ROLE_HOLDS)}
+        held={roleHeld(chosen)}
         suspensionHeld={heldBy(chosen, me.account.id, admins, SUSPENSION_HOLDS)}
         wide={wide}
         takesFocus={opening}
