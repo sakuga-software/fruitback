@@ -2839,6 +2839,7 @@ would never read the old notes. A note that nobody can read is personal data kep
 console says it before the click: « The notes that Fruitback keeps for it are deleted. » The notes of
 sites removed before this change stay: no migration deletes them, because a note copied from SQLite
 under a client that is not a site looks the same. `forget` deletes them.
+
 ## The notes of the instance, for its administrator (FRU-272)
 
 **The rules, in short:**
