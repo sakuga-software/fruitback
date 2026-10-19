@@ -500,6 +500,17 @@ test('Workspaces: the search reads once, 300 ms after the last key, and lives in
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText('Northwind');
 
+  // Back gives the filter before, and a search after it starts from that address, not an older one.
+  await page.goBack();
+  await expect(page).toHaveURL(/[?&]show=attention(&|$)/);
+  await expect(rows(page)).toHaveCount(2);
+  await search(page, 'Search workspaces').fill('acme');
+  await expect(page).toHaveURL(/[?&]q=acme(&|$)/);
+  await expect(page).toHaveURL(/[?&]show=attention(&|$)/);
+  await page.goForward();
+  await expect(page).toHaveURL(/[?&]show=empty(&|$)/);
+  await expect(search(page, 'Search workspaces')).toHaveValue('');
+
   // A search that keeps nothing says so, and gives the whole list back.
   await search(page, 'Search workspaces').fill('nothing like this');
   await expect(main(page)).toContainText('No workspace matches this search.');
