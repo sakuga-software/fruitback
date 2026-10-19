@@ -813,4 +813,22 @@ export const FRENCH: Readonly<Record<string, string>> = {
     '{name} voit cette administration et chaque workspace, et peut nommer et retirer des administrateurs. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
   '{name} no longer sees this admin, nor the workspaces they are not a member of. Every instance admin reads that you made this change.':
     '{name} ne voit plus cette administration, ni les workspaces dont cette personne n’est pas membre. Chaque administrateur de l’instance lit que vous avez fait ce changement.',
+  Suspended: 'Suspendu',
+  'A suspended account is not an instance admin. Restore access first.':
+    'Un compte suspendu n’est pas administrateur de l’instance. Rétablissez d’abord son accès.',
+  'You cannot suspend your own account. Another instance admin can.':
+    'Vous ne pouvez pas suspendre votre propre compte. Un autre administrateur de l’instance le peut.',
+  'The last instance admin cannot be suspended. Name another admin first.':
+    'Le dernier administrateur de l’instance ne peut pas être suspendu. Nommez d’abord un autre administrateur.',
+  'Nothing changed. Try again.': 'Rien n’a changé. Réessayez.',
+  '{name} cannot sign in, and every session they had ended.':
+    '{name} ne peut plus se connecter, et chacune de ses sessions a pris fin.',
+  Suspend: 'Suspendre',
+  'Restore access': 'Rétablir l’accès',
+  'Suspend {name}': 'Suspendre {name}',
+  'Restore access for {name}': 'Rétablir l’accès de {name}',
+  '{name} cannot sign in by any method, and their sessions of the console and of the extension end at once. Their notes stay. The owners of each of their workspaces see that you did it.':
+    '{name} ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+  '{name} can sign in again. Their old sessions stay ended. The owners of each of their workspaces see that you did it.':
+    '{name} peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
 };

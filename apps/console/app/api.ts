@@ -764,7 +764,10 @@ export type AdminUser = {
   name?: string;
   email: string;
   createdAt: string;
+  /** `false` for a suspended account, whatever its role: the worker counts it as no administrator. */
   instanceAdmin: boolean;
+  /** An administrator of the instance suspended the account (FRU-281). */
+  suspended: boolean;
   workspaces: { id: string; name: string; role: string }[];
   /** `email`, `github`, `google`. */
   providers: string[];
@@ -824,4 +827,17 @@ export function setInstanceAdmin(
   admin: boolean,
 ): Promise<Answer<{ user: { id: string; instanceAdmin: boolean }; changed: boolean }>> {
   return call('POST', `/console/admin/users/${encodeURIComponent(id)}/instance-admin`, { admin });
+}
+
+/**
+ * Suspends an account, or restores it (FRU-281). A suspended account signs in by no way, and its
+ * sessions of the console and of the extension end. The worker refuses with `409 self-suspension`
+ * and `409 last-admin`. `changed` is false when the account already was in the state that was asked.
+ * Each change writes a row for the owners of each workspace of the account.
+ */
+export function setSuspended(
+  id: string,
+  suspended: boolean,
+): Promise<Answer<{ user: { id: string; suspended: boolean }; changed: boolean }>> {
+  return call('POST', `/console/admin/users/${encodeURIComponent(id)}/suspension`, { suspended });
 }

@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { type AdminQuery, type AdminUser, adminUsers, setInstanceAdmin } from '../api';
+import { type AdminQuery, type AdminUser, adminUsers, setInstanceAdmin, setSuspended } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import { problemOf } from '../problems';
@@ -25,8 +25,9 @@ import { seenOn } from './members';
 /**
  * The people of the instance, as screen 19 of the mockup of 2026-10-13 draws them (FRU-263): their
  * workspaces, how they sign in, and whether they administer the instance. The switch « Instance
- * admin » of the panel names and removes an administrator (FRU-280). The other actions of the
- * mockup come with FRU-274.
+ * admin » of the panel names and removes an administrator (FRU-280). « Suspend » and « Restore
+ * access » suspend and restore the account (FRU-281). The other actions of the mockup come with
+ * FRU-274.
  *
  * The panel is the row: the worker has no route for one person. It lists accounts only, so somebody
  * invited who never signed in is not a row.
@@ -37,7 +38,7 @@ import { seenOn } from './members';
 
 /**
  * The filters of the worker (`USER_FILTERS`), with no count: the worker counts the filter it answers
- * only. The mockup's « Suspended » comes with FRU-274, and its « Invited » has no filter.
+ * only. The worker has no filter for the mockup's « Suspended » and « Invited ».
  */
 const SHOW = [
   { value: 'all', label: msg('All people') },
@@ -59,18 +60,36 @@ const PROVIDERS: Readonly<Record<string, string>> = {
 };
 
 /** A list of the people, with the search and the filter that it answers. */
-type Listed = { users: AdminUser[]; total: number; asked: AdminQuery };
+type Listed = {
+  users: AdminUser[];
+  total: number;
+  asked: AdminQuery;
+  /** The accounts that the read answered as suspended. The worker does not say their role. */
+  suspendedWhenRead: readonly string[];
+  /** One of them was restored since the read: it can be an admin again, and the list does not say. */
+  roleUnknown: boolean;
+};
 
-type Status = 'admin' | 'active' | 'invited';
+type Status = 'admin' | 'active' | 'invited' | 'suspended';
 
 const STATUSES = {
   admin: { word: msg('Instance admin'), colour: 'text-ink' },
   active: { word: msg('Active'), colour: 'text-done' },
   invited: { word: msg('Invited'), colour: 'text-muted' },
+  suspended: { word: msg('Suspended'), colour: 'text-accent' },
 } as const satisfies Record<Status, { word: string; colour: string }>;
+
+/**
+ * The colour of a status. The red of the mockup is 4.28:1 on the tint of the chosen row
+ * (design/simpler-flow/SPEC.md), so the chosen row takes the darker red.
+ */
+function colourOf(status: Status, chosen: boolean): string {
+  return status === 'suspended' && chosen ? 'text-accent-strong' : STATUSES[status].colour;
+}
 
 /** An account in no workspace with an invitation that waits is « Invited ». */
 function statusOf(user: AdminUser): Status {
+  if (user.suspended) return 'suspended';
   if (user.instanceAdmin) return 'admin';
 
   return user.workspaces.length === 0 && user.pendingInvitations.length > 0 ? 'invited' : 'active';
@@ -82,22 +101,42 @@ function roleOf(role: string | undefined): string {
   return ROLES[role] === undefined ? role : t(ROLES[role] as string);
 }
 
-/** The two refusals of the worker, which are also the reasons why a switch is held. */
-const SELF_REMOVAL = msg('You cannot take this role from yourself. Another instance admin can.');
-const LAST_ADMIN = msg('The last instance admin keeps the role. Name another admin first.');
+/** Why a control is held before the worker is asked: on yourself, and on the last admin. */
+type Holds = { self: string; last: string };
 
-const ROLE_PROBLEMS: Readonly<Record<string, string>> = { 'self-removal': SELF_REMOVAL, 'last-admin': LAST_ADMIN };
+/** The two refusals of the role, which are also the reasons why its switch is held. */
+const ROLE_HOLDS: Holds = {
+  self: msg('You cannot take this role from yourself. Another instance admin can.'),
+  last: msg('The last instance admin keeps the role. Name another admin first.'),
+};
+const ROLE_PROBLEMS: Readonly<Record<string, string>> = {
+  'self-removal': ROLE_HOLDS.self,
+  'last-admin': ROLE_HOLDS.last,
+};
 const ROLE_NOT_CHANGED = msg('The role did not change. Try again.');
+/** The worker counts a suspended admin as no admin, and a change of the role would not show. */
+const ROLE_OF_SUSPENDED = msg('A suspended account is not an instance admin. Restore access first.');
+
+/** The two refusals of a suspension, which are also the reasons why « Suspend » is held. */
+const SUSPENSION_HOLDS: Holds = {
+  self: msg('You cannot suspend your own account. Another instance admin can.'),
+  last: msg('The last instance admin cannot be suspended. Name another admin first.'),
+};
+const SUSPENSION_PROBLEMS: Readonly<Record<string, string>> = {
+  'self-suspension': SUSPENSION_HOLDS.self,
+  'last-admin': SUSPENSION_HOLDS.last,
+};
+const NOTHING_CHANGED = msg('Nothing changed. Try again.');
 
 /**
- * Why the switch of a person cannot change, before the worker is asked. `admins` is the count of
- * administrators, or `undefined` when the list does not hold all of them: then the worker answers.
- * The list does not say which account is banned, so the worker can count fewer administrators.
+ * Why a control of a person is held, before the worker is asked. `admins` is the count of
+ * administrators that are not suspended, or `undefined` when the list does not hold all of them:
+ * then the worker answers.
  */
-function heldBy(user: AdminUser, me: string, admins: number | undefined): string | undefined {
-  if (user.id === me) return SELF_REMOVAL;
+function heldBy(user: AdminUser, me: string, admins: number | undefined, holds: Holds): string | undefined {
+  if (user.id === me) return holds.self;
 
-  return user.instanceAdmin && admins === 1 ? LAST_ADMIN : undefined;
+  return user.instanceAdmin && !user.suspended && admins === 1 ? holds.last : undefined;
 }
 
 function providerOf(provider: string): string {
@@ -116,7 +155,10 @@ export default function AdminUsers() {
   const ask = useCallback(async (): Promise<Listed | 'failed'> => {
     const answer = await adminUsers({ q, show });
 
-    return answer.ok && Array.isArray(answer.data?.users) ? { ...answer.data, asked: { q, show } } : 'failed';
+    if (!answer.ok || !Array.isArray(answer.data?.users)) return 'failed';
+    const suspendedWhenRead = answer.data.users.filter((user) => user.suspended).map((user) => user.id);
+
+    return { ...answer.data, asked: { q, show }, suspendedWhenRead, roleUnknown: false };
   }, [q, show]);
   const { shown, again, patch } = useRead(ask);
   const { me } = useAdmin();
@@ -125,28 +167,35 @@ export default function AdminUsers() {
   // Only a list with no search, of everybody or of the administrators, and not cut, holds them all.
   // The rows of a read before stay while the next read is on its way: the count reads their question.
   const whole =
-    typeof shown === 'object' && shown.asked.q === '' && shown.asked.show !== 'alone' && shown.total === rows.length;
-  const admins = whole ? rows.filter((user) => user.instanceAdmin).length : undefined;
+    typeof shown === 'object' &&
+    shown.asked.q === '' &&
+    shown.asked.show !== 'alone' &&
+    shown.total === rows.length &&
+    !shown.roleUnknown;
+  const admins = whole ? rows.filter((user) => user.instanceAdmin && !user.suspended).length : undefined;
   const chosen = rows.find((user) => user.id === open);
   const close = () => {
     change({ open: '' }, true);
     if (chosen !== undefined) document.getElementById(rowId(chosen.id))?.focus();
   };
-  const changed = (id: string, instanceAdmin: boolean) =>
+  const changed = (id: string, change: Partial<AdminUser>) =>
     patch((listed) => ({
       ...listed,
-      users: listed.users.map((user) => (user.id === id ? { ...user, instanceAdmin } : user)),
+      roleUnknown: listed.roleUnknown || (change.suspended === false && listed.suspendedWhenRead.includes(id)),
+      users: listed.users.map((user) => (user.id === id ? { ...user, ...change } : user)),
     }));
   const panel =
     chosen === undefined ? null : (
       <Panel
         key={chosen.id}
         user={chosen}
-        held={heldBy(chosen, me.account.id, admins)}
+        held={chosen.suspended ? ROLE_OF_SUSPENDED : heldBy(chosen, me.account.id, admins, ROLE_HOLDS)}
+        suspensionHeld={heldBy(chosen, me.account.id, admins, SUSPENSION_HOLDS)}
         wide={wide}
         takesFocus={opening}
         onClose={close}
-        onRole={(instanceAdmin) => changed(chosen.id, instanceAdmin)}
+        onRole={(instanceAdmin) => changed(chosen.id, { instanceAdmin })}
+        onSuspended={(suspended) => changed(chosen.id, { suspended })}
       />
     );
 
@@ -238,7 +287,7 @@ export default function AdminUsers() {
                           <SignsInWith user={user} />
                         </td>
                         <td>
-                          <span className={`block font-semibold ${STATUSES[status].colour}`}>
+                          <span className={`block font-semibold ${colourOf(status, isChosen)}`}>
                             <StatusWord status={status} />
                           </span>
                           <span className="block text-hint text-muted tabular-nums">
@@ -300,17 +349,21 @@ function Seen({ user }: { user: AdminUser }) {
 function Panel({
   user,
   held,
+  suspensionHeld,
   wide,
   takesFocus,
   onClose,
   onRole,
+  onSuspended,
 }: {
   user: AdminUser;
   held: string | undefined;
+  suspensionHeld: string | undefined;
   wide: boolean;
   takesFocus: { current: boolean };
   onClose: () => void;
   onRole: (instanceAdmin: boolean) => void;
+  onSuspended: (suspended: boolean) => void;
 }) {
   useLocale();
   const rows = [
@@ -327,6 +380,9 @@ function Panel({
     value: provider === 'email' ? user.email : t('Linked'),
   }));
 
+  const suspension = useSuspension(user, onSuspended);
+  const control = <Suspension user={user} held={suspensionHeld} state={suspension} />;
+
   return (
     <AdminPanel
       wide={wide}
@@ -334,7 +390,10 @@ function Panel({
       onClose={onClose}
       title={user.name ?? user.email}
       {...(user.name === undefined ? {} : { detail: user.email })}
+      {...(user.suspended ? {} : { foot: control })}
     >
+      {user.suspended ? control : null}
+
       <PanelSection title={t('Workspaces')}>
         {rows.length === 0 ? (
           <p className="text-small text-muted">{t('In no workspace.')}</p>
@@ -417,7 +476,7 @@ function AdminRole({
         strong
         label={t('Instance admin')}
         hint={t('Sees this admin and every workspace.')}
-        value={user.instanceAdmin}
+        value={user.instanceAdmin && !user.suspended}
         disabled={busy || held !== undefined}
         onChange={() => setAsking(true)}
       />
@@ -441,6 +500,104 @@ function AdminRole({
         />
       ) : null}
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+    </div>
+  );
+}
+
+type SuspensionState = ReturnType<typeof useSuspension>;
+
+/**
+ * « Suspend » and « Restore access » (FRU-281), as the switch of `AdminRole`: a press asks first,
+ * only the button of the confirmation sends, and the row changes after a `200` only. After the
+ * answer, focus goes to the button that says the state of the account now: « Restore access » after
+ * a suspension, the same button after a refusal.
+ */
+function useSuspension(user: AdminUser, onSuspended: (suspended: boolean) => void) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>();
+  // A second press of the button that sends comes before React draws the first one as busy.
+  const sending = useRef(false);
+  const back = useRef(false);
+  // The control is in the foot of an active account and at the top of a suspended one: after a
+  // `200`, this box is another element.
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (asking || problem !== undefined) box.current?.scrollIntoView({ block: 'nearest' });
+  }, [asking, problem]);
+
+  useEffect(() => {
+    if (!back.current || asking || busy) return;
+    back.current = false;
+    box.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [asking, busy, user.suspended]);
+
+  const keep = () => {
+    back.current = true;
+    setAsking(false);
+  };
+
+  async function send() {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setProblem(undefined);
+    const answer = await setSuspended(user.id, !user.suspended);
+    sending.current = false;
+    if (answer.ok) onSuspended(answer.data.user.suspended);
+    else setProblem(problemOf(answer, SUSPENSION_PROBLEMS, NOTHING_CHANGED));
+    back.current = true;
+    setAsking(false);
+    setBusy(false);
+  }
+
+  return { asking, busy, problem, box, ask: () => setAsking(true), keep, send };
+}
+
+/**
+ * A suspended account says so at the top of its panel, with « Restore access », as screen 19 draws
+ * it. An active account has « Suspend » in the foot of its panel, as screen 18 draws it for a
+ * workspace.
+ */
+function Suspension({ user, held, state }: { user: AdminUser; held: string | undefined; state: SuspensionState }) {
+  useLocale();
+  const name = user.name ?? user.email;
+  const suspending = !user.suspended;
+
+  return (
+    <div ref={state.box} className="flex w-full flex-col gap-[10px] text-small">
+      {suspending ? null : (
+        <p role="status">
+          <span className="block font-semibold text-accent-strong">{t('Suspended')}</span>
+          <span className="block">{t('{name} cannot sign in, and every session they had ended.', { name })}</span>
+        </p>
+      )}
+      <div>
+        <Button tone="outline" disabled={state.busy || held !== undefined} onClick={state.ask}>
+          {suspending ? t('Suspend') : t('Restore access')}
+        </Button>
+      </div>
+      {held === undefined ? null : <p className="text-hint text-muted">{t(held)}</p>}
+      {state.asking ? (
+        <Confirmation
+          confirmLabel={suspending ? t('Suspend {name}', { name }) : t('Restore access for {name}', { name })}
+          consequence={
+            suspending
+              ? t(
+                  '{name} cannot sign in by any method, and their sessions of the console and of the extension end at once. Their notes stay. The owners of each of their workspaces see that you did it.',
+                  { name },
+                )
+              : t(
+                  '{name} can sign in again. Their old sessions stay ended. The owners of each of their workspaces see that you did it.',
+                  { name },
+                )
+          }
+          onConfirm={() => void state.send()}
+          onKeep={state.keep}
+        />
+      ) : null}
+      {state.problem === undefined ? null : <Problem>{t(state.problem)}</Problem>}
     </div>
   );
 }
