@@ -1815,7 +1815,10 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   un bandeau »). An administrator only, with `POST /console/admin/workspaces/<id>/suspension` and
   `{ suspended: true | false, reason? }`, behind the same guard. The reason is one line of 200
   characters at most, and every member of the workspace reads it. An administrator can suspend a
-  workspace that they are a member of. While a workspace is suspended:
+  workspace that they are a member of. The check of the role and the write are in one transaction,
+  under the lock of the role, so an administrator whose role is being removed is refused:
+  test:`refuses the suspension: it waits for the removal, then reads that the account is no administrator`.
+  While a workspace is suspended:
   - **its sites answer the widget and the extension as sites that do not exist**: the same status,
     the same headers and the same bytes, on `GET /feedback`, `POST /feedback`, the replies and
     `POST /screenshot`, from the origin of the site, from another origin and with none:

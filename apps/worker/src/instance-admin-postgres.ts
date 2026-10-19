@@ -747,6 +747,9 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       await migrated(database);
 
       return database.transaction(async (db): Promise<WorkspaceSuspensionChange> => {
+        // WARNING: the lock comes before every read, as in `setInstanceAdmin`: the check of the role
+        // below waits for a change of the role, so an administrator removed at this moment is refused.
+        await db.execute(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
         const [found] = await db
           .select({ id: organization.id })
           .from(organization)
