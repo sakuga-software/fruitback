@@ -67,6 +67,8 @@ function allowed(write: WorkspaceWrite): boolean {
 
 /**
  * The refusal of a write of `workspace` while it is suspended, or `undefined` when the write goes on.
+ * `asker` is `invited` for a person who is not a member yet: they read that the workspace is
+ * suspended, but not since when nor why, which only its members read.
  *
  * WARNING: call it after the role of the caller is read. A person who is not a member must get the
  * `404` of a workspace that does not exist, and not learn that this one is suspended.
@@ -76,13 +78,15 @@ export async function refusedWhileSuspended(
   workspace: string,
   write: WorkspaceWrite,
   headers: Record<string, string>,
+  asker: 'member' | 'invited' = 'member',
 ): Promise<Response | undefined> {
   if (allowed(write)) return undefined;
   const suspension = await accounts.suspension(workspace);
   if (suspension === undefined) return undefined;
   const { suspended: _, ...since } = suspensionView(suspension);
+  const told = asker === 'member' ? since : {};
 
-  return new Response(JSON.stringify({ error: SUSPENDED_ERROR, ...since }), {
+  return new Response(JSON.stringify({ error: SUSPENDED_ERROR, ...told }), {
     status: SUSPENDED_STATUS,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   });

@@ -791,7 +791,15 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       const before = await snapshot();
       const refused = await on.call('POST', `${ORG}${path.slice('/organization'.length)}`, { token, body });
       assert.equal(refused.status, SUSPENDED_STATUS, `${path}: ${await refused.clone().text()}`);
-      assert.equal(((await refused.json()) as { error: string }).error, SUSPENDED_ERROR);
+      // The reason is for the members: a person invited reads that the workspace is suspended, and no more.
+      const said = (await refused.json()) as { error: string; reason?: string; suspendedAt?: string };
+      assert.equal(said.error, SUSPENDED_ERROR);
+      const toMember = path !== '/organization/accept-invitation';
+      assert.deepEqual(
+        [said.reason, said.suspendedAt !== undefined],
+        toMember ? ['impayé', true] : [undefined, false],
+        path,
+      );
       assert.equal(await snapshot(), before, `${path} wrote while suspended`);
 
       await restore(on, on.acme);

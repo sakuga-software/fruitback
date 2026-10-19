@@ -469,7 +469,8 @@ async function answerOrganizationCall(
 
   // The guard of the writes of a suspended workspace (FRU-282), after the role is read.
   if (rule.method === 'POST' && call.changed !== undefined) {
-    const refused = await refusedWhileSuspended(context.accounts, call.changed, { organization: path }, headers);
+    const asker = path === '/organization/accept-invitation' ? 'invited' : 'member';
+    const refused = await refusedWhileSuspended(context.accounts, call.changed, { organization: path }, headers, asker);
     if (refused !== undefined) return refused;
   }
 
