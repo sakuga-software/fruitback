@@ -1,9 +1,12 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
-import { connectorOf } from './account-rows.ts';
+import { alias } from 'drizzle-orm/pg-core';
+import { connectorOf, newId } from './account-rows.ts';
 import { CONNECTOR_TROUBLES } from './accounts.ts';
 import { organization, user } from './auth-schema.ts';
 import type {
+  AdminAction,
+  AdminActionKind,
   AdminConnector,
   AdminNote,
   AdminUser,
@@ -11,15 +14,16 @@ import type {
   AdminWorkspaceDetail,
   AttentionConnector,
   InstanceAdminReads,
+  RoleChange,
   StageCounts,
   TracedRead,
 } from './instance-admin.ts';
-import { ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
+import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS } from './instance-admin.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import type { AuthorKind } from './notes-index.ts';
 import { placeIs, wordsOf } from './notes-index-postgres.ts';
-import { admin_reads, connectors, note_index, seeds, sites } from './postgres-schema.ts';
+import { admin_actions, admin_reads, connectors, note_index, seeds, sites } from './postgres-schema.ts';
 import { noteOf, rowOfIdentifier, seedIdOf } from './seed-rows.ts';
 
 /**
@@ -39,6 +43,32 @@ type Row = Record<string, unknown>;
 
 /** How many reads of one workspace its owners get, the newest first. */
 const READS_SHOWN = 200;
+
+/** How many actions the administrators get, the newest first. */
+const ACTIONS_SHOWN = 200;
+
+/**
+ * The advisory lock of the role of administrator: the key that the trigger of `0016_first_admin`
+ * takes. A change of the role waits for another change, and for the first account.
+ */
+export const ADMIN_ROLE_LOCK = 1179796036;
+
+/** The administrators of the instance: `role` is `admin`, and the account is not banned. */
+const IS_ADMIN = sql`role = 'admin' AND banned IS NOT TRUE`;
+
+/** `detail` of a row, or `undefined` for a value that is not a JSON object. */
+function detailOf(text: string | null): Record<string, unknown> | undefined {
+  if (text === null) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function rowsOf(answer: unknown): Row[] {
   return (answer as { rows: Row[] }).rows;
@@ -568,6 +598,107 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             admin: { email: row.email ?? row.admin_email, ...named(row.name) },
             what: row.what as TracedRead['what'],
             at: iso(row.at),
+          },
+        ];
+      });
+    },
+
+    async setInstanceAdmin(actor, target, admin, now) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<RoleChange> => {
+        const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+        // WARNING: the lock comes before every read. In READ COMMITTED, each statement after it reads
+        // what the transaction that held the lock committed, so two removals count one another.
+        await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+
+        const [row] = await rowsIn(sql`SELECT email, role, (${IS_ADMIN}) AS admin FROM "user" WHERE id = ${target}`);
+        if (row === undefined) return { ok: false, refused: 'unknown-account' };
+        if (!admin && target === actor.id) return { ok: false, refused: 'self-removal' };
+        if ((row.role === 'admin') === admin) return { ok: true, changed: false, instanceAdmin: row.admin === true };
+        if (row.admin === true) {
+          const [counted] = await rowsIn(sql`SELECT count(*)::int AS n FROM "user" WHERE ${IS_ADMIN}`);
+          if (number(counted?.n) <= 1) return { ok: false, refused: 'last-admin' };
+        }
+        // After the rule of the last administrator: of two that remove each other, the second learns why.
+        const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+
+        await db
+          .update(user)
+          .set({ role: admin ? 'admin' : null, updatedAt: new Date(now) })
+          .where(eq(user.id, target));
+        const action: AdminActionKind = admin ? 'admin-named' : 'admin-removed';
+        await db.insert(admin_actions).values({
+          id: newId('ada'),
+          at: now,
+          actor_account_id: actor.id,
+          actor_email: actor.email,
+          action,
+          target_account_id: target,
+          target_email: String(row.email),
+        });
+        const [after] = await rowsIn(sql`SELECT (${IS_ADMIN}) AS admin FROM "user" WHERE id = ${target}`);
+
+        return { ok: true, changed: true, instanceAdmin: after?.admin === true };
+      });
+    },
+
+    async actions() {
+      const actor = alias(user, 'actor');
+      const target = alias(user, 'target');
+      const rows = await run((db) =>
+        db
+          .select({
+            action: admin_actions.action,
+            at: admin_actions.at,
+            actor_id: admin_actions.actor_account_id,
+            actor_email: admin_actions.actor_email,
+            actor_now: actor.email,
+            actor_name: actor.name,
+            target_id: admin_actions.target_account_id,
+            target_email: admin_actions.target_email,
+            target_now: target.email,
+            target_name: target.name,
+            workspace_id: admin_actions.workspace_id,
+            workspace_name: organization.name,
+            detail: admin_actions.detail,
+          })
+          .from(admin_actions)
+          .leftJoin(actor, eq(actor.id, admin_actions.actor_account_id))
+          .leftJoin(target, eq(target.id, admin_actions.target_account_id))
+          .leftJoin(organization, eq(organization.id, admin_actions.workspace_id))
+          .orderBy(desc(admin_actions.at), asc(admin_actions.id))
+          .limit(ACTIONS_SHOWN),
+      );
+
+      return rows.flatMap((row): AdminAction[] => {
+        if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action)) return [];
+        const targetEmail = row.target_now ?? row.target_email;
+        const detail = detailOf(row.detail);
+
+        return [
+          {
+            action: row.action as AdminActionKind,
+            at: iso(row.at),
+            actor: {
+              ...(row.actor_id === null ? {} : { id: row.actor_id }),
+              email: row.actor_now ?? row.actor_email,
+              ...named(row.actor_name),
+            },
+            ...(targetEmail === null
+              ? {}
+              : {
+                  target: {
+                    ...(row.target_id === null ? {} : { id: row.target_id }),
+                    email: targetEmail,
+                    ...named(row.target_name),
+                  },
+                }),
+            ...(row.workspace_id === null || row.workspace_name === null
+              ? {}
+              : { workspace: { id: row.workspace_id, name: row.workspace_name } }),
+            ...(detail === undefined ? {} : { detail }),
           },
         ];
       });

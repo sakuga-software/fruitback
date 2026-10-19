@@ -1371,7 +1371,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-six columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-seven columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1461,7 +1461,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1474,7 +1474,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-six BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty-seven BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -2761,9 +2761,9 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Five reads, and no write** (FRU-274 writes): `instance`, `workspaces` (`q`, `show` of `all`,
-  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`), and
-  `notes` (FRU-272). A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+- **Six reads, and one write** (FRU-280): `instance`, `workspaces` (`q`, `show` of `all`,
+  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
+  `notes` (FRU-272) and `actions` (FRU-280). The write is the role of administrator, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
   workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
@@ -2786,7 +2786,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
   administrator, and asks again: the second insert waits for the first transaction, and its next
   statement reads what the first committed. **This holds in READ COMMITTED**, the isolation of every
   writer of `user`; under REPEATABLE READ the second would read its old snapshot. A unique partial
-  index was not taken: it would forbid the second administrator that FRU-274 names.
+  index was not taken: it would forbid the second administrator that FRU-280 names.
   test:`makes one administrator: the second account waits for the first to commit`, and
   test:`makes two administrators without the lock of the trigger` is its control: the same function
   with no lock gives two (measured on PostgreSQL 17).
@@ -2796,7 +2796,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
   role. The ticket said « if no admin exists yet », and the first version read it as at any time: a
   role set to `NULL`, `Admin` or `admin,user` then gave the instance to the next person who signed up
   (measured by a review on a worker, FRU-261). The decision of Mathieu says « le premier compte ». An
-  instance with no administrator gets one from its operator in the database, and FRU-274 must refuse
+  instance with no administrator gets one from its operator in the database, and FRU-280 refuses
   to take the role from the last one. A table of accounts emptied again gives the role to the next
   account: no route deletes an account, and a mark that the instance was set up once was not taken.
   test:`gives the role to no later account, after the role is taken away or written another way`.
@@ -2813,10 +2813,60 @@ its owners see it (D2). No OAuth key in any answer (D4).
 
 ### What it does not do
 
-- No write: naming or removing an administrator, suspending, deleting (FRU-274). The columns
+- No write but the role (FRU-280): suspending and deleting are later tickets. The columns
   `banned`, `banReason` and `banExpires` are written by nobody; the guard reads `banned`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
+
+## An administrator names and removes an administrator (FRU-280)
+
+Mathieu, 2026-10-19: « Oui, sauf le dernier ».
+
+### The rules, in short
+
+- **`POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }`**, behind
+  `instanceAdminOf`, in `ADMIN_WRITE_ROUTES` of `instance-admin.ts`. `200 { user: { id, instanceAdmin }, changed }`.
+  A body that is not this answers `400 invalid-admin`, an account that does not exist `404 not-found`.
+- **Two refusals, each a `409` with its code**: `self-removal` when `admin: false` names the caller,
+  also when another administrator stays, and `last-admin` when the account is the last administrator.
+  The caller is checked first: a sole administrator who removes themselves gets `self-removal`.
+- **No change, no row.** `admin: true` on an account whose `role` is `admin`, or `admin: false` on
+  an account whose role is not, answers `200` with `changed: false` and writes nothing. A banned account
+  whose role is `admin` keeps its ban: the route writes `role` only.
+- **One transaction, under the lock of `0016_first_admin`** (`setInstanceAdmin` of
+  `instance-admin-postgres.ts`). The lock comes first. Then, in this order: the target exists, it is
+  not the caller, the role changes, the target is not the last administrator, the caller is still an
+  administrator (`404` if not), the write of `role`, and the row of the action.
+- **The trace is `admin_actions`**: `id`, `at`, `actor_account_id` and `actor_email`, `action`
+  (`admin-named`, `admin-removed`), `target_account_id` and `target_email`, `workspace_id` (empty
+  for an action on the instance), and `detail` (JSON, empty for these two). It is written in the
+  transaction of the change. `GET /console/admin/actions` answers the 200 newest rows to an
+  administrator, and traces the workspaces its rows name, as every list.
+- **The guard reads the role at each call**, so a removed administrator is refused at the next one,
+  with the session still open.
+
+### The reasons, and what was measured
+
+- **Why a lock, and not a check then a write.** Two administrators who remove each other both count
+  two administrators, then both write: the instance has none. Only the database sees both. The lock
+  makes the second wait until the first commits, and in READ COMMITTED its next statement counts one.
+  The key is the one of the trigger: a change of the role also waits for the first account.
+  test:`removes one of them: the other gets « last-admin », and one administrator stays` holds the
+  table of the actions with a third connection, so both removals reach their last statement before
+  either commits. Without the lock the same test leaves no administrator (measured on PostgreSQL 18).
+- **Why the caller is checked after the last administrator.** The guard read the role before the
+  transaction. Of three administrators, A removes B while B removes C: B must not succeed with a role
+  that A took away a moment before, so the transaction reads it again. Of two who remove each other,
+  the second gets `last-admin` and not `404`, because that is the reason the console can explain.
+- **Why a table of its own, and not `admin_reads`.** A read names one workspace, and its row goes
+  with it. An action can name no workspace (this one), names a person, and must stay after the
+  workspace goes (a later deletion). The owners of a workspace can read the rows that name it beside
+  the reads, by `admin_actions_by_workspace`; no action names a workspace yet, so their route does
+  not read the table.
+- **Why no row for a call that changes nothing.** Two clicks on « Name administrator » are one
+  action. The trace says what changed, and a row for nothing would make « who did it » ambiguous.
+- **Why `self-removal`.** An administrator who removes themselves by mistake has no way back in the
+  console. Another administrator removes them.
 
 ## The notes of a site that goes (FRU-194)
 

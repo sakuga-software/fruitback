@@ -6,7 +6,13 @@ import { AUTH_BASE_PATH } from './auth.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
 import { GITHUB, GOOGLE, IDENTITY_SECRET, SESSION_COOKIE } from './auth-worker.fixture.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
-import { ADMIN_PATH, ADMIN_ROUTES, type InstanceAdminReads, isAdminPath } from './instance-admin.ts';
+import {
+  ADMIN_PATH,
+  ADMIN_ROUTES,
+  ADMIN_WRITE_ROUTES,
+  type InstanceAdminReads,
+  isAdminPath,
+} from './instance-admin.ts';
 import { createLinearStore } from './linear.ts';
 import type { Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
@@ -88,6 +94,11 @@ function pathsOf(workspace: string): string[] {
   return ADMIN_ROUTES.map((route) => route.example.replace(/ws_0+$/, workspace));
 }
 
+/** The path of each route that writes, with an account that exists. */
+function writePathsOf(account: string): string[] {
+  return ADMIN_WRITE_ROUTES.map((route) => route.example.replace(/acc_0+/, account));
+}
+
 describe('who the administrator of the instance is (FRU-261)', () => {
   it('is the first account, and no account after it', async () => {
     const { on, ana, bob } = await anInstance();
@@ -150,6 +161,34 @@ describe('the guard of the routes of the administrator (FRU-261)', () => {
       assert.equal((await get(on, path, bob.token)).status, 404, path);
       assert.equal((await get(on, path, ana.token)).status, 404, path);
     }
+  });
+
+  it('answers 404 on every route that writes to an account without the role, and to nobody, and writes nothing (FRU-280)', async () => {
+    const { on, ana, bob, carl } = await anInstance();
+    assert.ok(ADMIN_WRITE_ROUTES.length >= 1);
+
+    for (const path of writePathsOf(bob.id)) {
+      for (const token of [bob.token, carl.token, undefined]) {
+        const answer = await callOn(on, 'POST', path, {
+          ...(token === undefined ? {} : { token }),
+          body: { admin: true },
+        });
+        assert.equal(answer.status, 404, `${path} answered ${answer.status} to an account without the role`);
+        assert.deepEqual(await answer.json(), { error: 'not-found' });
+      }
+      // The cookie of the administrator, from no page of the console: a form of another page can send it.
+      const noOrigin = await callOn(on, 'POST', path, { token: ana.token, body: { admin: true }, origin: null });
+      assert.equal(noOrigin.status, 404, path);
+      assert.equal((await get(on, path, ana.token)).status, 405, path);
+    }
+    assert.deepEqual(
+      (await rowsOf(on.database, `SELECT email FROM "user" WHERE role = 'admin'`)).map((row) => row.email),
+      ['ana@acme.dev'],
+    );
+    assert.deepEqual(await rowsOf(on.database, 'SELECT id FROM admin_actions'), []);
+    // The control: the same call from the administrator, with the origin of the console, writes.
+    const [path] = writePathsOf(bob.id) as [string];
+    assert.equal((await callOn(on, 'POST', path, { token: ana.token, body: { admin: true } })).status, 200);
   });
 
   it('names every path of the administrator in the table that the guard reads, and nowhere else', () => {
@@ -671,5 +710,206 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
       assert.equal(status, 404);
       assert.deepEqual(JSON.parse(text), { error: 'not-found' });
     }
+  });
+});
+
+/** `POST /console/admin/users/<id>/instance-admin` from the person of `token`. */
+async function setAdmin(on: World, token: string, account: string, body: unknown) {
+  const answer = await callOn(on, 'POST', `${ADMIN_PATH}/users/${account}/instance-admin`, { token, body });
+
+  return { status: answer.status, body: (await answer.json()) as Record<string, unknown> };
+}
+
+const adminEmails = async (on: World): Promise<unknown[]> =>
+  (await rowsOf(on.database, `SELECT email FROM "user" WHERE role = 'admin' ORDER BY email`)).map((row) => row.email);
+
+const actionRows = (on: World) =>
+  rowsOf(
+    on.database,
+    'SELECT action, actor_account_id, actor_email, target_account_id, target_email, workspace_id, detail, at FROM admin_actions ORDER BY at, id',
+  );
+
+describe('an administrator names and removes an administrator (FRU-280)', () => {
+  it('names an administrator, who reads the routes of the administrator at the next call', async () => {
+    const { on, ana, bob, beta } = await anInstance();
+    const [path] = pathsOf(beta) as [string];
+    assert.equal((await get(on, path, bob.token)).status, 404);
+
+    const named = await setAdmin(on, ana.token, bob.id, { admin: true });
+
+    assert.equal(named.status, 200, JSON.stringify(named.body));
+    assert.deepEqual(named.body, { user: { id: bob.id, instanceAdmin: true }, changed: true });
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev', 'bob@beta.dev']);
+    assert.equal((await get(on, path, bob.token)).status, 200);
+  });
+
+  it('refuses a removed administrator at their next call, with their session still open', async () => {
+    const { on, ana, bob, beta } = await anInstance();
+    assert.equal((await setAdmin(on, ana.token, bob.id, { admin: true })).status, 200);
+    for (const path of pathsOf(beta)) assert.equal((await get(on, path, bob.token)).status, 200, path);
+
+    const removed = await setAdmin(on, ana.token, bob.id, { admin: false });
+
+    assert.deepEqual(removed.body, { user: { id: bob.id, instanceAdmin: false }, changed: true });
+    for (const path of pathsOf(beta)) assert.equal((await get(on, path, bob.token)).status, 404, path);
+    assert.equal((await setAdmin(on, bob.token, ana.id, { admin: false })).status, 404);
+    const me = await get(on, '/console/me', bob.token);
+    assert.equal(me.status, 200, 'the session ended: the test proves nothing about the role');
+    assert.equal((JSON.parse(me.text) as { instanceAdmin: boolean }).instanceAdmin, false);
+  });
+
+  it('refuses an administrator who removes themselves, also when another administrator stays', async () => {
+    const { on, ana, bob } = await anInstance();
+    assert.equal((await setAdmin(on, ana.token, bob.id, { admin: true })).status, 200);
+    const before = (await actionRows(on)).length;
+
+    const refused = await setAdmin(on, ana.token, ana.id, { admin: false });
+
+    assert.equal(refused.status, 409);
+    assert.deepEqual(refused.body, { error: 'self-removal' });
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev', 'bob@beta.dev']);
+    assert.equal((await actionRows(on)).length, before);
+    // The control: the other administrator removes her.
+    assert.equal((await setAdmin(on, bob.token, ana.id, { admin: false })).status, 200);
+    assert.deepEqual(await adminEmails(on), ['bob@beta.dev']);
+  });
+
+  it('refuses the last administrator who removes themselves', async () => {
+    const { on, ana } = await anInstance();
+
+    const refused = await setAdmin(on, ana.token, ana.id, { admin: false });
+
+    assert.equal(refused.status, 409);
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev']);
+    assert.deepEqual(await actionRows(on), []);
+  });
+
+  it('answers 200 with no change and writes no action when the account already has the role asked', async () => {
+    const { on, ana, bob } = await anInstance();
+
+    assert.deepEqual((await setAdmin(on, ana.token, ana.id, { admin: true })).body, {
+      user: { id: ana.id, instanceAdmin: true },
+      changed: false,
+    });
+    assert.deepEqual((await setAdmin(on, ana.token, bob.id, { admin: false })).body, {
+      user: { id: bob.id, instanceAdmin: false },
+      changed: false,
+    });
+    assert.deepEqual(await actionRows(on), []);
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev']);
+  });
+
+  it('answers 404 for an account that does not exist, and 400 for a body that is not { admin: true | false }', async () => {
+    const { on, ana, bob } = await anInstance();
+
+    const unknown = await setAdmin(on, ana.token, 'acc_nobody', { admin: true });
+    assert.equal(unknown.status, 404);
+    assert.deepEqual(unknown.body, { error: 'not-found' });
+    for (const body of [{}, { admin: 'true' }, { admin: 1 }, { admin: null }, [true], 'admin', null]) {
+      const answer = await setAdmin(on, ana.token, bob.id, body);
+      assert.equal(answer.status, 400, JSON.stringify(body));
+      assert.deepEqual(answer.body, { error: 'invalid-admin' });
+    }
+    const raw = await callOn(on, 'POST', `${ADMIN_PATH}/users/${bob.id}/instance-admin`, {
+      token: ana.token,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    assert.equal(raw.status, 400);
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev']);
+    assert.deepEqual(await actionRows(on), []);
+  });
+});
+
+describe('the trace of the actions of the administrators (FRU-280)', () => {
+  it('writes one row for each change, on the instance, and the administrators read the rows', async () => {
+    const { on, ana, bob } = await anInstance();
+    const named = Date.now();
+    await setAdmin(on, ana.token, bob.id, { admin: true });
+    await setAdmin(on, bob.token, ana.id, { admin: false });
+
+    const rows = await actionRows(on);
+    assert.deepEqual(
+      rows.map(({ at: _, ...row }) => row),
+      [
+        {
+          action: 'admin-named',
+          actor_account_id: ana.id,
+          actor_email: 'ana@acme.dev',
+          target_account_id: bob.id,
+          target_email: 'bob@beta.dev',
+          workspace_id: null,
+          detail: null,
+        },
+        {
+          action: 'admin-removed',
+          actor_account_id: bob.id,
+          actor_email: 'bob@beta.dev',
+          target_account_id: ana.id,
+          target_email: 'ana@acme.dev',
+          workspace_id: null,
+          detail: null,
+        },
+      ],
+    );
+    assert.ok(
+      rows.every((row) => Number(row.at) >= named - 1000),
+      JSON.stringify(rows),
+    );
+
+    const answer = await get(on, `${ADMIN_PATH}/actions`, bob.token);
+    assert.equal(answer.status, 200, answer.text);
+    const { actions } = JSON.parse(answer.text) as { actions: Record<string, unknown>[] };
+    assert.deepEqual(
+      actions.map(({ at: _, ...action }) => action),
+      [
+        {
+          action: 'admin-removed',
+          actor: { id: bob.id, email: 'bob@beta.dev' },
+          target: { id: ana.id, email: 'ana@acme.dev' },
+        },
+        {
+          action: 'admin-named',
+          actor: { id: ana.id, email: 'ana@acme.dev' },
+          target: { id: bob.id, email: 'bob@beta.dev' },
+        },
+      ],
+    );
+    // An action on the instance names no workspace: no owner reads it, and its read traces nothing.
+    assert.deepEqual(await rowsOf(on.database, 'SELECT id FROM admin_reads'), []);
+    assert.equal((await get(on, `${ADMIN_PATH}/actions`, ana.token)).status, 404);
+  });
+
+  it('keeps who acted on whom after both accounts go', async () => {
+    const { on, ana, bob, carl } = await anInstance();
+    await setAdmin(on, ana.token, bob.id, { admin: true });
+    await setAdmin(on, bob.token, carl.id, { admin: true });
+    await rowsOf(on.database, `DELETE FROM "user" WHERE id IN ('${bob.id}', '${carl.id}')`);
+
+    const { actions } = JSON.parse((await get(on, `${ADMIN_PATH}/actions`, ana.token)).text) as {
+      actions: { actor: unknown; target: unknown }[];
+    };
+    assert.deepEqual(
+      actions.map(({ actor, target }) => [actor, target]),
+      [
+        [{ email: 'bob@beta.dev' }, { email: 'carl@beta.dev' }],
+        [{ id: ana.id, email: 'ana@acme.dev' }, { email: 'bob@beta.dev' }],
+      ],
+    );
+  });
+
+  it('changes no role when its action cannot be written', async () => {
+    const { on, ana, bob } = await anInstance();
+    await rowsOf(on.database, 'ALTER TABLE admin_actions ADD CONSTRAINT refuses_every_row CHECK (false)');
+
+    // A refusal of the database is no `StoreError`: `handleRequest` throws it, and the server answers 500.
+    await assert.rejects(
+      callOn(on, 'POST', `${ADMIN_PATH}/users/${bob.id}/instance-admin`, { token: ana.token, body: { admin: true } }),
+      /refuses_every_row/,
+    );
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev']);
+    // The control: the same call with the table open again names Bob.
+    await rowsOf(on.database, 'ALTER TABLE admin_actions DROP CONSTRAINT refuses_every_row');
+    assert.equal((await setAdmin(on, ana.token, bob.id, { admin: true })).status, 200);
+    assert.deepEqual(await adminEmails(on), ['ana@acme.dev', 'bob@beta.dev']);
   });
 });

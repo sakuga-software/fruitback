@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { ADMIN_PAGE } from './instance-admin.ts';
-import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
+import { ADMIN_ROLE_LOCK, createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, migrationsThrough, ownDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate, migrated } from './postgres-migrate.ts';
@@ -36,6 +37,14 @@ const OF_BEFORE = [
 ];
 
 for (const { label, open, skip } of DATABASES) {
+  it('takes the lock of the trigger of the first account, so a change of the role waits for it (FRU-280)', () => {
+    const trigger = readFileSync(new URL('../drizzle/0016_first_admin.sql', import.meta.url), 'utf8');
+    const keys = [...trigger.matchAll(/pg_advisory_xact_lock\((\d+)\)/gu)].map((match) => Number(match[1]));
+
+    assert.ok(keys.length > 0, 'the trigger takes no lock: this test proves nothing');
+    assert.deepEqual([...new Set(keys)], [ADMIN_ROLE_LOCK]);
+  });
+
   describe(`the first account is the administrator of the instance, on ${label} (FRU-261)`, { skip }, () => {
     it('makes the first account of an empty database the administrator, and no account after it', async () => {
       const database = await opening(open);
@@ -167,6 +176,63 @@ for (const { label, open, skip } of DATABASES) {
       await reads.trace(bob, [workspace.id], 'workspace', instant);
       assert.equal((await reads.reads(workspace.id)).length, 1);
     });
+
+    it('refuses to take the role from the last administrator, whoever asks (FRU-280)', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+
+      // Bob passed the guard a moment before he lost the role: the store asks again.
+      assert.deepEqual(await reads.setInstanceAdmin(bob, ana.id, false, 1), { ok: false, refused: 'last-admin' });
+      assert.deepEqual(await reads.setInstanceAdmin(bob, bob.id, true, 1), { ok: false, refused: 'not-admin' });
+      assert.deepEqual(await admins(database), ['ana@acme.dev']);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM admin_actions'), []);
+
+      // The control: with two administrators, one removes the other.
+      assert.deepEqual(await reads.setInstanceAdmin(ana, bob.id, true, 2), {
+        ok: true,
+        changed: true,
+        instanceAdmin: true,
+      });
+      assert.deepEqual(await reads.setInstanceAdmin(bob, ana.id, false, 3), {
+        ok: true,
+        changed: true,
+        instanceAdmin: false,
+      });
+      assert.deepEqual(await admins(database), ['bob@acme.dev']);
+      assert.deepEqual(
+        (await rowsOf(database, 'SELECT action, at FROM admin_actions ORDER BY at')).map((row) => [
+          row.action,
+          Number(row.at),
+        ]),
+        [
+          ['admin-named', 2],
+          ['admin-removed', 3],
+        ],
+      );
+    });
+
+    it('reads the instant of an action as the number that was written (FRU-280)', async () => {
+      const database = await opening(open);
+      const accounts = createPostgresAccountStore(database);
+      const reads = createPostgresInstanceAdmin(database);
+      const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+      const instant = 2 ** 32 + 1;
+
+      await reads.setInstanceAdmin(ana, bob.id, true, instant);
+
+      assert.deepEqual(await reads.actions(), [
+        {
+          action: 'admin-named',
+          at: new Date(instant).toISOString(),
+          actor: { id: ana.id, email: 'ana@acme.dev' },
+          target: { id: bob.id, email: 'bob@acme.dev' },
+        },
+      ]);
+    });
   });
 }
 
@@ -288,3 +354,65 @@ describe('two first accounts at the same moment, on a real server (FRU-261)', { 
     }
   });
 });
+
+describe(
+  'two administrators who remove each other at the same moment, on a real server (FRU-280)',
+  {
+    skip: NO_REAL_POSTGRES,
+  },
+  () => {
+    it('removes one of them: the other gets « last-admin », and one administrator stays', async () => {
+      const own = await ownDatabase();
+      // Two replicas of one connection each, and a third connection that holds the table of the actions.
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+        assert.deepEqual(await admins(first), ['ana@acme.dev', 'bob@acme.dev']);
+
+        // Each removal writes its action last: while the table is held, a removal that counted waits there.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const removals = [
+          createPostgresInstanceAdmin(first).setInstanceAdmin(ana, bob.id, false, 1),
+          createPostgresInstanceAdmin(second).setInstanceAdmin(bob, ana.id, false, 1),
+        ].map((removal) => removal.finally(() => settled.push('settled')));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither removal ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+        const outcomes = await Promise.all(removals);
+
+        assert.deepEqual(outcomes.map((outcome) => (outcome.ok ? 'removed' : outcome.refused)).toSorted(), [
+          'last-admin',
+          'removed',
+        ]);
+        assert.equal((await admins(first)).length, 1);
+        assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM admin_actions'))[0]?.n), 1);
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);

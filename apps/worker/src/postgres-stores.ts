@@ -212,6 +212,8 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     notes: true,
     trace: true,
     reads: true,
+    setInstanceAdmin: true,
+    actions: true,
   });
 }
 

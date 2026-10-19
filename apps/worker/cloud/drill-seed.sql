@@ -127,3 +127,7 @@ INSERT INTO last_seen (member_id, day) VALUES
 -- owners of the workspace read.
 INSERT INTO admin_reads (id, workspace_id, admin_account_id, admin_email, what, at) VALUES
   ('read_drill1', 'ws_drill1', 'acc_drill1', 'alice@acme.dev', 'workspace', 1760000000000);
+
+-- An action of an administrator of the instance (FRU-280): its trace, which the administrators read.
+INSERT INTO admin_actions (id, at, actor_account_id, actor_email, action, target_account_id, target_email, workspace_id, detail) VALUES
+  ('ada_drill1', 1760000000000, 'acc_drill1', 'alice@acme.dev', 'admin-named', 'acc_drill2', 'bob@acme.dev', NULL, NULL);

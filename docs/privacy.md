@@ -237,10 +237,11 @@ workspace is shown with no name.
 Sakuga, the operator. What follows is what the console gives the administrator of the instance, and
 what it writes each time.
 
-- **Who.** The first account of the instance, and nobody it did not name: `role` of `user` says it.
+- **Who.** The first account of the instance, and the accounts that an administrator names (FRU-280):
+  `role` of `user` says it.
   On the Cloud it is the account of the operator. Since FRU-261 the database keeps four more columns
   for each person: `role` (`admin` for the administrator, empty for the others), `banned`,
-  `banReason` and `banExpires`, which no route writes yet.
+  `banReason` and `banExpires`. Only `role` has a route that writes it.
 - **What the console shows them, of every workspace**: its name and its owners, the name, the address
   and the role of each member, the day each was last seen, the ways each person signs in, the sites
   and who sees them, where each site sends its notes, the label of each connector and whether it
@@ -256,10 +257,16 @@ what it writes each time.
     worker does not ask the tracker of a workspace for the rest of a note, or for its replies.
 - **Each read in a workspace the administrator is not a member of leaves a row** in `admin_reads`:
   the workspace, the account and the address of the administrator, which read (`instance`,
-  `workspaces`, `workspace`, `users` or `notes`) and its moment. The read does not answer when the row cannot
+  `workspaces`, `workspace`, `users`, `notes` or `actions`) and its moment. The read does not answer when the row cannot
   be written. **The owners of the workspace read these rows**, and nobody else: no other member, and
   not the administrator. A row goes with its workspace; it keeps the address of the administrator
   after their account goes.
+- **Each action of an administrator that changes something leaves a row** in `admin_actions`
+  (FRU-280): the account and the address of the administrator who acted, which action (`admin-named`
+  or `admin-removed`), the account and the address of the person it touched, the workspace when the
+  action is in one, a detail when the action needs one, and its moment. **The administrators of the
+  instance read these rows.** A row keeps both addresses after the accounts go, and stays after its
+  workspace goes. Nothing deletes a row: it lives as long as the database.
 
 ### What stays in the reporter's browser
 
