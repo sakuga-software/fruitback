@@ -127,3 +127,22 @@ export function expectBox(found: Box, mockup: Partial<Box>, tolerance: number, n
       .toBeLessThanOrEqual(tolerance);
   }
 }
+
+/**
+ * Types `first` in `field`, then types `then` at the instant React Router writes the search in the
+ * address (FRU-279). A person who types on does that: the search writes 300 ms after a key, and a
+ * key can come before the screen draws the new address.
+ */
+export async function typeDuringTheWrite(field: Locator, first: string, then: string): Promise<void> {
+  await field.evaluate((input: HTMLInputElement, more: string) => {
+    const replace = history.replaceState.bind(history);
+    history.replaceState = (...args: Parameters<History['replaceState']>) => {
+      history.replaceState = replace;
+      replace(...args);
+      const write = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      write?.call(input, input.value + more);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+  }, then);
+  await field.pressSequentially(first);
+}

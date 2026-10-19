@@ -1,6 +1,17 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, box, expectBox, painted, rgb, sideScroll, stubWorker, styles } from './console-workspace.ts';
+import {
+  ACME,
+  type Role,
+  box,
+  expectBox,
+  painted,
+  rgb,
+  sideScroll,
+  stubWorker,
+  styles,
+  typeDuringTheWrite,
+} from './console-workspace.ts';
 
 /**
  * The Notes page (FRU-245), measured in a browser against screen 10 of the mockup of 2026-10-13: the
@@ -515,6 +526,14 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await expect(rows(page)).toHaveCount(1);
   expect(worker.asked.length).toBe(before + 1);
+  expect(worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+
+  // A key typed while the search is written in the address stays in the field (FRU-279).
+  await search(page).fill('');
+  await expect(page).not.toHaveURL(/q=/);
+  await typeDuringTheWrite(search(page), 'mu', 'g');
+  await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
+  await expect(search(page)).toHaveValue('mug');
   expect(worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
 
   // « Only my notes ».

@@ -4,6 +4,7 @@ import { type InstanceNote, type InstanceNotes, STAGES, type Stage, instanceNote
 import { ago } from '../ago';
 import { msg, t } from '../i18n';
 import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '../ui';
+import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
 import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
@@ -19,8 +20,6 @@ import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
 /** The filters of the screen, in its address: `?workspace=<id>` comes from the Workspaces screen. */
 const FILTERS = ['workspace', 'stage', 'q'] as const;
 type Filters = Record<(typeof FILTERS)[number], string>;
-/** How long the search waits after a key before it reads: a word is typed, not each letter read. */
-const TYPING_MS = 300;
 
 const AUTHOR_WORDS: Readonly<Record<InstanceNote['author']['kind'], string>> = {
   visitor: msg('Visitor'),
@@ -117,16 +116,7 @@ export default function AdminNotes() {
     setParams(next);
   }
 
-  const [typed, setTyped] = useState(filters.q);
-  useEffect(() => setTyped(filters.q), [filters.q]);
-  useEffect(() => {
-    if (typed === filters.q) return;
-    const waiting = setTimeout(() => filter({ q: typed.trim() === '' ? '' : typed }, true), TYPING_MS);
-
-    return () => clearTimeout(waiting);
-    // `filter` reads the address of this render, which is the one to change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typed]);
+  const [typed, setTyped] = useTypedSearch(filters.q, (q) => filter({ q }, true));
 
   const filtered = FILTERS.some((name) => filters[name] !== '');
   // The workspace of the address is an option before any answer names it.

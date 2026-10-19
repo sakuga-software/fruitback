@@ -2,6 +2,7 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { Link, useSearchParams } from 'react-router';
 import { t } from '../i18n';
 import { Choice, Field, LinkButton, type Option, SidePanel } from '../ui';
+import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 
 /**
@@ -11,9 +12,6 @@ import { useLocale } from '../use-locale';
  * WARNING: each read of a list writes a trace in each workspace of the answer that the administrator
  * is not a member of (FRU-261). So the search reads 300 ms after the last key, and never on each key.
  */
-
-/** How long the search waits after a key before it reads: a word is typed, not each letter read. */
-const TYPING_MS = 300;
 
 /** The id of the open panel, which its row names in `aria-controls`. */
 export const PANEL = 'admin-panel';
@@ -58,16 +56,7 @@ export function useListAddress() {
     [setParams],
   );
 
-  const [typed, setTyped] = useState(address.q);
-  useEffect(() => setTyped(address.q), [address.q]);
-  useEffect(() => {
-    if (typed === address.q) return;
-    const waiting = setTimeout(() => change({ q: typed.trim() === '' ? '' : typed }, true), TYPING_MS);
-
-    return () => clearTimeout(waiting);
-    // Only a key starts the wait: a change of the address sets `typed` to it, which is no key.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typed]);
+  const [typed, setTyped] = useTypedSearch(address.q, (q) => change({ q }, true));
 
   /** The address that opens the panel of a row, with the search and the filter of this one. */
   const openTo = (id: string): string => {

@@ -18,6 +18,7 @@ import {
 import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
+import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
@@ -65,8 +66,6 @@ export type NotesAnswer = {
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
 const FILTERS = ['place', 'site', 'stage', 'mine', 'q'] as const;
-/** How long the search waits after a key before it reads: a word is typed, not each letter read. */
-const TYPING_MS = 300;
 
 const AUTHOR_WORDS: Readonly<Record<NoteAuthor['kind'], string>> = {
   you: msg('You'),
@@ -185,17 +184,7 @@ export default function Notes() {
     setParams(next);
   }
 
-  // The search is typed here, and written in the address 300 ms after the last key.
-  const [typed, setTyped] = useState(filters.q);
-  useEffect(() => setTyped(filters.q), [filters.q]);
-  useEffect(() => {
-    if (typed === filters.q) return;
-    const waiting = setTimeout(() => filter({ q: typed.trim() === '' ? '' : typed }, true), TYPING_MS);
-
-    return () => clearTimeout(waiting);
-    // `filter` reads the address of this render, which is the one to change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typed]);
+  const [typed, setTyped] = useTypedSearch(filters.q, (q) => filter({ q }, true));
 
   const hostOf = (id: string) =>
     typeof sites === 'string' ? undefined : sites.find((site) => site.id === id)?.origin.replace(/^https?:\/\//, '');
