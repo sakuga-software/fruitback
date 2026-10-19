@@ -186,7 +186,7 @@ test('an administrator sees the frame and the instance, with the values of the m
   await expect(rail(page)).toContainText('localhost:8788');
   await expect(rail(page)).toContainText('Self-hosted instance');
   const nav = page.getByRole('navigation', { name: 'Instance' });
-  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Notes', 'My workspaces']);
+  await expect(nav.getByRole('link')).toHaveText(['Instance', 'Workspaces', 'Users', 'Notes', 'My workspaces']);
   await expect(nav.getByRole('link', { name: 'Instance' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByRole('link', { name: 'My workspaces' })).toHaveAttribute('href', '/');
   await expect(rail(page).getByRole('link', { name: 'Self-hosting guide' })).toHaveAttribute(
@@ -471,6 +471,8 @@ test('in French, every sentence of the screen is French', async ({ page }) => {
   );
   await expect(page.getByRole('navigation', { name: 'Instance' }).getByRole('link')).toHaveText([
     'Instance',
+    'Workspaces',
+    'Utilisateurs',
     'Notes',
     'Mes workspaces',
   ]);

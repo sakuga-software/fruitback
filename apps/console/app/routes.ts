@@ -31,6 +31,8 @@ export default [
   ]),
   layout('routes/admin.tsx', [
     route('admin', 'routes/admin-instance.tsx'),
+    route('admin/workspaces', 'routes/admin-workspaces.tsx'),
+    route('admin/users', 'routes/admin-users.tsx'),
     route('admin/notes', 'routes/admin-notes.tsx'),
   ]),
   ...kit,

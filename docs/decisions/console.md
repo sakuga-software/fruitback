@@ -349,8 +349,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup**: the switches, « Edit keys », the form of Google and « Turn on Google », « New workspace »,
   the policy « Anyone with an address at … » that the worker does not have, « Backed up 4 h ago »
   (no witness of a backup: « Not reported »), and the lead, which says that a setting is set in the
-  environment and not here. « Workspaces » and « Users » of the rail come with their screens.
-  `e2e/console-admin.spec.ts` holds the screen, the other accounts, the absence of any
+  environment and not here. « Workspaces », « Users » and « Notes » of the rail come with their
+  screens. `e2e/console-admin.spec.ts` holds the screen, the other accounts, the absence of any
   write, the states, French, 390 px and axe.
 - **The notes of the instance are the table of the Notes page, with their workspace** (FRU-273,
   screen 20 of the mockup of 2026-10-13, route of FRU-272). `routes/admin-notes.tsx`
@@ -368,6 +368,26 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and « page · workspace » under a note, which is a column « Workspace » here.
   `e2e/console-admin-notes.spec.ts` holds both kinds of note, the address, the other accounts, the
   absence of any write, the states, French, 390 px and axe.
+- **« Workspaces » and « Users » of the administration are read-only, and read only what is asked**
+  (FRU-263, screens 18 and 19, routes of FRU-261). `routes/admin-workspaces.tsx` and
+  `routes/admin-users.tsx` share `routes/admin-list.tsx`. Opening a screen is an explicit read, so it
+  reads its list when it opens; each read leaves a trace with the owners of the workspaces it names,
+  so **the search reads 300 ms after the last key**, and once only when the screen mounts, also
+  under the `StrictMode` of development. The search, the filter and the chosen row live in the
+  address (`q`, `show`, `open`). The panel of a row follows the rules of FRU-161 and FRU-197: beside
+  the table from 1280 px, under its row below, focus on a press, Escape back to the row. The panel
+  of a workspace reads `GET /console/admin/workspaces/<id>`; the panel of a person is its row, as the
+  worker has no route for one person. **The filters are the worker's** (`attention`, `empty`;
+  `admins`, `alone`), with no count on an option: the worker counts the filter it answers only.
+  « Manage in Users » searches the address of the first owner: the search of the people does not
+  match a workspace. « Last seen » is a day, as on Members. **Not copied from the mockup**: every
+  action (« New workspace », « Invite someone », « Send them again », « Suspend », « Delete »,
+  « Restore access », « Add to a workspace », the role lists, the switch « Instance admin », which is
+  « Yes » or « No ») until FRU-274; the filters « Suspended » and « Invited »; the counts of the
+  options; « Active now » and « 2 h ago » (no hour); « The address answered 503 at … » and
+  « Browsers signed in » (no data); a row for somebody invited who has no account (the worker lists
+  accounts). `e2e/console-admin-lists.spec.ts` holds both screens, the debounce, the filters, the
+  panels, the other accounts, the absence of any write, the states, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

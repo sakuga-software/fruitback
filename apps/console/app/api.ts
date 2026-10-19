@@ -732,3 +732,84 @@ export function instanceNotes(query: URLSearchParams): Promise<Answer<InstanceNo
 
   return call('GET', `/console/admin/notes${asked === '' ? '' : `?${asked}`}`);
 }
+
+/** How many notes of a workspace or of a site are at each stage (FRU-261). */
+export type StageCounts = Partial<Record<Stage, number>>;
+
+/** A connector of a workspace, as its administrator lists it (FRU-261): no secret and no address. */
+export type AdminConnector = { id: string; kind: string; label: string; attention?: ConnectorAttention };
+
+/** A row of « Workspaces » of the administration (FRU-261). */
+export type AdminWorkspace = InstanceWorkspace & {
+  notes: StageCounts;
+  destinations: AdminConnector[];
+  pendingDeliveries: number;
+};
+
+/** One workspace, with its people and its sites (FRU-261). */
+export type AdminWorkspaceDetail = {
+  id: string;
+  name: string;
+  createdAt: string;
+  members: { id: string; name?: string; email: string; role: string; lastSeen?: string }[];
+  sites: { id: string; origin: string; visibility: string; notes: StageCounts }[];
+  destinations: (AdminConnector & { createdAt: string })[];
+  pendingDeliveries: number;
+  pendingInvitations: number;
+};
+
+/** A row of « Users » of the administration (FRU-261). `lastSeen` is a day, `YYYY-MM-DD`. */
+export type AdminUser = {
+  id: string;
+  name?: string;
+  email: string;
+  createdAt: string;
+  instanceAdmin: boolean;
+  workspaces: { id: string; name: string; role: string }[];
+  /** `email`, `github`, `google`. */
+  providers: string[];
+  lastSeen?: string;
+  pendingInvitations: { workspace: { id: string; name: string }; role?: string }[];
+};
+
+/** What the lists of the administration show: `show` is one of the filters of the worker. */
+export type AdminQuery = { q: string; show: string };
+
+function adminList(path: string, { q, show }: AdminQuery): string {
+  const query = new URLSearchParams();
+  if (q !== '') query.set('q', q);
+  if (show !== 'all') query.set('show', show);
+  const search = query.toString();
+
+  return search === '' ? path : `${path}?${search}`;
+}
+
+/**
+ * The workspaces of the instance that match a search and a filter: 100 at most, and `total`.
+ *
+ * WARNING: the worker writes a trace of this read in each workspace of the answer that the
+ * administrator is not a member of. The owners of the workspace read it.
+ */
+export function adminWorkspaces(query: AdminQuery): Promise<Answer<{ workspaces: AdminWorkspace[]; total: number }>> {
+  return call('GET', adminList('/console/admin/workspaces', query));
+}
+
+/**
+ * One workspace of the instance.
+ *
+ * WARNING: the worker writes a trace of this read in the workspace when the administrator is not a
+ * member of it. Its owners read it.
+ */
+export function adminWorkspace(id: string): Promise<Answer<AdminWorkspaceDetail>> {
+  return call('GET', `/console/admin/workspaces/${encodeURIComponent(id)}`);
+}
+
+/**
+ * The accounts of the instance that match a search and a filter: 100 at most, and `total`.
+ *
+ * WARNING: the worker writes a trace of this read in each workspace of the answer, and of their
+ * invitations, that the administrator is not a member of. The owners of the workspace read it.
+ */
+export function adminUsers(query: AdminQuery): Promise<Answer<{ users: AdminUser[]; total: number }>> {
+  return call('GET', adminList('/console/admin/users', query));
+}

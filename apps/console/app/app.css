@@ -816,6 +816,12 @@ textarea {
   background: var(--color-subtle);
 }
 
+/* The row whose panel is open keeps its tint under the pointer. */
+.kit-table tbody tr[data-chosen='true'],
+.kit-table[data-hover='true'] tbody tr[data-chosen='true']:hover {
+  background: var(--color-chip);
+}
+
 .kit-table [data-align='end'] {
   text-align: right;
 }
@@ -852,6 +858,10 @@ textarea {
   flex-direction: column;
   gap: 24px;
   padding: 20px 22px;
+}
+
+.kit-panel[data-spacing='tight'] .kit-panel__body {
+  gap: 22px;
 }
 
 .kit-panel__foot {
