@@ -490,9 +490,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       ...(touch ? [] : [say('fruitback-banner-keys', 'capture.instructions')]),
       halt,
     );
-    // The capsule hides the launch button while a capture runs (FRU-303). Focus that was on it goes
-    // to the way out, which takes its place: Enter there still stops the capture.
-    if (deepActiveElement(document) === button) halt.focus();
+    // The capsule hides its controls while a capture runs (FRU-303): the launch button, the list,
+    // the gear, the chip of the detached notes. Focus that was on one of them goes to the way out,
+    // which takes their place: Enter there still stops the capture.
+    const active = deepActiveElement(document);
+    if (active !== null && dock.contains(active) && !banner.contains(active)) halt.focus();
   }
 
   function stop(): void {

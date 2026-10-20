@@ -671,6 +671,25 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     assert.equal(press(page, 'Enter').defaultPrevented, false);
   });
 
+  it('gives focus to the way out when the gear or the list had it, as the shortcut may start a capture then', () => {
+    for (const control of ['.fruitback-configure', '.fruitback-listing']) {
+      const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+      host = createCaptureHost({
+        document: page.document,
+        engine: fakeEngine(page, () => null),
+        onSelect: () => {},
+        onConfigure: () => {},
+        onList: () => {},
+      });
+      (host.root.querySelector(control) as HTMLElement).focus();
+      host.start();
+      const halt = host.root.querySelector('.fruitback-banner-stop') as HTMLElement;
+      assert.ok(deepActiveElement(page.document) === halt, `focus stayed on the hidden ${control}`);
+      host.destroy();
+      host = null;
+    }
+  });
+
   it('leaves focus where it is when a capture starts from elsewhere, as the shortcut of the extension does', () => {
     const page = mountKeyboard();
     const outside = page.query('#cta') as HTMLElement;
