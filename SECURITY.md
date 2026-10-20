@@ -1719,8 +1719,10 @@ same transaction).
   not reopen a note that the team did not close.
   test:`answers 409 on a note that is not done, and on a note confirmed already, and writes nothing`.
   **One verdict at a time on a note**: a second one sent while the first is written is
-  `409 check-in-progress`, held by a key of the shared `kv` for the time of the write (15 s at most).
-  test:`writes one verdict for two sent together, and answers 409 to the other`.
+  `409 check-in-progress`, held by a key of the shared `kv` for the time of the write (15 s at most),
+  and the note is read again under the key, so a request that read it before another wrote reads the
+  verdict after. test:`writes one verdict for two sent together, and answers 409 to the other`,
+  test:`writes one verdict when the second request read the note before the first wrote, and took the key after`.
 - **An index that does not answer is `502 store-unavailable`**, never a refusal of the author: the
   person tries again. test:`answers 502 when the index of the notes does not answer, never a refusal of the author`.
 - **Which note.** As for a reply: the route reads the page for the site and writes only under a note

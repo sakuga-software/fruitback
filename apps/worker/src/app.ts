@@ -1098,10 +1098,18 @@ async function postCheck(
       // and the limit of all requests applies above.
       // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
       // and would write two verdicts. The second is refused while the first is written; after it, the
-      // guards read the verdict of the first.
+      // read under the key sees the verdict of the first.
       const lock = `fruitback:check:${clientId}:${found.seed.id}`;
       if ((await kv.incr(lock, CHECK_LOCK_MS)) > 1) return json(409, { error: 'check-in-progress' }, corsHeaders);
       try {
+        // Read again under the key: a request that read the note before another wrote its verdict
+        // takes the key after it, and must see that verdict.
+        const now = (await store.findForPage({ url, clientId }, target, route.policy)).find(
+          (each) => each.id === found.id,
+        );
+        if (now === undefined) break;
+        if (now.stage !== 'ripe') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
+        if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
         const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
         const membership = memberships.find((each) => each.workspace.id === workspace);
         if (person === undefined || membership === undefined) {
@@ -1126,7 +1134,7 @@ async function postCheck(
             workspace,
             clientId,
             placeOf(target),
-            [{ ...found, stage: answer.stage, comments: [...(found.comments ?? []), answer.comment] }],
+            [{ ...now, stage: answer.stage, comments: [...(now.comments ?? []), answer.comment] }],
             Date.now(),
             { verdicts: true },
           ),

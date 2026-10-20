@@ -3237,6 +3237,8 @@ replies, and on a public site mounted by the extension with no session, only the
 - **One verdict at a time on a note** (heavy review): the guards read the store, then the store
   writes, and two requests can pass the guards together. A key of the `kv` (`incr`, `CHECK_LOCK_MS`)
   holds the note for the time of the write and is freed when the store answers, whatever it said.
+  Under the key the note is read again: a request that read before another wrote, and takes the
+  key after it, must see that verdict (lite review of #376).
   The `kv` is the database, so the replicas share it.
 - **An index that does not answer is a store that does not answer** (`indexedAuthorOf`): `502`,
   never « no author », which would refuse the author.

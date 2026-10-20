@@ -335,6 +335,47 @@ describe('a verdict, when two come at once or a store fails (FRU-294, heavy revi
     assert.equal(issue?.comments?.length, 1);
   });
 
+  it('writes one verdict when the second request read the note before the first wrote, and took the key after', async () => {
+    const { world, site, member, owner, note } = await aDoneNote();
+    // The first request writes for 150 ms, and the second reads the note during that write. The
+    // second then waits on the index past the end of the first, and takes the key that it gave back.
+    const memory = createMemoryStore();
+    const slow: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return memory.check?.(...args);
+      },
+    };
+    const real = world.context.noteIndex as NoteIndex;
+    let asked = 0;
+    const late: NoteIndex = {
+      ...real,
+      authors: async (...args) => {
+        asked += 1;
+        if (asked === 2) await new Promise((resolve) => setTimeout(resolve, 400));
+        return real.authors(...args);
+      },
+    };
+
+    const answers = await Promise.all([
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow, noteIndex: late }),
+      new Promise((resolve) => setTimeout(resolve, 60)).then(() =>
+        check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow, noteIndex: late }),
+      ),
+    ]);
+
+    assert.deepEqual(
+      answers.map((answer) => [answer.status, answer.body.error]),
+      [
+        [201, undefined],
+        [409, 'already-checked'],
+      ],
+    );
+    const [issue] = await read(world, site.id, owner);
+    assert.equal(issue?.comments?.length, 1);
+  });
+
   it('frees the note when the store fails, so the retry writes it', async () => {
     const { world, site, member, note } = await aDoneNote();
     const memory = createMemoryStore();
