@@ -698,7 +698,7 @@ describe('the thread of a note in place of the rows (FRU-312)', () => {
 
     rows()[0]?.click();
     // A press on the page, outside the list: focus goes to the page, and the click closes the thread.
-    const main = page.query('main');
+    const main = page.query('main') as HTMLElement;
     main.dispatchEvent(new view.Event('pointerdown', { bubbles: true, composed: true }));
     (deepActiveElement(page.document) as HTMLElement | null)?.blur();
     main.click();
