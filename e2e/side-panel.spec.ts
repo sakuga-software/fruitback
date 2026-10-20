@@ -1,5 +1,6 @@
 import { type Page, expect } from '@playwright/test';
 import { type LoadedExtension, PLAYGROUND_ORIGIN, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { pinFor } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -84,6 +85,15 @@ const WORDS = {
     done: 'Done',
     show: 'Show on the page',
     reply: 'Reply',
+    ready: 'Ready to check',
+    fixed: 'Looks fixed',
+    wrong: 'Still wrong',
+    markedDone: 'Marked done',
+    doneStage: 'Done',
+    newStage: 'New',
+    checkedByYou: 'Checked by you',
+    reopenedByYou: 'Reopened by you',
+    justNow: 'just now',
   },
   fr: {
     title: 'Notes de cette page',
@@ -96,6 +106,15 @@ const WORDS = {
     done: 'Terminées',
     show: 'Voir sur la page',
     reply: 'Répondre',
+    ready: 'À vérifier',
+    fixed: 'C’est corrigé',
+    wrong: 'Toujours pas',
+    markedDone: 'Marquée terminée',
+    doneStage: 'Terminé',
+    newStage: 'Nouveau',
+    checkedByYou: 'Vérifiée par vous',
+    reopenedByYou: 'Rouverte par vous',
+    justNow: 'à l’instant',
   },
 } as const;
 
@@ -320,7 +339,7 @@ function readyBlock(page: Page) {
 }
 
 /** A click on « Looks fixed » or « Still wrong » of the note with these words. */
-function verdict(page: Page, note: string, label: 'Looks fixed' | 'Still wrong'): Promise<boolean> {
+function verdict(page: Page, note: string, label: string): Promise<boolean> {
   return inPanel<boolean>(
     page,
     `(() => {
@@ -351,35 +370,68 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
   await popup.getByRole('button', { name: 'Turn on here' }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 
-  // Eight notes of the person: the store in memory marks the third and the eighth of a page done.
-  const cards = ['espresso', 'latte', 'mocha'];
-  for (let index = 0; index < 8; index += 1) {
-    const card = cards[index % cards.length];
-    await plantOn(page, `[data-testid="card-${card}"] ${index < 3 ? '.add' : 'h3'}`, `Check note ${index + 1}`);
+  // Four notes of the person. The team marks the second and the third done, and closes the fourth,
+  // as it would in its tracker: `POST /__dev/stage` of the worker of the suite.
+  for (let index = 0; index < 4; index += 1) {
+    await plantOn(
+      page,
+      `[data-testid="card-${['espresso', 'latte', 'mocha', 'espresso'][index]}"] ${index < 3 ? '.add' : 'h3'}`,
+      `Check note ${index + 1}`,
+    );
   }
-  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(8);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(4);
+  for (const [note, stage] of [
+    ['Check note 2', 'ripe'],
+    ['Check note 3', 'ripe'],
+    ['Check note 4', 'composted'],
+  ] as const) {
+    const id = await pinFor(page, note).getAttribute('data-fruitback-pin');
+    const moved = await fetch(`${AUTHENTICATED_WORKER_ORIGIN}/__dev/stage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: id, stage }),
+    });
+    expect(moved.status, note).toBe(200);
+  }
+  // The widget reads the stages of now when the page comes back, once the shared cache of the read
+  // (15 s, `CACHE_TTL_MS`) has let go of the answer of before.
+  await expect
+    .poll(
+      async () => {
+        await page.reload();
+        await expect(page.locator('[data-fruitback-pin]')).toHaveCount(4);
+
+        return page.locator('[data-fruitback-pin][data-fruitback-stage="ripe"]').count();
+      },
+      { timeout: 40_000, intervals: [3_000] },
+    )
+    .toBe(2);
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: 'Show every note of the page' }).click();
-  await expect
-    .poll(async () => (await readyBlock(page).catch(() => ({ title: null }))).title)
-    .toBe('Ready to check · 2');
+  await expect.poll(async () => (await readyBlock(page).catch(() => ({ items: [] }))).items.length).toBe(2);
+  const said = await words(page);
   const ready = await readyBlock(page);
-  expect(ready.items.map((item) => item.note).sort()).toEqual(['Check note 3', 'Check note 8']);
-  // The third note of a page has the replies of the dev store: Bruno's is the newest.
-  expect(ready.items.find((item) => item.note === 'Check note 3')?.meta).toMatch(/^Fixed by (Bruno|Alice) · /);
+  expect(ready.title).toBe(`${said.ready} · 2`);
+  expect(ready.items.map((item) => item.note).sort()).toEqual(['Check note 2', 'Check note 3']);
+  // No reply of the team: who marked it done is not known, only when.
+  expect(ready.items.find((item) => item.note === 'Check note 3')?.meta).toMatch(new RegExp(`^${said.markedDone} · `));
   // Not in Done while they wait to be checked.
-  expect((await panelRows(page)).tabs).toEqual([expect.stringMatching(/^Open · \d+$/), 'Done · 1']);
+  expect((await panelRows(page)).tabs[1]).toBe(`${said.done} · 1`);
 
   // « Looks fixed »: the note is in Done, checked by the person.
-  expect(await verdict(page, 'Check note 3', 'Looks fixed')).toBe(true);
-  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBe('Ready to check · 1');
-  await expect.poll(() => rowMeta(page, 'Check note 3')).toMatch(/^Done · Checked by you · /);
+  expect(await verdict(page, 'Check note 3', said.fixed)).toBe(true);
+  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBe(`${said.ready} · 1`);
+  await expect
+    .poll(() => rowMeta(page, 'Check note 3'))
+    .toBe(`${said.doneStage} · ${said.checkedByYou} · ${said.justNow}`);
 
   // « Still wrong »: the note is open again, New, reopened by the person.
-  expect(await verdict(page, 'Check note 8', 'Still wrong')).toBe(true);
+  expect(await verdict(page, 'Check note 2', said.wrong)).toBe(true);
   await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBeNull();
-  await expect.poll(() => rowMeta(page, 'Check note 8')).toBe('New · Reopened by you · just now');
+  await expect
+    .poll(() => rowMeta(page, 'Check note 2'))
+    .toBe(`${said.newStage} · ${said.reopenedByYou} · ${said.justNow}`);
 
   // The pins of the page say the same: the store moved the note, and the widget read it.
   await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="seeded"]')).not.toHaveCount(0);
