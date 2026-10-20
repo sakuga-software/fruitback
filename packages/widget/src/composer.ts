@@ -319,7 +319,9 @@ export function createComposer(options: ComposerOptions): Composer {
       identifier === undefined || identifier === ''
         ? t.text('composer.sent')
         : t.text('composer.sentAs', { identifier });
-    if (withoutPicture) sentTitle.textContent = t.text('composer.sentWithoutPicture');
+    // The identifier stays in the title: the note is planted. The picture it lacks is said under it,
+    // in place of the sentence that the pin follows the issue, which the new sentence ends with.
+    sentText.textContent = t.text(withoutPicture ? 'composer.sentWithoutPicture' : 'composer.sentFollows');
     // The number rides in its own span, turned back upright, as on a pin.
     const number = document.createElement('span');
     number.textContent = sentAs?.number === undefined ? '' : String(sentAs.number);

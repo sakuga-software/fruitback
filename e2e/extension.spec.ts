@@ -247,8 +247,12 @@ test('private mode: a picture the browser cannot take costs the picture, never t
   await page.getByLabel('Open Fruitback settings').click();
 
   await plantOnTheLatteCard(page, /Leave feedback/, 'Sans image, et pourtant envoyée');
-  // Not in silence (FRU-238): the composer says the note went without the picture it asked for.
-  await expect(page.getByText('sent, without the picture')).toBeVisible();
+  // Not in silence (FRU-238): the composer says the note went without the picture it asked for, and
+  // the title of its card keeps what the note was sent as (FRU-326).
+  await expect(page.locator('[data-fruitback-sent-text]')).toHaveText(
+    /^Sent without the picture, which could not be taken\./,
+  );
+  await expect(page.locator('[data-fruitback-sent-title]')).toHaveText(/^Sent( as \S+)?$/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   const [seed] = await seedsOn(page);

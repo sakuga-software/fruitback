@@ -48,7 +48,8 @@ export const FRENCH: Catalog = {
   'composer.landsTeam': 'Envoyée à l’équipe',
   'composer.failedTitle': 'Pas envoyée',
   'composer.failedRetry': 'Le texte est gardé. Réessayez, ou copiez-le avant de fermer la page.',
-  'composer.sentWithoutPicture': 'Envoyée, sans l’image',
+  'composer.sentWithoutPicture':
+    'Envoyée sans l’image, qui n’a pas pu être prise. Le pin reste ici et suit le statut du ticket.',
   'composer.keptWithoutPicture': 'Gardée pour plus tard, sans l’image',
   'composer.keep': 'Garder pour plus tard',
   'composer.restored': 'Brouillon restauré',

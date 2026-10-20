@@ -79,7 +79,8 @@ export const ENGLISH = {
   'composer.failedTitle': 'Did not go through',
   // The sentence of a send that can be tried again, under that title.
   'composer.failedRetry': 'Your text is kept. Try again, or copy it before closing the page.',
-  'composer.sentWithoutPicture': 'Sent, without the picture',
+  'composer.sentWithoutPicture':
+    'Sent without the picture, which could not be taken. The pin stays here and follows the issue’s status.',
   'composer.keptWithoutPicture': 'Kept for later, without the picture',
   // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.
   'composer.keep': 'Keep for later',

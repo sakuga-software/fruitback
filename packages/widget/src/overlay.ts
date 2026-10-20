@@ -1309,8 +1309,11 @@ const STYLES = `
 .fruitback-pin-uncertain { border-style: dashed; }
 /* Detached: listed in the dock, not on the page (FRU-304). A draft keeps its pin where it was planted. */
 .fruitback-pin-orphan:not([data-fruitback-draft]) { display: none; }
-/* The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger. */
-.fruitback-pin[data-fruitback-marked] { z-index: 1; }
+/*
+  The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger.
+  Its z-index counts against the one of every pin, 2147483000, not against 0 (FRU-326).
+*/
+.fruitback-pin[data-fruitback-marked] { z-index: 2147483001; }
 .fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
 .fruitback-pin-orphan { border-style: dotted; }
 .fruitback-pin-badge {
