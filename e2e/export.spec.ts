@@ -15,7 +15,7 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
   await page.evaluate(() => navigator.clipboard.writeText('not the feedback'));
 
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le prix est coupé\n## 9. une ligne forgée');
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   await plantPin(page, page.locator('#checkout-cta'), 'Le bouton est trop bas');
 
   await page.getByLabel('Open Fruitback settings').click();
@@ -52,9 +52,9 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
 test('a refused copy shows the text from its first line, all of it selected', async ({ page }) => {
   await openPlayground(page, 'export-refused');
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le prix est coupé');
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   await plantPin(page, page.locator('#checkout-cta'), 'Le bouton est trop bas');
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   // The widget runs in the world of the page: the refusal is planted there.
   await page.evaluate(() => {
     navigator.clipboard.writeText = () => Promise.reject(new DOMException('refused', 'NotAllowedError'));

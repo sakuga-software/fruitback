@@ -47,8 +47,10 @@ async function sendFailing(page: Page, note: string): Promise<string> {
   const field = page.locator('[data-fruitback-note]');
   await field.fill(note);
   await page.locator('[data-fruitback-send]').click();
-  const status = page.locator('[data-fruitback-status]');
+  // The sentence of the cause, under « Did not go through », in the card of a failed send (FRU-305).
+  const status = page.locator('[data-fruitback-failed-text]');
   await expect(page.locator('[data-fruitback-state="failed"]')).toBeVisible();
+  await expect(page.locator('[data-fruitback-failed-title]')).not.toHaveText('');
   // The text is kept, whatever the cause.
   await expect(field).toHaveValue(note);
 
@@ -59,7 +61,7 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   await refuseWrites(page, 503, 'store-unavailable');
   await mount(page, 'send-failure-503', 'en-US');
   const unavailable = await sendFailing(page, 'Kept through a 503');
-  expect(unavailable).toBe('Did not go through — your text is kept, try again');
+  expect(unavailable).toBe('Your text is kept. Try again, or copy it before closing the page.');
 
   await page.unrouteAll();
   await refuseWrites(page, 403, 'origin-not-allowed');
@@ -68,8 +70,8 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   expect(refused).toMatch(/tell the team of the site/);
   expect(refused).not.toBe(unavailable);
 
-  // Still announced: the words are in the live region of the composer.
-  await expect(page.locator('[data-fruitback-status]')).toHaveAttribute('role', 'status');
+  // Still announced: the card of a failure is an alert (FRU-305).
+  await expect(page.locator('[data-fruitback-failed]')).toHaveAttribute('role', 'alert');
 });
 
 test('in French, at 360 px of composer, the failure has a line of its own above the buttons', async ({ page }) => {
@@ -77,12 +79,12 @@ test('in French, at 360 px of composer, the failure has a line of its own above 
   await mount(page, 'send-failure-layout', 'fr-FR');
   await sendFailing(page, 'Une note refusée');
 
-  const status = await page.locator('[data-fruitback-status]').boundingBox();
+  const status = await page.locator('[data-fruitback-failed]').boundingBox();
   const cancel = await page.locator('[data-fruitback-cancel]').boundingBox();
   const send = await page.locator('[data-fruitback-send]').boundingBox();
   const composer = await page.locator('[data-fruitback-state="failed"]').boundingBox();
   expect(composer?.width).toBeLessThanOrEqual(360);
-  // The sentence ends above the top of both buttons: it shares no line with them.
+  // The card of the failure ends above the top of both buttons: it shares no line with them.
   expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
 });
 
@@ -97,7 +99,7 @@ for (const [locale, sentence] of [
     expect(await sendFailing(page, 'Kept through a 401')).toBe(sentence);
 
     await expect(page.locator('[data-fruitback-send]')).toBeEnabled();
-    const status = await page.locator('[data-fruitback-status]').boundingBox();
+    const status = await page.locator('[data-fruitback-failed]').boundingBox();
     const cancel = await page.locator('[data-fruitback-cancel]').boundingBox();
     const send = await page.locator('[data-fruitback-send]').boundingBox();
     const composer = await page.locator('[data-fruitback-state="failed"]').boundingBox();

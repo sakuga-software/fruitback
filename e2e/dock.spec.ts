@@ -171,7 +171,7 @@ test('a capture plays end to end inside the capsule, with the mouse and then wit
   await expect(host).not.toHaveAttribute('data-fruitback-capturing', '');
   await expect(banner).toBeEmpty();
   await expect(launch).toBeVisible();
-  await page.getByRole('button', { name: 'Close without sending' }).click();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toBeHidden();
 
   // With the keyboard: Enter on the launch button, the arrows to an element, Enter to choose it.
@@ -187,7 +187,7 @@ test('a capture plays end to end inside the capsule, with the mouse and then wit
   await expect(page.getByPlaceholder('What should change?')).toBeFocused();
   await expect(host).not.toHaveAttribute('data-fruitback-capturing', '');
   // Closed with no note, focus goes back to the launch button, which is drawn again.
-  await page.getByRole('button', { name: 'Close without sending' }).click();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(launch).toBeVisible();
   await expect(launch).toBeFocused();

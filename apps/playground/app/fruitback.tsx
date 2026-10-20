@@ -7,6 +7,7 @@ import {
   type ConfigPanel,
   type ConfigStore,
   type Overlay,
+  aboutTarget,
   captureSeed,
   createCaptureHost,
   createComposer,
@@ -95,6 +96,8 @@ export function Fruitback() {
             bottom: rect.bottom + window.scrollY,
             right: rect.right + window.scrollX,
           },
+          // What the note points at, in the head (FRU-305), and what the element says, as its title.
+          aboutTarget(selected.element, selected.source),
           readableName(selected.element),
         );
         setStatus(selected.source?.component ? `cible : <${selected.source.component}>` : 'cible sélectionnée');
@@ -124,6 +127,8 @@ export function Fruitback() {
         set: (name) => config.set({ reporterName: name }),
       },
       onClose: () => host.release(),
+      // « Pick again » starts a capture over the open composer, like `init` (FRU-305).
+      onPickAgain: () => host.start(),
       onSubmit: async (note, reporter) => {
         const identifier = await plant(note, target.current, setStatus, reporter);
         if (identifier === null) return false;

@@ -15,7 +15,7 @@ import { type TypingPlace, createTypingStore } from './typing.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackPlacement, feedbackAsText, placementOf } from './export.ts';
 import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
-import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
+import { type CaptureHost, type CaptureTarget, aboutTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
@@ -383,6 +383,7 @@ export function init(options: FruitbackOptions): Fruitback {
           bottom: rect.bottom + view.scrollY,
           right: rect.right + view.scrollX,
         },
+        aboutTarget(selected.element, selected.source),
         readableName(selected.element),
       );
     },
@@ -621,7 +622,17 @@ export function init(options: FruitbackOptions): Fruitback {
       const destination = destinationToSend(destinations.get(), chosen);
       // The element this note is about, as it was sent: the composer may stand on another by the answer.
       const about = typingPlace;
-      const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
+      let seedId: string | undefined;
+      const planted = await plant({
+        note,
+        target,
+        place,
+        reporter,
+        destination,
+        config: config.get(),
+        options,
+        onSeed: (id) => (seedId = id),
+      });
       if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
       if (typeof planted === 'string') {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
@@ -636,8 +647,19 @@ export function init(options: FruitbackOptions): Fruitback {
       // back, which is also what proves the write landed somewhere the read path can find.
       await read();
 
-      return planted;
+      // The card of a sent note says what the read gave back for it (FRU-305): its identifier, the
+      // way to it when the reader may open it, and the number of its pin.
+      const shown = overlay.resolutions().find((entry) => entry.issue.seed.id === seedId);
+      if (shown === undefined) return planted;
+
+      return {
+        sentAs: { identifier: shown.issue.identifier, url: shown.issue.url, number: shown.number },
+        ...(planted === true ? {} : { picture: 'missed' as const }),
+      };
     },
+    // « Pick again » starts a capture over the open composer: it keeps the text, and moves to the
+    // element chosen (FRU-258, FRU-305).
+    onPickAgain: () => host.start(),
   });
 
   /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
@@ -1004,6 +1026,7 @@ export async function plant({
   destination,
   config,
   options,
+  onSeed,
 }: {
   note: string;
   target: CaptureTarget | null;
@@ -1014,10 +1037,13 @@ export async function plant({
   destination?: string | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
+  /** The id of the seed about to be sent, so the caller finds its pin after the read (FRU-305). */
+  onSeed?: (id: string) => void;
 }): Promise<true | SentWithoutPicture | SendFailure> {
   const made = await seedFor({ note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
   const { seed, missedPicture } = made;
+  onSeed?.(seed.id);
 
   // Asked for per write rather than once at init: a short-lived token that expired mid-session would
   // otherwise turn every later note into a 401.

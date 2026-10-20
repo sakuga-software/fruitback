@@ -34,7 +34,7 @@ async function plant(page: Page, note: string): Promise<void> {
   await page.locator('[data-testid="card-espresso"] .add').click();
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
 }
 
 /** Every note the worker reads back gets fourteen replies. The store in memory gives two at most. */

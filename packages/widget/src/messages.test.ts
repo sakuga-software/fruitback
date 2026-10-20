@@ -12,7 +12,7 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
-import { type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
+import { type SendFailure, type SentAs, type SentWithoutPicture, createComposer, failureText } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
@@ -243,7 +243,7 @@ describe('every word the widget shows', () => {
       exportText: () => exported,
     });
     cleanup.push(() => panel.destroy());
-    let answer: (planted: boolean | SendFailure | SentWithoutPicture) => void = () => {};
+    let answer: (planted: boolean | SendFailure | SentWithoutPicture | SentAs) => void = () => {};
     let keptAnswer: true | SentWithoutPicture = true;
     let restoredText: string | undefined;
     const places = createOfferedDestinations();
@@ -252,7 +252,7 @@ describe('every word the widget shows', () => {
       document: page.document,
       host: host.panel,
       translator,
-      onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture>((resolve) => (answer = resolve)),
+      onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture | SentAs>((resolve) => (answer = resolve)),
       // Offered, so « Keep for later » is drawn (FRU-124).
       keep: { offered: () => true, onKeep: async () => keptAnswer },
       // A text saved for the element comes back with « Draft restored » (FRU-311).
@@ -421,6 +421,10 @@ describe('every word the widget shows', () => {
     // A read takes the places away under the open popover, and the composer says so.
     places.set([]);
     snapshots.push(...shown(host.root));
+    // One place: the foot says where the note lands (FRU-305).
+    places.set([{ id: 'dst_one', label: 'PLACE ONE' }]);
+    snapshots.push(...shown(host.root));
+    places.set([]);
     const send = composer.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     send.click();
@@ -444,6 +448,12 @@ describe('every word the widget shows', () => {
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     send.click();
     answer(true);
+    await settle();
+    snapshots.push(...shown(host.root));
+    // Sent, with what the worker gave back: « Sent as » its identifier (FRU-305).
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
+    send.click();
+    answer({ sentAs: { identifier: 'ID-1', url: 'https://…', number: 1 } });
     await settle();
     snapshots.push(...shown(host.root));
     // Kept for later rather than sent (FRU-124).
@@ -487,6 +497,9 @@ describe('every word the widget shows', () => {
         screenshot: { url: 'https://cdn.test/shot.png' },
       }),
     });
+    // The sentence of a send of drafts that can be tried again: the list writes it in its live region
+    // (FRU-124), and the composer writes another one under its title since FRU-305.
+    snapshots.push(failureText(translator, 'retry'));
     const copied = [
       feedbackAsText([], { pageUrl: 'https://acme.test/', translator }),
       feedbackAsText(

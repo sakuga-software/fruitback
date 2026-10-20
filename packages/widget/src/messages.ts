@@ -53,22 +53,32 @@ export const ENGLISH = {
   'settings.copyManually': 'Copy the text from here',
 
   'composer.placeholder': 'What should change?',
-  'composer.label': 'What should change?',
-  // The name of the dialog, and the title its head shows.
+  // The label above the field of the note (FRU-305), which names it.
+  'composer.label': 'Your comment',
+  // The name of the dialog.
   'composer.dialog': 'New note',
-  // `{element}` is the text of the element the note is about, or the name the page gave it.
-  'composer.about': 'on {element}',
-  'composer.close': 'Close without sending',
+  // The button of the head that starts a capture again, keeping the text (FRU-305).
+  'composer.pickAgain': 'Pick again',
   // The same preference as `settings.screenshot`, said beside the note it applies to.
-  'composer.picture': 'Attach a picture of this element',
-  'composer.identify': 'Add my name (optional)',
+  'composer.picture': 'Attach a picture of the element',
   'composer.namePlaceholder': 'Your name',
-  'composer.nameLabel': 'Your name (optional)',
+  'composer.nameLabel': 'Name (optional)',
   'composer.remember': 'Remember me on this site',
   'composer.cancel': 'Cancel',
   'composer.send': 'Send',
   'composer.sending': 'Sending…',
   'composer.sent': 'Sent',
+  // The card of a sent note (FRU-305): its identifier, what its pin does, and the way to the issue.
+  'composer.sentAs': 'Sent as {identifier}',
+  'composer.sentFollows': 'The pin stays here and follows the issue’s status.',
+  'composer.sentOpen': 'Open →',
+  // Where the note lands, in the foot (FRU-305): the place a member sees, or the team.
+  'composer.lands': 'Lands in {destination} as a new issue',
+  'composer.landsTeam': 'Sent to the team',
+  // The title of the card of a failed send (FRU-305), above the sentence of its cause.
+  'composer.failedTitle': 'Did not go through',
+  // The sentence of a send that can be tried again, under that title.
+  'composer.failedRetry': 'Your text is kept. Try again, or copy it before closing the page.',
   'composer.sentWithoutPicture': 'Sent, without the picture',
   'composer.keptWithoutPicture': 'Kept for later, without the picture',
   // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.

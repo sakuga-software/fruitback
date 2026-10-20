@@ -328,10 +328,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     tag.hidden = false;
     void sourceOf(element).then((source) => {
       if (element !== hovered && element !== chosen) return;
-      // The name the note will carry, which is not always the engine's: see `componentOf`.
-      const component = componentOf(element, source)?.trim() ?? '';
       // As text: a name is whatever the page called its component.
-      tag.textContent = component === '' ? selector : `${selector} · <${component}>`;
+      tag.textContent = aboutTarget(element, source);
     });
   }
 
@@ -670,6 +668,18 @@ export function shortSelector(element: Element): string {
   }
 
   return best === undefined ? tag : `${tag}.${best}`;
+}
+
+/**
+ * What a note on this element points at, as the frame of a capture and the head of the composer
+ * write it (FRU-303, FRU-305): « button.add · <AddToCart> », the short selector alone when the page
+ * gives no component. The component is the one the note will carry: see `componentOf`.
+ */
+export function aboutTarget(element: Element, source: SeedSource | undefined): string {
+  const selector = shortSelector(element);
+  const component = componentOf(element, source)?.trim() ?? '';
+
+  return component === '' ? selector : `${selector} · <${component}>`;
 }
 
 /**

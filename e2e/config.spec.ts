@@ -130,11 +130,14 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   await openPlayground(page, 'config-visuals');
   await page.getByLabel('Open Fruitback settings').click();
 
-  // `all: initial` resets `appearance` to its initial value, which is `none` — a native checkbox
-  // then draws nothing while staying perfectly checkable.
-  const box = page.locator('[name="stage-ripe"]');
-  await expect(box).toBeVisible();
-  expect(await box.evaluate((node) => getComputedStyle(node).appearance)).not.toBe('none');
+  // The box of a status is drawn as a chip since FRU-305: the chip is what must be drawn, with the
+  // drop of its colour, while its box stays checkable over it.
+  const chip = page.locator('.fruitback-config-chip').filter({ has: page.locator('[name="stage-ripe"]') });
+  await expect(chip).toBeVisible();
+  expect(await chip.locator('.fruitback-config-chip-drop').evaluate((node) => (node as HTMLElement).offsetWidth)).toBe(
+    9,
+  );
+  await expect(page.locator('[name="stage-ripe"]')).toBeChecked();
 
   // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
   // from the gear's own size cannot know that, and it covered the label.
@@ -144,4 +147,76 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   expect(gear, 'the gear should be on screen').not.toBeNull();
   expect(launch).not.toBeNull();
   expect(gear!.x + gear!.width, 'the gear ends before the launch button starts').toBeLessThanOrEqual(launch!.x);
+});
+
+test('the settings have the chips and the switches of the mock-up of 2026-10-20 (FRU-305)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openPlayground(page, 'config-chips');
+  await page.getByLabel('Open Fruitback settings').click();
+  const root = page.locator(panel);
+  await expect(root).toBeVisible();
+  const read = (selector: string, properties: string[]) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((element, names) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+
+        return {
+          width: box.width,
+          height: box.height,
+          ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
+        } as Record<string, string | number>;
+      }, properties);
+
+  expect(await read(panel, ['border-top-left-radius', 'border-top-width', 'box-shadow'])).toMatchObject({
+    'border-top-left-radius': '14px',
+    'border-top-width': '1px',
+    'box-shadow': 'rgba(0, 0, 0, 0.18) 0px 10px 30px 0px',
+  });
+  // The head: the drop of the mark in the accent, « Settings », the cross « Close settings ».
+  await expect(root.locator('.fruitback-config-title')).toHaveText('Settings');
+  expect(await read('.fruitback-config-head', ['padding', 'border-bottom-width'])).toMatchObject({
+    padding: '14px 12px 12px 16px',
+    'border-bottom-width': '1px',
+  });
+  expect(await read('.fruitback-config-close', [])).toMatchObject({ width: 44, height: 44 });
+
+  // « Pins shown »: a chip of 30 px for each status, in a target of 44 px. Shown: the sunken fill.
+  const chip = '.fruitback-config-chip';
+  expect(await read(chip, ['background-color', 'font-size', 'font-weight', 'border-top-width'])).toMatchObject({
+    height: 44,
+    'border-top-width': '7px',
+    'background-color': 'rgb(245, 245, 244)',
+    'font-size': '12px',
+    'font-weight': '600',
+  });
+  // The drop is turned: its own box is 9 px.
+  expect(
+    await page
+      .locator('.fruitback-config-chip-drop')
+      .first()
+      .evaluate((node) => (node as HTMLElement).offsetWidth),
+  ).toBe(9);
+  // A click on the chip is a click on its box: the status is hidden, and the chip turns white.
+  const closed = root.locator(chip).filter({ hasText: 'Closed' });
+  await closed.click();
+  await expect(page.locator('[name="stage-composted"]')).not.toBeChecked();
+  expect(await closed.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(255, 255, 255)');
+  await closed.click();
+  await expect(page.locator('[name="stage-composted"]')).toBeChecked();
+
+  // The switches: 36 × 20, a role that says on and off, the whole row of 44 px toggles them.
+  const hide = page.getByRole('switch', { name: 'Hide resolved feedback' });
+  await expect(hide).toBeVisible();
+  expect(
+    await hide.evaluate((node) => [node.getBoundingClientRect().width, node.getBoundingClientRect().height]),
+  ).toEqual([36, 20]);
+  expect(await read('.fruitback-config-check', [])).toMatchObject({ height: 44 });
+  await root.locator('.fruitback-config-check').filter({ hasText: 'Hide resolved feedback' }).click();
+  await expect(hide).toBeChecked();
+  expect(await hide.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(28, 25, 23)');
+  await hide.click();
+  await expect(hide).not.toBeChecked();
 });

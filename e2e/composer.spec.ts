@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground } from './pin.ts';
+import { hydrated, openPlayground, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The popover (FRU-4) in a browser: the two things that only exist there — a media query deciding
@@ -24,7 +24,7 @@ test('a note goes from sending to sent, and the pin lands', async ({ page }) => 
   await expect(page.locator('[data-fruitback-composer]')).toContainText(/\bSent\b/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   // And it closes itself once the confirmation has been read.
-  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 });
 
 test('a failed send keeps the note and stays open', async ({ page }) => {
@@ -123,7 +123,7 @@ test('the pin is a drop, and it says what it is to a screen reader', async ({ pa
   await expect(badge).toHaveAttribute('aria-label', /Un pin en goutte/);
 });
 
-test('the composer has the measures of the mock-up, above its element (FRU-258)', async ({ page }) => {
+test('the composer has the measures of the mock-up, above its element (FRU-258, FRU-305)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openPlayground(page, 'composer-measures');
@@ -150,6 +150,8 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
 
   const box = await read('[data-fruitback-composer]', [
     'border-radius',
+    'border-top-width',
+    'border-top-color',
     'background-color',
     'font-size',
     'line-height',
@@ -157,6 +159,8 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   expect(box).toMatchObject({
     width: 360,
     'border-radius': '14px',
+    'border-top-width': '1px',
+    'border-top-color': 'rgb(231, 229, 228)',
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '14px',
     'line-height': '21px',
@@ -164,86 +168,123 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   expect(await page.locator('[data-fruitback-composer]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
     'rgba(28, 25, 23, 0.22) 0px 14px 40px 0px',
   );
-  // Above the element: it ends 40 px over its top, on the edge of the frame, 6 px off the element.
+  // Above the element: it ends 40 px over its top, on the edge of the frame, 5 px off the element.
   const target = (await button.boundingBox())!;
   expect(Number(box.y) + Number(box.height)).toBeCloseTo(target.y - 40, 0);
-  expect(Number(box.x)).toBeCloseTo(target.x - 6, 0);
+  expect(Number(box.x)).toBeCloseTo(target.x - 5, 0);
   // The frame stays on the element the note is about, with the name of its component.
   await expect(page.locator('[data-fruitback-host-highlight]')).toBeVisible();
   await expect(page.locator('.fruitback-highlight-tag')).toHaveText('button#checkout-cta · <Button>');
   // The capture is over: one click, one note.
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveAttribute('aria-pressed', 'false');
 
-  expect(await read('.fruitback-composer-head', ['padding', 'gap'])).toMatchObject({
-    height: 48,
-    padding: '8px 8px 8px 16px',
-    gap: '10px',
+  // The head (FRU-305): the drop of a new note, what the note points at in mono, « Pick again ».
+  expect(
+    await read('.fruitback-composer-head', ['padding', 'gap', 'background-color', 'border-bottom-width']),
+  ).toMatchObject({
+    padding: '12px 12px 12px 14px',
+    gap: '8px',
+    'background-color': 'rgb(255, 253, 249)',
+    'border-bottom-width': '1px',
   });
-  await expect(page.locator('.fruitback-composer-title')).toHaveText('New note');
-  expect(await read('.fruitback-composer-title', ['font-size', 'font-weight'])).toMatchObject({
-    'font-size': '13px',
+  await expect(page.locator('.fruitback-composer-about')).toHaveText('button#checkout-cta · <Button>');
+  const about = await read('.fruitback-composer-about', ['font-size', 'font-family', 'white-space', 'text-overflow']);
+  expect(about).toMatchObject({ 'font-size': '12px', 'white-space': 'nowrap', 'text-overflow': 'ellipsis' });
+  expect(String(about['font-family'])).toMatch(/^ui-monospace/);
+  // The drop is turned: its own box, not the one on screen, is 10 px.
+  expect(
+    await page
+      .locator('.fruitback-composer-drop')
+      .evaluate((node) => [(node as HTMLElement).offsetWidth, getComputedStyle(node).backgroundColor]),
+  ).toEqual([10, 'rgb(106, 121, 80)']);
+  const pick = page.getByRole('button', { name: 'Pick again' });
+  await expect(pick).toBeVisible();
+  expect(await read('.fruitback-composer-pick', ['font-size', 'font-weight', 'color', 'padding'])).toMatchObject({
+    // 44 px to press: a chip of 26 px inside a transparent border of 9 px.
+    height: 44,
+    'font-size': '12px',
     'font-weight': '600',
+    color: 'rgb(117, 110, 105)',
+    padding: '4px 6px',
   });
-  // What the element says, on one line.
-  await expect(page.locator('.fruitback-composer-about')).toHaveText('on Commander');
-  expect(await read('.fruitback-composer-about', ['font-size', 'color', 'white-space', 'text-overflow'])).toMatchObject(
-    {
-      'font-size': '12px',
-      color: 'rgb(117, 110, 105)',
-      'white-space': 'nowrap',
-      'text-overflow': 'ellipsis',
-    },
-  );
-  const cross = page.getByRole('button', { name: 'Close without sending' });
-  expect(await read('.fruitback-composer-close', ['border-radius', 'color'])).toMatchObject({
-    width: 32,
-    height: 32,
-    'border-radius': '8px',
+  // No cross: « Cancel » and Escape close it.
+  await expect(page.getByRole('button', { name: 'Close without sending' })).toHaveCount(0);
+
+  expect(await read('.fruitback-composer-body', ['padding', 'gap'])).toMatchObject({ padding: '14px', gap: '12px' });
+  await expect(page.getByLabel('Your comment')).toBeVisible();
+  expect(await read('[data-fruitback-note-label]', ['font-size', 'color'])).toMatchObject({
+    'font-size': '12px',
     color: 'rgb(117, 110, 105)',
   });
-  expect(await read('.fruitback-composer-body', ['padding'])).toMatchObject({ padding: '0px 16px 12px' });
-  expect(
-    await read('[data-fruitback-note]', ['border-top-width', 'border-top-color', 'border-radius', 'padding', 'resize']),
-  ).toMatchObject({
-    // Three lines of 21 px, 9 px above and under, and the border.
-    height: 83,
-    width: 328,
+  const note = await read('[data-fruitback-note]', [
+    'border-top-width',
+    'border-top-color',
+    'border-top-left-radius',
+    'padding',
+    'resize',
+  ]);
+  expect(note).toMatchObject({
+    width: 330,
     'border-top-width': '1px',
     'border-top-color': 'rgb(143, 136, 131)',
-    'border-radius': '8px',
-    padding: '9px 12px',
+    'border-top-left-radius': '6px',
+    padding: '10px 12px',
     resize: 'vertical',
   });
+  expect(Number(note.height)).toBeGreaterThanOrEqual(96);
+  // « Name (optional) » is a field in sight, 36 px, in 13 px.
+  const name = page.getByLabel('Name (optional)');
+  await expect(name).toBeVisible();
+  expect(await name.evaluate((node) => [node.getBoundingClientRect().height, getComputedStyle(node).fontSize])).toEqual(
+    [36, '13px'],
+  );
+
   expect(
     await read('.fruitback-composer-foot', ['padding', 'gap', 'border-top-width', 'border-top-color']),
   ).toMatchObject({
-    padding: '10px 12px 12px 16px',
+    padding: '10px 12px 12px 14px',
     gap: '8px',
     'border-top-width': '1px',
     'border-top-color': 'rgb(231, 229, 228)',
   });
+  // Where the note lands: the playground offers no place, so « Sent to the team ».
+  await expect(page.locator('[data-fruitback-lands]')).toHaveText('Sent to the team');
+  expect(await read('[data-fruitback-lands]', ['font-size', 'color'])).toMatchObject({
+    'font-size': '12px',
+    color: 'rgb(117, 110, 105)',
+  });
+  // 34 px drawn, as the mock-up, in a target of 44 px.
   expect(
-    await read('[data-fruitback-cancel]', ['padding', 'border-radius', 'color', 'font-size', 'font-weight']),
+    await read('[data-fruitback-cancel]', ['padding', 'border-top-width', 'color', 'font-size', 'font-weight']),
   ).toMatchObject({
-    height: 36,
+    height: 44,
     padding: '0px 12px',
-    'border-radius': '999px',
+    'border-top-width': '5px',
     color: 'rgb(117, 110, 105)',
     'font-size': '13px',
     'font-weight': '600',
   });
-  expect(await read('[data-fruitback-send]', ['padding', 'border-radius', 'background-color', 'color'])).toMatchObject({
-    height: 36,
-    padding: '0px 18px',
-    'border-radius': '999px',
+  expect(
+    await read('[data-fruitback-send]', [
+      'padding-left',
+      'padding-right',
+      'border-top-width',
+      'background-color',
+      'color',
+    ]),
+  ).toMatchObject({
+    height: 44,
+    'padding-left': '12px',
+    'padding-right': '14px',
+    'border-top-width': '5px',
     'background-color': 'rgb(221, 44, 39)',
     color: 'rgb(255, 255, 255)',
   });
-  // A visitor with no account: no sentence « As … », and the name stays an offer.
+  await expect(page.locator('[data-fruitback-send] svg')).toHaveCount(1);
+  // A visitor with no account: no sentence « As … ».
   await expect(composer).not.toContainText(/\bAs /);
-  await expect(page.getByRole('button', { name: 'Add my name (optional)' })).toBeVisible();
 
-  // Under the pointer: the strong accent for Send, the sunken surface for Cancel and for the cross.
+  // Under the pointer: the strong accent for Send, the sunken surface for Cancel.
   await page.locator('[data-fruitback-send]').hover();
   expect(await read('[data-fruitback-send]', ['background-color'])).toMatchObject({
     'background-color': 'rgb(185, 28, 28)',
@@ -252,16 +293,61 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   expect(await read('[data-fruitback-cancel]', ['background-color'])).toMatchObject({
     'background-color': 'rgb(245, 245, 244)',
   });
-  await cross.hover();
-  expect(await read('.fruitback-composer-close', ['background-color'])).toMatchObject({
-    'background-color': 'rgb(245, 245, 244)',
-  });
 
-  // The cross closes without sending, and the frame goes with the composer.
-  await cross.click();
+  // « Cancel » closes without sending, and the frame goes with the composer.
+  await page.locator('[data-fruitback-cancel]').click();
   await expect(composer).toBeHidden();
   await expect(page.locator('[data-fruitback-host-highlight]')).toBeHidden();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+});
+
+test('« Pick again » keeps the text and moves the composer to the element chosen (FRU-305)', async ({ page }) => {
+  await openPlayground(page, 'composer-pick-again');
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  const field = page.getByPlaceholder('What should change?');
+  await field.fill('Written before picking again');
+  await page.getByRole('button', { name: 'Pick again' }).click();
+  await page.locator('[data-testid="card-mocha"] .add').click();
+  await expect(page.locator('.fruitback-composer-about')).toHaveText(/^button\.add · <Button>$/);
+  await expect(field).toHaveValue('Written before picking again');
+});
+
+test('a sent note says « Sent as » its identifier, with the number of its pin and « Open → » (FRU-305)', async ({
+  page,
+}) => {
+  // The widget as `init` assembles it: it reads the note back and finds its identifier and its pin.
+  await page.goto(`/?widget=off&case=composer-sent-as-${test.info().retry}`);
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await hydrated(page);
+  await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        locale: 'en-US',
+      }),
+    WORKER_ORIGIN,
+  );
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('What should change?').fill('A note to see its card');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  const card = page.locator('[data-fruitback-sent]');
+  await expect(card).toBeVisible();
+  await expect(page.locator('[data-fruitback-sent-title]')).toHaveText(/^Sent as \S+$/);
+  await expect(page.locator('[data-fruitback-sent-text]')).toHaveText(
+    'The pin stays here and follows the issue’s status.',
+  );
+  expect(await page.locator('[data-fruitback-sent-text]').evaluate((node) => getComputedStyle(node).color)).toBe(
+    'rgb(63, 100, 33)',
+  );
+  await expect(page.locator('[data-fruitback-sent-drop]')).toHaveText('1');
+  await expect(page.locator('[data-fruitback-sent-open]')).toHaveText('Open →');
+  // A click on the page closes it at once.
+  await page.locator('main h2, main h1').first().click();
+  await expect(card).toBeHidden();
 });
 
 test('it rises from the corner nearest to its element, with no fade', async ({ page }) => {
@@ -309,7 +395,7 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const about = page.locator('.fruitback-composer-about');
-  await expect(about).toHaveText('on Ajouter');
+  await expect(about).toHaveText(/^button\.add/);
   const note = 'Written before a second capture';
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -320,7 +406,7 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await page.locator('[data-testid="card-mocha"] .add').click();
 
   await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-state', 'sending');
-  await expect(about).toHaveText('on Ajouter');
+  await expect(about).toHaveText(/^button\.add/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 
   release();
