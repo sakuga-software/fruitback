@@ -27,8 +27,10 @@ const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
 const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
 
 /**
- * Where the extension is explained. It is in no store yet (FRU-130): until it is, « Add to Chrome »
- * and « Get the Firefox add-on » lead to the page that says how to install it.
+ * Where the extension is explained. It is in no store yet (FRU-130): until it is, the buttons say
+ * « Install the extension (beta) » and « Install it in Firefox (beta) » (FRU-318), and lead to the
+ * page that walks somebody who is no developer through the archive of the release. The day it is
+ * published they say « Add to Chrome » and lead to the store.
  */
 export const EXTENSION_GUIDE = 'https://fruitback.com/reviewing.html#1-install-it';
 

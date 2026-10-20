@@ -29,7 +29,14 @@ function code(source: string): string {
 
 const PAGES = ['../entrypoints/popup/main.ts', '../entrypoints/options/main.ts'] as const;
 /** The modules that draw a screen of the popup: their words go through `t` like a page's (FRU-251). */
-const VIEWS = ['./popup-view.ts', './kit.ts', './site-page.ts', './share-rules.ts', './side-panel.ts'] as const;
+const VIEWS = [
+  './popup-view.ts',
+  './kit.ts',
+  './site-page.ts',
+  './share-rules.ts',
+  './side-panel.ts',
+  './welcome.ts',
+] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
 const CONSTANTS = ['./remedy.ts', './site-form.ts', './site-editor.ts', './read-probe.ts'] as const;
 

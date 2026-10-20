@@ -621,10 +621,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Une dernière chose : l’extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
   'One more thing: the extension shows the notes on {site} and lets you leave yours.':
     'Une dernière chose : l’extension affiche les notes sur {site} et vous permet de laisser les vôtres.',
-  'Add to Chrome': 'Ajouter à Chrome',
+  'Install the extension (beta)': 'Installer l’extension (bêta)',
   'Open {site}': 'Ouvrir {site}',
   'Using Firefox?': 'Vous utilisez Firefox ?',
-  'Get the Firefox add-on': 'Obtenir le module pour Firefox',
+  'Install it in Firefox (beta)': 'L’installer dans Firefox (bêta)',
   // The last step of the setup, and the example page of its preview (FRU-242).
   'An example page. Pins show the same way on your site.':
     'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',

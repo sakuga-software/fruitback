@@ -428,20 +428,20 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
       'One more thing: the extension shows the notes on https://staging.acme.dev and lets you leave yours.',
     );
     expectNear(await boxOf(status), { x: 500, y: 261, width: 440, height: 48 }, 'confirmation');
-    const add = page.getByRole('link', { name: 'Add to Chrome' });
-    expectNear(await boxOf(add), { x: 500, y: 361 - 24, width: 167.1, height: 44 }, '« Add to Chrome »');
+    const add = page.getByRole('link', { name: 'Install the extension (beta)' });
+    expectNear(await boxOf(add), { x: 500, y: 361 - 24, width: 167.1, height: 44 }, '« Install the extension (beta) »');
     expectNear(
       await boxOf(page.getByRole('link', { name: 'Open https://staging.acme.dev' })),
       { x: 687, y: 363 - 24, width: 159.9, height: 41 },
       '« Open the site »',
     );
     expectNear(
-      await boxOf(page.getByRole('link', { name: 'Get the Firefox add-on' })),
+      await boxOf(page.getByRole('link', { name: 'Install it in Firefox (beta)' })),
       { x: 595, y: 454 - 24, width: 151.8, height: 17 },
       'Firefox',
     );
     // The extension is in no store yet: both links lead to the page that says how to install it.
-    for (const link of [add, page.getByRole('link', { name: 'Get the Firefox add-on' })]) {
+    for (const link of [add, page.getByRole('link', { name: 'Install it in Firefox (beta)' })]) {
       await expect(link).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
       await expect(link).toHaveAttribute('target', '_blank');
     }

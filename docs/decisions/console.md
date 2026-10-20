@@ -178,8 +178,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   invites (the worker lists the workspace of an invitation, not its sender: the line says
   « {workspace} invited you »); « It signs in with this account. » about the extension, which a
   browser still joins with a code from the console (Q8).
-  **The extension is in no store yet** (FRU-130): « Add to Chrome » and « Get the Firefox add-on »
-  lead to the page of the documentation that says how to install it.
+  **The extension is in no store yet** (FRU-130): « Install the extension (beta) » and « Install it
+  in Firefox (beta) » (FRU-318) lead to the page of the documentation that says how to install the
+  archive of the release, step by step. « Add to Chrome » comes back the day it is published.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `http://` when it is local (`localhost`, `*.localhost`,
   `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
