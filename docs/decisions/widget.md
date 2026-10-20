@@ -1219,7 +1219,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   sentence. The element is found as a pin is, **and only by its identity**: a text must not come back
   on the element that took the place of its own. Once for each visit of a page, never over somebody
   who writes, chooses or reads a thread, and never before a link to a note, which the address asked
-  for.
+  for. Never once the person chose an element on that visit: a text whose element
+  came late does not reopen over the note they left since (review of #372).
 - **A note sent, or kept for later, leaves**, for the element it was sent about: the composer can be
   open on another one when the answer comes. A field emptied by hand leaves too: that is the way to
   give a text up. A composer opened and closed with nothing typed writes nothing.

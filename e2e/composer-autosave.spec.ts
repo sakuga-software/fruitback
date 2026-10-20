@@ -101,3 +101,54 @@ test('another element opens empty, and a composer left with nothing typed saves 
   expect(saved).toHaveLength(1);
   expect(saved[0].text).toBe(NOTE);
 });
+
+// Review of #372: a text whose element came late must not reopen over a note the person already
+// left on this visit, at a later read that finds that element.
+test('a saved text does not reopen by itself once the person chose an element on the page', async ({ page }) => {
+  await page.goto(`/?widget=off&case=autosave-late-${test.info().retry}`);
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  // A text saved for an element that is not on the page when the widget mounts.
+  await page.evaluate(() => {
+    const anchor = {
+      selector: '#late',
+      domPath: 'main > button#late',
+      tag: 'button',
+      text: 'Plus tard',
+      bounds: { xPct: 1, yPct: 1, wPct: 5, hPct: 3 },
+    };
+    // The address as `canonicalizePageUrl` writes it: no fragment, the parameters sorted.
+    const url = new URL(location.href);
+    url.hash = '';
+    url.searchParams.sort();
+    const page = url.toString();
+    sessionStorage.setItem(
+      'fruitback:config:typing',
+      JSON.stringify([{ page, anchor, text: 'Un texte de tout à l’heure', at: Date.now() }]),
+    );
+  });
+  await page.addScriptTag({ path: IIFE });
+  await page.evaluate((endpoint) => {
+    const global = globalThis as unknown as {
+      Fruitback: { init(options: Record<string, string>): unknown };
+      widget: unknown;
+    };
+    global.widget = global.Fruitback.init({ endpoint, clientId: 'playground' });
+  }, WORKER_ORIGIN);
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+
+  // Another note, on another element, sent.
+  await writeOnTheLatte(page, 'Une autre note');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+
+  // The element of the saved text arrives, and a read runs.
+  await page.evaluate(() => {
+    const late = document.createElement('button');
+    late.id = 'late';
+    late.textContent = 'Plus tard';
+    document.querySelector('main')?.append(late);
+  });
+  await page.evaluate(() => (globalThis as unknown as { widget: { refresh(): Promise<void> } }).widget.refresh());
+  await page.waitForTimeout(500);
+  await expect(field(page)).toBeHidden();
+});

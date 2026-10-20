@@ -291,6 +291,10 @@ export function init(options: FruitbackOptions): Fruitback {
       }
       target = selected;
       place = placeOf(selected);
+      // The person chose an element on this visit: a text saved before no longer reopens by itself
+      // here, say at a later read that finds its element (review of #372). It comes back on its own
+      // element, when the person opens the composer there.
+      restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
       const rect = selected.element.getBoundingClientRect();
