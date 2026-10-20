@@ -368,9 +368,16 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
         return json({ sites: stub.as === 'sited' ? [{ ...site, ...first }] : [] });
       }
       if (stub.refuses?.site !== undefined) return json({ error: 'forbidden' }, stub.refuses.site);
-      const { url, visibility } = request.postDataJSON() as { url: string; visibility: string };
+      const { url, visibility, writers } = request.postDataJSON() as {
+        url: string;
+        visibility: string;
+        writers?: string;
+      };
 
-      return json({ id: 's2', origin: new URL(url).origin, visibility }, 201);
+      return json(
+        { id: 's2', origin: new URL(url).origin, visibility, ...(writers === undefined ? {} : { writers }) },
+        201,
+      );
     }
 
     return route.fulfill({ status: 204 });
@@ -574,14 +581,23 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       { x: 160, y: 644 - hint - LEAD, width: 352.2, height: 70.5 },
       'card, everyone',
     );
+    // « Who can leave a note? » (FRU-330) is not on the board: it comes 20 px under the cards, the
+    // gap of the form, and what follows is that much lower.
+    const writers = await boxOf(page.getByRole('radiogroup', { name: 'Who can leave a note?' }));
+    expectNear(
+      { ...writers, height: 0 },
+      { x: 160, y: 644 + 70.5 + 20 - hint - LEAD, width: 352.2, height: 0 },
+      '« Who can leave a note? »',
+    );
+    const asked = writers.height + 20;
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Add site' })),
-      { x: 160, y: 734 - hint - LEAD, width: 98.6, height: 44 },
+      { x: 160, y: 734 + asked - hint - LEAD, width: 98.6, height: 44 },
       '« Add site »',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Put it on the site', exact: true })),
-      { x: 160, y: 810 - hint - LEAD, width: 352.2, height: 26 },
+      { x: 160, y: 810 + asked - hint - LEAD, width: 352.2, height: 26 },
       'step 3',
     );
     await expect(page.getByText('Any page of it will do.')).toBeVisible();
@@ -809,6 +825,26 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     // The ring of the mockup on the control the keyboard is on.
     const focused = page.getByRole('button', { name: 'Continue with GitHub' });
     expect(await focused.evaluate((element) => getComputedStyle(element).outline)).toBe('rgb(221, 44, 39) solid 2px');
+  });
+
+  test('« Who can leave a note? » is « Members only » for a new site, and « Anyone on the page » is said once chosen (FRU-330)', async ({
+    page,
+  }) => {
+    await stubWorker(page, { as: 'named' });
+    await page.goto(`${CONSOLE}/setup`);
+    const writers = page.getByRole('radiogroup', { name: 'Who can leave a note?' });
+    await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
+    // A site that everyone reads is not asked: the question goes, and comes back with its answer.
+    await page.getByText('Everyone who visits', { exact: true }).click();
+    await expect(writers).toHaveCount(0);
+    await page.getByText(/^Members of Havane/).click();
+    await writers.getByText('Anyone on the page', { exact: true }).click();
+
+    await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
+    await page.getByRole('button', { name: 'Add site' }).click();
+
+    await expect(page.getByText('Notes from anyone on the page')).toBeVisible();
+    expect(await violations(page)).toEqual([]);
   });
 
   test('a refusal keeps what is typed, at each step', async ({ page }) => {

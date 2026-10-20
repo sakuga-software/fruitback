@@ -22,6 +22,8 @@ export type Role = 'owner' | 'admin' | 'member' | 'guest';
  */
 export type Workspace = Omit<WorkspaceSuspension, 'reason'> & { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
+/** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
+export type Writers = 'members' | 'anyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
 /** `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the tracker answers. */
@@ -34,6 +36,8 @@ export type Site = {
   id: string;
   origin: string;
   visibility: Visibility;
+  /** Absent from a worker of before FRU-330, whose sites take a note from anybody. */
+  writers?: Writers;
   destination?: Destination;
   destinations?: Destination[];
   /**

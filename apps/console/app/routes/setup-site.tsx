@@ -1,11 +1,12 @@
 import { type FormEvent, useState } from 'react';
-import { type Site, type Visibility, type Workspace, call } from '../api';
+import { type Site, type Visibility, type Workspace, type Writers, call } from '../api';
 import { t } from '../i18n';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Added, manages } from '../setup-stage';
 import { siteAddress, siteLabel } from '../site-address';
 import { Button, Field, LinkButton, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
+import { WritersPick } from '../writers-pick';
 
 /** Step 2 of the setup, « Your site » (FRU-239): the form that adds it, and its summary. */
 
@@ -29,6 +30,8 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   const before = replaces?.site;
   const [url, setUrl] = useState(before === undefined ? '' : siteLabel(before.origin));
   const [visibility, setVisibility] = useState<Visibility>(before?.visibility ?? 'members');
+  // A site of a worker of before has no `writers`: it takes a note from anybody (FRU-330).
+  const [writers, setWriters] = useState<Writers>(before === undefined ? 'members' : (before.writers ?? 'anyone'));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
@@ -39,12 +42,21 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
     const address = siteAddress(url);
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
     // Nothing changed: the site stays as it is, and nothing is asked of the worker.
-    if (replaces !== undefined && new URL(address).origin === before?.origin && visibility === before.visibility) {
+    if (
+      replaces !== undefined &&
+      new URL(address).origin === before?.origin &&
+      visibility === before.visibility &&
+      (visibility !== 'members' || writers === (before.writers ?? 'anyone'))
+    ) {
       return onDone(replaces);
     }
     setBusy(true);
     const base = `/console/workspaces/${workspace.id}/sites`;
-    const added = await call<Site>('POST', base, { url: address, visibility });
+    const added = await call<Site>('POST', base, {
+      url: address,
+      visibility,
+      ...(visibility === 'members' ? { writers } : {}),
+    });
     if (!added.ok) {
       setBusy(false);
 
@@ -87,6 +99,7 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
           },
         ]}
       />
+      <WritersPick visibility={visibility} value={writers} onChange={setWriters} />
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <Button type="submit" disabled={busy}>
@@ -124,6 +137,10 @@ export function SiteSummary({
         {site.visibility === 'members'
           ? t('Members of {workspace} see the notes', { workspace: workspace.name })
           : t('Everyone who visits sees the notes')}
+        {/* FRU-330: the exception only, as on the Sites screen. */}
+        {site.visibility === 'members' && site.writers === 'anyone' ? (
+          <span>{t('Notes from anyone on the page')}</span>
+        ) : null}
         {manages(workspace) ? (
           <LinkButton space="flush" onClick={onChange}>
             {t('Change')}
