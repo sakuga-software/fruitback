@@ -118,7 +118,6 @@ if (app !== null) {
     notice,
   );
   const share = transfer();
-  share.id = 'share';
   const prefs = await synchronise();
   prefs.id = 'prefs';
   // FRU-291: the key that starts a note, where the mock-up of 2026-10-20 puts it, in the preferences.

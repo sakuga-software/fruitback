@@ -54,6 +54,8 @@ export function exportSummary(count: number | undefined): string {
 export function shareRules(document: Document, options: ShareOptions): ShareSection {
   const section = make(document, 'section', 'page-section');
   section.classList.add('share');
+  // The anchor of « Share rules » in the menu of the page.
+  section.id = 'share';
   const title = make(document, 'h2', '', t('Share rules'));
   title.id = 'share-title';
   section.setAttribute('aria-labelledby', title.id);

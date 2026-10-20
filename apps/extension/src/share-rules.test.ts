@@ -25,6 +25,8 @@ describe('« Share rules » (FRU-290)', () => {
     const { document } = page();
     const { section } = shareRules(document, { onDownload: nothing, onFile: nothing });
 
+    // The menu links to `#share`.
+    assert.equal(section.id, 'share');
     assert.equal(section.querySelector('h2')?.textContent, 'Share rules');
     assert.equal(section.getAttribute('aria-labelledby'), section.querySelector('h2')?.id);
     assert.equal(
