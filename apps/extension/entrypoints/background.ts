@@ -426,7 +426,14 @@ async function openSignIn(
   const runtime = browser.runtime as typeof browser.runtime & {
     getContexts?: (filter: { contextTypes: string[] }) => Promise<unknown[]>;
   };
-  const open = await runtime.getContexts?.({ contextTypes: ['POPUP'] }).catch(() => []);
+  // A browser without `getContexts`, or one that refuses it, cannot tell: the popup is asked for all
+  // the same, and the failure is written down (review of #378). `openPopup` over an open popup
+  // leaves it as it is.
+  const open = await runtime.getContexts?.({ contextTypes: ['POPUP'] }).catch((error: unknown) => {
+    console.warn('[fruitback] could not tell whether the popup is open', error);
+
+    return [];
+  });
   if (open !== undefined && open.length > 0) return;
 
   await browser.action
