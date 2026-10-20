@@ -106,6 +106,8 @@ export function Fruitback() {
 
     const overlay = createOverlay({
       host: host.root,
+      // The chip of the detached notes is the first control of the capsule (FRU-303).
+      dock: host.dock,
       shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
       onSelect: (issue) => setStatus(`${issue.identifier} · ${issue.stateName}`),
       // The widget re-resolves by itself when the page changes (FRU-21). This only reports it: the

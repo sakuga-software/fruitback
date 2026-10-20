@@ -1,6 +1,7 @@
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
+import { isStableClass, isStableId } from './selector.ts';
 import { deepActiveElement } from './focus.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
@@ -69,6 +70,11 @@ export type CaptureHost = {
   root: ShadowRoot;
   /** Extra UI inside the Shadow root, e.g. the note popover. */
   panel: HTMLElement;
+  /**
+   * The capsule of the dock (FRU-303). The overlay puts the chip of the detached notes at its start:
+   * one capsule, and no chip that floats over it.
+   */
+  dock: HTMLElement;
   start(): void;
   stop(): void;
   capturing(): boolean;
@@ -186,23 +192,33 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   banner.className = 'fruitback-banner';
   banner.dataset.fruitbackHostBanner = '';
   banner.setAttribute('role', 'status');
+  // The way out: the key that does it, drawn, then the word (FRU-303). The key is a drawing for the
+  // eye: the name of the button is its word, and the banner reads how to move.
   const halt = document.createElement('button');
   halt.type = 'button';
   halt.className = 'fruitback-banner-stop';
-  halt.textContent = t.text('capture.stop');
+  const haltKey = document.createElement('kbd');
+  haltKey.className = 'fruitback-banner-key';
+  haltKey.setAttribute('aria-hidden', 'true');
+  haltKey.textContent = t.text('capture.escape');
+  const haltLabel = document.createElement('span');
+  haltLabel.textContent = t.text('capture.stop');
 
   const panel = document.createElement('div');
   panel.className = 'fruitback-panel';
   panel.dataset.fruitbackHostPanel = '';
 
-  // A dock rather than two fixed corners: the gear has to sit beside a button whose width is the
-  // embedder's label, and no offset computed from the gear's own size can know that. It overlapped
-  // the launch button until a recording showed it.
+  // One capsule (FRU-303): the detached notes, the list, the gear and the launch button, in this
+  // order. The overlay puts the chip of the detached notes at its start. A capture turns the same
+  // capsule dark and gives it the banner: the way out is where the way in was.
+  // No landmark of its own: the host element is the region « Fruitback feedback », and a second
+  // region with the same name is two landmarks that a screen reader cannot tell apart.
   const dock = document.createElement('div');
   dock.className = 'fruitback-dock';
+  dock.dataset.fruitbackDock = '';
   if (options.onList !== undefined) dock.append(listing);
   if (options.onConfigure !== undefined) dock.append(configure);
-  dock.append(button);
+  dock.append(button, banner);
 
   const announcer = document.createElement('div');
   announcer.className = 'fruitback-announcer';
@@ -210,7 +226,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  root.append(style, banner, dock, highlight, panel, announcer);
+  root.append(style, dock, highlight, panel, announcer);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();
@@ -282,7 +298,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     if (changed) name(element);
   }
 
-  /** The frame stands 6 px off the element on every side, as the mock-up draws it (FRU-258). */
+  /**
+   * The frame is a line of 2 px, 3 px off the element, as an outline would draw it (FRU-303). It
+   * follows the corners of the element, grown by the same 5 px, so a round button gets a round frame.
+   */
   function frame(element: Element): void {
     const bounds = engine.boundsOf(element);
     const top = bounds.top + (view?.scrollY ?? 0) - HIGHLIGHT_OUTSET;
@@ -292,21 +311,26 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       top: `${top}px`,
       width: `${bounds.width + 2 * HIGHLIGHT_OUTSET}px`,
       height: `${bounds.height + 2 * HIGHLIGHT_OUTSET}px`,
+      borderRadius: cornersOf(element, view),
     });
     // The name sits above the frame. At the top of the document there is no above: it goes inside.
     highlight.toggleAttribute('data-fruitback-tag-inside', top < TAG_ROOM);
   }
 
-  /** Write the name of the component on the frame, if the element is still the one framed. */
+  /**
+   * Write on the frame what the note will point at: a short selector, then the component when the
+   * page gives one (FRU-303), as « button.add · <AddToCart> ». Only if the element is still framed.
+   */
   function name(element: Element): void {
-    tag.hidden = true;
+    const selector = shortSelector(element);
+    tag.textContent = selector;
+    tag.hidden = false;
     void sourceOf(element).then((source) => {
       if (element !== hovered && element !== chosen) return;
       // The name the note will carry, which is not always the engine's: see `componentOf`.
       const component = componentOf(element, source)?.trim() ?? '';
       // As text: a name is whatever the page called its component.
-      tag.textContent = component;
-      tag.hidden = component === '';
+      tag.textContent = component === '' ? selector : `${selector} · <${component}>`;
     });
   }
 
@@ -394,7 +418,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function otherControlHasFocus(): boolean {
     const active = deepActiveElement(document);
 
-    return active !== null && active !== button && root.contains(active);
+    // The way out stands in for the launch button while a capture runs: Enter selects what is
+    // highlighted, and with nothing highlighted it presses the way out.
+    return active !== null && active !== button && active !== halt && root.contains(active);
   }
 
   /** A dialog of the widget that has focus owns the keys. */
@@ -456,23 +482,29 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
       return part;
     };
-    // The banner is the one voice of a start: what to do, the key that stops, and for a keyboard the
-    // way to move, which is read and not drawn. Then the button, which a thumb needs.
+    // The banner is the one voice of a start: what to do, and for a keyboard the way to move, which
+    // is read and not drawn. Then the button, which a thumb needs, with the key that does the same.
+    halt.replaceChildren(...(touch ? [] : [haltKey]), haltLabel);
     banner.replaceChildren(
       say('fruitback-banner-ask', touch ? 'capture.bannerTouch' : 'capture.banner'),
-      ...(touch
-        ? []
-        : [say('fruitback-banner-key', 'capture.escape'), say('fruitback-banner-keys', 'capture.instructions')]),
+      ...(touch ? [] : [say('fruitback-banner-keys', 'capture.instructions')]),
       halt,
     );
+    // The capsule hides the launch button while a capture runs (FRU-303). Focus that was on it goes
+    // to the way out, which takes its place: Enter there still stops the capture.
+    if (deepActiveElement(document) === button) halt.focus();
   }
 
   function stop(): void {
+    // The way out leaves the tree with the banner: focus on it goes back to the launch button, which
+    // is shown again. A dialog opened by the choice then gives focus back there (FRU-303).
+    const outHadFocus = deepActiveElement(document) === halt;
     capturing = false;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
     button.setAttribute('aria-pressed', 'false');
     banner.replaceChildren();
+    if (outHadFocus) button.focus();
     // The frame goes back to the element that is held, if one is: the capture borrowed it.
     if (chosen === null) highlight.style.display = 'none';
     else hold(chosen);
@@ -525,6 +557,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   return {
     root,
     panel,
+    dock,
     start,
     stop,
     capturing: () => capturing,
@@ -595,9 +628,61 @@ export function readableName(element: Element): string {
   return text.length > 80 ? `${text.slice(0, 79)}…` : text;
 }
 
-/** How far the frame of a capture stands off its element, and the room its name takes above it. */
-const HIGHLIGHT_OUTSET = 6;
-const TAG_ROOM = 24;
+/**
+ * What the frame of a capture writes for an element (FRU-303): its tag, then its id or the class
+ * that names it best, as a person would write it in a stylesheet. « button.add », « input#email »,
+ * « main ». It is a name to read, not a selector to run: the note carries the one that selects.
+ *
+ * The class that names it best is the one the fewest elements of the page share, the last one on a
+ * tie, and never a modifier (« --md »). A design system puts its own classes first and the class of
+ * the author last (« button button--md add »), and « button.button » says nothing.
+ */
+export function shortSelector(element: Element): string {
+  const tag = element.tagName.toLowerCase();
+  // The id and the classes a person wrote, as selector.ts judges them: a useId or a hash is no name.
+  const id = element.getAttribute('id')?.trim() ?? '';
+  if (id !== '' && !/\s/.test(id) && isStableId(id)) return `${tag}#${id}`;
+  const classes = (element.getAttribute('class') ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter((name) => name !== '' && name !== tag && !name.includes('--') && isStableClass(name));
+  let best: string | undefined;
+  let fewest = Number.POSITIVE_INFINITY;
+  for (const name of classes) {
+    const count = element.ownerDocument.getElementsByClassName(name).length;
+    if (count <= fewest) {
+      best = name;
+      fewest = count;
+    }
+  }
+
+  return best === undefined ? tag : `${tag}.${best}`;
+}
+
+/**
+ * The corners of the frame: those of the element, grown by the outset, or the small radius when the
+ * element is square or its corners are not in pixels.
+ */
+function cornersOf(element: Element, view: Window | null): string {
+  const style = view?.getComputedStyle?.(element);
+  if (style === undefined) return '';
+  const corners = [
+    style.borderTopLeftRadius,
+    style.borderTopRightRadius,
+    style.borderBottomRightRadius,
+    style.borderBottomLeftRadius,
+  ].map((corner) => (/^\d+(\.\d+)?px$/.test(corner ?? '') ? Number.parseFloat(corner) : Number.NaN));
+  if (corners.some((corner) => Number.isNaN(corner)) || corners.every((corner) => corner === 0)) return '';
+
+  return corners.map((corner) => `${corner === 0 ? 0 : corner + HIGHLIGHT_OUTSET}px`).join(' ');
+}
+
+/**
+ * How far the frame of a capture stands off its element: an outline of 2 px, 3 px off (FRU-303).
+ * And the room its name takes above it.
+ */
+const HIGHLIGHT_OUTSET = 5;
+const TAG_ROOM = 28;
 
 /**
  * `all: initial` on every element, because a Shadow root stops the page's *selectors* but not its
@@ -655,7 +740,12 @@ li { display: list-item; }
   flex: none;
   overflow: hidden;
 }
-/* The dock of the mock-up of 2026-10-13 (FRU-252): 24 px from the corner, three controls of 44 px. */
+/*
+  The dock of the mock-up of 2026-10-20 (FRU-303): one capsule, 24 px from the corner, on the surface.
+  Every control in it is 44 px tall, and draws a smaller shape inside a transparent border: 36 px for
+  the round ones and the way out, 40 px for the launch button. The capsule is then the 52 px of the
+  mock-up, and a target is never under 44 px.
+*/
 .fruitback-dock {
   position: fixed;
   inset-inline-end: 24px;
@@ -663,43 +753,55 @@ li { display: list-item; }
   z-index: 2147483200;
   display: flex;
   align-items: center;
-  gap: 10px;
+  max-width: calc(100vw - 48px);
+  padding-block: 3px;
+  padding-inline: 1px 3px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-md);
 }
 .fruitback-launch {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 44px;
-  padding: 0 20px;
+  margin-inline-start: 2px;
+  padding-inline: 14px 18px;
+  border: 2px solid transparent;
   border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-accent);
+  background: var(--fruitback-color-accent) padding-box;
   color: var(--fruitback-color-on-accent);
   /* Tightened tracking rather than a smaller size: the label is the widget's only voice on the
      page, and shrinking it is how a control starts looking like an advert. */
   font: 600 13px/1 var(--fruitback-font-sans);
   letter-spacing: -0.006em;
-  box-shadow: var(--fruitback-shadow-md);
+  white-space: nowrap;
   cursor: pointer;
 }
-/* The drop of the mark, taller than wide, as the mock-up draws it. */
-.fruitback-launch .fruitback-icon { width: 12px; height: 15px; }
-.fruitback-launch:hover { background: var(--fruitback-color-accent-strong); }
+/* The drop of the mark, 14 px tall and narrower than tall, as the mock-up draws it. */
+.fruitback-launch .fruitback-icon { width: 11px; height: 14px; }
+.fruitback-launch:hover { background: var(--fruitback-color-accent-strong) padding-box; }
 .fruitback-configure,
 .fruitback-listing {
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
+  border: 4px solid transparent;
   border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-chip);
-  color: var(--fruitback-color-on-chip);
+  background: transparent;
+  color: var(--fruitback-color-text-subtle);
   font: 600 18px/1 var(--fruitback-font-sans);
-  box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
+/* The gear is drawn 1 px smaller than the list, as in the mock-up. */
+.fruitback-configure { font-size: 17px; }
+.fruitback-configure:hover,
+.fruitback-listing:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
 .fruitback-listing { position: relative; }
-/* The dot of a read that failed (FRU-316), on the corner of the button, ringed by the button's own
-   colour so it reads on any page. */
+/* The dot of a read that failed (FRU-316), on the corner of the round shape, ringed by the surface
+   of the capsule so it reads on the icon. */
 .fruitback-listing-alert {
   position: absolute;
   top: 2px;
@@ -708,12 +810,16 @@ li { display: list-item; }
   height: 10px;
   border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-accent);
-  box-shadow: 0 0 0 2px var(--fruitback-color-chip);
+  box-shadow: 0 0 0 2px var(--fruitback-color-surface);
 }
 .fruitback-listing-alert[hidden] { display: none; }
 @media (forced-colors: active) {
   .fruitback-listing-alert { background: Mark; box-shadow: none; outline: 1px solid CanvasText; }
 }
+/*
+  The frame of a capture (FRU-303): a line of 2 px, 3 px off the element, as an outline draws it, and
+  nothing over the element itself. A tint hid the colour the reporter is writing about.
+*/
 .fruitback-highlight {
   position: absolute;
   display: none;
@@ -721,60 +827,44 @@ li { display: list-item; }
   /* The reporter is aiming at the page, not at this box. */
   pointer-events: none;
   border: 2px solid var(--fruitback-color-accent);
-  background: color-mix(in srgb, var(--fruitback-color-accent) 6%, transparent);
   border-radius: var(--fruitback-radius-sm);
 }
 /*
-  The name of the component, on the start corner of the frame and above it: 30 px above the element,
-  as the mock-up draws it. Its positions count from inside the 2 px border of the frame.
+  What the note will point at, centred above the frame: « button.add · <AddToCart> », in the mono of
+  a selector. Centred with the physical left, because the middle has no side.
 */
 .fruitback-highlight-tag {
   position: absolute;
-  inset-inline-start: -2px;
-  top: -26px;
+  /* The reset gives every element its pointer back: the name must not take a click the page needs. */
+  pointer-events: none;
+  left: 50%;
+  top: -28px;
+  transform: translateX(-50%);
   max-width: min(320px, 90vw);
   padding: 3px 8px;
   border-radius: var(--fruitback-radius-sm);
-  border-end-start-radius: 0;
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
-  font: 600 11px/1.5 var(--fruitback-font-sans);
+  font: 600 11px/1.5 var(--fruitback-font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .fruitback-highlight-tag[hidden] { display: none; }
-.fruitback-highlight[data-fruitback-tag-inside] .fruitback-highlight-tag {
-  top: -2px;
-  border-end-start-radius: var(--fruitback-radius-sm);
-  border-start-end-radius: 0;
+.fruitback-highlight[data-fruitback-tag-inside] .fruitback-highlight-tag { top: 2px; }
+/*
+  The banner of a capture (FRU-303) lives in the capsule. Empty at rest, and still in the tree: no
+  box, no paint, and a live region that a screen reader already knows.
+*/
+.fruitback-banner { display: flex; align-items: center; min-width: 0; }
+.fruitback-banner-ask {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  padding-inline: 12px 10px;
+  color: var(--fruitback-color-on-ink-muted);
+  font: 12px/1.35 var(--fruitback-font-sans);
 }
-/* The banner of a capture (FRU-258): a dark pill at the top of the window, in its middle. */
-.fruitback-banner {
-  position: fixed;
-  top: 16px;
-  /* In the middle, with no side named: the two edges and the two margins say it in any direction. */
-  inset-inline: 0;
-  margin-inline: auto;
-  width: fit-content;
-  max-width: calc(100vw - 16px);
-  z-index: 2147483200;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-block: 6px;
-  padding-inline: 18px 6px;
-  border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-ink);
-  color: var(--fruitback-color-on-ink);
-  font: 13px/1.5 var(--fruitback-font-sans);
-  box-shadow: var(--fruitback-shadow-lg);
-  white-space: nowrap;
-}
-/* Empty at rest, and still in the tree: no box, no paint. */
-.fruitback-banner:empty { padding: 0; box-shadow: none; }
-/* The key and the button keep their line: in a narrow window the sentence is what wraps. */
-.fruitback-banner-key { flex: none; color: var(--fruitback-color-on-ink-muted); white-space: nowrap; }
 /* Read, not drawn: how a keyboard moves. */
 .fruitback-banner-keys {
   position: absolute;
@@ -786,17 +876,52 @@ li { display: list-item; }
 }
 .fruitback-banner-stop {
   flex: none;
-  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
   padding: 0 14px;
+  border: 4px solid transparent;
   border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-chip);
+  background: var(--fruitback-color-chip) padding-box;
   color: var(--fruitback-color-on-chip);
   font: 600 13px/1 var(--fruitback-font-sans);
+  white-space: nowrap;
   cursor: pointer;
 }
-/* A window narrower than the sentence: it wraps, and a pill of two lines is a rounded box. */
-@media (max-width: 480px) {
-  .fruitback-banner { white-space: normal; border-radius: var(--fruitback-radius-lg); }
+/* The key, drawn as a key: a border, and a bottom of 2 px. */
+.fruitback-banner-key {
+  display: inline-block;
+  padding: 2px 5px;
+  border: 1px solid var(--fruitback-color-on-ink-muted);
+  border-bottom-width: 2px;
+  border-radius: calc(var(--fruitback-radius-sm) - 2px);
+  font: 700 11px/1 var(--fruitback-font-sans);
+}
+/*
+  While a capture runs, the capsule is the ink of the mock-up, in both schemes: it lies on the page of
+  the host. It holds only the banner: the launch button, the list and the gear stand aside.
+*/
+:host([data-fruitback-capturing]) .fruitback-dock {
+  /* 46 px tall, as the mock-up draws it: the way out is the one control left. */
+  padding-block: 0;
+  padding-inline-end: 1px;
+  border-color: var(--fruitback-color-ink);
+  background: var(--fruitback-color-ink);
+  color: var(--fruitback-color-on-ink);
+}
+:host([data-fruitback-capturing]) .fruitback-dock > :not(.fruitback-banner) { display: none; }
+/*
+  A forced palette paints every border, a transparent one too, and drops the fills: the shape of a
+  control is then a line of the system's colours, inside the border that makes its target 44 px.
+*/
+@media (forced-colors: active) {
+  .fruitback-launch,
+  .fruitback-configure,
+  .fruitback-listing,
+  .fruitback-banner-stop { border-color: Canvas; }
+  .fruitback-launch,
+  .fruitback-banner-stop { outline: 1px solid ButtonText; outline-offset: -3px; }
 }
 .fruitback-panel { position: absolute; top: 0; left: 0; }
 .fruitback-announcer {
@@ -812,14 +937,4 @@ li { display: list-item; }
   list covers this corner, and holds its own button to leave a note and its own cross.
 */
 :host([data-fruitback-listing]) .fruitback-dock { display: none; }
-/* Pressed while a capture runs: the strong accent of the mock-up, under the same foreground (FRU-252). */
-:host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-accent-strong); }
-/*
-  A thumb, not a pointer (FRU-157): the three buttons of the dock were 30 px and grew to 44 px on a
-  touch screen. They are 44 px everywhere now, so a touch screen needs no rule of its own here. The
-  way out of a capture is the one control a phone has for it: 44 px there, in a pill that grows with it.
-*/
-@media (pointer: coarse) {
-  .fruitback-banner-stop { min-height: 44px; padding-inline: 18px; }
-}
 `;

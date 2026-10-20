@@ -273,6 +273,7 @@ describe('every word the widget shows', () => {
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
+      dock: host.dock,
       translator,
       isDraft: (issue) => issue === draftIssue,
       reply: { allowed: () => true, send: () => new Promise((resolve) => replyAnswers.push(resolve)) },
@@ -537,7 +538,11 @@ describe('every word the widget shows', () => {
       'CheckoutCta',
       'src/components/checkout-cta.tsx',
     ];
+    // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
+    // Matched whole: as a part, « i » would take that letter out of every other text.
+    const selectors = new Set(['main', 'i']);
     const untranslated = snapshots.filter((text) => {
+      if (selectors.has(text)) return false;
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));
 
       return /\p{L}/u.test(rest);

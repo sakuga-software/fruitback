@@ -331,6 +331,7 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     translator,
     host: host.root,
+    dock: host.dock,
     // A draft has no stage yet, so no stage the reporter hid can hide it.
     shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
     isDraft,

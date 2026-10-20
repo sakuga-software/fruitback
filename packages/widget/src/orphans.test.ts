@@ -189,3 +189,46 @@ describe('announcing detached notes (FRU-51)', () => {
     assert.equal(list?.owns(region as Node), true, 'the overlay would take a new announcement for a page change');
   });
 });
+
+describe('the chip in the capsule of the dock (FRU-303)', () => {
+  it('is the first control of the capsule, says « 1 detached », and announces the whole sentence', () => {
+    const page = mountPage('<main></main><div id="dock"><button id="launch">Leave feedback</button></div>');
+    const dock = page.query('#dock');
+    list = createOrphanList({ document: page.document, host: page.document.body, dock });
+
+    list.update([issue('sd_1', 'Une note')]);
+
+    const root = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
+    assert.equal(dock.firstElementChild, root, 'the chip is not at the start of the capsule');
+    assert.ok(root.hasAttribute('data-fruitback-docked'));
+    assert.equal(root.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached');
+    // The live region stays outside the capsule, and says the sentence with its noun.
+    const announcer = page.document.querySelector('[data-fruitback-orphans-announcer]');
+    assert.equal(announcer?.parentElement, page.document.body);
+    assert.equal(announcer?.textContent, '1 detached note');
+    assert.ok(list.owns(root.querySelector('.fruitback-orphans-toggle') as Node));
+  });
+
+  it('says « 2 détachées » in French', () => {
+    const page = mountPage('<main></main><div id="dock"></div>');
+    list = createOrphanList({
+      document: page.document,
+      host: page.document.body,
+      dock: page.query('#dock'),
+      translator: createTranslator({ locale: 'fr' }),
+    });
+
+    list.update([issue('sd_1', 'Une'), issue('sd_2', 'Deux')]);
+
+    assert.equal(page.document.querySelector('.fruitback-orphans-toggle')?.textContent, '2 détachées');
+  });
+
+  it('floats alone above the corner without a capsule, with the whole sentence', () => {
+    const page = mount();
+    list?.update([issue('sd_1', 'Une note')]);
+    const root = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
+    assert.equal(root.parentElement, page.document.body);
+    assert.equal(root.hasAttribute('data-fruitback-docked'), false);
+    assert.equal(root.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached note');
+  });
+});

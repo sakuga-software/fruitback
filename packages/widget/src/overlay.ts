@@ -87,6 +87,8 @@ export type OverlayOptions = {
    * somewhere else — absolute positions resolve against the nearest positioned ancestor.
    */
   host?: Element | ShadowRoot;
+  /** The capsule of the dock, where the chip of the detached notes goes (FRU-303). See `OrphanListOptions`. */
+  dock?: Element;
   /**
    * Which pins to draw. Re-read on `refilter`, so a preference change does not need the issues to be
    * fetched again (FRU-14). Defaults to drawing everything.
@@ -194,6 +196,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const orphans: OrphanList = createOrphanList({
     document,
     host,
+    ...(options.dock === undefined ? {} : { dock: options.dock }),
     translator: t,
     onSelect: (issue) => {
       const entry = placed.find((candidate) => candidate.issue.seed.id === issue.seed.id);

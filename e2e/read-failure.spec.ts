@@ -46,7 +46,7 @@ for (const [name, fail] of Object.entries(failures)) {
     );
     await mount(page, `read-failure-${name.replace(' ', '-')}`);
 
-    const opener = page.getByRole('button', { name: 'Show every note of this page' });
+    const opener = page.getByRole('button', { name: 'Show every note in a sidebar' });
     await opener.click();
     const list = page.getByRole('dialog', { name: 'Notes on this page' });
     await expect(list.getByRole('status')).toHaveText(/could not be read/);
@@ -91,7 +91,7 @@ test('a read that fails after a good one leaves the pins and the list as they we
   await failed;
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await list.getByRole('tab', { name: 'All 1' }).click();
   await expect(list.locator('[data-fruitback-note]')).toHaveCount(1);
@@ -118,7 +118,7 @@ test('a read that fails puts a dot on the button of the list, and the network ba
     });
   }, WORKER_ORIGIN);
 
-  const opener = page.getByRole('button', { name: 'Show every note of this page. They could not be read.' });
+  const opener = page.getByRole('button', { name: 'Show every note in a sidebar. They could not be read.' });
   await expect(opener).toBeVisible();
   await expect(opener.locator('.fruitback-listing-alert')).toBeVisible();
   await expect(page.locator('[data-fruitback-announcer]')).toHaveText(
@@ -130,6 +130,6 @@ test('a read that fails puts a dot on the button of the list, and the network ba
   );
   await context.setOffline(false);
   await read;
-  await expect(page.getByRole('button', { name: 'Show every note of this page', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show every note in a sidebar', exact: true })).toBeVisible();
   await expect(page.locator('.fruitback-listing-alert')).toBeHidden();
 });

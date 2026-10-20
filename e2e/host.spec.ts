@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, badgeFor, openPlayground, plantPin } from './pin.ts';
+import { badgeFor, openPlayground, plantPin } from './pin.ts';
 
 /**
  * The Shadow DOM host (FRU-3), in a browser that has a real selector engine, a real cascade and
@@ -34,7 +34,8 @@ test('the page cannot restyle the widget, however hard it tries', async ({ page 
   // A `!important` in the page's own sheet cannot select through a Shadow boundary…
   expect(styles.background).not.toBe('rgb(0, 255, 0)');
   expect(styles.fontSize).toBe('13px');
-  expect(styles.borderStyle).toBe('none');
+  // The transparent border of the capsule's controls (FRU-303), not the page's dotted one.
+  expect(styles.borderStyle).toBe('solid');
   // …and `font-family` is the one that would have got through by inheritance, which is what
   // `all: initial` on the host is for.
   expect(styles.fontFamily).not.toContain('Papyrus');
@@ -133,7 +134,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   // Proof that the emoji check below is checking something. `textContent` on a Shadow root includes
   // the CSS of every <style> in it, so asserting the text is non-empty passes before a single piece
   // of chrome has rendered — which is what the first version of this test did. Raised in review.
-  for (const rendered of ['Leave feedback', 'Settings', 'detached note']) {
+  for (const rendered of ['Leave feedback', 'Settings', 'detached']) {
     expect(text, `never reached the state that renders ${rendered}`).toContain(rendered);
   }
 
@@ -200,12 +201,12 @@ test('hovering highlights the element the pointer is really over', async ({ page
       const [box, target] = await Promise.all([highlight.boundingBox(), button.boundingBox()]);
       if (box === null || target === null) return null;
 
-      // The frame stands 6 px off the element on every side (FRU-258).
+      // The frame stands 5 px off the element on every side: 2 px of line, 3 px off (FRU-303).
       return Math.max(
-        Math.abs(box.x - (target.x - 6)),
-        Math.abs(box.y - (target.y - 6)),
-        Math.abs(box.width - (target.width + 12)),
-        Math.abs(box.height - (target.height + 12)),
+        Math.abs(box.x - (target.x - 5)),
+        Math.abs(box.y - (target.y - 5)),
+        Math.abs(box.width - (target.width + 10)),
+        Math.abs(box.height - (target.height + 10)),
       );
     })
     .toBeLessThanOrEqual(1);
@@ -284,89 +285,4 @@ test('a note, its byline and its warning are three lines, not one paragraph', as
 
   expect(lines, 'the thread should show a note and a byline').not.toBeNull();
   expect(lines!.metaTop, 'the byline starts below the note, not beside it').toBeGreaterThanOrEqual(lines!.noteBottom);
-});
-
-test('the dock has the measures of the mock-up: three controls of 44 px, 24 px from the corner (FRU-252)', async ({
-  page,
-}) => {
-  // The widget as `init` assembles it, from the built script: the playground has no button of the list.
-  await page.goto('/?widget=off&case=dock-measures');
-  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
-  await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
-  await page.evaluate(
-    (endpoint) =>
-      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
-        endpoint,
-        clientId: 'playground',
-        locale: 'en-US',
-      }),
-    WORKER_ORIGIN,
-  );
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
-  const gear = page.getByRole('button', { name: 'Open Fruitback settings' });
-  const list = page.getByRole('button', { name: 'Show every note of this page' });
-  await expect(launch).toBeVisible();
-  await page.mouse.move(0, 0);
-
-  const viewport = page.viewportSize()!;
-  const [launchBox, gearBox, listBox] = await Promise.all([launch, gear, list].map((each) => each.boundingBox()));
-  // 24 px from the right and from the bottom, and 10 px between two controls, the list first.
-  expect(viewport.width - (launchBox!.x + launchBox!.width)).toBe(24);
-  expect(viewport.height - (launchBox!.y + launchBox!.height)).toBe(24);
-  expect(launchBox!.x - (gearBox!.x + gearBox!.width)).toBe(10);
-  expect(gearBox!.x - (listBox!.x + listBox!.width)).toBe(10);
-  for (const round of [gearBox!, listBox!]) expect([round.width, round.height]).toEqual([44, 44]);
-  expect(launchBox!.height).toBe(44);
-
-  const painted = (locator: typeof launch) =>
-    locator.evaluate((element) => {
-      const style = getComputedStyle(element);
-      const icon = element.querySelector('svg')!.getBoundingClientRect();
-
-      return {
-        fill: style.backgroundColor,
-        text: style.color,
-        radius: style.borderTopLeftRadius,
-        shadow: style.boxShadow,
-        padding: `${style.paddingLeft} ${style.paddingRight}`,
-        font: `${style.fontSize} ${style.fontWeight}`,
-        gap: style.columnGap,
-        icon: [Math.round(icon.width), Math.round(icon.height)],
-      };
-    });
-  const shadow = 'rgba(0, 0, 0, 0.25) 0px 4px 18px 0px';
-  expect(await painted(launch)).toEqual({
-    fill: 'rgb(221, 44, 39)',
-    text: 'rgb(255, 255, 255)',
-    radius: '999px',
-    shadow,
-    padding: '20px 20px',
-    font: '13px 600',
-    gap: '8px',
-    icon: [12, 15],
-  });
-  for (const round of [gear, list]) {
-    expect(await painted(round)).toMatchObject({
-      fill: 'rgb(68, 64, 60)',
-      text: 'rgb(255, 255, 255)',
-      radius: '999px',
-      shadow,
-      icon: [18, 18],
-    });
-  }
-
-  // Under the pointer, and while a capture runs: the strong accent. The button keeps its words
-  // then, and says it is pressed (FRU-258).
-  await launch.hover();
-  await expect.poll(async () => (await painted(launch)).fill).toBe('rgb(185, 28, 28)');
-  await launch.click();
-  await page.mouse.move(0, 0);
-  const pressed = page.locator('[data-fruitback-host-launch]');
-  await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
-  expect((await painted(pressed)).fill).toBe('rgb(185, 28, 28)');
-  await expect(pressed).toHaveAttribute('aria-pressed', 'true');
-  await expect(pressed).toHaveText('Leave feedback');
-  await page.keyboard.press('Escape');
-  await expect(pressed).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(async () => (await painted(pressed)).fill).toBe('rgb(221, 44, 39)');
 });

@@ -170,7 +170,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258)'
   expect(Number(box.x)).toBeCloseTo(target.x - 6, 0);
   // The frame stays on the element the note is about, with the name of its component.
   await expect(page.locator('[data-fruitback-host-highlight]')).toBeVisible();
-  await expect(page.locator('.fruitback-highlight-tag')).toHaveText('Button');
+  await expect(page.locator('.fruitback-highlight-tag')).toHaveText('button#checkout-cta · <Button>');
   // The capture is over: one click, one note.
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveAttribute('aria-pressed', 'false');
 

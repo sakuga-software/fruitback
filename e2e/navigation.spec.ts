@@ -66,7 +66,7 @@ test('a note sent after a navigation goes to the page where it was written', asy
   await expect(composer).toBeHidden({ timeout: 5_000 });
 
   // Not on the page the reporter went to.
-  const open = page.getByRole('button', { name: 'Show every note of this page' });
+  const open = page.getByRole('button', { name: 'Show every note in a sidebar' });
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await open.click();
   await expect(list.getByText('No note on this page yet.')).toBeVisible();

@@ -102,7 +102,17 @@ const PAIRS: Pair[] = [
     minimum: 4.5,
     where: 'the warning about an approximate position, in the thread and in the list',
   },
-  { foreground: 'color-on-warning', background: 'color-warning', minimum: 4.5, where: 'the detached-notes chip' },
+  // The brown of a note whose element is gone, on the chip of the capsule (FRU-303).
+  { foreground: 'color-on-stage', background: 'color-unplaced', minimum: 4.5, where: 'the detached-notes chip' },
+  // The list and the gear are drawn on the capsule, and on its sunken fill under the pointer.
+  {
+    foreground: 'color-text-subtle',
+    background: 'color-surface',
+    minimum: 3,
+    where: 'the list and the gear of the dock',
+  },
+  // A drawing: the key Esc on the way out of a capture.
+  { foreground: 'color-on-ink-muted', background: 'color-chip', minimum: 3, where: 'the border of the key Esc' },
   { foreground: 'color-border-strong', background: 'color-surface', minimum: 3, where: 'the border of a field' },
   {
     foreground: 'color-border-strong',

@@ -97,7 +97,7 @@ for (const scheme of ['light', 'dark'] as const) {
     );
 
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Show every note of this page' }).click();
+    await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     // « All »: whether the store in memory made the note an open one or a done one is not this test's.
     await page.getByRole('dialog', { name: 'Notes on this page' }).getByRole('tab', { name: 'All 1' }).click();
     expect(await display(page, 'ul.fruitback-sidebar-list')).toBe('block');
@@ -269,7 +269,7 @@ test('at 390 px, a note with a long address wraps in the thread and in the list'
   expect(await overflowsSideways(page, '.fruitback-thread')).toBe(0);
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await page.getByRole('tab', { name: 'All 1' }).click();
   await expect(page.locator('.fruitback-sidebar-note')).toBeVisible();
   expect(await overflowsSideways(page, '.fruitback-sidebar-note')).toBe(0);

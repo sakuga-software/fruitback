@@ -58,12 +58,13 @@ const ICONS: Record<IconName, IconShape> = {
   },
   // Dashed, because that is how the overlay draws a pin it could not re-anchor. The chip and the pin
   // then say the same thing in the same language, which an emoji could not do.
-  // Three lines, drawn here. It is no path of somebody else, so it adds no notice to carry.
+  // A panel beside the page, as the mock-up of 2026-10-20 draws the button of the list (FRU-303):
+  // a rounded frame and its divider. Drawn here: no path of somebody else, so no notice to carry.
   list: {
     viewBox: '0 0 16 16',
     paths: [
       {
-        d: 'M3 4.5 H13 M3 8 H13 M3 11.5 H13',
+        d: 'M3.75 2.75 H12.25 A1.75 1.75 0 0 1 14 4.5 V11.5 A1.75 1.75 0 0 1 12.25 13.25 H3.75 A1.75 1.75 0 0 1 2 11.5 V4.5 A1.75 1.75 0 0 1 3.75 2.75 Z M6.25 2.75 V13.25',
         fill: 'none',
         stroke: 'currentColor',
         'stroke-width': '1.5',
