@@ -80,6 +80,10 @@ const WORDS = {
     title: 'Notes on this page',
     close: 'Close the sidebar',
     notOn: ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
+    open: 'Open',
+    done: 'Done',
+    show: 'Show on the page',
+    reply: 'Reply',
   },
   fr: {
     title: 'Notes de cette page',
@@ -88,6 +92,10 @@ const WORDS = {
       'Fruitback n’est pas activé sur cette page.',
       'Activez-le depuis le bouton Fruitback de la barre d’outils.',
     ],
+    open: 'Ouvertes',
+    done: 'Terminées',
+    show: 'Voir sur la page',
+    reply: 'Répondre',
   },
 } as const;
 
@@ -193,13 +201,19 @@ function panelRows(page: Page) {
   );
 }
 
-/** A click in the panel, on the button of a row with these words. */
+/** A click in the panel, on the button of a row with these words; `row` opens the row. */
 function clickInRow(page: Page, note: string, label: string): Promise<unknown> {
   return inPanel(
     page,
     `(() => {
       const row = [...document.querySelectorAll('li[data-note]')].find((each) => each.querySelector('.panel-row-note')?.textContent === ${JSON.stringify(note)});
-      const button = label === 'row' ? row?.querySelector('.panel-row-head') : [...(row?.querySelectorAll('button') ?? [])].find((each) => each.textContent === ${JSON.stringify(label)});
+      if (${JSON.stringify(label)} === 'row') {
+        const head = row?.querySelector('.panel-row-head');
+        // Opened, never closed: a row may be open already, from a click on its pin.
+        if (head?.getAttribute('aria-expanded') !== 'true') head?.click();
+        return head !== undefined;
+      }
+      const button = [...(row?.querySelectorAll('button') ?? [])].find((each) => each.textContent === ${JSON.stringify(label)});
       button?.click();
       return button !== undefined;
     })()`,
@@ -243,7 +257,8 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const open = pins.filter((pin) => !pin.done);
   const done = pins.filter((pin) => pin.done);
   const listed = await panelRows(page);
-  expect(listed.tabs).toEqual([`Open · ${open.length}`, `Done · ${done.length}`]);
+  const said = await words(page);
+  expect(listed.tabs).toEqual([`${said.open} · ${open.length}`, `${said.done} · ${done.length}`]);
   expect(listed.rows.map((row) => row.number).sort()).toEqual(open.map((pin) => pin.number).sort());
 
   // A click on a pin opens its row in the panel.
@@ -261,12 +276,12 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const target = (await panelRows(page)).rows[0];
   expect(target).toBeDefined();
   await clickInRow(page, target?.note ?? '', 'row');
-  await expect.poll(() => clickInRow(page, target?.note ?? '', 'Show on the page')).toBe(true);
+  await expect.poll(() => clickInRow(page, target?.note ?? '', said.show)).toBe(true);
   await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toBeVisible();
   await page.keyboard.press('Escape');
 
   // « Reply »: the reply is in the thread of the widget.
-  await expect.poll(() => clickInRow(page, target?.note ?? '', 'Reply')).toBe(true);
+  await expect.poll(() => clickInRow(page, target?.note ?? '', said.reply)).toBe(true);
   await inPanel(
     page,
     `(() => {
@@ -281,7 +296,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
       timeout: 20_000,
     })
     .toContain('Answered from the side panel');
-  await clickInRow(page, target?.note ?? '', 'Show on the page');
+  await clickInRow(page, target?.note ?? '', said.show);
   await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText('Answered from the side panel');
 
   // The panel read no worker: every read went through the widget of the tab.
