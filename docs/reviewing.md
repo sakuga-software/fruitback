@@ -166,6 +166,12 @@ popup says `No rule covers this origin, so Fruitback does nothing here.` The but
 right of the popup, **Account and settings**, opens the options page, which lists every rule and
 adds new ones.
 
+The page of the extension (FRU-301) has a menu on the left, and **Sites** first: a table of every
+rule with its **Mode**, its **Worker**, its **Access** and a switch to turn it on or off. **Filter
+sites** narrows the table by pattern or by worker. Click the site of a row, or press Enter on it, to
+open its panel: the mode, the **Worker endpoint**, the **Client id**, what this browser holds for it,
+**Save** and **Remove rule**. **Add a site** opens the form of a new rule in the same place.
+
 A rule names the sites it covers:
 
 | Sites                        | covers                                                            |
@@ -201,8 +207,9 @@ file replaces the rule with the same pattern, and the other rules stay. An entry
 skipped, and the page names it.
 
 The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
-imported rule reads `No access in this browser` until you press **Grant access**, and a team-mode worker
-still needs you to pair. A rule that is off reads `No access while it is off`: **Turn on** asks for it.
+imported rule reads `No access in this browser` in its panel until you press **Grant access**, and a
+team-mode worker still needs you to pair. A rule that is off reads `No access while it is off`: its
+switch asks for it.
 
 ### Keep your rules in your other browsers
 

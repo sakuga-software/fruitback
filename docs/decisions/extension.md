@@ -324,6 +324,29 @@ did not change: the fields of 760 px and the file input of the browser are as th
   it does not grant. Automation cannot answer the prompt of **Allow access again**, so the spec
   plays **Turn off for this site**.
 
+## The page of the extension, its menu and « Sites » (FRU-301)
+
+### The rules, in short
+
+- **The options page is the page of the extension of the mock-up of 2026-10-20**: a menu (the drop,
+  « Fruitback » and the version of the manifest, the sections, the two guides), and a column of
+  sections. **Sites** is a table of the rules and the panel of the one that is chosen; **Share
+  rules** and **Preferences** (the copy to the account of the browser) are the sections of before,
+  until FRU-290 and FRU-302 draw them. « Workers and sessions » comes with FRU-302.
+- **`src/site-page.ts` builds the parts**, with no `browser`: `site-page.test.ts` reads them on
+  happy-dom. `entrypoints/options/main.ts` reads storage and the grants, and binds the clicks.
+- **What a rule does has not changed**: the checks of a new rule, the grant asked in the click, the
+  switch, the refusal of a team wildcard, `PREVIEWS_NOT_PROVEN`, `STALE_TEAM_WILDCARD` and
+  `TOO_LARGE_FOR_ACCOUNT`. **Save** goes through `editor.save`, under the checks of a new rule; it
+  keeps the rule on or off as it was, keeps the label of a private rule, and keeps the mount of a site
+  of a workspace while its worker stays.
+- **A change of storage draws the table again, never the panel**: somebody may be typing in it. The
+  panel is drawn when a row is chosen, and goes when its rule is removed.
+- **The site of a row is a native button**: Tab reaches it, Enter opens its panel. The switch of a
+  row is the switch of a table of the kit, named « Fruitback on {pattern} ».
+- **No date « added »**: the mock-up writes one, and storage keeps none. It is left out rather than
+  made up.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

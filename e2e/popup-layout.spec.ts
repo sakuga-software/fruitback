@@ -364,6 +364,6 @@ test('axe finds nothing on the popup and on the options page, in both schemes', 
 
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
-  await expect(options.getByRole('button', { name: 'Add rule' })).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Add a site' })).toBeVisible();
   await clean(options, 'the options page');
 });
