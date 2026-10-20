@@ -303,3 +303,84 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const fetched = await inPanel<string[]>(page, `performance.getEntriesByType('resource').map((entry) => entry.name)`);
   expect(fetched.filter((url) => !url.startsWith('chrome-extension://'))).toEqual([]);
 });
+
+/** What « Ready to check » shows: its title, and each note with the line of who fixed it. */
+function readyBlock(page: Page) {
+  return inPanel<{ title: string | null; items: { note: string; meta: string }[]; problem: string | null }>(
+    page,
+    `({
+      title: document.querySelector('section.ready h3')?.textContent ?? null,
+      items: [...document.querySelectorAll('.ready-item')].map((item) => ({
+        note: item.querySelector('.ready-note')?.textContent ?? '',
+        meta: item.querySelector('.ready-meta')?.textContent ?? '',
+      })),
+      problem: document.querySelector('.ready-problem')?.textContent ?? null,
+    })`,
+  );
+}
+
+/** A click on « Looks fixed » or « Still wrong » of the note with these words. */
+function verdict(page: Page, note: string, label: 'Looks fixed' | 'Still wrong'): Promise<boolean> {
+  return inPanel<boolean>(
+    page,
+    `(() => {
+      const item = [...document.querySelectorAll('.ready-item')].find((each) => each.querySelector('.ready-note')?.textContent === ${JSON.stringify(note)});
+      const button = [...(item?.querySelectorAll('button') ?? [])].find((each) => each.textContent.trim() === ${JSON.stringify(label)});
+      button?.click();
+      return button !== undefined;
+    })()`,
+  );
+}
+
+/** The meta line of the row of a note, in the list of the panel. */
+function rowMeta(page: Page, note: string): Promise<string | null> {
+  return inPanel<string | null>(
+    page,
+    `[...document.querySelectorAll('li[data-note]')].find((row) => row.querySelector('.panel-row-note')?.textContent === ${JSON.stringify(note)})?.querySelector('.panel-row-meta')?.textContent ?? null`,
+  );
+}
+
+test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wrong » reopens one (FRU-300)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-check');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+
+  // Eight notes of the person: the store in memory marks the third and the eighth of a page done.
+  const cards = ['espresso', 'latte', 'mocha'];
+  for (let index = 0; index < 8; index += 1) {
+    const card = cards[index % cards.length];
+    await plantOn(page, `[data-testid="card-${card}"] ${index < 3 ? '.add' : 'h3'}`, `Check note ${index + 1}`);
+  }
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(8);
+
+  const again = await openPopup(extension, page);
+  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await expect
+    .poll(async () => (await readyBlock(page).catch(() => ({ title: null }))).title)
+    .toBe('Ready to check · 2');
+  const ready = await readyBlock(page);
+  expect(ready.items.map((item) => item.note).sort()).toEqual(['Check note 3', 'Check note 8']);
+  // The third note of a page has the replies of the dev store: Bruno's is the newest.
+  expect(ready.items.find((item) => item.note === 'Check note 3')?.meta).toMatch(/^Fixed by (Bruno|Alice) · /);
+  // Not in Done while they wait to be checked.
+  expect((await panelRows(page)).tabs).toEqual([expect.stringMatching(/^Open · \d+$/), 'Done · 1']);
+
+  // « Looks fixed »: the note is in Done, checked by the person.
+  expect(await verdict(page, 'Check note 3', 'Looks fixed')).toBe(true);
+  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBe('Ready to check · 1');
+  await expect.poll(() => rowMeta(page, 'Check note 3')).toMatch(/^Done · Checked by you · /);
+
+  // « Still wrong »: the note is open again, New, reopened by the person.
+  expect(await verdict(page, 'Check note 8', 'Still wrong')).toBe(true);
+  await expect.poll(async () => (await readyBlock(page)).title, { timeout: 20_000 }).toBeNull();
+  await expect.poll(() => rowMeta(page, 'Check note 8')).toBe('New · Reopened by you · just now');
+
+  // The pins of the page say the same: the store moved the note, and the widget read it.
+  await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="seeded"]')).not.toHaveCount(0);
+});
