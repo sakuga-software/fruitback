@@ -106,6 +106,8 @@ type Admin = {
   instance?: Facts | number;
   /** Holds the answer of `GET /console/admin/instance` until it resolves. */
   hold?: Promise<void>;
+  /** Holds the read of the deleted workspaces (FRU-284) as `hold` holds the one of the instance. */
+  holdDeleted?: Promise<void>;
   /** The workspaces that an administrator deleted (FRU-284), none by default; a number: that status. */
   deleted?: readonly unknown[] | number;
 };
@@ -148,9 +150,11 @@ async function stub(page: Page, options: Admin = {}): Promise<void> {
       if (new URL(route.request().url()).searchParams.get('kind') !== 'workspace-deleted')
         return route.fulfill({ status: 400, json: { error: 'invalid-kind' } });
 
-      return typeof deleted === 'number'
-        ? route.fulfill({ status: deleted, json: { error: 'unavailable' } })
-        : route.fulfill({ json: { actions: deleted } });
+      return (options.holdDeleted ?? Promise.resolve()).then(() =>
+        typeof deleted === 'number'
+          ? route.fulfill({ status: deleted, json: { error: 'unavailable' } })
+          : route.fulfill({ json: { actions: deleted } }),
+      );
     }
 
     return undefined;
@@ -462,14 +466,21 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
 test('the screen says it is loading while the worker has not answered', async ({ page }) => {
   let release = () => {};
   const hold = new Promise<void>((resolve) => (release = resolve));
-  await stub(page, { hold });
+  // « Deleted workspaces » (FRU-284) says « Loading… » too while its own read waits. On CI that read
+  // was sometimes still on its way, and a locator of the whole screen found two lines. Both reads are
+  // held here, so the two lines are always there, and the line of the instance is the one under the
+  // header.
+  await stub(page, { hold, holdDeleted: hold });
   await open(page);
 
-  await expect(main(page).getByText('Loading…')).toBeVisible();
+  const loading = main(page).getByText('Loading…');
+  await expect(loading).toHaveCount(2);
+  await expect(main(page).locator('header + p')).toHaveText('Loading…');
+  await expect(page.getByRole('region', { name: 'Deleted workspaces' }).getByText('Loading…')).toBeVisible();
   await expect(health(page)).toHaveCount(0);
   release();
   await expect(fact(page, 'Worker').value).toHaveText('Answering');
-  await expect(main(page).getByText('Loading…')).toHaveCount(0);
+  await expect(loading).toHaveCount(0);
 });
 
 test('in French, every sentence of the screen is French', async ({ page }) => {
