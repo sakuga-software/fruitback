@@ -1,5 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
 import type { PanelNote } from './protocol.ts';
@@ -8,8 +10,11 @@ import {
   type PanelOptions,
   type PanelState,
   REPLY_PROBLEM,
+  REPLY_MAX_LENGTH,
   ageOf,
   keepPopupOnActionClick,
+  notesOf,
+  openOnRead,
   openPanel,
   openPanelOrPage,
   panelPage,
@@ -137,6 +142,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       onReplySend: () => calls.push('send'),
       onReplyCancel: () => calls.push('cancel'),
       onRetry: () => calls.push('retry'),
+      onReload: () => calls.push('reload'),
       onSettings: () => calls.push('settings'),
     };
   };
@@ -398,5 +404,69 @@ describe('the host the panel shows', () => {
     assert.equal(webHost('about:blank'), undefined);
     assert.equal(webHost(undefined), undefined);
     assert.equal(webHost('not a url'), undefined);
+  });
+});
+
+describe('what the panel does with an answer of the widget (raised in review)', () => {
+  const NOTE: PanelNote = {
+    id: 'n1',
+    stage: 'green',
+    note: 'A note',
+    createdAt: '2026-10-20T10:00:00Z',
+    updatedAt: '2026-10-20T10:00:00Z',
+    replies: [],
+    canReply: false,
+    placement: 'found',
+  };
+
+  it('lists the notes, waits for a widget that has not read, says a failed read, and a page with nothing to answer', () => {
+    assert.deepEqual(notesOf({ notes: [NOTE] }), [NOTE]);
+    assert.equal(notesOf({ reading: 'pending' }), 'reading');
+    assert.equal(notesOf({ reading: 'no-widget' }), 'reading');
+    assert.equal(notesOf({}), 'reading');
+    assert.equal(notesOf({ reading: 'failed' }), 'failed');
+    assert.equal(notesOf({ reading: 'signed-out' }), 'signed-out');
+    assert.equal(notesOf(undefined), 'reload');
+  });
+
+  it('opens the row of a pin once a list that holds it is read, and keeps it waiting until then', () => {
+    assert.deepEqual(openOnRead('n1', 'reading'), { waiting: 'n1' });
+    assert.deepEqual(openOnRead('n1', 'failed'), { waiting: 'n1' });
+    assert.deepEqual(openOnRead('n1', [NOTE]), { open: NOTE });
+    assert.deepEqual(openOnRead('gone', [NOTE]), {});
+    assert.deepEqual(openOnRead(undefined, [NOTE]), {});
+  });
+
+  it('says to reload a page that was open before the site was on, with a button that does it', () => {
+    const calls: string[] = [];
+    const root = panelPage(new HappyDomWindow().document as unknown as Document, {
+      state: { kind: 'on', host: 'staging.acme.dev', notes: 'reload' },
+      tab: 'open',
+      onClose: () => {},
+      onLeave: () => {},
+      onTab: () => {},
+      onToggle: () => {},
+      onShow: () => {},
+      onReplyOpen: () => {},
+      onReplyInput: () => {},
+      onReplySend: () => {},
+      onReplyCancel: () => {},
+      onRetry: () => {},
+      onReload: () => calls.push('reload'),
+      onSettings: () => {},
+    });
+    assert.match(root.textContent ?? '', /Reload it to see its notes\./);
+    [...root.querySelectorAll<HTMLButtonElement>('button')]
+      .find((each) => each.textContent === 'Reload the page')
+      ?.click();
+    assert.deepEqual(calls, ['reload']);
+  });
+
+  it('takes a reply of the length the worker takes, read in the worker', () => {
+    const worker = readFileSync(fileURLToPath(new URL('../../worker/src/app.ts', import.meta.url)), 'utf8');
+    const length = /export const REPLY_LENGTH = (\d+);/.exec(worker)?.[1];
+
+    assert.ok(length !== undefined, 'apps/worker/src/app.ts no longer names REPLY_LENGTH: this check reads nothing');
+    assert.equal(REPLY_MAX_LENGTH, Number(length));
   });
 });

@@ -217,6 +217,11 @@ export type Fruitback = {
    * answered: an empty list would then say there are no notes.
    */
   pageNotes(): PageNote[] | undefined;
+  /**
+   * Where the read of the notes of this page is (FRU-299): `pending` until one answers, `read`, or
+   * `failed` when none answered. A list outside the page says which, rather than wait.
+   */
+  notesState(): ReadState;
   /** Scrolls to the pin of a note and opens its thread, as a row of the list does. `false`: not drawn. */
   focusNote(id: string): boolean;
   /** Shows the pin of a note above the others, a fifth bigger: the row open in a list. `undefined`: none. */
@@ -802,6 +807,7 @@ export function init(options: FruitbackOptions): Fruitback {
           placement,
         }));
     },
+    notesState: () => readState,
     focusNote: (id) => overlay.select(id),
     markNote: (id) => overlay.mark(id),
     async replyTo(id, body) {

@@ -114,6 +114,7 @@ export default defineContentScript({
           ...(message.counts === undefined ? {} : { counts: message.counts }),
           ...(message.notes === undefined ? {} : { notes: message.notes }),
           ...(message.outcome === undefined ? {} : { outcome: message.outcome }),
+          ...(message.reading === undefined ? {} : { reading: message.reading }),
         });
         commands.delete(message.id);
 

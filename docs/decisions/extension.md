@@ -460,6 +460,12 @@ did not change: the fields of 760 px and the file input of the browser are as th
   widget is the site's, and answers the extension nothing: the panel says that its notes are in its
   own list on the page, rather than wait for them and report a failed read.
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
+- **The panel never asks again on a timer.** `notes` answers the notes, or why there are none: no
+  widget of ours yet, a read not answered (the panel waits for `notes-changed`), a read that failed
+  (« Try again » asks the widget to read again, `reread`), a session that ended (FRU-315), or nothing
+  on the page at all, a page open before the site was on (« Reload the page »).
+- **A click on a pin opens its row once a list that holds its note is read**: the id waits until
+  then (`openOnRead`).
 - **What somebody types in a reply stays.** The panel draws again at each change; the text, the
   caret and the focus are put back. A reply that did not go keeps its text and says why.
 - **The foot names the host and the workspace of the rule**, which the extension stores. The

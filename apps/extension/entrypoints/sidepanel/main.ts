@@ -1,12 +1,14 @@
 import { browser } from 'wxt/browser';
 import { language, setLanguage } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
-import type { PanelNote } from '../../src/protocol.ts';
 import {
   type NotesTab,
+  type PanelNotes,
   type PanelOptions,
   type PanelState,
   REPLY_PROBLEM,
+  notesOf,
+  openOnRead,
   panelPage,
   tabOf,
   webHost,
@@ -35,21 +37,28 @@ const app = document.querySelector('#app');
 
 /** The tab the panel follows: its id and what the panel knows of it. */
 let followed: { tabId: number; host: string; where?: string; siteWidget?: true } | undefined;
-let notes: PanelNote[] | 'reading' | 'failed' = 'reading';
+let notes: PanelNotes = 'reading';
 let tab: NotesTab = 'open';
 let open: string | undefined;
 let replying: PanelOptions['replying'];
 /** Each look at the tab counts one: an older one that answers late does not draw over a newer one. */
 let looks = 0;
-/** The reads of the notes that answered « not yet »: the widget is mounting, or reading. */
-let waits = 0;
-let waitTimer: ReturnType<typeof setTimeout> | undefined;
-const MAX_WAITS = 6;
+/** The note a click on a pin asked to open, until a list that holds it is read. */
+let pendingOpen: string | undefined;
 
 async function ask(command: TabCommand, args: { note?: string; body?: string } = {}): Promise<TabCommandAnswer> {
-  if (followed === undefined) return { done: false };
+  return (await askOrNothing(command, args)) ?? { done: false };
+}
 
-  return parseAnswer(await browser.tabs.sendMessage(followed.tabId, tabCommand(command, args)).catch(() => undefined));
+/** The answer of the widget of the tab, or nothing when nothing on the page answers. */
+async function askOrNothing(
+  command: TabCommand,
+  args: { note?: string; body?: string } = {},
+): Promise<TabCommandAnswer | undefined> {
+  if (followed === undefined) return undefined;
+  const raw: unknown = await browser.tabs.sendMessage(followed.tabId, tabCommand(command, args)).catch(() => undefined);
+
+  return raw === undefined ? undefined : parseAnswer(raw);
 }
 
 /** Which tab the panel follows now, and whether Fruitback is on there. */
@@ -78,39 +87,42 @@ async function look(): Promise<void> {
   }
   // Another tab: its own notes, from the start.
   if (followed?.tabId !== before) {
-    // A read of the tab of before that waits to try again would read this one a second time.
-    if (waitTimer !== undefined) clearTimeout(waitTimer);
-    waitTimer = undefined;
     notes = 'reading';
     open = undefined;
+    pendingOpen = undefined;
     replying = undefined;
     tab = 'open';
-    waits = 0;
   }
   draw();
   if (followed !== undefined && followed.siteWidget !== true) await readNotes();
 }
 
-/** The notes of the widget of the tab. « Not yet » is asked again a few times, then said. */
+/**
+ * The notes of the widget of the tab, or why there are none (`notesOf`). Never asked again on a
+ * timer: the widget says when it has read, and a page with nothing to answer says so.
+ */
 async function readNotes(): Promise<void> {
   const reading = followed?.tabId;
-  if (waitTimer !== undefined) clearTimeout(waitTimer);
-  const answer = await ask('notes');
+  const answer = await askOrNothing('notes');
   if (followed?.tabId !== reading) return;
-  if (answer.notes !== undefined) {
-    notes = answer.notes;
-    waits = 0;
-    // The open row of a note that is gone closes.
-    if (open !== undefined && !answer.notes.some((note) => note.id === open)) open = undefined;
-  } else if (waits < MAX_WAITS) {
-    waits += 1;
-    waitTimer = setTimeout(() => void readNotes(), 1_000);
-
-    return;
-  } else {
-    notes = 'failed';
+  notes = notesOf(answer);
+  // The open row of a note that is gone closes.
+  if (Array.isArray(notes) && open !== undefined && !notes.some((note) => note.id === open)) open = undefined;
+  // A row a pin asked for, once a list that holds its note is read.
+  const asked = openOnRead(pendingOpen, notes);
+  pendingOpen = asked.waiting;
+  if (asked.open !== undefined) {
+    open = asked.open.id;
+    tab = tabOf(asked.open);
   }
   draw();
+  if (asked.open !== undefined) {
+    void ask('mark-note', { note: asked.open.id });
+    // The row of the pin that was clicked comes into sight.
+    app
+      ?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(asked.open.id)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function state(): PanelState {
@@ -189,11 +201,14 @@ function draw(): void {
         draw();
       },
       onReplySend: () => void sendReply(),
+      // The widget reads the page again, and says when it has (`notes-changed`).
       onRetry: () => {
         notes = 'reading';
-        waits = 0;
         draw();
-        void readNotes();
+        void ask('reread');
+      },
+      onReload: () => {
+        if (followed !== undefined) void browser.tabs.reload(followed.tabId);
       },
       onSettings: () => void browser.runtime.openOptionsPage(),
     }),
@@ -235,18 +250,8 @@ browser.storage.onChanged.addListener((changes, area) => {
 browser.runtime.onMessage.addListener((message: unknown, sender) => {
   const event = panelEvent(message);
   if (event === undefined || followed === undefined || sender.tab?.id !== followed.tabId) return undefined;
-  void readNotes().then(() => {
-    if (event.open === undefined) return;
-    // Opened once the list that holds the note is read: a note it does not hold opens nothing.
-    const note = Array.isArray(notes) ? notes.find((each) => each.id === event.open) : undefined;
-    if (note === undefined) return;
-    open = note.id;
-    tab = tabOf(note);
-    draw();
-    void ask('mark-note', { note: note.id });
-    // The row of the pin that was clicked comes into sight.
-    app?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(note.id)}"]`)?.scrollIntoView({ block: 'nearest' });
-  });
+  if (event.open !== undefined) pendingOpen = event.open;
+  void readNotes();
 
   return undefined;
 });

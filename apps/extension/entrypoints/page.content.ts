@@ -179,9 +179,16 @@ export default defineContentScript({
         }
         // FRU-299: the side panel. The notes the pins show, a note shown on the page, a reply.
         let notes: ReturnType<NonNullable<typeof widget>['pageNotes']>;
-        if (widget !== undefined && message.command === 'notes') {
-          notes = widget.pageNotes();
+        let reading: string | undefined;
+        if (message.command === 'notes') {
+          notes = widget?.pageNotes();
           done = notes !== undefined;
+          // Why there are none, for the panel to say it rather than wait (raised in review).
+          if (notes === undefined) reading = widget === undefined ? 'no-widget' : widget.notesState();
+        }
+        if (widget !== undefined && message.command === 'reread') {
+          void widget.refresh();
+          done = true;
         }
         if (widget !== undefined && message.command === 'focus-note' && message.note !== undefined) {
           done = widget.focusNote(message.note);
@@ -202,6 +209,7 @@ export default defineContentScript({
               ...(counts === undefined ? {} : { counts }),
               ...(notes === undefined ? {} : { notes }),
               ...(outcome === undefined ? {} : { outcome }),
+              ...(reading === undefined ? {} : { reading }),
             },
             '*',
           );

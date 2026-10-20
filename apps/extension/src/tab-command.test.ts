@@ -165,6 +165,10 @@ describe('the commands of the side panel (FRU-299)', () => {
     assert.deepEqual(parseAnswer({ done: true, notes: [NOTE] }), { done: true, notes: [NOTE] });
     assert.deepEqual(parseAnswer({ done: false, outcome: 'wait' }), { done: false, outcome: 'wait' });
     assert.deepEqual(parseAnswer({ done: false, outcome: 'boom' }), { done: false });
+    // Why there are no notes (raised in review).
+    assert.deepEqual(parseAnswer({ done: false, reading: 'failed' }), { done: false, reading: 'failed' });
+    assert.deepEqual(parseAnswer({ done: false, reading: 'no-widget' }), { done: false, reading: 'no-widget' });
+    assert.deepEqual(parseAnswer({ done: false, reading: 'gone' }), { done: false });
   });
 
   it('keep the notes that are notes, and drop the others', () => {

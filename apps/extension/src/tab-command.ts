@@ -1,6 +1,8 @@
 import {
   PANEL_LIMITS,
   type PageCounts,
+  NOTES_READINGS,
+  type NotesReading,
   type PanelNote,
   REPLY_OUTCOMES,
   type ReplyOutcome,
@@ -58,6 +60,7 @@ export type TabCommandAnswer = {
   counts?: PageCounts;
   notes?: PanelNote[];
   outcome?: ReplyOutcome;
+  reading?: NotesReading;
 };
 
 /** What the popup, or the side panel, sends. */
@@ -114,10 +117,11 @@ export function acceptedRequest(
 /** The answer, read back: an unknown shape is « not done ». */
 export function parseAnswer(value: unknown): TabCommandAnswer {
   if (typeof value !== 'object' || value === null) return { done: false };
-  const { done, busy, counts, notes, outcome } = value as Record<string, unknown>;
+  const { done, busy, counts, notes, outcome, reading } = value as Record<string, unknown>;
   const parsed = parsePageCounts(counts);
   const listed = parsePanelNotes(notes);
   const replied = REPLY_OUTCOMES.find((each) => each === outcome);
+  const why = NOTES_READINGS.find((each) => each === reading);
 
   return {
     done: done === true,
@@ -125,5 +129,6 @@ export function parseAnswer(value: unknown): TabCommandAnswer {
     ...(parsed === undefined ? {} : { counts: parsed }),
     ...(listed === undefined ? {} : { notes: listed }),
     ...(replied === undefined ? {} : { outcome: replied }),
+    ...(why === undefined ? {} : { reading: why }),
   };
 }

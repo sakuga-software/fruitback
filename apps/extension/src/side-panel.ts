@@ -1,6 +1,6 @@
 import { language, msg, t } from './i18n.ts';
 import { dropMark, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
-import type { PanelNote, ReplyOutcome } from './protocol.ts';
+import type { NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 
 /**
  * The side panel of the browser (FRU-296, FRU-299): its place in the manifest, the gesture that
@@ -102,11 +102,44 @@ export type PanelState =
       host: string;
       /** What the foot says after the host: the workspace of the rule, when it has one. */
       where?: string;
-      /** The notes, or where their read is. `failed`: the widget did not answer. */
-      notes: PanelNote[] | 'reading' | 'failed';
+      /** The notes, or where their read is (`notesOf`). */
+      notes: PanelNotes;
     };
 
 export type NotesTab = 'open' | 'done';
+
+/**
+ * The notes, or where their read is. `reading`: the widget has not read yet, or is not mounted yet;
+ * it says when it has. `failed`: its read failed. `signed-out`: the session of the site ended (FRU-315). `reload`: nothing on the page answers, a page open
+ * before the site was turned on.
+ */
+export type PanelNotes = PanelNote[] | 'reading' | 'failed' | 'reload' | 'signed-out';
+
+/**
+ * What an answer to `notes` says (raised in review): the notes, or why there are none. No answer at
+ * all is a page with no bridge. The panel does not ask again on a timer: the widget says when it has
+ * read (`notes-changed`).
+ */
+export function notesOf(answer: { notes?: PanelNote[]; reading?: NotesReading } | undefined): PanelNotes {
+  if (answer === undefined) return 'reload';
+  if (answer.notes !== undefined) return answer.notes;
+
+  if (answer.reading === 'failed' || answer.reading === 'signed-out') return answer.reading;
+
+  return 'reading';
+}
+
+/**
+ * The row a click on a pin asked for, once a list is read (raised in review). The id waits for a
+ * list that holds its note: `open` is the row to open, `waiting` what still waits.
+ */
+export function openOnRead(asked: string | undefined, notes: PanelNotes): { open?: PanelNote; waiting?: string } {
+  if (asked === undefined) return {};
+  if (!Array.isArray(notes)) return { waiting: asked };
+  const note = notes.find((each) => each.id === asked);
+
+  return note === undefined ? {} : { open: note };
+}
 
 export type PanelOptions = {
   state: PanelState;
@@ -128,6 +161,7 @@ export type PanelOptions = {
   onReplySend: () => void;
   onReplyCancel: () => void;
   onRetry: () => void;
+  onReload: () => void;
   onSettings: () => void;
 };
 
@@ -281,12 +315,32 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
 }
 
 /** The list part: reading, failed, empty, or the tabs and the rows. */
-function notesPart(document: Document, options: PanelOptions, notes: PanelNote[] | 'reading' | 'failed'): Node[] {
+function notesPart(document: Document, options: PanelOptions, notes: PanelNotes): Node[] {
   if (notes === 'reading') {
     const line = make(document, 'p', 'panel-reading', t('Reading the notes of this page…'));
     line.setAttribute('role', 'status');
 
     return [line];
+  }
+  if (notes === 'signed-out') {
+    const line = make(
+      document,
+      'p',
+      'panel-reading',
+      t('Your session ended. Sign in again from the Fruitback button.'),
+    );
+    line.setAttribute('role', 'status');
+
+    return [line];
+  }
+  if (notes === 'reload') {
+    const box = make(document, 'div', 'panel-failed');
+    box.append(
+      make(document, 'p', '', t('This page was open before Fruitback was on. Reload it to see its notes.')),
+      linkButton(document, t('Reload the page'), options.onReload),
+    );
+
+    return [box];
   }
   if (notes === 'failed') {
     const box = make(document, 'div', 'panel-failed');

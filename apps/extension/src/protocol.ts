@@ -215,6 +215,8 @@ export type CommandResponseMessage = {
   counts?: PageCounts;
   /** The answer of `notes` (FRU-299): the notes the pins show. */
   notes?: PanelNote[];
+  /** Why `notes` answered none: no widget of ours on the page, its read not answered, or failed. */
+  reading?: NotesReading;
   /** The answer of `reply`: sent, or why not. */
   outcome?: ReplyOutcome;
 };
@@ -239,11 +241,17 @@ export const TAB_COMMANDS = [
   'focus-note',
   'mark-note',
   'reply',
+  // The read of the widget, again: « Try again » of a read that failed.
+  'reread',
 ] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 
 const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 export type PageCounts = Record<(typeof STAGES)[number], number>;
+
+/** Why a widget gave no notes (FRU-299). */
+export const NOTES_READINGS = ['no-widget', 'pending', 'failed', 'signed-out'] as const;
+export type NotesReading = (typeof NOTES_READINGS)[number];
 
 /** What `reply` answers: the reply is in the store, or why it is not. */
 export const REPLY_OUTCOMES = ['sent', 'retry', 'wait', 'signed-out', 'refused'] as const;
@@ -540,6 +548,7 @@ function parseCommandResponse(data: Record<string, unknown>): CommandResponseMes
   const counts = parsePageCounts(data.counts);
   const notes = parsePanelNotes(data.notes);
   const outcome = REPLY_OUTCOMES.find((each) => each === data.outcome);
+  const reading = NOTES_READINGS.find((each) => each === data.reading);
 
   return {
     channel: CHANNEL,
@@ -550,6 +559,7 @@ function parseCommandResponse(data: Record<string, unknown>): CommandResponseMes
     ...(counts === undefined ? {} : { counts }),
     ...(notes === undefined ? {} : { notes }),
     ...(outcome === undefined ? {} : { outcome }),
+    ...(reading === undefined ? {} : { reading }),
   };
 }
 

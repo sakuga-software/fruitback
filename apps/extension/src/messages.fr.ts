@@ -225,6 +225,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your session ended. Sign in again from the Fruitback button, then send.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis envoyez.',
   'You cannot reply to this note any more.': 'Vous ne pouvez plus répondre à cette note.',
+  'This page was open before Fruitback was on. Reload it to see its notes.':
+    'Cette page était ouverte avant que Fruitback soit activé. Rechargez-la pour voir ses notes.',
+  'Reload the page': 'Recharger la page',
+  'Your session ended. Sign in again from the Fruitback button.':
+    'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback.',
   '{host} runs its own Fruitback.': '{host} a son propre Fruitback.',
   'Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.':
     'Ses notes sont sur la page, dans sa propre liste. Ce panneau liste les notes d’un site où Fruitback se monte.',

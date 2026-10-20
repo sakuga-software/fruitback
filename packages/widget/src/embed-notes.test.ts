@@ -132,6 +132,19 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     ]);
   });
 
+  it('says where its read is: pending before one answers, read, or failed (raised in review)', async () => {
+    const pending = widgetOn(mounted(), { transport: worker({}).transport });
+    assert.equal(pending.notesState(), 'pending');
+    await pending.refresh();
+    assert.equal(pending.notesState(), 'read');
+
+    const failing = async (): Promise<TransportResponse> => ({ ok: false, status: 503, body: '{}' });
+    const failed = widgetOn(mounted(), { transport: failing });
+    await failed.refresh();
+    assert.equal(failed.notesState(), 'failed');
+    assert.equal(failed.pageNotes(), undefined);
+  });
+
   it('leaves out a stage the reporter hid, and says the list changed', async () => {
     const page = mounted();
     const widget = widgetOn(page, { transport: worker({}).transport });
