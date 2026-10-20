@@ -209,6 +209,30 @@ describe('the session the widget is told of (FRU-315)', () => {
     );
   });
 
+  it('keeps what it said last when the read of the session fails', async () => {
+    const posts: BridgeMessage[] = [];
+    const answers: (() => Promise<boolean>)[] = [async () => true, async () => Promise.reject(new Error('storage'))];
+    const apply = createApply({
+      readSite: async () => TEAM,
+      readSignedOut: () => (answers.shift() ?? (async () => false))(),
+      post: (message) => void posts.push(message),
+    });
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      await apply();
+      await apply();
+    } finally {
+      console.warn = warn;
+    }
+
+    // Signed out, then a failed read: nothing new is said, so the widget keeps offering the sign-in.
+    assert.deepEqual(
+      posts.filter((message) => message.kind === 'session'),
+      [{ channel: CHANNEL, kind: 'session', signedOut: true }],
+    );
+  });
+
   it('says nothing of a session to a widget of the private mode', async () => {
     const { posts, apply } = applying(PRIVATE, { signedOut: true });
     await apply();

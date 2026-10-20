@@ -54,7 +54,15 @@ export function createApply({
     const message = decide(site, locale);
     const relayed =
       message.kind === 'mount' && message.relay === true && site !== undefined && readSignedOut !== undefined;
-    const signedOut = relayed ? await readSignedOut(site).catch(() => false) : false;
+    // A read of storage that fails keeps what was said last, and says why in the console: forcing
+    // « signed in » would hide the sign-in from somebody whose session ended (review of #378).
+    const signedOut = relayed
+      ? await readSignedOut(site).catch((error: unknown) => {
+          console.warn('[fruitback] could not read whether this site has a session', error);
+
+          return said ?? false;
+        })
+      : false;
     if (mine !== generation) return;
 
     // The language is part of the signature below. A change of language is a change of config: the
