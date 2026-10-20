@@ -474,7 +474,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   in place of « Try again », and keeps what was typed: `problemOf` knows the code for every screen,
   and `writeProblemOf` for the screens that name their own sentences. The same refusal shows the
   banner (`onWorkspaceSuspended` of `api.ts`), with the day of the `409`, when the suspension came
-  after `/console/me` was read. The filter « Suspended » of Workspaces is the one of the mockup, and
+  after `/console/me` was read, and only for the workspace that the write named (`workspaceOfWrite`:
+  its path, or `organizationId`): a write of another workspace answered after a change of workspace
+  shows nothing. The filter « Suspended » of Workspaces is the one of the mockup, and
   asks the worker `show=suspended`: a workspace restored under that filter stays in the list until it
   is read again, as each read leaves a trace. `e2e/console-suspended.spec.ts` holds the banner on each
   section, its day or no day, no reason, its contrast, the refusal of a site and of an invitation, the

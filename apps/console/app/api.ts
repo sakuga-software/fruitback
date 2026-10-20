@@ -142,18 +142,33 @@ function send(method: string, to: string, body?: unknown): Promise<Response | un
   return reach(to, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 
-type SuspendedListener = (suspendedAt: string | undefined) => void;
+type SuspendedListener = (workspace: string, suspendedAt: string | undefined) => void;
 const suspendedListeners = new Set<SuspendedListener>();
 
 /**
  * Tells the listener when a write was refused because the workspace is suspended (FRU-328), with the
- * day the worker says to a member. The frame of the workspace shows its banner then, also when the
- * suspension came after `/console/me` was read. Returns how to stop.
+ * workspace the write named and the day the worker says to a member. The frame of the workspace shows
+ * its banner then, also when the suspension came after `/console/me` was read. Returns how to stop.
+ *
+ * WARNING: the listener gets the workspace of the write, not the one on screen. A write sent in one
+ * workspace can be answered after the person went to another one.
  */
 export function onWorkspaceSuspended(listener: SuspendedListener): () => void {
   suspendedListeners.add(listener);
 
   return () => void suspendedListeners.delete(listener);
+}
+
+/**
+ * The workspace a call names: in its path for the console API (`/console/workspaces/<id>/…`), in
+ * `organizationId` of its body for the organization plugin. `undefined` when it names none.
+ */
+export function workspaceOfWrite(to: string, body: unknown): string | undefined {
+  const inPath = /^\/console\/workspaces\/([^/?#]+)/.exec(to)?.[1];
+  if (inPath !== undefined) return decodeURIComponent(inPath);
+  const inBody = (body as { organizationId?: unknown } | null | undefined)?.organizationId;
+
+  return typeof inBody === 'string' ? inBody : undefined;
 }
 
 type SignedOutListener = () => void;
@@ -169,7 +184,7 @@ export function onSignedOut(listener: SignedOutListener): () => void {
   return () => void signedOutListeners.delete(listener);
 }
 
-async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
+async function answer<T>(response: Response | undefined, workspace?: string): Promise<Answer<T>> {
   if (response === undefined) return UNREACHABLE;
   if (response.status === 204) return { ok: true, data: undefined as T };
   const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown; field?: unknown } & T;
@@ -178,9 +193,9 @@ async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
   const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
 
   if (response.ok) return { ok: true, data: body };
-  if (response.status === 409 && named === WORKSPACE_SUSPENDED_ERROR) {
+  if (response.status === 409 && named === WORKSPACE_SUSPENDED_ERROR && workspace !== undefined) {
     const since = (body as { suspendedAt?: unknown }).suspendedAt;
-    for (const listener of suspendedListeners) listener(typeof since === 'string' ? since : undefined);
+    for (const listener of suspendedListeners) listener(workspace, typeof since === 'string' ? since : undefined);
   }
 
   return {
@@ -308,7 +323,7 @@ async function ask<T>(
     endSeen = true;
     for (const listener of signedOutListeners) listener();
   }
-  const result = await answer<T>(response);
+  const result = await answer<T>(response, workspaceOfWrite(to, body));
   if (method === 'GET' && to === '/console/me' && result.ok) {
     const id = (result.data as { account?: { id?: unknown } } | undefined)?.account?.id;
     if (typeof id === 'string') {

@@ -1,6 +1,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { call, redeemLink, signInProviders } from './api.ts';
+import { call, redeemLink, signInProviders, workspaceOfWrite } from './api.ts';
 
 afterEach(() => mock.restoreAll());
 
@@ -50,4 +50,21 @@ describe('a worker that refuses to say what it offers (FRU-205)', () => {
       }
     });
   }
+});
+
+describe('the workspace a write names (FRU-328)', () => {
+  it('reads it in the path of the console API, and in organizationId of the organization plugin', () => {
+    assert.equal(workspaceOfWrite('/console/workspaces/ws_1/sites', { url: 'https://a.dev' }), 'ws_1');
+    assert.equal(workspaceOfWrite('/console/workspaces/ws_1', undefined), 'ws_1');
+    assert.equal(
+      workspaceOfWrite('/console/auth/organization/invite-member', { organizationId: 'ws_2', email: 'a@b.dev' }),
+      'ws_2',
+    );
+  });
+
+  it('names none for a call of no workspace', () => {
+    assert.equal(workspaceOfWrite('/console/me/name', { name: 'Ana' }), undefined);
+    assert.equal(workspaceOfWrite('/console/auth/organization/invite-member', { organizationId: 42 }), undefined);
+    assert.equal(workspaceOfWrite('/console/workspacesX/ws_1', undefined), undefined);
+  });
 });

@@ -60,12 +60,13 @@ export default function WorkspaceFrame() {
   }, [id, navigate]);
 
   // A write refused because the workspace is suspended shows the banner, also when the suspension
-  // came after `/console/me` was read. Every write of a screen of the frame is of its workspace.
+  // came after `/console/me` was read. Only a refusal of the workspace on screen: a write sent in
+  // another workspace can be answered after the person came here.
   useEffect(
     () =>
-      onWorkspaceSuspended((suspendedAt) =>
+      onWorkspaceSuspended((workspace, suspendedAt) =>
         setContext((current) =>
-          current === undefined || current.workspace.suspended === true
+          current === undefined || current.workspace.id !== workspace || current.workspace.suspended === true
             ? current
             : {
                 ...current,
