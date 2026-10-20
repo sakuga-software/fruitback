@@ -13,7 +13,9 @@ import {
   REPLY_PROBLEM,
   REPLY_MAX_LENGTH,
   ageOf,
+  iconOpensPanel,
   keepPopupOnActionClick,
+  setPanelOnClick,
   notesOf,
   openOnRead,
   openPanel,
@@ -641,5 +643,35 @@ describe('what the panel does with an answer of the widget (raised in review)', 
 
     assert.ok(length !== undefined, 'apps/worker/src/app.ts no longer names REPLY_LENGTH: this check reads nothing');
     assert.equal(REPLY_MAX_LENGTH, Number(length));
+  });
+});
+
+describe('what the click on the icon opens (FRU-302)', () => {
+  it('opens the panel when asked for, on a site that is on, and with its session held', () => {
+    assert.equal(iconOpensPanel(true, { enabled: true }, false), true);
+    assert.equal(iconOpensPanel(false, { enabled: true }, false), false);
+    assert.equal(iconOpensPanel(true, { enabled: false }, false), false);
+    assert.equal(iconOpensPanel(true, undefined, false), false);
+  });
+
+  it('opens the popup on a site whose session ended, where the person signs in again (review)', () => {
+    assert.equal(iconOpensPanel(true, { enabled: true }, true), false);
+  });
+
+  it('sets the behaviour of the browser, and nothing on a browser with no such behaviour', async () => {
+    const set: boolean[] = [];
+    const apis: PanelApis = {
+      sidePanel: {
+        open: async () => {},
+        setPanelBehavior: async ({ openPanelOnActionClick }) => {
+          set.push(openPanelOnActionClick);
+        },
+      },
+    };
+    await setPanelOnClick(apis, true, true);
+    await setPanelOnClick(apis, true, false);
+    await setPanelOnClick(apis, false, true);
+    assert.deepEqual(set, [true, false, false]);
+    await setPanelOnClick({ sidebarAction: { open: async () => {} } }, true, true);
   });
 });

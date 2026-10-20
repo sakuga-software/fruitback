@@ -290,7 +290,8 @@ export default defineContentScript({
       }
 
       // The same decision, posted again: the widget on screen is already this one.
-      const signature = JSON.stringify(message);
+      // FRU-302: the suggested name is not part of it, as in the bridge: it fills the next composer.
+      const signature = JSON.stringify({ ...message, name: undefined });
       if (widget !== undefined && signature === mounted) return;
 
       // Private mode. The transport goes away with the announcement, so the site's own widget — if
@@ -325,6 +326,8 @@ export default defineContentScript({
           : {}),
         // FRU-44: offered here, and off until the reviewer turns it on in the settings of the widget.
         captureScreenshot,
+        // FRU-302: « Name on my notes », for a reporter who kept none on this site.
+        ...(message.name !== undefined ? { reporterName: message.name } : {}),
       });
       mounted = signature;
       // FRU-299: the side panel asks for the notes again when they change, and opens the row of a

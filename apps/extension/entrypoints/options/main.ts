@@ -35,6 +35,14 @@ import {
 } from '../../src/site-page.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
+import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
+import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
+import { cloudEndpoint } from '../../src/popup-state.ts';
+import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
+import { touchesARefreshToken } from '../../src/session-storage.ts';
+import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
+import { NOTES_NAME_KEY } from '../../src/protocol.ts';
+import { PANEL_ON_CLICK_KEY } from '../../src/side-panel.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -99,6 +107,15 @@ const imported = new Set<string>();
 /** Writes the number of rules on the export card, once the page holds the card. */
 let setShareCount: (count: number | undefined) => void = () => undefined;
 const sessions = createBrowserSessions();
+/** The Fruitback of this build, whose session is the account of the person (FRU-238). */
+const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
+const returnAccess = createBrowserAccessReturn(sessions);
+/** The section « Workers and sessions », drawn again at each change of the rules or of a session. */
+const workers = element('div', '', 'workers-slot');
+/** A code a pairing link brought here from the popup: `#workers?worker=<endpoint>&code=<code>`. */
+let linked = linkedPairing(window.location.hash);
+/** The pairing link whose card already took the focus. */
+let focusedLink: typeof linked;
 
 if (app !== null) {
   const sites = element('section', '', 'page-section');
@@ -118,12 +135,9 @@ if (app !== null) {
     notice,
   );
   const share = transfer();
-  const prefs = await synchronise();
-  prefs.id = 'prefs';
-  // FRU-291: the key that starts a note, where the mock-up of 2026-10-20 puts it, in the preferences.
-  prefs.append(element('h3', t('Keyboard shortcut')), await shortcutLine());
+  const prefs = await preferences();
   const content = element('main', '', 'page-content');
-  content.append(sites, share, prefs);
+  content.append(sites, workers, share, prefs);
   const frame = element('div', '', 'page');
   frame.append(
     menu(document, {
@@ -131,6 +145,7 @@ if (app !== null) {
       current: 'sites',
       entries: [
         { id: 'sites', label: t('Sites') },
+        { id: 'workers', label: t('Workers and sessions') },
         { id: 'share', label: t('Share rules') },
         { id: 'prefs', label: t('Preferences') },
       ],
@@ -141,6 +156,18 @@ if (app !== null) {
 }
 
 void renderList();
+void renderWorkers();
+// A pairing link opened from the popup while this page is open changes the fragment only.
+window.addEventListener('hashchange', () => {
+  linked = linkedPairing(window.location.hash);
+  if (linked !== undefined) void renderWorkers();
+});
+// FRU-302: a session that is made or ends, here or in the popup, redraws the cards of the workers.
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.sites !== undefined || touchesARefreshToken(Object.keys(changes)))) {
+    void renderWorkers();
+  }
+});
 // Only the table is drawn again, so a change from the popup does not clear what somebody is typing.
 browser.storage.onChanged.addListener((changes, area) => {
   const drawn = changes.sites !== undefined || changes[SYNC_SETTING] !== undefined;
@@ -477,35 +504,6 @@ async function importFile(file: File, result: HTMLElement): Promise<void> {
   result.textContent = `${said}${skipped}`;
 }
 
-/**
- * The rules in the account of the browser (FRU-72). Off until the reviewer ticks the box: a rule that
- * is synchronised leaves this computer. The background does the copy; this writes the choice only.
- */
-async function synchronise(): Promise<HTMLElement> {
-  const box = document.createElement('input');
-  box.type = 'checkbox';
-  box.checked = (await browser.storage.local.get(SYNC_SETTING))[SYNC_SETTING] === true;
-  box.addEventListener('change', () => void browser.storage.local.set({ [SYNC_SETTING]: box.checked }));
-  const label = document.createElement('label');
-  label.className = 'choice';
-  label.append(box, t('Keep my rules in the account of this browser'));
-
-  const wrapper = element('section', '', 'page-section');
-  wrapper.append(
-    element('h2', t('Preferences')),
-    element('h3', t('Synchronise rules')),
-    element(
-      'p',
-      t(
-        'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
-      ),
-    ),
-    label,
-  );
-
-  return wrapper;
-}
-
 function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   const modes: [SiteMode, string][] = [
@@ -544,41 +542,158 @@ function button(text: string, onClick: () => void, className?: string): HTMLButt
   return node;
 }
 
-/**
- * The key that starts a note, and the way to change it (FRU-291). One line, on its own, so the
- * page of the extension that replaces this one can take it whole.
- *
- * The key is the browser's, read from `commands.getAll()`: the person may have changed it, and a
- * browser installs the command with no key when another extension holds the one suggested.
- */
-async function shortcutLine(): Promise<HTMLElement> {
-  const line = element('p', '', 'state');
-  const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
-  line.append(
-    shortcut === undefined
-      ? t('Leave feedback shortcut: none set.')
-      : t('Leave feedback shortcut: {shortcut}.', { shortcut }),
-    ' ',
-  );
+function linkedPairing(hash: string): { endpoint: string; code: string } | undefined {
+  const query = hash.startsWith('#workers?') ? new URLSearchParams(hash.slice('#workers?'.length)) : undefined;
+  const endpoint = query?.get('worker');
+  const code = query?.get('code');
 
-  // Firefox 137 opens its own page. Chromium browsers have one, at an address the extension may open.
-  // An older Firefox has neither, so the line says where to look.
-  const commands = browser.commands as typeof browser.commands & { openShortcutSettings?: () => Promise<void> };
-  let open: (() => Promise<unknown> | undefined) | undefined;
-  if (typeof commands.openShortcutSettings === 'function') open = () => commands.openShortcutSettings?.();
-  else if (!import.meta.env.FIREFOX) open = () => browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
-  if (open === undefined) {
-    line.append(t('Change it in Add-ons, Manage Extension Shortcuts.'));
+  return endpoint && code ? { endpoint, code } : undefined;
+}
 
-    return line;
+/** What a worker takes: https, plain http of this machine, or nothing. */
+function pairingOf(endpoint: string): Pairing {
+  if (!isSecureWorkerEndpoint(endpoint)) return 'insecure';
+
+  return endpoint.startsWith('http://') ? 'local' : 'https';
+}
+
+function hostOf(endpoint: string): string {
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return endpoint;
   }
-  // The small outlined button that sits beside a sentence, as a remedy does: no new style.
-  const change = element('button', t('Change the shortcut'), 'remedy');
-  change.type = 'button';
-  change.addEventListener('click', () => void open());
-  line.append(change);
+}
 
-  return line;
+/**
+ * One card for each worker a rule names, and for a worker this browser holds a session with and no
+ * rule names (the Cloud of an account). Read again at each change: no state of its own.
+ */
+async function renderWorkers(): Promise<void> {
+  const [sites, held] = await Promise.all([
+    readAll(),
+    sessions.list().catch(() => ({}) as Record<string, StoredSession>),
+  ]);
+  const counted = new Map<string, number>();
+  for (const [pattern, site] of Object.entries(sites)) {
+    if (parseSitePattern(pattern) !== pattern) continue;
+    counted.set(site.endpoint, (counted.get(site.endpoint) ?? 0) + 1);
+  }
+  for (const endpoint of Object.keys(held)) if (!counted.has(endpoint)) counted.set(endpoint, 0);
+  // The code of a link is spent once its worker holds a session: a log out later does not offer it
+  // again (raised in review).
+  if (linked !== undefined && held[linked.endpoint] !== undefined) linked = undefined;
+  if (linked !== undefined && !counted.has(linked.endpoint)) counted.set(linked.endpoint, 0);
+  const cards: WorkerCard[] = [...counted.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([endpoint, count]) => {
+      const session = held[endpoint];
+
+      return {
+        endpoint,
+        host: hostOf(endpoint),
+        sites: count,
+        pairing: pairingOf(endpoint),
+        ...(session === undefined
+          ? {}
+          : {
+              session: {
+                ...(session.identity.name === undefined ? {} : { name: session.identity.name }),
+                ...(session.identity.email === undefined ? {} : { email: session.identity.email }),
+              },
+            }),
+        ...(endpoint === CLOUD ? { account: true } : {}),
+        ...(linked?.endpoint === endpoint && session === undefined ? { code: linked.code } : {}),
+      };
+    });
+  const drew = redrawWorkers(document, workers, { cards, onPair: pair, onLogout: logout });
+  // The menu counts the workers, as the mock-up does: « Workers and sessions 3 ».
+  const entry = document.querySelector('.page-entry[href="#workers"]');
+  let menuCount = entry?.querySelector('.page-count') ?? null;
+  if (entry !== null && menuCount === null) {
+    menuCount = element('span', '', 'page-count');
+    entry.append(menuCount);
+  }
+  if (menuCount !== null) menuCount.textContent = String(cards.length);
+  // The card of a pairing link takes the focus when it is drawn for it, not at each later draw.
+  if (linked !== undefined && drew && linked !== focusedLink) {
+    focusedLink = linked;
+    document.querySelector<HTMLElement>(`.worker-card[data-endpoint="${CSS.escape(linked.endpoint)}"] input`)?.focus();
+  }
+}
+
+/**
+ * One attempt to pair, from « Pair » or from the remedy under a failed one (FRU-90). The permission
+ * of the worker's origin is asked first, before anything is awaited: a browser shows the prompt only
+ * in a gesture. Then the code is spent once: the button waits while it is.
+ */
+function pair(endpoint: string, code: string, said: HTMLElement, submit: HTMLButtonElement): void {
+  const value = code.trim();
+  showProblem(said, value === '' ? PAIRING_CODE_REQUIRED : '');
+  if (value === '') return;
+  submit.disabled = true;
+  const again = (): void => pair(endpoint, code, said, submit);
+  void (async () => {
+    const granted = await browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
+    const result = granted ? await sessions.pair(endpoint, value) : undefined;
+    // The button is turned back on first: a card with a button off is not drawn again (`redrawWorkers`).
+    submit.disabled = false;
+    if (result?.ok === true) {
+      // The card says who now (FRU-289): it is drawn again from the session just stored.
+      await renderWorkers();
+
+      return;
+    }
+    // A draw that waited for this pairing, now that it failed: its line below stays if the cards did not change.
+    if (workers.dataset.pending === 'true') await renderWorkers();
+    showProblem(said, PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason], {
+      retry: again,
+      grant: again,
+    });
+  })();
+}
+
+/** Log out: the worker revokes, then this browser forgets, then gives back the access it was for. */
+function logout(endpoint: string, out: HTMLButtonElement): void {
+  out.disabled = true;
+  void sessions
+    .logout(endpoint)
+    .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
+    .then(() => returnAccess([workerOrigin(endpoint)]))
+    .catch((error: unknown) => console.error('[fruitback] could not give back the access to the worker', error))
+    .then(() => {
+      out.disabled = false;
+
+      return renderWorkers();
+    });
+}
+
+/** « Preferences » (FRU-302): the panel on the icon, the name, the shortcut, the copy of the rules. */
+async function preferences(): Promise<HTMLElement> {
+  const stored = await browser.storage.local.get([PANEL_ON_CLICK_KEY, NOTES_NAME_KEY, SYNC_SETTING]);
+  const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
+  // Firefox 137 opens its own page. Chromium browsers have one, at an address the extension may open.
+  // An older Firefox has neither, so the row says where to look.
+  const commands = browser.commands as typeof browser.commands & { openShortcutSettings?: () => Promise<void> };
+  let onShortcut: (() => void) | undefined;
+  if (typeof commands.openShortcutSettings === 'function') onShortcut = () => void commands.openShortcutSettings?.();
+  else if (!import.meta.env.FIREFOX) onShortcut = () => void browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
+  const panel = (browser as unknown as { sidePanel?: unknown }).sidePanel !== undefined;
+
+  return preferencesSection(document, {
+    // The icon opens the panel only where the browser has one to open (Chrome): no row on Firefox.
+    ...(panel ? { panelOnClick: stored[PANEL_ON_CLICK_KEY] === true } : {}),
+    onPanelOnClick: (on) => browser.storage.local.set({ [PANEL_ON_CLICK_KEY]: on }),
+    name: typeof stored[NOTES_NAME_KEY] === 'string' ? stored[NOTES_NAME_KEY] : '',
+    onName: (name) =>
+      name === ''
+        ? browser.storage.local.remove(NOTES_NAME_KEY)
+        : browser.storage.local.set({ [NOTES_NAME_KEY]: name }),
+    ...(shortcut === undefined ? {} : { shortcut }),
+    ...(onShortcut === undefined ? {} : { onShortcut }),
+    synced: stored[SYNC_SETTING] === true,
+    onSynced: (on) => browser.storage.local.set({ [SYNC_SETTING]: on }),
+  });
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(

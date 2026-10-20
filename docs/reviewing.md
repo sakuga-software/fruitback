@@ -174,6 +174,11 @@ code: `https://feedback.acme.dev/pair#ABCD-EFGH-JKMN`. That is what the operator
 3. Press **Pair with this worker**. The popup then reads `Paired as Alex`, with **Log out** beside
    it. Go back to the site: it reaches the worker now.
 
+The page of the extension does the same, worker by worker: **Workers and sessions** has a card for
+each worker a rule names, with who you are paired as and **Log out**, or a field for the code and
+**Pair**. From the popup of a pairing link, **Pair in the page of the extension** opens that card with
+the code filled in.
+
 The code is after the `#`, and a browser sends nothing after a `#` to a server, so the worker's logs
 do not hold it. It is still in your browser's history, and it is spent the moment you pair.
 

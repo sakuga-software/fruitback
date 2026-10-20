@@ -129,11 +129,6 @@ body {
   margin: 0;
 }
 
-/* The section of before (Preferences), until FRU-302: a button at its width. */
-.page-section > button {
-  align-self: flex-start;
-}
-
 /* « Sites »: the title and what a rule is, then the filter and « Add a site ». */
 .sites-head {
   display: flex;
@@ -471,17 +466,6 @@ button.remedy {
   font-weight: 600;
 }
 
-/* A box and its words on one line (FRU-72). */
-label.choice {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-label.choice input {
-  flex: none;
-}
-
 /*
   « Share rules » (FRU-290): « Export » and « Import a rules file », side by side, one under the other
   when the window is narrow. The import card is a label around a file input kept out of sight: the
@@ -582,5 +566,202 @@ button.share-button:disabled {
 }
 
 .share-result:empty {
+  display: none;
+}
+
+/* « Workers and sessions » (FRU-302): one card for each worker, in a grid. */
+.workers-intro {
+  max-width: 620px;
+  color: var(--muted);
+}
+
+.workers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.worker-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.worker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.worker-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--line-control);
+}
+
+.worker-dot[data-on='true'] {
+  background: var(--success-line);
+}
+
+.worker-host {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.worker-sites,
+.worker-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.worker-card p {
+  margin: 0;
+}
+
+.worker-who strong {
+  font-weight: 650;
+}
+
+button.worker-button {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.worker-pair {
+  display: flex;
+  gap: 8px;
+}
+
+.worker-code {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  letter-spacing: 0.04em;
+}
+
+button.worker-pair-button {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+}
+
+button.worker-pair-button:disabled {
+  opacity: 0.6;
+}
+
+.worker-said:empty {
+  display: none;
+}
+
+.worker-said {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+/* « Preferences » (FRU-302): one card, a row for each choice. */
+.pref-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.pref-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.pref-row + .pref-row {
+  border-top: 1px solid var(--line-row);
+}
+
+.pref-words {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pref-title {
+  font-weight: 600;
+}
+
+.pref-help {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pref-name {
+  box-sizing: border-box;
+  width: 200px;
+  height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.pref-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+button.pref-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A preference whose write failed: the control is back, and the card says so. */
+.pref-problem {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--alert-text);
+  font-size: 13px;
+}
+
+.pref-problem:empty {
   display: none;
 }

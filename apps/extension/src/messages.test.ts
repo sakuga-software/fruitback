@@ -36,6 +36,7 @@ const VIEWS = [
   './share-rules.ts',
   './side-panel.ts',
   './welcome.ts',
+  './workers-page.ts',
 ] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
 const CONSTANTS = ['./remedy.ts', './site-form.ts', './site-editor.ts', './read-probe.ts'] as const;

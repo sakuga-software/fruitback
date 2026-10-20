@@ -10,7 +10,7 @@ import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
-import { type StoredSession, describeIdentity } from '../../src/session.ts';
+import { type SessionIdentity, type StoredSession, describeIdentity } from '../../src/session.ts';
 import { currentShortcut } from '../../src/shortcut.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
@@ -759,7 +759,11 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
 async function linked(link: PairLink): Promise<HTMLElement[]> {
   const held = (await sessions.list())[link.endpoint];
   if (held !== undefined) {
-    return [paired(link.endpoint, describeIdentity(held.identity)), element('p', t(LINK_ALREADY_PAIRED), 'state')];
+    // FRU-289: paired by this link, just now, is a success; « already paired » is only for a browser
+    // that was paired before the link.
+    const said = pairedNow.has(link.endpoint) ? LINK_PAIRED : LINK_ALREADY_PAIRED;
+
+    return [paired(link.endpoint, held.identity), element('p', t(said), 'state')];
   }
 
   const submit = element('button', t('Pair with this worker'));
@@ -781,6 +785,14 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
 
   const attempt = pairing(link.endpoint, () => link.code, submit, problem, {});
   submit.addEventListener('click', attempt);
+  // FRU-302: the same pairing, on the card of the worker in the page of the extension, code filled.
+  const page = element('button', t('Pair in the page of the extension'), 'secondary');
+  page.addEventListener('click', () => {
+    const query = new URLSearchParams({ worker: link.endpoint, code: link.code });
+    void browser.tabs.create({ url: `${browser.runtime.getURL('/options.html')}#workers?${query.toString()}` });
+    window.close();
+  });
+  wrapper.append(page);
 
   return [wrapper];
 }
@@ -789,8 +801,16 @@ const NOT_A_LINK = msg('This is a site to review');
 
 const LINK_ALREADY_PAIRED = msg('This browser is already paired with that worker, so the link is not needed.');
 
-/** Who this browser is paired as with a worker, and the way out. */
-function paired(endpoint: string, identity: string): HTMLElement {
+const LINK_PAIRED = msg('Paired. This browser reads and writes the notes of this worker.');
+
+/** The workers this popup paired with, while it is open: the screen after a pairing says it is done. */
+const pairedNow = new Set<string>();
+
+/**
+ * Who this browser is paired as with a worker, and the way out. With no name, « Paired » alone and
+ * the e-mail under it, in the secondary text (FRU-289), as the card of the page of the extension.
+ */
+function paired(endpoint: string, identity: SessionIdentity): HTMLElement {
   const out = element('button', t('Log out'));
   out.addEventListener('click', () => {
     out.disabled = true;
@@ -818,11 +838,24 @@ function paired(endpoint: string, identity: string): HTMLElement {
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', t('Paired as {identity}', { identity }), 'state'), out);
+  const name = identity.name?.trim();
+  row.append(
+    element(
+      'span',
+      name === undefined || name === '' ? t('Paired') : t('Paired as {identity}', { identity: name }),
+      'state',
+    ),
+    out,
+  );
 
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
   wrapper.append(row);
+  if ((name === undefined || name === '') && identity.email !== undefined) {
+    const email = element('p', identity.email, 'state');
+    email.classList.add('identity-email');
+    wrapper.append(email);
+  }
 
   return wrapper;
 }
@@ -859,6 +892,7 @@ function pairing(
       const granted = await grantWorkerOrigin(endpoint);
       const result = granted ? await sessions.pair(endpoint, value) : undefined;
       if (result?.ok === true) {
+        pairedNow.add(endpoint);
         void render();
 
         return;
@@ -888,7 +922,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
   // already holds stays on the screen, with its log out.
   if (held === undefined && site.mode !== 'team') return [];
-  if (held !== undefined) return [paired(endpoint, describeIdentity(held.identity))];
+  if (held !== undefined) return [paired(endpoint, held.identity)];
 
   const code = field(t('Pairing code'), 'ABCD-EFGH-JKMN');
   const submit = element('button', t('Pair with this worker'));

@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs/promises';
 import { type Page, expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, addRule, test } from './extension.ts';
+import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -13,6 +14,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 /** The one `chrome.*` call of this spec, from the service worker: the rules in storage. */
 declare const chrome: {
   storage: { local: { get(key: string): Promise<Record<string, unknown>>; set(items: object): Promise<void> } };
+  sidePanel: { getPanelBehavior(): Promise<{ openPanelOnActionClick?: boolean }> };
 };
 
 /** A rule nobody granted: the copy of the extension holds access to the local origins only. */
@@ -341,4 +343,191 @@ test('« Share rules » downloads the rules, imports a file chosen or dropped, a
       )
       .toEqual([]);
   }
+});
+
+/** A team rule on the worker of the suite that keeps sessions: its card offers to pair. */
+async function teamRuleOnTheSessionWorker(extension: {
+  worker: { evaluate: <T, A>(fn: (arg: A) => Promise<T>, arg: A) => Promise<T> };
+}) {
+  await extension.worker.evaluate(
+    async ({ endpoint }) => {
+      const { sites } = (await chrome.storage.local.get('sites')) as { sites?: Record<string, unknown> };
+      await chrome.storage.local.set({
+        sites: { ...(sites ?? {}), 'https://team.elsewhere.example': { mode: 'team', endpoint, enabled: false } },
+      });
+    },
+    { endpoint: AUTHENTICATED_WORKER_ORIGIN },
+  );
+}
+
+test('« Workers and sessions » pairs with a code, says who, logs out, and takes a code from a link (FRU-302)', async ({
+  extension,
+}) => {
+  await teamRuleOnTheSessionWorker(extension);
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
+  await expect(card).toContainText(
+    'Not paired. Private-mode sites read without a session; a team site would stay asleep.',
+  );
+  await expect(card).toContainText('Plain http on localhost. Pairing works here');
+  await expect(card).toContainText('1 site');
+
+  // A code nobody minted: the card says why, and keeps the code.
+  await card.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
+  await card.getByRole('button', { name: 'Pair' }).click();
+  await expect(card.getByRole('status')).toContainText('That code has been used or has expired.');
+  await expect(card.getByLabel('Pairing code')).toHaveValue('AAAA-BBBB-CCCC');
+
+  // A real code: « Paired as » the name the operator gave (FRU-289), and « Log out ».
+  const { code } = await mintPairing('Camille Durand');
+  await card.getByLabel('Pairing code').fill(code);
+  await card.getByRole('button', { name: 'Pair' }).click();
+  // The suite builds the extension with this worker as its Cloud (WXT_FRUITBACK_CLOUD): its card
+  // speaks of an account.
+  await expect(card.locator('.worker-who')).toHaveText(
+    /^(Paired as|Appairé en tant que|Signed in as|Connecté en tant que) Camille Durand$/,
+  );
+  await expect(card.locator('.worker-dot')).toHaveAttribute('data-on', 'true');
+  await expect(page.locator('.page-entry[href="#workers"] .page-count')).not.toHaveText('');
+
+  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeVisible();
+
+  // A link from the popup: the card of the worker, its code filled.
+  const linked = await mintPairing('Camille Durand');
+  const query = new URLSearchParams({ worker: AUTHENTICATED_WORKER_ORIGIN, code: linked.code });
+  await page.goto(`chrome-extension://${extension.id}/options.html#workers?${query.toString()}`);
+  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue(linked.code);
+  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeFocused();
+
+  // Paired with it, then logged out: the code of the link is spent, and the field is empty (review).
+  await card.getByRole('button', { name: /^(Pair|Appairer)$/ }).click();
+  await expect(card.locator('.worker-who')).toContainText('Camille Durand');
+  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue('');
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    const { violations } = await new AxeBuilder({ page }).include('section#workers').include('section#prefs').analyze();
+    expect
+      .soft(
+        violations.map((violation) => violation.id),
+        colorScheme,
+      )
+      .toEqual([]);
+  }
+});
+
+test('a card is not drawn again while its pairing is in progress: « Pair » stays off, and the code is spent once (review)', async ({
+  extension,
+}) => {
+  await teamRuleOnTheSessionWorker(extension);
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
+  await expect(card.getByLabel('Pairing code')).toBeVisible();
+
+  // The pairing is held at the worker until the spec lets it go.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pairs = 0;
+  await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/pair`, async (route) => {
+    pairs += 1;
+    await held;
+    await route.continue();
+  });
+  const { code } = await mintPairing('Camille Durand');
+  await card.getByLabel('Pairing code').fill(code);
+  const pair = card.getByRole('button', { name: 'Pair' });
+  await pair.click();
+  await expect.poll(() => pairs).toBe(1);
+  await expect(pair).toBeDisabled();
+
+  // Meanwhile the cards change: a rule names another worker. The card in progress is not drawn
+  // again, so its « Pair » is not turned back on for a second click.
+  await extension.worker.evaluate(async () => {
+    const { sites } = await chrome.storage.local.get('sites');
+    await chrome.storage.local.set({
+      sites: {
+        ...(sites as Record<string, unknown>),
+        'https://staging.other.example': {
+          mode: 'private',
+          clientId: 'other',
+          endpoint: 'https://notes.other.example',
+          enabled: false,
+        },
+      },
+    });
+  });
+  await page.waitForTimeout(500);
+  await expect(pair).toBeDisabled();
+  await expect(page.locator('.worker-card[data-endpoint="https://notes.other.example"]')).toHaveCount(0);
+
+  // The pairing ends: the card says who, and the draw that waited shows the other worker.
+  release();
+  await expect(card.locator('.worker-who')).toContainText('Camille Durand');
+  await expect(page.locator('.worker-card[data-endpoint="https://notes.other.example"]')).toHaveCount(1);
+  expect(pairs).toBe(1);
+});
+
+test('« Preferences »: the name fills the composer in private mode, and the icon opens the panel on a site that is on (FRU-302)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const prefs = page.locator('section#prefs');
+  await expect(prefs.locator('.pref-title')).toHaveText([
+    'Open notes in the sidebar',
+    'Name on my notes',
+    'Leave feedback shortcut',
+    'Keep my rules in the account of this browser',
+  ]);
+
+  // The name, kept by the extension, fills the composer of a widget it mounts in private mode.
+  await prefs.getByLabel('Name on my notes').fill('Camille Durand');
+  await prefs.getByLabel('Name on my notes').press('Tab');
+  await expect
+    .poll(() => extension.worker.evaluate(async () => (await chrome.storage.local.get('notesName')).notesName))
+    .toBe('Camille Durand');
+  const site = await extension.context.newPage();
+  await openBareSite(site, 'prefs-name');
+  await site.locator('[data-fruitback-host-launch]').click();
+  await site.locator('[data-testid="card-latte"] .add').click();
+  await expect(site.locator('[data-fruitback-name]')).toHaveValue('Camille Durand');
+  await expect(site.locator('[data-fruitback-remember]')).not.toBeChecked();
+
+  // « Open notes in the sidebar »: on a site that is on, the icon opens the panel; off, the popup.
+  const behaviour = () =>
+    extension.worker.evaluate(async () => (await chrome.sidePanel.getPanelBehavior()).openPanelOnActionClick === true);
+  await page.bringToFront();
+  await prefs.getByRole('switch', { name: 'Open notes in the sidebar' }).click();
+  await site.bringToFront();
+  await expect.poll(behaviour).toBe(true);
+  await page.bringToFront();
+  await expect.poll(behaviour).toBe(false);
+  await prefs.getByRole('switch', { name: 'Open notes in the sidebar' }).click();
+  await site.bringToFront();
+  await expect.poll(behaviour).toBe(false);
+});
+
+test('a pairing link says « Paired » once it paired, and « already paired » only to a browser paired before (FRU-289)', async ({
+  extension,
+}) => {
+  const { link } = await mintPairing('Camille Durand');
+  const worker = await extension.context.newPage();
+  await worker.goto(link);
+  const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
+  await popup.getByRole('button', { name: /^(Pair with this worker|Appairer avec ce worker)$/ }).click();
+  await expect(popup.getByText(/^(Paired as|Appairé en tant que) Camille Durand$/)).toBeVisible();
+  await expect(popup.getByText(/^(Paired\. This browser|Appairé\. Ce navigateur)/)).toBeVisible();
+  await expect(popup.getByText(/already paired|déjà appairé/)).toHaveCount(0);
+  await popup.close();
+
+  // The same link, later: this browser was paired before it.
+  const again = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
+  await expect(again.getByText(/already paired|déjà appairé/)).toBeVisible();
 });

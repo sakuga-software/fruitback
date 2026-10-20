@@ -159,6 +159,12 @@ export type FruitbackOptions = {
    * session of the reviewer ended, before the worker refuses anything.
    */
   onSignIn?: () => void;
+  /**
+   * The name the host suggests for a reporter who kept none on this site (FRU-302): the extension
+   * passes the « Name on my notes » of its preferences. The composer starts with it; a name the
+   * reporter typed and kept on this site wins. Never sent unless a note is.
+   */
+  reporterName?: string;
   document?: Document;
 };
 
@@ -568,6 +574,8 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     translator,
     host: host.panel,
+    // FRU-302: the name the host suggests, for a reporter who kept none here.
+    suggestName: () => suggestedName(options.reporterName),
     // The name lives with the other preferences of this browser, under the same key.
     memory: {
       get: () => config.get().reporterName,
@@ -1164,6 +1172,13 @@ async function sendCheck(
   if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
 
   return response.ok ? 'sent' : 'retry';
+}
+
+/** The name a host suggests, trimmed, or nothing for an empty one. */
+function suggestedName(name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
 }
 
 /** Never the token in the body: the seed is stored verbatim in a Linear description (FRU-9). */

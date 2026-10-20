@@ -496,6 +496,39 @@ did not change: the fields of 760 px and the file input of the browser are as th
   That last word is kept by the panel while it is open: the store keeps the verdict, not who
   reopened from where.
 
+## The page of the extension, « Workers and sessions » and « Preferences » (FRU-302)
+
+### The rules, in short
+
+- **One card for each worker a rule names**, and for a worker this browser holds a session with and
+  no rule names (the Cloud of an account). Paired: « Paired as {name} », or « Paired » and the e-mail
+  under it when the worker gave no name (FRU-289), « Verified by the worker · renews on its own », and
+  **Log out** (revoke on the worker, forget here, give back the access to the worker). The Cloud:
+  « Signed in as {name} ». Not paired: the code and **Pair**, which asks for the worker's origin in
+  its click, then pairs; plain http off this machine offers no pairing. `src/workers-page.ts` builds
+  them, with no `browser`.
+- **The popup keeps its pairing.** A pairing link still pairs from the popup, which the specs and the
+  guide use; the popup adds **Pair in the page of the extension**, which opens the card of that
+  worker with the code filled in (`#workers?worker=…&code=…`). Taking pairing out of the popup is a
+  choice for later, once the page is the habit.
+- **FRU-289, in the popup too.** A pairing link that just paired says « Paired. This browser reads and
+  writes the notes of this worker. »; « already paired » is only for a browser paired before the
+  link. With no name, the popup says « Paired » and the e-mail under it, as the card does.
+- **« Open notes in the sidebar »** sets what the icon opens: the side panel on a site that is on,
+  the popup everywhere else (where a site is turned on). Chrome keeps one behaviour for the browser,
+  so the background sets it again when the tab, the rules or the preference change
+  (`setPanelOnClick`). Firefox has no such behaviour: the row is not drawn there.
+- **« Name on my notes »** is kept in the local area of the extension (`notesName`) and given to a
+  widget the extension mounts in private mode: the composer starts with it when the reporter kept no
+  name on that site, and the box « remember me » stays as it was, so the site keeps nothing it was not
+  asked to. Team mode signs with the session. It is not part of the signature of a mount: a change of
+  it never builds the widget again over a note being written; the next mount takes it.
+- **« Leave feedback shortcut »** shows the keys of `commands.getAll()` and opens the shortcut settings
+  of the browser; **« Keep my rules in the account of this browser »** is the copy of FRU-72, moved.
+- **A preference is a write, and a write can fail** (a full storage): the control goes back where it
+  was and the card says « This preference could not be saved. Try again. », so the page never shows
+  a value the extension did not keep.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short
