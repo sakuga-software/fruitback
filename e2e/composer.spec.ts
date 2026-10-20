@@ -341,6 +341,10 @@ for (const [locale, keep, cancel, send] of [
   test(`in ${locale}, « ${send} » ends the row of the foot, and the ghosts never go under it (FRU-317)`, async ({
     page,
   }) => {
+    // The composer rises with a scale and a slide (FRU-258). Each `boundingBox` is read at another
+    // frame of that animation, so the boxes did not agree to a pixel or two on CI. With no motion,
+    // the boxes are those of the final layout.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?widget=off&case=composer-foot-${locale}-${test.info().retry}`);
     await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
     await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
