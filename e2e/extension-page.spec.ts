@@ -111,8 +111,15 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   await expect(rowOf(page, WORKER_ORIGIN)).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('button', { name: 'Add rule' })).toHaveCount(0);
 
-  // « Remove rule » removes it, and its panel goes.
+  // The switch of the table, with the panel open: its state follows, and what is typed stays (raised in review).
   await rowOf(page, FAR).getByRole('button').first().click();
+  await expect(details).toContainText('No access in this browser');
+  await details.getByLabel('Worker endpoint').fill('https://typed.elsewhere.example');
+  await rowOf(page, FAR).getByRole('switch').click();
+  await expect(details).toContainText('No access while it is off');
+  await expect(details.getByLabel('Worker endpoint')).toHaveValue('https://typed.elsewhere.example');
+
+  // « Remove rule » removes it, and its panel goes.
   await details.getByRole('button', { name: 'Remove rule' }).click();
   await expect(rowOf(page, FAR)).toHaveCount(0);
   expect(Object.keys(await storedSites(extension)).sort()).toEqual([PLAYGROUND_ORIGIN, WORKER_ORIGIN]);

@@ -270,7 +270,7 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
   client.hidden = mode === 'team';
 
   const body = make(document, 'div', 'panel-body');
-  body.append(modes, endpoint, client, stateBox(document, options));
+  body.append(modes, endpoint, client, ruleState(document, options));
   if (row.tooLarge !== undefined) body.append(make(document, 'p', 'problem', t(row.tooLarge)));
 
   const foot = make(document, 'div', 'panel-foot');
@@ -299,8 +299,12 @@ function textField(document: Document, label: string, value: string, type: 'url'
   return wrapper;
 }
 
-/** What the browser holds for the rule: no access, a session, or a grant. */
-function stateBox(document: Document, options: PanelOptions): HTMLElement {
+/**
+ * What the browser holds for the rule: no access, a session, or a grant. Exported so that the page
+ * can put a new one in place in an open panel, when the rule is switched or granted from elsewhere,
+ * without drawing again the fields somebody may be typing in.
+ */
+export function ruleState(document: Document, options: PanelOptions): HTMLElement {
   const { row } = options;
   const box = make(document, 'div', 'panel-state');
   const say = (kind: string, title: string, text: string): void => {

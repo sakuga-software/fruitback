@@ -22,7 +22,16 @@ import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type StoredSession, describeIdentity } from '../../src/session.ts';
-import { type RuleRow, matches, menu, rulePanel, sitesHead, sitesTable } from '../../src/site-page.ts';
+import {
+  type PanelOptions,
+  type RuleRow,
+  matches,
+  menu,
+  rulePanel,
+  ruleState,
+  sitesHead,
+  sitesTable,
+} from '../../src/site-page.ts';
 import { storedLanguage } from '../../src/language.ts';
 
 /**
@@ -157,6 +166,7 @@ async function renderList(): Promise<void> {
   if (chosen !== undefined && chosen !== 'add' && sites[chosen] === undefined && shown === chosen) choose(undefined);
   // A rule chosen before the list could read it (the one just added): its panel opens now.
   if (chosen !== undefined && chosen !== 'add' && sites[chosen] !== undefined && shown !== chosen) choose(chosen);
+  else refreshState();
   // The first time, the first rule is open, as the mock-up shows it.
   if (chosen === undefined && panel.childElementCount === 0 && rows[0] !== undefined && !opened) {
     opened = true;
@@ -209,20 +219,44 @@ function choose(pattern: string | undefined): void {
     if (chosen !== pattern) return;
     const said = element('p', '', 'problem');
     const aside = rulePanel(document, {
-      row,
-      ...(name === undefined ? {} : { pairedAs: name }),
-      onGrant: () => attempt(() => grant(row.pattern, row.site)),
-      onRemove: () =>
-        attempt(async () => {
-          await removeSite(row.pattern);
-          choose(undefined);
-        }),
+      ...panelOptions(row, name),
       onSave: (fields) =>
         void editor.save(row.pattern, fields).then((text) => showProblem(said, text, { list: reloadList })),
     });
     aside.querySelector('.panel-body')?.append(said);
     shown = pattern;
     panel.replaceChildren(aside);
+  });
+}
+
+/** What the panel of a rule says and does, read from the rule as the list holds it now. */
+function panelOptions(row: RuleRow, name: string | undefined): PanelOptions {
+  const now = (): RuleRow => rows.find((candidate) => candidate.pattern === row.pattern) ?? row;
+
+  return {
+    row,
+    ...(name === undefined ? {} : { pairedAs: name }),
+    onGrant: () => attempt(() => grant(row.pattern, now().site)),
+    onRemove: () =>
+      attempt(async () => {
+        await removeSite(row.pattern);
+        choose(undefined);
+      }),
+    onSave: () => undefined,
+  };
+}
+
+/**
+ * The open panel says what the browser holds now: its rule was switched in the table, or granted.
+ * Only its box of state is put in place: the fields stay as somebody may be typing them (raised in
+ * review).
+ */
+function refreshState(): void {
+  const row = rows.find((candidate) => candidate.pattern === shown);
+  if (row === undefined || shown !== chosen) return;
+  void pairedAs(row.site).then((name) => {
+    if (shown !== row.pattern) return;
+    panel.querySelector('.panel-state')?.replaceWith(ruleState(document, panelOptions(row, name)));
   });
 }
 
