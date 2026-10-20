@@ -1,5 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { WORKER_ORIGIN, hydrated } from './pin.ts';
 
 /**
  * The note being written survives a reload, Esc, « Cancel » and the cross (FRU-311), on the widget
@@ -12,6 +12,8 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 async function mount(page: Page): Promise<void> {
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  // The widget and the elements a spec adds come after React: see `lateElementAndRead`.
+  await hydrated(page);
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     (endpoint) =>
@@ -107,6 +109,7 @@ test('another element opens empty, and a composer left with nothing typed saves 
 async function mountWithLateText(page: Page, testCase: string): Promise<void> {
   await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await hydrated(page);
   // A text saved for an element that is not on the page when the widget mounts.
   await page.evaluate(() => {
     const anchor = {
@@ -136,7 +139,15 @@ async function mountWithLateText(page: Page, testCase: string): Promise<void> {
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 }
 
-/** The element of the saved text arrives, and a read runs, awaited to its end. */
+/**
+ * The element of the saved text arrives, and a read runs, awaited to its end.
+ *
+ * Only once React has hydrated the page (`mountWithLateText` waits for it). The server sends the page
+ * whole, so its heading is visible before React runs. A button added to `main` before that is a
+ * hydration mismatch: React renders the page again on the client, and the button is gone, with
+ * the host of the widget beside it. Under load it happened about one run in five with four workers,
+ * and the composer never opened (« element(s) not found »), or the retry timed out.
+ */
 async function lateElementAndRead(page: Page): Promise<void> {
   await page.evaluate(() => {
     const late = document.createElement('button');
