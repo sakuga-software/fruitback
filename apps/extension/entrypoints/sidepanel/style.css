@@ -1,0 +1,79 @@
+/*
+  The side panel (FRU-296), on the tokens of popup/style.css and the kit. The browser sets its width;
+  the mock-up draws it at 400 px. The list of the notes comes with FRU-299.
+*/
+body.side-panel-page {
+  min-width: 0;
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 14px/1.5 var(--font-sans);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-soft) transparent;
+}
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 10px 20px;
+}
+
+.panel-title {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+button.panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-action);
+  background: transparent;
+  color: var(--subtle);
+}
+
+button.panel-close:hover {
+  background: var(--surface-sunken);
+}
+
+.panel-cross {
+  width: 15px;
+  height: 15px;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 20px 20px;
+}
+
+.panel-body p {
+  margin: 0;
+}
+
+.panel-site {
+  font-weight: 650;
+}
+
+.panel-state-title {
+  font-weight: 650;
+}
+
+.panel-state-text {
+  color: var(--subtle);
+}

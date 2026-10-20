@@ -189,6 +189,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   imported: 'importée',
   'This rule came from a rules file, and access does not travel with it. Nothing is mounted until you grant it.':
     'Cette règle vient d’un fichier de règles, et l’accès ne voyage pas avec elle. Rien n’est monté tant que vous ne le donnez pas.',
+  // FRU-296: the side panel of the browser.
+  'Notes on this page': 'Notes de cette page',
+  'Close the sidebar': 'Fermer le panneau',
+  'Fruitback is not on for this page.': 'Fruitback n’est pas activé sur cette page.',
+  'Turn it on from the Fruitback button in the toolbar.': 'Activez-le depuis le bouton Fruitback de la barre d’outils.',
+  'Show the notes on the page': 'Voir les notes sur la page',
 
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':

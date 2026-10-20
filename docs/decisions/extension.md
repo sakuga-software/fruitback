@@ -399,6 +399,45 @@ did not change: the fields of 760 px and the file input of the browser are as th
   pages only (`acceptedCommand`). Measured in Chromium: the bridge takes a message of the service
   worker, and the widget starts the capture. The spec fails if that stops.
 
+## The side panel of the browser (FRU-296)
+
+### The rules, in short
+
+- **One page, `entrypoints/sidepanel/`**: wxt writes `side_panel.default_path` and the `sidePanel`
+  permission for Chrome, and `sidebar_action` (`open_at_install: false`) for Firefox. The frame is
+  the head of the shell, « Notes on this page » and « Close the sidebar »; the list of the notes is
+  FRU-299. `src/side-panel.ts` holds the parts, with no `browser`.
+- **The click on the icon keeps the popup.** The background sets
+  `setPanelBehavior({ openPanelOnActionClick: false })` at install and at each update. The panel
+  opens from « Show every note of the page » of the popup, and later from the preference « Open
+  notes in the sidebar » (FRU-302).
+- **`openPanel` is called in the click, before any `await`.** Both browsers open a panel only in a
+  gesture of the person; an `await` first drops it. On Chrome it opens the global panel of the
+  window of the tab (`sidePanel.open({ tabId })`); on Firefox, `sidebarAction.open()`. A browser
+  with neither, or one that refuses to open it, shows the list of the widget in the page
+  (`show-notes`), as before (`openPanelOrPage`).
+- **The panel follows the active tab of its window** (`tabs.onActivated`, `tabs.onUpdated`,
+  `windows.onFocusChanged`, and a change of the rules). It reads the address of the tab itself:
+  the browser gives it only for a site the extension has access to, so any other tab reads « not
+  on ». It reads no worker and keeps nothing.
+- **Until FRU-299, the panel offers « Show the notes on the page »**, the in-page list of the widget,
+  so that the button of the popup loses nothing on the day it opens the panel.
+
+### What was measured, and what was not
+
+- **Chrome adds no warning for `sidePanel`.** `management.getPermissionWarningsByManifest` on the
+  built manifest, and on the same manifest without the panel, answer the same list
+  (`e2e/side-panel.spec.ts` asks it on every run).
+- **The new headless Chromium of Playwright opens the panel**: the click resolves and the popup
+  closes, and `runtime.getContexts` lists a context `SIDE_PANEL` on `sidepanel.html`. Playwright
+  does not hand that page over as a `Page`, so the spec reads the panel through that context.
+- **Firefox was not measured in a browser.** The suite loads extensions in Chromium only. The
+  Firefox build, read by hand on 2026-10-20, holds `sidebar_action` (`default_panel:
+"sidepanel.html"`, `open_at_install: false`) and no `sidePanel`. MDN: `sidebarAction.open()` works
+  only in the handler of a user action, which the popup button is, and the sidebar has the same
+  `tabs` API. If a Firefox does not open it, the in-page list stays: the popup keeps it for a browser
+  with no panel API.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

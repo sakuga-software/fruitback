@@ -360,6 +360,9 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   « Connect this browser » (FRU-240), so the console goes back to that request after the provider.
   It is read once and forgotten, and the tab forgets it when it closes. No name, no address, no
   token.
+- **The side panel of the browser** (FRU-296), when the reviewer opens it from the popup, reads the
+  address of the active tab of its window, the way the popup does: only for a site the extension
+  has access to, or after the click on its icon. It keeps nothing, and sends nothing to a worker.
 - The widget sets no cookie.
 
 ## How long a note is kept

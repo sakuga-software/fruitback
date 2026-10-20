@@ -46,6 +46,7 @@ import {
   wantsSession as siteWantsSession,
 } from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
+import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
@@ -646,8 +647,14 @@ async function siteOfWorkspaceOn(
         // Said only when the widget is there and said no: no answer is a page that is not ready.
         else showProblem(problem, t(busy === true ? NOT_NOW_WRITING : NOT_THERE));
       }),
+    // FRU-296: the panel of the browser, opened in this click (before any `await`: the browser opens
+    // it only in a gesture). A browser with no panel shows the list of the widget in the page.
     onShowEveryNote: () =>
-      void askTab(tab, 'show-notes').then(({ done }) => (done ? window.close() : showProblem(problem, t(NOT_THERE)))),
+      void openPanelOrPage(
+        browser as unknown as PanelApis,
+        { ...(tab?.id === undefined ? {} : { tabId: tab.id }) },
+        async () => (await askTab(tab, 'show-notes')).done,
+      ).then((shown) => (shown === 'nothing' ? showProblem(problem, t(NOT_THERE)) : window.close())),
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem);

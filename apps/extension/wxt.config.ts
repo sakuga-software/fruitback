@@ -62,6 +62,9 @@ export default defineConfig({
     // offer nothing, on every site, forever. Raised in review, and it made a fresh install useless.
     // `alarms` keeps the session's access token fresh from a service worker the browser is free
     // to stop at any moment (FRU-60) — a `setTimeout` would die with it.
+    // FRU-296: wxt adds `sidePanel` on Chrome, with `side_panel.default_path`, because
+    // `entrypoints/sidepanel/` exists; on Firefox it writes `sidebar_action`, which asks for no
+    // permission. `sidePanel` adds no warning at install: `e2e/side-panel.spec.ts` asks Chrome.
     permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
