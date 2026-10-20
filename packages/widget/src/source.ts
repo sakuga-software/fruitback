@@ -88,16 +88,13 @@ const BOUND_PREFIX = /^(?:bound )+/;
  * Names a person did write, but in a library, not in the app (FRU-320): the component a note is about
  * is the first one the app wrote. A dev build, which a staging site often runs, keeps react-aria's
  * `DOMElement` in clear, and the frame and the thread said « DOMElement · site.tsx:48 ». Seen by the
- * audit of 2026-10-20 on the playground (HeroUI, on react-aria). The others are the wrappers of Radix,
- * by their display names: written from its sources, not measured on a page.
+ * audit of 2026-10-20 on the playground (HeroUI, on react-aria).
+ *
+ * **Only names seen, and exact.** A generic name a library uses (`Slot`, `Presence`) is also a name an
+ * app can give its own component: left out, its note would go to the wrapper above it. One is added
+ * here the day it is seen on a page, not before (review of #381).
  */
-export const LIBRARY_COMPONENT_PATTERNS = [
-  /^DOMElement$/,
-  /^Slot(?:Clone)?$/,
-  /^Slottable$/,
-  /^Presence$/,
-  /^Primitive\.\w+$/,
-];
+export const LIBRARY_COMPONENT_PATTERNS = [/^DOMElement$/];
 
 export function isMangledComponentName(name: string): boolean {
   const own = name.replace(BOUND_PREFIX, '');

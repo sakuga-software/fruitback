@@ -204,19 +204,10 @@ describe('what a bundler minted, in what the engine says (FRU-113)', () => {
 });
 
 describe('the components of a library, which no note is about (FRU-320)', () => {
-  it('are left out by name, and a name of the app that looks like one is kept', () => {
-    for (const name of [
-      'DOMElement',
-      'Slot',
-      'SlotClone',
-      'Slottable',
-      'Presence',
-      'Primitive.button',
-      'bound DOMElement',
-    ]) {
-      assert.equal(isMangledComponentName(name), true, name);
-    }
-    for (const name of ['DOMElementCard', 'SlotMachine', 'PresenceBadge', 'Primitive', 'Primitives.Row']) {
+  it('are left out by their exact name, and a name of the app is kept, even one a library also uses', () => {
+    for (const name of ['DOMElement', 'bound DOMElement']) assert.equal(isMangledComponentName(name), true, name);
+    // `Slot` and `Presence` are names of Radix, and names an app can write: kept until one is seen.
+    for (const name of ['DOMElementCard', 'Slot', 'Presence', 'Primitive.button', 'SlotMachine']) {
       assert.equal(isMangledComponentName(name), false, name);
     }
   });
