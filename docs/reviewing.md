@@ -23,6 +23,8 @@ by hand, once; it takes two minutes and no developer tools.
    address bar, then press the pin beside Fruitback. Its icon stays in the toolbar.
 5. Click the Fruitback icon, then **Sign in with email**: section 2 goes on from there.
 
+   ![The page that opens at install: pin Fruitback, then sign in](assets/guide-welcome.png)
+
 **In Firefox:** download `fruitback-<version>-firefox.zip` from the same release, open
 `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
 Firefox keeps such an add-on until it restarts.
@@ -44,24 +46,43 @@ run there.
 
 ## 2. Switch a site on
 
-**With Fruitback Cloud, there is nothing to type.** Click the extension on any page and choose
-**Sign in with email**, **Google** or **GitHub**: all three open the console in a tab, which signs
-you in its own way and shows a word. Check that the popup shows the same word, then approve in the
-console; the popup picks the sign-in up by itself, even when it was closed meanwhile. Invited by a
-client or a team? Use the email the invitation was sent to. On Fruitback Cloud, the console's
-**Connect this browser** button leads to the same: a page that says to click the Fruitback icon and
-sign in. On a server you run yourself, it opens a pairing link of that server instead. Then, on a site of one of your workspaces, the popup names the workspace, how many notes
-wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
-only, and the widget appears, reading and writing as you. Once it is on, the popup has a switch to
-turn it off and on, the notes of the page by stage, **Leave feedback** and **Show every note of the
-page**, which opens the side panel of the browser beside the page: **Notes on this page**, with
-**Open** and **Done**, the replies of a note, **Show on the page**, and **Reply** where your role may
-reply. A click on a pin opens its row; the panel follows the tab you look at. **Alt+Shift+F** (Option+Shift+F on a Mac) starts a note too, on a site that is on: the
-page of the extension shows the key under Preferences, and opens the settings of your browser to change it. On a site of none of
-your workspaces, an owner or an admin gets **Add to {workspace} and
-turn on**: the browser asks for access to the site, the site is added to that workspace, for its
-members only, and the widget appears. To set a site up by hand, the button at the top right of the
-popup, **Account and settings**, opens the options page.
+### With Fruitback Cloud
+
+There is nothing to type, and four steps.
+
+1. **Sign in.** Click the Fruitback icon on any page and choose **Sign in with email**, **Google** or
+   **GitHub**: all three open the console in a tab, which signs you in its own way. Invited by a
+   client or a team? Use the email the invitation was sent to.
+
+   ![The popup of a browser that is signed out: Sign in with email, Google, GitHub](assets/guide-sign-in.png)
+
+2. **Check the word.** The tab of the console shows a word, and the popup shows the same one. Approve
+   in the console; the popup picks the sign-in up by itself, even when it was closed meanwhile. The
+   console's **Connect this browser** button leads here too: a page that says to click the Fruitback
+   icon and sign in.
+
+   ![The word in the console, to check against the popup, with Connect](assets/guide-word.png)
+
+3. **Turn it on.** On a site of one of your workspaces, the popup names the workspace, how many notes
+   wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
+   only, and the widget appears, reading and writing as you. On a site of none of your workspaces,
+   an owner or an admin gets **Add to {workspace} and turn on** instead: the browser asks for access
+   to the site, the site is added to that workspace, for its members only, and the widget appears.
+
+   ![The popup on a site of the workspace, with Turn on here](assets/guide-turn-on.png)
+
+4. **Leave a note.** Once it is on, the popup has a switch to turn it off and on, the notes of the
+   page by stage, **Leave feedback** and **Show every note of the page**, which opens the side panel
+   of the browser beside the page: **Notes on this page**, with **Open** and **Done**, the replies of
+   a note, **Show on the page**, and **Reply** where your role may reply. A click on a pin opens its
+   row; the panel follows the tab you look at. **Alt+Shift+F**
+   (Option+Shift+F on a Mac) starts a note too, on a site that is on: the page of the extension shows
+   the key under Preferences, and opens the settings of your browser to change it.
+
+   ![A note written on an element of the page](assets/step-write.png)
+
+To set a site up by hand, the button at the top right of the popup, **Account and settings**, opens
+the options page.
 
 If a site is on and its access was removed in the settings of the browser, the popup says
 **Fruitback can't open this page**, and the site is **Paused**: your notes are safe.
@@ -70,6 +91,11 @@ If a site is on and its access was removed in the settings of the browser, the p
 
 If your session ends, the widget says so on the page: its button reads « Sign in to leave notes » and
 opens the popup, where you sign in again. What you were writing stays.
+
+### On your own server
+
+The words _worker_, _mode_ and _client id_ belong to this part only. On a server you run yourself,
+the console's **Connect this browser** opens a pairing link of that server (section 3).
 
 On a worker you run yourself, or on a site of no workspace, open the page you want to review and
 click the extension. While this browser holds no session at all, the foot of the popup offers
