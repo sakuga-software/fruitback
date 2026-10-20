@@ -222,6 +222,12 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     actionsIn: true,
     setWorkspaceSuspended: true,
     deleteWorkspace: true,
+    setMemberRole: true,
+    addMember: true,
+    setOwner: true,
+    invite: true,
+    noteMailed: true,
+    createWorkspace: true,
   });
 }
 

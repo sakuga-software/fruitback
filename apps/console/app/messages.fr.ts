@@ -129,6 +129,74 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.':
     '{workspace} est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
   'Type {workspace} to confirm': 'Tapez {workspace} pour confirmer',
+  'Change a role': 'Changer un rôle',
+  'Change the role of {name}': 'Changer le rôle de {name}',
+  'New role': 'Nouveau rôle',
+  '{name} becomes {role} of {workspace} at once. The owners of {workspace} see that you did it.':
+    '{name} devient {role} de {workspace} tout de suite. Les propriétaires de {workspace} voient que vous l’avez fait.',
+  'Change the role': 'Changer le rôle',
+  'This is the last owner of the workspace. Make somebody else its owner first.':
+    'C’est le dernier propriétaire du workspace. Nommez d’abord un autre propriétaire.',
+  'This person is no longer a member of the workspace.': 'Cette personne n’est plus membre du workspace.',
+  'This person is in every workspace already.': 'Cette personne est déjà dans chaque workspace.',
+  'The owners of each workspace listed here see that you read the list.':
+    'Les propriétaires de chaque workspace de cette liste voient que vous l’avez lue.',
+  'Add to a workspace': 'Ajouter à un workspace',
+  'Add {name} to a workspace': 'Ajouter {name} à un workspace',
+  '{name} joins {workspace} as {role} at once. The owners of {workspace} see that you did it.':
+    '{name} rejoint {workspace} comme {role} tout de suite. Les propriétaires de {workspace} voient que vous l’avez fait.',
+  'Add to the workspace': 'Ajouter au workspace',
+  'This person is a member of the workspace already.': 'Cette personne est déjà membre du workspace.',
+  'Nobody was added. Try again.': 'Personne n’a été ajouté. Réessayez.',
+  '{workspace} was made, owned by {email}.': '{workspace} a été créé, et appartient à {email}.',
+  'Add someone': 'Ajouter quelqu’un',
+  'Add someone to {workspace}': 'Ajouter quelqu’un à {workspace}',
+  'Address of their account': 'Adresse de son compte',
+  '{email} joins {workspace} as {role} at once. The owners of {workspace} see that you did it.':
+    '{email} rejoint {workspace} comme {role} tout de suite. Les propriétaires de {workspace} voient que vous l’avez fait.',
+  'This person': 'Cette personne',
+  'Add to {workspace}': 'Ajouter à {workspace}',
+  'No account has this address. Use « Invite someone » for a person with no account.':
+    'Aucun compte n’a cette adresse. Utilisez « Inviter quelqu’un » pour une personne sans compte.',
+  'This is not an e-mail address.': 'Ce n’est pas une adresse e-mail.',
+  '{email} was added to {workspace}.': '{email} a été ajouté à {workspace}.',
+  'Invite someone to {workspace}': 'Inviter quelqu’un dans {workspace}',
+  'Their e-mail address': 'Son adresse e-mail',
+  '{email} is invited to {workspace} as {role}, for 7 days, in your name. The owners of {workspace} see that you did it.':
+    '{email} est invité dans {workspace} comme {role}, pour 7 jours, en votre nom. Les propriétaires de {workspace} voient que vous l’avez fait.',
+  'Send the invitation': 'Envoyer l’invitation',
+  'This address has an account. Use « Add someone » instead.':
+    'Cette adresse a un compte. Utilisez plutôt « Ajouter quelqu’un ».',
+  'This address is invited to the workspace already.': 'Cette adresse est déjà invitée dans le workspace.',
+  'Nobody was invited. Try again.': 'Personne n’a été invité. Réessayez.',
+  'An invitation was sent to {email}.': 'Une invitation a été envoyée à {email}.',
+  '{email} is invited. No message left: send them {link}':
+    '{email} est invité. Aucun message n’est parti : envoyez-lui {link}',
+  'Change the owner': 'Changer le propriétaire',
+  'Change the owner of {workspace}': 'Changer le propriétaire de {workspace}',
+  'Address of the new owner': 'Adresse du nouveau propriétaire',
+  '{email} becomes the owner of {workspace} at once. The owners of before become admins: they keep the workspace. The owners see that you did it.':
+    '{email} devient propriétaire de {workspace} tout de suite. Les propriétaires d’avant deviennent administrateurs : ils gardent le workspace. Les propriétaires voient que vous l’avez fait.',
+  'Make them the owner': 'En faire le propriétaire',
+  'No account has this address. Invite them first, then make them the owner.':
+    'Aucun compte n’a cette adresse. Invitez d’abord cette personne, puis faites-en le propriétaire.',
+  'This account is suspended. Restore its access first.': 'Ce compte est suspendu. Rétablissez d’abord son accès.',
+  'The owner did not change. Try again.': 'Le propriétaire n’a pas changé. Réessayez.',
+  '{email} owns {workspace} now.': '{email} est maintenant propriétaire de {workspace}.',
+  '{email} owned {workspace} already.': '{email} était déjà propriétaire de {workspace}.',
+  'New workspace': 'Nouveau workspace',
+  'Name of the workspace': 'Nom du workspace',
+  'Address of its owner': 'Adresse de son propriétaire',
+  'The workspace is made at once, and {email} owns it. They see that you made it.':
+    'Le workspace est créé tout de suite, et appartient à {email}. Cette personne voit que vous l’avez créé.',
+  'its owner': 'son propriétaire',
+  'Make the workspace': 'Créer le workspace',
+  'No account has this address. The owner signs in once first.':
+    'Aucun compte n’a cette adresse. Le propriétaire se connecte d’abord une fois.',
+  'The workspace was not made. Try again.': 'Le workspace n’a pas été créé. Réessayez.',
+  'This workspace is suspended. Restore it first.': 'Ce workspace est suspendu. Rétablissez-le d’abord.',
+  'This workspace no longer exists, or you are no longer an instance admin.':
+    'Ce workspace n’existe plus, ou vous n’êtes plus administrateur de l’instance.',
   'Deleted workspaces': 'Workspaces supprimés',
   'Deleted by an instance admin. Their owners cannot read this: the workspace is gone.':
     'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : le workspace n’existe plus.',

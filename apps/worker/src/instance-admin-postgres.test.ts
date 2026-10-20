@@ -751,3 +751,70 @@ describe(
     });
   },
 );
+
+describe(
+  'two administrators who demote the two owners of a workspace at the same moment, on a real server (FRU-283)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    it('demotes one of them: the other gets « last-owner », and one owner stays', async () => {
+      const own = await ownDatabase();
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        const carl = await accounts.signIn({ provider: 'email', subject: 'carl@acme.dev', email: 'carl@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+        const acme = await accounts.createWorkspace('Acme', carl.id);
+        await rowsOf(
+          first,
+          `INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('mem_ana', '${acme.id}', '${ana.id}', 'owner', now())`,
+        );
+
+        // Each change writes its action last: while the table is held, the first one waits there.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const calls = [
+          createPostgresInstanceAdmin(first).setMemberRole(ana, acme.id, carl.id, 'admin', 1),
+          createPostgresInstanceAdmin(second).setMemberRole(bob, acme.id, ana.id, 'admin', 2),
+        ].map((call) => call.finally(() => settled.push('settled')));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither call ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+        const outcomes = await Promise.all(calls);
+
+        assert.deepEqual(outcomes.map((outcome) => (outcome.ok ? 'changed' : outcome.refused)).toSorted(), [
+          'changed',
+          'last-owner',
+        ]);
+        const [owners] = await rowsOf(
+          first,
+          `SELECT count(*)::int AS n FROM member WHERE "organizationId" = '${acme.id}' AND role = 'owner'`,
+        );
+        assert.equal(Number(owners?.n), 1);
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);

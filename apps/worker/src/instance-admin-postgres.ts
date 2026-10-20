@@ -1,13 +1,18 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { connectorOf, newId } from './account-rows.ts';
+import { connectorOf, newId, roleOf } from './account-rows.ts';
 import { dropWorkspace } from './accounts-postgres.ts';
-import { CONNECTOR_TROUBLES } from './accounts.ts';
-import { organization, session, user } from './auth-schema.ts';
+import { CONNECTOR_TROUBLES, can } from './accounts.ts';
+import { invitation, member, organization, session, user } from './auth-schema.ts';
 import type {
   AdminAction,
   AdminActionKind,
+  AdminInvitation,
+  MemberAddition,
+  MemberRoleChange,
+  OwnerChange,
+  WorkspaceCreation,
   AdminConnector,
   AdminNote,
   AdminUser,
@@ -24,7 +29,7 @@ import type {
   WorkspaceDeletion,
   WorkspaceSuspensionChange,
 } from './instance-admin.ts';
-import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS, isWorkspaceAction } from './instance-admin.ts';
+import { ADMIN_ACTIONS, ADMIN_INVITATION_MS, ADMIN_PAGE, ADMIN_READS, isWorkspaceAction } from './instance-admin.ts';
 import { suspensionView } from './workspace-suspension.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -36,6 +41,7 @@ import {
   connectors,
   note_index,
   seeds,
+  site_shares,
   sites,
   workspace_suspensions,
 } from './postgres-schema.ts';
@@ -118,6 +124,13 @@ const deletedIn = (detail: Record<string, unknown> | undefined): { workspace?: {
   return typeof kept?.id === 'string' && typeof kept.name === 'string'
     ? { workspace: { id: kept.id, name: kept.name } }
     : {};
+};
+
+/** The role that `detail` of an action holds, for its owners (FRU-283). */
+const roleIn = (detail: string | null): { role?: string } => {
+  const role = detailOf(detail)?.role;
+
+  return typeof role === 'string' && role !== '' ? { role } : {};
 };
 
 /** The reason that `detail` of an action holds, for its owners (FRU-282). */
@@ -227,6 +240,50 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
   return texts;
 }
 
+/** The columns of an action of `actor`, at `now`, in `workspace`. */
+function actionOf(actor: { id: string; email: string }, now: number, action: AdminActionKind, workspace: string) {
+  return {
+    id: newId('ada'),
+    at: now,
+    actor_account_id: actor.id,
+    actor_email: actor.email,
+    action,
+    workspace_id: workspace,
+  };
+}
+
+/**
+ * What follows a change of a role, as after `update-member-role` of `auth-organization.ts`, in the
+ * transaction of the change: a role that no longer invites cancels the invitations of that person in
+ * the workspace (FRU-209), and a guest who becomes another role keeps no site of a guest (FRU-250).
+ */
+async function afterRoleChange(
+  db: Db,
+  workspace: string,
+  account: string,
+  before: string,
+  after: string,
+): Promise<void> {
+  const role = roleOf(after);
+  if (role === undefined || !can(role, 'manage-members')) {
+    await db
+      .update(invitation)
+      .set({ status: 'canceled' })
+      .where(
+        and(
+          eq(invitation.organizationId, workspace),
+          eq(invitation.inviterId, account),
+          eq(invitation.status, 'pending'),
+        ),
+      );
+  }
+  if (before === 'guest' && after !== 'guest') {
+    await db
+      .delete(site_shares)
+      .where(and(eq(site_shares.workspace_id, workspace), eq(site_shares.account_id, account)));
+  }
+}
+
 export function createPostgresInstanceAdmin(database: Database): InstanceAdminReads {
   const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
     await migrated(database);
@@ -273,6 +330,38 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
     }
 
     return found;
+  };
+
+  /**
+   * One write of an administrator in a workspace (FRU-283), in one transaction: the lock of the role
+   * first, as every write of the administrator; the workspace `FOR UPDATE`, so a member added by the
+   * plugin waits; the caller is still an administrator; the workspace is not suspended (FRU-282).
+   */
+  const inWorkspace = async <T>(
+    actor: { id: string },
+    workspace: string,
+    work: (db: Db, rowsIn: (statement: SQL) => Promise<Row[]>, found: { id: string; name: string }) => Promise<T>,
+  ): Promise<T | { ok: false; refused: 'unknown-workspace' | 'not-admin' | 'workspace-suspended' }> => {
+    await migrated(database);
+
+    return database.transaction(async (db) => {
+      const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+      await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+      const [found] = await db
+        .select({ id: organization.id, name: organization.name })
+        .from(organization)
+        .where(eq(organization.id, workspace))
+        .for('update');
+      if (found === undefined) return { ok: false as const, refused: 'unknown-workspace' as const };
+      const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+      if (asking === undefined) return { ok: false as const, refused: 'not-admin' as const };
+      const [suspended] = await rowsIn(
+        sql`SELECT 1 AS one FROM workspace_suspensions WHERE workspace_id = ${workspace}`,
+      );
+      if (suspended !== undefined) return { ok: false as const, refused: 'workspace-suspended' as const };
+
+      return work(db, rowsIn, found);
+    });
   };
 
   return {
@@ -876,6 +965,196 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       });
     },
 
+    async setMemberRole(actor, workspace, account, role, now) {
+      return inWorkspace<MemberRoleChange>(actor, workspace, async (db, rowsIn) => {
+        const [held] = await rowsIn(
+          sql`SELECT m.role, u.email FROM member m JOIN "user" u ON u.id = m."userId"
+               WHERE m."organizationId" = ${workspace} AND m."userId" = ${account} FOR UPDATE OF m`,
+        );
+        if (held === undefined) return { ok: false, refused: 'not-a-member' };
+        const before = String(held.role);
+        if (before === role) return { ok: true, changed: false, role };
+        // The rule of `update-member-role`: a workspace keeps an owner. The other owners are counted
+        // under the lock of the workspace, so two changes at once cannot both take the last one.
+        if (before === 'owner') {
+          const [owners] = await rowsIn(
+            sql`SELECT count(*)::int AS n FROM member WHERE "organizationId" = ${workspace} AND role = 'owner'`,
+          );
+          if (number(owners?.n) <= 1) return { ok: false, refused: 'last-owner' };
+        }
+        await db
+          .update(member)
+          .set({ role })
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, account)));
+        await afterRoleChange(db, workspace, account, before, role);
+        await db.insert(admin_actions).values({
+          ...actionOf(actor, now, 'member-role-changed', workspace),
+          target_account_id: account,
+          target_email: String(held.email),
+          detail: JSON.stringify({ from: before, role }),
+        });
+
+        return { ok: true, changed: true, role };
+      });
+    },
+
+    async addMember(actor, workspace, email, role, now) {
+      return inWorkspace<MemberAddition>(actor, workspace, async (db, rowsIn) => {
+        const [person] = await rowsIn(sql`SELECT id, email FROM "user" WHERE email = ${email}`);
+        if (person === undefined) return { ok: false, refused: 'unknown-account' };
+        const id = String(person.id);
+        const [already] = await rowsIn(
+          sql`SELECT 1 AS one FROM member WHERE "organizationId" = ${workspace} AND "userId" = ${id}`,
+        );
+        if (already !== undefined) return { ok: false, refused: 'already-member' };
+        await db
+          .insert(member)
+          .values({ id: newId('mem'), organizationId: workspace, userId: id, role, createdAt: new Date(now) });
+        await db.insert(admin_actions).values({
+          ...actionOf(actor, now, 'member-added', workspace),
+          target_account_id: id,
+          target_email: String(person.email),
+          detail: JSON.stringify({ role }),
+        });
+
+        return { ok: true, member: { id, email: String(person.email), role } };
+      });
+    },
+
+    async setOwner(actor, workspace, email, now) {
+      return inWorkspace<OwnerChange>(actor, workspace, async (db, rowsIn) => {
+        const [person] = await rowsIn(
+          sql`SELECT id, email, (banned IS TRUE) AS suspended FROM "user" WHERE email = ${email}`,
+        );
+        if (person === undefined) return { ok: false, refused: 'unknown-account' };
+        if (person.suspended === true) return { ok: false, refused: 'suspended-account' };
+        const id = String(person.id);
+        const owner = { id, email: String(person.email) };
+        const owners = await rowsIn(
+          sql`SELECT m."userId" AS id, u.email FROM member m JOIN "user" u ON u.id = m."userId"
+               WHERE m."organizationId" = ${workspace} AND m.role = 'owner' FOR UPDATE OF m`,
+        );
+        const others = owners.filter((row) => row.id !== id);
+        if (others.length === 0 && owners.length === 1) return { ok: true, changed: false, owner, previous: [] };
+
+        const [held] = await rowsIn(
+          sql`SELECT role FROM member WHERE "organizationId" = ${workspace} AND "userId" = ${id} FOR UPDATE`,
+        );
+        if (held === undefined) {
+          await db.insert(member).values({
+            id: newId('mem'),
+            organizationId: workspace,
+            userId: id,
+            role: 'owner',
+            createdAt: new Date(now),
+          });
+        } else if (held.role !== 'owner') {
+          await db
+            .update(member)
+            .set({ role: 'owner' })
+            .where(and(eq(member.organizationId, workspace), eq(member.userId, id)));
+          await afterRoleChange(db, workspace, id, String(held.role), 'owner');
+        }
+        // Each other owner becomes an admin: they keep the workspace and its members, and lose the
+        // role of owner only. Nobody is removed, so the change is undone by the same route.
+        for (const other of others) {
+          await db
+            .update(member)
+            .set({ role: 'admin' })
+            .where(and(eq(member.organizationId, workspace), eq(member.userId, String(other.id))));
+        }
+        const previous = others.map((other) => String(other.email));
+        await db.insert(admin_actions).values({
+          ...actionOf(actor, now, 'owner-changed', workspace),
+          target_account_id: id,
+          target_email: owner.email,
+          detail: JSON.stringify({ role: 'owner', previous }),
+        });
+
+        return { ok: true, changed: true, owner, previous };
+      });
+    },
+
+    async invite(actor, workspace, email, role, now) {
+      return inWorkspace<AdminInvitation>(actor, workspace, async (db, rowsIn, found) => {
+        const [person] = await rowsIn(sql`SELECT id FROM "user" WHERE email = ${email}`);
+        if (person !== undefined) {
+          const [already] = await rowsIn(
+            sql`SELECT 1 AS one FROM member WHERE "organizationId" = ${workspace} AND "userId" = ${String(person.id)}`,
+          );
+
+          return { ok: false, refused: already === undefined ? 'has-account' : 'already-member' };
+        }
+        const [waits] = await rowsIn(
+          sql`SELECT 1 AS one FROM invitation
+               WHERE "organizationId" = ${workspace} AND email = ${email} AND status = 'pending' AND "expiresAt" > now()`,
+        );
+        if (waits !== undefined) return { ok: false, refused: 'already-invited' };
+        // The row that the plugin writes for an invitation of a member, with the administrator as
+        // its inviter: `inviterStillInvites` of `auth-organization.ts` takes it while they are one.
+        const kept = { id: newId('inv'), email, role, expiresAt: now + ADMIN_INVITATION_MS };
+        await db.insert(invitation).values({
+          id: kept.id,
+          organizationId: workspace,
+          email,
+          role,
+          status: 'pending',
+          expiresAt: new Date(kept.expiresAt),
+          createdAt: new Date(now),
+          inviterId: actor.id,
+        });
+        await db.insert(admin_actions).values({
+          ...actionOf(actor, now, 'member-invited', workspace),
+          target_email: email,
+          detail: JSON.stringify({ role }),
+        });
+
+        return { ok: true, invitation: kept, workspace: found };
+      });
+    },
+
+    async noteMailed(id, mailed) {
+      // A message that left stays left, as `noteMailed` of `auth-organization.ts` keeps it.
+      await run((db) =>
+        db
+          .update(invitation)
+          .set({ mailed })
+          .where(and(eq(invitation.id, id), mailed ? sql`TRUE` : sql`${invitation.mailed} IS NOT TRUE`)),
+      );
+    },
+
+    async createWorkspace(actor, name, email, now) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<WorkspaceCreation> => {
+        const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+        await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+        const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+        const [person] = await rowsIn(
+          sql`SELECT id, email, (banned IS TRUE) AS suspended FROM "user" WHERE email = ${email}`,
+        );
+        if (person === undefined) return { ok: false, refused: 'unknown-account' };
+        if (person.suspended === true) return { ok: false, refused: 'suspended-account' };
+        const owner = { id: String(person.id), email: String(person.email) };
+        // The rows of `createWorkspace` of `accounts-postgres.ts`: a slug that is the id, one owner.
+        const workspace = { id: newId('ws'), name };
+        const at = new Date(now);
+        await db.insert(organization).values({ id: workspace.id, name, slug: workspace.id, createdAt: at });
+        await db
+          .insert(member)
+          .values({ id: newId('mem'), organizationId: workspace.id, userId: owner.id, role: 'owner', createdAt: at });
+        await db.insert(admin_actions).values({
+          ...actionOf(actor, now, 'workspace-created', workspace.id),
+          target_account_id: owner.id,
+          target_email: owner.email,
+          detail: JSON.stringify({ role: 'owner' }),
+        });
+
+        return { ok: true, workspace, owner };
+      });
+    },
+
     async actionsIn(workspace) {
       const actor = alias(user, 'actor');
       const target = alias(user, 'target');
@@ -916,6 +1195,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             at: iso(row.at),
             admin,
             target: { email: targetEmail, ...named(row.target_name) },
+            ...roleIn(row.detail),
           },
         ];
       });

@@ -879,3 +879,69 @@ export type DeletedWorkspace = {
 export function deletedWorkspaces(): Promise<Answer<{ actions: DeletedWorkspace[] }>> {
   return call('GET', '/console/admin/actions?kind=workspace-deleted');
 }
+
+/**
+ * Gives a member of a workspace another role (FRU-283): `owner`, `admin` or `member`. The worker
+ * refuses with `409 last-owner`, `409 not-a-member` and `409 workspace-suspended`. The owners of the
+ * workspace read that the administrator did it.
+ */
+export function setMemberRoleAsAdmin(
+  workspace: string,
+  account: string,
+  role: string,
+): Promise<Answer<{ member: { id: string; role: string }; changed: boolean }>> {
+  return call(
+    'POST',
+    `/console/admin/workspaces/${encodeURIComponent(workspace)}/members/${encodeURIComponent(account)}/role`,
+    { role },
+  );
+}
+
+/**
+ * Adds the account of an address to a workspace with a role (FRU-283). The worker refuses with
+ * `409 unknown-account` (no account has the address: invite it), `409 already-member` and
+ * `409 workspace-suspended`.
+ */
+export function addMemberAsAdmin(
+  workspace: string,
+  email: string,
+  role: string,
+): Promise<Answer<{ member: { id: string; email: string; role: string } }>> {
+  return call('POST', `/console/admin/workspaces/${encodeURIComponent(workspace)}/members`, { email, role });
+}
+
+/**
+ * Makes the account of an address the owner of a workspace (FRU-283). The owners of before become
+ * admins. The worker refuses with `409 unknown-account`, `409 suspended-account` and
+ * `409 workspace-suspended`.
+ */
+export function setOwnerAsAdmin(
+  workspace: string,
+  email: string,
+): Promise<Answer<{ owner: { id: string; email: string }; previous: string[]; changed: boolean }>> {
+  return call('POST', `/console/admin/workspaces/${encodeURIComponent(workspace)}/owner`, { email });
+}
+
+/**
+ * Invites an address that has no account into a workspace (FRU-283), as `admin` or `member`. `mailed`
+ * says whether its message left; when it did not, the person is told by hand. The worker refuses with
+ * `409 has-account`, `409 already-member`, `409 already-invited` and `409 workspace-suspended`.
+ */
+export function inviteAsAdmin(
+  workspace: string,
+  email: string,
+  role: string,
+): Promise<Answer<{ invitation: { id: string; email: string; role: string; expiresAt: string; mailed: boolean } }>> {
+  return call('POST', `/console/admin/workspaces/${encodeURIComponent(workspace)}/invitations`, { email, role });
+}
+
+/**
+ * Makes a workspace whose owner is the account of an address (FRU-283). The worker refuses with
+ * `400 invalid-name`, `409 unknown-account` and `409 suspended-account`.
+ */
+export function createWorkspaceAsAdmin(
+  name: string,
+  owner: string,
+): Promise<Answer<{ workspace: { id: string; name: string }; owner: { id: string; email: string } }>> {
+  return call('POST', '/console/admin/new-workspace', { name, owner });
+}

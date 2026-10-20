@@ -1807,7 +1807,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
   No route of the administrator writes anything but the trace, except the role, the suspension of
-  an account, the suspension of a workspace and the deletion of a workspace below.
+  an account, the suspension of a workspace, the deletion of a workspace and the writes in a
+  workspace below.
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
@@ -1941,6 +1942,38 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   That page asks `GET /console/admin/actions?kind=workspace-deleted`, which names no workspace that
   exists, so its read leaves no trace with an owner:
   test:`lists the deleted workspaces alone with kind, and that read leaves no trace with an owner`.
+
+- **What an administrator writes in a workspace they are not a member of** (FRU-283, « Directes,
+  tracées »), behind the same guard, each a `POST` that any other caller gets `404` on:
+  test:`answers 404 to an owner, an admin of the workspace and nobody, and writes nothing`.
+  - `…/workspaces/<id>/members/<account>/role` `{ role }`: one of `owner`, `admin`, `member`, never
+    `guest`, as `update-member-role`. **A workspace keeps an owner**: the last one is refused with
+    `409 last-owner`, and the owners are counted under the lock of the role with the workspace held
+    `FOR UPDATE`, so two administrators who demote the two owners at once leave one:
+    test:`demotes one of them: the other gets « last-owner », and one owner stays`. A role that no
+    longer invites cancels the invitations of that person, and a guest who becomes another role
+    keeps no site of a guest, as after `update-member-role`:
+    test:`cancels the invitations of a member whose new role does not invite, and the sites of a guest who is no longer one`.
+  - `…/workspaces/<id>/members` `{ email, role }`: an account that exists, by its address.
+  - `…/workspaces/<id>/owner` `{ email }`: that account becomes the owner, a member already or not,
+    and **each other owner becomes an admin**: nobody loses access, and the same route undoes it.
+    A suspended account cannot become an owner.
+  - `…/workspaces/<id>/invitations` `{ email, role }`: an address with **no** account, as `admin` or
+    `member`. The row is the one of an invitation of a member, with the administrator as its inviter,
+    and its message goes under the same windows. An invitation is the word of whoever made it
+    (FRU-209): the acceptance takes the word of an administrator while they are one, and refuses it
+    with `INVITER_NO_LONGER_INVITES` once their role is taken away or their account is suspended:
+    test:`stands behind an invitation while its administrator is one, and no longer once they are removed`.
+  - `/console/admin/new-workspace` `{ name, owner }`: a workspace whose one owner is that account.
+
+  Each write is one transaction under the lock of the role, with the workspace held `FOR UPDATE`, and
+  runs one at a time with the routes of the organization plugin in this process (`oneAtATime`). **A
+  suspended workspace refuses each one with `409 workspace-suspended`**:
+  test:`refuses each one with 409 workspace-suspended and writes nothing, and each works after the restoration`.
+  Each change writes one row in `admin_actions` (`member-role-changed`, `member-added`,
+  `owner-changed`, `member-invited`, `workspace-created`) with the workspace, the address of the
+  person and the role given, and **the owners of the workspace read it beside the reads**. A call
+  that changes nothing writes no row.
 
 ### Personal data
 
