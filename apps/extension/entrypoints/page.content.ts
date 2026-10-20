@@ -217,7 +217,14 @@ export default defineContentScript({
           message.note !== undefined &&
           message.verdict !== undefined
         ) {
-          void widget.checkNote(message.note, message.verdict).then(
+          // Answered whatever happens, a throw included, as a reply is.
+          let checking: Promise<string>;
+          try {
+            checking = widget.checkNote(message.note, message.verdict);
+          } catch {
+            checking = Promise.resolve('retry');
+          }
+          void checking.then(
             (outcome) => {
               done = outcome === 'sent';
               answer(outcome);
