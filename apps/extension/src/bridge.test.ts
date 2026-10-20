@@ -233,6 +233,42 @@ describe('the session the widget is told of (FRU-315)', () => {
     );
   });
 
+  // Review of ffa2f88: a session read for the site of before must not be said after a newer apply.
+  it('says nothing from an apply that a newer one replaced while it read the session', async () => {
+    const posts: BridgeMessage[] = [];
+    let site: SiteConfig = TEAM;
+    let release: (signedOut: boolean) => void = () => {};
+    const slow = new Promise<boolean>((resolve) => (release = resolve));
+    let first = true;
+    const apply = createApply({
+      readSite: async () => site,
+      readSignedOut: () => {
+        if (!first) return Promise.resolve(false);
+        first = false;
+
+        return slow;
+      },
+      post: (message) => void posts.push(message),
+    });
+
+    const older = apply();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The rule changes while the older run waits on its read of the session.
+    site = PRIVATE;
+    await apply();
+    release(true);
+    await older;
+
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount'],
+    );
+    assert.equal(
+      posts.some((message) => message.kind === 'session'),
+      false,
+    );
+  });
+
   it('says nothing of a session to a widget of the private mode', async () => {
     const { posts, apply } = applying(PRIVATE, { signedOut: true });
     await apply();

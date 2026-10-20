@@ -258,7 +258,12 @@ export default defineBackground(() => {
     const asking = acceptedSignIn(message, sender, browser.runtime.id);
     if (asking !== undefined) {
       // Once in a while per tab: a page can forge the ask, and must not open the popup in a loop.
-      if (asking.id !== undefined && signInGate(asking.id)) void openSignIn(asking);
+      if (asking.id !== undefined && signInGate(asking.id)) {
+        // The sessions of this worker, read once more: a store that cannot be read opens nothing.
+        void openSignIn(asking, () => sessions.list()).catch((error: unknown) =>
+          console.warn('[fruitback] could not decide whether to open the popup for the sign-in', error),
+        );
+      }
 
       return false;
     }
@@ -400,7 +405,10 @@ export default defineBackground(() => {
  * in from the toolbar's button. Nothing else is opened in its place: the sign-in starts in the popup
  * because the popup is where its word is compared.
  */
-async function openSignIn(tab: { url?: string; windowId?: number }): Promise<void> {
+async function openSignIn(
+  tab: { url?: string; windowId?: number },
+  listSessions: () => Promise<Record<string, unknown>>,
+): Promise<void> {
   if (tab.url === undefined) return;
   let origin: string;
   try {
@@ -409,7 +417,7 @@ async function openSignIn(tab: { url?: string; windowId?: number }): Promise<voi
     return;
   }
   const site = await readSite(origin);
-  const held = await createBrowserSessions().list();
+  const held = await listSessions();
   if (site === undefined || !wantsSession(site, cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD), held)) return;
 
   // A popup already open is where the person is: nothing opens over it.
