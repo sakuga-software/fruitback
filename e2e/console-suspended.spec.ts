@@ -182,3 +182,47 @@ test('an invitation that the organization plugin refuses while suspended says so
   await expect(form.getByRole('textbox', { name: 'Email' })).toHaveValue('dana@acme.dev');
   await expect(banner(page)).toHaveText(`This workspace has been suspended since ${DAY}.${LEAD}`);
 });
+
+test('a refusal of a write of another workspace, answered after the person changed workspace, shows no banner', async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let refused = false;
+  await stubWorker(page, {
+    workspaces: [ACME, LUMEN],
+    answer: (pathname, route) => {
+      if (route.request().method() !== 'POST' || pathname !== '/console/workspaces/w1/sites') return undefined;
+
+      return held.then(() => {
+        refused = true;
+
+        return route.fulfill({ status: 409, json: { error: 'workspace-suspended', suspendedAt: SUSPENDED_AT } });
+      });
+    },
+  });
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Add a site' });
+  await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
+  await form.getByRole('button', { name: 'Add site', exact: true }).click();
+
+  // The person goes to Lumen Studio before the worker answers the write of Acme.
+  await page.locator('aside.kit-rail').getByRole('button', { name: /Acme/ }).click();
+  await page.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
+  await expect(page).toHaveURL(/\/w\/w2\/sites$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Sites' })).toBeVisible();
+  release();
+  await expect.poll(() => refused).toBe(true);
+  await page.waitForTimeout(300);
+  await expect(banner(page)).toHaveCount(0);
+
+  // The control: back in Acme, the same refusal shows the banner.
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
+  await form.getByRole('button', { name: 'Add site', exact: true }).click();
+  await expect(banner(page)).toHaveText(`This workspace has been suspended since ${DAY}.${LEAD}`);
+});
