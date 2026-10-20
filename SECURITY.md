@@ -783,7 +783,8 @@ whole.
   workspace gets `404`, a caller with no session `401`, and the token of an extension `401` on the
   console's routes (FRU-202).
 - **The extension gets the counts of the sites of its workspace** in `GET /session/sites`, with the
-  session of a member, and not what did not arrive.
+  session of a member, and not what did not arrive. It gets, for the session of an account, how many
+  notes of that account are done and not confirmed (`toCheck`, FRU-295), and nobody else's.
 - **A guest reads the counts of the sites shared with them, and of no other** (FRU-250): the list
   of the sites is narrowed first, in the console and in `GET /session/sites`, and the counts with it.
   test:`lets the guest read every site in GET /console/workspaces/<id>/sites without its filter`.
@@ -929,6 +930,20 @@ one click. It answers an origin, an id and a visibility per site, and the langua
 to a page where it mounts the widget: it is a locale tag, and the page can read it. The cookie of the console is not read here, and gets `401`. The entry the extension
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
 and the page never holds the token.
+
+**This is the authenticated `GET` that counts by site** (the decision of 2026-10-06 of FRU-58): the
+counts of FRU-237, and two fields of FRU-295.
+
+- **`destination: { label }`, where the notes of a site go** (« Linear · Northwind », or « Fruitback »
+  for a site that keeps them in the worker), **to a role with `see-tracker` only**: owner, admin,
+  member. A guest gets no field, as for the places of `GET /feedback` (FRU-123).
+  test:`names the destination to a role that sees the tracker, and not to a guest`, whose control is
+  the owner on the same site.
+- **`toCheck`, the notes of the person that the team marked done and that they did not confirm**
+  (FRU-294), to the session of an account only: it counts the rows of the index whose author is that
+  account. A pairing of a workspace gets no field, and nor does a session whose index does not
+  answer: absent is « not known », never zero. The count is as the last read of each page left it:
+  `asOf` says how late. test:`counts the done notes of the person, not those of another member, and drops by one after « Looks fixed »`.
 
 **`POST /session/sites` adds a site to a workspace, from the extension** (FRU-255): the first route
 where the token of an extension writes. It takes the access token of a session of an **account**

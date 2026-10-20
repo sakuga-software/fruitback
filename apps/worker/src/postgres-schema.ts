@@ -1,5 +1,16 @@
 import { sql } from 'drizzle-orm';
-import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  customType,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  unique,
+} from 'drizzle-orm/pg-core';
 import { invitation, member, organization, user } from './auth-schema.ts';
 
 /**
@@ -510,6 +521,9 @@ export const note_index = pgTable(
     reference_url: text('reference_url'),
     created_at: instant('created_at').notNull(),
     checked_at: instant('checked_at').notNull(),
+    // FRU-295: whether the newest verdict in the replies of the note is « looks fixed » (FRU-294), as
+    // the last read that saw its replies said it. Empty: no read saw them yet.
+    confirmed: boolean('confirmed'),
   },
   (table) => [
     primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.seed_id] }),

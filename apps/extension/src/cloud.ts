@@ -35,6 +35,16 @@ export type WorkspaceSite = {
   workspace: Workspace;
   previews?: string[];
   notes?: StageCounts;
+  /**
+   * Where the notes of the site go (FRU-295): « Linear · Northwind », or « Fruitback ». Only for a
+   * role that sees the tracker. Absent: not known, never « nowhere ».
+   */
+  destination?: { label: string };
+  /**
+   * The notes of the person that the team marked done and that they did not confirm (FRU-295), for
+   * the session of an account. Absent: not known, never zero.
+   */
+  toCheck?: number;
 };
 /**
  * What `GET /session/sites` lists, in either of its two shapes: a pairing's session names one
@@ -102,6 +112,8 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
         ? entry.previews.flatMap((pattern: unknown) => readPreviewPattern(pattern) ?? [])
         : [];
       const notes = countsOf(entry.notes);
+      const destination = destinationOf(entry.destination);
+      const toCheck = countOf(entry.toCheck);
 
       return [
         {
@@ -111,10 +123,27 @@ export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
           workspace: of,
           ...(previews.length === 0 ? {} : { previews }),
           ...(notes === undefined ? {} : { notes }),
+          ...(destination === undefined ? {} : { destination }),
+          ...(toCheck === undefined ? {} : { toCheck }),
         },
       ];
     }),
   };
+}
+
+/** The label of a destination: a short line of text, or nothing. */
+function destinationOf(value: unknown): { label: string } | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { label } = value as Record<string, unknown>;
+  if (typeof label !== 'string') return undefined;
+  const flat = label.replace(/\s+/gu, ' ').trim();
+
+  return flat === '' || flat.length > 200 ? undefined : { label: flat };
+}
+
+/** A count the worker gave: a whole number from zero, or nothing. */
+function countOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function workspaceOf(value: unknown): Workspace | undefined {

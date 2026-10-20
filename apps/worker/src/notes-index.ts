@@ -127,6 +127,12 @@ export type NoteIndex = {
    * may confirm or reopen a note, and which notes are a reader's own (`mine`).
    */
   authors(workspace: string, site: string, seeds: readonly string[]): Promise<Map<string, string>>;
+  /**
+   * The notes of each site of a workspace that `account` left, that the team marked done, and that
+   * the person did not confirm yet (FRU-295): « fixes to check ». As the last read of each page said
+   * it, so the count can be late: `asOf` of `summary` says how late. A site with none is absent.
+   */
+  toCheck(workspace: string, account: string): Promise<Map<string, number>>;
   /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
   deliveryOf(workspace: string, site: string, seed: string): Promise<{ connector: string; id: string } | undefined>;
 };

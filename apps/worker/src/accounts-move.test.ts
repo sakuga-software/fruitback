@@ -382,7 +382,15 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await answer.json(), {
         workspace: { id: 'ws_acme', name: 'Acme' },
         locale: 'fr',
-        sites: [{ id: 'site_acme', origin: 'https://staging.acme.dev', visibility: 'members' }],
+        // FRU-295: where its notes go, to an owner: the connector of before, by its label.
+        sites: [
+          {
+            id: 'site_acme',
+            origin: 'https://staging.acme.dev',
+            visibility: 'members',
+            destination: { label: 'Hook' },
+          },
+        ],
       });
 
       const refreshed = await refreshSession(createPostgresSessionStore(database), session.refreshToken, SECRET);

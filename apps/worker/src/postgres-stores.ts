@@ -198,6 +198,7 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
     list: true,
     deliveryOf: true,
     authors: true,
+    toCheck: true,
   });
 }
 

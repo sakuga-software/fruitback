@@ -49,8 +49,16 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       workspace: { id: acme.id, name: 'Acme' },
-      // FRU-237: and the notes of the site, none here.
-      sites: [{ id: site.id, origin: 'https://staging.acme.dev', visibility: 'members', ...noNotes() }],
+      // FRU-237: and the notes of the site, none here. FRU-295: where they go, for an owner.
+      sites: [
+        {
+          id: site.id,
+          origin: 'https://staging.acme.dev',
+          visibility: 'members',
+          destination: { label: 'Fruitback' },
+          ...noNotes(),
+        },
+      ],
     });
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), EXTENSION);
   });

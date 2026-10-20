@@ -1091,7 +1091,13 @@ async function postCheck(
       await invalidatePages(kv, [url]);
       // The stage the store answers now, for the counts of the console and of the extension.
       await indexed(context.noteIndex, (index) =>
-        index.refresh(workspace, clientId, placeOf(target), [{ ...found, stage: answer.stage }], Date.now()),
+        index.refresh(
+          workspace,
+          clientId,
+          placeOf(target),
+          [{ ...found, stage: answer.stage, comments: [...(found.comments ?? []), answer.comment] }],
+          Date.now(),
+        ),
       );
 
       return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
