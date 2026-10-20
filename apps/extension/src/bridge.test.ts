@@ -160,3 +160,122 @@ describe('createApply', () => {
     assert.deepEqual(posts, [UNMOUNT, MOUNT]);
   });
 });
+
+describe('the session the widget is told of (FRU-315)', () => {
+  const TEAM: SiteConfig = {
+    mode: 'team',
+    endpoint: 'https://api.fruitback.test',
+    enabled: true,
+    mount: { clientId: 'site_1', workspace: 'Acme' },
+  };
+  const PRIVATE: SiteConfig = { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true };
+
+  function applying(site: SiteConfig, held: { signedOut: boolean }) {
+    const posts: BridgeMessage[] = [];
+    const apply = createApply({
+      readSite: async () => site,
+      readSignedOut: async () => held.signedOut,
+      post: (message) => void posts.push(message),
+    });
+
+    return { posts, apply };
+  }
+
+  it('follows the mount of a widget we relay, and says a change of session alone, without a mount', async () => {
+    const held = { signedOut: false };
+    const { posts, apply } = applying(TEAM, held);
+
+    await apply();
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount', 'session'],
+    );
+    assert.deepEqual(posts[1], { channel: CHANNEL, kind: 'session', signedOut: false });
+
+    // The session ends: the widget is told, and not built again over what is being written.
+    held.signedOut = true;
+    await apply();
+    assert.deepEqual(posts.slice(2), [{ channel: CHANNEL, kind: 'session', signedOut: true }]);
+
+    // A change of storage that is not one of the session says nothing.
+    await apply();
+    assert.equal(posts.length, 3);
+
+    // The handshake: the page world may have missed both.
+    await apply(true);
+    assert.deepEqual(
+      posts.slice(3).map((message) => message.kind),
+      ['mount', 'session'],
+    );
+  });
+
+  it('keeps what it said last when the read of the session fails', async () => {
+    const posts: BridgeMessage[] = [];
+    const answers: (() => Promise<boolean>)[] = [async () => true, async () => Promise.reject(new Error('storage'))];
+    const apply = createApply({
+      readSite: async () => TEAM,
+      readSignedOut: () => (answers.shift() ?? (async () => false))(),
+      post: (message) => void posts.push(message),
+    });
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      await apply();
+      await apply();
+    } finally {
+      console.warn = warn;
+    }
+
+    // Signed out, then a failed read: nothing new is said, so the widget keeps offering the sign-in.
+    assert.deepEqual(
+      posts.filter((message) => message.kind === 'session'),
+      [{ channel: CHANNEL, kind: 'session', signedOut: true }],
+    );
+  });
+
+  // Review of ffa2f88: a session read for the site of before must not be said after a newer apply.
+  it('says nothing from an apply that a newer one replaced while it read the session', async () => {
+    const posts: BridgeMessage[] = [];
+    let site: SiteConfig = TEAM;
+    let release: (signedOut: boolean) => void = () => {};
+    const slow = new Promise<boolean>((resolve) => (release = resolve));
+    let first = true;
+    const apply = createApply({
+      readSite: async () => site,
+      readSignedOut: () => {
+        if (!first) return Promise.resolve(false);
+        first = false;
+
+        return slow;
+      },
+      post: (message) => void posts.push(message),
+    });
+
+    const older = apply();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The rule changes while the older run waits on its read of the session.
+    site = PRIVATE;
+    await apply();
+    release(true);
+    await older;
+
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount'],
+    );
+    assert.equal(
+      posts.some((message) => message.kind === 'session'),
+      false,
+    );
+  });
+
+  it('says nothing of a session to a widget of the private mode', async () => {
+    const { posts, apply } = applying(PRIVATE, { signedOut: true });
+    await apply();
+
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount'],
+    );
+  });
+});

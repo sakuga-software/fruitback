@@ -116,6 +116,7 @@ declare const chrome: {
       set(items: Record<string, unknown>): Promise<void>;
     }
   >;
+  runtime: { getContexts(filter: { contextTypes: string[] }): Promise<unknown[]> };
 };
 
 /** Everything the extension keeps in one area, as one text. */
@@ -427,7 +428,9 @@ test('a session of the account that ended draws no person in the head, on a site
   await expect(after.getByRole('link', { name: 'Open the console' })).toHaveCount(0);
 });
 
-test('a session that ended keeps the note, and the popup offers to sign in again (FRU-238)', async ({ extension }) => {
+test('a session that ended: the widget says so at once, opens the popup, and the popup offers to sign in again (FRU-238, FRU-315)', async ({
+  extension,
+}) => {
   // Signed in with a session the worker of the suite does not know: it refuses its token and its
   // refresh, as a worker refuses a session ended in « My account » (`401` with `session-ended`).
   const { claim } = await signInRoutes(extension.context, requestOf('ended-write'));
@@ -453,20 +456,27 @@ test('a session that ended keeps the note, and the popup offers to sign in again
     { origin: PLAYGROUND_ORIGIN, endpoint: CLOUD },
   );
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 
   // The reads of the widget are refused for that session; the background renews it once, and the
-  // refresh is refused too: the session is forgotten. A note then: refused, and its text kept.
-  await page.getByRole('button', { name: 'Leave feedback' }).click();
-  await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder('What should change?').fill('Une note après la fin de la session');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByText('Your session has ended. Your text is kept: sign in again, then send it.')).toBeVisible();
-  await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une note après la fin de la session');
-  // The session is forgotten here: the refresh token is gone.
+  // refresh is refused too: the session is forgotten. The widget says it at once (FRU-315): no
+  // note can start that the worker would refuse, and the list says why it shows none.
   await expect.poll(() => stored(extension, 'local')).not.toContain('e2e-refresh-1');
+  const signIn = page.getByRole('button', { name: 'Sign in to leave notes' });
+  await expect(signIn).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await expect(page.getByText('Sign in to see the notes of this page.')).toBeVisible();
+  await page.getByRole('button', { name: 'Close the notes' }).click();
 
-  // The popup offers the one thing that makes the site work again.
+  // The button opens the popup over the tab, where the sign-in starts and its word is compared.
+  // `action.openPopup` opens no page Playwright can drive: the popup is counted from the service
+  // worker (measured: none before the click, one after), and read in a tab as the other specs do.
+  const popups = () =>
+    extension.worker.evaluate(async () => (await chrome.runtime.getContexts({ contextTypes: ['POPUP'] })).length);
+  expect(await popups()).toBe(0);
+  await page.bringToFront();
+  await signIn.click();
+  await expect.poll(popups).toBe(1);
   const after = await openPopup(extension, page);
   await expect(
     after.getByRole('heading', { level: 1, name: 'Comment on any website, right on the page' }),

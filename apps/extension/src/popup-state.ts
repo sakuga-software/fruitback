@@ -1,4 +1,5 @@
 import type { ConnectState } from './connect.ts';
+import type { SiteConfig } from './sites.ts';
 import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint } from './endpoint.ts';
 
 /**
@@ -25,6 +26,17 @@ export function cloudEndpoint(raw: string | undefined): string | undefined {
   if (value === '' || !isWorkerEndpoint(value) || !isSecureWorkerEndpoint(value)) return undefined;
 
   return normalizeWorkerEndpoint(value);
+}
+
+/**
+ * Whether a site wants a session this browser does not hold: a site of a workspace of this build's
+ * Fruitback, with no session for it. The popup then offers to sign in, and the widget the extension
+ * mounts there says so too (FRU-315).
+ */
+export function wantsSession(site: SiteConfig, cloud: string | undefined, held: Record<string, unknown>): boolean {
+  if (cloud === undefined || site.mode !== 'team' || site.mount === undefined || site.endpoint !== cloud) return false;
+
+  return held[cloud] === undefined;
 }
 
 /**

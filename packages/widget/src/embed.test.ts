@@ -1748,3 +1748,67 @@ describe('a read that fails, seen on the page (FRU-316)', () => {
     }
   });
 });
+
+describe('a session of the host that ends, and comes back (FRU-315)', () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  function reads(): number[] {
+    const seen: number[] = [];
+    mock.method(globalThis, 'fetch', async () => {
+      seen.push(1);
+
+      return new Response(JSON.stringify({ issues: [] }), { status: 200 });
+    });
+
+    return seen;
+  }
+
+  const launchOf = (page: MountedPage) =>
+    (page.document.querySelector('[data-fruitback-host]') as HTMLElement).shadowRoot?.querySelector(
+      '[data-fruitback-host-launch]',
+    ) as HTMLButtonElement;
+
+  it('turns the launch button and « Leave feedback » into the sign-in, then reads again once back', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const seen = reads();
+    const asked: number[] = [];
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      onSignIn: () => asked.push(1),
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const readsBefore = seen.length;
+
+      widget.signedOut(true);
+      assert.equal(launchOf(page).textContent, 'Sign in to leave notes');
+      launchOf(page).click();
+      // The command of the popup and of the key leads there too.
+      assert.equal(widget.leaveFeedback(), true);
+      assert.deepEqual(asked, [1, 1]);
+
+      widget.signedOut(false);
+      assert.equal(launchOf(page).textContent, 'Leave feedback');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(seen.length, readsBefore + 1, 'back, the widget did not read the page again');
+    } finally {
+      widget.destroy();
+    }
+  });
+
+  it('does nothing for a host that offers no sign-in', () => {
+    const page = mountPage('<main></main>');
+    reads();
+    const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
+    try {
+      widget.signedOut(true);
+      assert.equal(launchOf(page).textContent, 'Leave feedback');
+    } finally {
+      widget.destroy();
+    }
+  });
+});

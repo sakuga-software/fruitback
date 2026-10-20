@@ -25,6 +25,8 @@ export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: strin
 
 export const ENGLISH = {
   'launch.label': 'Leave feedback',
+  // The launch button while the session of the extension has ended (FRU-315): it opens the sign-in.
+  'launch.signIn': 'Sign in to leave notes',
   'widget.label': 'Fruitback feedback',
   // The banner of a capture (FRU-258). `capture.bannerTouch` is the same sentence on a touch screen,
   // which has no Escape key and no arrows (FRU-157): it then stands alone beside `capture.stop`.
@@ -79,6 +81,8 @@ export const ENGLISH = {
     'This site does not accept your note from here. Your text is kept: tell the team of the site.',
   // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).
   'composer.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
+  // The button beside that sentence, when the host can open the sign-in (FRU-315).
+  'composer.signIn': 'Sign in again',
   'composer.failedTooLarge':
     'This note is too large. Your text is kept: shorten it, or turn the picture off in the settings.',
   // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.
@@ -150,6 +154,9 @@ export const ENGLISH = {
   'sidebar.loading': 'Reading the notes of this page…',
   'sidebar.failed': 'The notes of this page could not be read. They are not lost.',
   'sidebar.retry': 'Try again',
+  // The list while the session of the extension has ended (FRU-315), and its one button.
+  'sidebar.signedOut': 'Sign in to see the notes of this page.',
+  'sidebar.signIn': 'Sign in',
   'sidebar.approximate': 'Approximate position',
   // The notes kept for later in this tab, on every page, and the button that sends them (FRU-124).
   'sidebar.drafts': 'Kept for later, not sent yet',

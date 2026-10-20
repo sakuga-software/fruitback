@@ -693,3 +693,43 @@ describe('the notes kept for later, in the list (FRU-124)', () => {
     sidebar.destroy();
   });
 });
+
+describe('the list while the session of the host has ended (FRU-315)', () => {
+  it('says to sign in, its one button signs in, and the way to a new note goes', () => {
+    const page = mountPage('<main><div id="widget"></div></main>');
+    const state: { read: ReadState } = { read: 'signed-out' };
+    const asked: string[] = [];
+    const sidebar = createSidebar({
+      document: page.document,
+      host: page.query('#widget'),
+      entries: () => [],
+      onSelect: () => {},
+      readState: () => state.read,
+      onRetry: () => asked.push('retry'),
+      onSignIn: () => asked.push('sign-in'),
+      leave: { label: 'Leave feedback', onLeave: () => asked.push('leave') },
+      translator: createTranslator({ locale: 'en' }),
+    });
+    cleanup.push(() => sidebar.destroy());
+    const root = page.query('[data-fruitback-sidebar]') as HTMLElement;
+    sidebar.open();
+
+    assert.equal(
+      root.querySelector('.fruitback-sidebar-failed-text')?.textContent,
+      'Sign in to see the notes of this page.',
+    );
+    const button = root.querySelector('.fruitback-sidebar-retry') as HTMLButtonElement;
+    assert.equal(button.textContent, 'Sign in');
+    assert.equal((root.querySelector('[data-fruitback-leave]') as HTMLElement).hidden, true);
+    // Not « No note on this page »: nothing was read.
+    assert.equal((root.querySelector('.fruitback-sidebar-empty') as HTMLElement).hidden, true);
+    button.click();
+    assert.deepEqual(asked, ['sign-in']);
+
+    // Back: « Try again » and the way to a new note return.
+    state.read = 'failed';
+    sidebar.refresh();
+    assert.equal(button.textContent, 'Try again');
+    assert.equal((root.querySelector('[data-fruitback-leave]') as HTMLElement).hidden, false);
+  });
+});

@@ -379,7 +379,8 @@ describe('every word the widget shows', () => {
     sidebar.refresh();
     snapshots.push(...shown(host.root));
     // Before a read answered, then after one failed (FRU-153).
-    for (const state of ['pending', 'failed'] as const) {
+    // And while the session of the host has ended (FRU-315).
+    for (const state of ['pending', 'failed', 'signed-out'] as const) {
       listed.state = state;
       sidebar.refresh();
       snapshots.push(...shown(host.root));
@@ -389,6 +390,10 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     host.readFailed(false, '');
     sidebar.close();
+    // The launch button, while the session of the host has ended (FRU-315).
+    host.offerSignIn({ label: translator.text('launch.signIn'), onSignIn: () => {} });
+    snapshots.push(...shown(host.root));
+    host.offerSignIn(undefined);
     const badges = [...host.root.querySelectorAll('.fruitback-pin-badge')] as HTMLElement[];
     for (const badge of badges) {
       badge.click();

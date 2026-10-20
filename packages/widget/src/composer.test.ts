@@ -1398,3 +1398,51 @@ describe('the text being written, saved as it is typed (FRU-311)', () => {
     assert.equal(statusText(), 'Brouillon restauré');
   });
 });
+
+describe('a send refused for a session that ended (FRU-315)', () => {
+  const signInButton = () => composer?.element.querySelector('[data-fruitback-sign-in]') as HTMLButtonElement;
+
+  it('offers « Sign in again » beside its sentence, and keeps the text', async () => {
+    const asked: number[] = [];
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    mounted = page;
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async () => 'signed-out',
+      onSignIn: () => asked.push(1),
+    });
+    composer.open(ANCHOR);
+    field().value = 'Une note gardée';
+    assert.equal(signInButton().hidden, true);
+
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(signInButton().hidden, false);
+    assert.equal(signInButton().textContent, 'Sign in again');
+    signInButton().click();
+    assert.deepEqual(asked, [1]);
+    assert.equal(field().value, 'Une note gardée');
+  });
+
+  it('offers nothing for another failure, nor without a sign-in to open', async () => {
+    mount(async () => 'retry');
+    composer?.open(ANCHOR);
+    field().value = 'x';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(signInButton().hidden, true);
+
+    composer?.destroy();
+    mount(async () => 'signed-out');
+    composer?.open(ANCHOR);
+    field().value = 'x';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(statusText(), 'Your session has ended. Your text is kept: sign in again, then send it.');
+    assert.equal(signInButton().hidden, true);
+  });
+});

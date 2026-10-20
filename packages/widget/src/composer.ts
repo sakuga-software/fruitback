@@ -107,6 +107,11 @@ export type ComposerOptions = {
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
   /**
+   * Open the sign-in of the host (FRU-315). Given, a send refused for a session that ended
+   * (`signed-out`) offers « Sign in again » beside its sentence. The text stays in the field.
+   */
+  onSignIn?: () => void;
+  /**
    * Where the text being written is saved as it is typed (FRU-311). The host knows the element and
    * the page; the composer knows the text. Left out: nothing is saved, as before.
    */
@@ -207,6 +212,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const picture = root.querySelector('[data-fruitback-picture]') as HTMLInputElement;
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
   const keep = root.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
+  const signIn = root.querySelector('[data-fruitback-sign-in]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
   const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
   const who = root.querySelector('[data-fruitback-who]') as HTMLElement;
@@ -236,6 +242,7 @@ export function createComposer(options: ComposerOptions): Composer {
   askForNameOrNot();
   cancel.textContent = t.text('composer.cancel');
   keep.textContent = t.text('composer.keep');
+  signIn.textContent = t.text('composer.signIn');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
 
   /** The places as the line was last drawn from them, and the id of the one it shows. */
@@ -260,6 +267,8 @@ export function createComposer(options: ComposerOptions): Composer {
     keep.disabled = send.disabled;
     field.readOnly = next === 'sending';
     status.textContent = next === 'idle' ? '' : t.text(next === 'failed' ? FAILURES[failure] : STATUS[next]);
+    // The one thing that makes this send work again, beside the sentence that says so (FRU-315).
+    signIn.hidden = !(next === 'failed' && failure === 'signed-out' && options.onSignIn !== undefined);
   }
 
   /** Send the note, or keep it for later: the same states, and the text kept on any failure. */
@@ -546,6 +555,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
   send.addEventListener('click', () => void submit());
   keep.addEventListener('click', () => void submit('keep'));
+  signIn.addEventListener('click', () => options.onSignIn?.());
   cancel.addEventListener('click', close);
   // The cross and « Cancel » do the same thing: the head holds a way out wherever the eye is.
   shut.addEventListener('click', close);
@@ -633,6 +643,7 @@ const TEMPLATE = `
   </div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
+    <button type="button" data-fruitback-sign-in class="fruitback-composer-ghost fruitback-composer-sign-in" hidden></button>
     <button type="button" data-fruitback-keep class="fruitback-composer-ghost fruitback-composer-keep" hidden></button>
     <button type="button" data-fruitback-cancel class="fruitback-composer-ghost"></button>
     <button type="button" data-fruitback-send class="fruitback-composer-send"></button>
@@ -833,7 +844,9 @@ const STYLES = `
 }
 .fruitback-composer-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fruitback-composer-keep[hidden] { display: none; }
+.fruitback-composer-keep[hidden], .fruitback-composer-sign-in[hidden] { display: none; }
+/* « Sign in again » is the way out of the sentence above it: it reads as an action, in the text colour. */
+.fruitback-composer-sign-in { color: var(--fruitback-color-text); text-decoration: underline; text-underline-offset: 3px; }
 .fruitback-composer-keep[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer[data-fruitback-state="sent"] .fruitback-composer-status,
 .fruitback-composer[data-fruitback-state="kept"] .fruitback-composer-status {

@@ -25,6 +25,8 @@ import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut } from '../src/shortcut.ts';
+import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
+import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -247,9 +249,25 @@ export default defineBackground(() => {
     await returnAccess(accessOf(before, patternsOf(mutation)));
   });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
+  const signInGate = createSignInGate();
   const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // FRU-315: the widget of a tab asks for the sign-in. The popup opens over that tab, and only
+    // when the site of the tab wants a session this browser does not hold.
+    const asking = acceptedSignIn(message, sender, browser.runtime.id);
+    if (asking !== undefined) {
+      // Once in a while per tab: a page can forge the ask, and must not open the popup in a loop.
+      if (asking.id !== undefined && signInGate(asking.id)) {
+        // The sessions of this worker, read once more: a store that cannot be read opens nothing.
+        void openSignIn(asking, () => sessions.list()).catch((error: unknown) =>
+          console.warn('[fruitback] could not decide whether to open the popup for the sign-in', error),
+        );
+      }
+
+      return false;
+    }
+
     const mutation = parseSiteMutation(message);
     if (mutation !== undefined) {
       // A content script can send this too, and a page must not add a rule for itself.
@@ -378,6 +396,41 @@ export default defineBackground(() => {
   // first access token of the day rather than waiting for something to ask for one.
   void refreshSessions();
 });
+
+/**
+ * The popup, over the tab whose widget asked for the sign-in (FRU-315).
+ *
+ * `action.openPopup` is what Chrome 127 and later give every extension. Firefox opens it only from
+ * a gesture, which a message is not: the call then fails, and the widget's words still say to sign
+ * in from the toolbar's button. Nothing else is opened in its place: the sign-in starts in the popup
+ * because the popup is where its word is compared.
+ */
+async function openSignIn(
+  tab: { url?: string; windowId?: number },
+  listSessions: () => Promise<Record<string, unknown>>,
+): Promise<void> {
+  if (tab.url === undefined) return;
+  let origin: string;
+  try {
+    origin = new URL(tab.url).origin;
+  } catch {
+    return;
+  }
+  const site = await readSite(origin);
+  const held = await listSessions();
+  if (site === undefined || !wantsSession(site, cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD), held)) return;
+
+  // A popup already open is where the person is: nothing opens over it.
+  const runtime = browser.runtime as typeof browser.runtime & {
+    getContexts?: (filter: { contextTypes: string[] }) => Promise<unknown[]>;
+  };
+  const open = await runtime.getContexts?.({ contextTypes: ['POPUP'] }).catch(() => []);
+  if (open !== undefined && open.length > 0) return;
+
+  await browser.action
+    .openPopup(tab.windowId === undefined ? undefined : { windowId: tab.windowId })
+    .catch((error: unknown) => console.warn('[fruitback] the popup did not open for the sign-in', error));
+}
 
 /**
  * The origin the browser says the message came from, never the one the message claims.

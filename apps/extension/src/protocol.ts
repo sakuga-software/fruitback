@@ -84,6 +84,28 @@ export type MountMessage = {
   relay?: true;
 };
 
+/**
+ * The session of the reviewer for the site of the widget we mounted, as the isolated world reads it
+ * (FRU-315): `signedOut` when a site of the workspace of this build's Fruitback has no session. The
+ * page can read and forge it, and it buys nothing: it changes what the widget offers, never what
+ * the background relays.
+ */
+export type SessionMessage = {
+  channel: typeof CHANNEL;
+  kind: 'session';
+  signedOut: boolean;
+};
+
+/**
+ * The widget asks for the sign-in (FRU-315): « Sign in to leave notes », « Sign in », « Sign in
+ * again ». The page can forge it too: the background opens the popup, and only for a tab whose site
+ * has a rule that wants a session.
+ */
+export type SignInMessage = {
+  channel: typeof CHANNEL;
+  kind: 'sign-in';
+};
+
 export type UnmountMessage = {
   channel: typeof CHANNEL;
   kind: 'unmount';
@@ -218,7 +240,9 @@ export type BridgeMessage =
   | RelayRequestMessage
   | RelayResponseMessage
   | CaptureRequestMessage
-  | CaptureResponseMessage;
+  | CaptureResponseMessage
+  | SessionMessage
+  | SignInMessage;
 
 /**
  * Recognise one of our messages, or return `undefined`.
@@ -233,6 +257,12 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'unmount') return { channel: CHANNEL, kind: 'unmount' };
   if (data.kind === 'ready') return { channel: CHANNEL, kind: 'ready' };
   if (data.kind === 'announce') return { channel: CHANNEL, kind: 'announce' };
+  if (data.kind === 'sign-in') return { channel: CHANNEL, kind: 'sign-in' };
+  if (data.kind === 'session') {
+    return typeof data.signedOut === 'boolean'
+      ? { channel: CHANNEL, kind: 'session', signedOut: data.signedOut }
+      : undefined;
+  }
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind === 'capture-request') return parseCaptureRequest(data);

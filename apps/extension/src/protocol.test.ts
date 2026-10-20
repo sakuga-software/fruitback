@@ -289,3 +289,19 @@ describe('the answer to a capture (FRU-44)', () => {
     }
   });
 });
+
+describe('the messages of the sign-in (FRU-315)', () => {
+  it('reads a session as a boolean and nothing else, and a sign-in with nothing in it', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'session', signedOut: true }), {
+      channel: CHANNEL,
+      kind: 'session',
+      signedOut: true,
+    });
+    assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'session', signedOut: 'yes' }), undefined);
+    assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'session' }), undefined);
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'sign-in', url: 'https://evil.test' }), {
+      channel: CHANNEL,
+      kind: 'sign-in',
+    });
+  });
+});

@@ -1231,6 +1231,21 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   (a reload, Esc, « Cancel », the cross, and the witness that another element opens empty and that
   nothing typed saves nothing).
 
+## A session of the host that ended (FRU-315)
+
+### The rules, in short
+
+- **`init({ onSignIn })` and `widget.signedOut(ended)`.** A host that can tell the session it reads
+  with has ended (the extension can) says so; the widget then offers `onSignIn` instead of a note:
+  the launch button reads « Sign in to leave notes » and loses `aria-pressed` (it is no switch
+  then), the list says « Sign in to see the notes of this page. » with « Sign in », and a send refused
+  with `401` offers « Sign in again » beside its sentence. The composer asks for no name, and « Keep
+  for later » stays offered so a text outlives the sign-in. `leaveFeedback()` leads to `onSignIn`.
+- **What is written stays.** An open composer stays open with its text; nothing is built again.
+- **Back, the widget reads the page again**, from a read and not from what it held.
+- **Without `onSignIn`, `signedOut` does nothing**: a site's own widget has no sign-in to offer.
+- No new colour: the same pill, the list's own block of « Try again », a ghost button of the composer.
+
 ## A link that opens a note on its page (FRU-253)
 
 ### The rules, in short

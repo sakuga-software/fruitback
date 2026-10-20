@@ -149,8 +149,16 @@ export default defineContentScript({
         message.kind === 'ready' ||
         message.kind === 'relay-request' ||
         message.kind === 'capture-request' ||
-        message.kind === 'command-response'
+        message.kind === 'command-response' ||
+        message.kind === 'sign-in'
       ) {
+        return;
+      }
+
+      // FRU-315: the session of the reviewer for this site ended, or is back. Only our widget hears it.
+      if (message.kind === 'session') {
+        widget?.signedOut(message.signedOut);
+
         return;
       }
 
@@ -245,6 +253,11 @@ export default defineContentScript({
         // reviewer has no session here, and the rule of FRU-257 gives them no field to reply: the
         // worker cannot tell them from a visitor of the site.
         ...(message.relay === true ? { transport: api.transport } : { replies: false }),
+        // FRU-315: a site of a workspace can lose its session. The widget then offers the sign-in,
+        // which the popup holds: the isolated world carries the ask to the background.
+        ...(message.relay === true
+          ? { onSignIn: () => window.postMessage({ channel: CHANNEL, kind: 'sign-in' }, '*') }
+          : {}),
         // FRU-44: offered here, and off until the reviewer turns it on in the settings of the widget.
         captureScreenshot,
       });

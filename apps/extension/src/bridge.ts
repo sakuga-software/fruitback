@@ -12,10 +12,20 @@ export type BridgeSeams = {
   readSite: () => Promise<SiteConfig | undefined>;
   /** The language of the reviewer's account, if the extension knows one (FRU-131). */
   readLanguage?: () => Promise<string | undefined>;
+  /**
+   * Whether this site wants a session it does not have (FRU-315): a site of the workspace of this
+   * build's Fruitback, with no session for it. Asked for a widget we mount through the relay only.
+   */
+  readSignedOut?: (site: SiteConfig) => Promise<boolean>;
   post: (message: BridgeMessage) => void;
 };
 
-export function createApply({ readSite, readLanguage, post }: BridgeSeams): (force?: boolean) => Promise<void> {
+export function createApply({
+  readSite,
+  readLanguage,
+  readSignedOut,
+  post,
+}: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
   //
   // **This is what protects a half-written note.** `writeSite` stores the whole map under one key,
@@ -25,6 +35,8 @@ export function createApply({ readSite, readLanguage, post }: BridgeSeams): (for
   // that is the one failure this widget cannot afford, so the guard is here rather than in the page
   // world, where the message has already been treated as a config change. Raised in review.
   let posted: string | undefined;
+  /** The session last said, so a change of storage that is not one of the session says nothing. */
+  let said: boolean | undefined;
 
   // Three sources call this, and it awaits in the middle: the first run, the page world's handshake,
   // and every storage change. So two can be in flight, and the older one can resolve last and post a
@@ -37,19 +49,39 @@ export function createApply({ readSite, readLanguage, post }: BridgeSeams): (for
   return async (force = false): Promise<void> => {
     const mine = ++generation;
     const [site, locale] = await Promise.all([readSite(), readLanguage?.().catch(() => undefined)]);
+    // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
+    // widget offers without building it again over a note being written.
+    const message = decide(site, locale);
+    const relayed =
+      message.kind === 'mount' && message.relay === true && site !== undefined && readSignedOut !== undefined;
+    // A read of storage that fails keeps what was said last, and says why in the console: forcing
+    // « signed in » would hide the sign-in from somebody whose session ended (review of #378).
+    const signedOut = relayed
+      ? await readSignedOut(site).catch((error: unknown) => {
+          console.warn('[fruitback] could not read whether this site has a session', error);
+
+          return said ?? false;
+        })
+      : false;
     if (mine !== generation) return;
 
     // The language is part of the signature below. A change of language is a change of config: the
     // widget is built again, which closes an open composer, like a change of worker.
-    const message = decide(site, locale);
-
     const signature = JSON.stringify(message);
     // `force` is for the handshake: the page world says it is listening, and it may have missed the
     // message that carries this same decision.
-    if (!force && signature === posted) return;
-
-    posted = signature;
-    post(message);
+    const mounting = force || signature !== posted;
+    if (mounting) {
+      posted = signature;
+      post(message);
+    }
+    // After the mount, which builds the widget this message is for. A new widget starts signed in.
+    if (relayed && (mounting || signedOut !== said)) {
+      said = signedOut;
+      post({ channel: CHANNEL, kind: 'session', signedOut });
+    } else if (!relayed) {
+      said = undefined;
+    }
   };
 }
 

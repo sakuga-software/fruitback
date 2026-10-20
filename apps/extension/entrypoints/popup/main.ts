@@ -38,7 +38,13 @@ import {
   startConnect,
 } from '../../src/connect.ts';
 import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
-import { type AccountState, type PopupState, cloudEndpoint, decide } from '../../src/popup-state.ts';
+import {
+  type AccountState,
+  type PopupState,
+  cloudEndpoint,
+  decide,
+  wantsSession as siteWantsSession,
+} from '../../src/popup-state.ts';
 import { type TabCommand } from '../../src/protocol.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
@@ -343,9 +349,7 @@ function siteWithoutAccess(origin: string, { pattern, site }: ResolvedSite, acco
  * have forgotten it this very time.
  */
 async function wantsSession(site: SiteConfig): Promise<boolean> {
-  if (CLOUD === undefined || site.mode !== 'team' || site.mount === undefined || site.endpoint !== CLOUD) return false;
-
-  return (await sessions.list())[CLOUD] === undefined;
+  return siteWantsSession(site, CLOUD, await sessions.list());
 }
 
 /** The title of a screen about a site: its host, as the mock-up writes it (06, 07, 08). */
