@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
-import { type WorkerCard, preferencesSection, shortcutKeys, sitesCount, workersSection } from './workers-page.ts';
+import {
+  type WorkerCard,
+  preferencesSection,
+  redrawWorkers,
+  shortcutKeys,
+  sitesCount,
+  workersSection,
+} from './workers-page.ts';
 
 /**
  * « Workers and sessions » and « Preferences » of the page of the extension (FRU-302), on happy-dom.
@@ -154,6 +161,56 @@ describe('« Workers and sessions » (FRU-302)', () => {
   });
 });
 
+describe('« Workers and sessions » drawn again (raised in review)', () => {
+  const unpaired: WorkerCard = {
+    endpoint: 'https://feedback.acme.dev',
+    host: 'feedback.acme.dev',
+    sites: 2,
+    pairing: 'https',
+  };
+  const other: WorkerCard = { endpoint: 'https://notes.beta.dev', host: 'notes.beta.dev', sites: 1, pairing: 'https' };
+  const handlers = { onPair: nothing, onLogout: nothing };
+
+  it('does not draw again the same cards: a code being typed, and what its line says, stay', () => {
+    const document = page();
+    const container = document.createElement('div');
+    document.body.append(container);
+    assert.equal(redrawWorkers(document, container, { cards: [unpaired], ...handlers }), true);
+    const input = container.querySelector<HTMLInputElement>('input.worker-code');
+    const said = container.querySelector('.worker-said');
+    if (input === null || said === null) throw new Error('no field');
+    input.value = 'ABCD-EF';
+    input.focus();
+    said.textContent = 'Enter the code';
+
+    // A refresh of a session turned its tokens: the storage changed, the cards did not.
+    assert.equal(redrawWorkers(document, container, { cards: [unpaired], ...handlers }), false);
+    assert.equal(container.querySelector('input.worker-code'), input);
+    assert.equal(input.value, 'ABCD-EF');
+    assert.equal(container.querySelector('.worker-said')?.textContent, 'Enter the code');
+  });
+
+  it('puts back a code typed in a card still unpaired, with its focus, when other cards change', () => {
+    const document = page();
+    const container = document.createElement('div');
+    document.body.append(container);
+    redrawWorkers(document, container, { cards: [unpaired, other], ...handlers });
+    const input = container.querySelector<HTMLInputElement>(`[data-endpoint="${unpaired.endpoint}"] input.worker-code`);
+    if (input === null) throw new Error('no field');
+    input.value = 'ABCD-EF';
+    input.focus();
+
+    // The other worker was paired in the popup meanwhile.
+    const paired: WorkerCard = { ...other, session: { name: 'Camille Durand' } };
+    assert.equal(redrawWorkers(document, container, { cards: [unpaired, paired], ...handlers }), true);
+    const again = container.querySelector<HTMLInputElement>(`[data-endpoint="${unpaired.endpoint}"] input.worker-code`);
+    assert.notEqual(again, input);
+    assert.equal(again?.value, 'ABCD-EF');
+    assert.equal(document.activeElement, again);
+    assert.match(container.querySelector(`[data-endpoint="${other.endpoint}"]`)?.textContent ?? '', /Camille Durand/);
+  });
+});
+
 describe('« Preferences » (FRU-302)', () => {
   const options = (extra: Partial<Parameters<typeof preferencesSection>[1]> = {}) => ({
     panelOnClick: false,
@@ -227,5 +284,7 @@ describe('« Preferences » (FRU-302)', () => {
     assert.match(section.textContent ?? '', /Not set/);
     assert.match(section.textContent ?? '', /Change it in Add-ons, Manage Extension Shortcuts\./);
     assert.deepEqual(shortcutKeys('Alt+Shift+F'), ['Alt', 'Shift', 'F']);
+    // Chrome on macOS: one sign for each key, with no `+`.
+    assert.deepEqual(shortcutKeys('⌥⇧F'), ['⌥', '⇧', 'F']);
   });
 });

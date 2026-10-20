@@ -35,7 +35,7 @@ import {
 } from '../../src/site-page.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
-import { type Pairing, type WorkerCard, preferencesSection, workersSection } from '../../src/workers-page.ts';
+import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
@@ -114,6 +114,8 @@ const returnAccess = createBrowserAccessReturn(sessions);
 const workers = element('div', '', 'workers-slot');
 /** A code a pairing link brought here from the popup: `#workers?worker=<endpoint>&code=<code>`. */
 let linked = linkedPairing(window.location.hash);
+/** The pairing link whose card already took the focus. */
+let focusedLink: typeof linked;
 
 if (app !== null) {
   const sites = element('section', '', 'page-section');
@@ -601,7 +603,7 @@ async function renderWorkers(): Promise<void> {
         ...(linked?.endpoint === endpoint && session === undefined ? { code: linked.code } : {}),
       };
     });
-  workers.replaceChildren(workersSection(document, { cards, onPair: pair, onLogout: logout }));
+  const drew = redrawWorkers(document, workers, { cards, onPair: pair, onLogout: logout });
   // The menu counts the workers, as the mock-up does: « Workers and sessions 3 ».
   const entry = document.querySelector('.page-entry[href="#workers"]');
   let menuCount = entry?.querySelector('.page-count') ?? null;
@@ -610,7 +612,9 @@ async function renderWorkers(): Promise<void> {
     entry.append(menuCount);
   }
   if (menuCount !== null) menuCount.textContent = String(cards.length);
-  if (linked !== undefined) {
+  // The card of a pairing link takes the focus when it is drawn for it, not at each later draw.
+  if (linked !== undefined && drew && linked !== focusedLink) {
+    focusedLink = linked;
     document.querySelector<HTMLElement>(`.worker-card[data-endpoint="${CSS.escape(linked.endpoint)}"] input`)?.focus();
   }
 }

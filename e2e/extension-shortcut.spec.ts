@@ -59,11 +59,12 @@ test('what the shortcut sends starts a capture on the tab, and Esc stops it', as
 test('the options page shows the key, and the way to change it', async ({ extension }) => {
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
-  const line = options.locator('p').filter({ hasText: 'Leave feedback shortcut:' });
+  // FRU-302: the line is a row of « Preferences », the keys in the `kbd` of the kit.
+  const row = options.locator('section#prefs .pref-row').filter({ hasText: 'Leave feedback shortcut' });
 
-  await expect(line).toHaveText(/^Leave feedback shortcut: (Alt\+Shift\+F|⌥⇧F)\. Change the shortcut$/);
+  await expect(row.locator('kbd')).toHaveText([/^(Alt|⌥)$/, /^(Shift|⇧)$/, 'F']);
 
   const opened = extension.context.waitForEvent('page');
-  await line.getByRole('button', { name: 'Change the shortcut' }).click();
+  await row.getByRole('button', { name: 'Change' }).click();
   await expect.poll(async () => (await opened).url()).toBe('chrome://extensions/shortcuts');
 });

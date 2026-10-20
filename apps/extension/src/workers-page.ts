@@ -91,6 +91,38 @@ export function workersSection(document: Document, options: WorkersOptions): HTM
   return section;
 }
 
+/**
+ * Draws « Workers and sessions » in `container`, unless the cards are those already drawn (raised in
+ * review). The tokens of a session turn at each refresh, and each turn is a change of the storage:
+ * drawn again for it, a card would lose the code somebody is typing and what its line says. When the
+ * cards did change (a session made or ended elsewhere), a code typed in a card that is still unpaired
+ * is put back, with the focus. Answers whether it drew.
+ */
+export function redrawWorkers(document: Document, container: HTMLElement, options: WorkersOptions): boolean {
+  const key = JSON.stringify(options.cards);
+  if (container.dataset.cards === key) return false;
+  const typed = new Map<string, string>();
+  for (const input of container.querySelectorAll<HTMLInputElement>('input.worker-code')) {
+    const endpoint = input.closest<HTMLElement>('.worker-card')?.dataset.endpoint;
+    if (endpoint !== undefined && input.value !== '') typed.set(endpoint, input.value);
+  }
+  // No global `HTMLInputElement` here: the page may be another window's (the tests, on happy-dom).
+  const active = document.activeElement;
+  const hadFocus = active !== null && active.matches('input.worker-code') && container.contains(active);
+  const focused = active?.closest<HTMLElement>('.worker-card')?.dataset.endpoint;
+  container.replaceChildren(workersSection(document, options));
+  container.dataset.cards = key;
+  for (const card of container.querySelectorAll<HTMLElement>('.worker-card')) {
+    const input = card.querySelector<HTMLInputElement>('input.worker-code');
+    const value = card.dataset.endpoint === undefined ? undefined : typed.get(card.dataset.endpoint);
+    if (input === null || value === undefined) continue;
+    input.value = value;
+    if (hadFocus && focused === card.dataset.endpoint) input.focus();
+  }
+
+  return true;
+}
+
 /** One worker: its host and its sites, then its session, or the way to pair. */
 export function workerCard(document: Document, card: WorkerCard, options: WorkersOptions): HTMLElement {
   const root = make(document, 'article', 'worker-card');
@@ -219,12 +251,14 @@ function row(document: Document, title: string, help: string, control: HTMLEleme
   return root;
 }
 
-/** The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. */
+/**
+ * The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. Chrome on macOS writes
+ * them with no `+`, a sign each (`⌥⇧F`, measured in the e2e): each sign is then a key of its own.
+ */
 export function shortcutKeys(shortcut: string): string[] {
-  return shortcut
-    .split('+')
-    .map((key) => key.trim())
-    .filter((key) => key !== '');
+  const keys = shortcut.includes('+') ? shortcut.split('+') : [...shortcut.replace(/\s+/gu, '')];
+
+  return keys.map((key) => key.trim()).filter((key) => key !== '');
 }
 
 /** The section « Preferences ». */
