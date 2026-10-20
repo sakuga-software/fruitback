@@ -1628,8 +1628,8 @@ an earlier migration, and writes nothing`.
 ### The guards, each planted out
 
 `visitor.test.ts` takes each guard of `app.ts` out of a copy of the module, and the case that holds
-it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, and the check of
-`verified.session` in `writesWith`. The account suite plants three violations of the store: a new
+it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, the check of
+`verified.session` in `writesWith`, and the session that `POST /screenshot` asks for. The account suite plants three violations of the store: a new
 site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
 `writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of
 `accounts.test.ts` and four cases of `visitor.test.ts`.

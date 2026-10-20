@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { deflateSync } from 'node:zlib';
 import { describe, it } from 'node:test';
 import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -8,6 +9,7 @@ import { mutatedModule } from './conformance.fixture.ts';
 import { WORKER, type World, callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import { createPostgresScreenshotStore } from './screenshots-postgres.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
@@ -442,6 +444,98 @@ describe('the guards of « Members only », each planted out (FRU-330)', () => {
     });
     try {
       assert.equal((mutant.module.writesWith as typeof writesWith)(policy, verified), true);
+    } finally {
+      mutant.remove();
+    }
+  });
+});
+
+/** A PNG of one grey pixel: what the extension sends, the smallest that `pngSize` reads. */
+function onePixel(): Uint8Array {
+  const crc = (bytes: Uint8Array): number => {
+    let c = ~0;
+    for (const byte of bytes) {
+      c ^= byte;
+      for (let bit = 0; bit < 8; bit += 1) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+
+    return ~c >>> 0;
+  };
+  const chunk = (type: string, data: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(12 + data.length);
+    const view = new DataView(out.buffer);
+    view.setUint32(0, data.length);
+    out.set(new TextEncoder().encode(type), 4);
+    out.set(data, 8);
+    view.setUint32(8 + data.length, crc(out.subarray(4, 8 + data.length)));
+
+    return out;
+  };
+  const header = new Uint8Array(13);
+  new DataView(header.buffer).setUint32(0, 1);
+  new DataView(header.buffer).setUint32(4, 1);
+  header.set([8, 0, 0, 0, 0], 8);
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', new Uint8Array(deflateSync(new Uint8Array([0, 0x80])))),
+    chunk('IEND', new Uint8Array()),
+  ];
+  const all = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    all.set(part, at);
+    at += part.length;
+  }
+
+  return all;
+}
+
+/** `POST /screenshot` as the relay sends it: the PNG as the body, and the site of the note. */
+function sendPicture(handle: Handle, world: World, site: string, token?: string): Promise<Response> {
+  return handle(
+    new Request(`${WORKER}/screenshot?client=${site}`, {
+      method: 'POST',
+      headers: {
+        Origin: SITE,
+        'Content-Type': 'image/png',
+        ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+      },
+      body: onePixel(),
+    }),
+    world.env,
+    { clientIp: '198.18.1.2', ...world.context, screenshots: createPostgresScreenshotStore(world.database) },
+  );
+}
+
+describe('a picture with a note, on a site that its members read (FRU-330)', () => {
+  it('is refused with no session, whoever may leave a note, and kept for a member', async () => {
+    const { handleRequest: real } = await import('./app.ts');
+    for (const writers of ['members', 'anyone'] as const) {
+      const { world, admin, workspace, site } = await workerWithASite('members', writers);
+
+      const refused = await sendPicture(real, world, site);
+      assert.equal(refused.status, 401, writers);
+      assert.deepEqual(await refused.json(), { error: 'identity-required' }, writers);
+      // The control: the session that the relay sends.
+      const kept = await sendPicture(real, world, site, await sessionOf(world, admin.id, workspace));
+      assert.equal(kept.status, 201, `${writers}: ${await kept.clone().text()}`);
+    }
+  });
+
+  it('is kept with no session when the guard of the route is taken out', async () => {
+    const mutant = await mutatedModule('app.ts', {
+      from: "if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);",
+      to: "if (workspace === undefined) return json(401, { error: 'identity-required' }, headers);",
+    });
+    try {
+      const { world, site } = await workerWithASite('members', 'members');
+      // Past the guard, the store is asked to keep a picture of nobody, and the database refuses the row.
+      const passed = await sendPicture(mutant.module.handleRequest as Handle, world, site).then(
+        (sent) => sent.status !== 401,
+        (error: unknown) => /account_id/.test(String(error)),
+      );
+      assert.equal(passed, true);
     } finally {
       mutant.remove();
     }
