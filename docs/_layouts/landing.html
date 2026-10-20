@@ -12,193 +12,371 @@
     <header class="top">
       <div class="wrap top-row">
         <a class="brand" href="{{ '/' | relative_url }}">
-          <svg width="16" height="16" viewBox="0 0 128 128" aria-hidden="true">
-            <path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z" fill="#dd2c27" />
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z" fill="#dd2c27" />
           </svg>
           Fruitback
         </a>
         <nav class="top-nav" aria-label="Site">
           <a href="#how">How it works</a>
-          <a href="#plans">Plans</a>
+          <a href="#modes">Modes</a>
+          <a href="#self-hosting">Self-hosting</a>
           <a href="#guides">Guides</a>
-          <a href="https://github.com/sakuga-software/fruitback">GitHub</a>
-          <a class="button button-small" href="https://app.fruitback.com">Open the console</a>
         </nav>
+        <a class="pill" href="https://github.com/sakuga-software/fruitback">GitHub</a>
       </div>
     </header>
 
     <main>
-      <section class="hero wrap">
-        <p class="eyebrow">Free during the beta · Hosted in Europe</p>
-        <h1>Feedback on the page.<br />Issues in your tracker.</h1>
-        <p class="lead">
-          Your client clicks the element that bothers them and writes a note. It becomes an issue with the CSS selector,
-          the React component and the source file. Back on the page, the pin is still there, coloured by the state of
-          its issue.
-        </p>
-        <div class="actions">
-          <a class="button" href="https://app.fruitback.com">Create a workspace</a>
-          <a class="button button-outline" href="https://demo.fruitback.com">Try the demo</a>
+      <section class="hero">
+        <div class="wrap">
+          <p class="badge"><span class="dot" aria-hidden="true"></span>Free during the beta · Hosted in Europe</p>
+          <h1>Feedback planted on the page. Harvested in your tracker.</h1>
+          <p class="lead">
+            A client clicks the element that bothers them and types a note. It lands as an issue in Linear, in GitHub
+            Issues or in your workspace, carrying the CSS selector, the React component and the source file behind that
+            element.
+          </p>
+          <div class="actions">
+            <a class="button" href="https://app.fruitback.com">
+              <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z" fill="currentColor" />
+              </svg>
+              Create a workspace
+            </a>
+            <a class="button button-outline" href="#guides">Read the guides</a>
+            <span class="fine">Widget MIT · worker AGPL-3.0 · or run it yourself</span>
+          </div>
+
+          <div class="showcase">
+            <figure class="browser" aria-label="A pin on the Add button of a staging site, with its note">
+              <div class="browser-bar">
+                <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="url">staging.acme.dev/blends</span>
+              </div>
+              <div class="browser-page" aria-hidden="true">
+                <p class="demo-title">Our blends</p>
+                <div class="demo-cards">
+                  <div class="demo-card"><b>Espresso</b><strong>9 €</strong><span class="demo-add">Add</span></div>
+                  <div class="demo-card">
+                    <b>Latte</b><strong>19 €</strong><span class="demo-add demo-faint">Add</span>
+                    <span class="demo-pin demo-progress"></span>
+                  </div>
+                  <div class="demo-card">
+                    <b>Mocha</b><strong>29 €</strong><span class="demo-add">Add</span>
+                    <span class="demo-pin demo-new"></span>
+                  </div>
+                </div>
+                <div class="demo-note">
+                  <p class="demo-note-head"><span class="drop drop-progress"></span>In progress <em>FRU-128 →</em></p>
+                  <p>The Add button is almost invisible until you hover it.</p>
+                  <p class="demo-note-meta">Marc: fix in review · 2 replies</p>
+                </div>
+                <span class="demo-launch">Leave feedback</span>
+              </div>
+            </figure>
+            <p class="lands" aria-hidden="true">lands as</p>
+            <article class="issue" aria-label="The issue it becomes">
+              <p class="issue-head"><b>FRU-128</b> · your tracker <span class="state">In progress</span></p>
+              <h2>The Add button is almost invisible until you hover it.</h2>
+              <dl>
+                <div>
+                  <dt>Element</dt>
+                  <dd><code>div.card:nth-child(2) &gt; button.add</code></dd>
+                </div>
+                <div>
+                  <dt>Component</dt>
+                  <dd><code>&lt;AddToCart&gt;</code></dd>
+                </div>
+                <div>
+                  <dt>Source</dt>
+                  <dd><code>src/components/Card.tsx:42</code></dd>
+                </div>
+                <div>
+                  <dt>Page</dt>
+                  <dd>staging.acme.dev/blends · 1440 × 900</dd>
+                </div>
+                <div>
+                  <dt>Reporter</dt>
+                  <dd>Camille Durand</dd>
+                </div>
+                <div>
+                  <dt>Picture</dt>
+                  <dd>element.png</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
         </div>
-        <figure class="frame">
-          <div class="frame-bar"><span></span><span></span><span></span><em>staging.acme.dev</em></div>
+      </section>
+
+      <section id="how" class="section">
+        <div class="wrap">
+          <h2 class="big">Nobody leaves the page. Nobody learns a new tool.</h2>
+          <ol class="steps">
+            <li>
+              <p class="kicker">Point</p>
+              <h3>Click what bothers you</h3>
+              <p>
+                Hover the page, or move with the arrow keys and press Enter. The reporter never has to describe where
+                the problem is.
+              </p>
+            </li>
+            <li>
+              <p class="kicker">Send</p>
+              <h3>A note becomes an issue</h3>
+              <p>
+                In the tracker your team already runs, or in your workspace, with the selector, the component and the
+                file, and a picture of the element when the site offers one.
+              </p>
+            </li>
+            <li>
+              <p class="kicker">Follow up</p>
+              <h3>The pin follows the issue</h3>
+              <p>
+                When the client comes back, their pins are still there, coloured by the issue's status. Replies from the
+                team show under each one.
+              </p>
+            </li>
+          </ol>
+          <ul class="stages" aria-label="The five statuses of a note">
+            <li><span class="drop drop-new"></span><b>New</b><small>just sent</small></li>
+            <li><span class="drop drop-todo"></span><b>To do</b><small>accepted by the team</small></li>
+            <li><span class="drop drop-progress"></span><b>In progress</b><small>being fixed</small></li>
+            <li><span class="drop drop-done"></span><b>Done</b><small>fixed</small></li>
+            <li><span class="drop drop-closed"></span><b>Closed</b><small>not kept</small></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="modes" class="section section-warm">
+        <div class="wrap">
+          <h2 class="big">Three ways to run it. The first question is what the site ships.</h2>
+          <p class="sub">Every mode uses the same worker. They differ on who sees the pins and who can read them.</p>
+          <div class="modes">
+            <article class="mode">
+              <p class="mode-head"><b>Public</b><small>script tag</small></p>
+              <p>The site embeds the widget and every visitor can leave a note.</p>
+              <dl>
+                <div>
+                  <dt>The site embeds</dt>
+                  <dd>the widget</dd>
+                </div>
+                <div>
+                  <dt>Pins shown to</dt>
+                  <dd>every visitor</dd>
+                </div>
+                <div>
+                  <dt>Good for</dt>
+                  <dd>a public "report a problem"</dd>
+                </div>
+              </dl>
+            </article>
+            <article class="mode">
+              <p class="mode-head"><b>Private</b><small>browser extension</small></p>
+              <p>The site embeds nothing. The extension puts the widget on it for one reviewer.</p>
+              <dl>
+                <div>
+                  <dt>The site embeds</dt>
+                  <dd>nothing</dd>
+                </div>
+                <div>
+                  <dt>Pins shown to</dt>
+                  <dd>the reviewer who switched it on</dd>
+                </div>
+                <div>
+                  <dt>Good for</dt>
+                  <dd>reviewing a client's site, invisibly</dd>
+                </div>
+              </dl>
+            </article>
+            <article class="mode">
+              <p class="mode-head"><b>Team</b><small>script tag + extension</small></p>
+              <p>A dormant widget wakes up for the members whose extension is connected.</p>
+              <dl>
+                <div>
+                  <dt>The site embeds</dt>
+                  <dd>the widget, dormant</dd>
+                </div>
+                <div>
+                  <dt>Pins shown to</dt>
+                  <dd>members whose extension is connected</dd>
+                </div>
+                <div>
+                  <dt>Good for</dt>
+                  <dd>a team reviewing its own staging</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
+          <p class="more"><a href="{{ '/modes.html' | relative_url }}">The three modes, side by side</a></p>
+        </div>
+      </section>
+
+      <section id="self-hosting" class="section section-dark">
+        <div class="wrap dark-grid">
+          <div>
+            <h2 class="big">Self-hosted, no service of ours holds your feedback.</h2>
+            <p class="sub">
+              One compose file starts three containers: the worker, its PostgreSQL and the console. The tracker's API
+              key stays on your server: it cannot ship in client-side JavaScript.
+            </p>
+            <ul class="dashes">
+              <li>Notes in your PostgreSQL, or issues in Linear or GitHub Issues</li>
+              <li>Each site read by everyone, or by the members of its workspace only</li>
+              <li>Images for amd64 and arm64</li>
+            </ul>
+            <p class="more">
+              <a href="{{ '/self-hosting.html' | relative_url }}"
+                >From an empty folder to a first pin, in seven steps</a
+              >
+            </p>
+          </div>
+          <div class="codes">
+            <p class="code-title">Two files, five lines of <code>.env</code>, one command</p>
+            <pre
+              tabindex="0"
+              aria-label="The commands that start an instance"
+            ><code><span class="prompt">$</span> curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
+<span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
+<span class="comment"># fill the five lines .env names</span>
+<span class="prompt">$</span> docker compose up -d --wait</code></pre>
+            <p class="code-title">Then one tag on the site, which the console gives you:</p>
+            <pre
+              tabindex="0"
+              aria-label="The tag of the site"
+            ><code>&lt;script src="https://cdn.acme.dev/fruitback.iife.js"
+  data-fruitback-endpoint="https://api.feedback.acme.dev"
+  data-fruitback-client="site_…" defer&gt;&lt;/script&gt;</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="extension" class="section section-warm">
+        <div class="wrap ext-grid">
+          <div>
+            <h2 class="big">Reviewing a client's site they will never deploy to</h2>
+            <p class="sub">
+              The browser extension puts the widget on any site you switch on, for you alone. Your own team's staging
+              works the same way, with a session you connect once.
+            </p>
+            <div class="points">
+              <div>
+                <h3>One click per site</h3>
+                <p>The popup asks « Turn Fruitback on for this site? », and the browser asks for that site only.</p>
+              </div>
+              <div>
+                <h3>Every note in a side panel</h3>
+                <p>The notes of the page beside it, with their replies, « Show on the page » and « Reply ».</p>
+              </div>
+              <div>
+                <h3>Rules you can hand over</h3>
+                <p>Download a rules file; a teammate drops it on « Import a rules file ».</p>
+              </div>
+              <div>
+                <h3>Chrome and Firefox</h3>
+                <p>In beta, not in a store yet: load the archive of the last release, in two minutes.</p>
+              </div>
+            </div>
+            <p class="more"><a href="{{ '/reviewing.html' | relative_url }}">The reviewer's guide</a></p>
+          </div>
           <img
-            src="{{ '/assets/landing-pin.png' | relative_url }}"
-            width="1088"
-            height="562"
-            alt="A pin on the button of a pricing page, with its note, its status In progress, and the reply of the team."
+            class="popup"
+            src="{{ '/assets/guide-turn-on.png' | relative_url }}"
+            width="380"
+            height="580"
+            alt="The popup on a site of the workspace: Turn Fruitback on for this site?, where the notes go, who sees them, and Turn on."
+            loading="lazy"
           />
-        </figure>
+        </div>
       </section>
 
-      <section id="how" class="wrap section">
-        <h2>How it works</h2>
-        <ol class="steps">
-          <li>
-            <img
-              src="{{ '/assets/step-pick.png' | relative_url }}"
-              width="528"
-              height="392"
-              alt="The element under the pointer is outlined on the page."
-              loading="lazy"
-            />
-            <h3>Point at it</h3>
-            <p>
-              A reviewer clicks any element of the page. Nothing to describe: the selector, the component and the file
-              come with it.
-            </p>
-          </li>
-          <li>
-            <img
-              src="{{ '/assets/step-write.png' | relative_url }}"
-              width="528"
-              height="392"
-              alt="A note written in the popover beside the element."
-              loading="lazy"
-            />
-            <h3>Write the note</h3>
-            <p>One field. The note becomes an issue in Linear, in GitHub Issues, or in the workspace itself.</p>
-          </li>
-          <li>
-            <img
-              src="{{ '/assets/step-pin.png' | relative_url }}"
-              width="528"
-              height="392"
-              alt="The pin stays on the page with the status of its issue."
-              loading="lazy"
-            />
-            <h3>See it move</h3>
-            <p>
-              The pin stays on the page, coloured by the state of its issue, with the team's replies under the note.
-            </p>
-          </li>
-        </ol>
-        <p class="note">
-          On a site that embeds nothing, the <a href="{{ '/reviewing.html' | relative_url }}">browser extension</a> puts
-          the same widget on the page, for you only.
-        </p>
-      </section>
-
-      <section id="plans" class="wrap section">
-        <h2 class="center">Two ways to run Fruitback. The same product in both.</h2>
-        <p class="lead center">Same widget, same extension, same trackers. The only question is who runs the server.</p>
-        <div class="plans">
-          <article class="plan plan-main">
-            <h3>Fruitback Cloud</h3>
-            <p class="muted">We run it. You sign in and paste the address of your site.</p>
-            <p class="price"><strong>Free</strong> during the beta</p>
-            <a class="button button-block" href="https://app.fruitback.com">Create a workspace</a>
-            <ul class="checks">
-              <li>Ready in minutes, nothing to deploy</li>
-              <li>Sign in with a link sent by e-mail</li>
-              <li>Hosted in Europe, updates included</li>
-              <li>The notes stay in your workspace</li>
-            </ul>
-          </article>
-          <article class="plan">
-            <h3>Self-hosted</h3>
-            <p class="muted">You run one compose file: the server, its PostgreSQL and the console.</p>
-            <p class="price"><strong>Free</strong> open source, MIT and AGPL</p>
-            <a class="button button-outline button-block" href="{{ '/self-hosting.html' | relative_url }}"
-              >Read the install guide</a
-            >
-            <ul class="checks">
-              <li>Two Docker images, for amd64 and arm64</li>
-              <li>Your PostgreSQL, Linear or GitHub Issues</li>
-              <li>Feedback can stay in your database</li>
-              <li>Your own keys, on your server only</li>
-            </ul>
-          </article>
-        </div>
-
-        <h3 class="table-title">Side by side</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Cloud</th>
-                <th>Self-hosted</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Who runs the server</td>
-                <td>Sakuga, in Europe</td>
-                <td>You</td>
-              </tr>
-              <tr>
-                <td>Where notes land</td>
-                <td>Your workspace</td>
-                <td>Your PostgreSQL, Linear or GitHub Issues</td>
-              </tr>
-              <tr>
-                <td>Accounts</td>
-                <td>Sign in by e-mail link</td>
-                <td>A first administrator from the log, then GitHub, Google or e-mail if you set them up</td>
-              </tr>
-              <tr>
-                <td>Updates</td>
-                <td>Automatic</td>
-                <td><code>docker compose pull</code></td>
-              </tr>
-              <tr>
-                <td>Price</td>
-                <td>Free during the beta</td>
-                <td>Free</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="faq">
-          <div>
-            <h4>Does the extension work with both?</h4>
-            <p>Yes. It talks to the worker you name: the Cloud's, or your own.</p>
-          </div>
-          <div>
-            <h4>Who reads the notes?</h4>
-            <p>You choose per site: the members of your workspace only, or everyone who visits it.</p>
-          </div>
-          <div>
-            <h4>What does the Cloud keep?</h4>
-            <p>
-              Accounts, workspaces, the addresses of your sites, and the notes.
-              <a href="{{ '/privacy.html' | relative_url }}">Every field is listed.</a>
-            </p>
+      <section id="plans" class="section">
+        <div class="wrap">
+          <h2 class="big">Fruitback Cloud, or your own server. The same product in both.</h2>
+          <div class="plans">
+            <article class="plan plan-main">
+              <h3>Fruitback Cloud</h3>
+              <p>We run it. You sign in and paste the address of your site.</p>
+              <p class="price"><strong>Free</strong> during the beta</p>
+              <ul class="checks">
+                <li>Ready in minutes, nothing to deploy</li>
+                <li>Sign in with a link sent by e-mail</li>
+                <li>Hosted in Europe, updates included</li>
+                <li>The notes stay in your workspace</li>
+              </ul>
+              <a class="button button-block" href="https://app.fruitback.com">Create a workspace</a>
+            </article>
+            <article class="plan">
+              <h3>Self-hosted</h3>
+              <p>You run one compose file: the server, its PostgreSQL and the console.</p>
+              <p class="price"><strong>Free</strong> open source, MIT and AGPL</p>
+              <ul class="checks">
+                <li>Two Docker images, for amd64 and arm64</li>
+                <li>Your PostgreSQL, Linear or GitHub Issues</li>
+                <li>A first administrator from the log</li>
+                <li>Your own keys, on your server only</li>
+              </ul>
+              <a class="button button-outline button-block" href="{{ '/self-hosting.html' | relative_url }}"
+                >Read the install guide</a
+              >
+            </article>
           </div>
         </div>
       </section>
 
-      <section id="guides" class="wrap section guides">{{ content }}</section>
+      <section id="status" class="section section-warm">
+        <div class="wrap">
+          <h2>Where it stands</h2>
+          <div class="cards">
+            <article class="card">
+              <h3>Fruitback Cloud</h3>
+              <p class="state-line state-ok">Open</p>
+              <p>Free during the beta, hosted in Europe.</p>
+            </article>
+            <article class="card">
+              <h3>Worker and console images</h3>
+              <p class="state-line state-ok">Published</p>
+              <p>For amd64 and arm64. Not public on ghcr.io yet: log in with a token to pull them.</p>
+            </article>
+            <article class="card">
+              <h3>Widget</h3>
+              <p class="state-line state-wait">Not on npm yet</p>
+              <p>The console serves its script, at <code>/fruitback.iife.js</code>.</p>
+            </article>
+            <article class="card">
+              <h3>Extension</h3>
+              <p class="state-line state-wait">In beta</p>
+              <p>Not in a store yet: the archive of the last release loads in Chrome and Firefox.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="guides" class="section guides">
+        <div class="wrap">{{ content }}</div>
+      </section>
     </main>
 
-    <footer class="wrap foot">
-      <span>Fruitback, by Sakuga Software</span>
-      <span
-        ><a href="{{ '/privacy.html' | relative_url }}">Privacy</a> ·
-        <a href="https://github.com/sakuga-software/fruitback">Source</a></span
-      >
+    <footer class="foot">
+      <div class="wrap foot-row">
+        <div>
+          <p class="foot-title">Leave the first note on your staging site this afternoon.</p>
+          <div class="actions">
+            <a class="button" href="https://app.fruitback.com">
+              <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z" fill="currentColor" />
+              </svg>
+              Create a workspace
+            </a>
+            <a class="button button-outline" href="https://github.com/sakuga-software/fruitback">Source on GitHub</a>
+          </div>
+        </div>
+        <div class="foot-meta">
+          <p>Fruitback, by Sakuga Software · <a href="{{ '/privacy.html' | relative_url }}">Privacy</a></p>
+          <p>Widget MIT · worker and extension AGPL-3.0</p>
+        </div>
+      </div>
     </footer>
   </body>
 </html>
