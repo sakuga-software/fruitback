@@ -148,6 +148,20 @@
       "when": 1792504274600,
       "tag": "0020_workspace_keeps_owner",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792537235692,
+      "tag": "0021_sites_writers",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792537240526,
+      "tag": "0022_sites_writers_default",
+      "breakpoints": true
     }
   ]
 }

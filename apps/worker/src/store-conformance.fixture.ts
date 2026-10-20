@@ -76,7 +76,13 @@ export type ConformanceSubject = {
   garbled: (() => SeedStore) | string;
 };
 
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
+const POLICY: ClientPolicy = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+};
 const QUIET: ClientPolicy = { ...POLICY, showComments: false };
 
 const ORIGIN = 'https://preview.acme.test';

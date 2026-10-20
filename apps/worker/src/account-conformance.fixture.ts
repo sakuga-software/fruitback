@@ -226,12 +226,44 @@ export function accountCases(it: Declare<AccountStore>): void {
       workspaceId: workspace.id,
       origin: 'https://acme.dev',
       visibility: 'members',
+      writers: 'members',
       destinations: [],
     });
     assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone' }]);
     assert.deepEqual(await store.clientMap(), {
-      [first.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'public' },
+      [first.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'public', write: 'public' },
     });
+  });
+
+  it('makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)', async (store) => {
+    const { workspace } = await world(store);
+
+    const made = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    assert.equal(made.writers, 'members');
+    assert.equal((await store.clientMap())[made.id]?.write, 'authenticated');
+
+    const opened = await store.addSite(workspace.id, {
+      origin: 'https://acme.dev',
+      visibility: 'members',
+      writers: 'anyone',
+    });
+    assert.equal(opened.writers, 'anyone');
+    // A caller that names no `writers` (a console of before) changes the visibility and nothing else.
+    const again = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    assert.equal(again.writers, 'anyone');
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => site.writers),
+      ['anyone'],
+    );
+    assert.equal((await store.clientMap())[made.id]?.write, 'public');
+
+    const closed = await store.addSite(workspace.id, {
+      origin: 'https://acme.dev',
+      visibility: 'members',
+      writers: 'members',
+    });
+    assert.equal(closed.writers, 'members');
+    assert.equal((await store.clientMap())[made.id]?.write, 'authenticated');
   });
 
   it('keeps one address apart in two workspaces', async (store) => {
@@ -245,8 +277,8 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.sites(acme.id), [ours]);
     assert.deepEqual(await store.sites(globex.id), [theirs]);
     assert.deepEqual(await store.clientMap(), {
-      [ours.id]: { workspace: acme.id, origins: ['https://shared.dev'], read: 'authenticated' },
-      [theirs.id]: { workspace: globex.id, origins: ['https://shared.dev'], read: 'public' },
+      [ours.id]: { workspace: acme.id, origins: ['https://shared.dev'], read: 'authenticated', write: 'authenticated' },
+      [theirs.id]: { workspace: globex.id, origins: ['https://shared.dev'], read: 'public', write: 'public' },
     });
   });
 
@@ -347,7 +379,7 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.connectors(acme.id), []);
     assert.deepEqual(await store.sites(acme.id), [site]);
     assert.deepEqual(await store.clientMap(), {
-      [site.id]: { workspace: acme.id, origins: ['https://acme.dev'], read: 'authenticated' },
+      [site.id]: { workspace: acme.id, origins: ['https://acme.dev'], read: 'authenticated', write: 'authenticated' },
     });
     assert.deepEqual(await store.dueDeliveries(10, 10), []);
   });
@@ -372,6 +404,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         workspace: acme.id,
         origins: ['https://acme.dev'],
         read: 'authenticated',
+        write: 'authenticated',
         connector: ours.id,
         teamId: 'team_1',
         projectId: 'project_1',
@@ -417,6 +450,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         workspace: workspace.id,
         origins: ['https://acme.dev'],
         read: 'authenticated',
+        write: 'authenticated',
         // The first place is where a note goes when nobody chose. It has no team.
         connector: hook.id,
         destinations: places.map((place) => ({ id: destinationId(site.id, place), ...place })),
@@ -506,6 +540,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         workspace: workspace.id,
         origins: ['https://acme.dev'],
         read: 'authenticated',
+        write: 'authenticated',
         connector: hook.id,
         destinations: [{ id: destinationId(site.id, place), ...place }],
       },
@@ -514,7 +549,12 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.setDestinations(workspace.id, site.id, []), true);
     assert.deepEqual(await store.sites(workspace.id), [site]);
     assert.deepEqual(await store.clientMap(), {
-      [site.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'authenticated' },
+      [site.id]: {
+        workspace: workspace.id,
+        origins: ['https://acme.dev'],
+        read: 'authenticated',
+        write: 'authenticated',
+      },
     });
   });
 
@@ -554,6 +594,7 @@ export function accountCases(it: Declare<AccountStore>): void {
         workspace: kept.id,
         origins: ['https://one.dev'],
         read: 'authenticated',
+        write: 'authenticated',
         connector: ours.id,
         teamId: 'team_1',
         destinations: [{ id: destinationId(first.id, place), ...place }],

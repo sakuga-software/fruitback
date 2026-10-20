@@ -28,7 +28,13 @@ const { privateKey: PEM, publicKey: PUBLIC_KEY } = generateKeyPairSync('rsa', {
 
 const NOW = Date.parse('2026-09-14T12:00:00Z');
 const CONFIG = { appId: '12345', privateKey: createPrivateKey(PEM), repository: 'acme/site' };
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
+const POLICY: ClientPolicy = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+};
 const PAGE = seedFixture().page.url;
 
 afterEach(() => {

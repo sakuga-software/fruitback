@@ -15,7 +15,6 @@ import {
   seed_comments,
   seeds,
   site_destinations,
-  sites,
 } from './postgres-schema.ts';
 
 /**
@@ -119,6 +118,21 @@ const members = pgTable(
     index('members_by_account').on(table.account_id),
   ],
 );
+
+/**
+ * `sites` as `COPY_SCHEMA` has it: FRU-330 added `writers`, which no file holds. `0021_sites_writers`
+ * gives each site copied here `anyone`: it took a note from anybody in the worker that wrote the file.
+ */
+const sites = pgTable('sites', {
+  id: text('id').primaryKey(),
+  workspace_id: text('workspace_id').notNull(),
+  origin: text('origin').notNull(),
+  visibility: text('visibility').notNull(),
+  created_at: instant('created_at').notNull(),
+  connector_id: text('connector_id'),
+  team_id: text('team_id'),
+  project_id: text('project_id'),
+});
 
 /**
  * `sessions` as `COPY_SCHEMA` has it: FRU-238 added three columns to it, for a session of an account,

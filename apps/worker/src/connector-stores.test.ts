@@ -429,7 +429,13 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
 });
 
 describe('the sites that take a reply, by where their notes go (FRU-257)', () => {
-  const policy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' } as ClientPolicy;
+  const policy = {
+    showComments: true,
+    identitySecret: undefined,
+    read: 'public',
+    write: 'public',
+    locale: 'en',
+  } as ClientPolicy;
 
   /** One connector of each shape, as `sealedKey` answers them. */
   const accounts = {

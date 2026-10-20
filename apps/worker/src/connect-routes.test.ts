@@ -1060,6 +1060,7 @@ describe('a token of a site, and the claims of a session of the worker (FRU-238)
     identitySecret: 'the-own-key-of-a-site-of-enough-length',
     showComments: false,
     read: 'authenticated' as const,
+    write: 'public' as const,
     locale: 'en',
     sessions: { secret: SECRET, workspace: 'ws_acme', reaches: async () => true },
   };

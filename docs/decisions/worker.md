@@ -1592,15 +1592,47 @@ an earlier migration, and writes nothing`.
 - **Two checks refuse an origin, and the test names both.** An origin that is no site of the worker
   is refused before the site is looked for (`origin-not-allowed`). The origin of another site, of
   any workspace, is refused for this site (`origin-not-allowed-for-client`).
-- **Measured, and not decided here: a site for members takes a note that has no session.** The
-  visibility is the rule of the reads. The ticket said that such a site « asks for a session »:
-  that is true of a read. test:`still takes a note sent with no session, which its sender cannot
-read back` holds what the worker does, and `SECURITY.md` says it. Refusing that note is a change of
-  `attributionFor`, and a question for Mathieu.
+- **Measured then, decided since: a site for members took a note that had no session.** The
+  visibility is the rule of the reads. FRU-330 made the writes a setting of such a site: see « Who
+  can leave a note » below.
 - **Not decided: the token signed by the site.** A site that has its own login signs a token with
   the `identitySecret` of its client, in `FRUITBACK_CLIENTS`. A site of the console has no secret.
   A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
   changes it. `docs/modes.md` says what holds today.
+
+## Who can leave a note (FRU-330)
+
+### The rules, in short
+
+- **`writers` of a site: `members` (« Members only ») or `anyone` (« Anyone on the page »).** The
+  decision of Mathieu of 2026-10-20 on FRU-286: a setting, closed by default. `clientOf` turns it
+  into `write: 'authenticated'` only for a site that `members` read; a site that everyone reads takes
+  a note from anybody, whatever the field says.
+- **A new site is `members`, by the store and by the column.** `0021_sites_writers` adds the column
+  with `anyone`, the value of every site that exists then: they took a note from anybody, and a
+  migration does not close them in silence. `0022_sites_writers_default` makes `members` the default
+  of a row written with no value. Both are generated: two schemas, two `db:generate`.
+- **`addSite` with no `writers` keeps the value of a site that exists.** The console of before sends
+  the address and the visibility again to change the visibility: it must not close a site that an
+  admin opened.
+- **One rule, `writesWith`, for the note, the batch, the reply and the read.** With `write:
+'authenticated'`, a write needs a token that verifies **and** is a session of the worker key
+  (`verified.session`). A token that a site signs verifies for a read and is refused for a write.
+- **The refusal of a write is the refusal of a read**: `401 { error: 'identity-required', reason:
+'identity-required' }` with no token, and `reason: 'session-required'` for a token that is no
+  session. A token that does not verify keeps its `invalid-identity`.
+- **The read says `canWrite: false` where this reader may not write**, in a `200` and in a `401`, and
+  says nothing where they may: a worker of before says nothing, and the widget offers a note.
+- **`POST /screenshot` changes nothing**: it asks for a session of the workspace on every site (FRU-44).
+
+### The guards, each planted out
+
+`visitor.test.ts` takes each guard of `app.ts` out of a copy of the module, and the case that holds
+it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, and the check of
+`verified.session` in `writesWith`. The account suite plants three violations of the store: a new
+site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
+`writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of
+`accounts.test.ts` and four cases of `visitor.test.ts`.
 
 ## The notes in PostgreSQL (FRU-218)
 

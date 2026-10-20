@@ -8,6 +8,7 @@ const FALLBACK = {
   identitySecret: undefined,
   showComments: true,
   read: 'public',
+  write: 'public',
   // Worker-wide, and no client overrides it: a description is read where the issues are (FRU-39).
   locale: 'en',
 } as const;
@@ -102,7 +103,7 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      policy: { identitySecret: undefined, showComments: true, read: 'public', locale: 'en' },
+      policy: { identitySecret: undefined, showComments: true, read: 'public', write: 'public', locale: 'en' },
       client: MAP.acme,
     });
   });
@@ -121,7 +122,7 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      policy: { identitySecret: undefined, showComments: true, read: 'public', locale: 'en' },
+      policy: { identitySecret: undefined, showComments: true, read: 'public', write: 'public', locale: 'en' },
       client: MAP.acme,
     });
   });

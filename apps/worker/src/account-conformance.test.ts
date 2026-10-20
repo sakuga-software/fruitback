@@ -159,7 +159,28 @@ const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'adds a site once, whatever was pasted twice, and serves it as a client of its workspace',
     by: 'keeps the visibility of the first time',
-    replace: { from: 'set: { visibility: sql`excluded.visibility` },', to: 'set: { visibility: sites.visibility },' },
+    replace: { from: 'visibility: sql`excluded.visibility`,', to: 'visibility: sites.visibility,' },
+  },
+  {
+    breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
+    by: 'opens a new site to anyone',
+    replace: { from: 'writers: writers ?? DEFAULT_WRITERS,', to: "writers: writers ?? 'anyone'," },
+  },
+  {
+    breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
+    by: 'closes a site again when a caller names no `writers`',
+    replace: {
+      from: '...(writers === undefined ? {} : { writers }),',
+      to: 'writers: writers ?? DEFAULT_WRITERS,',
+    },
+  },
+  {
+    breaks: 'makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)',
+    by: 'never changes who writes on a site that exists',
+    replace: {
+      from: '...(writers === undefined ? {} : { writers }),',
+      to: '',
+    },
   },
   {
     breaks: 'keeps one address apart in two workspaces',

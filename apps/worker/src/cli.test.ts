@@ -23,7 +23,7 @@ async function storeWithAlice(): Promise<SeedStore> {
   await store.create(
     seedFixture({ note: 'Le bouton ne répond pas', reporter: { name: 'Alice', email: 'alice@example.com' } }),
     undefined,
-    { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' },
+    { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
   );
 
   return store;

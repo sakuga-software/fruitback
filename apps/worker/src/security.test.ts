@@ -293,11 +293,25 @@ describe('SECURITY.md states what the code does', () => {
       'the API no longer makes a site members-only by default',
     );
     assert.equal(
-      clientOf({ id: 's', workspaceId: 'w', origin: 'https://a.test', visibility: 'members', destinations: [] }).read,
+      clientOf({
+        id: 's',
+        workspaceId: 'w',
+        origin: 'https://a.test',
+        visibility: 'members',
+        writers: 'anyone',
+        destinations: [],
+      }).read,
       'authenticated',
     );
     assert.equal(
-      clientOf({ id: 's', workspaceId: 'w', origin: 'https://a.test', visibility: 'everyone', destinations: [] }).read,
+      clientOf({
+        id: 's',
+        workspaceId: 'w',
+        origin: 'https://a.test',
+        visibility: 'everyone',
+        writers: 'anyone',
+        destinations: [],
+      }).read,
       'public',
     );
   });

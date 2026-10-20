@@ -655,6 +655,7 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
           showComments: false,
           identitySecret: undefined,
           read: 'public',
+          write: 'public',
           locale: 'en',
         })
         .catch(() => []);
