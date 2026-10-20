@@ -6,6 +6,7 @@ import {
   type ComposerOptions,
   type DestinationChoice,
   type SendFailure,
+  type SentAs,
   type SentWithoutPicture,
   createComposer,
 } from './composer.ts';
@@ -32,7 +33,10 @@ afterEach(() => {
 let mounted: MountedPage | null = null;
 
 function mount(
-  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void | SendFailure | SentWithoutPicture>,
+  onSubmit: (
+    note: string,
+    reporter?: SeedReporter,
+  ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>,
   more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
@@ -62,6 +66,7 @@ const failedText = () =>
   [...(composer?.element.querySelectorAll('[data-fruitback-failed] p') ?? [])].map((p) => p.textContent).join(' ');
 /** The title of the card of a sent note (FRU-305). */
 const sentTitle = () => composer?.element.querySelector('[data-fruitback-sent-title]')?.textContent ?? '';
+const sentText = () => composer?.element.querySelector('[data-fruitback-sent-text]')?.textContent ?? '';
 
 describe('what the popover looks like (FRU-36)', () => {
   it('writes Send behind the drop of the mark, and has no cross: Cancel and Escape close it (FRU-305)', () => {
@@ -303,7 +308,33 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(composer?.state(), 'sent');
-    assert.equal(sentTitle(), 'Sent, without the picture');
+    assert.equal(sentTitle(), 'Sent');
+    assert.equal(
+      sentText(),
+      'Sent without the picture, which could not be taken. The pin stays here and follows the issue’s status.',
+    );
+  });
+
+  it('keeps the identifier in the title of a note sent without its picture, and says the picture under it (FRU-326)', async () => {
+    let answer: SentAs | SentWithoutPicture = { sentAs: { identifier: 'FRU-134', number: 3 }, picture: 'missed' };
+    mount(async () => answer);
+    composer?.open(ANCHOR);
+    field().value = 'Une note';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(sentTitle(), 'Sent as FRU-134');
+    assert.match(sentText(), /^Sent without the picture/);
+
+    // The card is reused: the next note, sent with its picture, gets the sentence of the pin back.
+    answer = { sentAs: { identifier: 'FRU-135', number: 4 } };
+    composer?.open(ANCHOR);
+    field().value = 'Une autre';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(sentTitle(), 'Sent as FRU-135');
+    assert.equal(sentText(), 'The pin stays here and follows the issue’s status.');
   });
 });
 

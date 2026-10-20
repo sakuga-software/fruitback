@@ -17,12 +17,14 @@ async function mount(page: Page, testCase: string, locale = 'en-US'): Promise<vo
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
-    ({ endpoint, locale }) =>
-      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
-        endpoint,
-        clientId: 'playground',
-        locale,
-      }),
+    ({ endpoint, locale }) => {
+      const scope = globalThis as unknown as {
+        Fruitback: { init(options: Record<string, string>): unknown };
+        fruitbackWidget?: unknown;
+      };
+      // Kept for the tests that drive what an extension drives, such as the mark of a pin.
+      scope.fruitbackWidget = scope.Fruitback.init({ endpoint, clientId: 'playground', locale });
+    },
     { endpoint: WORKER_ORIGIN, locale },
   );
 }
@@ -129,3 +131,56 @@ for (const scheme of ['light', 'dark'] as const) {
     );
   });
 }
+
+test('a marked pin is drawn above the pin it overlaps, and above the page (FRU-299, FRU-326)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mount(page, 'pins-marked-stack');
+  await plant(page, '[data-testid="card-espresso"] .add', 'The pin to mark');
+  await plant(page, '[data-testid="card-latte"] .add', 'The pin over it');
+  const pins = page.locator('[data-fruitback-pin]');
+  await expect(pins).toHaveCount(2);
+
+  // The first pin in the order of the page: with equal z-indexes, the second would be drawn over it.
+  const first = (await pins.first().getAttribute('data-fruitback-pin'))!;
+  const second = (await pins.nth(1).getAttribute('data-fruitback-pin'))!;
+  const marked = await page.evaluate(
+    (id) =>
+      (globalThis as unknown as { fruitbackWidget: { markNote(id: string): boolean } }).fruitbackWidget.markNote(id),
+    first,
+  );
+  expect(marked).toBe(true);
+  await expect(pins.first()).toHaveAttribute('data-fruitback-marked', '');
+
+  // The second pin is put where the first is, so that the two drops overlap fully.
+  const hit = await page.evaluate(
+    ([one, two]) => {
+      const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
+      const under = root.querySelector(`[data-fruitback-pin="${one}"]`) as HTMLElement;
+      const over = root.querySelector(`[data-fruitback-pin="${two}"]`) as HTMLElement;
+      over.style.left = under.style.left;
+      over.style.top = under.style.top;
+      over.style.width = under.style.width;
+      over.style.height = under.style.height;
+      for (const name of ['--fruitback-pin-tip-x', '--fruitback-pin-tip-y', '--fruitback-pin-slot']) {
+        over.style.setProperty(name, under.style.getPropertyValue(name));
+      }
+      const box = under.querySelector('.fruitback-pin-badge')!.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      const y = box.top + box.height / 2;
+      const top = root.elementFromPoint(x, y);
+      const atPage = document.elementFromPoint(x, y);
+
+      return {
+        pin: top?.closest('[data-fruitback-pin]')?.getAttribute('data-fruitback-pin') ?? null,
+        // From the page, the topmost element is the host of the widget, not an element of the page.
+        host: atPage === document.querySelector('[data-fruitback-host]'),
+        zMarked: Number(getComputedStyle(under).zIndex),
+        zOther: Number(getComputedStyle(over).zIndex),
+      };
+    },
+    [first, second],
+  );
+  expect(hit.zMarked).toBeGreaterThan(hit.zOther);
+  expect(hit.pin).toBe(first);
+  expect(hit.host).toBe(true);
+});

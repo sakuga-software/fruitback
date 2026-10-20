@@ -380,6 +380,22 @@ describe('createOverlay', () => {
     assert.doesNotMatch(openRule, /:has\(/);
   });
 
+  it('stacks a marked pin above every other pin, not under them (FRU-299, FRU-326)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    assert.equal(overlay.mark(issueOnCta().seed.id), true);
+    assert.ok(page.document.querySelector('[data-fruitback-pin]')?.hasAttribute('data-fruitback-marked'));
+
+    const rules = (page.document.querySelector('style')?.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const zOf = (rule: RegExp) => Number(/z-index: (\d+)/.exec(rule.exec(rules)?.[0] ?? '')?.[1]);
+    const pin = zOf(/\.fruitback-pin \{[^}]*\}/);
+    const marked = zOf(/\.fruitback-pin\[data-fruitback-marked\] \{[^}]*\}/);
+    // A z-index is compared with the one of its siblings: below theirs, the marked pin went under them.
+    assert.ok(pin > 0, 'no z-index on a pin');
+    assert.ok(marked > pin, `the marked pin is at ${marked}, under the others at ${pin}`);
+  });
+
   it('falls back to the stage when the store reports no state name (FRU-24)', () => {
     // The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
     // string. That used to leave a lone glyph in the header; with the glyph gone it would leave an
