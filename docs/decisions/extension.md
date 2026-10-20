@@ -331,8 +331,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **The options page is the page of the extension of the mock-up of 2026-10-20**: a menu (the drop,
   « Fruitback » and the version of the manifest, the sections, the two guides), and a column of
   sections. **Sites** is a table of the rules and the panel of the one that is chosen; **Share
-  rules** and **Preferences** (the copy to the account of the browser) are the sections of before,
-  until FRU-290 and FRU-302 draw them. « Workers and sessions » comes with FRU-302.
+  rules** is the two cards of FRU-290; **Preferences** (the copy to the account of the browser) is
+  the section of before, until FRU-302 draws it. « Workers and sessions » comes with FRU-302.
 - **`src/site-page.ts` builds the parts**, with no `browser`: `site-page.test.ts` reads them on
   happy-dom. `entrypoints/options/main.ts` reads storage and the grants, and binds the clicks.
 - **What a rule does has not changed**: the checks of a new rule, the grant asked in the click, the
@@ -346,6 +346,19 @@ did not change: the fields of 760 px and the file input of the browser are as th
   row is the switch of a table of the kit, named « Fruitback on {pattern} ».
 - **No date « added »**: the mock-up writes one, and storage keeps none. It is left out rather than
   made up.
+- **« Share rules » is two cards** (FRU-290, `src/share-rules.ts`): « Export » with **Download**,
+  and « Import a rules file », a `label` around a file input kept out of sight but in the tab order.
+  A file chosen or dropped on the card is read the same way; the result is a live region in the
+  card. No native « Choose file » shows: Chrome and Firefox drew it differently, in their own
+  language.
+- **The file is `fruitback-rules.json`**, the name of the mock-up. The import reads what the file
+  holds (`format: "fruitback-sites"`, unchanged), not its name, so a `fruitback-sites.json` of before
+  is read the same.
+- **« imported » is said by the page that imported, until it is closed.** A rule from a file is
+  stored as a rule typed in: no field of `SiteConfig` marks it, so the account copy (FRU-72) and the
+  worker see nothing new. The row and the panel say « imported », and the panel says that access
+  did not travel with the file, while the page is open; a removed rule, or one typed in again, loses
+  the word.
 
 ## The key that starts a note (FRU-291)
 

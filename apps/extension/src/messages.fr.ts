@@ -168,7 +168,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Change it in Add-ons, Manage Extension Shortcuts.':
     'Changez-le dans Modules complémentaires, Gérer les raccourcis d’extensions.',
   'Add a rule': 'Ajouter une règle',
-  'Export rules': 'Exporter les règles',
   'Import a rules file': 'Importer un fichier de règles',
   'Imported 1 rule.': '1 règle importée.',
   'Imported {count} rules.': '{count} règles importées.',
@@ -178,8 +177,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.':
     'Quand c’est activé, vos règles (motifs, modes, adresses de worker, identifiants de client, et les libellés et noms de workspace qu’elles portent) sont gardées par le compte de ce navigateur, et arrivent dans vos autres navigateurs où c’est activé aussi. Aucune session et aucun accès ne voyagent : sur un autre navigateur, donnez l’accès à chaque site. Désactiver arrête la copie, et ne retire rien du compte.',
   'Share rules': 'Partager les règles',
-  'A rules file holds patterns, modes, endpoints and client ids. It holds no session and no access. An imported rule replaces the rule with the same pattern, and the other rules stay.':
-    'Un fichier de règles contient des motifs, des modes, des adresses de worker et des identifiants de client. Il ne contient ni session ni accès. Une règle importée remplace la règle du même motif, et les autres règles restent.',
+  // FRU-290: the two cards of « Share rules ».
+  'Hand a reviewer a rules file instead of five fields to copy. Browser access never travels with it: they grant it on first use.':
+    'Donnez un fichier de règles plutôt que cinq champs à recopier. L’accès du navigateur ne voyage jamais avec lui : il se donne à la première utilisation.',
+  Export: 'Exporter',
+  Download: 'Télécharger',
+  '1 rule': '1 règle',
+  '{count} rules': '{count} règles',
+  'Drop it here, or choose one': 'Déposez-le ici, ou choisissez-en un',
+  'Choose…': 'Choisir…',
+  imported: 'importée',
+  'This rule came from a rules file, and access does not travel with it. Nothing is mounted until you grant it.':
+    'Cette règle vient d’un fichier de règles, et l’accès ne voyage pas avec elle. Rien n’est monté tant que vous ne le donnez pas.',
 
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':

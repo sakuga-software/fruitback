@@ -115,11 +115,15 @@ export type RuleRow = {
   refused?: string;
   /** Why the background does not send it to the account of the browser (FRU-264). */
   tooLarge?: string;
+  /** Read from a rules file by this page (FRU-290): its row and its panel say so. */
+  imported?: boolean;
 };
 
-/** What a pattern covers, in a few words. */
-export function scopeOf(pattern: string): string {
-  return isWildcardPattern(pattern) ? t('Every site this pattern covers') : t('This origin');
+/** What a pattern covers, in a few words, and « imported » when it came from a rules file. */
+export function scopeOf(pattern: string, imported = false): string {
+  const scope = isWildcardPattern(pattern) ? t('Every site this pattern covers') : t('This origin');
+
+  return imported ? `${scope} · ${t('imported')}` : scope;
 }
 
 function hostOf(endpoint: string): string {
@@ -184,7 +188,7 @@ export function sitesTable(document: Document, options: TableOptions): HTMLEleme
     const open = button(document, 'rule-open', '', () => options.onSelect(row.pattern));
     open.append(
       make(document, 'span', 'rule-pattern', row.pattern),
-      make(document, 'span', 'rule-scope', scopeOf(row.pattern)),
+      make(document, 'span', 'rule-scope', scopeOf(row.pattern, row.imported)),
     );
     site.append(open);
 
@@ -240,7 +244,7 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
   top.append(
     make(document, 'span', 'panel-label', t('Rule')),
     make(document, 'span', 'panel-pattern', row.pattern),
-    make(document, 'span', 'panel-scope', scopeOf(row.pattern)),
+    make(document, 'span', 'panel-scope', scopeOf(row.pattern, row.imported)),
   );
 
   let mode: SiteMode = row.site.mode;
@@ -319,9 +323,13 @@ export function ruleState(document: Document, options: PanelOptions): HTMLElemen
     say(
       'no-access',
       t('No access in this browser'),
-      t(
-        'Access does not travel with a rule, and it can be removed in the settings of the browser. Nothing is mounted until you grant it.',
-      ),
+      row.imported === true
+        ? t(
+            'This rule came from a rules file, and access does not travel with it. Nothing is mounted until you grant it.',
+          )
+        : t(
+            'Access does not travel with a rule, and it can be removed in the settings of the browser. Nothing is mounted until you grant it.',
+          ),
     );
     box.append(button(document, 'page-primary', t('Grant access'), options.onGrant));
   } else if (!row.granted) {

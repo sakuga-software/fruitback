@@ -207,12 +207,15 @@ page; in team mode the call comes from the extension, which the worker does not 
 
 ### Share rules with a team
 
-**Export rules** downloads `fruitback-sites.json`, and **Import a rules file** reads one. A rule in the
-file replaces the rule with the same pattern, and the other rules stay. An entry that does not parse is
-skipped, and the page names it.
+In **Share rules**, **Download** writes `fruitback-rules.json`. To read one, drop it on
+**Import a rules file**, or click the card and choose it. A rule in the file replaces the rule with the same
+pattern, and the other rules stay. An entry that does not parse is skipped, and the card names it. A
+file from an earlier version, `fruitback-sites.json`, is read the same way: the import reads what the
+file holds, not its name.
 
 The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
-imported rule reads `No access in this browser` in its panel until you press **Grant access**, and a
+imported rule says « imported » under its site, and reads `No access in this browser` in its panel
+until you press **Grant access**, and a
 team-mode worker still needs you to pair. A rule that is off reads `No access while it is off`: its
 switch asks for it.
 
