@@ -82,12 +82,14 @@ for (const scheme of ['light', 'dark'] as const) {
     const list = await thread.locator('.fruitback-thread-replies').evaluate((element) => ({
       height: element.getBoundingClientRect().height,
       scrolls: element.scrollHeight > element.clientHeight,
-      indent: element.querySelector('li')!.getBoundingClientRect().left - element.getBoundingClientRect().left,
+      indent:
+        element.querySelector('li')!.getBoundingClientRect().left -
+        element.closest('.fruitback-thread')!.getBoundingClientRect().left,
     }));
     expect(list.height).toBeLessThanOrEqual(180);
     expect(list.scrolls).toBe(true);
-    // The replies start where the note does: 16 px from the edge of the bubble (FRU-256).
-    expect(list.indent).toBe(16);
+    // The replies start where the note does: 16 px inside the edge of 1 px of the bubble (FRU-256, FRU-304).
+    expect(list.indent).toBe(17);
     // A reply holds the same address, and wraps too.
     expect(await overflowsSideways(page, '.fruitback-thread-replies')).toBe(0);
 
@@ -130,8 +132,11 @@ async function theNoteOfTheMockUp(page: Page): Promise<void> {
   });
 }
 
-test('the bubble of a note has the measures of the mock-up, and opens beside its frame (FRU-256)', async ({ page }) => {
+test('the bubble of a note has the measures of the mock-up, and opens beside its drop (FRU-256, FRU-304)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await theNoteOfTheMockUp(page);
   await mount(page, 'thread-measures');
   await plant(page, 'The button is hard to read on the green. Could it take the cream of the logo, with dark text?');
@@ -143,30 +148,42 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
   await expect(thread).toBeVisible();
 
   const read = (selector: string, properties: string[]) =>
-    page.locator(selector).evaluate((element, names) => {
-      const style = getComputedStyle(element);
-      const box = element.getBoundingClientRect();
+    page
+      .locator(selector)
+      .first()
+      .evaluate((element, names) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
 
-      return {
-        width: box.width,
-        height: box.height,
-        ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
-      } as Record<string, string | number>;
-    }, properties);
+        return {
+          width: box.width,
+          height: box.height,
+          ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
+        } as Record<string, string | number>;
+      }, properties);
 
-  expect(await read('.fruitback-thread', ['border-radius', 'font-size', 'line-height'])).toMatchObject({
-    width: 360,
+  expect(
+    await read('.fruitback-thread', [
+      'border-radius',
+      'border-top-width',
+      'border-top-color',
+      'font-size',
+      'line-height',
+    ]),
+  ).toMatchObject({
+    width: 344,
     'border-radius': '14px',
+    'border-top-width': '1px',
+    'border-top-color': 'rgb(231, 229, 228)',
     'font-size': '14px',
     'line-height': '21px',
   });
   expect(await page.locator('.fruitback-thread').evaluate((element) => getComputedStyle(element).boxShadow)).toMatch(
     /0px 10px 30px 0px$|^rgba?\(0, 0, 0, 0\.18\) 0px 10px 30px 0px/,
   );
-  // The head: 8 px around a cross of 32 px, and the rule under it.
+  // The head: the state behind its drop, since when, the identifier in a chip, and the cross.
   expect(await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'gap'])).toMatchObject({
-    height: 49,
-    padding: '8px 8px 8px 16px',
+    padding: '14px 14px 12px 16px',
     'border-bottom-width': '1px',
     gap: '10px',
   });
@@ -176,79 +193,124 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     gap: '7px',
   });
   expect(await read('.fruitback-thread-drop', ['background-color'])).toMatchObject({
-    width: 10,
-    height: 10,
     // The amber of « in progress », the colour its pin has.
     'background-color': 'rgb(172, 95, 0)',
   });
-  expect(await read('.fruitback-thread-link', ['font-size', 'text-decoration-line', 'color'])).toMatchObject({
+  expect(await read('.fruitback-thread-age', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    'text-decoration-line': 'underline',
     color: 'rgb(117, 110, 105)',
   });
-  await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+$/);
-  expect(await read('.fruitback-thread-close', ['border-radius'])).toMatchObject({
-    width: 32,
-    height: 32,
-    'border-radius': '8px',
+  await expect(page.locator('.fruitback-thread-age')).not.toHaveText('');
+  expect(
+    await read('.fruitback-thread-link', [
+      'font-size',
+      'font-weight',
+      'text-decoration-line',
+      'background-color',
+      'border-top-left-radius',
+      'padding',
+    ]),
+  ).toMatchObject({
+    // 44 px to press: a chip of 26 px inside a transparent border of 9 px.
+    height: 44,
+    'font-size': '12px',
+    'font-weight': '600',
+    'text-decoration-line': 'none',
+    'background-color': 'rgb(245, 245, 244)',
+    'border-top-left-radius': '6px',
+    padding: '4px 8px',
+  });
+  await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+ →$/);
+  // The cross: 28 px drawn, 44 px to press.
+  expect(await read('.fruitback-thread-close', ['border-top-width'])).toMatchObject({
+    width: 44,
+    height: 44,
+    'border-top-width': '8px',
   });
   expect(await read('.fruitback-thread-body', ['padding', 'gap', 'display'])).toMatchObject({
-    padding: '14px 16px',
-    gap: '8px',
+    padding: '14px 16px 4px',
+    gap: '10px',
     display: 'flex',
   });
   expect(await read('.fruitback-thread-meta', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
     color: 'rgb(117, 110, 105)',
   });
-  await expect(page.locator('.fruitback-thread-source')).toHaveText('HeroBanner · src/components/Hero.tsx:42');
+  // The block of mono: the selector the note carries, then the component and the file.
   const source = await read('.fruitback-thread-source', [
-    'font-size',
     'font-family',
     'padding',
     'border-radius',
-    'margin-top',
+    'border-top-width',
     'background-color',
-    'color',
   ]);
   expect(source).toMatchObject({
-    'font-size': '11.5px',
-    padding: '6px 8px',
+    padding: '8px 10px',
     'border-radius': '6px',
-    'margin-top': '4px',
-    'background-color': 'rgb(250, 250, 249)',
-    color: 'rgb(87, 83, 78)',
+    'border-top-width': '1px',
+    'background-color': 'rgb(255, 253, 249)',
   });
   expect(String(source['font-family'])).toMatch(/^ui-monospace/);
-  expect(await read('.fruitback-thread-answers', ['border-top-width'])).toMatchObject({ 'border-top-width': '1px' });
-  expect(await read('.fruitback-thread-replies', ['padding'])).toMatchObject({ padding: '12px 16px' });
-  expect(await read('.fruitback-thread-reply', ['gap', 'display'])).toMatchObject({ gap: '2px', display: 'flex' });
+  await expect(page.locator('.fruitback-thread-selector')).not.toHaveText('');
+  expect(await read('.fruitback-thread-selector', ['font-size', 'color'])).toMatchObject({
+    'font-size': '12px',
+    color: 'rgb(28, 25, 23)',
+  });
+  await expect(page.locator('.fruitback-thread-component')).toHaveText('<HeroBanner> · src/components/Hero.tsx:42');
+  expect(await read('.fruitback-thread-component', ['font-size', 'color'])).toMatchObject({
+    'font-size': '11px',
+    color: 'rgb(117, 110, 105)',
+  });
+  // « Replies », the round of an initial, and the text of the reply.
+  expect(await read('.fruitback-thread-answers', ['padding'])).toMatchObject({ padding: '10px 16px 16px' });
+  expect(
+    await read('.fruitback-thread-answers-title', ['font-size', 'font-weight', 'text-transform', 'color']),
+  ).toMatchObject({
+    'font-size': '11px',
+    'font-weight': '600',
+    'text-transform': 'uppercase',
+    color: 'rgb(117, 110, 105)',
+  });
+  expect(
+    await read('.fruitback-thread-reply-avatar', ['border-top-left-radius', 'background-color', 'font-size']),
+  ).toMatchObject({
+    width: 24,
+    height: 24,
+    'border-top-left-radius': '999px',
+    'background-color': 'rgb(245, 245, 244)',
+    'font-size': '11px',
+  });
+  await expect(page.locator('.fruitback-thread-reply-avatar')).toHaveText('L');
   expect(await read('.fruitback-thread-reply-who', ['font-size'])).toMatchObject({ 'font-size': '11px' });
   expect(await read('.fruitback-thread-reply-name', ['font-weight', 'color'])).toMatchObject({
     'font-weight': '600',
     color: 'rgb(28, 25, 23)',
   });
   expect(await read('.fruitback-thread-reply-body', ['font-size', 'line-height'])).toMatchObject({
-    'font-size': '12px',
-    'line-height': '18px',
+    'font-size': '13px',
+    'line-height': '18.85px',
   });
-  // The foot of the mock-up: a field to reply, since FRU-257 decided who may (this worker lets everybody).
+  // The foot: a field to reply, since FRU-257 decided who may (this worker lets everybody).
   await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveCount(1);
   await expect(thread.getByRole('button', { name: 'Send reply' })).toHaveCount(1);
 
-  // Beside the frame, as the mock-up places it: 26 px past its edge and 32 px above its top, which
-  // is 30 and 36 px from the element.
+  // Beside the drop: 26 px past its point, 8 px above the top of the drop, and 24 px or more from
+  // the top of the window.
   const place = await page.evaluate(() => {
     const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
-    const pin = root.querySelector('[data-fruitback-pin][data-fruitback-open]')!.getBoundingClientRect();
+    const pin = root.querySelector('[data-fruitback-pin][data-fruitback-open]') as HTMLElement;
+    const frame = pin.getBoundingClientRect();
     const bubble = root.querySelector('.fruitback-thread')!.getBoundingClientRect();
+    const tipX = frame.left + Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x'));
+    const tipY = frame.top + Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y'));
 
-    return { beside: bubble.left - pin.right, above: pin.top - bubble.top };
+    return { beside: bubble.left - tipX, above: tipY - bubble.top, top: bubble.top };
   });
   expect(place.beside).toBeCloseTo(26, 0);
-  expect(place.above).toBeCloseTo(32, 0);
+  if (place.top > 24.5) expect(place.above).toBeCloseTo(42, 0);
+  else expect(place.top).toBeCloseTo(24, 0);
 
-  // The cross answers a pointer with the sunken surface, and a keyboard with the ring of the widget.
+  // The cross answers a pointer with the sunken surface.
   await page.locator('.fruitback-thread-close').hover();
   expect(await read('.fruitback-thread-close', ['background-color'])).toMatchObject({
     'background-color': 'rgb(245, 245, 244)',

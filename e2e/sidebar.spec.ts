@@ -58,11 +58,16 @@ test('the list shows every note, and a note chosen there opens its thread', asyn
   await list.getByRole('tab', { name: 'All 2' }).click();
   await expect(entries).toHaveCount(2);
 
-  // Choosing a note opens its thread, and the list stays for the next one.
+  // Choosing a note opens its thread in the column of the list, in place of the rows (FRU-312): the
+  // head of the list stays, and nothing covers it.
   await entries.filter({ hasText: 'Second note of the list' }).click();
   const thread = page.getByRole('dialog', { name: /^Note \d+$/ });
   await expect(thread).toContainText('Second note of the list');
   await expect(list).toBeVisible();
+  await expect(list.locator('[data-fruitback-thread]')).toHaveCount(1);
+  await expect(entries.first()).toBeHidden();
+  await expect(list.getByRole('button', { name: 'All notes' })).toBeVisible();
+  await expect(list.getByRole('button', { name: 'Close the notes' })).toBeVisible();
 
   // Escape closes the thread and gives focus back to the entry. A second Escape closes the list.
   await page.keyboard.press('Escape');
@@ -364,9 +369,18 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   await page.keyboard.press('Home');
   await expect(tabs.nth(0)).toBeFocused();
 
-  // The row of the note whose thread is open says so, on the sunken surface. Under the pointer, the raised one.
+  // A row opens its thread in place of the rows (FRU-312), and Escape brings the rows back.
   await rows.nth(1).click();
-  await expect(page.locator('[data-fruitback-thread]')).toBeVisible();
+  await expect(list.locator('[data-fruitback-thread]')).toBeVisible();
+  await expect(rows.nth(1)).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(rows.nth(1)).toBeVisible();
+  await expect(rows.nth(1)).toBeFocused();
+
+  // The row of a note whose thread is open on the page says so, on the sunken surface. Under the
+  // pointer, the raised one.
+  const id = await rows.nth(1).getAttribute('data-fruitback-note');
+  await page.locator(`[data-fruitback-pin="${id}"] .fruitback-pin-badge`).click();
   await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
   await page.mouse.move(0, 0);
   expect(await rows.nth(1).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(245, 245, 244)');

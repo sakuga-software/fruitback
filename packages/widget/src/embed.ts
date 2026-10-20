@@ -683,7 +683,9 @@ export function init(options: FruitbackOptions): Fruitback {
     entries,
     drafts: () => drafts.list(),
     onSendDrafts: sendKept,
-    onSelect: (id) => void overlay.select(id),
+    // The thread goes in the column of the list, in place of its rows (FRU-312).
+    onSelect: (id, home) => overlay.select(id, home),
+    onBack: () => overlay.closeThread(),
     current: () => overlay.openId(),
     below: (id) => overlay.below(id),
     // The dock stands aside while the list is open, so the list holds the way to a new note.

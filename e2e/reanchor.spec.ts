@@ -77,6 +77,8 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
   // say that the place is a guess.
   await expect(pin.getByRole('button')).toHaveAccessibleName(/approximate position/);
   expect(await pin.evaluate((frame) => getComputedStyle(frame).borderTopStyle)).toBe('dashed');
+  // Found by position, not by identity (FRU-304): the same drop, its white ring dashed.
+  expect(await pin.getByRole('button').evaluate((badge) => getComputedStyle(badge).borderTopStyle)).toBe('dashed');
 });
 
 test('a note whose element is gone lands in the detached list, and one merely moved does not', async ({ page }) => {
@@ -97,6 +99,9 @@ test('a note whose element is gone lands in the detached list, and one merely mo
   const drawer = page.locator('[data-fruitback-orphans]');
   await expect(drawer).toBeVisible();
   await expect(drawer.locator('.fruitback-orphans-toggle')).toHaveText('1 detached');
+  // Detached: listed in the dock, not on the page (FRU-304). Its pin is not drawn.
+  await expect(page.locator('[data-fruitback-pin].fruitback-pin-orphan')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin].fruitback-pin-orphan')).toBeHidden();
 
   await drawer.locator('.fruitback-orphans-toggle').click();
   await expect(drawer.locator('.fruitback-orphans-item')).toHaveCount(1);

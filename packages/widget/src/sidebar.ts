@@ -52,8 +52,13 @@ export type SidebarOptions = {
   host: Element | ShadowRoot;
   /** The notes of the page as the overlay holds them now. Read on each draw, so it costs no request. */
   entries: () => readonly SidebarEntry[];
-  /** The reviewer chose this note. */
-  onSelect: (id: string) => void;
+  /**
+   * The reviewer chose this note. Its thread goes in `home`, which takes the place of the rows in the
+   * column of the list (FRU-312). `false`: the note has no thread to show, and the rows stay.
+   */
+  onSelect: (id: string, home: HTMLElement) => boolean | void;
+  /** The reviewer went back from a thread to the rows: its thread closes. */
+  onBack?: () => void;
   /** Read on each draw. Left out, the list is always `read`. */
   readState?: () => ReadState;
   /** The reviewer asked to read the notes again, after a failed read. */
@@ -292,7 +297,29 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   unplaced.append(unplacedTitle, unplacedList);
 
   panel.append(drafted, sentText, empty, failedText, failed, list, unplaced);
-  root.append(head, actions, panel);
+
+  // The thread of a note, in the column of the list and in place of its rows (FRU-312). The thread
+  // on the page covered the rows and the head of the list; here the head stays, and « All notes »
+  // goes back to the row that opened it.
+  const detail = document.createElement('div');
+  detail.className = 'fruitback-sidebar-detail';
+  detail.dataset.fruitbackSidebarDetail = '';
+  detail.hidden = true;
+  const back = document.createElement('button');
+  back.type = 'button';
+  back.className = 'fruitback-sidebar-back';
+  back.dataset.fruitbackSidebarBack = '';
+  const arrow = document.createElement('span');
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.textContent = '←';
+  const backWords = document.createElement('span');
+  backWords.textContent = t.text('sidebar.back');
+  back.append(arrow, backWords);
+  const home = document.createElement('div');
+  home.className = 'fruitback-sidebar-home';
+  detail.append(back, home);
+
+  root.append(head, actions, panel, detail);
   options.host.append(style, root);
 
   /** The shadow host, which the dock reads: it stands aside while the list is open. */
@@ -300,12 +327,58 @@ export function createSidebar(options: SidebarOptions): Sidebar {
 
   /** What had focus when the list opened, to give it back. */
   let opener: HTMLElement | null = null;
+  /** The note whose thread is shown in place of the rows, if one is (FRU-312). */
+  let shown: string | undefined;
+
+  /** The thread of this note in place of the rows. The rows come back when it closes. */
+  function showNote(id: string): void {
+    actions.hidden = true;
+    panel.hidden = true;
+    detail.hidden = false;
+    // Marked after the choice: the thread of before closes during it, and `mark` must not take that
+    // close for the close of this one.
+    if (options.onSelect(id, home) === false) {
+      detail.hidden = true;
+      actions.hidden = false;
+      panel.hidden = false;
+      return;
+    }
+    shown = id;
+  }
+
+  /** The rows again, and focus on the row of the note that was open when focus was in the thread. */
+  function showRows(focus: boolean): void {
+    if (shown === undefined) return;
+    const id = shown;
+    shown = undefined;
+    home.replaceChildren();
+    detail.hidden = true;
+    actions.hidden = false;
+    panel.hidden = false;
+    if (!focus) return;
+    const row = [...panel.querySelectorAll<HTMLElement>('[data-fruitback-note]')].find(
+      (button) => button.dataset.fruitbackNote === id,
+    );
+    (row ?? close).focus();
+  }
+
+  /** Whether focus was in the thread that goes, or fell to the page when its node went. */
+  function focusWasHere(): boolean {
+    const active = deepActiveElement(document);
+
+    return active === null || active === document.body || root.contains(active);
+  }
+
+  back.addEventListener('click', () => {
+    options.onBack?.();
+    showRows(true);
+  });
 
   function draw(): void {
     const entries = options.entries();
     const placed = entries.filter((entry) => entry.placement !== 'detached');
     const detached = entries.filter((entry) => entry.placement === 'detached');
-    const shown = placed.filter((entry) => inTab(tab, entry));
+    const inThisTab = placed.filter((entry) => inTab(tab, entry));
     // The note that has focus keeps it across a draw: the pins change while somebody reads the list.
     const active = deepActiveElement(document);
     const focusedId =
@@ -338,7 +411,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     if (state === 'pending') nothing = 'sidebar.loading';
     else if (entries.length === 0) nothing = 'sidebar.empty';
     empty.textContent = t.text(nothing);
-    empty.hidden = asking || shown.length > 0;
+    empty.hidden = asking || inThisTab.length > 0;
     // Set only when it changes, so a draw does not announce the same words again.
     let message = '';
     if (signedOut) message = t.text('sidebar.signedOut');
@@ -352,9 +425,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     leave.hidden = signedOut;
     const leaving = !asking && failed.contains(active);
     failed.hidden = !asking;
-    list.hidden = asking || shown.length === 0;
+    list.hidden = asking || inThisTab.length === 0;
     const current = options.current?.();
-    list.replaceChildren(...(asking ? [] : shown.map((entry) => item(entry, current))));
+    list.replaceChildren(...(asking ? [] : inThisTab.map((entry) => item(entry, current))));
     unplaced.hidden = asking || detached.length === 0;
     unplacedWords.textContent = detached.length === 0 ? '' : t.text('sidebar.unplaced', { count: detached.length });
     unplacedList.replaceChildren(...(asking ? [] : detached.map((entry) => lost(entry, current))));
@@ -439,7 +512,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     button.className = 'fruitback-sidebar-item';
     button.dataset.fruitbackNote = issue.seed.id;
     if (issue.seed.id === current) button.setAttribute('aria-current', 'true');
-    button.addEventListener('click', () => options.onSelect(issue.seed.id));
+    button.addEventListener('click', () => showNote(issue.seed.id));
 
     // The drop of its pin, with the number the pin carries: the eye goes from the row to the page.
     // For the eye only: the row says its status in words, and a screen reader has no pin to match.
@@ -489,7 +562,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     button.className = 'fruitback-sidebar-lost';
     button.dataset.fruitbackNote = issue.seed.id;
     if (issue.seed.id === current) button.setAttribute('aria-current', 'true');
-    button.addEventListener('click', () => options.onSelect(issue.seed.id));
+    button.addEventListener('click', () => showNote(issue.seed.id));
     const why = document.createElement('span');
     why.className = 'fruitback-sidebar-meta';
     why.textContent = t.text('sidebar.unplacedWhy');
@@ -532,6 +605,10 @@ export function createSidebar(options: SidebarOptions): Sidebar {
 
   function shut(): void {
     if (root.hidden) return;
+    if (shown !== undefined) {
+      options.onBack?.();
+      showRows(false);
+    }
     const active = deepActiveElement(document);
     const inside = active !== null && root.contains(active);
     root.hidden = true;
@@ -546,9 +623,15 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   close.addEventListener('click', shut);
   root.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
-    // The thread closes on Escape from the document. This Escape is for the list only.
+    // The thread closes on Escape from the document. This Escape is for the list only: from a
+    // thread shown in place of the rows, it goes back to the rows (FRU-312).
     event.stopPropagation();
-    shut();
+    if (shown === undefined) {
+      shut();
+      return;
+    }
+    options.onBack?.();
+    showRows(true);
   });
 
   return {
@@ -564,6 +647,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     mark() {
       if (root.hidden) return;
       const current = options.current?.();
+      // The thread shown in place of the rows closed, by its cross or by a click on the page.
+      if (shown !== undefined && current !== shown) showRows(focusWasHere());
       for (const row of panel.querySelectorAll<HTMLElement>('[data-fruitback-note]')) {
         if (row.dataset.fruitbackNote === current) row.setAttribute('aria-current', 'true');
         else row.removeAttribute('aria-current');
@@ -801,6 +886,25 @@ const STYLES = `
   cursor: pointer;
 }
 .fruitback-sidebar-lost-note { overflow-wrap: anywhere; }
+.fruitback-sidebar-actions[hidden], .fruitback-sidebar-panel[hidden], .fruitback-sidebar-detail[hidden] { display: none; }
+/* The thread of a note in place of the rows (FRU-312): the way back, then the thread, which scrolls. */
+.fruitback-sidebar-detail { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.fruitback-sidebar-back {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 6px 8px 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--fruitback-radius-md);
+  background: none;
+  color: var(--fruitback-color-text-subtle);
+  font: 600 13px/1.45 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-sidebar-back:hover { background: var(--fruitback-color-surface-raised); color: var(--fruitback-color-text); }
 @media (prefers-reduced-motion: reduce) {
   .fruitback-sidebar { animation: none; }
 }

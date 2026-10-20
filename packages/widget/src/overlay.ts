@@ -36,36 +36,43 @@ const NAME_MAX_LENGTH = 60;
 
 /**
  * Kept next to the stylesheet's `width`, because `positionThread` has to know it to flip sides. The
- * 360 px of the mock-up (FRU-256); a window narrower than that takes the width the stylesheet left.
+ * 344 px of the mock-up of 2026-10-20 (FRU-304); a window narrower than that takes what it leaves.
  */
-const THREAD_WIDTH = 360;
+const THREAD_WIDTH = 344;
 const THREAD_GAP = 8;
 /**
- * Where the bubble sits beside its pin, read on the mock-up (FRU-256): 30 px past the element and
- * 36 px above its top. The frame stands 4 px off the element, so that is 26 and 32 px from the frame,
- * and 8 px above the drop.
+ * Where the bubble sits beside its pin (FRU-304): 26 px past the point of the drop, on its end side,
+ * or on the other side when the window has no room there. Its top is 8 px above the drop, and never
+ * nearer than 24 px to the top or the bottom of the window.
  */
 const THREAD_BESIDE = 26;
-const THREAD_RISE = 32;
+const THREAD_RISE = 8;
+const THREAD_MARGIN = 24;
 
 /**
  * How far apart the badges of one spot sit (FRU-155). Kept next to the stylesheet, which reads it
- * through `--fruitback-pin-slot`: a 26 px drop and a 4 px gap.
+ * through `--fruitback-pin-slot`: a 28 px drop and a 2 px gap.
  */
 const BADGE_STEP = 30;
 
 /**
- * How far the frame of a pin stands off its element, on every side (FRU-252): the 4 px of the
- * mock-up. The frame is 2 px thick, so 2 px of the page show between the element and its frame, and
- * the frame draws around the element and not on it.
+ * The drop of a pin (FRU-304): 28 px, turned by 45 degrees, its point on the anchor of the note.
+ * Its box is 34 px above the point and 14 px on each side of it, as the mock-up places it.
  */
-const FRAME_OUTSET = 4;
+const BADGE_HALF = 14;
+const BADGE_RISE = 34;
+/**
+ * Where on its element a pin points: 16 px in from its start corner, on its top edge, or the middle
+ * of an element narrower than 32 px.
+ */
+const ANCHOR_INSET = 16;
 
 /**
- * The room a badge needs on the left of its element, from the document's edge: the 26 px drop
- * (FRU-158). With less, the fan goes back above the element.
+ * How far the frame of a pin stands off its element, on every side (FRU-304): a line of 2 px, 3 px
+ * off, as an outline draws it, and as the frame of a capture does (FRU-303). It shows only while its
+ * note is pointed at, focused or open.
  */
-const BADGE_ROOM = 26;
+const FRAME_OUTSET = 5;
 
 /** A framework commit arrives as several mutation bursts. Resolving on each one repeats the cascade. */
 const RESOLVE_DEBOUNCE_MS = 100;
@@ -161,8 +168,13 @@ export type Overlay = {
   /**
    * Scrolls to the pin of this note and opens its thread (FRU-129). `false` when the note is not
    * drawn: a stage the reporter hid, or a note that is gone.
+   *
+   * With `home`, the thread is drawn in that element and not on the page (FRU-312): the list of the
+   * page shows it in its own column, in place of its rows. It closes like any thread.
    */
-  select(id: string): boolean;
+  select(id: string, home?: HTMLElement): boolean;
+  /** Closes the open thread, if any, and gives focus back as Close does. */
+  closeThread(): void;
   /**
    * Shows the pin of this note above the others, a fifth bigger (FRU-299): the row a list outside
    * the page has open. `undefined` lets it go. Kept across a draw. `false`: no pin of that note.
@@ -213,6 +225,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let source: SeedIssue[] = [];
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
+  /** Where the open thread is drawn when it is not on the page: a panel of the widget (FRU-312). */
+  let threadHome: HTMLElement | null = null;
   /** What had focus when the thread opened: its badge, or an entry of the detached-notes list. */
   let threadOpener: HTMLElement | null = null;
   let frame = 0;
@@ -244,7 +258,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function reposition(): void {
     for (const entry of placed) place(entry);
     fan();
-    if (thread !== null)
+    // A thread in a panel of the widget (FRU-312) has no place on the page.
+    if (thread !== null && threadHome === null)
       positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin, t.direction);
   }
 
@@ -269,37 +284,34 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       width: `${rect.width + 2 * FRAME_OUTSET}px`,
       height: `${rect.height + 2 * FRAME_OUTSET}px`,
     });
+    // The point of the drop, in the box of the pin (FRU-304). Physical, like the pin (FRU-38). At the
+    // top of the document the drop has no room above its element: the point goes down by what is missing.
+    const tipTop = Math.max(rect.top, BADGE_RISE);
+    entry.pin.style.setProperty('--fruitback-pin-tip-x', `${Math.min(ANCHOR_INSET, rect.width / 2) + FRAME_OUTSET}px`);
+    entry.pin.style.setProperty('--fruitback-pin-tip-y', `${tipTop - rect.top + FRAME_OUTSET}px`);
   }
 
   /**
    * Several notes on one spot fan their badges out, in render order (FRU-155).
    *
    * Without it the badges lay exactly on top of each other: one drop showed, and only the last one
-   * took the click. A badge hangs from the top-left corner of its pin, so pins that share that
-   * corner share a badge position, whether they are on one element or on two of the same box. Each
-   * note keeps its own drop, its own stage colour and its own thread.
-   *
-   * The badge sits outside that corner, up and to the left, and the fan goes on to the left
-   * (FRU-158): above the element is where a label, a title or a price is written. An element too
-   * close to the left edge of the document for the whole fan keeps it above itself, going right —
-   * `fruitback-pin-tight` — because a badge off the page cannot be clicked at all.
+   * took the click. Pins whose drops point at one spot share a place, whether they are on one element
+   * or on two of the same box. Each note keeps its own drop, its own stage colour and its own thread.
+   * The fan goes on to the right, one drop and 2 px at a time: the first one keeps the point.
    */
   function fan(): void {
-    const corners = placed.map((entry) => {
-      const left = Number.parseFloat(entry.pin.style.left) || 0;
-      const top = Number.parseFloat(entry.pin.style.top) || 0;
-
-      return { pin: entry.pin, left, key: `${Math.round(left)},${Math.round(top)}` };
-    });
-    const counts = new Map<string, number>();
-    for (const { key } of corners) counts.set(key, (counts.get(key) ?? 0) + 1);
-
     const taken = new Map<string, number>();
-    for (const { pin, left, key } of corners) {
+    for (const { pin } of placed) {
+      const x =
+        (Number.parseFloat(pin.style.left) || 0) +
+        (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x')) || 0);
+      const y =
+        (Number.parseFloat(pin.style.top) || 0) +
+        (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y')) || 0);
+      const key = `${Math.round(x)},${Math.round(y)}`;
       const slot = taken.get(key) ?? 0;
       taken.set(key, slot + 1);
       pin.style.setProperty('--fruitback-pin-slot', String(slot));
-      pin.classList.toggle('fruitback-pin-tight', left < BADGE_ROOM + ((counts.get(key) ?? 1) - 1) * BADGE_STEP);
     }
   }
 
@@ -525,8 +537,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread?.remove();
     thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
-    container.append(thread);
-    positionThread(thread, entry.pin, t.direction);
+    mountThread(thread, entry);
     const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
     if (caret !== undefined && field !== null) {
       field.focus();
@@ -534,16 +545,27 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     } else if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
   }
 
-  function openThread(entry: Placed): void {
+  /** On the page beside its pin, or in the panel that asked for it (FRU-312). */
+  function mountThread(node: HTMLElement, entry: Placed): void {
+    if (threadHome !== null) {
+      node.dataset.fruitbackHome = '';
+      threadHome.replaceChildren(node);
+      return;
+    }
+    container.append(node);
+    positionThread(node, entry.pin, t.direction);
+  }
+
+  function openThread(entry: Placed, home: HTMLElement | null = null): void {
     const active = deepActiveElement(document);
     closeThread();
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
+    threadHome = home;
     entry.pin.dataset.fruitbackOpen = '';
     entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
     thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
-    container.append(thread);
-    positionThread(thread, entry.pin, t.direction);
+    mountThread(thread, entry);
     // The thread is the last child of the container, far from its badge in the tab order.
     thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
     options.onSelect?.(entry.issue);
@@ -558,6 +580,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const wasOpen = thread !== null;
     thread?.remove();
     thread = null;
+    threadHome = null;
     for (const entry of placed) {
       delete entry.pin.dataset.fruitbackOpen;
       entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
@@ -636,7 +659,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
       return id === undefined || found;
     },
-    select(id) {
+    select(id, home) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);
       if (entry === undefined) return false;
       // The element when the page still has it, the pin otherwise: a detached note has only its pin.
@@ -644,10 +667,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       const element = entry.resolution.element;
       const target = element !== null && element.isConnected ? element : entry.pin;
       target.scrollIntoView?.({ block: 'center', inline: 'nearest' });
-      openThread(entry);
+      openThread(entry, home ?? null);
 
       return true;
     },
+    closeThread: () => closeThread(),
     destroy() {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
       if (resolveTimer !== undefined) clearTimeout(resolveTimer);
@@ -697,7 +721,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   badge.className = 'fruitback-pin-badge';
   // A pin opens its note: a screen reader is told which one is open, and is not told it twice.
   badge.setAttribute('aria-expanded', 'false');
-  badge.title = DRAFTS.has(issue) ? stateLabel(issue, t) : `${issue.identifier} · ${stateLabel(issue, t)}`;
+  // « In progress · The Add button is almost invisible… », as the mock-up writes it (FRU-304).
+  badge.title = `${stateLabel(issue, t)} · ${summarise(issue)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
@@ -784,9 +809,14 @@ export function shortened(text: string, max: number): string {
 function replies(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
+  // « Replies », above the list or above the sentence that says there is none (FRU-304). For the eye:
+  // the list is named by the same word.
+  const title = element(document, 'p', 'fruitback-thread-answers-title', t.text('thread.replies'));
+  title.setAttribute('aria-hidden', 'true');
   if (issue.comments.length === 0) {
     return [
       element(document, 'div', 'fruitback-thread-answers', [
+        title,
         element(document, 'p', 'fruitback-thread-empty', t.text('thread.noReplies')),
       ]),
     ];
@@ -803,44 +833,62 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
     const fromPage = replyFromPage(comment.body);
+    const who = fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name;
+    // The initial of who answers, in a round of 24 px (FRU-304). A drawing: the name follows it.
+    const avatar = element(document, 'span', 'fruitback-thread-reply-avatar', initialOf(who));
+    avatar.setAttribute('aria-hidden', 'true');
     item.append(
-      byline(
-        document,
-        'p',
-        'fruitback-thread-reply-who',
-        fromPage === undefined ? (comment.author ?? t.text('thread.team')) : fromPage.name,
-        comment.createdAt,
-        t,
-        // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
-        'fruitback-thread-reply-name',
-        fromPage?.who,
-      ),
-      // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
-      // issue, rendered inside someone else's page. It is text here and nothing more.
-      element(document, 'p', 'fruitback-thread-reply-body', fromPage?.text ?? comment.body),
+      avatar,
+      element(document, 'div', 'fruitback-thread-reply-text', [
+        byline(
+          document,
+          'p',
+          'fruitback-thread-reply-who',
+          who,
+          comment.createdAt,
+          t,
+          // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
+          'fruitback-thread-reply-name',
+          fromPage?.who,
+        ),
+        // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
+        // issue, rendered inside someone else's page. It is text here and nothing more.
+        element(document, 'p', 'fruitback-thread-reply-body', fromPage?.text ?? comment.body),
+      ]),
     );
     list.append(item);
   }
 
-  return [element(document, 'div', 'fruitback-thread-answers', [list])];
+  return [element(document, 'div', 'fruitback-thread-answers', [title, list])];
+}
+
+/** The first letter of a name, as a person reads it, for the round of a reply. */
+function initialOf(name: string): string {
+  const first = [...name.trim()][0];
+
+  return first === undefined ? '' : first.toLocaleUpperCase();
 }
 
 /**
- * The component and the file behind the element, when the capture found them (FRU-256).
- *
- * It is what a developer reads first, and until now only the export said it. A note taken on a page
- * with no React, or on a production build, has none: the line is then absent, and nothing stands in.
- * As text, like everything a note carries.
+ * What the note points at, in a block of mono (FRU-304): the selector the note carries, then the
+ * component and the file behind the element when the capture found them (FRU-256), as
+ * « <AddToCart> · src/components/Card.tsx:42 ». A note with no source has the selector alone. As
+ * text, like everything a note carries.
  */
-function sourceLine(document: Document, issue: SeedIssue): HTMLElement[] {
+function sourceBlock(document: Document, issue: SeedIssue): HTMLElement[] {
   const source = issue.seed.source;
-  if (source === undefined) return [];
+  const selector = issue.seed.anchor.selector;
+  const line = source?.line === undefined ? '' : `:${source.line}`;
+  const file = source?.file === undefined ? undefined : `${source.file}${line}`;
+  const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;
+  const parts = [component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
 
-  const line = source.line === undefined ? '' : `:${source.line}`;
-  const file = source.file === undefined ? undefined : `${source.file}${line}`;
-  const parts = [source.component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
-
-  return parts.length > 0 ? [element(document, 'p', 'fruitback-thread-source', parts.join(' · '))] : [];
+  return [
+    element(document, 'div', 'fruitback-thread-source', [
+      element(document, 'p', 'fruitback-thread-selector', selector),
+      ...(parts.length > 0 ? [element(document, 'p', 'fruitback-thread-component', parts.join(' · '))] : []),
+    ]),
+  ];
 }
 
 /**
@@ -901,6 +949,8 @@ function buildThread(
         drop,
         element(document, 'span', 'fruitback-thread-state', stateLabel(issue, t)),
       ]),
+      // Since when the note is in its state (FRU-304), from the last change the store reports.
+      ...stateAge(document, issue, t),
       // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
       ...link(document, issue, t),
       closeButton(document, t),
@@ -908,7 +958,7 @@ function buildThread(
     element(document, 'div', 'fruitback-thread-body', [
       element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
-      ...sourceLine(document, issue),
+      ...sourceBlock(document, issue),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
       // checks; a reader who is told nothing believes it.
       ...uncertaintyNote(document, resolution, t),
@@ -1045,6 +1095,20 @@ function uncertaintyNote(document: Document, resolution: AnchorResolution, t: Tr
   return [];
 }
 
+/**
+ * How long ago the store last changed the note, as a relative date (FRU-304), with the day in the
+ * title. A draft has no store, and a date the store wrote in a shape `Date` cannot read says nothing.
+ */
+function stateAge(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
+  if (DRAFTS.has(issue)) return [];
+  const date = new Date(issue.updatedAt);
+  if (Number.isNaN(date.getTime())) return [];
+  const age = element(document, 'span', 'fruitback-thread-age', t.relative(date));
+  age.title = t.date(date);
+
+  return [age];
+}
+
 function closeButton(document: Document, t: Translator): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
@@ -1116,10 +1180,10 @@ function element(document: Document, tag: string, className: string, content: st
 }
 
 /**
- * Beside the frame when the window has the room, as the mock-up draws it (FRU-256): past its end edge
- * for the reading direction, a little above its top. Otherwise below the pin, or above it when there
- * is no room below: that is every phone, and every element that runs to the edge of the window. The
- * values stay physical, like the pin (FRU-38).
+ * Beside the drop when the window has the room (FRU-304): 26 px past its point on the end side for
+ * the reading direction, or on the other side, a little above the drop, and never nearer than 24 px
+ * to the top or the bottom of the window. Otherwise below the pin, or above it when there is no room
+ * below: that is every phone. The values stay physical, like the pin (FRU-38).
  */
 function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direction: Direction): void {
   if (pin === undefined) return;
@@ -1129,6 +1193,8 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const top = Number.parseFloat(pin.style.top) || 0;
   const pinHeight = Number.parseFloat(pin.style.height) || 0;
   const pinWidth = Number.parseFloat(pin.style.width) || 0;
+  const tipX = left + (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x')) || 0);
+  const tipY = top + (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y')) || 0);
   const viewportWidth = view?.innerWidth ?? 0;
   const viewportHeight = view?.innerHeight ?? 0;
   const scrollX = view?.scrollX ?? 0;
@@ -1142,12 +1208,15 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const first = scrollX + THREAD_GAP;
   const last = scrollX + viewportWidth - threadWidth - THREAD_GAP;
 
-  const beside = direction === 'rtl' ? left - THREAD_BESIDE - threadWidth : left + pinWidth + THREAD_BESIDE;
-  if (beside >= first && beside <= last) {
-    // Never under the bottom of the window, and never above its top: the head holds the way out.
-    const lowest = scrollY + viewportHeight - threadHeight - THREAD_GAP;
+  const after = tipX + THREAD_BESIDE;
+  const before = tipX - THREAD_BESIDE - threadWidth;
+  const sides = direction === 'rtl' ? [before, after] : [after, before];
+  const beside = sides.find((side) => side >= first && side <= last);
+  if (beside !== undefined) {
+    const highest = scrollY + THREAD_MARGIN;
+    const lowest = scrollY + viewportHeight - threadHeight - THREAD_MARGIN;
     thread.style.left = `${beside}px`;
-    thread.style.top = `${Math.max(scrollY + THREAD_GAP, Math.min(top - THREAD_RISE, lowest))}px`;
+    thread.style.top = `${Math.max(highest, Math.min(tipY - BADGE_RISE - THREAD_RISE, lowest))}px`;
     return;
   }
 
@@ -1198,22 +1267,28 @@ const STYLES = `
   z-index: 2147483000;
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
   pointer-events: none;
-  border: 2px solid var(--fruitback-pin-color);
+  /*
+    The frame of the mock-up of 2026-10-20 (FRU-304): a line of 2 px, 3 px off the element, in the
+    colour of the status. Transparent at rest: the mock-up draws the drop alone.
+  */
+  border: 2px solid transparent;
   border-radius: var(--fruitback-radius-sm);
 }
 /*
-  The tint only while its note is pointed at, focused or open (FRU-158). Left on, it greyed every
+  The frame only while its note is pointed at, focused or open (FRU-158). Left on, it lined every
   annotated element of the page, and the more a page was annotated, the less it could be read.
 
   Two rules and not one list: a browser with no :has() drops the whole rule that names it, and the
-  tint of an open thread must not go with it.
+  frame of an open thread must not go with it.
 */
-.fruitback-pin[data-fruitback-open] { background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent); }
+.fruitback-pin[data-fruitback-open] { z-index: 2147483001; border-color: var(--fruitback-pin-color); }
 .fruitback-pin:has(.fruitback-pin-badge:hover),
 .fruitback-pin:has(.fruitback-pin-badge:focus-visible) {
-  background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
+  border-color: var(--fruitback-pin-color);
 }
-.fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }
+.fruitback-pin-uncertain { border-style: dashed; }
+/* Detached: listed in the dock, not on the page (FRU-304). A draft keeps its pin where it was planted. */
+.fruitback-pin-orphan:not([data-fruitback-draft]) { display: none; }
 /* The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger. */
 .fruitback-pin[data-fruitback-marked] { z-index: 1; }
 .fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
@@ -1221,78 +1296,96 @@ const STYLES = `
 .fruitback-pin-badge {
   position: absolute;
   /*
-    Outside the top-left corner, its point on the corner of the frame and not one pixel over the element (FRU-158). Above the element is
-    where its label or its price is written, and the badge covered it. One step to the left for each
-    note before this one on the same spot (FRU-155).
+    The point of the drop is on the anchor of the note (FRU-304), which place() writes in the box of
+    the pin. One step to the right for each note before this one on the same spot (FRU-155).
   */
-  bottom: 100%;
-  right: calc(100% + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
+  left: calc(var(--fruitback-pin-tip-x, 0px) - ${BADGE_HALF}px + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
+  top: calc(var(--fruitback-pin-tip-y, 0px) - ${BADGE_RISE}px);
   /* …except this, which is the one thing you can click. */
   pointer-events: auto;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  /* Three round corners and one sharp: a seed, pointing down and in at the corner of its element. */
+  /* A ring of the foreground of the stages, so the drop reads on any page. */
+  border: 2px solid var(--fruitback-color-on-stage);
+  /* Three round corners and one sharp: a drop, pointing down at its spot. */
   border-radius: 50% 50% 50% 0;
-  transform: rotate(-90deg);
+  transform: rotate(-45deg);
   background: var(--fruitback-pin-color);
   color: var(--fruitback-pin-on-color, var(--fruitback-color-on-stage));
-  font: 600 13px/1 var(--fruitback-font-sans);
+  font: 700 12px/1 var(--fruitback-font-sans);
   cursor: pointer;
   box-shadow: var(--fruitback-shadow-sm);
+  transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
   /* Squash and stretch: the drop lands, flattens, and settles. */
   animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
+/* Found by position, not by identity: the same drop, its ring dashed. The number stays. */
+.fruitback-pin-uncertain .fruitback-pin-badge { border-style: dashed; }
+/* Open: the drop grows, above the others. */
+.fruitback-pin[data-fruitback-open] .fruitback-pin-badge { transform: rotate(-45deg) scale(1.15); }
 .fruitback-pin-glyph {
-  transform: rotate(90deg);
-  font-size: 13px;
-  font-weight: 600;
+  transform: rotate(45deg);
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-/* No room on the left: above the element, going right, as before FRU-158. */
-.fruitback-pin-tight .fruitback-pin-badge {
-  right: auto;
-  left: calc(var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
-  bottom: calc(100% + 4px);
-}
 .fruitback-pin-badge:hover { filter: brightness(1.06); }
 .fruitback-pin-badge:focus-visible { outline: 2px solid var(--fruitback-color-text); outline-offset: 2px; }
+/* A forced palette drops the fill: the drop is then its ring. */
+@media (forced-colors: active) {
+  .fruitback-pin-badge { border-color: ButtonText; }
+  .fruitback-pin[data-fruitback-open],
+  .fruitback-pin:has(.fruitback-pin-badge:hover) { border-color: Highlight; }
+}
 
 @keyframes fruitback-pin-drop {
-  0% { opacity: 0; transform: translate(-7px, -7px) rotate(-90deg) scale(0.7, 1.25); }
-  55% { opacity: 1; transform: translate(0, 0) rotate(-90deg) scale(1.18, 0.82); }
-  100% { opacity: 1; transform: rotate(-90deg) scale(1, 1); }
+  0% { opacity: 0; transform: translate(0, -7px) rotate(-45deg) scale(0.7, 1.25); }
+  55% { opacity: 1; transform: translate(0, 0) rotate(-45deg) scale(1.18, 0.82); }
+  100% { opacity: 1; transform: rotate(-45deg) scale(1, 1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fruitback-pin-badge { animation: none; }
+  .fruitback-pin-badge { animation: none; transition: none; }
 }
 .fruitback-thread {
   position: absolute;
   z-index: 2147483100;
-  /* 360 px, and what a narrower window leaves: 8 px on each side, the gap the placement keeps. */
-  width: min(360px, calc(100vw - 16px));
+  /* 344 px, and what a narrower window leaves: 8 px on each side, the gap the placement keeps. */
+  width: min(344px, calc(100vw - 16px));
   pointer-events: auto;
+  border: 1px solid var(--fruitback-color-border);
   border-radius: var(--fruitback-radius-lg);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-lg);
 }
+/*
+  In a panel of the widget (FRU-312): the column of the list holds it, so it has no place of its own,
+  no edge and no shadow.
+*/
+.fruitback-thread[data-fruitback-home] {
+  position: static;
+  width: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 /* A shadow is not drawn in forced colours: the bubble then needs an edge of its own. */
 @media (forced-colors: active) {
   .fruitback-thread { outline: 1px solid CanvasText; }
+  .fruitback-thread[data-fruitback-home] { outline: 0; }
 }
 .fruitback-thread-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-block: 8px;
-  padding-inline: 16px 8px;
+  padding-block: 14px 12px;
+  padding-inline: 16px 14px;
   border-bottom: 1px solid var(--fruitback-color-border);
 }
 .fruitback-thread-stage {
@@ -1310,95 +1403,125 @@ const STYLES = `
   width: 10px;
   height: 10px;
   border-radius: 50% 50% 50% 0;
-  transform: rotate(-90deg);
+  transform: rotate(-45deg);
   background: var(--fruitback-pin-color);
 }
 /* anywhere: the store names its states, and a long name must wrap inside the head. */
 .fruitback-thread-state { min-width: 0; overflow-wrap: anywhere; }
+.fruitback-thread-age { flex: none; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/*
+  The way out to the store (FRU-304): « FRU-128 → » in a chip of the sunken surface, at the end of the
+  head. Its target is 44 px tall: a transparent border around the chip, and the margins give it back.
+*/
+.fruitback-thread-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+  margin-block: -9px;
+  padding: 4px 8px;
+  border: 9px solid transparent;
+  border-inline-width: 0;
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken) padding-box;
+  color: var(--fruitback-color-text);
+  font: 600 12px/1.5 var(--fruitback-font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fruitback-thread-link:hover { color: var(--fruitback-color-accent-strong); }
+/* The cross: 28 px drawn, 44 px to press, the margins give the difference back to the head. */
 .fruitback-thread-close {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-inline-start: auto;
-  border: 0;
-  border-radius: var(--fruitback-radius-field);
-  background: var(--fruitback-color-surface);
-  font-size: 15px;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  border: 8px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 8px);
+  background: transparent;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
-.fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken); }
-.fruitback-thread-body { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+.fruitback-thread-link + .fruitback-thread-close { margin-inline-start: -8px; }
+.fruitback-thread-age + .fruitback-thread-close,
+.fruitback-thread-stage + .fruitback-thread-close { margin-inline-start: auto; }
+.fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
+@media (forced-colors: active) {
+  .fruitback-thread-close, .fruitback-thread-link { border-color: Canvas; }
+}
+.fruitback-thread-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 4px; }
 /* anywhere: an address has no space, and it must wrap inside the thread instead of leaving it (FRU-154). */
-.fruitback-thread-note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fruitback-thread-note { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fruitback-thread-meta { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+/* What the note points at: the selector, then the component and the file, in mono (FRU-304). */
 .fruitback-thread-source {
-  margin: 4px 0 0;
-  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
   border: 1px solid var(--fruitback-color-border);
   border-radius: var(--fruitback-radius-sm);
-  background: var(--fruitback-color-surface-raised);
-  color: var(--fruitback-color-text-subtle);
-  font: 11.5px/1.5 var(--fruitback-font-mono);
+  background: var(--fruitback-color-surface-warm);
+  font-family: var(--fruitback-font-mono);
   overflow-wrap: anywhere;
 }
+.fruitback-thread-selector { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fruitback-color-text); }
+.fruitback-thread-component { margin: 0; font-size: 11px; line-height: 1.5; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-orphan { margin: 0; font-size: 12px; color: var(--fruitback-color-warning); }
-.fruitback-thread-answers { border-top: 1px solid var(--fruitback-color-border); }
-.fruitback-thread-empty {
-  margin: 0;
-  padding: 12px 16px;
-  font-size: 12px;
-  color: var(--fruitback-color-text-subtle);
-  font-style: italic;
+.fruitback-thread-answers { padding: 10px 16px 16px; }
+.fruitback-thread-answers-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fruitback-color-text-muted);
 }
+.fruitback-thread-empty { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-replies {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin: 0;
-  padding: 12px 16px;
+  padding: 0;
   list-style: none;
-  /* A long conversation belongs in Linear, which the link of the head goes to. */
+  /* A long conversation belongs in the store, which the link of the head goes to. */
   max-height: 180px;
   overflow-y: auto;
 }
-/*
-  Inside, not around: the list goes to the edges of the bubble, and a ring drawn outside it would lie
-  on the rule above and leave the bubble below.
-*/
 .fruitback-thread-replies:focus-visible {
   outline: 2px solid var(--fruitback-color-accent);
-  outline-offset: -2px;
-  border-end-start-radius: var(--fruitback-radius-lg);
-  border-end-end-radius: var(--fruitback-radius-lg);
+  outline-offset: 2px;
+  border-radius: var(--fruitback-radius-sm);
 }
 /*
   On the item, not only on the list. The host reset gives every element all:initial, which resets each
   item's own list-style-type to its initial value of disc — and a reset value beats what it would have
   inherited from the list. The bullets came back, and only a recording showed it.
 */
-.fruitback-thread-reply { display: flex; flex-direction: column; gap: 2px; flex: none; list-style: none; }
+.fruitback-thread-reply { display: flex; gap: 10px; flex: none; list-style: none; }
+/* The initial of who answers, in a round of 24 px. */
+.fruitback-thread-reply-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface-sunken);
+  color: var(--fruitback-color-text-subtle);
+  font: 700 11px/1 var(--fruitback-font-sans);
+}
+.fruitback-thread-reply-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .fruitback-thread-reply-who { margin: 0; font-size: 11px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
 .fruitback-thread-reply-name { font-weight: 600; color: var(--fruitback-color-text); }
-.fruitback-thread-reply-body { margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.fruitback-thread-link {
-  flex: none;
-  font-size: 12px;
-  color: var(--fruitback-color-text-muted);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.fruitback-thread-link:hover { color: var(--fruitback-color-accent-strong); }
-/*
-  A thumb, not a pointer (FRU-157). The cross stays 15 px and its button grows to 44 px. The negative
-  margins give the extra size back to the padding of the head, so the head keeps its height.
-*/
+.fruitback-thread-reply-body { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* The foot where a reader replies (FRU-257): the field grows with the text, the button stays at its foot. */
 .fruitback-thread-reply-form {
   display: flex;
@@ -1441,8 +1564,6 @@ const STYLES = `
 .fruitback-thread-reply-status { flex-basis: 100%; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-reply-status:empty { display: none; }
 @media (pointer: coarse) {
-  .fruitback-thread-close { min-width: 44px; min-height: 44px; margin-block: -6px; margin-inline-end: -6px; }
-  .fruitback-thread-link { display: inline-flex; align-items: center; min-height: 32px; }
   .fruitback-thread-reply-field { font-size: 16px; }
   .fruitback-thread-reply-send { min-height: 44px; }
 }
