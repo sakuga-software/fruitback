@@ -502,7 +502,8 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
 
 /** The source of axe, run in the panel: Playwright hands the panel over as no `Page` for `AxeBuilder`. */
 function axeSource(): string {
-  const playwrightAxe = createRequire(import.meta.url).resolve('@axe-core/playwright');
+  // From the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
+  const playwrightAxe = createRequire(`${process.cwd()}/package.json`).resolve('@axe-core/playwright');
 
   return readFileSync(createRequire(playwrightAxe).resolve('axe-core/axe.min.js'), 'utf8');
 }
