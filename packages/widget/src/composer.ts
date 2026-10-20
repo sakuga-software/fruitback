@@ -764,9 +764,18 @@ const STYLES = `
   background: var(--fruitback-color-surface);
 }
 .fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+/*
+  « Send » ends the row, whatever the length of the words (FRU-317). The row is laid out from its end
+  (\`row-reverse\`) and its lines from the bottom (\`wrap-reverse\`), in the \`order\` below: « Send »
+  first, so it holds the end of the last line, then « Cancel », « Keep for later » and the status. When
+  the words do not fit, the ghosts go to a line above « Send », never the reverse. The source order,
+  which is the order of the keyboard, stays « Keep for later », « Cancel », « Send ». In a language
+  written from the right, the end is the left: the same rules put « Send » there.
+*/
 .fruitback-composer-foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row-reverse;
+  flex-wrap: wrap-reverse;
   align-items: center;
   gap: 8px;
   padding-block: 10px 12px;
@@ -774,6 +783,10 @@ const STYLES = `
   border-top: 1px solid var(--fruitback-color-border);
 }
 .fruitback-composer-status { flex: 1; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-send { order: 1; }
+.fruitback-composer-foot > .fruitback-composer-ghost:not(.fruitback-composer-keep) { order: 2; }
+.fruitback-composer-keep { order: 3; }
+.fruitback-composer-status { order: 4; }
 .fruitback-composer-ghost, .fruitback-composer-send {
   display: inline-flex;
   align-items: center;
@@ -801,13 +814,9 @@ const STYLES = `
   font-weight: 600;
 }
 .fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { color: var(--fruitback-color-accent); }
-/* A failure says what to do in a sentence: it takes the whole line above the buttons (FRU-156). */
+/* A failure says what to do in a sentence: it takes the whole line above the buttons (FRU-156). The
+   buttons keep the end of the line below, as the row is laid out from its end. */
 .fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { flex-basis: 100%; }
-/* The first button of the row is pushed to the end: Keep for later when it is there, Cancel otherwise. */
-.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-keep:not([hidden]),
-.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-keep[hidden] + .fruitback-composer-ghost {
-  margin-inline-start: auto;
-}
 
 /* The « rise » of the mock-up: no fade, it is there at once and settles. */
 @keyframes fruitback-composer-in {
