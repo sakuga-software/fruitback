@@ -264,7 +264,11 @@ for (const { label, open, skip } of DATABASES) {
       );
       assert.deepEqual(await accounts.suspension(acme.id), { since: instant, reason: 'impayé' });
       assert.equal(await accounts.suspension(globex.id), undefined);
-      assert.deepEqual(await accounts.memberships(ana.id), [
+      // Two workspaces made in one millisecond come in the order of their random ids: sorted here.
+      const byName = (await accounts.memberships(ana.id)).sort((a, b) =>
+        a.workspace.name.localeCompare(b.workspace.name),
+      );
+      assert.deepEqual(byName, [
         { workspace: acme, role: 'owner', suspension: { since: instant, reason: 'impayé' } },
         { workspace: globex, role: 'owner' },
       ]);

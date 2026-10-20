@@ -118,7 +118,35 @@ export type SeedStore = {
    * answer is whether `reply` is there.
    */
   repliesFor?(client: ClientConfig | undefined): Promise<boolean>;
+  /**
+   * The verdict of a person on a note that the team marked done (FRU-294), as a marked reply under
+   * the note (`checkText`). `wrong` then reopens the note in this store. The answer is the reply
+   * and the stage the note has now. `undefined`: this store holds no such note for this client.
+   * Absent: this store takes no verdict. A store with `check` has `reply` too.
+   */
+  check?(
+    target: ReplyTarget,
+    check: NewCheck,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+  ): Promise<CheckAnswer | undefined>;
+  /** Whether the store of this client takes a verdict, for a store that routes by client. */
+  checksFor?(client: ClientConfig | undefined): Promise<boolean>;
 };
+
+/** What a person says of a note that the team marked done (FRU-294). */
+export type CheckVerdict = 'fixed' | 'wrong';
+
+/** A verdict to write. Only a member gives one: the route refuses everybody else. */
+export type NewCheck = {
+  verdict: CheckVerdict;
+  author: Extract<ReplyAuthor, { kind: 'member' }>;
+  /** What the person typed with « Still wrong », if anything. */
+  body?: string;
+};
+
+/** The marked reply that a verdict wrote, and the stage of the note after it. */
+export type CheckAnswer = { comment: SeedComment; stage: SeedStage };
 
 /**
  * Who writes a reply, as the worker knows it (FRU-257). A member is a session of the workspace of the
@@ -135,6 +163,16 @@ export type NewReply = { body: string; author: ReplyAuthor };
 /** Whether a store takes a reply for this client. */
 export async function takesReplies(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.repliesFor === undefined ? store.reply !== undefined : store.repliesFor(client);
+}
+
+/**
+ * Whether a store takes a verdict for this client (FRU-294): it has `check`, and it takes a reply
+ * there. A store that hides its replies would write a verdict that no read shows.
+ */
+export async function takesChecks(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+  if (store.checksFor !== undefined) return store.checksFor(client);
+
+  return store.check !== undefined && (await takesReplies(store, client));
 }
 
 /**

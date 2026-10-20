@@ -121,6 +121,12 @@ export type NoteIndex = {
    * page, the origin of the site, the stage, the reference), never the rest of a text.
    */
   list(workspace: string, query: NoteQuery): Promise<NoteList>;
+  /**
+   * The account that left each of these notes of a site, for the notes a member left (FRU-294). A note
+   * of a visitor, of a token of the site, or of an account that is gone is absent. What decides who
+   * may confirm or reopen a note, and which notes are a reader's own (`mine`).
+   */
+  authors(workspace: string, site: string, seeds: readonly string[]): Promise<Map<string, string>>;
   /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
   deliveryOf(workspace: string, site: string, seed: string): Promise<{ connector: string; id: string } | undefined>;
 };

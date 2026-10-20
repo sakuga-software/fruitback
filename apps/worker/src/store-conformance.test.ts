@@ -6,7 +6,7 @@ import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { ClientPolicy } from './clients.ts';
 import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './github.ts';
-import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
+import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
 import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
@@ -27,6 +27,14 @@ const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, re
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
+
+/** The board of the team of the fake Linear, with no triage. */
+const TEAM_STATES = [
+  { id: 'st_backlog', name: 'Backlog', type: 'backlog', position: 0 },
+  { id: 'st_todo', name: 'Todo', type: 'unstarted', position: 1 },
+  { id: 'st_doing', name: 'In Progress', type: 'started', position: 2 },
+  { id: 'st_done', name: 'Done', type: 'completed', position: 3 },
+];
 
 /**
  * Linear, as far as the Linear store uses it. It keeps the labels and the issues it receives, and
@@ -115,6 +123,27 @@ function fakeLinear({ refuseLabels = false } = {}): { node(id: string): IssueNod
       issue.node.comments = { nodes: [comment, ...(issue.node.comments?.nodes ?? [])] };
 
       return json(200, { data: { commentCreate: { success: true, comment } } });
+    }
+
+    if (operation === 'FruitbackIssueStates') {
+      // A team with no triage, as most are: « Still wrong » goes to its backlog (FRU-294).
+      const found = issues.find((each) => each.node.id === variables.id);
+      if (found === undefined) return json(200, { errors: [{ message: 'Entity not found: Issue' }] });
+
+      return json(200, {
+        data: { issue: { id: found.node.id, team: { id: found.teamId, states: { nodes: TEAM_STATES } } } },
+      });
+    }
+
+    if (operation === 'FruitbackReopenIssue') {
+      const found = issues.find((each) => each.node.id === variables.id);
+      const state = TEAM_STATES.find((each) => each.id === (variables.input as { stateId: string }).stateId);
+      if (found === undefined || state === undefined) return json(200, { errors: [{ message: 'Entity not found' }] });
+      found.node.state = { id: state.id, name: state.name, type: state.type };
+
+      return json(200, {
+        data: { issueUpdate: { success: true, issue: { id: found.node.id, state: found.node.state } } },
+      });
     }
 
     if (operation === 'FruitbackIssues') {
@@ -335,6 +364,9 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
     unknownState: async (created) => {
       await rowsOf(opened(), `UPDATE seeds SET stage = 'marmalade' WHERE id = ${Number(created.id)}`);
     },
+    markDone: async (created) => {
+      await rowsOf(opened(), `UPDATE seeds SET stage = 'ripe' WHERE id = ${Number(created.id)}`);
+    },
     plantReplies: async (store, seed, count) => {
       const created = await store.create(seed, undefined, POLICY);
       for (const reply of repliesNewestFirst(count)) {
@@ -388,6 +420,9 @@ const SUBJECTS: ConformanceSubject[] = [
     unknownState(created) {
       linear!.node(created.id).state = { name: 'Marmalade', type: 'marmalade' };
     },
+    markDone(created) {
+      linear!.node(created.id).state = { id: 'st_done', name: 'Done', type: 'completed' };
+    },
     plantReplies: (store, seed, count) =>
       writeWithReplies(store, seed, (created) => {
         linear!.node(created.id).comments = {
@@ -419,6 +454,8 @@ const SUBJECTS: ConformanceSubject[] = [
     provider: 'github',
     noReply:
       'GitHub is a store of the environment and no connector of a workspace yet (FRU-188): no route writes to it',
+    noCheck: 'a verdict is a reply (FRU-294), and GitHub takes no reply: see noReply',
+    markDone: 'GitHub takes no verdict',
     writtenStage: DEFAULT_SEED_STAGE,
     replyCap: GITHUB_REPLY_CAP,
     otherTenant: { repository: 'acme/other' },
@@ -469,6 +506,7 @@ const SUBJECTS: ConformanceSubject[] = [
     },
     close: () => resetMemoryLinear(),
     unknownState: 'the dev store gives each note a state from its own list',
+    markDone: (created) => setMemoryIssueState(created.id, { name: 'Done', type: 'completed' }),
     async plantReplies(store, seed) {
       // The dev store writes two replies, newest first, on the third note of each page (FRU-268).
       // The two notes before it are on the same page, for another client, so a read for this one

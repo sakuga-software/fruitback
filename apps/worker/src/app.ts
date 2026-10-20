@@ -38,12 +38,15 @@ import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowe
 import {
   type BatchAnswer,
   type BatchMemory,
+  type CheckVerdict,
   type CreatedIssue,
   type ReplyAuthor,
   type SeedStore,
   StoreError,
+  takesChecks,
   takesReplies,
 } from './store.ts';
+import { checkedOf } from './reply-text.ts';
 import { createAll } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -265,6 +268,47 @@ async function hidesTracker(request: Request, config: Served, policy: ClientPoli
   const role = await config.roleIn(policy.sessions.workspace, verified.reporter.id);
 
   return role !== undefined && !can(role, 'see-tracker');
+}
+
+/**
+ * The ids the widget gave to the notes of `issues` that the reader of this request left (FRU-294): a
+ * session of the workspace of the site, whose account the index keeps as their author. Empty for
+ * anybody else, and for a worker with no index. An index that does not answer costs `mine`, never
+ * the read.
+ */
+async function notesOfReader(
+  request: Request,
+  config: Served,
+  policy: ClientPolicy,
+  workspace: string | undefined,
+  site: string | undefined,
+  issues: readonly SeedIssue[],
+  noteIndex: NoteIndex | undefined,
+): Promise<Set<string>> {
+  if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) {
+    return new Set();
+  }
+  if (policy.sessions === undefined) return new Set();
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return new Set();
+  const verified = await verifyForClient(token, policy);
+  const account = verified?.ok === true && verified.session === true ? verified.reporter.id : undefined;
+  if (account === undefined) return new Set();
+  try {
+    const authors = await noteIndex.authors(
+      workspace,
+      site,
+      issues.map((issue) => issue.seed.id),
+    );
+
+    return new Set([...authors].flatMap(([seed, author]) => (author === account ? [seed] : [])));
+  } catch (error) {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return new Set();
+  }
 }
 
 /**
@@ -752,7 +796,8 @@ async function routed(
   }
 
   const replyTo = REPLY_PATH.exec(pathname)?.[1];
-  if (pathname !== '/feedback' && replyTo === undefined) {
+  const checkOf = CHECK_PATH.exec(pathname)?.[1];
+  if (pathname !== '/feedback' && replyTo === undefined && checkOf === undefined) {
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
@@ -771,6 +816,17 @@ async function routed(
       clientIp: context.clientIp,
       accounts,
       stillWrites: () => sessionWrites(request, served, context).then((session) => session !== undefined),
+    });
+  }
+
+  if (checkOf !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postCheck(request, checkOf, served, watchedStore(store, accounts), kv, cors.headers, {
+      clientIp: context.clientIp,
+      accounts,
+      noteIndex,
+      context,
     });
   }
 
@@ -904,6 +960,141 @@ async function postReply(
       await invalidatePages(kv, [url]);
 
       return json(201, { comment }, corsHeaders);
+    }
+
+    return json(404, { error: 'not-found' }, corsHeaders);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+    throw error;
+  }
+}
+
+/** `POST /feedback/<id>/check`: a verdict on a note that the team marked done (FRU-294). */
+const CHECK_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/check$/;
+
+const VERDICTS: readonly CheckVerdict[] = ['fixed', 'wrong'];
+
+/**
+ * `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` (FRU-294).
+ *
+ * « Looks fixed » writes a marked reply under the note, and the note stays done. « Still wrong »
+ * writes the marked reply, then reopens the note in its store. **The store stays the one source of the
+ * stage and of the verdict**: nothing is kept here.
+ *
+ * - **Who.** A session of the extension, read again in the store as for every write (2026-10-14),
+ *   of a person who reads the site now. And of them, the person who left the note (the index keeps
+ *   their account) or a role that manages the sites. Anybody else of the workspace: `403`.
+ * - **When.** Only on a note that its store says is `ripe` now (`409 not-done`), and not confirmed
+ *   already (`409 already-checked`).
+ */
+async function postCheck(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: {
+    clientIp: string;
+    accounts: AccountStore | undefined;
+    noteIndex: NoteIndex | undefined;
+    context: RequestContext;
+  },
+): Promise<Response> {
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const {
+    url: requested,
+    verdict,
+    body,
+  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
+  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  if (typeof verdict !== 'string' || !VERDICTS.includes(verdict as CheckVerdict)) {
+    return json(400, { error: 'invalid-verdict', verdicts: VERDICTS }, corsHeaders);
+  }
+  if (body !== undefined && (typeof body !== 'string' || [...body].length > REPLY_LENGTH)) {
+    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
+  }
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  try {
+    const workspace = route.client?.workspace;
+    const { accounts } = context;
+    // A session of the extension, still valid in the store: no token, a token of a site, a cookie of
+    // the console, a session that ended, all stop here.
+    const session = await sessionWrites(request, config, context.context);
+    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+      return json(401, { error: 'identity-required' }, corsHeaders);
+    }
+    const account = await writerIn(request, config, context.context, workspace, clientId);
+    const reach = await accounts.reach(workspace, session.subject);
+    // A person of the workspace who does not read this site (a guest of another site): `403`. Anybody
+    // else, a workspace that is suspended included (FRU-282): `401`, as for no session.
+    if (account === undefined) {
+      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
+
+      return reach === undefined || suspended
+        ? json(401, { error: 'identity-required' }, corsHeaders)
+        : json(403, { error: 'not-allowed' }, corsHeaders);
+    }
+    if (!route.policy.showComments) return json(403, { error: 'checks-not-taken' }, corsHeaders);
+
+    // A guest reads a note by the id the widget gave it, never by the id of the tracker (FRU-250).
+    const hidden = await hidesTracker(request, config, route.policy);
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    for (const target of targets) {
+      // Read now in the store, never in the cache: the stage that decides is the store's.
+      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
+        hidden ? each.seed.id === issue : each.id === issue,
+      );
+      if (found === undefined) continue;
+
+      const author = (await context.noteIndex?.authors(workspace, clientId, [found.seed.id]))?.get(found.seed.id);
+      const manages = reach !== undefined && can(reach.role, 'manage-sites');
+      if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
+      if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
+      if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
+      if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
+      if (!(await checkReplyLimit(kv, context.clientIp))) return json(429, { error: 'rate-limited' }, corsHeaders);
+
+      const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
+      const membership = memberships.find((each) => each.workspace.id === workspace);
+      if (person === undefined || membership === undefined)
+        return json(401, { error: 'identity-required' }, corsHeaders);
+      const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
+      const answer = await store.check?.(
+        { issue: found.id, clientId },
+        {
+          verdict: verdict as CheckVerdict,
+          author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+          ...typed,
+        },
+        target,
+        route.policy,
+      );
+      if (answer === undefined) break;
+      await invalidatePages(kv, [url]);
+      // The stage the store answers now, for the counts of the console and of the extension.
+      await indexed(context.noteIndex, (index) =>
+        index.refresh(workspace, clientId, placeOf(target), [{ ...found, stage: answer.stage }], Date.now()),
+      );
+
+      return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
     }
 
     return json(404, { error: 'not-found' }, corsHeaders);
@@ -1535,9 +1726,20 @@ async function getFeedback(
         ? found.flat()
         : found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
     // Asked at each request, after the cache, whose answer every reader of the page shares.
-    const issues: SeedIssue[] = (await hidesTracker(request, config, route.policy))
-      ? all.map((issue) => withoutTracker(issue, issue.seed.id))
-      : all;
+    const hidden = await hidesTracker(request, config, route.policy);
+    // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
+    // answer: `mine` is the reader's.
+    const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
+    const issues: SeedIssue[] = all.map((issue) => {
+      const checked = issue.stage === 'ripe' ? checkedOf(issue.comments) : undefined;
+      const marked = {
+        ...issue,
+        ...(checked === undefined ? {} : { checked }),
+        ...(own.has(issue.seed.id) ? { mine: true as const } : {}),
+      };
+
+      return hidden ? withoutTracker(marked, issue.seed.id) : marked;
+    });
 
     // The stages of the trackers that answered, in the order of `SEED_STAGES` (FRU-188). A site read in
     // several places can show a pin of each of them.

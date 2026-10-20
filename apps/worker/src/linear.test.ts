@@ -1,7 +1,8 @@
-import { describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
-import { createLinearStore, linearRoutingFor, stageForLinearState } from './linear.ts';
+import { createLinearStore, linearRoutingFor, reopenStateOf, stageForLinearState } from './linear.ts';
+import { installLinearStub } from './linear-stub.ts';
 
 /**
  * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
@@ -68,5 +69,86 @@ describe('the Linear store', () => {
     assert.equal(store.name, 'linear');
     assert.equal(store.scope(undefined), 'team_worker');
     assert.equal(store.scope({ teamId: 'team_acme' }), 'team_acme');
+  });
+});
+
+describe('« Still wrong » in Linear (FRU-294)', () => {
+  afterEach(() => mock.restoreAll());
+
+  const state = (id: string, type: string, position: number) => ({ id, name: id, type, position });
+  const CHECKER = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
+
+  it('picks triage, else backlog, else unstarted, the first of the board of that type', () => {
+    const triage = [state('Done', 'completed', 0), state('Triage', 'triage', 3), state('Backlog', 'backlog', 1)];
+    const noTriage = [state('Later', 'backlog', 2), state('Backlog', 'backlog', 1), state('Todo', 'unstarted', 0)];
+    const onlyTodo = [state('Todo', 'unstarted', 4), state('Doing', 'started', 1)];
+
+    assert.equal(reopenStateOf(triage)?.id, 'Triage');
+    assert.equal(reopenStateOf(noTriage)?.id, 'Backlog');
+    assert.equal(reopenStateOf(onlyTodo)?.id, 'Todo');
+    assert.equal(reopenStateOf([state('Done', 'completed', 0)]), undefined);
+  });
+
+  it('writes the marked reply, then moves the issue of a team with no triage to its backlog', async () => {
+    const stub = installLinearStub({
+      teamStates: [
+        state('st_done', 'completed', 3),
+        state('st_todo', 'unstarted', 1),
+        state('st_backlog', 'backlog', 0),
+      ],
+    });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.check?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { verdict: 'wrong', author: CHECKER },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
+    );
+    assert.deepEqual(stub.calls[2]?.variables, { id: 'issue_1', input: { stateId: 'st_backlog' } });
+    assert.equal(answer?.stage, 'seeded');
+    assert.equal(answer?.comment.body, '**Bob** via Fruitback · member of Acme\nReopened: still wrong');
+  });
+
+  it('« Looks fixed » writes the reply and moves nothing', async () => {
+    const stub = installLinearStub({ teamStates: [state('st_backlog', 'backlog', 0)] });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    const answer = await store.check?.(
+      { issue: 'issue_1', clientId: 'acme' },
+      { verdict: 'fixed', author: CHECKER },
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', locale: 'fr' },
+    );
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation),
+      ['FruitbackCreateComment'],
+    );
+    assert.equal(answer?.stage, 'ripe');
+    assert.equal(answer?.comment.body, '**Bob** via Fruitback · membre de Acme\nVérifié : semble corrigé');
+  });
+
+  it('fails after the reply when the team has no state to reopen the issue in, and moves nothing', async () => {
+    const stub = installLinearStub({ teamStates: [state('st_done', 'completed', 0)] });
+    const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
+
+    await assert.rejects(
+      store.check?.({ issue: 'issue_1', clientId: 'acme' }, { verdict: 'wrong', author: CHECKER }, undefined, {
+        showComments: true,
+        identitySecret: undefined,
+        read: 'public',
+        locale: 'en',
+      }) ?? Promise.resolve(),
+    );
+    assert.equal(
+      stub.calls.some((call) => call.operation === 'FruitbackReopenIssue'),
+      false,
+    );
   });
 });

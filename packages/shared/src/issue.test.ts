@@ -78,6 +78,22 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
     assert.deepEqual(seedIssueSchema.parse(issue), issue);
   });
 
+  it('reads checked and mine, and refuses a checked with no name or no instant, and a mine that is not true (FRU-294)', () => {
+    const issue = realisticIssue({
+      stage: 'ripe',
+      checked: { by: 'Bob', at: '2026-10-20T10:00:00.000Z' },
+      mine: true,
+    });
+
+    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+    for (const checked of [{ by: 'Bob' }, { at: '2026-10-20T10:00:00.000Z' }, {}, 'Bob']) {
+      assert.equal(seedIssueSchema.safeParse({ ...issue, checked }).success, false, JSON.stringify(checked));
+    }
+    for (const mine of [false, 'true', 1]) {
+      assert.equal(seedIssueSchema.safeParse({ ...issue, mine }).success, false, String(mine));
+    }
+  });
+
   it('reads an answer with no URL, as a store with no web interface gives it', () => {
     const { url: _none, ...issue } = realisticIssue();
 

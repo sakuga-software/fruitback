@@ -16,14 +16,16 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import {
   type BatchAnswer,
   type BatchMemory,
+  type CheckAnswer,
   type CreatedIssue,
+  type NewCheck,
   type NewReply,
   type SeedIssueQuery,
   type SeedStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { replyText } from './reply-text.ts';
+import { checkText, replyText } from './reply-text.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
@@ -168,6 +170,87 @@ export async function createReply(
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
 
   return seedCommentOf(comment);
+}
+
+/**
+ * The states of the team of an issue, to reopen it (FRU-294). The team is the issue's own: the read
+ * that found the note asked for the team of the client, so this is that team.
+ */
+const ISSUE_STATES_QUERY = `
+  query FruitbackIssueStates($id: String!) {
+    issue(id: $id) {
+      id
+      team { id states(first: 100) { nodes { id name type position } } }
+    }
+  }
+`;
+
+const REOPEN_ISSUE_MUTATION = `
+  mutation FruitbackReopenIssue($id: String!, $input: IssueUpdateInput!) {
+    issueUpdate(id: $id, input: $input) {
+      success
+      issue { id state { id name type } }
+    }
+  }
+`;
+
+type WorkflowStateNode = { id: string; name: string; type: string; position: number };
+type IssueStatesResult = { issue: { id: string; team: { id: string; states: { nodes: WorkflowStateNode[] } } } | null };
+type ReopenIssueResult = {
+  issueUpdate: {
+    success: boolean;
+    issue: { id: string; state: { id: string; name: string; type: string } | null } | null;
+  };
+};
+
+/** The types of state a reopened note goes to, the first that the team has. */
+export const REOPEN_STATE_TYPES = ['triage', 'backlog', 'unstarted'] as const;
+
+/**
+ * The state a note goes back to with « Still wrong » (FRU-294): of the first type of
+ * `REOPEN_STATE_TYPES` that the team has, the first of its board. `undefined` for a team with none.
+ */
+export function reopenStateOf(states: readonly WorkflowStateNode[]): WorkflowStateNode | undefined {
+  for (const type of REOPEN_STATE_TYPES) {
+    const [first] = states.filter((state) => state.type === type).sort((a, b) => a.position - b.position);
+    if (first !== undefined) return first;
+  }
+
+  return undefined;
+}
+
+/**
+ * A verdict under an issue (FRU-294). The reply is written first, then « Still wrong » moves the issue
+ * to `reopenStateOf`. A move that fails leaves a « wrong » reply on an issue still done: the note reads
+ * as not confirmed, and a second try writes the reply again and moves it. The other order left an
+ * issue moved with no reply, which a second try refused as `409 not-done` (raised in review).
+ * The scope `write` of OAuth and a personal key both allow the two calls.
+ */
+export async function createCheck(
+  config: LinearConfig,
+  issueId: string,
+  check: NewCheck,
+  locale: string | undefined,
+  stages: StageExceptions = {},
+): Promise<CheckAnswer | undefined> {
+  const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
+    input: { issueId, body: checkText(check, locale) },
+  });
+  const comment = created.commentCreate.comment;
+  if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  if (check.verdict === 'fixed') return { comment: seedCommentOf(comment), stage: 'ripe' };
+
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
+  const state = reopenStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no state to reopen it in');
+  const moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+    id: issueId,
+    input: { stateId: state.id },
+  });
+  if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
+
+  return { comment: seedCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
 
 type TeamLabelsResult = { team: { labels: { nodes: { id: string; name: string }[] } } | null };
@@ -711,6 +794,7 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
     findForPage: (query, client, policy) =>
       fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
+    check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
   };
 }
 

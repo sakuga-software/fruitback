@@ -111,6 +111,15 @@ name of their account and the workspace for a member, the name they typed (or «
 verified » for anybody else. The worker keeps no copy of a reply that went to a tracker. In Linear
 the comment is shown under the app of Fruitback, or under the owner of a personal key.
 
+### « Looks fixed » and « Still wrong » (FRU-294)
+
+A verdict on a note marked done is a reply: it goes where the note went, under the same line as a
+reply of a member (the name of their account and their workspace), then one line that says
+« Checked: looks fixed » or « Reopened: still wrong », then what the person typed, if anything,
+quoted. « Still wrong » also moves the note back in the tracker. The worker keeps no copy of the
+verdict: a read finds it in the replies. The index of the notes keeps nothing new; it already keeps
+the account of the member who left a note, and that is what says who may give a verdict.
+
 ### What the worker keeps besides the note
 
 - **No access log.** The worker writes to its output at boot, on a configuration problem and on a

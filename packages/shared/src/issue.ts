@@ -101,6 +101,16 @@ export const seedIssueSchema = z.object({
    * them; empty means it did and there were none — the widget says something different for each.
    */
   comments: z.array(seedCommentSchema).optional(),
+  /**
+   * Who said that a note marked done looks fixed, and when (FRU-294). Read from its replies, in the
+   * store: present only on a `ripe` note whose newest verdict is « fixed ». Read-envelope field.
+   */
+  checked: z.object({ by: z.string(), at: z.string() }).optional(),
+  /**
+   * `true` on a note that the reader left, with the session of their account (FRU-294). Absent for
+   * every other note and every other reader: the worker says it only to the person it names.
+   */
+  mine: z.literal(true).optional(),
   seed: seedSchema,
 });
 

@@ -19,6 +19,9 @@ first publish made it expensive.
 - **A read says `identified: true` to a reader whose token the worker verified** (FRU-112), and
   leaves the field out for everybody else. Only `true` is the word of the worker. It says that a note
   of this reader would be signed by the worker, never who the reader is. A read-envelope field too.
+- **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
+  newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
+  optional, both read-envelope fields: `SEED_VERSION` does not move.
 
 ### The reasons, and the history
 

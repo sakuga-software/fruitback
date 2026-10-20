@@ -1676,6 +1676,50 @@ the database for a site with no destination.
   session from one address**, counted apart from the requests and in the same database; a member is
   not counted. test:`takes 5 replies with no session from one address in a minute, and a member's after them`.
 
+### « Looks fixed » and « Still wrong », from the extension (FRU-294)
+
+`POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` writes a
+verdict on a note that the team marked done. « fixed » writes a marked reply under the note, which
+stays done. « wrong » writes the marked reply, then reopens the note in its store (Linear: the first
+state of the team of type `triage`, else `backlog`, else `unstarted`; the database: `seeded`, in the
+same transaction).
+**The store is the one place that keeps the stage and the verdict**: the worker keeps no copy.
+
+- **Who.** A session of the extension of the workspace of the site, **read again in the store** as
+  for every write (2026-10-14), of a person who reads that site now. Of them, **the person who left
+  the note**, as the index of the notes keeps their account, **or a role with `manage-sites`**
+  (owner, admin). Another member, and a guest who left no note there: `403 not-allowed`. A guest of
+  another site: `403`. No token, the token of a site, the cookie of the console, a session that
+  ended, a person of another workspace, a workspace suspended: `401`.
+  test:`refuses another member who did not leave the note, and takes an owner, who manages the sites`,
+  whose control gives the same member to an index that names them as the author:
+  test:`the control: the same member is taken when the index names them as the author`.
+  test:`refuses no token, a session that ended, and the cookie of the console, with 401`.
+- **A note of a visitor, or of the token of a site, has no author the worker vouches for**: only a
+  role with `manage-sites` gives a verdict on it.
+- **When.** Only on a note that its store says is done **now**, read for the request and not in the
+  cache (`409 not-done`), and not confirmed already (`409 already-checked`): a « Still wrong » does
+  not reopen a note that the team did not close.
+  test:`answers 409 on a note that is not done, and on a note confirmed already, and writes nothing`.
+- **Which note.** As for a reply: the route reads the page for the site and writes only under a note
+  that the read answers, else `404`. test:`answers 404 for the id of a note of another site`.
+- **What goes to the tracker.** The name of the account and the name of the workspace, on the line
+  that says who wrote it, then the line of the verdict, then what the person typed, quoted. The
+  tracker writes it under the identity of its key, as a reply. **A reply of the page cannot pass for
+  a verdict**: its second line is always empty. **A person of the team can write a verdict by hand
+  in the tracker**: the tracker is theirs, and they can move the note there too.
+  test:`reads a verdict in either language of a team, and no reply of the page as one`.
+- **Where not.** A site whose store takes no reply takes no verdict: an address that only receives,
+  a tracker whose workspace hides its replies, GitHub. `403 checks-not-taken`.
+- **How much.** A text of at most 2 000 characters, like a reply. **5 verdicts a minute from one
+  address**, in the count of the replies with no session.
+- **What a read says.** `GET /feedback` adds `checked: { by, at }` to a done note whose newest verdict
+  is « fixed », read in its replies: anybody who reads the replies of the page reads it. It adds
+  `mine: true` to the notes that the reader left, **for a session of the workspace and nobody
+  else**, after the shared cache, like `canReply`.
+  test:`says mine to the person who left the note, and to nobody else`.
+- **The relay of the extension does not carry this path yet**: FRU-300 adds it to the list below.
+
 ### The picture of a note, taken by the extension (FRU-44)
 
 The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the

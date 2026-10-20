@@ -8,9 +8,9 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
-import { type IssueNode, toSeedIssue } from './linear.ts';
-import { replyText } from './reply-text.ts';
-import type { CreatedIssue, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
+import { type IssueNode, stageForLinearState, toSeedIssue } from './linear.ts';
+import { checkText, replyText } from './reply-text.ts';
+import type { CheckAnswer, CreatedIssue, NewCheck, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -137,6 +137,40 @@ async function createReply(
   return { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name };
 }
 
+/**
+ * A verdict on an issue of this client (FRU-294). « Still wrong » puts the issue back in Backlog
+ * first, as the real store picks the first state of the team that is not started.
+ */
+async function createCheck(
+  id: string,
+  check: NewCheck,
+  clientId: string | undefined,
+  locale?: string,
+): Promise<CheckAnswer | undefined> {
+  const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
+  if (issue === undefined) return undefined;
+  if (check.verdict === 'wrong') issue.state = { name: 'Backlog', type: 'backlog' };
+  const comment = {
+    id: `dev_reply_${issue.id}_${issue.comments?.nodes.length ?? 0}`,
+    body: checkText(check, locale),
+    createdAt: new Date().toISOString(),
+    user: { name: 'Fruitback' },
+  };
+  issue.comments = { nodes: [comment, ...(issue.comments?.nodes ?? [])] };
+
+  return {
+    comment: { id: comment.id, body: comment.body, createdAt: comment.createdAt, author: comment.user.name },
+    stage: stageForLinearState(issue.state?.type ?? ''),
+  };
+}
+
+/** Test seam: the state of the issue `id`, as a team would move it in Linear. */
+export function setMemoryIssueState(id: string, state: { name: string; type: string }): void {
+  const issue = issues.find((each) => each.id === id);
+  if (issue === undefined) throw new Error(`no issue ${id} in the dev store`);
+  issue.state = state;
+}
+
 /** Test seam, and what makes each playground run start from an empty page. */
 export function resetMemoryLinear(): void {
   issues.length = 0;
@@ -173,6 +207,7 @@ export function createMemoryStore(): SeedStore {
     create: (seed, _client, policy) => createSeedIssue(seed, policy.locale),
     findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
     reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
+    check: (target, check, _client, policy) => createCheck(target.issue, check, target.clientId, policy.locale),
   };
 }
 
