@@ -61,20 +61,38 @@ export function initialOf(name: string): string {
 }
 
 export type HeadOptions = {
-  /** The person signed in. With `onAccount`, the head ends on the button of the account. */
+  /** The person signed in: the button shows the initial. Nobody: it shows the gear. */
   account?: { name: string };
+  /** What the button of the account opens. Without it, the head has no button. */
   onAccount?: () => void;
 };
+
+/** The gear, in a box of 24: what the button of the account shows when nobody is signed in. */
+const GEAR =
+  'M19.62 10.33 L22.10 10.60 L22.10 13.40 L19.62 13.67 L18.57 16.21 L20.13 18.16 L18.16 20.13 L16.21 18.57 L13.67 19.62 L13.40 22.10 L10.60 22.10 L10.33 19.62 L7.79 18.57 L5.84 20.13 L3.87 18.16 L5.43 16.21 L4.38 13.67 L1.90 13.40 L1.90 10.60 L4.38 10.33 L5.43 7.79 L3.87 5.84 L5.84 3.87 L7.79 5.43 L10.33 4.38 L10.60 1.90 L13.40 1.90 L13.67 4.38 L16.21 5.43 L18.16 3.87 L20.13 5.84 L18.57 7.79 Z M15.10 12 A3.1 3.1 0 1 0 8.90 12 A3.1 3.1 0 1 0 15.10 12 Z';
 
 /** The head of a shell: 52 px, the drop and « Fruitback », and the button of the account. */
 export function head(document: Document, options: HeadOptions = {}): HTMLElement {
   const root = make(document, 'div', 'kit-head');
   root.append(dropMark(document), make(document, 'span', 'kit-brand', 'Fruitback'));
-  if (options.account !== undefined && options.onAccount !== undefined) {
+  if (options.onAccount !== undefined) {
     const avatar = button(document, 'kit-avatar', options.onAccount);
     avatar.setAttribute('aria-label', t('Account and settings'));
-    const dot = make(document, 'span', 'kit-avatar-dot', initialOf(options.account.name));
+    const dot = make(document, 'span', 'kit-avatar-dot');
     dot.setAttribute('aria-hidden', 'true');
+    if (options.account === undefined) {
+      const gear = document.createElementNS(SVG, 'svg');
+      gear.setAttribute('viewBox', '0 0 24 24');
+      gear.setAttribute('class', 'kit-gear');
+      const path = document.createElementNS(SVG, 'path');
+      path.setAttribute('d', GEAR);
+      path.setAttribute('fill-rule', 'evenodd');
+      path.setAttribute('fill', 'currentColor');
+      gear.append(path);
+      dot.append(gear);
+    } else {
+      dot.textContent = initialOf(options.account.name);
+    }
     avatar.append(dot);
     root.append(avatar);
   }

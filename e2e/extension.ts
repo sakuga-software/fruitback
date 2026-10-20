@@ -24,11 +24,15 @@ export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
-export const test = base.extend<{ extension: LoadedExtension }>({
-  // Playwright reads the fixtures a function asks for from this pattern, so it must be a pattern.
-  // oxlint-disable-next-line no-empty-pattern
-  extension: async ({}, use, testInfo) => {
-    const directory = copyWithLocalAccess(testInfo.outputPath('extension'));
+export const test = base.extend<{ extension: LoadedExtension; extraPermissions: string[] }>({
+  /**
+   * Permissions the copy holds beyond the shipped manifest, for one spec (FRU-297). A popup opened in
+   * a tab has no `activeTab`, which the click on the toolbar gives: with `tabs`, it reads the address
+   * of a tab whose site the browser does not grant, as the real popup does after that click.
+   */
+  extraPermissions: [[], { option: true }],
+  extension: async ({ extraPermissions }, use, testInfo) => {
+    const directory = copyWithLocalAccess(testInfo.outputPath('extension'), extraPermissions);
     // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile
     // holds a refresh token.
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'fruitback-e2e-profile-'));
@@ -61,7 +65,7 @@ export const test = base.extend<{ extension: LoadedExtension }>({
  * granted at load, so the request from the options page and the popup resolves at once. Only this
  * copy changes. The shipped manifest still asks for no host at install.
  */
-function copyWithLocalAccess(directory: string): string {
+function copyWithLocalAccess(directory: string, extraPermissions: string[] = []): string {
   const builtPath = path.join(BUILT_EXTENSION, 'manifest.json');
   if (!fs.existsSync(builtPath)) {
     throw new Error(`${BUILT_EXTENSION} is not built. Run pnpm e2e, which builds it first.`);
@@ -84,6 +88,9 @@ function copyWithLocalAccess(directory: string): string {
   fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
   manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`, `${AUTHENTICATED_WORKER_ORIGIN}/*`];
+  if (extraPermissions.length > 0) {
+    manifest.permissions = [...((manifest.permissions as string[] | undefined) ?? []), ...extraPermissions];
+  }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 
   return directory;
@@ -159,7 +166,7 @@ export async function addRule(
  *
  * The popup acts on the active tab of its window. It opens behind the site, so the site stays that tab.
  */
-export async function openPopup(extension: LoadedExtension, site: Page, origin = PLAYGROUND_ORIGIN): Promise<Page> {
+export async function openPopup(extension: LoadedExtension, site: Page, _origin = PLAYGROUND_ORIGIN): Promise<Page> {
   await site.bringToFront();
   const url = `chrome-extension://${extension.id}/popup.html`;
   await extension.worker.evaluate(async (popupUrl) => {
@@ -170,8 +177,10 @@ export async function openPopup(extension: LoadedExtension, site: Page, origin =
   await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
   if (popup === undefined) throw new Error('the popup did not open');
 
-  // Every screen of a page names its host, as the mock-up writes it (FRU-251): `localhost:5177`.
-  await expect(popup.getByText(new URL(origin).host, { exact: true })).toBeVisible();
+  // A screen is drawn: the shell, past the screen that says it is loading. Screen 1 of the mock-up
+  // of 2026-10-20 names no host (FRU-297), so the host is no longer what says the popup is ready.
+  await expect(popup.locator('.popup .popup-body')).toBeVisible();
+  await expect(popup.getByRole('status').filter({ hasText: /^(Loading…|Chargement…)$/ })).toHaveCount(0);
 
   return popup;
 }

@@ -4,13 +4,13 @@ import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
 import {
   connecting,
-  initialOf,
   loading,
   newSite,
   notAWebPage,
+  problem,
   shell,
   showPageCounts,
-  signInProblem,
+  signInStop,
   signedOut,
   siteInWorkspace,
   siteOn,
@@ -39,43 +39,39 @@ const nothing = () => {};
 
 afterEach(() => setLanguage('en'));
 
-describe('the shell of the popup', () => {
-  it('has a head with the logo and the gear, a body, and no foot when nobody is signed in', () => {
+describe('the shell of the popup (FRU-297)', () => {
+  it('has the head of the kit with the button of the account, a body, and no foot when nobody is signed in', () => {
     const document = page();
-    const root = shell(document, { onSettings: nothing }, document.createTextNode('Body'));
+    let settings = 0;
+    const root = shell(document, { onSettings: () => (settings += 1) }, document.createTextNode('Body'));
 
     assert.deepEqual(
       [...root.children].map((child) => child.className),
-      ['popup-head', 'popup-body'],
+      ['kit-head popup-head', 'popup-body'],
     );
-    const logo = root.querySelector('.popup-head svg.logo');
-    assert.equal(logo?.getAttribute('role'), 'img');
-    assert.equal(logo?.getAttribute('aria-label'), 'Fruitback');
-    assert.deepEqual(stops(root), ['button: Settings and every site']);
-    // The gear is a drawing the button names: it says nothing of its own.
-    assert.equal(root.querySelector('.icon-button svg')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(root.querySelector('.kit-brand')?.textContent, 'Fruitback');
+    // Nobody signed in: the button shows the gear, and its name says what it opens.
+    assert.deepEqual(stops(root), ['button: Account and settings']);
+    assert.ok(root.querySelector('.kit-avatar svg.kit-gear') !== null);
+    (root.querySelector('.kit-avatar') as HTMLElement).click();
+    assert.equal(settings, 1);
   });
 
-  it('says who is signed in, and gives the foot of the account', () => {
+  it('shows the initial of who is signed in, and gives the foot of the account', () => {
     const document = page();
-    let settings = 0;
     const root = shell(document, {
-      onSettings: () => (settings += 1),
+      onSettings: nothing,
       account: { name: 'Camille Durand', email: 'camille@acme.dev', console: 'https://app.fruitback.test' },
     });
 
-    const avatar = root.querySelector('.avatar');
-    assert.equal(avatar?.textContent, 'C');
-    assert.equal(avatar?.getAttribute('role'), 'img');
-    assert.equal(avatar?.getAttribute('aria-label'), 'Signed in as Camille Durand');
+    assert.equal(root.querySelector('.kit-avatar')?.textContent, 'C');
+    assert.equal(root.querySelector('.kit-avatar')?.getAttribute('aria-label'), 'Account and settings');
     const foot = root.querySelector('.popup-foot');
     assert.equal(foot?.querySelector('.who')?.textContent, 'camille@acme.dev');
     const consoleLink = foot?.querySelector('a');
     assert.equal(consoleLink?.textContent, 'Open the console');
     assert.equal(consoleLink?.getAttribute('href'), 'https://app.fruitback.test');
     assert.equal(consoleLink?.getAttribute('rel'), 'noreferrer');
-    (root.querySelector('.icon-button') as HTMLElement).click();
-    assert.equal(settings, 1);
   });
 
   it('gives no link to a console it does not know, and the name when there is no address', () => {
@@ -86,106 +82,93 @@ describe('the shell of the popup', () => {
     assert.equal(root.querySelector('.popup-foot a'), null);
   });
 
-  it('takes the first letter of a name, whatever is in front of it', () => {
-    assert.equal(initialOf('  émile'), 'É');
-    assert.equal(initialOf('"Zoë"'), 'Z');
-    assert.equal(initialOf('42 rue'), '4');
-    assert.equal(initialOf(''), '?');
-    assert.equal(initialOf('—'), '?');
+  it('can leave out the button of the account, and says which screen of the mock-up it holds', () => {
+    const root = shell(page(), { onSettings: nothing, accountButton: false, screen: 1 });
+
+    assert.equal(root.querySelector('button'), null);
+    assert.ok(root.classList.contains('popup-screen-1'));
   });
 });
 
-describe('signed out (05)', () => {
-  it('says what to do, offers one action, and points a self-hosted instance to the settings', () => {
+describe('1 · signed out (FRU-297)', () => {
+  it('says what Fruitback is for, offers e-mail, Google and GitHub, and leads a server of its own to the page', () => {
     const document = page();
     const done: string[] = [];
     const root = signedOut(document, {
-      origin: ORIGIN,
       canSignIn: true,
       onSignIn: () => done.push('sign in'),
       onSettings: () => done.push('settings'),
     });
 
-    assert.equal(root.querySelector('.host')?.textContent, 'staging.acme.dev');
-    assert.equal(root.querySelector('h1')?.textContent, 'Sign in to see and leave notes here');
+    assert.equal(root.querySelector('h1')?.textContent, 'Comment on any website, right on the page');
     assert.equal(
       root.querySelector('.lead')?.textContent,
-      'One account for the console and this extension. The sign-in opens in a tab, and this popup picks it up by itself.',
+      'Sign in once. Fruitback then works on every site your team reviews.',
     );
-    assert.equal(root.querySelector('.popup-foot')?.textContent, 'Running your own Fruitback? Connect it in settings');
-    // The order of the mock-up: the settings, the action, the link.
+    assert.deepEqual(
+      [...root.querySelectorAll('.invited span')].map((line) => line.textContent),
+      ['Invited by a client or a team?', 'Use the email the invitation was sent to.'],
+    );
+    // The order of the mock-up: no button of the account, the three ways in, then the foot.
     assert.deepEqual(stops(root), [
-      'button: Settings and every site',
-      'button: Sign in to Fruitback',
-      'button: Connect it in settings',
+      'button: Sign in with email',
+      'button: Google',
+      'button: GitHub',
+      'button: Use your own Fruitback server',
     ]);
-    // Signed out: no avatar, and none of the words the popup no longer says.
-    assert.equal(root.querySelector('.avatar'), null);
+    assert.ok(root.classList.contains('popup-screen-1'));
+    // No word of the mechanics of before.
     assert.doesNotMatch(root.textContent ?? '', /\b(worker|rule|mode|client id|pair)/i);
 
-    (root.querySelector('.action') as HTMLElement).click();
+    // The three ways in all start the sign-in of the console: it offers its own methods.
+    for (const button of root.querySelectorAll<HTMLElement>('.methods button')) button.click();
     (root.querySelector('.popup-foot button') as HTMLElement).click();
-    assert.deepEqual(done, ['sign in', 'settings']);
+    assert.deepEqual(done, ['sign in', 'sign in', 'sign in', 'settings']);
   });
 
-  it('has no sign-in in a build that names no Fruitback to sign in to', () => {
-    const root = signedOut(page(), { origin: ORIGIN, canSignIn: false, onSignIn: nothing, onSettings: nothing });
+  it('leads to the page of the extension alone in a build that names no Fruitback to sign in to', () => {
+    const root = signedOut(page(), { canSignIn: false, onSignIn: nothing, onSettings: nothing });
 
-    assert.equal(root.querySelector('.action'), null);
-    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Connect it in settings']);
+    assert.deepEqual(stops(root), ['button: Use your own Fruitback server']);
+    assert.ok(root.querySelector('.kit-primary') !== null);
+    assert.equal(root.querySelector('.popup-foot'), null);
   });
 
-  it('says the session ended when it did, and still offers the one action', () => {
-    const root = signedOut(page(), {
-      origin: ORIGIN,
-      canSignIn: true,
-      ended: true,
-      onSignIn: nothing,
-      onSettings: nothing,
-    });
+  it('says the session ended when it did, and still offers the ways in', () => {
+    const root = signedOut(page(), { canSignIn: true, ended: true, onSignIn: nothing, onSettings: nothing });
 
     assert.equal(root.querySelector('h1')?.textContent, 'Your sign-in ended');
     assert.equal(root.querySelector('.lead')?.textContent, 'Sign in again to see and leave notes here.');
-    assert.equal(root.querySelector('.action')?.textContent, 'Sign in to Fruitback');
+    assert.equal(root.querySelector('.kit-primary')?.textContent, 'Sign in with email');
   });
 
   it('speaks French', () => {
     setLanguage('fr');
-    const root = signedOut(page(), { origin: ORIGIN, canSignIn: true, onSignIn: nothing, onSettings: nothing });
+    const root = signedOut(page(), { canSignIn: true, onSignIn: nothing, onSettings: nothing });
 
-    assert.equal(root.querySelector('h1')?.textContent, 'Connectez-vous pour voir et laisser des notes ici');
-    assert.equal(root.querySelector('.action')?.textContent, 'Se connecter à Fruitback');
+    assert.equal(root.querySelector('h1')?.textContent, 'Commentez n’importe quel site, directement sur la page');
+    assert.equal(root.querySelector('.kit-primary')?.textContent, 'Se connecter par e-mail');
+    assert.equal(root.querySelector('.popup-foot')?.textContent, 'Utiliser votre propre serveur Fruitback');
   });
 });
 
-describe('a sign-in that waits for the console', () => {
+describe('1, while the sign-in waits for the console', () => {
   it('shows the word to check, says it waits once, and can start again', () => {
     const document = page();
     let again = 0;
-    const root = connecting(document, {
-      origin: ORIGIN,
-      word: 'PLUM 47',
-      onStartAgain: () => (again += 1),
-      onSettings: nothing,
-    });
+    const root = connecting(document, { word: 'PLUM 47', onStartAgain: () => (again += 1), onSettings: nothing });
 
     assert.equal(root.querySelector('h1')?.textContent, 'Check that the tab shows the same word');
     const word = root.querySelector('.word');
     assert.equal(word?.textContent, 'PLUM 47');
     assert.equal(root.querySelector('[role="status"]')?.textContent, 'Waiting for you to connect in the tab…');
-    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Start again']);
+    assert.deepEqual(stops(root), ['button: Start again']);
     (root.querySelector('.link-button') as HTMLElement).click();
     assert.equal(again, 1);
   });
 
   it('says when Fruitback did not answer a claim, and keeps the word', () => {
-    const root = connecting(page(), {
-      origin: ORIGIN,
-      word: 'PLUM 47',
-      unanswered: true,
-      onStartAgain: nothing,
-      onSettings: nothing,
-    });
+    const root = connecting(page(), { word: 'PLUM 47', unanswered: true, onStartAgain: nothing, onSettings: nothing });
 
     assert.equal(root.querySelector('[role="status"]')?.textContent, 'Fruitback did not answer. The popup asks again.');
     assert.equal(root.querySelector('.word')?.textContent, 'PLUM 47');
@@ -193,7 +176,6 @@ describe('a sign-in that waits for the console', () => {
 
   it('writes the word as text, whatever Fruitback sent', () => {
     const root = connecting(page(), {
-      origin: ORIGIN,
       word: '<img src=x onerror=alert(1)>',
       onStartAgain: nothing,
       onSettings: nothing,
@@ -204,55 +186,84 @@ describe('a sign-in that waits for the console', () => {
   });
 });
 
-describe('a sign-in that did not finish', () => {
-  for (const [problem, title, sentence, button] of [
-    ['refused', 'The sign-in did not finish.', 'It was refused in the console.', 'Sign in to Fruitback'],
-    ['expired', 'The sign-in did not finish.', 'The tab was not approved in time.', 'Sign in to Fruitback'],
-    ['unavailable', 'Fruitback did not answer.', 'Check the connection, then try again.', 'Try again'],
-    [
-      'untrusted',
-      'The sign-in did not start.',
-      'Fruitback named a console that is not its own.',
-      'Sign in to Fruitback',
-    ],
-    [
-      'blocked',
-      'The sign-in did not start.',
-      'The browser did not give the extension access to Fruitback.',
-      'Sign in to Fruitback',
-    ],
+describe('1, after a sign-in that did not finish', () => {
+  for (const [stopped, title, sentence] of [
+    ['refused', 'The sign-in did not finish.', 'It was refused in the console.'],
+    ['expired', 'The sign-in did not finish.', 'The tab was not approved in time.'],
+    ['unavailable', 'Fruitback did not answer.', 'Check the connection, then try again.'],
+    ['untrusted', 'The sign-in did not start.', 'Fruitback named a console that is not its own.'],
+    ['blocked', 'The sign-in did not start.', 'The browser did not give the extension access to Fruitback.'],
   ] as const) {
-    it(`says why when it was ${problem}, and offers to start again`, () => {
+    it(`says why in an alert when it was ${stopped}, above the ways to sign in again`, () => {
       let again = 0;
-      const root = signInProblem(page(), {
-        origin: ORIGIN,
-        problem,
+      const root = signedOut(page(), {
+        canSignIn: true,
+        stop: signInStop(stopped),
         onSignIn: () => (again += 1),
         onSettings: nothing,
       });
 
-      assert.equal(root.querySelector('h1')?.textContent, title);
       // Said at once: the screen changed under the person, and this is why.
-      assert.equal(root.querySelector('[role="alert"]')?.textContent, sentence);
-      assert.deepEqual(stops(root), ['button: Settings and every site', `button: ${button}`]);
-      (root.querySelector('.action') as HTMLElement).click();
+      const alert = root.querySelector('[role="alert"]');
+      assert.equal(alert?.querySelector('.kit-alert-title')?.textContent, title);
+      assert.equal(alert?.querySelector('.kit-alert-body')?.textContent, sentence);
+      // Above the ways in, as the ticket draws it.
+      assert.equal(alert?.nextElementSibling?.className, 'methods');
+      (root.querySelector('.kit-primary') as HTMLElement).click();
       assert.equal(again, 1);
     });
   }
 });
 
-describe('the two screens with nothing to do', () => {
-  it('says that a page that is not http or https is not one Fruitback runs on', () => {
+describe('4 · a problem, with its fix (FRU-297)', () => {
+  it('says the access to a site was removed, and offers to give it back or to turn the site off', () => {
+    const done: string[] = [];
+    const root = problem(page(), {
+      site: ORIGIN,
+      title: "Fruitback can't open this page",
+      text: 'Access to staging.acme.dev was removed in your browser settings. Your notes are safe.',
+      primary: { label: 'Allow access again', onClick: () => done.push('allow') },
+      secondary: { label: 'Turn off for this site', onClick: () => done.push('off') },
+      account: { name: 'Mathieu' },
+      onSettings: nothing,
+    });
+
+    assert.ok(root.classList.contains('popup-screen-4'));
+    assert.equal(root.querySelector('.kit-site-host')?.textContent, 'staging.acme.dev');
+    const state = root.querySelector('.kit-site-state') as HTMLElement;
+    assert.equal(state.textContent, 'Paused');
+    assert.equal(state.dataset.paused, 'true');
+    assert.equal(root.querySelector('[role="alert"] .kit-alert-title')?.textContent, "Fruitback can't open this page");
+    assert.deepEqual(stops(root), [
+      'button: Account and settings',
+      'button: Allow access again',
+      'button: Turn off for this site',
+    ]);
+    (root.querySelector('.kit-primary') as HTMLElement).click();
+    (root.querySelector('.kit-secondary') as HTMLElement).click();
+    assert.deepEqual(done, ['allow', 'off']);
+  });
+
+  it('has no tile and no button when the problem is about no site and has no fix', () => {
+    const root = problem(page(), { title: "Fruitback can't reach api.fruitback.com", onSettings: nothing });
+
+    assert.equal(root.querySelector('.kit-tile'), null);
+    assert.deepEqual(stops(root), ['button: Account and settings']);
+  });
+
+  it('says that a page that is not http or https is not one Fruitback runs on, with no button', () => {
     const root = notAWebPage(page(), { onSettings: nothing });
 
+    assert.ok(root.classList.contains('popup-screen-4'));
     assert.equal(root.querySelector('h1')?.textContent, 'Fruitback works on http and https pages.');
+    assert.deepEqual(stops(root), ['button: Account and settings']);
   });
 
   it('says it is loading, once, with nothing to press but the settings', () => {
     const root = loading(page(), { onSettings: nothing });
 
     assert.equal(root.querySelector('[role="status"]')?.textContent, 'Loading…');
-    assert.deepEqual(stops(root), ['button: Settings and every site']);
+    assert.deepEqual(stops(root), ['button: Account and settings']);
   });
 });
 
@@ -296,7 +307,7 @@ describe('a site of a workspace, not on here (06, FRU-254)', () => {
       '3 new · 2 to do · 4 in progress · 2 done · 1 closed',
     );
     assert.equal(root.querySelector('.note')?.textContent, 'Chrome asks for access to this site only.');
-    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Turn on here']);
+    assert.deepEqual(stops(root), ['button: Account and settings', 'button: Turn on here']);
     (root.querySelector('.action') as HTMLElement).click();
     assert.equal(turned, 1);
   });
@@ -368,7 +379,7 @@ describe('a site of a workspace, on here (07, FRU-254)', () => {
       ],
     );
     assert.deepEqual(stops(root), [
-      'button: Settings and every site',
+      'button: Account and settings',
       'button: Fruitback on staging.acme.dev',
       'button: Leave feedback',
       'button: Show every note of the page',
@@ -452,7 +463,7 @@ describe('a site of no workspace (08, FRU-255)', () => {
     assert.equal(root.querySelector('h1')?.textContent, 'preview.client.fr');
     assert.equal(root.querySelector('.subtitle')?.textContent, 'Not in a workspace yet');
     assert.equal(root.querySelector('select'), null);
-    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Add to Sakuga and turn on']);
+    assert.deepEqual(stops(root), ['button: Account and settings', 'button: Add to Sakuga and turn on']);
     (root.querySelector('form') as HTMLFormElement).requestSubmit();
     assert.deepEqual(added, ['ws_1']);
     // Nothing about previews: no proof of the domain, no preview (Q4).
@@ -484,7 +495,7 @@ describe('a site of no workspace (08, FRU-255)', () => {
 
     assert.equal(root.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
     assert.equal(root.querySelector('.action'), null);
-    assert.deepEqual(stops(root), ['button: Settings and every site']);
+    assert.deepEqual(stops(root), ['button: Account and settings']);
   });
 
   it('speaks French', () => {

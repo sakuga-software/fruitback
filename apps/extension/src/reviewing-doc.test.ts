@@ -24,7 +24,7 @@ import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './
 describe('the guide quotes the popup this extension renders', () => {
   const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
   // The screens of the sign-in and the head of every screen are drawn in `popup-view.ts` (FRU-251).
-  const popup = `${read('../entrypoints/popup/main.ts')}\n${read('./popup-view.ts')}`;
+  const popup = `${read('../entrypoints/popup/main.ts')}\n${read('./popup-view.ts')}\n${read('./kit.ts')}`;
   const optionsPage = read('../entrypoints/options/main.ts');
   const guide = read('../../../docs/reviewing.md');
 
@@ -90,9 +90,14 @@ describe('the guide quotes the popup this extension renders', () => {
       "team mode · the site's own widget",
       'No rule covers this origin, so Fruitback does nothing here.',
       'Turn off for every site this rule covers',
-      'Settings and every site',
-      'Sign in to Fruitback',
-      'Connect it in settings',
+      // The screens 1 and 4 of the mock-up of 2026-10-20 (FRU-297).
+      'Account and settings',
+      'Sign in with email',
+      'Use your own Fruitback server',
+      "Fruitback can't open this page",
+      'Allow access again',
+      'Turn off for this site',
+      'Paused',
     ];
 
     for (const control of controls) {

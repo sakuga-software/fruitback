@@ -1,6 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CLOUD, type PopupFacts, cloudEndpoint, decide } from './popup-state.ts';
+import {
+  DEFAULT_CLOUD,
+  POPUP_KINDS,
+  type PopupFacts,
+  SCREEN_OF,
+  cloudEndpoint,
+  decide,
+  screenOf,
+  unmapped,
+} from './popup-state.ts';
 
 /** A site with no rule, in a browser that holds nothing: the first popup anybody opens. */
 const FRESH: PopupFacts = {
@@ -107,5 +116,42 @@ describe('the Fruitback of the build', () => {
     for (const raw of ['', '  ', 'http://fruitback.client.fr', 'javascript:alert(1)', 'not an address']) {
       assert.equal(cloudEndpoint(raw), undefined, raw);
     }
+  });
+});
+
+describe('the ten states of before, in the four screens of the mock-up of 2026-10-20 (FRU-297)', () => {
+  it('puts each kind in its screen, as the table of the ticket says', () => {
+    assert.deepEqual(Object.fromEntries(POPUP_KINDS.map((kind) => [kind, SCREEN_OF[kind]])), {
+      'not-web': 4,
+      'pair-link': 'page',
+      connecting: 1,
+      'sign-in-problem': 1,
+      form: 'page',
+      rule: 3,
+      'no-access': 4,
+      offer: 2,
+      unreachable: 4,
+      'new-site': 2,
+      'signed-out': 1,
+    });
+    assert.equal(screenOf(on({})), 1);
+    assert.equal(screenOf(on({ rule: true })), 3);
+  });
+
+  it('finds a kind that has no screen', () => {
+    // The planted violation: the table without « unreachable ».
+    const { unreachable: _left, ...table } = SCREEN_OF;
+    assert.deepEqual(unmapped(table), ['unreachable']);
+    assert.deepEqual(unmapped(SCREEN_OF), []);
+  });
+
+  it('says a rule whose access the browser removed is the screen of a problem (4)', () => {
+    assert.deepEqual(on({ rule: true, accessRemoved: true }), { kind: 'no-access' });
+    assert.deepEqual(on({ rule: true, accessRemoved: false }), { kind: 'rule' });
+    // A sign-in in progress still comes first.
+    assert.deepEqual(on({ rule: true, accessRemoved: true, connect: 'waiting' }), {
+      kind: 'connecting',
+      unanswered: false,
+    });
   });
 });

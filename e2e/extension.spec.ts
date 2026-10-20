@@ -550,7 +550,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   const popup = await openPopup(extension, page);
   await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
   await expect(popup.getByText('Activé · playground', { exact: false })).toBeVisible();
-  await expect(popup.getByRole('button', { name: 'Réglages et tous les sites' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Compte et réglages' })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.lang)).toBe('fr');
 
   const options = await extension.context.newPage();

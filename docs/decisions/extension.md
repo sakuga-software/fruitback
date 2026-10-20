@@ -278,7 +278,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **One source for the parts the popup, the side panel and the page share.** `src/kit.ts` builds
   them, with no `browser`, so `kit.test.ts` reads each on happy-dom; `src/kit.css` gives their
   measures on the tokens. The popup and the options page link `kit.css` after `popup/style.css`.
-- **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px, the drop and
+- **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px and its rule of 1 px, 53 in all, as the mock-up draws it; the drop and
   « Fruitback », the button of the account of 44 px), the main button (46 px; 56 px with the drop
   for the action of a site; 48 px in the panel), the second button (44 px), the text button
   (« Change », a target of 44 px), the switch (44 × 26, 36 × 22 in a table, 40 × 24 in the
@@ -295,6 +295,34 @@ did not change: the fields of 760 px and the file input of the browser are as th
   the notes of the page. Its screens do not change: the four screens of the mock-up are FRU-297
   and FRU-298, which take the head and the other parts. `e2e/popup-layout.spec.ts` reads the
   measures of the kit on computed styles, in both schemes and in both languages.
+
+## The popup in four screens (FRU-297)
+
+### The rules, in short
+
+- **The ten kinds that `decide` answers fall in the four screens of the mock-up of 2026-10-20**, or
+  in the page of the extension: `SCREEN_OF` in `src/popup-state.ts`, a `Record` over the union, so a
+  kind with no screen does not compile, and `popup-state.test.ts` holds the table of the ticket.
+  1 · signed out (`signed-out`, `connecting`, `sign-in-problem`); 2 · a site not added (`offer`,
+  `new-site`); 3 · a site on (`rule`); 4 · a problem (`no-access`, `unreachable`, `not-web`); the
+  page (`form`, `pair-link`). Until the page has them (FRU-301, FRU-302), `form` and `pair-link`
+  keep their screen of before, and the screens 2 and 3 are FRU-298.
+- **The shell is 380 × 580 at least**, with the head of the kit. The button at the top right,
+  **Account and settings**, shows the initial of the account, or the gear when nobody is signed in,
+  and opens the page of the extension. Screen 1 has no such button: its foot, **Use your own
+  Fruitback server**, leads there.
+- **E-mail, Google and GitHub all start the sign-in of the console** (FRU-238), which offers its
+  own methods. The extension has no surface of authentication of its own: decided by the
+  orchestrator on 2026-10-20. A sign-in that did not finish is screen 1 with the alert of the kit
+  above the ways in.
+- **`no-access` is a rule that is on, for sites the browser no longer grants**: access was removed
+  in the settings of the browser. The popup asks `permissions.contains` for the rule's pattern.
+  **Allow access again** calls `permissions.request` in the click itself (an await before it loses
+  the gesture), then injects the open tabs; **Turn off for this site** keeps the rule, off.
+- **The e2e of screen 4 holds `tabs`, in the copy of the extension only**: a popup opened in a tab
+  has no `activeTab`, which the click on the toolbar gives, and could not read the address of a site
+  it does not grant. Automation cannot answer the prompt of **Allow access again**, so the spec
+  plays **Turn off for this site**.
 
 ## The rules in the reviewer's other browsers (FRU-72)
 

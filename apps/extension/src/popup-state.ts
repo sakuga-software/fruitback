@@ -49,6 +49,11 @@ export type PopupFacts = {
   /** A rule of this browser covers the origin. */
   rule: boolean;
   /**
+   * The rule is on, and the browser no longer grants its sites (FRU-297): access was removed in the
+   * settings of the browser. Asked only for a rule that is on.
+   */
+  accessRemoved?: boolean;
+  /**
    * The rule is of a site of the workspace of this build's Fruitback, and no session of it is held
    * now: it ended, and its widget reads and writes nothing until the person signs in again (FRU-238).
    */
@@ -67,6 +72,7 @@ export type PopupState =
   | { kind: 'sign-in-problem'; problem: 'refused' | 'expired' }
   | { kind: 'form' }
   | { kind: 'rule' }
+  | { kind: 'no-access' }
   | { kind: 'offer' }
   | { kind: 'unreachable' }
   | { kind: 'new-site' }
@@ -92,6 +98,8 @@ export function decide(facts: PopupFacts): PopupState {
   if (facts.rule && facts.ruleWantsSession === true) {
     return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: facts.account === 'ended' };
   }
+  // The rule is on and the browser took its access away: the one thing to do is to give it back.
+  if (facts.rule && facts.accessRemoved === true) return { kind: 'no-access' };
   if (facts.rule) return { kind: 'rule' };
   if (facts.offer) return { kind: 'offer' };
 
@@ -104,4 +112,57 @@ export function decide(facts: PopupFacts): PopupState {
   if (facts.sessions === 0) return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: false };
 
   return { kind: 'form' };
+}
+
+/**
+ * The four screens of the mock-up of 2026-10-20 (FRU-297), and the page of the extension.
+ *
+ * 1 · signed out (with the word of a sign-in, and what stopped one); 2 · a site not added here;
+ * 3 · a site on; 4 · a problem, with its fix. `page`: what the page of the extension takes over
+ * (FRU-301, FRU-302). Until that page has them, `form` and `pair-link` keep their screen of before.
+ */
+export type PopupScreen = 1 | 2 | 3 | 4 | 'page';
+
+/** Every kind `decide` answers, written once: `screenOf` and its test read this list. */
+export const POPUP_KINDS = [
+  'not-web',
+  'pair-link',
+  'connecting',
+  'sign-in-problem',
+  'form',
+  'rule',
+  'no-access',
+  'offer',
+  'unreachable',
+  'new-site',
+  'signed-out',
+] as const satisfies readonly PopupState['kind'][];
+
+// The list above holds every kind of the union: a kind added to `PopupState` and not here fails here.
+type Missing = Exclude<PopupState['kind'], (typeof POPUP_KINDS)[number]>;
+const everyKindListed: [Missing] extends [never] ? true : Missing = true;
+void everyKindListed;
+
+/** The screen of each kind. A `Record` over the union: a kind with no screen does not compile. */
+export const SCREEN_OF: Readonly<Record<PopupState['kind'], PopupScreen>> = {
+  'signed-out': 1,
+  connecting: 1,
+  'sign-in-problem': 1,
+  offer: 2,
+  'new-site': 2,
+  rule: 3,
+  'no-access': 4,
+  unreachable: 4,
+  'not-web': 4,
+  form: 'page',
+  'pair-link': 'page',
+};
+
+export function screenOf(state: PopupState): PopupScreen {
+  return SCREEN_OF[state.kind];
+}
+
+/** The kinds of a table that have no screen: the check `popup-state.test.ts` plants a violation in. */
+export function unmapped(table: Partial<Record<PopupState['kind'], PopupScreen>>): PopupState['kind'][] {
+  return POPUP_KINDS.filter((kind) => table[kind] === undefined);
 }

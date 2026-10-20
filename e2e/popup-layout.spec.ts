@@ -4,17 +4,22 @@ import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test 
 import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
+/** The one `chrome.*` call of these specs, from the service worker: the rules in storage. */
+declare const chrome: {
+  storage: { local: { get(key: string): Promise<Record<string, unknown>>; set(items: object): Promise<void> } };
+};
+
 /**
  * The layout of the popup in its five states (FRU-169): signed out, a pairing link, paired, a site of
  * the workspace, a site turned on.
  *
  * The popup is opened in a tab, like every spec of the extension. Its real window follows its
- * content, which is 360 px wide since the shell of FRU-251, so the tab is measured at 360 px.
+ * content, which is 380 px wide since the shell of FRU-297, so the tab is measured at 380 px.
  */
 
 /** A name as long as an address: forty characters. */
 const NAME = 'qa+popup-layout-reviewer-01@example.test';
-const WIDTHS = [360];
+const WIDTHS = [380];
 /** Two buttons that touch read as one control. */
 const SPACE = 8;
 
@@ -38,13 +43,16 @@ function measure(popup: Page): Promise<Measure> {
 
     return {
       buttons: visible.map((button) => {
-        const range = document.createRange();
-        range.selectNodeContents(button);
+        // The lines of its words only: the dot of the button of the account is a box, not a line.
+        const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+        const tops = new Set<number>();
+        for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+        }
 
-        return {
-          name: button.textContent ?? '',
-          lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size,
-        };
+        return { name: button.getAttribute('aria-label') ?? button.textContent ?? '', lines: tops.size };
       }),
       closest,
       // The body is at least 280 px wide plus its padding, so a tab of 280 px always scrolls. What
@@ -63,7 +71,7 @@ async function expectLaidOut(popup: Page, state: string, buttons: number): Promi
     expect.soft(measured.buttons.length, `${where}: buttons`).toBe(buttons);
     expect
       .soft(
-        measured.buttons.filter((button) => button.lines !== 1),
+        measured.buttons.filter((button) => button.lines > 1),
         `${where}: buttons on two lines`,
       )
       .toEqual([]);
@@ -93,11 +101,11 @@ for (const language of ['en', 'fr'] as const) {
 
     // 1. Nothing held: sign in (FRU-251). The gear, the sign-in, and the way to a self-hosted instance.
     const empty = await openPopup(extension, page);
-    await expect(
-      empty.getByRole('button', { name: /^(Sign in to Fruitback|Se connecter à Fruitback)$/ }),
-    ).toBeVisible();
+    await expect(empty.getByRole('button', { name: /^(Sign in with email|Se connecter par e-mail)$/ })).toBeVisible();
     expect(await empty.evaluate(() => document.documentElement.lang)).toBe(language);
-    await expectLaidOut(empty, 'signed out', 3);
+    // Screen 1 (FRU-297): e-mail, Google, GitHub, and the link of the foot.
+    await expectLaidOut(empty, 'signed out', 4);
+    await expectNothingCut(empty, 'signed out', language);
     await empty.close();
 
     // 2. A pairing link.
@@ -128,7 +136,7 @@ for (const language of ['en', 'fr'] as const) {
     // person of the pairing.
     await turnOn.click();
     await expect(offered.getByRole('switch')).toBeChecked();
-    await expect(offered.getByRole('img', { name: new RegExp(NAME.replace(/[.+]/g, '\\$&')) })).toBeVisible();
+    await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The row of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
     await expectLaidOut(offered, 'site turned on', 5);
@@ -173,6 +181,105 @@ for (const language of ['en', 'fr'] as const) {
     await expect(offered.locator('.kit-primary')).toHaveCount(1);
   });
 }
+
+/** No word of a control cut, and nothing past the 380 px of the popup, in both schemes. */
+async function expectNothingCut(popup: Page, state: string, language: string): Promise<void> {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await popup.emulateMedia({ colorScheme });
+    const read = await popup.evaluate(() => ({
+      cut: [...document.querySelectorAll<HTMLElement>('button, h1, .kit-alert-title, .kit-alert-body, .invited')]
+        .filter((node) => node.scrollWidth > node.clientWidth + 1)
+        .map((node) => node.textContent),
+      wide: document.documentElement.scrollWidth,
+    }));
+    expect.soft(read.cut, `${state}, ${language}, ${colorScheme}: a word cut`).toEqual([]);
+    expect.soft(read.wide, `${state}, ${language}, ${colorScheme}: wider than the popup`).toBeLessThanOrEqual(380);
+  }
+  await popup.emulateMedia({ colorScheme: 'light' });
+}
+
+/** The boxes of screen 4 of the mock-up (popup/ExtPopups.dc.html, measured in a browser), ± 2 px. */
+const PROBLEM_BOXES = {
+  tile: { x: 24, y: 78, width: 40, height: 40 },
+  alert: { x: 24, y: 141, width: 332 },
+  allow: { x: 24, y: 456, width: 332, height: 46 },
+  off: { x: 24, y: 512, width: 332, height: 44 },
+} as const;
+
+/**
+ * 4 · A problem, with its fix (FRU-297), for real: a rule that is on, for an origin the browser does
+ * not grant. The copy of the extension holds access to `localhost` only, so the worker read on
+ * `127.0.0.1` is a site whose access is gone. « Allow access again » asks the browser, and automation
+ * cannot answer that prompt: the spec turns the site off instead, which keeps the rule.
+ */
+test.describe('screen 4 (FRU-297)', () => {
+  // The click on the toolbar gives the popup the address of the tab (`activeTab`): `tabs` stands for it.
+  test.use({ extraPermissions: ['tabs'] });
+  for (const language of ['en', 'fr'] as const) {
+    test(`screen 4: a site whose access was removed, at 380 px, in both schemes, in ${language}`, async ({
+      extension,
+    }) => {
+      if (language === 'fr') {
+        await extension.context.addInitScript(() => {
+          Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
+        });
+      }
+      const origin = WORKER_ORIGIN.replace('localhost', '127.0.0.1');
+      await extension.worker.evaluate(
+        async ({ pattern, endpoint }) => {
+          await chrome.storage.local.set({
+            sites: { [pattern]: { endpoint, enabled: true, mode: 'private', clientId: 'playground' } },
+          });
+        },
+        { pattern: origin, endpoint: WORKER_ORIGIN },
+      );
+      const site = await extension.context.newPage();
+      await site.goto(`${origin}/health`);
+      const popup = await openPopup(extension, site);
+      await popup.setViewportSize({ width: 380, height: 580 });
+
+      const allow = popup.getByRole('button', { name: /^(Allow access again|Autoriser à nouveau)$/ });
+      const off = popup.getByRole('button', { name: /^(Turn off for this site|Désactiver pour ce site)$/ });
+      await expect(allow).toBeVisible();
+      await expect(popup.getByRole('alert')).toContainText(
+        language === 'en' ? "Fruitback can't open this page" : 'Fruitback ne peut pas ouvrir cette page',
+      );
+      await expect(popup.locator('.kit-site-state')).toHaveText(language === 'en' ? 'Paused' : 'En pause');
+      await expect(popup.locator('.kit-site-host')).toHaveText('127.0.0.1:8788');
+      await expectLaidOut(popup, 'a problem', 3);
+      await expectNothingCut(popup, 'a problem', language);
+      // Where the font is the mock-up's: the CI draws Linux's, a pixel or two off (see popup-sign-in).
+      if (language === 'en' && process.platform === 'darwin') {
+        for (const [name, locator] of [
+          ['tile', popup.locator('.kit-tile')],
+          ['alert', popup.getByRole('alert')],
+          ['allow', allow],
+          ['off', off],
+        ] as const) {
+          const box = await locator.boundingBox();
+          for (const [side, value] of Object.entries(PROBLEM_BOXES[name])) {
+            expect
+              .soft(Math.abs((box?.[side as 'x'] ?? Number.NaN) - value), `${name}: ${side} is ${box?.[side as 'x']}`)
+              .toBeLessThanOrEqual(2);
+          }
+        }
+      }
+
+      // « Turn off for this site » keeps the rule, off, and the popup draws the rule again.
+      await off.click();
+      await expect(allow).toHaveCount(0);
+      expect(
+        await extension.worker.evaluate(async (pattern) => {
+          const { sites } = (await chrome.storage.local.get('sites')) as {
+            sites: Record<string, { enabled: boolean }>;
+          };
+
+          return sites[pattern]?.enabled;
+        }, origin),
+      ).toBe(false);
+    });
+  }
+});
 
 /** The accent of the extension in each scheme (FRU-292). */
 const ACCENT = { light: 'rgb(194, 65, 12)', dark: 'rgb(251, 146, 60)' } as const;
@@ -245,7 +352,7 @@ test('axe finds nothing on the popup and on the options page, in both schemes', 
   await openBareSite(page, 'popup-axe');
 
   const empty = await openPopup(extension, page);
-  await expect(empty.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await expect(empty.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await clean(empty, 'the popup signed out');
   // One popup at a time: `openPopup` finds the popup by its address.
   await empty.close();
