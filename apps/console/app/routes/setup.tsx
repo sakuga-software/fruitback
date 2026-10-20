@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
+import { API, type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
 import { PreviewScene } from '../preview-scene';
@@ -20,6 +20,10 @@ import { Account, Ask, Sent, Unnamed } from './setup-account';
 import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 import { siteLabel } from '../site-address';
+import { instanceOf } from '../instance';
+
+/** Whether this console calls Fruitback Cloud: the build holds no flag, the host of the worker decides. */
+const CLOUD = instanceOf(API).cloud;
 
 /**
  * The setup, on one screen (FRU-239, screen 01 of the mockup of 2026-10-13): « Your account »,
@@ -184,7 +188,12 @@ export default function Setup() {
         <div id="setup-title" className="mb-2">
           <Title size="setup">{t('Set up Fruitback')}</Title>
         </div>
-        <Lead className="mb-9">{t('Three steps to your first note on a live page. Hosted in Europe.')}</Lead>
+        {/* Only Fruitback Cloud is hosted in Europe: a self-hosted worker is where its owner put it (FRU-321). */}
+        <Lead className="mb-9">
+          {CLOUD
+            ? t('Three steps to your first note on a live page. Hosted in Europe.')
+            : t('Three steps to your first note on a live page.')}
+        </Lead>
 
         <Steps>
           <Step state={first} number={1} title={t('Your account')} currentPrefix={prefix}>

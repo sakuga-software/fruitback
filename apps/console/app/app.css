@@ -1174,8 +1174,11 @@ textarea {
 }
 
 /* Code to copy. It scrolls in its box, and the page does not. */
+/* A script breaks inside its attributes rather than being cut at the edge of a narrow card (FRU-321). */
 .kit-snippet {
   overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   padding: 10px 12px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-button);

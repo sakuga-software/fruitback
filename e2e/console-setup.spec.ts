@@ -418,6 +418,12 @@ const violations = async (page: Page): Promise<string[]> =>
     (violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`,
   );
 
+/**
+ * The mockup's lead ends with « Hosted in Europe », which a console that is not of the Cloud does not
+ * say (FRU-321): its lead is one line shorter at 1440 px, and what is under it is that much higher.
+ */
+const LEAD = 24;
+
 test.describe('the states of the setup, against the mockup (FRU-239)', () => {
   // The boxes of the mockup at 1440 × 900, read in its `measures.json`. Tolerance: 2 px.
   test('« Your account », to do: the boxes of the mockup at 1440 px', async ({ page }) => {
@@ -441,37 +447,37 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: `${CURRENT}Your account` })),
-      { x: 160, y: 240, width: 352.2, height: 26 },
+      { x: 160, y: 240 - LEAD, width: 352.2, height: 26 },
       'step 1',
     );
     expectNear(
       await boxOf(page.getByRole('textbox', { name: 'Work email' })),
-      { x: 160, y: 361, width: 352.2, height: 44 },
+      { x: 160, y: 361 - LEAD, width: 352.2, height: 44 },
       'field',
     );
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Email me a link' })),
-      { x: 160, y: 415, width: 142.5, height: 44 },
+      { x: 160, y: 415 - LEAD, width: 142.5, height: 44 },
       'main button',
     );
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Continue with Google' })),
-      { x: 160, y: 562, width: 352.2, height: 44 },
+      { x: 160, y: 562 - LEAD, width: 352.2, height: 44 },
       'Google',
     );
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Continue with GitHub' })),
-      { x: 160, y: 616, width: 352.2, height: 44 },
+      { x: 160, y: 616 - LEAD, width: 352.2, height: 44 },
       'GitHub',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Your site', exact: true })),
-      { x: 160, y: 692, width: 352.2, height: 26 },
+      { x: 160, y: 692 - LEAD, width: 352.2, height: 26 },
       'step 2',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Put it on the site', exact: true })),
-      { x: 160, y: 773, width: 352.2, height: 26 },
+      { x: 160, y: 773 - LEAD, width: 352.2, height: 26 },
       'step 3',
     );
     const preview = page.getByRole('region', { name: 'Preview of your site' });
@@ -499,23 +505,23 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(sent).toContainText('Check your inbox');
     await page.clock.runFor(19_000);
 
-    expectNear(await boxOf(sent), { x: 160, y: 278, width: 352.2, height: 283.5 }, 'callout');
+    expectNear(await boxOf(sent), { x: 160, y: 278 - LEAD, width: 352.2, height: 283.5 }, 'callout');
     const again = page.getByRole('button', { name: 'Send again in 0:41' });
-    expectNear(await boxOf(again), { x: 181, y: 455, width: 157.5, height: 40 }, '« Send again »');
+    expectNear(await boxOf(again), { x: 181, y: 455 - LEAD, width: 157.5, height: 40 }, '« Send again »');
     await expect(again).toBeDisabled();
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Use another address' })),
-      { x: 181, y: 505, width: 139.9, height: 37 },
+      { x: 181, y: 505 - LEAD, width: 139.9, height: 37 },
       '« Use another address »',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Your site', exact: true })),
-      { x: 160, y: 593, width: 352.2, height: 26 },
+      { x: 160, y: 593 - LEAD, width: 352.2, height: 26 },
       'step 2',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Put it on the site', exact: true })),
-      { x: 160, y: 674, width: 352.2, height: 26 },
+      { x: 160, y: 674 - LEAD, width: 352.2, height: 26 },
       'step 3',
     );
     expect(await violations(page)).toEqual([]);
@@ -532,46 +538,50 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
 
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Your account', exact: true })),
-      { x: 160, y: 240, width: 352.2, height: 26 },
+      { x: 160, y: 240 - LEAD, width: 352.2, height: 26 },
       'step 1',
     );
     expectNear(
       await boxOf(page.locator('main ol > li').first().locator('.kit-step__mark svg')),
-      { x: 122, y: 247, width: 13, height: 13 },
+      { x: 122, y: 247 - LEAD, width: 13, height: 13 },
       'check of step 1',
     );
     // « Rename » is where the mockup has it, 6 px higher and 12 px taller: its target (A23).
     const rename = await boxOf(page.getByRole('button', { name: 'Rename' }));
     expectNear(
       { ...rename, y: rename.y + 6, height: rename.height - 12 },
-      { x: 314, y: 299, width: 54.4, height: 21 },
+      { x: 314, y: 299 - LEAD, width: 54.4, height: 21 },
       '« Rename »',
     );
     expect.soft(rename.height, 'the target of « Rename »').toBeGreaterThanOrEqual(24);
     expectNear(
       await boxOf(page.getByRole('heading', { name: `${CURRENT}Your site` })),
-      { x: 160, y: 353, width: 352.2, height: 26 },
+      { x: 160, y: 353 - LEAD, width: 352.2, height: 26 },
       'step 2',
     );
     expectNear(
       await boxOf(page.getByRole('textbox', { name: 'Site address' })),
-      { x: 160, y: 413, width: 352.2, height: 44 },
+      { x: 160, y: 413 - LEAD, width: 352.2, height: 44 },
       'field',
     );
     // Under the field the mockup has a hint of two lines, and its second sentence waits for a
     // decision on the previews (FRU-103): one line here, so what follows is 19.5 px higher.
     const hint = 19.5;
     const cards = page.locator('.kit-pick__card');
-    expectNear(await boxOf(cards.nth(0)), { x: 160, y: 546 - hint, width: 352.2, height: 90 }, 'card, members');
-    expectNear(await boxOf(cards.nth(1)), { x: 160, y: 644 - hint, width: 352.2, height: 70.5 }, 'card, everyone');
+    expectNear(await boxOf(cards.nth(0)), { x: 160, y: 546 - hint - LEAD, width: 352.2, height: 90 }, 'card, members');
+    expectNear(
+      await boxOf(cards.nth(1)),
+      { x: 160, y: 644 - hint - LEAD, width: 352.2, height: 70.5 },
+      'card, everyone',
+    );
     expectNear(
       await boxOf(page.getByRole('button', { name: 'Add site' })),
-      { x: 160, y: 734 - hint, width: 98.6, height: 44 },
+      { x: 160, y: 734 - hint - LEAD, width: 98.6, height: 44 },
       '« Add site »',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Put it on the site', exact: true })),
-      { x: 160, y: 810 - hint, width: 352.2, height: 26 },
+      { x: 160, y: 810 - hint - LEAD, width: 352.2, height: 26 },
       'step 3',
     );
     await expect(page.getByText('Any page of it will do.')).toBeVisible();
@@ -593,18 +603,18 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
 
     expectNear(
       await boxOf(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })),
-      { x: 160, y: 466, width: 352.2, height: 26 },
+      { x: 160, y: 466 - LEAD, width: 352.2, height: 26 },
       'step 3',
     );
     const change = await boxOf(page.getByRole('button', { name: 'Change' }));
     expectNear(
       { ...change, y: change.y + 6, height: change.height - 12 },
-      { x: 405, y: 412, width: 51.8, height: 21 },
+      { x: 405, y: 412 - LEAD, width: 51.8, height: 21 },
       '« Change »',
     );
     expectNear(
       await boxOf(page.getByRole('heading', { name: 'Browser extension' })),
-      { x: 179, y: 553, width: 314.2, height: 18 },
+      { x: 179, y: 553 - LEAD, width: 314.2, height: 18 },
       'card of the extension',
     );
     // The cards are one under the other in this column, as on the mockup, and as wide.
@@ -612,7 +622,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(cards).toHaveCount(2);
     expectNear(
       await boxOf(cards.nth(0)),
-      { x: 160, y: 534, width: 352.2, height: (await boxOf(cards.nth(0))).height },
+      { x: 160, y: 534 - LEAD, width: 352.2, height: (await boxOf(cards.nth(0))).height },
       'first card',
     );
     expect.soft((await boxOf(cards.nth(1))).x).toBe(160);
@@ -630,6 +640,9 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     );
     await expect(page.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
     await expect(page.getByText('Before the closing body tag. Members see their pins on every visit.')).toBeVisible();
+    // Only Fruitback Cloud says where it is hosted: this console calls a worker of its own (FRU-321).
+    await expect(page.getByText('Three steps to your first note on a live page.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Hosted in Europe/)).toHaveCount(0);
 
     // The example page: the address of the site in the bar, the scene of the mockup, its caption.
     const preview = page.getByRole('region', { name: 'Preview of your site' });
@@ -970,6 +983,10 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       // The long host reads in full: it takes the lines it needs.
       const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      // The script breaks inside its attributes: nothing of it is past the edge of its card (FRU-321).
+      const script = page.locator('.kit-snippet').first();
+      expect.soft(await script.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await expect(script).toContainText('fruitback.iife.js');
       expect(await violations(page)).toEqual([]);
       await context.close();
     });
