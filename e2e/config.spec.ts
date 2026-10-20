@@ -130,11 +130,14 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   await openPlayground(page, 'config-visuals');
   await page.getByLabel('Open Fruitback settings').click();
 
-  // `all: initial` resets `appearance` to its initial value, which is `none` — a native checkbox
-  // then draws nothing while staying perfectly checkable.
-  const box = page.locator('[name="stage-ripe"]');
-  await expect(box).toBeVisible();
-  expect(await box.evaluate((node) => getComputedStyle(node).appearance)).not.toBe('none');
+  // The box of a status is drawn as a chip since FRU-305: the chip is what must be drawn, with the
+  // drop of its colour, while its box stays checkable over it.
+  const chip = page.locator('.fruitback-config-chip').filter({ has: page.locator('[name="stage-ripe"]') });
+  await expect(chip).toBeVisible();
+  expect(await chip.locator('.fruitback-config-chip-drop').evaluate((node) => (node as HTMLElement).offsetWidth)).toBe(
+    9,
+  );
+  await expect(page.locator('[name="stage-ripe"]')).toBeChecked();
 
   // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
   // from the gear's own size cannot know that, and it covered the label.
@@ -189,7 +192,13 @@ test('the settings have the chips and the switches of the mock-up of 2026-10-20 
     'font-size': '12px',
     'font-weight': '600',
   });
-  expect(await read('.fruitback-config-chip-drop', [])).toMatchObject({ width: 9, height: 9 });
+  // The drop is turned: its own box is 9 px.
+  expect(
+    await page
+      .locator('.fruitback-config-chip-drop')
+      .first()
+      .evaluate((node) => (node as HTMLElement).offsetWidth),
+  ).toBe(9);
   // A click on the chip is a click on its box: the status is hidden, and the chip turns white.
   const closed = root.locator(chip).filter({ hasText: 'Closed' });
   await closed.click();

@@ -43,17 +43,21 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
   await expect(field).toHaveValue('');
 
   await page.keyboard.type('Planté sans souris');
-  // The field is the first control of the dialog since its head lost the cross (FRU-305): one step
-  // back wraps to the last one, which is Send.
+  // « Pick again » of the head is the control before the field (FRU-305), and the first of the
+  // dialog: one more step back wraps to the last one, which is Send.
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Pick again' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   const plant = page.getByRole('button', { name: 'Send', exact: true });
   await expect(plant).toBeFocused();
   // The reset removes the browser's focus ring, and host.ts puts one back.
   expect(await plant.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
   await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
   await expect(field).toBeFocused();
   await expect(field).toHaveValue('Planté sans souris');
 
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);

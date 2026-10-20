@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground } from './pin.ts';
+import { hydrated, openPlayground, WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The popover (FRU-4) in a browser: the two things that only exist there — a media query deciding
@@ -191,15 +191,16 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   const about = await read('.fruitback-composer-about', ['font-size', 'font-family', 'white-space', 'text-overflow']);
   expect(about).toMatchObject({ 'font-size': '12px', 'white-space': 'nowrap', 'text-overflow': 'ellipsis' });
   expect(String(about['font-family'])).toMatch(/^ui-monospace/);
-  expect(await read('.fruitback-composer-drop', ['background-color'])).toMatchObject({
-    width: 10,
-    height: 10,
-    'background-color': 'rgb(106, 121, 80)',
-  });
+  // The drop is turned: its own box, not the one on screen, is 10 px.
+  expect(
+    await page
+      .locator('.fruitback-composer-drop')
+      .evaluate((node) => [(node as HTMLElement).offsetWidth, getComputedStyle(node).backgroundColor]),
+  ).toEqual([10, 'rgb(106, 121, 80)']);
   const pick = page.getByRole('button', { name: 'Pick again' });
   await expect(pick).toBeVisible();
   expect(await read('.fruitback-composer-pick', ['font-size', 'font-weight', 'color', 'padding'])).toMatchObject({
-    // 44 px to press: a chip inside a transparent border of 12 px.
+    // 44 px to press: a chip of 26 px inside a transparent border of 9 px.
     height: 44,
     'font-size': '12px',
     'font-weight': '600',
@@ -211,7 +212,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
 
   expect(await read('.fruitback-composer-body', ['padding', 'gap'])).toMatchObject({ padding: '14px', gap: '12px' });
   await expect(page.getByLabel('Your comment')).toBeVisible();
-  expect(await read('.fruitback-composer-label', ['font-size', 'color'])).toMatchObject({
+  expect(await read('[data-fruitback-note-label]', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
     color: 'rgb(117, 110, 105)',
   });
@@ -315,8 +316,21 @@ test('« Pick again » keeps the text and moves the composer to the element chos
 test('a sent note says « Sent as » its identifier, with the number of its pin and « Open → » (FRU-305)', async ({
   page,
 }) => {
-  await openPlayground(page, 'composer-sent-as');
-  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  // The widget as `init` assembles it: it reads the note back and finds its identifier and its pin.
+  await page.goto(`/?widget=off&case=composer-sent-as-${test.info().retry}`);
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await hydrated(page);
+  await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        locale: 'en-US',
+      }),
+    WORKER_ORIGIN,
+  );
+  await page.locator('[data-fruitback-host-launch]').click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What should change?').fill('A note to see its card');
   await page.getByRole('button', { name: 'Send', exact: true }).click();

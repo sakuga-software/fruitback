@@ -114,7 +114,10 @@ test('a reader the worker offers no place gets the composer with no line, and a 
   await expect(composer(page).locator('[data-fruitback-destination]')).toBeHidden();
   await expect(composer(page).getByRole('radio')).toHaveCount(0);
   // The place of the notice is always in the tree, for a screen reader. Empty, it takes no room.
-  expect((await composer(page).locator('[data-fruitback-destination-gone]').boundingBox())?.height).toBe(0);
+  const gone = composer(page).locator('[data-fruitback-destination-gone]');
+  await expect(gone).toHaveCount(1);
+  await expect(gone).toBeEmpty();
+  await expect(gone).toBeHidden();
   const plain = await composer(page).boundingBox();
   await page.keyboard.press('Escape');
 
@@ -147,9 +150,11 @@ test('a member chooses a place with the keyboard, the note goes there, and the n
   await mount(page, 'destination-choose');
   await compose(page, 'card-espresso');
 
-  // From the note: the name disclosure, then the line. Enter unfolds it onto the place that is chosen.
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
+  // From the note, Tab reaches the line after the fields of the name (FRU-305). Enter unfolds it onto
+  // the place that is chosen.
+  for (let step = 0; step < 4 && !(await line(page).evaluate((node) => node.matches(':focus'))); step += 1) {
+    await page.keyboard.press('Tab');
+  }
   await expect(line(page)).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(places(page)).toBeVisible();

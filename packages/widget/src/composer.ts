@@ -819,9 +819,9 @@ const STYLES = `
 /* « Pick again »: a word in a chip, 44 px to press, the margins give the difference back to the head. */
 .fruitback-composer-pick {
   flex: none;
-  margin-block: -12px;
+  margin-block: -9px;
   padding: 4px 6px;
-  border: 12px solid transparent;
+  border: 9px solid transparent;
   border-inline-width: 0;
   border-radius: var(--fruitback-radius-sm);
   background: transparent;

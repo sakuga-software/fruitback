@@ -354,7 +354,8 @@ test('team mode: paired from the popup, the site reads and writes through the re
 
   // The control of the absence below: before the pairing nobody names this reviewer, and the
   // composer asks (FRU-112).
-  const nameField = page.locator('[data-fruitback-identify]');
+  // The name of the person, a field in sight since FRU-305, that a known reviewer no longer sees.
+  const nameField = page.locator('[data-fruitback-who]');
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await expect(nameField).toBeVisible();
