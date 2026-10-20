@@ -852,7 +852,9 @@ function paired(endpoint: string, identity: SessionIdentity): HTMLElement {
   wrapper.className = 'session';
   wrapper.append(row);
   if ((name === undefined || name === '') && identity.email !== undefined) {
-    wrapper.append(element('p', identity.email, 'state identity-email'));
+    const email = element('p', identity.email, 'state');
+    email.classList.add('identity-email');
+    wrapper.append(email);
   }
 
   return wrapper;
