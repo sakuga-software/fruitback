@@ -5,6 +5,7 @@ import {
   type InstanceFacts,
   type InstanceSignIn,
   type InstanceWorkspace,
+  type WorkspaceSuspension,
   deletedWorkspaces,
   instanceFacts,
   instanceWorkspaces,
@@ -267,6 +268,24 @@ function Redirect({ address }: { address: string }) {
 }
 
 /**
+ * « Suspended since 30 Sep » under the name of a suspended workspace, in the red of the mockup, as
+ * the row of a suspended person (FRU-281). On the chosen row the red is the strong accent: the accent
+ * is 4.28:1 on the tint of the row.
+ */
+export function SuspendedSince({ workspace, chosen }: { workspace: WorkspaceSuspension; chosen: boolean }) {
+  useLocale();
+  if (workspace.suspended !== true) return null;
+
+  return (
+    <span className={`block text-hint font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`}>
+      {workspace.suspendedAt === undefined
+        ? t('Suspended')
+        : t('Suspended since {day}', { day: dayOf(workspace.suspendedAt) })}
+    </span>
+  );
+}
+
+/**
  * The workspaces of the instance, read on a click only (Mathieu, 2026-10-19). Each read writes a
  * trace in each workspace of the answer that the administrator is not a member of, and its owners
  * read it: a visit to see the health of the server must not tell them that their workspace was read.
@@ -340,6 +359,7 @@ function Workspaces() {
                     <LinkButton to={`/admin/workspaces?open=${encodeURIComponent(workspace.id)}`}>
                       {workspace.name}
                     </LinkButton>
+                    <SuspendedSince workspace={workspace} chosen={false} />
                   </td>
                   <td>{workspace.owners.map((owner) => owner.email).join(', ')}</td>
                   <td data-align="end">{workspace.members}</td>

@@ -673,8 +673,19 @@ export type InstanceFacts = {
   attention: { count: number; connectors: AttentionConnector[] };
 };
 
+/**
+ * Whether an administrator of the instance suspended a workspace (FRU-282), as every read of the
+ * administrator says it (`suspensionView` of the worker): `suspendedAt` and `reason` come with
+ * `suspended: true` only, and `reason` only when one was given. A worker of before sends none of the
+ * three: the console reads it as not suspended.
+ */
+export type WorkspaceSuspension = { suspended?: boolean; suspendedAt?: string; reason?: string };
+
+/** The longest reason of a suspension, in characters (`SUSPENSION_REASON_LENGTH` of the worker). */
+export const SUSPENSION_REASON_LENGTH = 200;
+
 /** A workspace of the instance, as its administrator lists it (FRU-261). */
-export type InstanceWorkspace = {
+export type InstanceWorkspace = WorkspaceSuspension & {
   id: string;
   name: string;
   createdAt: string;
@@ -747,7 +758,7 @@ export type AdminWorkspace = InstanceWorkspace & {
 };
 
 /** One workspace, with its people and its sites (FRU-261). */
-export type AdminWorkspaceDetail = {
+export type AdminWorkspaceDetail = WorkspaceSuspension & {
   id: string;
   name: string;
   createdAt: string;
@@ -841,6 +852,24 @@ export function setSuspended(
   suspended: boolean,
 ): Promise<Answer<{ user: { id: string; suspended: boolean }; changed: boolean }>> {
   return call('POST', `/console/admin/users/${encodeURIComponent(id)}/suspension`, { suspended });
+}
+
+/**
+ * Suspends a workspace, or restores it (FRU-282, FRU-323). `reason` is optional, one line of
+ * `SUSPENSION_REASON_LENGTH` characters at most: the worker refuses a longer one with
+ * `400 invalid-reason`, and answers `404 not-found` for a workspace that does not exist. `changed` is
+ * false when the workspace already was in the state that was asked: a second suspension keeps the
+ * reason of the first. Each change writes a row of the trace, which the owners read.
+ */
+export function setWorkspaceSuspendedAsAdmin(
+  id: string,
+  suspended: boolean,
+  reason?: string,
+): Promise<Answer<{ workspace: { id: string } & WorkspaceSuspension; changed: boolean }>> {
+  return call('POST', `/console/admin/workspaces/${encodeURIComponent(id)}/suspension`, {
+    suspended,
+    ...(reason === undefined ? {} : { reason }),
+  });
 }
 
 /** What went with a workspace that an administrator deleted (FRU-284), counted at the deletion. */

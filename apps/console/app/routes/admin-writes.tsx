@@ -39,6 +39,7 @@ export function AdminWrite<T>({
   label: string;
   /** The name of the group, for a screen reader: « Change the owner of Acme ». */
   name: string;
+  /** What to fill in. `null`: nothing, and « Keep it » takes focus (« Restore », FRU-323). */
   fields: ReactNode;
   /** What the write does, and that the owners read it. */
   consequence: string;
@@ -113,7 +114,8 @@ export function AdminWrite<T>({
           {fields}
           <p>{consequence}</p>
           <span className="flex flex-wrap gap-[8px]">
-            <Button tone="quiet" onClick={close}>
+            {/* A write with nothing to fill in gives focus to « Keep it », as `Confirmation` does. */}
+            <Button tone="quiet" autoFocus={fields === null} onClick={close}>
               {t('Keep it')}
             </Button>
             <Button tone="primary" size="panel" disabled={busy || !ready} onClick={() => void confirm()}>

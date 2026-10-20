@@ -952,4 +952,22 @@ export const FRENCH: Readonly<Record<string, string>> = {
     '{name} ne peut plus se connecter d’aucune façon, et ses sessions de la console et de l’extension prennent fin aussitôt. Ses notes restent. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
   '{name} can sign in again. Their old sessions stay ended. The owners of each of their workspaces see that you did it.':
     '{name} peut de nouveau se connecter. Ses anciennes sessions restent fermées. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+
+  // « Suspend » and « Restore » of a workspace (FRU-323).
+  'Suspended since {day}': 'Suspendu depuis le {day}',
+  'Since {day}. Its sites answer as unknown, and nothing in it changes. Its members still read it.':
+    'Depuis le {day}. Ses sites répondent comme inconnus, et rien n’y change. Ses membres le lisent toujours.',
+  'Its sites answer as unknown, and nothing in it changes. Its members still read it.':
+    'Ses sites répondent comme inconnus, et rien n’y change. Ses membres le lisent toujours.',
+  'No reason was given.': 'Aucune raison n’a été donnée.',
+  'Reason: {reason}': 'Raison : {reason}',
+  'Reason (optional)': 'Raison (facultative)',
+  'Suspend {workspace}': 'Suspendre {workspace}',
+  '{workspace} is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.':
+    '{workspace} est suspendu aussitôt. Ses sites répondent comme inconnus au widget et à l’extension, chaque changement y est refusé, et ses notes attendent d’être livrées. Ses membres se connectent toujours et le lisent. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
+  Restore: 'Rétablir',
+  'Restore {workspace}': 'Rétablir {workspace}',
+  '{workspace} works again at once: its sites answer, its members change it again, and the notes that waited are delivered. Its owners see that you did it.':
+    '{workspace} fonctionne de nouveau aussitôt : ses sites répondent, ses membres le modifient de nouveau, et les notes qui attendaient sont livrées. Ses propriétaires voient que vous l’avez fait.',
+  'A reason is one line of 200 characters at most.': 'Une raison tient sur une ligne de 200 caractères au plus.',
 };

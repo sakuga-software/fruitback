@@ -4,7 +4,9 @@ import {
   type AdminWorkspace,
   type AdminWorkspaceDetail,
   STAGES,
+  SUSPENSION_REASON_LENGTH,
   type StageCounts,
+  type WorkspaceSuspension,
   addMemberAsAdmin,
   adminWorkspace,
   adminWorkspaces,
@@ -12,13 +14,14 @@ import {
   deleteWorkspaceAsAdmin,
   inviteAsAdmin,
   setOwnerAsAdmin,
+  setWorkspaceSuspendedAsAdmin,
 } from '../api';
 import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { Button, Choice, DataTable, Field, LinkButton, PageHead, Problem, StatusBar } from '../ui';
 import { useLocale } from '../use-locale';
 import { useWide } from '../wide';
-import { dayOf } from './admin-instance';
+import { SuspendedSince, dayOf } from './admin-instance';
 import {
   AdminPanel,
   Cut,
@@ -41,12 +44,14 @@ import { siteLabel } from '../site-address';
  * who owns each one, its notes, and where they go. « Delete the workspace » in the foot of a panel
  * deletes it after its name is typed (FRU-284). « New workspace », and in a panel « Add someone »,
  * « Invite someone » and « Change the owner », write at once, and the owners read it (FRU-283).
+ * « Suspend » in the foot of a panel, and « Restore » at the top of a suspended one, after a
+ * confirmation (FRU-323, routes of FRU-282); a suspended workspace says so in its row, with the day.
  *
  * WARNING: each read writes a trace in each workspace of the answer that the administrator is not a
  * member of (FRU-261). The panel reads its workspace again, and leaves one more trace there.
  */
 
-/** The filters of the worker (`WORKSPACE_FILTERS`). The mockup's « Suspended » comes with FRU-274. */
+/** The filters of the worker (`WORKSPACE_FILTERS`). The worker has no filter for the mockup's « Suspended ». */
 const SHOW = [
   { value: 'all', label: msg('All workspaces') },
   { value: 'attention', label: msg('Needs a look') },
@@ -77,7 +82,7 @@ export default function AdminWorkspaces() {
 
     return answer.ok && Array.isArray(answer.data?.workspaces) ? answer.data : 'failed';
   }, [q, show]);
-  const { shown, again } = useRead(ask);
+  const { shown, again, patch } = useRead(ask);
   // The name of the workspace that was just deleted: the page says it, where its row was.
   const [said, setSaid] = useState<Saying | undefined>();
   const statusLine = useRef<HTMLParagraphElement>(null);
@@ -102,7 +107,7 @@ export default function AdminWorkspaces() {
 
     return { id: chosenId, detail: answer.data };
   }, [chosenId]);
-  const { shown: read, again: readAgain } = useRead(askDetail);
+  const { shown: read, again: readAgain, patch: patchRead } = useRead(askDetail);
   const detail = typeof read === 'object' && read.id === chosenId ? read.detail : 'loading';
   const close = () => {
     change({ open: '' }, true);
@@ -133,6 +138,23 @@ export default function AdminWorkspaces() {
           known.current.delete(chosen.id);
           readAgain();
           again();
+        }}
+        onSuspension={(state) => {
+          // The row and the detail change in place, as a suspension of a person does (FRU-281): each
+          // read leaves a trace with the owners, and the answer says the state.
+          const id = chosen.id;
+          const withState = <T extends WorkspaceSuspension>(each: T): T => ({ ...withoutSuspension(each), ...state });
+          patch((listed) => ({
+            ...listed,
+            workspaces: listed.workspaces.map((each) => (each.id === id ? withState(each) : each)),
+          }));
+          const kept = known.current.get(id);
+          if (kept !== undefined) known.current.set(id, withState(kept));
+          patchRead((current) =>
+            current !== 'none' && current.id === id && typeof current.detail === 'object'
+              ? { id, detail: withState(current.detail) }
+              : current,
+          );
         }}
       />
     );
@@ -227,6 +249,7 @@ export default function AdminWorkspaces() {
                             {workspace.name}
                           </RowLink>
                           <span className="block text-hint text-muted tabular-nums">{sizeOf(workspace)}</span>
+                          <SuspendedSince workspace={workspace} chosen={isChosen} />
                         </td>
                         <td className="[overflow-wrap:anywhere]">{ownersOf(workspace)}</td>
                         <td>
@@ -349,6 +372,13 @@ function Alert({ workspace, chosen }: { workspace: AdminWorkspace; chosen: boole
   );
 }
 
+/** The three fields of a suspension taken out, so that the state of an answer replaces them all. */
+function withoutSuspension<T extends WorkspaceSuspension>(each: T): T {
+  const { suspended: _suspended, suspendedAt: _at, reason: _reason, ...rest } = each;
+
+  return rest as T;
+}
+
 /**
  * The panel of a workspace: where its notes go, its people and its sites. Its head is the row, so it
  * shows at once; the rest is the read of the workspace, which the page does.
@@ -362,6 +392,7 @@ function Panel({
   onClose,
   onDeleted,
   onChanged,
+  onSuspension,
 }: {
   workspace: AdminWorkspace;
   detail: AdminWorkspaceDetail | 'loading' | 'failed';
@@ -371,16 +402,36 @@ function Panel({
   onClose: () => void;
   onDeleted: (name: string) => void;
   onChanged: () => void;
+  onSuspension: (state: WorkspaceSuspension) => void;
 }) {
   useLocale();
   const owners = ownersOf(workspace);
+  // After a change, the control that says the state now takes focus: « Restore » at the top after a
+  // suspension, « Suspend » in the foot after a restoration.
+  const moved = useRef(false);
+  const suspension = (
+    <Suspension
+      workspace={workspace}
+      moved={moved}
+      onSuspension={(state) => {
+        moved.current = true;
+        onSuspension(state);
+      }}
+    />
+  );
+  const suspended = workspace.suspended === true;
 
   return (
     <AdminPanel
       wide={wide}
       takesFocus={takesFocus}
       onClose={onClose}
-      foot={<Deletion workspace={workspace} onDeleted={onDeleted} />}
+      foot={
+        <div className="flex w-full flex-col gap-[16px]">
+          {suspended ? null : suspension}
+          <Deletion workspace={workspace} onDeleted={onDeleted} />
+        </div>
+      }
       title={workspace.name}
       detail={
         owners === ''
@@ -388,6 +439,7 @@ function Panel({
           : t('Owned by {owner} · created {day}', { owner: owners, day: dayOf(workspace.createdAt) })
       }
     >
+      {suspended ? suspension : null}
       {detail === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
       {detail === 'failed' ? (
         <div className="flex flex-col items-start gap-[12px]">
@@ -474,6 +526,118 @@ function Detail({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onC
         <ChangeOwner workspace={workspace} onChanged={onChanged} />
       </PanelSection>
     </>
+  );
+}
+
+/**
+ * « Suspend » and « Restore » (FRU-323), on the routes of FRU-282. A press asks, as every write of an
+ * administrator (`AdminWrite`): a suspension takes an optional reason, kept with it and in the trace,
+ * and says what a suspended workspace does; only the button of the confirmation
+ * sends. A suspended workspace says so at the top of its panel, with the day and the reason, and
+ * « Restore »; an active one has « Suspend » in the foot, as screen 18 draws it. The row and the panel
+ * change after a `200` only.
+ */
+function Suspension({
+  workspace,
+  moved,
+  onSuspension,
+}: {
+  workspace: AdminWorkspace;
+  moved: { current: boolean };
+  onSuspension: (state: WorkspaceSuspension) => void;
+}) {
+  useLocale();
+  const [reason, setReason] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  const name = workspace.name;
+  const suspending = workspace.suspended !== true;
+  const given = reason.replace(/\s+/g, ' ').trim();
+
+  // This control is drawn again in another place after a change: its button takes focus there.
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    box.current?.querySelector<HTMLElement>('button')?.focus();
+  }, [moved]);
+
+  const done = (data: { workspace: WorkspaceSuspension }) => {
+    setReason('');
+    const { suspended = false, suspendedAt, reason: kept } = data.workspace;
+    onSuspension({
+      suspended,
+      ...(suspendedAt === undefined ? {} : { suspendedAt }),
+      ...(kept === undefined ? {} : { reason: kept }),
+    });
+  };
+  const problems = {
+    'invalid-reason': msg('A reason is one line of 200 characters at most.'),
+    'invalid-suspended': msg('Nothing changed. Try again.'),
+  };
+
+  return (
+    <div ref={box} className="flex w-full flex-col gap-[10px] text-small">
+      {suspending ? null : (
+        <p role="status">
+          <span className="block font-semibold text-accent-strong">{t('Suspended')}</span>
+          <span className="block">
+            {workspace.suspendedAt === undefined
+              ? t('Its sites answer as unknown, and nothing in it changes. Its members still read it.')
+              : t('Since {day}. Its sites answer as unknown, and nothing in it changes. Its members still read it.', {
+                  day: dayOf(workspace.suspendedAt),
+                })}
+          </span>
+          <span className="block [overflow-wrap:anywhere]">
+            {workspace.reason === undefined
+              ? t('No reason was given.')
+              : t('Reason: {reason}', { reason: workspace.reason })}
+          </span>
+        </p>
+      )}
+      {suspending ? (
+        <AdminWrite
+          label={t('Suspend')}
+          name={t('Suspend {workspace}', { workspace: name })}
+          fields={
+            <Field
+              label={t('Reason (optional)')}
+              compact
+              autoFocus
+              autoComplete="off"
+              maxLength={SUSPENSION_REASON_LENGTH}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          }
+          consequence={t(
+            '{workspace} is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.',
+            { workspace: name },
+          )}
+          confirmLabel={t('Suspend {workspace}', { workspace: name })}
+          ready
+          send={() => setWorkspaceSuspendedAsAdmin(workspace.id, true, given === '' ? undefined : given)}
+          problems={problems}
+          notDone={msg('Nothing changed. Try again.')}
+          onDone={done}
+          onClose={() => setReason('')}
+        />
+      ) : (
+        <AdminWrite
+          label={t('Restore')}
+          name={t('Restore {workspace}', { workspace: name })}
+          fields={null}
+          consequence={t(
+            '{workspace} works again at once: its sites answer, its members change it again, and the notes that waited are delivered. Its owners see that you did it.',
+            { workspace: name },
+          )}
+          confirmLabel={t('Restore {workspace}', { workspace: name })}
+          ready
+          send={() => setWorkspaceSuspendedAsAdmin(workspace.id, false)}
+          problems={problems}
+          notDone={msg('Nothing changed. Try again.')}
+          onDone={done}
+        />
+      )}
+    </div>
   );
 }
 
