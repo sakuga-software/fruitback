@@ -1751,6 +1751,24 @@ same transaction).
   test:`says mine to the person who left the note, and to nobody else`.
 - **The relay of the extension does not carry this path yet**: FRU-300 adds it to the list below.
 
+### The side panel of the browser (FRU-296)
+
+The extension declares a side panel: `side_panel.default_path` and the `sidePanel` permission on
+Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.html`.
+
+- **No access to a page.** `sidePanel` lets the extension show its own page beside the tab; it
+  grants no host, no content script and no read of a page. Chrome shows no warning for it: measured
+  on the built manifest with `management.getPermissionWarningsByManifest`, the warnings with and
+  without the panel are the same (`e2e/side-panel.spec.ts`). `sidebar_action` asks for no permission.
+- **The panel opens only from a gesture of the person**: the button of the popup, which calls the
+  browser in its click. The click on the toolbar icon still opens the popup
+  (`setPanelBehavior({ openPanelOnActionClick: false })`). No page can open the panel.
+- **What it reads.** The address of the active tab of its window, as the popup does: the browser
+  gives it only for a site the extension has access to, or after the click on its icon. With it, the
+  rule of that site from the extension's storage. It reads no worker and keeps nothing. Its one
+  command to the tab, « Show the notes on the page », is a command of the popup (`show-notes`),
+  under the same guard: the bridge takes it from a page of the extension only (`acceptedCommand`).
+
 ### The picture of a note, taken by the extension (FRU-44)
 
 The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the

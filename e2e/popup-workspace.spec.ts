@@ -9,6 +9,9 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
  * whose workspace lists the playground.
  */
 
+/** The one `chrome.*` call of this spec, from the service worker: the contexts of the extension. */
+declare const chrome: { runtime: { getContexts(filter: { contextTypes: string[] }): Promise<unknown[]> } };
+
 const NAME = 'Camille Durand';
 
 type Box = { x: number; y: number; width: number; height: number };
@@ -159,11 +162,17 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   ]);
   await clean(popup, 'the popup on a site that is on');
 
-  // « Show every note of the page »: the list of the widget opens, and the popup goes.
+  // « Show every note of the page »: the side panel of the browser opens (FRU-296), and the popup
+  // goes. `e2e/side-panel.spec.ts` reads the panel.
   await popup.getByRole('button', { name: 'Show every note of the page' }).click();
-  await expect(page.getByRole('dialog', { name: 'Notes on this page' })).toBeVisible();
   await expect.poll(() => popup.isClosed()).toBe(true);
-  await page.getByRole('button', { name: 'Close the notes' }).click();
+  await expect
+    .poll(() =>
+      extension.worker.evaluate(
+        async () => (await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })).length,
+      ),
+    )
+    .toBe(1);
 
   // « Leave feedback »: the widget waits for an element.
   popup = await reopen(extension, page);

@@ -27,6 +27,7 @@ import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browse
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
+import { type PanelApis, keepPopupOnActionClick } from '../src/side-panel.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -319,6 +320,11 @@ export default defineBackground(() => {
 
   browser.runtime.onInstalled.addListener(() => {
     void sync();
+    // FRU-296: the click on the icon opens the popup; the panel opens from it. The browser keeps the
+    // behaviour, so it is set at install and at each update.
+    void keepPopupOnActionClick(browser as unknown as PanelApis).catch((error: unknown) =>
+      console.error('[fruitback] could not keep the popup on the click of the icon', error),
+    );
     // A rule switched off before FRU-115 kept its access. An update gives it back, once.
     void readAll()
       .then((sites) => returnAccess(accessOf(sites, Object.keys(sites))))

@@ -103,6 +103,12 @@ Lets the popup read the address of the tab it was opened on, so it can name the 
 In team mode, renews the short-lived access token before it expires. A Manifest V3 service worker can be stopped at any moment, so a timer inside it is not reliable.
 ```
 
+`sidePanel`
+
+```text
+Shows the notes of the page in the browser's side panel, next to the page, when the user opens it from the popup. The panel is a page packaged in the extension; it reads nothing from a website by itself and gives the extension no access to any page.
+```
+
 Host permission (`optional_host_permissions: *://*/*`)
 
 ```text
