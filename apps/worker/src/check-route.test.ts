@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { REPLY_LENGTH } from './app.ts';
+import { REPLY_LIMIT } from './rate-limit.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { type SeedStore, StoreError } from './store.ts';
@@ -370,5 +371,23 @@ describe('a verdict, when two come at once or a store fails (FRU-294, heavy revi
 
     assert.equal(answer.status, 502);
     assert.equal(answer.body.error, 'store-unavailable');
+  });
+});
+
+describe('how many verdicts (FRU-294)', () => {
+  it('takes more verdicts of members from one address than the replies of visitors allow', async () => {
+    const { world, site, member, bobs } = await aDoneNote();
+    const ip = '198.51.100.9';
+    const notes = [];
+    for (let index = 0; index <= REPLY_LIMIT; index += 1) {
+      const note = await noteOf(world, site.id, `sd_many_${index}`, bobs.accessToken);
+      setMemoryIssueState(note.id, DONE);
+      notes.push(note);
+    }
+
+    for (const note of notes) {
+      const answer = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, ip });
+      assert.equal(answer.status, 201, JSON.stringify(answer.body));
+    }
   });
 });

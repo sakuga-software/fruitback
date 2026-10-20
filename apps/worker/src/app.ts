@@ -1094,7 +1094,8 @@ async function postCheck(
       if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
       if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
       if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
-      if (!(await checkReplyLimit(kv, context.clientIp))) return json(429, { error: 'rate-limited' }, corsHeaders);
+      // No count of its own, as for the reply of a member (FRU-257): only a member gives a verdict,
+      // and the limit of all requests applies above.
       // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
       // and would write two verdicts. The second is refused while the first is written; after it, the
       // guards read the verdict of the first.

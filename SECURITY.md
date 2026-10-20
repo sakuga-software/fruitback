@@ -1733,8 +1733,9 @@ same transaction).
   test:`reads a verdict in either language of a team, and no reply of the page as one`.
 - **Where not.** A site whose store takes no reply takes no verdict: an address that only receives,
   a tracker whose workspace hides its replies, GitHub. `403 checks-not-taken`.
-- **How much.** A text of at most 2 000 characters, like a reply. **5 verdicts a minute from one
-  address**, in the count of the replies with no session.
+- **How much.** A text of at most 2 000 characters, like a reply. **No count of its own**: only a
+  member gives a verdict, and a member's reply is not counted either (FRU-257); the limit of all
+  requests applies. test:`takes more verdicts of members from one address than the replies of visitors allow`.
 - **What a read says.** `GET /feedback` adds `checked: { by, at }` to a done note whose newest verdict
   is « fixed », read in its replies: anybody who reads the replies of the page reads it. It adds
   `mine: true` to the notes that the reader left, **for a session of the workspace and nobody
