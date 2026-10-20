@@ -814,6 +814,7 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
     'Acme supportMember',
     'Email linknadia@acme.dev',
     'GitHubLinked',
+    'Change the owner of Acme web',
   ]);
   await main(page).getByRole('link', { name: 'sara@acme.dev' }).click();
   await expect(panel(page)).toHaveAccessibleName('sara@acme.dev');
