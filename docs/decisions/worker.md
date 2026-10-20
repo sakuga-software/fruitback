@@ -1012,7 +1012,7 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
 - **A note that a session of an account signs is such a write** (decided on 2026-10-14, after the
   independent review of #303): `postFeedback` calls `stillWrites` once per request, the batch and
   `?destination=` included, before anything is written. A note of a session paired for a workspace
-  is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, built on `sessionWrites`, which reads the
+  is not checked: its tokens predate `sid`. `POST /attachments` (FRU-331) asks `writerIn`, built on `sessionWrites`, which reads the
   membership and the session in one call. `verifyForClient` drops `account` and `chain` from a token
   that the key of a site verified: a site writes the claims it likes.
 - **The refresh ends a session of an account whose account is gone or suspended** (`stillOfTheWorkspace`,
@@ -1340,7 +1340,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
 - **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
-  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `screenshots-postgres.ts` and `seeds-postgres.ts`,
+  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `attachments-postgres.ts` and `seeds-postgres.ts`,
   and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
   holds both. (A test held the rest for a worker with no database, which refuses to start since
@@ -1371,7 +1371,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-eight columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-nine columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1461,7 +1461,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282, thirty-nine since FRU-331), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1474,7 +1474,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-eight BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty-nine BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3043,8 +3043,7 @@ suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
   | --------------------------------------- | ----------------------------------------------------------------- |
   | `GET /feedback`, `POST /feedback`       | the answer of an unknown `client`, by `clientMap`                 |
   | `POST /feedback/<id>/replies`           | the answer of an unknown `client`, by `clientMap`                 |
-  | `POST /screenshot`                      | the answer of an unknown `client`, by `clientMap`                 |
-  | `GET /screenshot/<id>`                  | `404`, as a picture that does not exist (`memberOf`)              |
+  | `POST /attachments`                     | the answer of an unknown `client`, by `clientMap`                 |
   | `GET /session/sites`, account session   | the workspace and its sites are not listed, as after its deletion |
   | `GET /session/sites`, workspace session | `401 not-a-member`, as after its deletion                         |
   | `POST /session/sites`                   | `404 not-found`, as for a workspace that does not exist           |
@@ -3100,7 +3099,7 @@ suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the thirty-eight BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the thirty-nine BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3946,3 +3945,61 @@ Applying the migrations on PGlite took 50 ms a case, and emptying `public` 14 ms
 time of the suite, and the dry run of the mutation pass runs every test file in a process of its own
 (FRU-336). The store under test still calls `migrated`, and the first case of each process applies
 every migration on an empty database with `migrate` of `postgres-migrate.ts`. test:`is the database that migrate makes on an empty one, with every migration in its journal`
+
+## The files of a note, in transit (FRU-331)
+
+Decision of Mathieu of 2026-10-20 on FRU-198: **Fruitback stores no file, the ticket of the tracker
+does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected and on what condition.
+
+### The rules, in short
+
+- **A file waits for its note, 7 days at most** (`ATTACHMENT_TRANSIT_DAYS`). `expires_at` is written
+  with the row, a row past it reads as absent everywhere, and `sweep` deletes it: on each new file
+  and on each pass of the deliveries. Nothing else is needed for the promise to hold: a sweep that
+  does not run leaves bytes that no route reads.
+- **The ids travel in the query of `POST /feedback`, never in the seed.** The seed is the round trip
+  of the description of the issue (`contract.md`): an id in transit there would be a dead word in the
+  tracker for ever. The relay of the extension carries a query, so the body stays the seed. A batch
+  takes no file: its query could not say which note a file is of.
+- **A store says whether it takes files** (`attachments: true`, `attachmentsFor` for the routed store),
+  as it says whether it takes a reply. The worker's own store (« Kept in Fruitback ») and GitHub take
+  none: `409 attachments-not-taken` on the file and on the note, `canAttach: false` on the read.
+- **Linear takes the bytes before the issue exists.** `fileUpload`, then a `PUT` to the address it
+  gives, then `issueCreate`, then `attachmentCreate` with the subtitle `Fruitback`. A failure before
+  the issue throws `StoreError`: `502`, the files stay, the widget sends both again. A failure after
+  it is `lost`, never a throw, or the note would be written twice. A read shows the attachments with
+  that subtitle only.
+- **A REST address gets an address of one hour for each file, signed at each attempt**
+  (`withSignedFiles`). The queue keeps ids, never an address: an attempt a day later must not carry
+  one that ended. The signature of the delivery covers the body that carries them. The file goes one
+  hour after the `2xx`: the receiver may read it after it answered.
+- **The one read of a file needs a signature of this worker** (`verifiesSignedRead`): no route reads a
+  file for a member or a page. A file that no note took is no file of a delivery, and answers `404`
+  even signed.
+- **The table keeps its name, `screenshots`.** A rename is a prompt of `drizzle-kit` that nothing
+  answers in a script, and the name costs nothing. Its migration `0021` adds the columns, then three
+  statements that are not generated (its header says which) change the rows of FRU-44.
+
+### The reasons, and what was measured
+
+- **Why an address and not multipart, for REST.** Multipart would change the contract of every
+  receiver (a JSON body, signed as a string), make each retry send every byte again, and keep the
+  signature over a body that a receiver must rebuild from parts. An address keeps the body JSON, the
+  signature as it is, and the bytes out of the queue. Its cost is that the worker answers a file to
+  whoever holds the address for one hour: the address is only in the signed body, sent over https to
+  the address the workspace chose, and it answers as a download with no CORS header.
+- **Why GitHub takes none.** The REST API of an issue takes `title` and `body`, text only (the
+  documentation of « Create an issue », read on 2026-10-21). The upload of github.com answers a
+  browser with a cookie, not an App. A commit of the file in the repository (`PUT /contents`) would
+  keep a person's capture in the history of the code, where no transit can end. The console says it
+  on the row of GitHub. **Not measured on a real repository**: no App of a test repository exists.
+- **Linear is not measured on a real workspace either.** The shapes are the ones of the guide of
+  Linear (« How to upload a file to Linear »: `fileUpload(contentType, filename, size)`,
+  `uploadUrl`, `assetUrl`, `headers`, a `PUT` from a server with `Content-Type` and
+  `Cache-Control`), played against `linear-stub.ts`. The guide names `attachmentCreate` for an
+  issue only in passing; its limit of size is not written there. A first note with a file on a real
+  workspace is the measurement this lacks.
+- **The rows of before** named no note: the note named `GET /screenshot/<id>`, which is gone. The
+  migration deletes the ones that a note kept by the worker names (`seeds.seed` holds the id) and that
+  no waiting delivery names, and ends the others 7 days after they came. A row named only by an issue
+  of Linear cannot be told from a row of a note that never went: both end with the 7 days.

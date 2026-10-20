@@ -391,9 +391,14 @@ const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
 });
 
 /**
- * The picture of an element, taken by the extension with a note (FRU-44). `content` is a PNG of
- * `MAX_SCREENSHOT_BYTES` at most. It is of a workspace and goes with it: only a member reads it.
- * `account_id` is who sent it, and holds no foreign key: the picture stays when the person leaves.
+ * The files of the notes in transit (FRU-331), on their way to the ticket of the tracker:
+ * `attachments.ts`. The table keeps the name of FRU-44, when it held the pictures of the elements.
+ *
+ * A row goes when its tracker has the file, or at `expires_at`, `ATTACHMENT_TRANSIT_DAYS` after it
+ * came. A row read after `expires_at` reads as absent. `expires_at` defaults to 0: a row written
+ * with no end is past it at once. `account_id` is who sent it, and holds no foreign key: the file
+ * of a person who leaves still goes with its note. `seed_id` is the note that took it: the id
+ * the widget gave the seed.
  */
 export const screenshots = pgTable(
   'screenshots',
@@ -401,14 +406,17 @@ export const screenshots = pgTable(
     id: text('id').primaryKey(),
     workspace_id: text('workspace_id').notNull(),
     account_id: text('account_id').notNull(),
-    // The site of the note the picture goes with (FRU-250): a guest reads the pictures of their
-    // sites only. NULL for a picture sent before: no guest reads one. No foreign key, as for the
-    // account: the picture of a site that goes stays with its workspace, as before.
+    // The site of the note the file goes with (FRU-250). NULL for a picture sent before.
     site_id: text('site_id'),
     content: bytes('content').notNull(),
-    width: integer('width').notNull(),
-    height: integer('height').notNull(),
+    // The pictures of FRU-44 had a size in pixels. A file has none, and nothing decodes one.
+    width: integer('width'),
+    height: integer('height'),
     created_at: instant('created_at').notNull(),
+    name: text('name').notNull().default('screenshot.png'),
+    content_type: text('content_type').notNull().default('image/png'),
+    expires_at: instant('expires_at').notNull().default(0),
+    seed_id: text('seed_id'),
   },
   (table) => [
     foreignKey({
@@ -417,6 +425,9 @@ export const screenshots = pgTable(
       foreignColumns: [organization.id],
     }).onDelete('cascade'),
     index('screenshots_by_workspace').on(table.workspace_id),
+    // The sweep, and what one account holds.
+    index('screenshots_by_expiry').on(table.expires_at),
+    index('screenshots_by_account').on(table.account_id),
   ],
 );
 

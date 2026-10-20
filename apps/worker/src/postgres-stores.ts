@@ -4,7 +4,7 @@ import type { InstanceAdminReads } from './instance-admin.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
-import type { ScreenshotStore } from './screenshots.ts';
+import type { AttachmentStore } from './attachments.ts';
 import type { SessionStore } from './session.ts';
 import type { ConnectStore } from './connect.ts';
 import type { SeedStore } from './store.ts';
@@ -147,13 +147,18 @@ export function postgresConnectStore(url: string, schema: string): ConnectStore 
   return connectStoreOn(databaseFor(url, schema));
 }
 
-/** The pictures of the notes of this database (FRU-44). */
-export function postgresScreenshotStore(url: string, schema: string): ScreenshotStore {
+/** The files of the notes in transit in this database (FRU-331). */
+export function postgresAttachmentStore(url: string, schema: string): AttachmentStore {
   const database = databaseFor(url, schema);
 
-  return later(async () => (await import('./screenshots-postgres.ts')).createPostgresScreenshotStore(database), {
+  return later(async () => (await import('./attachments-postgres.ts')).createPostgresAttachmentStore(database), {
     put: true,
     get: true,
+    heldBy: true,
+    claim: true,
+    endAt: true,
+    remove: true,
+    sweep: true,
   });
 }
 

@@ -671,7 +671,8 @@ a change when the account refuses one of them, and marks only those as known`. O
   `captureScreenshot`, which posts a `capture-request` with the area of the element on the bridge.
   The background takes the picture of the tab (`tabs.captureVisibleTab`), cuts the area out
   (`createImageBitmap`, `OffscreenCanvas`), and sends the PNG to `POST /screenshot` of the worker of
-  the stored entry, for its client, with the session of that worker. `src/capture.ts` holds every
+  the stored entry, for its client, with the session of that worker. **Since FRU-331 that route is
+  `POST /attachments`, and it answers an id in transit, not an address: FRU-332 moves this path.** `src/capture.ts` holds every
   case where it gives up.
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.

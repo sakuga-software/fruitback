@@ -1,4 +1,6 @@
 import {
+  MAX_ATTACHMENTS_PER_NOTE,
+  MAX_ATTACHMENT_BYTES_PER_NOTE,
   SEED_STAGES,
   type Seed,
   type SeedIssue,
@@ -47,9 +49,11 @@ import {
   type BatchMemory,
   type CheckVerdict,
   type CreatedIssue,
+  type FilesAnswer,
   type ReplyAuthor,
   type SeedStore,
   StoreError,
+  takesAttachments,
   takesChecks,
   takesReplies,
 } from './store.ts';
@@ -68,20 +72,27 @@ import {
   postgresInstanceAdmin,
   postgresKv,
   postgresNoteIndex,
-  postgresScreenshotStore,
+  postgresAttachmentStore,
   postgresSessionStore,
 } from './postgres-stores.ts';
 import type { ConnectStore } from './connect.ts';
 import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
 import { sessionStillValid } from './session-check.ts';
 import {
-  MAX_SCREENSHOT_BYTES,
-  SCREENSHOT_PATH,
-  type ScreenshotStore,
-  newScreenshotId,
-  pngSize,
-  screenshotIdOf,
-} from './screenshots.ts';
+  ATTACHMENTS_PATH,
+  type AttachmentStore,
+  MAX_HELD_BYTES,
+  MAX_HELD_FILES,
+  type OutgoingFile,
+  TRANSIT_MS,
+  attachmentIdOf,
+  attachmentIdsOf,
+  attachmentName,
+  checkAttachment,
+  maxBytesFor,
+  newAttachmentId,
+  verifiesSignedRead,
+} from './attachments.ts';
 import { withoutAddress } from './postgres.ts';
 import {
   type SessionIdentity,
@@ -322,10 +333,18 @@ async function notesOfReader(
  * A note as a guest reads it (FRU-250): no reference in the tracker, no address of the issue, and no
  * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
  */
-function withoutTracker<T extends { id: string; identifier: string; url?: string }>(issue: T, seed: string): T {
-  const { url: _url, ...rest } = issue;
+function withoutTracker<
+  T extends { id: string; identifier: string; url?: string; attachments?: SeedIssue['attachments'] },
+>(issue: T, seed: string): T {
+  const { url: _url, attachments, ...rest } = issue;
 
-  return { ...rest, id: seed, identifier: seed } as T;
+  // The address of a file is the tracker's (FRU-331): a guest reads its name only.
+  return {
+    ...rest,
+    ...(attachments === undefined ? {} : { attachments: attachments.map(({ name }) => ({ name })) }),
+    id: seed,
+    identifier: seed,
+  } as T;
 }
 
 /**
@@ -401,7 +420,15 @@ export async function deliverPending(
   const accounts = held ?? accountStoreFor(config.config);
   if (accounts === undefined) return;
 
-  await deliverDue({ accounts, secretsKey: config.config.secretsKey, send, ...(now === undefined ? {} : { now }) });
+  const attachments = attachmentStoreFor(config.config);
+  await deliverDue({
+    accounts,
+    secretsKey: config.config.secretsKey,
+    send,
+    ...(attachments === undefined ? {} : { attachments }),
+    ...(config.config.publicUrl === undefined ? {} : { publicUrl: config.config.publicUrl }),
+    ...(now === undefined ? {} : { now }),
+  });
 }
 
 /** What the transport knows and the request itself cannot say. */
@@ -437,8 +464,8 @@ export type RequestContext = {
    * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
    */
   auth?: Auth | Promise<Auth>;
-  /** Where the pictures of the notes are kept (FRU-44). A suite hands over one in memory. */
-  screenshots?: ScreenshotStore;
+  /** Where the files of the notes wait for their tracker (FRU-331). A suite hands over one in memory. */
+  attachments?: AttachmentStore;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
@@ -844,9 +871,25 @@ async function routed(
     }
   }
 
-  if (pathname === SCREENSHOT_PATH || pathname.startsWith(`${SCREENSHOT_PATH}/`)) {
+  // Resolved once here, not inside each handler: see `RequestContext.store`.
+  const storeOfRequest = (): SeedStore => {
+    const own = context.store ?? storeFor(served);
+
+    // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
+    return accounts === undefined
+      ? own
+      : createRoutedStore(
+          own,
+          createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth, {
+            // FRU-331: a delivery carries the address of a file on this worker, which needs both.
+            filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
+          }),
+        );
+  };
+
+  if (pathname === ATTACHMENTS_PATH || pathname.startsWith(`${ATTACHMENTS_PATH}/`)) {
     try {
-      return await handleScreenshot(request, pathname, served, context, cors.headers);
+      return await handleAttachment(request, pathname, served, context, cors.headers, storeOfRequest());
     } catch (error) {
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
       throw error;
@@ -859,13 +902,7 @@ async function routed(
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
-  // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const own = context.store ?? storeFor(served);
-  // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
-  const store =
-    accounts === undefined
-      ? own
-      : createRoutedStore(own, createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth));
+  const store = storeOfRequest();
 
   if (replyTo !== undefined) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
@@ -890,9 +927,17 @@ async function routed(
 
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
-    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
-    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex, () =>
-        sessionWrites(request, served, context).then((session) => session !== undefined),
+    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex, context)
+    : postFeedback(
+        request,
+        served,
+        watchedStore(store, accounts),
+        kv,
+        cors.headers,
+        context.clientIp,
+        noteIndex,
+        () => sessionWrites(request, served, context).then((session) => session !== undefined),
+        context,
       );
 }
 
@@ -1368,10 +1413,10 @@ function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
   return target?.connector === undefined ? { kind: 'fruitback' } : { kind: 'connector', connector: target.connector };
 }
 
-export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | undefined {
+export function attachmentStoreFor(config: WorkerConfig): AttachmentStore | undefined {
   return config.databaseUrl === undefined
     ? undefined
-    : postgresScreenshotStore(config.databaseUrl, config.databaseSchema);
+    : postgresAttachmentStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**
@@ -1452,90 +1497,112 @@ async function writerIn(
 }
 
 /**
- * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
- * `GET /screenshot/<id>` answers it.
+ * The files of the notes in transit (FRU-331): see `attachments.ts`.
  *
- * **Both answer somebody of the workspace, whatever their role, and nobody else.** A picture shows a
- * page of a staging site, so it is never read without a session, as the pins of a public site are
- * (FRU-84 is still open on what a public site may show). A guest sends one and reads one (FRU-213):
- * a guest reads the notes of the workspace, and the address of the picture is in the note. The right
- * asked for is to be of the workspace, and not `see-tracker`, which is about the tracker and what
- * the team answers there. That somebody is the session of the extension: its token, signed with the
- * worker key, names the account and the workspace, and the role is read at each request. A picture is sent for a client (`?client=`, the site of the note) and belongs to
- * the workspace of that site. To anybody who is not one of its members, with a token, a picture
- * answers `404`, as one that does not exist.
+ * `POST /attachments?client=<site>&name=<name>[&destination=<place>]`, the bytes as the body and
+ * their type in `Content-Type`: a session of the workspace of the site, whatever its role, keeps one
+ * file for a note of that site, as `writerIn` says for a write. A guest sends one on a site shared
+ * with them. Nobody else: `401`.
  *
- * The rest is the guard of the write path: the rate limit above, the CORS of the sites and of the
- * extension, `413` over `MAX_SCREENSHOT_BYTES`, `400` for bytes that are not a PNG. A worker with no
- * database keeps no picture, and answers `404` on both.
+ * - `409 attachments-not-taken` when the store of the place takes no file: the note stays in
+ *   Fruitback (« Kept in Fruitback »), or goes to GitHub, whose API takes none.
+ * - `413` over the limit of the kind of the file (`MAX_ATTACHMENT_BYTES`), `400 type-mismatch` for
+ *   bytes that are not what the type says, `400 empty-file`.
+ * - `429 transit-full` when the account already holds `MAX_HELD_FILES` or `MAX_HELD_BYTES`.
+ *
+ * `GET /attachments/<id>?expires=…&signature=…` is the read of the receiver of a delivery of a REST
+ * connector, and the one read of a file there is: a signature of this worker that has not ended, or
+ * `404`, as for a file that does not exist. No CORS header, a download, and nothing a browser runs.
+ * There is no read for a member, a guest or a page: **Fruitback serves no file to a person**.
  */
-async function handleScreenshot(
+async function handleAttachment(
   request: Request,
   pathname: string,
   config: Served,
   context: RequestContext,
   headers: Record<string, string>,
+  store: SeedStore,
 ): Promise<Response> {
-  const store = context.screenshots ?? screenshotStoreFor(config);
-  if (store === undefined) return json(404, { error: 'not-found' }, headers);
+  const files = context.attachments ?? attachmentStoreFor(config);
+  if (files === undefined) return json(404, { error: 'not-found' }, headers);
+  const now = Date.now();
 
-  if (pathname === SCREENSHOT_PATH) {
-    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    // The picture is of the workspace of the site whose note it goes with: the client of the call.
-    const route = routeFor(request, config, normalizeClientId(new URL(request.url).searchParams.get('client')));
-    if (!route.ok) return routingFailure(route, headers);
-    const workspace = route.policy.sessions?.workspace;
-    // The site of the note: a guest sends a picture on a site shared with them only (FRU-250).
-    const site = normalizeClientId(new URL(request.url).searchParams.get('client'));
-    // A write: a member of the workspace, with a session read again in the store (FRU-238).
-    const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace, site);
-    if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
+  if (pathname !== ATTACHMENTS_PATH) {
+    const id = attachmentIdOf(pathname);
+    if (id === undefined) return json(404, { error: 'not-found' }, headers);
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    // No CORS header on any answer of this read: no page of any origin reads the bytes.
+    const query = new URL(request.url).searchParams;
+    if (config.secretsKey === undefined || !verifiesSignedRead(config.secretsKey, id, query, now))
+      return json(404, { error: 'not-found' });
+    const found = await files.get(id, now);
+    // A file that no note took is no file of a delivery.
+    if (found === undefined || found.seed === undefined) return json(404, { error: 'not-found' });
 
-    const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
-    if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_SCREENSHOT_BYTES }, headers);
-    const size = pngSize(body);
-    if (size === undefined) return json(400, { error: 'not-a-png' }, headers);
-
-    const id = newScreenshotId();
-    await store.put({
-      id,
-      workspace,
-      account,
-      ...(site === undefined ? {} : { site }),
-      png: body,
-      ...size,
-      createdAt: Date.now(),
+    return new Response(found.content, {
+      status: 200,
+      headers: {
+        'Content-Type': found.type,
+        'Content-Length': String(found.content.byteLength),
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(found.name)}`,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Cross-Origin-Resource-Policy': 'same-origin',
+      },
     });
-    const base = config.publicUrl ?? new URL(request.url).origin;
-
-    // `id` is what a caller builds the address from, at the address it reaches this worker by: `url`
-    // is this worker's own idea of itself, which behind a proxy and with no `FRUITBACK_PUBLIC_URL`
-    // is an inner address (raised in review).
-    return json(201, { id, url: `${base}${SCREENSHOT_PATH}/${id}`, ...size }, headers);
   }
 
-  const id = screenshotIdOf(pathname);
-  if (id === undefined) return json(404, { error: 'not-found' }, headers);
-  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-  if (readBearerToken(request.headers.get('Authorization')) === undefined)
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+  const params = new URL(request.url).searchParams;
+  const site = normalizeClientId(params.get('client'));
+  const route = routeFor(request, config, site);
+  if (!route.ok) return routingFailure(route, headers);
+  const workspace = route.policy.sessions?.workspace;
+  // A write: a member of the workspace, with a session read again in the store (FRU-238).
+  const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace, site);
+  if (workspace === undefined || account === undefined || site === undefined)
     return json(401, { error: 'identity-required' }, headers);
-  const found = await store.get(id);
-  // A picture of another workspace answers as one that does not exist, and so does a picture of a
-  // site that is not shared with a guest (FRU-250).
-  if (found === undefined || (await memberOf(request, config, found.workspace, found.site)) === undefined)
-    return json(404, { error: 'not-found' }, headers);
 
-  return new Response(found.png, {
-    status: 200,
-    headers: {
-      ...headers,
-      'Content-Type': 'image/png',
-      // Read by a member with a token: no shared cache keeps it, and no browser runs it as a page.
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': "default-src 'none'",
-    },
+  const target = await chosenPlace(request, config, route);
+  if (target === null) return json(403, { error: 'destination-not-allowed' }, headers);
+  if (!(await takesAttachments(store, target))) return json(409, { error: 'attachments-not-taken' }, headers);
+
+  const declared = request.headers.get('Content-Type');
+  const maxBytes = maxBytesFor(declared);
+  const body = await readBoundedBytes(request, maxBytes);
+  if (body === null) return json(413, { error: 'payload-too-large', maxBytes }, headers);
+  const checked = checkAttachment(declared, body);
+  if (!checked.ok) return json(400, { error: checked.error }, headers);
+
+  const held = await files.heldBy(account, now);
+  if (held.files >= MAX_HELD_FILES || held.bytes + body.byteLength > MAX_HELD_BYTES)
+    return json(429, { error: 'transit-full', maxFiles: MAX_HELD_FILES, maxBytes: MAX_HELD_BYTES }, headers);
+
+  const id = newAttachmentId();
+  const name = attachmentName(params.get('name'));
+  const expiresAt = now + TRANSIT_MS;
+  await files.put({
+    id,
+    workspace,
+    account,
+    site,
+    name,
+    type: checked.type,
+    content: body,
+    createdAt: now,
+    expiresAt,
   });
+  // The files whose transit ended go with the next one that comes: a worker that receives files sweeps.
+  await files
+    .sweep(now)
+    .catch((error: unknown) => console.error('[fruitback] the files in transit were not swept', error));
+
+  return json(
+    201,
+    { id, name, type: checked.type, size: body.byteLength, expiresAt: new Date(expiresAt).toISOString() },
+    headers,
+  );
 }
 
 /**
@@ -1780,6 +1847,7 @@ async function getFeedback(
   kv: Kv,
   corsHeaders: Record<string, string>,
   noteIndex?: NoteIndex,
+  context?: RequestContext,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const requested = params.get('url');
@@ -1880,13 +1948,25 @@ async function getFeedback(
 
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
+    // FRU-331: whether a note of this reader may carry files, for a reader who may send one (a
+    // session of the workspace that reads this site). Asked at each request, like the places.
+    const attaches =
+      route.client?.workspace !== undefined &&
+      clientId !== undefined &&
+      (context?.attachments ?? attachmentStoreFor(config)) !== undefined &&
+      (await memberOf(request, config, route.client.workspace, clientId)) !== undefined;
     const offered =
       places.length > 0 && (await seesTracker(request, config, route.policy))
         ? {
-            destinations: places.map((place) => ({
-              id: place.id,
-              ...(place.label === undefined ? {} : { label: place.label }),
-            })),
+            destinations: await Promise.all(
+              places.map(async (place) => ({
+                id: place.id,
+                ...(place.label === undefined ? {} : { label: place.label }),
+                ...(attaches
+                  ? { canAttach: await takesAttachments(store, placedAt(route.client as ClientConfig, place)) }
+                  : {}),
+              })),
+            ),
           }
         : {};
 
@@ -1905,6 +1985,9 @@ async function getFeedback(
         ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
         // FRU-330: absent where this reader may leave a note, as on every worker of before.
         ...((await writesHere(request, route.policy)) ? {} : { canWrite: false }),
+        // FRU-331: `false` says that the notes of this site stay in Fruitback, or go to a tracker that
+        // takes no file: the widget offers no file and says why. Absent: this reader sends none.
+        ...(attaches ? { canAttach: await takesAttachments(store, route.client) } : {}),
         ...batchOffer(config),
       },
       // No browser cache, deliberately. The read cache above is what protects the Linear
@@ -1965,7 +2048,15 @@ async function postFeedback(
   noteIndex: NoteIndex | undefined,
   /** Whether the session of the token still writes, read in the store (FRU-238). */
   stillWrites: () => Promise<boolean>,
+  context?: RequestContext,
 ): Promise<Response> {
+  // FRU-331: the files of the note, by their ids in transit. Read before the body: a bad list is
+  // refused whatever the note says.
+  const attachmentIds = attachmentIdsOf(new URL(request.url).searchParams.get('attachments'), MAX_ATTACHMENTS_PER_NOTE);
+  if (attachmentIds === null) {
+    return json(400, { error: 'invalid-attachments', max: MAX_ATTACHMENTS_PER_NOTE }, corsHeaders);
+  }
+
   const body = await readBoundedText(request);
   if (body === null) {
     return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
@@ -1980,6 +2071,8 @@ async function postFeedback(
 
   // FRU-124: an array is a batch, an object is one note, as before.
   if (Array.isArray(payload)) {
+    // A note with files goes alone: the files of a batch would have to say which note is theirs.
+    if (attachmentIds.length > 0) return json(400, { error: 'attachments-in-batch' }, corsHeaders);
     return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex, stillWrites);
   }
 
@@ -2010,7 +2103,20 @@ async function postFeedback(
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
 
   try {
-    const issue = await store.create(attributed, target, route.policy);
+    const taken =
+      attachmentIds.length === 0
+        ? undefined
+        : await takeFiles(request, config, context, store, route, target, attributed.id, clientId, attachmentIds);
+    if (taken !== undefined && !taken.ok) return json(taken.status, taken.body, corsHeaders);
+    const { files: answered, ...issue } = await store.create(
+      attributed,
+      target,
+      route.policy,
+      taken?.ok === true ? taken.files : undefined,
+    );
+    // The tracker has the files, or refused them once the note was written: none stays in transit.
+    // A file that a delivery carries later stays until that delivery arrives, or its transit ends.
+    const filesOutcome = taken?.ok === true ? await settleFiles(taken.store, taken.files, answered) : undefined;
     await invalidatePages(kv, [attributed.page.url]);
     const workspace = route.client?.workspace;
     if (workspace !== undefined && clientId !== undefined) {
@@ -2020,7 +2126,14 @@ async function postFeedback(
 
     const hidden = await hidesTracker(request, config, route.policy);
 
-    return json(201, { issue: hidden ? withoutTracker(issue, attributed.id) : issue }, corsHeaders);
+    return json(
+      201,
+      {
+        issue: hidden ? withoutTracker(issue, attributed.id) : issue,
+        ...(filesOutcome === undefined ? {} : { attachments: filesOutcome }),
+      },
+      corsHeaders,
+    );
   } catch (error) {
     if (error instanceof StoreError) {
       // Upstream failed, not the caller: 502 tells the widget to keep the note and retry.
@@ -2028,6 +2141,99 @@ async function postFeedback(
     }
     throw error;
   }
+}
+
+/**
+ * The files that a note names, given to it (FRU-331), or the answer that refuses the note.
+ *
+ * - `409 attachments-not-taken`: the store of the place takes no file.
+ * - `401`: only the session that sent the files names them, as a write (`writerIn`).
+ * - `410 attachment-gone`: a file is not one this person sent for this site, or its transit ended,
+ *   or another note took it. `ids` says which: the widget keeps the note and its text, and the
+ *   person sends it again without them.
+ * - `413`: the files of one note are over `MAX_ATTACHMENT_BYTES_PER_NOTE` together.
+ *
+ * Nothing is written before every file is checked: a refusal leaves the files where they were.
+ */
+async function takeFiles(
+  request: Request,
+  config: Served,
+  context: RequestContext | undefined,
+  store: SeedStore,
+  route: Extract<ClientResolution, { ok: true }>,
+  target: ClientConfig | undefined,
+  seed: string,
+  site: string | undefined,
+  ids: readonly string[],
+): Promise<
+  | { ok: true; store: AttachmentStore; files: OutgoingFile[] }
+  | { ok: false; status: number; body: Record<string, unknown> }
+> {
+  const files = context?.attachments ?? attachmentStoreFor(config);
+  if (files === undefined || !(await takesAttachments(store, target))) {
+    return { ok: false, status: 409, body: { error: 'attachments-not-taken' } };
+  }
+  const workspace = route.client?.workspace;
+  const account =
+    workspace === undefined || context === undefined
+      ? undefined
+      : await writerIn(request, config, context, workspace, site);
+  if (account === undefined || site === undefined) {
+    return { ok: false, status: 401, body: { error: 'identity-required' } };
+  }
+
+  const now = Date.now();
+  const found = await Promise.all(ids.map((id) => files.get(id, now)));
+  const gone = ids.filter((id, index) => {
+    const file = found[index];
+
+    return (
+      file === undefined ||
+      file.account !== account ||
+      file.workspace !== workspace ||
+      file.site !== site ||
+      (file.seed !== undefined && file.seed !== seed)
+    );
+  });
+  if (gone.length > 0) return { ok: false, status: 410, body: { error: 'attachment-gone', ids: gone } };
+  const total = found.reduce((sum, file) => sum + (file?.content.byteLength ?? 0), 0);
+  if (total > MAX_ATTACHMENT_BYTES_PER_NOTE) {
+    return { ok: false, status: 413, body: { error: 'payload-too-large', maxBytes: MAX_ATTACHMENT_BYTES_PER_NOTE } };
+  }
+
+  const claimed = await files.claim(ids, seed, now);
+  // Another note took one between the read and the claim: none is sent, and the note is refused.
+  if (claimed.length !== ids.length) {
+    const kept = new Set(claimed.map((file) => file.id));
+
+    return { ok: false, status: 410, body: { error: 'attachment-gone', ids: ids.filter((id) => !kept.has(id)) } };
+  }
+
+  return {
+    ok: true,
+    store: files,
+    files: claimed.map((file) => ({ id: file.id, name: file.name, type: file.type, content: file.content })),
+  };
+}
+
+/**
+ * Removes from the transit the files that the tracker has, or refused, and answers how many of each
+ * (FRU-331). A store that said nothing of them sent none: they are lost, and removed too.
+ */
+async function settleFiles(
+  files: AttachmentStore,
+  sent: readonly OutgoingFile[],
+  answer: FilesAnswer | undefined,
+): Promise<{ sent: number; lost: number; waiting: number }> {
+  const outcome = answer ?? { sent: [], lost: sent.map((file) => file.id), waiting: [] };
+  try {
+    await files.remove([...outcome.sent, ...outcome.lost]);
+  } catch (error) {
+    // The note is written. A file that stays goes at the end of its transit.
+    console.error('[fruitback] files of a written note were not removed from the transit', error);
+  }
+
+  return { sent: outcome.sent.length, lost: outcome.lost.length, waiting: outcome.waiting.length };
 }
 
 /**

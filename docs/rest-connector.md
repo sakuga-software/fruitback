@@ -33,6 +33,30 @@ This page is the contract your receiver is written against.
 | `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                    |
 | `seed`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field. |
 
+A note can carry files (FRU-331): a capture of the page or of an area, an image, any file. A body
+then has one more field, `attachments`, with one entry for each file that still waits in the worker:
+
+```text
+"attachments": [
+  {
+    "name": "capture.png",
+    "type": "image/png",
+    "size": 48213,
+    "url": "https://api.fruitback.example/attachments/att_5c1e…?expires=1792569600&signature=9b2f…",
+    "expiresAt": "2026-10-21T11:00:00.000Z"
+  }
+]
+```
+
+**Read each file at its `url` before `expiresAt`, and keep it: Fruitback does not.** The address
+answers the bytes with a `GET` and no credential, for one hour from the attempt that carries it, and
+`404` after. The worker deletes the file one hour after your `2xx`, and 7 days after it came at the
+latest. Each attempt signs new addresses, so the body of a second attempt differs from the first;
+a file whose 7 days ended is left out, and the note comes without it. `type` is the type the worker
+checked: an image (PNG, JPEG, WebP, GIF), a PDF, a text (plain, CSV, JSON), or
+`application/octet-stream` for any other file, whatever its sender said. Never open a file in a
+browser on its `type`: serve it as a download.
+
 And these headers:
 
 | Header                  | What it is                                                              |

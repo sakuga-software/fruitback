@@ -13,7 +13,7 @@ import {
 } from './console-world.fixture.ts';
 import { ADMIN_PATH, type InstanceAdminReads, handleInstanceAdmin } from './instance-admin.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createMemoryScreenshotStore } from './screenshots.ts';
+import { createMemoryAttachmentStore } from './attachments.ts';
 import { seal } from './secrets.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -77,7 +77,7 @@ async function anInstance() {
     context: {
       ...base.context,
       store: createPostgresSeedStore(base.database),
-      screenshots: createMemoryScreenshotStore(),
+      attachments: createMemoryAttachmentStore(),
       connectStore: base.connectStore,
       resolveTxt: async () => [],
     },

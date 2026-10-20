@@ -5,7 +5,7 @@ import type { ClientConfig } from './clients.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
-import { type SeedStore, StoreError, takesChecks, takesReplies } from './store.ts';
+import { type SeedStore, StoreError, takesAttachments, takesChecks, takesReplies } from './store.ts';
 
 /**
  * The store of a request on a worker whose workspaces connect their own trackers (FRU-121).
@@ -39,7 +39,7 @@ function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore 
 
   return {
     ...noReply,
-    create: (seed, client, policy) => store.create(seed, client, quiet(policy)),
+    create: (seed, client, policy, files) => store.create(seed, client, quiet(policy), files),
     ...(store.createBatch === undefined
       ? {}
       : {
@@ -69,8 +69,12 @@ function receivingStore(own: SeedStore, accounts: AccountStore, connector: strin
 
   return {
     ...noReply,
-    async create(seed, client, policy) {
+    // FRU-331: the files of a note travel with its delivery, by the addresses of short life that each
+    // attempt signs (`deliverDue`). The worker's own store takes none: the files never stay with it.
+    attachments: true,
+    async create(seed, client, policy, files = []) {
       const created = await own.create(seed, client, policy);
+      const ids = files.map((file) => file.id);
       try {
         await accounts.enqueueDelivery(
           connector,
@@ -82,14 +86,27 @@ function receivingStore(own: SeedStore, accounts: AccountStore, connector: strin
             },
             identifier: created.identifier,
             seed,
+            ...(files.length === 0
+              ? {}
+              : {
+                  attachments: files.map((file) => ({
+                    id: file.id,
+                    name: file.name,
+                    type: file.type,
+                    size: file.content.byteLength,
+                  })),
+                }),
           }),
           now(),
         );
       } catch (error) {
         console.error('[fruitback] a note was kept and its delivery was not queued', created.identifier, error);
+
+        // No delivery carries the files: they are lost, and the worker removes them now.
+        return { ...created, files: { sent: [], lost: ids, waiting: [] } };
       }
 
-      return created;
+      return { ...created, files: { sent: [], lost: [], waiting: ids } };
     },
   };
 }
@@ -113,13 +130,24 @@ export function createConnectorStores(
   secretsKey: string | undefined,
   now: () => number = Date.now,
   oauth?: LinearOAuth,
+  /**
+   * Whether a delivery can carry the address of a file on this worker (FRU-331): it has a public
+   * address and a key to sign with. Without them an address that receives takes no file.
+   */
+  { filesReachable = false }: { filesReachable?: boolean } = {},
 ): ConnectorStores {
   return async (connector, workspace, own) => {
     const kept = await accounts.sealedKey(connector);
     if (kept === undefined || kept.workspaceId !== workspace)
       throw new StoreError('The connector of this site is gone');
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
-    if (kept.kind === 'rest') return receivingStore(own, accounts, connector, now);
+    if (kept.kind === 'rest') {
+      const receiving = receivingStore(own, accounts, connector, now);
+      if (filesReachable) return receiving;
+      const { attachments: _files, ...noFiles } = receiving;
+
+      return noFiles;
+    }
 
     // A token of OAuth near its end is refreshed here.
     const authorization = await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now });
@@ -143,7 +171,9 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     // The connector is in the key: two sites of one team in two workspaces must not share an entry.
     scope: (client) =>
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,
-    create: async (seed, client, policy) => (await pick(client)).create(seed, client, policy),
+    create: async (seed, client, policy, files) => (await pick(client)).create(seed, client, policy, files),
+    // FRU-331: the store of the site says whether it takes files. The worker's own store takes none.
+    attachmentsFor: async (client) => takesAttachments(await pick(client), client),
     // The store of the client decides how a batch is written: under a parent, or one note at a time.
     createBatch: async (seeds, client, policy, memory) => createAll(await pick(client), seeds, client, policy, memory),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),

@@ -1,8 +1,17 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
-import { createLinearStore, linearRoutingFor, reopenStateOf, stageForLinearState } from './linear.ts';
-import { installLinearStub } from './linear-stub.ts';
+import { seedFixture } from '@fruitback/shared/seed.fixture';
+import {
+  ATTACHMENT_SUBTITLE,
+  createLinearStore,
+  linearRoutingFor,
+  reopenStateOf,
+  stageForLinearState,
+  toSeedIssue,
+} from './linear.ts';
+import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
+import { StoreError } from './store.ts';
 
 /**
  * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
@@ -151,5 +160,100 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       stub.calls.some((call) => call.operation === 'FruitbackReopenIssue'),
       false,
     );
+  });
+});
+
+describe('the files of a note, in Linear (FRU-331)', () => {
+  afterEach(() => mock.restoreAll());
+
+  const POLICY = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' } as const;
+  const config = { apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined };
+  const files = [
+    { id: 'att_1', name: 'capture.png', type: 'image/png', content: new Uint8Array([1, 2, 3]) },
+    { id: 'att_2', name: 'log.txt', type: 'text/plain', content: new Uint8Array([0x61]) },
+  ];
+
+  it('puts each file in the storage of Linear before the issue, then attaches it to the issue', async () => {
+    const stub = installLinearStub();
+    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY, files);
+
+    assert.deepEqual(
+      stub.calls.map((call) => call.operation).filter((operation) => !operation.includes('Label')),
+      [
+        'FruitbackFileUpload',
+        'PUT',
+        'FruitbackFileUpload',
+        'PUT',
+        'FruitbackCreateIssue',
+        'FruitbackCreateAttachment',
+        'FruitbackCreateAttachment',
+      ],
+    );
+    assert.deepEqual(stub.calls[0]?.variables, { contentType: 'image/png', filename: 'capture.png', size: 3 });
+    // The PUT carries the bytes, the type, and every header that `fileUpload` named.
+    assert.deepEqual([...(stub.puts[0]?.body ?? [])], [1, 2, 3]);
+    assert.equal(stub.puts[0]?.headers['Content-Type'], 'image/png');
+    assert.equal(stub.puts[0]?.headers['x-goog-content-length-range'], '3,3');
+    assert.deepEqual(stub.calls.at(-2)?.variables, {
+      input: {
+        issueId: 'issue_1',
+        title: 'capture.png',
+        url: 'https://uploads.linear.app/asset/1/capture.png',
+        subtitle: ATTACHMENT_SUBTITLE,
+      },
+    });
+    assert.deepEqual(created.files, { sent: ['att_1', 'att_2'], lost: [], waiting: [] });
+  });
+
+  it('writes no issue when Linear does not take a file, so the note and its files are sent again', async () => {
+    for (const options of [
+      { failFileUpload: true },
+      { putStatus: 403 },
+      { uploadUrl: 'http://storage.linear.test/put' },
+    ]) {
+      const stub = installLinearStub(options);
+      await assert.rejects(createLinearStore(config).create(seedFixture(), undefined, POLICY, files), StoreError);
+      assert.equal(
+        stub.calls.some((call) => call.operation === 'FruitbackCreateIssue'),
+        false,
+        JSON.stringify(options),
+      );
+      mock.restoreAll();
+    }
+  });
+
+  it('answers a file that Linear refuses to attach as lost, once the issue exists, and never throws', async () => {
+    installLinearStub({ failAttachment: true });
+    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY, files);
+
+    assert.equal(created.identifier, 'SKG-999');
+    assert.deepEqual(created.files, { sent: [], lost: ['att_1', 'att_2'], waiting: [] });
+  });
+
+  it('sends no file and says nothing of files for a note without one', async () => {
+    const stub = installLinearStub();
+    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY);
+
+    assert.equal('files' in created, false);
+    assert.equal(stub.puts.length, 0);
+  });
+
+  it('reads back the attachments that Fruitback made, by name and address, and not the others', () => {
+    const seed = seedFixture();
+    const issue = toSeedIssue(
+      {
+        ...storedIssueFromSeed(seed),
+        attachments: {
+          nodes: [
+            { title: 'capture.png', url: 'https://uploads.linear.app/a/capture.png', subtitle: ATTACHMENT_SUBTITLE },
+            { title: 'PR #12', url: 'https://github.com/acme/app/pull/12', subtitle: 'Open' },
+          ],
+        },
+      },
+      seed.page.url,
+    );
+
+    assert.deepEqual(issue?.attachments, [{ name: 'capture.png', url: 'https://uploads.linear.app/a/capture.png' }]);
+    assert.equal('attachments' in (toSeedIssue(storedIssueFromSeed(seed), seed.page.url) ?? {}), false);
   });
 });

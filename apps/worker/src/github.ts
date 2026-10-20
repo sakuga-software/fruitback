@@ -314,6 +314,14 @@ function commentPages(count: number): number[] {
 
 /**
  * Build a GitHub store. The configuration arrives validated by `createGithubStoreSpec`.
+ *
+ * **It takes no file of a note** (FRU-331): it has no `attachments`, so a site on it answers
+ * `canAttach: false` and `409 attachments-not-taken`. The REST API of an issue takes text only
+ * (`title`, `body`: documentation of « Create an issue », read on 2026-10-21), and has no route that
+ * puts a file. The upload of the web interface of GitHub answers a browser with a cookie, not the
+ * token of an App. The one way left is a commit of the file in the repository (`PUT /contents`),
+ * which keeps it in the history of the code for ever, where nobody can delete it at the end of a
+ * transit: refused. Not measured on a real repository: no App of a test repository is installed.
  */
 export function createGithubStore(config: GithubConfig, options: GithubStoreOptions = {}): SeedStore {
   const now = options.now ?? Date.now;

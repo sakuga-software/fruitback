@@ -3,6 +3,7 @@ import { BlockList, isIP } from 'node:net';
 import type { Seed } from '@fruitback/shared';
 import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
+import { type AttachmentStore, SIGNED_URL_MS, signedAttachmentPath } from './attachments.ts';
 
 /**
  * An address that receives each note of a site (FRU-122).
@@ -169,7 +170,21 @@ export type DeliveryBody = {
   /** What Fruitback calls the note, as its thread shows it. */
   identifier: string;
   seed: Seed;
+  /**
+   * The files of the note (FRU-331), as the queue keeps them: an id in transit, a name, a type, a
+   * size. Each attempt replaces this list with `SentAttachment`s: see `withSignedFiles`.
+   */
+  attachments?: KeptAttachment[];
 };
+
+/** A file of a note, as the queue of deliveries keeps it. The id is never sent. */
+export type KeptAttachment = { id: string; name: string; type: string; size: number };
+
+/**
+ * A file of a note, as a delivery sends it (FRU-331): `url` answers the bytes until `expiresAt`, to
+ * anybody who has the address, and then never again. The receiver reads it once, and keeps the file.
+ */
+export type SentAttachment = { name: string; type: string; size: number; url: string; expiresAt: string };
 
 export function deliveryBody(note: Omit<DeliveryBody, 'version' | 'event'>): string {
   return JSON.stringify({ version: DELIVERY_VERSION, event: 'note.created', ...note } satisfies DeliveryBody);
@@ -192,6 +207,10 @@ export type DeliverySeams = {
   accounts: AccountStore;
   secretsKey: string | undefined;
   send: Send;
+  /** The files in transit (FRU-331). Absent: a delivery sends no file, and the note goes without. */
+  attachments?: AttachmentStore;
+  /** The public address of the worker, which the address of a file starts with (`FRUITBACK_PUBLIC_URL`). */
+  publicUrl?: string;
   now?: () => number;
   /** How many deliveries one pass attempts. The others wait for the next pass. */
   limit?: number;
@@ -208,6 +227,8 @@ export async function deliverDue({
   accounts,
   secretsKey,
   send,
+  attachments,
+  publicUrl,
   now = Date.now,
   limit = 20,
 }: DeliverySeams): Promise<{ delivered: number; failed: number }> {
@@ -222,11 +243,14 @@ export async function deliverDue({
 
     let status: number | undefined;
     let error: string | undefined;
+    let files: string[] = [];
     if (target === undefined) {
       error = 'The address of this connector could not be opened';
     } else {
       const timestamp = Math.floor(now() / 1_000);
       try {
+        const signed = await withSignedFiles(delivery.body, { attachments, publicUrl, secretsKey, now: now() });
+        files = signed.files;
         status = (
           await send(
             target.url,
@@ -235,9 +259,9 @@ export async function deliverDue({
               'User-Agent': 'Fruitback',
               [DELIVERY_HEADER]: delivery.id,
               [TIMESTAMP_HEADER]: String(timestamp),
-              [SIGNATURE_HEADER]: signature(target.secret, timestamp, delivery.body),
+              [SIGNATURE_HEADER]: signature(target.secret, timestamp, signed.body),
             },
-            delivery.body,
+            signed.body,
           )
         ).status;
       } catch (thrown) {
@@ -246,6 +270,9 @@ export async function deliverDue({
     }
 
     if (status !== undefined && status >= 200 && status < 300) {
+      // The receiver has the addresses of the files: they answer until the end of their signature,
+      // and the files go then. Never later than the end of their transit.
+      await attachments?.endAt(files, now() + SIGNED_URL_MS);
       await accounts.settleDelivery(delivery.id, { delivered: true });
       return true;
     }
@@ -282,6 +309,57 @@ export async function deliverDue({
   failed = arrived.length - delivered;
 
   await accounts.dropAbandonedDeliveries(now() - ABANDONED_KEPT_DAYS * 24 * 60 * 60 * 1_000);
+  // The files whose transit ended, whatever store they wait for (FRU-331). A sweep that fails is
+  // tried again at the next pass: a file past its end already reads as absent.
+  await attachments?.sweep(now()).catch((error: unknown) => {
+    console.error('[fruitback] the files in transit were not swept', error);
+  });
 
   return { delivered, failed };
+}
+
+/**
+ * The body of one attempt (FRU-331): the files that the queue names, each with an address of short
+ * life, signed for this attempt. A file that is gone (its transit ended, or the worker has no store
+ * of files, or no public address) is left out, and the note goes without it.
+ *
+ * The body of the queue holds no address: an attempt a day later signs new ones. `files` is the ids
+ * of the files that this body names.
+ */
+export async function withSignedFiles(
+  body: string,
+  {
+    attachments,
+    publicUrl,
+    secretsKey,
+    now,
+  }: { attachments: AttachmentStore | undefined; publicUrl: string | undefined; secretsKey: string; now: number },
+): Promise<{ body: string; files: string[] }> {
+  let parsed: DeliveryBody;
+  try {
+    parsed = JSON.parse(body) as DeliveryBody;
+  } catch {
+    return { body, files: [] };
+  }
+  if (!Array.isArray(parsed.attachments)) return { body, files: [] };
+
+  const expires = Math.floor((now + SIGNED_URL_MS) / 1_000);
+  const sent: SentAttachment[] = [];
+  const files: string[] = [];
+  for (const kept of parsed.attachments) {
+    if (attachments === undefined || publicUrl === undefined) break;
+    const found = await attachments.get(kept.id, now);
+    if (found === undefined) continue;
+    files.push(found.id);
+    sent.push({
+      name: found.name,
+      type: found.type,
+      size: found.content.byteLength,
+      url: `${publicUrl.replace(/\/+$/, '')}${signedAttachmentPath(secretsKey, found.id, expires)}`,
+      expiresAt: new Date(expires * 1_000).toISOString(),
+    });
+  }
+  const { attachments: _kept, ...rest } = parsed;
+
+  return { body: JSON.stringify(sent.length === 0 ? rest : { ...rest, attachments: sent }), files };
 }

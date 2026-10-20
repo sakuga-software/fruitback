@@ -21,7 +21,7 @@ import { ADMIN_PATH, SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { deliverDue, deliveryBody, sealTarget } from './rest-connector.ts';
-import { createMemoryScreenshotStore } from './screenshots.ts';
+import { createMemoryAttachmentStore } from './attachments.ts';
 import { seal } from './secrets.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
@@ -102,7 +102,7 @@ async function anInstance() {
     context: {
       ...base.context,
       store: createPostgresSeedStore(base.database),
-      screenshots: createMemoryScreenshotStore(),
+      attachments: createMemoryAttachmentStore(),
       connectStore: base.connectStore,
       resolveTxt: async () => [],
     },
@@ -150,7 +150,7 @@ async function bytesOf(answer: Response) {
   };
 }
 
-/** A call of the extension with the bytes of a picture: `callOn` sends JSON. */
+/** A call of the extension with the bytes of a file (FRU-331): `callOn` sends JSON. */
 function picture(on: Instance, method: string, path: string, origin: string | null, body?: Uint8Array) {
   return handleRequest(
     new Request(`${WORKER}${path}`, {
@@ -294,8 +294,8 @@ describe('a site of a suspended workspace answers as a site that does not exist 
         }),
     },
     {
-      name: 'POST /screenshot',
-      ask: (on, site, origin) => picture(on, 'POST', `/screenshot?client=${site}`, origin, png()),
+      name: 'POST /attachments',
+      ask: (on, site, origin) => picture(on, 'POST', `/attachments?client=${site}`, origin, png()),
     },
   ];
 
@@ -413,22 +413,6 @@ describe('a site of a suspended workspace answers as a site that does not exist 
     assert.equal(await count(on, 'sites'), 3);
     // The control: the same call into Globex adds the site.
     assert.equal((await add(on.globex)).status, 201);
-  });
-
-  it('answers a picture of a suspended workspace as a picture that does not exist', async () => {
-    const on = await anInstance();
-    const send = (method: string, path: string, body?: Uint8Array) => picture(on, method, path, EXTENSION, body);
-    const sent = await send('POST', `/screenshot?client=${on.site.id}`, png());
-    assert.equal(sent.status, 201, await sent.clone().text());
-    const { id } = (await sent.json()) as { id: string };
-    assert.equal((await send('GET', `/screenshot/${id}`)).status, 200);
-
-    await suspend(on, on.acme);
-
-    assert.deepEqual(
-      await bytesOf(await send('GET', `/screenshot/${id}`)),
-      await bytesOf(await send('GET', `/screenshot/shot_${'0'.repeat(20)}`)),
-    );
   });
 });
 

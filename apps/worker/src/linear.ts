@@ -26,6 +26,8 @@ import {
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 import { checkText, replyText } from './reply-text.ts';
+import type { OutgoingFile } from './attachments.ts';
+import type { CreatedWithFiles } from './store.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
@@ -253,6 +255,118 @@ export async function createCheck(
   return { comment: seedCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
 
+/**
+ * The files of a note, in Linear (FRU-331): `fileUpload` gives an address to put the bytes at, and an
+ * address of the asset; the worker puts the bytes there, then `attachmentCreate` adds the asset to the
+ * issue. The subtitle marks the attachments that Fruitback made: a read shows those, and not the links
+ * that the team or another integration added.
+ *
+ * Not measured on a real workspace (FRU-331): the shapes are the ones of the documentation of Linear
+ * (« File upload », `fileUpload` and `attachmentCreate`), played against the double of `linear-stub.ts`.
+ */
+const FILE_UPLOAD_MUTATION = `
+  mutation FruitbackFileUpload($contentType: String!, $filename: String!, $size: Int!) {
+    fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+      success
+      uploadFile { uploadUrl assetUrl headers { key value } }
+    }
+  }
+`;
+
+const CREATE_ATTACHMENT_MUTATION = `
+  mutation FruitbackCreateAttachment($input: AttachmentCreateInput!) {
+    attachmentCreate(input: $input) {
+      success
+      attachment { id url title }
+    }
+  }
+`;
+
+/** What marks an attachment of an issue as a file that Fruitback sent. */
+export const ATTACHMENT_SUBTITLE = 'Fruitback';
+
+type FileUploadResult = {
+  fileUpload: {
+    success: boolean;
+    uploadFile: { uploadUrl: string; assetUrl: string; headers: { key: string; value: string }[] } | null;
+  };
+};
+type CreateAttachmentResult = { attachmentCreate: { success: boolean } };
+
+/** A file whose bytes Linear has, and that no issue names yet. */
+type UploadedFile = { id: string; name: string; assetUrl: string };
+
+/**
+ * Puts the bytes of each file in the storage of Linear, before the issue exists. A file that Linear
+ * does not take throws `StoreError`: no issue is written, the files stay in transit, and the widget
+ * sends the note again. An asset that was put and is named by no issue stays in Linear, unread.
+ */
+async function uploadFiles(config: LinearConfig, files: readonly OutgoingFile[]): Promise<UploadedFile[]> {
+  const uploaded: UploadedFile[] = [];
+  for (const file of files) {
+    const asked = await graphql<FileUploadResult>(config, FILE_UPLOAD_MUTATION, {
+      contentType: file.type,
+      filename: file.name,
+      size: file.content.byteLength,
+    });
+    const target = asked.fileUpload.uploadFile;
+    if (!asked.fileUpload.success || target === null) throw new StoreError('Linear refused to take a file');
+    let address: URL;
+    try {
+      address = new URL(target.uploadUrl);
+    } catch {
+      throw new StoreError('Linear gave no address to put a file at');
+    }
+    // The bytes of a person go over https only, to the address Linear gave.
+    if (address.protocol !== 'https:') throw new StoreError('Linear gave an address that is not https');
+
+    let put: Response;
+    try {
+      put = await fetch(address, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+          'Cache-Control': 'public, max-age=31536000',
+          ...Object.fromEntries(target.headers.map(({ key, value }) => [key, value])),
+        },
+        body: file.content,
+      });
+    } catch {
+      throw new StoreError('The storage of Linear could not be reached');
+    }
+    if (!put.ok) throw new StoreError(`The storage of Linear responded ${put.status}`);
+    uploaded.push({ id: file.id, name: file.name, assetUrl: target.assetUrl });
+  }
+
+  return uploaded;
+}
+
+/**
+ * Names each uploaded file on the issue. The issue exists: a file that Linear refuses here is lost,
+ * never a throw, or the widget would send the note a second time.
+ */
+async function attachFiles(
+  config: LinearConfig,
+  issueId: string,
+  uploaded: readonly UploadedFile[],
+): Promise<{ sent: string[]; lost: string[]; waiting: string[] }> {
+  const sent: string[] = [];
+  const lost: string[] = [];
+  for (const file of uploaded) {
+    try {
+      const created = await graphql<CreateAttachmentResult>(config, CREATE_ATTACHMENT_MUTATION, {
+        input: { issueId, title: file.name, url: file.assetUrl, subtitle: ATTACHMENT_SUBTITLE },
+      });
+      (created.attachmentCreate.success ? sent : lost).push(file.id);
+    } catch (error) {
+      if (!(error instanceof StoreError)) console.error('[fruitback] a file of a note was not attached', error);
+      lost.push(file.id);
+    }
+  }
+
+  return { sent, lost, waiting: [] };
+}
+
 type TeamLabelsResult = { team: { labels: { nodes: { id: string; name: string }[] } } | null };
 type CreateLabelResult = { issueLabelCreate: { issueLabel: { id: string; name: string } | null } };
 type CreateIssueResult = { issueCreate: { success: boolean; issue: CreatedIssue | null } };
@@ -315,7 +429,10 @@ export async function createSeedIssue(
   locale?: string,
   /** The issue of the batch this seed belongs to (FRU-124): the seed becomes one of its sub-issues. */
   parentId?: string,
-): Promise<CreatedIssue> {
+  /** The files of the note in transit (FRU-331). Put in Linear before the issue is written. */
+  files: readonly OutgoingFile[] = [],
+): Promise<CreatedWithFiles> {
+  const uploaded = await uploadFiles(config, files);
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
 
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
@@ -332,8 +449,10 @@ export async function createSeedIssue(
   if (!created.issueCreate.success || created.issueCreate.issue === null) {
     throw new StoreError('Linear refused to create the issue');
   }
+  const issue = created.issueCreate.issue;
+  if (files.length === 0) return issue;
 
-  return created.issueCreate.issue;
+  return { ...issue, files: await attachFiles(config, issue.id, uploaded) };
 }
 
 /** The words of the parent of a batch, in the language of the team (FRU-39). */
@@ -437,6 +556,9 @@ const ISSUES_QUERY = `
         comments(first: $comments) {
           nodes { id body createdAt user { name } }
         }
+        attachments(first: 10) {
+          nodes { title url subtitle }
+        }
       }
     }
   }
@@ -453,6 +575,8 @@ export type IssueNode = {
   /** `id` is what a connector's exceptions name (FRU-102). The in-memory Linear has none. */
   state: { id?: string; name: string; type: string } | null;
   comments?: { nodes: CommentNode[] } | null;
+  /** The attachments of the issue (FRU-331). Only the ones marked `ATTACHMENT_SUBTITLE` are read. */
+  attachments?: { nodes: { title: string; url: string; subtitle: string | null }[] } | null;
 };
 
 export type CommentNode = {
@@ -658,6 +782,7 @@ export function toSeedIssue(
     stateName: node.state?.name ?? '',
     updatedAt: node.updatedAt,
     ...optionalComments(policy?.showComments === false ? undefined : toSeedComments(node)),
+    ...attachmentsOf(node),
     seed: parsed.seed,
   };
 
@@ -666,6 +791,13 @@ export function toSeedIssue(
   const result = seedIssueSchema.safeParse(candidate);
 
   return result.success ? result.data : null;
+}
+
+/** The files that Fruitback sent to this issue, by their name and the address Linear gave. */
+function attachmentsOf(node: IssueNode): { attachments?: { name: string; url: string }[] } {
+  const ours = (node.attachments?.nodes ?? []).filter((each) => each.subtitle === ATTACHMENT_SUBTITLE);
+
+  return ours.length === 0 ? {} : { attachments: ours.map((each) => ({ name: each.title, url: each.url })) };
 }
 
 export type LinearTeam = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
@@ -788,7 +920,10 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
     // The team, because that is what separates one tenant's issues from another's here. The worker
     // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
     scope: (client) => linearRoutingFor(config, client).teamId,
-    create: (seed, client, policy) => createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale),
+    // FRU-331: the files of a note go to the issue.
+    attachments: true,
+    create: (seed, client, policy, files) =>
+      createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale, undefined, files),
     createBatch: (seeds, client, policy, memory) =>
       createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>

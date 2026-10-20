@@ -8,9 +8,10 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
-import { type IssueNode, stageForLinearState, toSeedIssue } from './linear.ts';
+import { ATTACHMENT_SUBTITLE, type IssueNode, stageForLinearState, toSeedIssue } from './linear.ts';
+import type { OutgoingFile } from './attachments.ts';
 import { checkText, replyText } from './reply-text.ts';
-import type { CheckAnswer, CreatedIssue, NewCheck, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
+import type { CheckAnswer, CreatedWithFiles, NewCheck, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -63,7 +64,11 @@ const DEV_STATES = [
   { name: 'Canceled', type: 'canceled' },
 ] as const;
 
-async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssue> {
+async function createSeedIssue(
+  seed: Seed,
+  locale?: string,
+  files: readonly OutgoingFile[] = [],
+): Promise<CreatedWithFiles> {
   const number = issues.length + 1;
   // The state and the replies follow the rank of the issue on its page, not in the whole store. The
   // E2E specs run side by side and each keeps to its own page (FRU-268): five notes on one page get
@@ -94,12 +99,24 @@ async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssu
             }))
           : [],
     },
+    // FRU-331: the files as Linear lists them on an issue. The bytes are not kept: the dev loop shows
+    // that a note has its files, and no address here opens one.
+    attachments: {
+      nodes: files.map((file) => ({
+        title: file.name,
+        url: `http://localhost/dev-issue/${identifier}/attachments/${encodeURIComponent(file.name)}`,
+        subtitle: ATTACHMENT_SUBTITLE,
+      })),
+    },
     labels: buildIssueLabels(seed),
     clientId: seed.client?.id,
     page: seed.page.url,
   });
+  const issue = { id: `dev_issue_${number}`, identifier, url: `http://localhost/dev-issue/${identifier}` };
 
-  return { id: `dev_issue_${number}`, identifier, url: `http://localhost/dev-issue/${identifier}` };
+  return files.length === 0
+    ? issue
+    : { ...issue, files: { sent: files.map((file) => file.id), lost: [], waiting: [] } };
 }
 
 async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Promise<SeedIssue[]> {
@@ -204,7 +221,9 @@ export function createMemoryStore(): SeedStore {
     // The client id is already part of the worker's cache key, so there is nothing further to
     // distinguish here — unlike Linear, where two clients can share one team.
     scope: () => 'memory',
-    create: (seed, _client, policy) => createSeedIssue(seed, policy.locale),
+    // FRU-331: it stands in for Linear, which takes the files of a note.
+    attachments: true,
+    create: (seed, _client, policy, files) => createSeedIssue(seed, policy.locale, files),
     findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
     reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
     check: (target, check, _client, policy) => createCheck(target.issue, check, target.clientId, policy.locale),

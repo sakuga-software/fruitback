@@ -233,8 +233,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Delete workspace': 'Supprimer le workspace',
   'Delete {workspace}': 'Supprimer {workspace}',
 
-  'An issue per note, in one repository.': 'Un ticket par note, dans un dépôt.',
-  'POST each note to your own endpoint.': 'Chaque note envoyée en POST à votre propre adresse.',
+  'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
+    'Un ticket par note, dans un dépôt. Les fichiers d’une note ne partent pas : GitHub n’en prend aucun par son API.',
+  'POST each note to your own endpoint, with an address of one hour for each of its files.':
+    'Chaque note envoyée en POST à votre propre adresse, avec une adresse valable une heure pour chacun de ses fichiers.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':
     'Linear a refusé cette clé. Copiez-la de nouveau depuis Linear, dans Settings, puis Security and access.',
   'This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.':

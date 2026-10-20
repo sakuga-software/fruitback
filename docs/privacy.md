@@ -44,7 +44,8 @@ If your staging site shows real customer records, keep that in mind before you i
 - **No picture leaves the page unless somebody chose it.** The widget bundles no screen capture.
   The setting is absent unless the integrator supplied `captureScreenshot`, and present, it starts
   off: the reporter turns it on. The picture goes to **your** storage, and the seed holds only its
-  URL — whether that URL is public is your decision.
+  URL — whether that URL is public is your decision. A file that a person joins to a note through
+  the worker goes to the ticket of the tracker, never into the seed (FRU-331): see below.
 - **The identity token never enters the seed.** It travels in an `Authorization` header and is
   verified, not stored. The seed is kept verbatim for as long as the issue exists, and a credential
   in it would outlive its expiry by months.
@@ -183,14 +184,19 @@ the account of the member who left a note, and that is what says who may give a 
   and the date. Nothing else: the sites themselves are the rows above. A row goes with its site, its
   invitation, its workspace or its account, and when the guest leaves or is removed.
 
-- **The pictures of the notes, in the PostgreSQL database** (FRU-44), when a reviewer turned on
-  « Attach a picture of the element » in a widget that the extension mounts. A PNG of the element,
-  as the screen showed it, of 1 MB at most, with the workspace it belongs to, the site of its note
-  (since FRU-250), the account that sent it and its date. Only a member of that workspace reads it,
-  and a guest only the pictures of the sites shared with them. Deleting the workspace deletes its
-  pictures. The seed in the tracker holds the address of the picture, not the picture. **The picture
-  is sent when the note is written**, so a note that is kept for later (FRU-124) and never sent
-  leaves its picture on the worker, with no note that names it.
+- **The files of the notes, in transit, in the PostgreSQL database** (FRU-331): a capture of the
+  page or of an area, an image or a file that a person joined to a note that goes to a tracker. Each
+  with its name, its type as the worker checked it, the workspace and the site of its note, the
+  account that sent it, its date and its end. **Fruitback keeps no file: it waits there until the
+  tracker has it, 7 days at most.** Linear takes it with the note, and it leaves the worker at once;
+  a REST address reads it by an address of one hour in its delivery, and it leaves the worker one
+  hour after that delivery arrived; a file whose note never reaches the tracker leaves at the end of
+  its 7 days, and the note goes without it. A note that stays in Fruitback, or goes to GitHub, takes
+  no file. **Nobody reads a file in Fruitback**: no route shows one to a member, a guest or a page.
+  Who reads it after is who reads the ticket in the tracker, and the receiver of the REST address.
+  Deleting the workspace deletes the files that wait. The table is still named `screenshots`; the
+  pictures of before FRU-331 went with the migration when a note that the worker keeps named them,
+  and the others end 7 days after they came.
 
 - **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
@@ -295,7 +301,7 @@ what it writes each time.
   its `detail`: **the owners of the workspace read who acted and when** beside the reads, without the
   reason, and the administrators read the reason too. The reason of a suspension that ended stays
   there, as long as the database. A suspension deletes no note: the
-  notes that Fruitback keeps, their replies, the pictures and the deliveries that wait stay, and a
+  notes that Fruitback keeps, their replies, the files in transit and the deliveries that wait stay, and a
   restoration serves them again. While it lasts, the widget takes no note on its sites, and no
   delivery goes to its receiving addresses. Its owner can delete the workspace, which deletes all of
   it as for any workspace.

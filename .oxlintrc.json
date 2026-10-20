@@ -191,7 +191,7 @@
         "apps/worker/src/postgres.ts",
         "apps/worker/src/accounts-postgres.ts",
         "apps/worker/src/session-postgres.ts",
-        "apps/worker/src/screenshots-postgres.ts",
+        "apps/worker/src/attachments-postgres.ts",
         "apps/worker/src/seeds-postgres.ts",
         "apps/worker/src/kv-postgres.ts",
         "apps/worker/src/notes-index-postgres.ts",
@@ -233,7 +233,7 @@
                 "group": [
                   "./accounts-postgres.ts",
                   "./session-postgres.ts",
-                  "./screenshots-postgres.ts",
+                  "./attachments-postgres.ts",
                   "./seeds-postgres.ts",
                   "./kv-postgres.ts",
                   "./notes-index-postgres.ts",
@@ -279,7 +279,7 @@
                 "group": [
                   "./accounts-postgres.ts",
                   "./session-postgres.ts",
-                  "./screenshots-postgres.ts",
+                  "./attachments-postgres.ts",
                   "./seeds-postgres.ts",
                   "./kv-postgres.ts",
                   "./notes-index-postgres.ts",
@@ -321,7 +321,7 @@
                 "group": [
                   "./accounts-postgres.ts",
                   "./session-postgres.ts",
-                  "./screenshots-postgres.ts",
+                  "./attachments-postgres.ts",
                   "./seeds-postgres.ts",
                   "./kv-postgres.ts",
                   "./notes-index-postgres.ts",
@@ -342,7 +342,7 @@
       "files": [
         "apps/worker/src/accounts-postgres.ts",
         "apps/worker/src/session-postgres.ts",
-        "apps/worker/src/screenshots-postgres.ts",
+        "apps/worker/src/attachments-postgres.ts",
         "apps/worker/src/seeds-postgres.ts",
         "apps/worker/src/kv-postgres.ts",
         "apps/worker/src/notes-index-postgres.ts",
