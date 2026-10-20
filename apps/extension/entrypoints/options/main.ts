@@ -113,7 +113,7 @@ const returnAccess = createBrowserAccessReturn(sessions);
 /** The section « Workers and sessions », drawn again at each change of the rules or of a session. */
 const workers = element('div', '', 'workers-slot');
 /** A code a pairing link brought here from the popup: `#workers?worker=<endpoint>&code=<code>`. */
-const linked = linkedPairing(window.location.hash);
+let linked = linkedPairing(window.location.hash);
 
 if (app !== null) {
   const sites = element('section', '', 'page-section');
@@ -155,6 +155,11 @@ if (app !== null) {
 
 void renderList();
 void renderWorkers();
+// A pairing link opened from the popup while this page is open changes the fragment only.
+window.addEventListener('hashchange', () => {
+  linked = linkedPairing(window.location.hash);
+  if (linked !== undefined) void renderWorkers();
+});
 // FRU-302: a session that is made or ends, here or in the popup, redraws the cards of the workers.
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes.sites !== undefined || touchesARefreshToken(Object.keys(changes)))) {
@@ -597,7 +602,13 @@ async function renderWorkers(): Promise<void> {
       };
     });
   workers.replaceChildren(workersSection(document, { cards, onPair: pair, onLogout: logout }));
-  const menuCount = document.querySelector('.page-entry[href="#workers"] .page-count');
+  // The menu counts the workers, as the mock-up does: « Workers and sessions 3 ».
+  const entry = document.querySelector('.page-entry[href="#workers"]');
+  let menuCount = entry?.querySelector('.page-count') ?? null;
+  if (entry !== null && menuCount === null) {
+    menuCount = element('span', '', 'page-count');
+    entry.append(menuCount);
+  }
   if (menuCount !== null) menuCount.textContent = String(cards.length);
   if (linked !== undefined) {
     document.querySelector<HTMLElement>(`.worker-card[data-endpoint="${CSS.escape(linked.endpoint)}"] input`)?.focus();

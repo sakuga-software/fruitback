@@ -115,7 +115,8 @@ for (const language of ['en', 'fr'] as const) {
     const linked = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
     const pair = linked.getByRole('button', { name: /^(Pair with this worker|Appairer avec ce worker)$/ });
     await expect(pair).toBeVisible();
-    await expectLaidOut(linked, 'pairing link', 3);
+    // FRU-302: « Pair in the page of the extension » joins the buttons.
+    await expectLaidOut(linked, 'pairing link', 4);
 
     // 3. Paired, with a name of forty characters beside « Log out ».
     await pair.click();

@@ -383,7 +383,11 @@ test('« Workers and sessions » pairs with a code, says who, logs out, and take
   const { code } = await mintPairing('Camille Durand');
   await card.getByLabel('Pairing code').fill(code);
   await card.getByRole('button', { name: 'Pair' }).click();
-  await expect(card.locator('.worker-who')).toHaveText(/^(Paired as|Appairé en tant que) Camille Durand$/);
+  // The suite builds the extension with this worker as its Cloud (WXT_FRUITBACK_CLOUD): its card
+  // speaks of an account.
+  await expect(card.locator('.worker-who')).toHaveText(
+    /^(Paired as|Appairé en tant que|Signed in as|Connecté en tant que) Camille Durand$/,
+  );
   await expect(card.locator('.worker-dot')).toHaveAttribute('data-on', 'true');
   await expect(page.locator('.page-entry[href="#workers"] .page-count')).not.toHaveText('');
 
