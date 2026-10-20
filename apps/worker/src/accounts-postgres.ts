@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
@@ -176,6 +176,26 @@ async function dropKeptNotes(db: Db, workspace: string, ids: readonly string[]):
 }
 
 /**
+ * Holds the rows of the members of a workspace, in the transaction of `db` (FRU-324). A writer that
+ * holds the workspace and then writes its members calls this **before** it holds the workspace.
+ *
+ * WARNING: the trigger of `0020_workspace_keeps_owner` holds the workspace after the row of the member
+ * that a route of better-auth writes. A writer that held the workspace first, and then waited for that
+ * member, waited for a route that waited for it: PostgreSQL ended one of them on a deadlock. Members,
+ * then the workspace, is the one order.
+ */
+export async function holdMembers(db: Db, workspace: string): Promise<void> {
+  // `of: member`, written: the planted case of `accounts-postgres.test.ts` takes out the lock of the
+  // site by its text, which must be in this file once.
+  await db
+    .select({ id: member.id })
+    .from(member)
+    .where(eq(member.organizationId, workspace))
+    .orderBy(asc(member.id))
+    .for('update', { of: member });
+}
+
+/**
  * Deletes a workspace, in the transaction of `db`: the one path of a deletion, for its owner and for
  * an administrator of the instance (FRU-284). The foreign keys take its members, its invitations, its
  * sites and their destinations, its connectors and their deliveries with it. The notes that the
@@ -187,6 +207,8 @@ export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
   // workspace at the same moment wait for each other, where the other order ended one of them on a
   // deadlock (seen by the heavy review of #364).
   // `NO KEY UPDATE`, which waits for the `FOR UPDATE` of the deletion by an administrator as well.
+  // Its members first, which the foreign keys delete with it: see `holdMembers`.
+  await holdMembers(db, workspace);
   await db
     .select({ id: organization.id })
     .from(organization)

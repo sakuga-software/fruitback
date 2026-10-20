@@ -2,7 +2,7 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId, roleOf } from './account-rows.ts';
-import { dropWorkspace } from './accounts-postgres.ts';
+import { dropWorkspace, holdMembers } from './accounts-postgres.ts';
 import { CONNECTOR_TROUBLES, can } from './accounts.ts';
 import { invitation, member, organization, session, user } from './auth-schema.ts';
 import type {
@@ -335,8 +335,9 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
 
   /**
    * One write of an administrator in a workspace (FRU-283), in one transaction: the lock of the role
-   * first, as every write of the administrator; the workspace `FOR UPDATE`, so a member added by the
-   * plugin waits; the caller is still an administrator; the workspace is not suspended (FRU-282).
+   * first, as every write of the administrator; its members, then the workspace `FOR UPDATE`, so a
+   * member added by the plugin waits (members first: see `holdMembers`, FRU-324); the caller is still
+   * an administrator; the workspace is not suspended (FRU-282).
    */
   const inWorkspace = async <T>(
     actor: { id: string },
@@ -348,6 +349,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
     return database.transaction(async (db) => {
       const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
       await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+      await holdMembers(db, workspace);
       const [found] = await db
         .select({ id: organization.id, name: organization.name })
         .from(organization)
@@ -919,7 +921,9 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         // role below waits for a change of the role, so an administrator removed at this moment is refused.
         await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
         // `FOR UPDATE`: a write that names the workspace (a site, a member, a connector) waits for the
-        // deletion, and then finds no workspace. The counts below are then the ones that go.
+        // deletion, and then finds no workspace. The counts below are then the ones that go. Its
+        // members first, which go with it: see `holdMembers` (FRU-324).
+        await holdMembers(db, workspace);
         const [found] = await db
           .select({ id: organization.id, name: organization.name })
           .from(organization)
@@ -1184,8 +1188,13 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
         if (asking === undefined) return { ok: false, refused: 'not-admin' };
         if (String(row.email) !== email) return { ok: false, refused: 'email-mismatch' };
-        // The workspaces of the account are held, as a write of an administrator holds one (FRU-283):
-        // a change of their owners waits, and the count below is the one that holds at the deletion.
+        // The memberships of the account are held, then its workspaces, as a write of an administrator
+        // holds one (FRU-283): a change of their owners waits, and the count below is the one that
+        // holds at the deletion. A route of better-auth that takes the other owner away waits for the
+        // commit in the trigger of `0020_workspace_keeps_owner`, and is refused there (FRU-324). The
+        // memberships come first, the order of `holdMembers`: a route that removes this account holds
+        // its membership, then waits for the workspace in the trigger.
+        await rowsIn(sql`SELECT id FROM member WHERE "userId" = ${target} ORDER BY id FOR UPDATE`);
         const workspaces = await rowsIn(
           sql`SELECT o.id, o.name FROM organization o
                WHERE o.id IN (SELECT "organizationId" FROM member WHERE "userId" = ${target})

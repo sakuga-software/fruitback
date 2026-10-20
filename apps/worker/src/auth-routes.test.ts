@@ -19,7 +19,7 @@ import { createPostgresKv } from './kv-postgres.ts';
 import { MailError } from './mail.ts';
 import { GITHUB, GOOGLE, SESSION_COOKIE, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { digest } from './session.ts';
 
@@ -376,7 +376,7 @@ for (const { label, open, skip } of DATABASES) {
       });
       assert.equal(connected.status, 201);
 
-      await rowsOf(worker.database, `DELETE FROM "member" WHERE "organizationId" = '${id}'`);
+      await withoutOwnerRule(worker.database, `DELETE FROM "member" WHERE "organizationId" = '${id}'`);
       assert.equal((await sites()).status, 404);
 
       const listed = await worker.call('/console/sessions', { headers: { Cookie: cookie } });

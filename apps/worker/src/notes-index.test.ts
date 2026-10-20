@@ -5,7 +5,7 @@ import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { EXCERPT_LENGTH, type NoteIndex, excerptOf } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import type { SeedStore } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
@@ -606,7 +606,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       );
       void accounts;
 
-      await rowsOf(database, `DELETE FROM "user" WHERE id = '${alice.id}'`);
+      await withoutOwnerRule(database, `DELETE FROM "user" WHERE id = '${alice.id}'`);
 
       assert.deepEqual(await rowsOf(database, 'SELECT seed_id, author_kind, author_account_id FROM note_index'), [
         { seed_id: 'sd_member', author_kind: 'member', author_account_id: null },

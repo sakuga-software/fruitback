@@ -4,7 +4,7 @@ import type { AccountStore, Visibility } from './accounts.ts';
 import { REPLY_LENGTH } from './app.ts';
 import { type World, callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { REPLY_LIMIT } from './rate-limit.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { type SeedStore, StoreError } from './store.ts';
@@ -143,7 +143,7 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
 
   it('refuses a member who left the workspace, with the session they held', async () => {
     const { world, alice, workspace, site, note, member } = await aSite('members');
-    await rowsOf(
+    await withoutOwnerRule(
       world.database,
       `DELETE FROM member WHERE "userId" = '${alice.id}' AND "organizationId" = '${workspace}'`,
     );

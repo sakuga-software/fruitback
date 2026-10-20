@@ -7,7 +7,14 @@ import { DATABASES, optionsOn } from './auth.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import type { PgDatabase } from './postgres.ts';
-import { appliedDates, journalDates, journalTags, migrationsThrough, rowsOf } from './postgres.fixture.ts';
+import {
+  appliedDates,
+  journalDates,
+  journalTags,
+  migrationsThrough,
+  rowsOf,
+  withoutOwnerRule,
+} from './postgres.fixture.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -407,7 +414,10 @@ for (const { label, open, skip } of DATABASES) {
       const { database, session } = await databaseOfBefore(open);
       assert.equal((await sitesOf(database, session.accessToken)).status, 200);
 
-      await rowsOf(database, `DELETE FROM "member" WHERE "organizationId" = 'ws_acme' AND "userId" = 'acc_alice'`);
+      await withoutOwnerRule(
+        database,
+        `DELETE FROM "member" WHERE "organizationId" = 'ws_acme' AND "userId" = 'acc_alice'`,
+      );
       const answer = await sitesOf(database, session.accessToken);
 
       assert.equal(answer.status, 401);

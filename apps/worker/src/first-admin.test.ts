@@ -218,8 +218,9 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
       /a sign-in link made for an administrator was refused: this Fruitback has an owner now/,
     );
     assert.ok(!said.join('\n').includes(token));
-    // And it is gone for good: the owner leaving does not bring it back.
-    await rowsOf(world.database, 'DELETE FROM member');
+    // And it is gone for good: an instance with no owner again does not bring it back. Its owner
+    // deletes the workspace: the last owner cannot leave it (FRU-324).
+    await rowsOf(world.database, 'DELETE FROM organization');
     assert.equal((await open(world, token)).status, 401);
   });
 
