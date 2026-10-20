@@ -37,7 +37,10 @@ function mount(
     note: string,
     reporter?: SeedReporter,
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>,
-  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave' | 'suggestName'> = {},
+  more: Pick<
+    ComposerOptions,
+    'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave' | 'suggestName'
+  > = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
