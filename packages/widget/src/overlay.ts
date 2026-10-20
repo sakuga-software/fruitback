@@ -1312,12 +1312,22 @@ const STYLES = `
   Two rules and not one list: a browser with no :has() drops the whole rule that names it, and the
   frame of an open thread must not go with it.
 */
-.fruitback-pin[data-fruitback-open] { z-index: 2147483001; border-color: var(--fruitback-pin-color); }
+.fruitback-pin[data-fruitback-open] {
+  z-index: 2147483001;
+  border-color: var(--fruitback-pin-color);
+  outline: 1px var(--fruitback-pin-frame-style, solid) var(--fruitback-color-stage-edge);
+}
+/*
+  The frame has the edge of the drop outside it (FRU-334): the grey of « to do » is 1.39:1 on a white
+  page, and the frame of its note would be lost there.
+*/
 .fruitback-pin:has(.fruitback-pin-badge:hover),
 .fruitback-pin:has(.fruitback-pin-badge:focus-visible) {
   border-color: var(--fruitback-pin-color);
+  outline: 1px var(--fruitback-pin-frame-style, solid) var(--fruitback-color-stage-edge);
 }
-.fruitback-pin-uncertain { border-style: dashed; }
+/* Dashed, and its edge too. A custom property, so that the outline stays off at rest. */
+.fruitback-pin-uncertain { border-style: dashed; --fruitback-pin-frame-style: dashed; }
 /* Detached: listed in the dock, not on the page (FRU-304). A draft keeps its pin where it was planted. */
 .fruitback-pin-orphan:not([data-fruitback-draft]) { display: none; }
 /*
@@ -1366,7 +1376,8 @@ const STYLES = `
   color: var(--fruitback-pin-on-color, var(--fruitback-color-on-stage));
   font: 700 12px/1 var(--fruitback-font-sans);
   cursor: pointer;
-  box-shadow: var(--fruitback-shadow-sm);
+  /* The edge outside the white ring (FRU-334): a light pin holds on a white page too. */
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge), var(--fruitback-shadow-sm);
   transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
   /* Squash and stretch: the drop lands, flattens, and settles. */
   animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
@@ -1454,6 +1465,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fruitback-pin-color);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
 }
 /* anywhere: the store names its states, and a long name must wrap inside the head. */
 .fruitback-thread-state { min-width: 0; overflow-wrap: anywhere; }

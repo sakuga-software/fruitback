@@ -160,13 +160,13 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     width: 360,
     'border-radius': '14px',
     'border-top-width': '1px',
-    'border-top-color': 'rgb(231, 229, 228)',
+    'border-top-color': 'rgb(228, 228, 231)',
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '14px',
     'line-height': '21px',
   });
   expect(await page.locator('[data-fruitback-composer]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
-    'rgba(28, 25, 23, 0.22) 0px 14px 40px 0px',
+    'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
   );
   // Above the element: it ends 40 px over its top, on the edge of the frame, 5 px off the element.
   const target = (await button.boundingBox())!;
@@ -184,7 +184,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   ).toMatchObject({
     padding: '12px 12px 12px 14px',
     gap: '8px',
-    'background-color': 'rgb(255, 253, 249)',
+    'background-color': 'rgb(250, 250, 250)',
     'border-bottom-width': '1px',
   });
   await expect(page.locator('.fruitback-composer-about')).toHaveText('button#checkout-cta · <Button>');
@@ -196,7 +196,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     await page
       .locator('.fruitback-composer-drop')
       .evaluate((node) => [(node as HTMLElement).offsetWidth, getComputedStyle(node).backgroundColor]),
-  ).toEqual([10, 'rgb(106, 121, 80)']);
+  ).toEqual([10, 'rgb(190, 194, 200)']);
   const pick = page.getByRole('button', { name: 'Pick again' });
   await expect(pick).toBeVisible();
   expect(await read('.fruitback-composer-pick', ['font-size', 'font-weight', 'color', 'padding'])).toMatchObject({
@@ -204,7 +204,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     height: 44,
     'font-size': '12px',
     'font-weight': '600',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
     padding: '4px 6px',
   });
   // No cross: « Cancel » and Escape close it.
@@ -214,7 +214,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   await expect(page.getByLabel('Your comment')).toBeVisible();
   expect(await read('[data-fruitback-note-label]', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   const note = await read('[data-fruitback-note]', [
     'border-top-width',
@@ -226,7 +226,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   expect(note).toMatchObject({
     width: 330,
     'border-top-width': '1px',
-    'border-top-color': 'rgb(143, 136, 131)',
+    'border-top-color': 'rgb(138, 138, 147)',
     'border-top-left-radius': '6px',
     padding: '10px 12px',
     resize: 'vertical',
@@ -245,13 +245,13 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     padding: '10px 12px 12px 14px',
     gap: '8px',
     'border-top-width': '1px',
-    'border-top-color': 'rgb(231, 229, 228)',
+    'border-top-color': 'rgb(228, 228, 231)',
   });
   // Where the note lands: the playground offers no place, so « Sent to the team ».
   await expect(page.locator('[data-fruitback-lands]')).toHaveText('Sent to the team');
   expect(await read('[data-fruitback-lands]', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   // 34 px drawn, as the mock-up, in a target of 44 px.
   expect(
@@ -260,7 +260,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
     height: 44,
     padding: '0px 12px',
     'border-top-width': '5px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
     'font-size': '13px',
     'font-weight': '600',
   });
@@ -291,7 +291,7 @@ test('the composer has the measures of the mock-up, above its element (FRU-258, 
   });
   await page.locator('[data-fruitback-cancel]').hover();
   expect(await read('[data-fruitback-cancel]', ['background-color'])).toMatchObject({
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
   });
 
   // « Cancel » closes without sending, and the frame goes with the composer.
@@ -341,7 +341,7 @@ test('a sent note says « Sent as » its identifier, with the number of its pin 
     'The pin stays here and follows the issue’s status.',
   );
   expect(await page.locator('[data-fruitback-sent-text]').evaluate((node) => getComputedStyle(node).color)).toBe(
-    'rgb(63, 100, 33)',
+    'rgb(21, 128, 61)',
   );
   await expect(page.locator('[data-fruitback-sent-drop]')).toHaveText('1');
   await expect(page.locator('[data-fruitback-sent-open]')).toHaveText('Open →');

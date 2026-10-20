@@ -208,7 +208,15 @@ const CONTROL = 'rgb(138, 138, 147)';
 const ACCENT = 'rgb(221, 44, 39)';
 const ACCENT_STRONG = 'rgb(185, 28, 28)';
 const DONE = 'rgb(21, 128, 61)';
-const STATUS_COLOURS = [ACCENT, 'rgb(37, 99, 235)', 'rgb(245, 158, 11)', DONE, 'rgb(100, 116, 139)'];
+/** The five statuses of the widget, chosen by Mathieu (FRU-334), and the edge of their drop. */
+const STATUS_COLOURS = [
+  'rgb(190, 194, 200)',
+  'rgb(217, 219, 223)',
+  'rgb(243, 187, 61)',
+  'rgb(85, 96, 196)',
+  'rgb(165, 42, 58)',
+];
+const STATUS_EDGE = 'rgb(138, 138, 147) 0px 0px 0px 1px';
 
 async function openKit(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => route.fulfill({ status: 204 }));
@@ -606,6 +614,8 @@ test('a status has its colour, its shape, and words beside it (FRU-232)', async 
       borderBottomLeftRadius: '0px',
       // rotate(-90deg).
       transform: 'matrix(0, -1, 1, 0, 0, 0)',
+      // The edge (FRU-334): the grey of « to do » is 1.39:1 on white, the edge 3.42:1.
+      boxShadow: STATUS_EDGE,
     });
     // The drop says nothing to a screen reader, and its item has a word.
     await expect(dots.nth(index)).toHaveAttribute('aria-hidden', 'true');
@@ -619,10 +629,12 @@ test('a status has its colour, its shape, and words beside it (FRU-232)', async 
   const segments = await bar.locator('span').evaluateAll((spans) =>
     spans.map((span) => ({
       colour: getComputedStyle(span).backgroundColor,
+      edge: getComputedStyle(span).boxShadow,
       width: span.getBoundingClientRect().width,
     })),
   );
   expect.soft(segments.map((segment) => segment.colour)).toEqual(STATUS_COLOURS);
+  expect.soft(new Set(segments.map((segment) => segment.edge))).toEqual(new Set([`${STATUS_EDGE} inset`]));
   // 128 px less four gaps of 2 px, shared as 3, 2, 4, 2, 1 of 12.
   expect.soft(segments.map((segment) => segment.width)).toEqual([30, 20, 40, 20, 10]);
   // A status with no note takes no room, and the words still count it.

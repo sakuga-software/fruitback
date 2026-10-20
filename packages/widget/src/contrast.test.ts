@@ -16,13 +16,17 @@ import { THEME_STYLES, onStageToken } from './theme.ts';
 
 type Pair = { foreground: string; background: string; minimum: number; where: string };
 
-/** The stages whose drop is not written in the shared foreground. */
-const ON_STAGE: Partial<Record<string, string>> = { ripening: 'color-on-stage-ripening' };
+/** The stages whose drop is not written in the shared foreground: the three light fills (FRU-334). */
+const ON_STAGE: Partial<Record<string, string>> = {
+  seeded: 'color-on-stage-seeded',
+  green: 'color-on-stage-green',
+  ripening: 'color-on-stage-ripening',
+};
 
 /**
- * The pairs under their ratio. None since FRU-292: the amber of 2026-10-13 was 2.15:1 on white, and
- * the amber of 2026-10-20 is 4.78:1. The test fails if any pair fails, so a new failure has to be
- * written here with its reason.
+ * The pairs under their ratio. None since FRU-292. The light statuses of FRU-334 are under 3:1 on
+ * white, but a drop is drawn by its edge, and the edge is what is measured below. The test fails if
+ * any pair fails, so a new failure has to be written here with its reason.
  */
 const KNOWN: string[] = [];
 
@@ -102,7 +106,7 @@ const PAIRS: Pair[] = [
     minimum: 4.5,
     where: 'the warning about an approximate position, in the thread and in the list',
   },
-  // The brown of a note whose element is gone, on the chip of the capsule (FRU-303).
+  // The grey of a note whose element is gone, on the chip of the capsule (FRU-303, FRU-334).
   { foreground: 'color-on-stage', background: 'color-unplaced', minimum: 4.5, where: 'the detached-notes chip' },
   // The list and the gear are drawn on the capsule, and on its sunken fill under the pointer.
   {
@@ -121,7 +125,7 @@ const PAIRS: Pair[] = [
     where: 'the border of a field in the composer',
   },
   { foreground: 'color-accent', background: 'color-surface-raised', minimum: 3, where: 'the focus ring' },
-  // What a pin writes on its drop. One stage has a foreground of its own (FRU-233): `onStageToken`.
+  // What a pin writes on its drop. Three stages have a foreground of their own (FRU-334): `onStageToken`.
   ...SEED_STAGES.map((stage) => ({
     foreground: ON_STAGE[stage] ?? 'color-on-stage',
     background: `stage-${stage}`,
@@ -175,12 +179,14 @@ const PAIRS: Pair[] = [
     minimum: 3,
     where: 'the outline of a note with no place',
   },
-  // A drawing, not text: 1.4.11 asks for 3:1. The list names the stage in words too.
-  ...SEED_STAGES.map((stage) => ({
-    foreground: `stage-${stage}`,
-    background: 'color-surface',
+  // A drawing, not text: 1.4.11 asks for 3:1. The list names the stage in words too. The fill of a
+  // light stage is under 3:1 on white, and blueberry and cherry are under it on the dark surface:
+  // every drop and every mark is drawn with an edge (FRU-334), and the edge is what holds.
+  ...(['color-surface', 'color-surface-raised', 'color-surface-sunken'] as const).map((background) => ({
+    foreground: 'color-stage-edge',
+    background,
     minimum: 3,
-    where: 'the stage mark of a detached note, and the drop in the head of a thread',
+    where: 'the edge of a pin, of a drop in the list and of the mark of a status',
   })),
 ];
 
@@ -230,21 +236,35 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     }
   });
 
-  it('writes « in progress » white on its amber, like the four others (FRU-292)', () => {
-    // The amber of 2026-10-13 needed the ink. The amber of 2026-10-20 holds white, so its token is white.
+  it('writes new, to do and in progress black, and done and closed white (FRU-334)', () => {
+    // The « Texte » column of the ticket: black on the three light fills, white on the two dark ones.
+    const written = { seeded: '#18181b', green: '#18181b', ripening: '#18181b', ripe: '#fff', composted: '#fff' };
     for (const tokens of [light, dark]) {
-      const amber = tokens['stage-ripening'] ?? '';
-      assert.ok(ratio('#ffffff', amber) >= 4.5, 'white no longer reads on this stage');
-      assert.equal(tokens['color-on-stage-ripening'], '#fff');
+      const read = Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[ON_STAGE[stage] ?? 'color-on-stage']]));
+      assert.deepEqual(read, written);
     }
-    assert.equal(onStageToken('ripening'), 'var(--fruitback-color-on-stage-ripening, var(--fruitback-color-on-stage))');
+    for (const stage of ['seeded', 'green', 'ripening'] as const) {
+      assert.equal(onStageToken(stage), `var(--fruitback-color-on-stage-${stage}, var(--fruitback-color-on-stage))`);
+    }
+    // The control: white on the grey of « to do » is what the black replaces, and it cannot be read.
+    assert.ok(ratio('#ffffff', light['stage-green'] ?? '') < 1.5);
   });
 
-  it('holds the five statuses of the mock-up of 2026-10-20, in both schemes (FRU-292)', () => {
-    const drawn = { seeded: '#6a7950', green: '#56802e', ripening: '#ac5f00', ripe: '#dd2c27', composted: '#8d6e63' };
+  it('holds the five statuses chosen by Mathieu, in both schemes (FRU-334)', () => {
+    const chosen = { seeded: '#bec2c8', green: '#d9dbdf', ripening: '#f3bb3d', ripe: '#5560c4', composted: '#a52a3a' };
     for (const tokens of [light, dark]) {
-      assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), drawn);
+      assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), chosen);
     }
+  });
+
+  it('draws the edge of a drop in one grey in both schemes, outside the ring of the pin (FRU-334)', () => {
+    // A pin lies on the page of the host: its edge does not follow the scheme of the reader.
+    assert.equal(light['color-stage-edge'], dark['color-stage-edge']);
+    // Without the edge, the light stages are the failures it fixes: the control of the pairs above.
+    const unedged = (['seeded', 'green', 'ripening'] as const).filter(
+      (stage) => ratio(light[`stage-${stage}`] ?? '', light['color-surface'] ?? '') < 3,
+    );
+    assert.deepEqual(unedged, ['seeded', 'green', 'ripening']);
   });
 
   it('keeps the red of the widget as its accent, in the light scheme (FRU-292)', () => {

@@ -188,7 +188,7 @@ test('the settings have the chips and the switches of the mock-up of 2026-10-20 
   expect(await read(chip, ['background-color', 'font-size', 'font-weight', 'border-top-width'])).toMatchObject({
     height: 44,
     'border-top-width': '7px',
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
     'font-size': '12px',
     'font-weight': '600',
   });
@@ -216,7 +216,7 @@ test('the settings have the chips and the switches of the mock-up of 2026-10-20 
   expect(await read('.fruitback-config-check', [])).toMatchObject({ height: 44 });
   await root.locator('.fruitback-config-check').filter({ hasText: 'Hide resolved feedback' }).click();
   await expect(hide).toBeChecked();
-  expect(await hide.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(28, 25, 23)');
+  expect(await hide.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(24, 24, 27)');
   await hide.click();
   await expect(hide).not.toBeChecked();
 });

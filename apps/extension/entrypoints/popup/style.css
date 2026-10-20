@@ -1,80 +1,91 @@
 /*
-  The tokens of the mock-up of 2026-10-20 (FRU-292). The greys, the statuses, the shadows and the
-  radii are those of the widget (packages/widget/src/theme.ts); the accent is the extension's own
-  (#c2410c), where the widget keeps its red: one accent per surface. A stylesheet of an extension
-  page cannot import the widget, so the shared values are copied here, and
-  src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
+  The tokens of the extension. The greys, the statuses, the shadows and the radii are those of the
+  widget (packages/widget/src/theme.ts), which are the zinc of the console since FRU-334; the
+  accent is the extension's own (#c2410c), where the widget keeps its red: one accent per surface.
+  A stylesheet of an extension page cannot import the widget, so the shared values are copied here,
+  and src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
   background. The options page loads this file first.
 */
 :root {
   color-scheme: light dark;
   --surface: #fff;
   /* A quiet block, and the background of the page of the extension. */
-  --surface-raised: #fafaf9;
-  --surface-sunken: #f5f5f4;
-  /* A mono block, and the row that is open. */
-  --surface-warm: #fffdf9;
-  --text: #1c1917;
-  /* #78716c in the mock-up, one step darker so that it holds 4.5:1 on the sunken surface too. */
-  --muted: #756e69;
+  --surface-raised: #fafafa;
+  --surface-sunken: #f4f4f5;
+  /* A mono block, and the row that is open. A cream until FRU-334, the raised grey now. */
+  --surface-warm: #fafafa;
+  --text: #18181b;
+  /* The muted text of the console: 5.28:1 on the surface, 4.80:1 on the sunken surface. */
+  --muted: #6b6b74;
   /* The secondary text of the extension. */
-  --subtle: #57534e;
-  --line: #e7e5e4;
+  --subtle: #52525b;
+  --line: #e4e4e7;
   /* The rule between the rows of a table. */
-  --line-row: #f0efed;
-  /* The edge of a field: 3.49:1 on the surface. */
-  --line-strong: #8f8883;
+  --line-row: #f4f4f5;
+  /* The edge of a field: the field border of the console, 3.42:1 on the surface. */
+  --line-strong: #8a8a93;
   /*
-    The edge of a secondary button and of a key. 2.52:1 on the surface: the label of the button says
+    The edge of a secondary button and of a key. 2.56:1 on the surface: the label of the button says
     what it is, so the edge is not the only cue. A field takes --line-strong.
   */
-  --line-control: #a8a29e;
+  --line-control: #a1a1aa;
   /* The search field of the page, and a switch that is off. */
-  --line-soft: #d6d3d1;
+  --line-soft: #d4d4d8;
   --accent: #c2410c;
   --accent-strong: #9a3412;
   --on-accent: #fff;
-  --chip: #44403c;
+  --chip: #3f3f46;
   --on-chip: #fff;
   /* The capture capsule and the Save button. */
-  --ink: #1c1917;
-  --on-ink-muted: #d6d3d1;
-  --success: #3f6421;
-  /* The edge of « Looks fixed », and the dot that says a session is attached. */
-  --success-line: #4e7d2a;
-  /* A problem and its remedy. */
+  --ink: #18181b;
+  --on-ink-muted: #d4d4d8;
+  --success: #15803d;
+  /* The edge of « Looks fixed », and the dot that says a session is attached: 3.30:1 on the surface. */
+  --success-line: #16a34a;
+  /*
+    A problem and its remedy: the tint of the accent, kept because it says a problem in the colour
+    of the extension (FRU-334 moves the row that is chosen to --surface-sunken).
+  */
   --alert-surface: #fff7ed;
   --alert-line: #fdba74;
   --alert-text: #9a3412;
-  /* The block « Ready to check ». */
-  --ready-surface: #fffaf5;
+  /* The block « Ready to check »: the raised grey, under a line of the accent. */
+  --ready-surface: #fafafa;
   --ready-line: #fed7aa;
-  --ready-divider: #fde4c8;
+  --ready-divider: #e4e4e7;
   --selection: #fed7aa;
   /* The tile of a site that is on. */
   --tile-on: #2f4f3a;
   --on-tile: #fff;
   /* The dot of the account, and the tile of a site nobody added (FRU-293). */
-  --avatar-surface: #e7e5e4;
-  --on-avatar: #44403c;
+  --avatar-surface: #e4e4e7;
+  --on-avatar: #3f3f46;
   /* The words of a problem, under its title. */
-  --alert-body: #44403c;
-  /* The number on the drop of a status, and its edge. */
+  --alert-body: #3f3f46;
+  /* The ring of a drop, and the number on done and closed: white. */
   --on-stage: #fff;
+  /* The number on new, to do and in progress, the three light fills (FRU-334): black. */
+  --on-stage-seeded: #18181b;
+  --on-stage-green: #18181b;
+  --on-stage-ripening: #18181b;
+  /* The edge of every drop: 3.42:1 on white, 5.18:1 on the dark surface (FRU-334). */
+  --stage-edge: #8a8a93;
+  /* A note whose element is gone: a neutral grey, no longer the brown of « closed » (FRU-334). */
+  --unplaced: #71717a;
   /* The knob of a switch, on the accent and on the grey of off. */
   --knob: #fff;
-  /* The five statuses of a note, as the widget draws them on the page. */
-  --stage-seeded: #6a7950;
-  --stage-green: #56802e;
-  --stage-ripening: #ac5f00;
-  --stage-ripe: #dd2c27;
-  --stage-composted: #8d6e63;
+  /* The five statuses of a note, as the widget draws them on the page (FRU-334). */
+  --stage-seeded: #bec2c8;
+  --stage-green: #d9dbdf;
+  --stage-ripening: #f3bb3d;
+  --stage-ripe: #5560c4;
+  --stage-composted: #a52a3a;
   /* The tab that is chosen; the popup; the side panel. */
-  --shadow-xs: 0 1px 3px rgba(28, 25, 23, 0.15);
-  --shadow-popup: 0 8px 28px rgba(28, 25, 23, 0.14);
-  --shadow-panel: -8px 0 24px rgba(28, 25, 23, 0.06);
+  --shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);
+  --shadow-popup: 0 8px 28px rgba(24, 24, 27, 0.14);
+  --shadow-panel: -8px 0 24px rgba(24, 24, 27, 0.06);
   /* The drop of a status in a list, and the knob of the switch of a table. */
-  --shadow-drop: 0 2px 6px rgba(28, 25, 23, 0.22);
+  --shadow-drop: 0 2px 6px rgba(24, 24, 27, 0.22);
   --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
   --radius-control: 6px;
   --radius-field: 8px;
@@ -89,40 +100,42 @@
 }
 
 /*
-  The mock-up draws no dark scheme. This one is derived: the stone scale from its other end (900,
-  800, 700), an orange lighter than the accent under dark text, every pair measured by the test.
+  No mock-up draws a dark scheme. This one is derived: the zinc scale of the widget from its other
+  end (900, 800, 700), an orange lighter than the accent under dark text, every pair measured by
+  the test. The brown fills of before (#431407, #2a1d14) are the greys of the scale now (FRU-334):
+  a problem keeps its line and its title in the orange.
 */
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #1c1917;
-    --surface-raised: #292524;
-    --surface-sunken: #312c29;
-    --surface-warm: #221e1b;
-    --text: #f5f5f4;
-    --muted: #a8a29e;
-    --subtle: #d6d3d1;
-    --line: #44403c;
-    --line-row: #292524;
-    --line-strong: #8f8883;
-    --line-control: #78716c;
-    --line-soft: #57534e;
+    --surface: #18181b;
+    --surface-raised: #27272a;
+    --surface-sunken: #2e2e33;
+    --surface-warm: #1f1f23;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --subtle: #d4d4d8;
+    --line: #3f3f46;
+    --line-row: #27272a;
+    --line-strong: #8a8a93;
+    --line-control: #71717a;
+    --line-soft: #52525b;
     /* No orange holds white text at 4.5:1 and is also readable on a dark surface: a lighter fill with dark text on it. */
     --accent: #fb923c;
     --accent-strong: #fdba74;
-    --on-accent: #1c1917;
-    --chip: #57534e;
-    --success: #9bc46a;
-    --success-line: #9bc46a;
-    --alert-surface: #431407;
+    --on-accent: #18181b;
+    --chip: #52525b;
+    --success: #4ade80;
+    --success-line: #4ade80;
+    --alert-surface: #27272a;
     --alert-line: #9a3412;
     --alert-text: #fdba74;
-    --ready-surface: #2a1d14;
+    --ready-surface: #1f1f23;
     --ready-line: #7c2d12;
-    --ready-divider: #431407;
+    --ready-divider: #3f3f46;
     --selection: #7c2d12;
-    --avatar-surface: #44403c;
-    --on-avatar: #f5f5f4;
-    --alert-body: #d6d3d1;
+    --avatar-surface: #3f3f46;
+    --on-avatar: #f4f4f5;
+    --alert-body: #d4d4d8;
     --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
     --shadow-popup: 0 8px 28px rgba(0, 0, 0, 0.5);
     --shadow-panel: -8px 0 24px rgba(0, 0, 0, 0.4);

@@ -66,11 +66,12 @@ describe('the tokens of the console (FRU-232)', () => {
       '--color-rail-text': '#d4d4d8',
       '--color-rail-muted': '#a1a1aa',
       '--color-rail-accent': '#ec5b57',
-      '--color-status-new': '#dd2c27',
-      '--color-status-todo': '#2563eb',
-      '--color-status-progress': '#f59e0b',
-      '--color-status-done': '#15803d',
-      '--color-status-closed': '#64748b',
+      '--color-status-new': '#bec2c8',
+      '--color-status-todo': '#d9dbdf',
+      '--color-status-progress': '#f3bb3d',
+      '--color-status-done': '#5560c4',
+      '--color-status-closed': '#a52a3a',
+      '--color-status-edge': '#8a8a93',
       '--shadow-frame': '0 10px 30px rgba(24, 24, 27, 0.08)',
       '--ease-settle': 'cubic-bezier(0.16, 1, 0.3, 1)',
       '--duration-fast': '220ms',
@@ -84,6 +85,28 @@ describe('the tokens of the console (FRU-232)', () => {
     const read = Object.fromEntries(Object.keys(expected).map((name) => [name, token(name)]));
 
     assert.deepEqual(read, expected);
+  });
+
+  it('shares the five statuses and their edge with the widget and the extension (FRU-334)', () => {
+    // The widget is the one source: the extension copies it too, and its design-tokens.test.ts compares.
+    const widget = readFileSync(new URL('../../../packages/widget/src/theme.ts', import.meta.url), 'utf8');
+    const light = widget.slice(0, widget.indexOf('@media'));
+    const ofTheWidget = (name: string) => new RegExp(`--fruitback-${name}:\\s*([^;]+);`).exec(light)?.[1];
+    const STAGES = { new: 'seeded', todo: 'green', progress: 'ripening', done: 'ripe', closed: 'composted' };
+    const differences = (read: (name: string) => string | undefined) => [
+      ...Object.entries(STAGES)
+        .filter(([status, stage]) => read(`--color-status-${status}`) !== ofTheWidget(`stage-${stage}`))
+        .map(([status]) => status),
+      ...(read('--color-status-edge') === ofTheWidget('color-stage-edge') ? [] : ['edge']),
+    ];
+
+    assert.deepEqual(differences(token), []);
+    assert.equal(ofTheWidget('stage-ripe'), '#5560c4', 'the stages of the widget were not read');
+    // The control: the red « new » of 2026-10-13, left in the console, is a difference.
+    assert.deepEqual(
+      differences((name) => (name === '--color-status-new' ? '#dd2c27' : token(name))),
+      ['new'],
+    );
   });
 
   it('holds no colour of the palette of before, in any file of the console', () => {

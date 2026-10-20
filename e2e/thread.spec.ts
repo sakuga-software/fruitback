@@ -178,7 +178,7 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     width: 344,
     'border-radius': '14px',
     'border-top-width': '1px',
-    'border-top-color': 'rgb(231, 229, 228)',
+    'border-top-color': 'rgb(228, 228, 231)',
     'font-size': '14px',
     'line-height': '21px',
   });
@@ -197,12 +197,12 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     gap: '7px',
   });
   expect(await read('.fruitback-thread-drop', ['background-color'])).toMatchObject({
-    // The amber of « in progress », the colour its pin has.
-    'background-color': 'rgb(172, 95, 0)',
+    // The mango of « in progress », the colour its pin has.
+    'background-color': 'rgb(243, 187, 61)',
   });
   expect(await read('.fruitback-thread-age', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   await expect(page.locator('.fruitback-thread-age')).not.toHaveText('');
   expect(
@@ -220,7 +220,7 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     'font-size': '12px',
     'font-weight': '600',
     'text-decoration-line': 'none',
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
     'border-top-left-radius': '6px',
     padding: '4px 8px',
   });
@@ -238,7 +238,7 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
   });
   expect(await read('.fruitback-thread-meta', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   // The block of mono: the selector the note carries, then the component and the file.
   const source = await read('.fruitback-thread-source', [
@@ -252,18 +252,18 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     padding: '8px 10px',
     'border-radius': '6px',
     'border-top-width': '1px',
-    'background-color': 'rgb(255, 253, 249)',
+    'background-color': 'rgb(250, 250, 250)',
   });
   expect(String(source['font-family'])).toMatch(/^ui-monospace/);
   await expect(page.locator('.fruitback-thread-selector')).not.toHaveText('');
   expect(await read('.fruitback-thread-selector', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(28, 25, 23)',
+    color: 'rgb(24, 24, 27)',
   });
   await expect(page.locator('.fruitback-thread-component')).toHaveText('<HeroBanner> · src/components/Hero.tsx:42');
   expect(await read('.fruitback-thread-component', ['font-size', 'color'])).toMatchObject({
     'font-size': '11px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   // « Replies », the round of an initial, and the text of the reply.
   expect(await read('.fruitback-thread-answers', ['padding'])).toMatchObject({ padding: '10px 16px 16px' });
@@ -273,7 +273,7 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     'font-size': '11px',
     'font-weight': '600',
     'text-transform': 'uppercase',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   expect(
     await read('.fruitback-thread-reply-avatar', ['border-top-left-radius', 'background-color', 'font-size']),
@@ -281,14 +281,14 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     width: 24,
     height: 24,
     'border-top-left-radius': '999px',
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
     'font-size': '11px',
   });
   await expect(page.locator('.fruitback-thread-reply-avatar')).toHaveText('L');
   expect(await read('.fruitback-thread-reply-who', ['font-size'])).toMatchObject({ 'font-size': '11px' });
   expect(await read('.fruitback-thread-reply-name', ['font-weight', 'color'])).toMatchObject({
     'font-weight': '600',
-    color: 'rgb(28, 25, 23)',
+    color: 'rgb(24, 24, 27)',
   });
   expect(await read('.fruitback-thread-reply-body', ['font-size', 'line-height'])).toMatchObject({
     'font-size': '13px',
@@ -317,7 +317,7 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
   // The cross answers a pointer with the sunken surface.
   await page.locator('.fruitback-thread-close').hover();
   expect(await read('.fruitback-thread-close', ['background-color'])).toMatchObject({
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
   });
 });
 

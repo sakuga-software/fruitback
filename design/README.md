@@ -15,21 +15,21 @@ lists them), and `tools/` the scripts that unpack the file and take the pictures
 are those of the console (below) and `SPEC.md` § 1 and § 3. The mockup is in English only, and
 draws no dark theme.
 
-| Screens                              | What they show                                       | Tickets                                    |
-| ------------------------------------ | ---------------------------------------------------- | ------------------------------------------ |
-| 01 Setup, one screen                 | « Your account », « Your site », « Put it on the site » | FRU-239, FRU-242                           |
-| 02 Sign in                           | The sign-in page, the link on its way                | FRU-235                                    |
-| 03 Invitation                        | « Join », then « You are in »                        | FRU-241                                    |
-| 04 Connect this browser              | The console approves the extension                   | FRU-240, FRU-238                           |
-| 05 to 08 the popup                   | Signed out, a site of the workspace, on, a new site  | FRU-251, FRU-254, FRU-255                  |
-| 09 Sites                             | The table of the sites, the menu of a row            | FRU-243, FRU-270                           |
-| 10 Notes                             | Every note of the workspace, and where it went       | FRU-245, FRU-244                           |
-| 11 Connectors                        | The sources, and the panel of a source               | FRU-246                                    |
-| 12 Members                           | The invitation on one line, the table of the people  | FRU-247                                    |
-| 13 My account                        | The profile, the ways to sign in, the browsers       | FRU-248, FRU-249                           |
-| 14 to 16 the widget                  | A note, leaving a note, every note of the page       | FRU-252, FRU-253, FRU-256, FRU-258, FRU-259 |
-| 17 to 20 the instance of a self-host | Instance, workspaces, users, notes                   | FRU-260 to FRU-263                         |
-| The frame of a workspace             | The dark rail, the workspace switcher                | FRU-234                                    |
+| Screens                              | What they show                                          | Tickets                                     |
+| ------------------------------------ | ------------------------------------------------------- | ------------------------------------------- |
+| 01 Setup, one screen                 | « Your account », « Your site », « Put it on the site » | FRU-239, FRU-242                            |
+| 02 Sign in                           | The sign-in page, the link on its way                   | FRU-235                                     |
+| 03 Invitation                        | « Join », then « You are in »                           | FRU-241                                     |
+| 04 Connect this browser              | The console approves the extension                      | FRU-240, FRU-238                            |
+| 05 to 08 the popup                   | Signed out, a site of the workspace, on, a new site     | FRU-251, FRU-254, FRU-255                   |
+| 09 Sites                             | The table of the sites, the menu of a row               | FRU-243, FRU-270                            |
+| 10 Notes                             | Every note of the workspace, and where it went          | FRU-245, FRU-244                            |
+| 11 Connectors                        | The sources, and the panel of a source                  | FRU-246                                     |
+| 12 Members                           | The invitation on one line, the table of the people     | FRU-247                                     |
+| 13 My account                        | The profile, the ways to sign in, the browsers          | FRU-248, FRU-249                            |
+| 14 to 16 the widget                  | A note, leaving a note, every note of the page          | FRU-252, FRU-253, FRU-256, FRU-258, FRU-259 |
+| 17 to 20 the instance of a self-host | Instance, workspaces, users, notes                      | FRU-260 to FRU-263                          |
+| The frame of a workspace             | The dark rail, the workspace switcher                   | FRU-234                                     |
 
 ## The export of 2026-10-07
 
@@ -61,24 +61,24 @@ orchestrator read it as his answer on the palette on 2026-10-13, and he may come
 every value is named once, in `apps/console/app/app.css`, and a screen writes the name:
 `app/tokens.test.ts` fails on a colour written as a value in a screen or in the kit.
 
-| Token                                                            | Value                                                           | What it is for                                               |
-| ---------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
-| `ink`, `ink-soft`, `muted`                                       | `#18181b`, `#52525b`, `#6b6b74`                                 | text, a value that is locked, a hint and a placeholder       |
-| `page`, `surface`, `subtle`, `chip`                              | `#ffffff`, `#ffffff`, `#fafafa`, `#f4f4f5`                      | the page, a card, a panel or an empty state, a selection     |
-| `line`, `control`                                                | `#e4e4e7`, `#8a8a93`                                            | a rule or a frame, the border of a field and of a control    |
-| `accent`, `accent-strong`                                        | `#dd2c27`, `#b91c1c`                                            | the main button, the focus ring, an alert; under the pointer |
-| `done`                                                           | `#15803d`                                                       | « Connected », a step that is done                           |
-| `status-new`, `-todo`, `-progress`, `-done`, `-closed`           | `#dd2c27`, `#2563eb`, `#f59e0b`, `#15803d`, `#64748b`           | the status of a note                                         |
-| `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent`  | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`           | the dark rail of a workspace (FRU-234)                       |
-| `avatar`                                                         | `#3f3f46`                                                       | the round initial of a person                                |
-| `text-title`, `-title-setup`, `-conclusion`                      | `28px/1.15`, `30px/1.15`, `22px/1.25`                           | a title, weight 700                                          |
-| `text-section`, `-step`, `-lead`                                 | `18px`, `17px/26px`, `16px/1.5`                                 | a section, a step, the sentence under a title                |
-| `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`      | `15px/1.5`, `14px/1.5`, `14px/1.45`, `13px/1.5`, `13px`, `12px` | text                                                         |
-| `h-control`, `-control-panel`, `-control-chip`, `-control-small` | `44px`, `40px`, `36px`, `32px`                                  | the height of a control                                      |
-| `rounded-button`, `-field`, `-box`, `-frame`                     | `6px`, `8px`, `10px`, `14px`                                    | a control, a field, an option card, a table or a panel       |
-| `shadow-frame`, `-pin`, `-thumb`                                 | see `app.css`                                                   | the preview, a drop, the thumb of a switch                   |
-| `ease-settle`, `--duration-fast`                                 | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                          | the one movement of the console: a switch                    |
-| Font                                                             | the system font (`-apple-system, BlinkMacSystemFont`)           | weights 400, 600 and 700 only                                |
+| Token                                                            | Value                                                            | What it is for                                               |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ |
+| `ink`, `ink-soft`, `muted`                                       | `#18181b`, `#52525b`, `#6b6b74`                                  | text, a value that is locked, a hint and a placeholder       |
+| `page`, `surface`, `subtle`, `chip`                              | `#ffffff`, `#ffffff`, `#fafafa`, `#f4f4f5`                       | the page, a card, a panel or an empty state, a selection     |
+| `line`, `control`                                                | `#e4e4e7`, `#8a8a93`                                             | a rule or a frame, the border of a field and of a control    |
+| `accent`, `accent-strong`                                        | `#dd2c27`, `#b91c1c`                                             | the main button, the focus ring, an alert; under the pointer |
+| `done`                                                           | `#15803d`                                                        | « Connected », a step that is done                           |
+| `status-new`, `-todo`, `-progress`, `-done`, `-closed`, `-edge`  | `#bec2c8`, `#d9dbdf`, `#f3bb3d`, `#5560c4`, `#a52a3a`, `#8a8a93` | the status of a note (FRU-334), and the edge of its drop     |
+| `rail`, `rail-active`, `rail-text`, `rail-muted`, `rail-accent`  | `#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`, `#ec5b57`            | the dark rail of a workspace (FRU-234)                       |
+| `avatar`                                                         | `#3f3f46`                                                        | the round initial of a person                                |
+| `text-title`, `-title-setup`, `-conclusion`                      | `28px/1.15`, `30px/1.15`, `22px/1.25`                            | a title, weight 700                                          |
+| `text-section`, `-step`, `-lead`                                 | `18px`, `17px/26px`, `16px/1.5`                                  | a section, a step, the sentence under a title                |
+| `text-body`, `-small`, `-table`, `-hint`, `-label`, `-tiny`      | `15px/1.5`, `14px/1.5`, `14px/1.45`, `13px/1.5`, `13px`, `12px`  | text                                                         |
+| `h-control`, `-control-panel`, `-control-chip`, `-control-small` | `44px`, `40px`, `36px`, `32px`                                   | the height of a control                                      |
+| `rounded-button`, `-field`, `-box`, `-frame`                     | `6px`, `8px`, `10px`, `14px`                                     | a control, a field, an option card, a table or a panel       |
+| `shadow-frame`, `-pin`, `-thumb`                                 | see `app.css`                                                    | the preview, a drop, the thumb of a switch                   |
+| `ease-settle`, `--duration-fast`                                 | `cubic-bezier(.16, 1, .3, 1)`, `220ms`                           | the one movement of the console: a switch                    |
+| Font                                                             | the system font (`-apple-system, BlinkMacSystemFont`)            | weights 400, 600 and 700 only                                |
 
 **Measured, on the pairs the console draws** (`e2e/console-kit.spec.ts` measures every text of the
 kit): muted on white 5.28:1, on `subtle` 5.05:1, on `chip` 4.80:1; white on the accent 4.70:1, and
@@ -87,8 +87,14 @@ kit): muted on white 5.28:1, on `subtle` 5.05:1, on `chip` 4.80:1; white on the 
 
 **Two things of the mockup the console does not copy.** The accent on `chip` is 4.28:1: an alert
 that is a text alone is the accent on white, and `accent-strong` on `subtle` or `chip` (6.20:1 and
-5.89:1). The amber of « In progress » is 2.15:1 on white: a status is never told by its colour alone,
-and `StatusDot` and `StatusBar` are pictures with the words beside them.
+5.89:1). The light statuses are under 3:1 on white (the grey of « To do » is 1.39:1): a status is
+never told by its colour alone, and `StatusDot` and `StatusBar` are pictures with the words beside
+them, drawn with an edge of `#8a8a93` (3.42:1).
+
+**The statuses are those of the widget** (FRU-334, chosen by Mathieu on 2026-10-21): new `#bec2c8`,
+to do `#d9dbdf`, in progress `#f3bb3d`, done `#5560c4`, closed `#a52a3a`. `packages/widget/src/theme.ts`
+is their one source; the console and the extension copy them, and `app/tokens.test.ts` and
+`apps/extension/src/design-tokens.test.ts` fail when a copy differs.
 
 **The console has no dark theme**: the mockup draws none.
 

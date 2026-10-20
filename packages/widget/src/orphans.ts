@@ -262,7 +262,7 @@ const STYLES = `
   padding: 7px 12px;
   border: 0;
   border-radius: var(--fruitback-radius-pill);
-  /* The brown of a pin whose element is gone, and the foreground every pin writes on its stage. */
+  /* The grey of a note whose element is gone, and white on it (FRU-334). */
   --fruitback-pin-color: var(--fruitback-color-unplaced);
   background: var(--fruitback-pin-color);
   color: var(--fruitback-color-on-stage);
@@ -272,7 +272,7 @@ const STYLES = `
 }
 /*
   In the capsule of the dock (FRU-303): its first control, 44 px tall like the others, with the
-  brown pill of 36 px of the mock-up inside a transparent border. The list opens above the capsule.
+  grey pill of 36 px (FRU-334) inside a transparent border. The list opens above the capsule.
 */
 .fruitback-orphans[data-fruitback-docked] { position: relative; inset: auto; z-index: auto; max-width: none; }
 .fruitback-orphans[data-fruitback-docked] .fruitback-orphans-toggle {
@@ -319,6 +319,8 @@ const STYLES = `
 .fruitback-orphans-list[hidden] { display: none; }
 .fruitback-orphans-item { display: flex; align-items: baseline; gap: 6px; list-style: none; }
 .fruitback-orphans-stage { color: var(--fruitback-pin-color); font-size: 11px; }
+/* The edge of a drop (FRU-334): the grey of « to do » is 1.39:1 on the surface, its edge 3.42:1. */
+.fruitback-orphans-stage path { stroke: var(--fruitback-color-stage-edge); stroke-width: 2px; }
 .fruitback-orphans-item + .fruitback-orphans-item { margin-top: 6px; }
 .fruitback-orphans-note {
   flex: 1;

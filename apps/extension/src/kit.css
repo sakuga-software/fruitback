@@ -176,7 +176,7 @@ button.kit-switch {
   border: 0;
   border-radius: var(--radius-pill);
   /*
-    Off: the edge of a field, 3.49:1 on the surface. The lighter grey of the mock-up (--line-soft) is 1.48:1, and the
+    Off: the edge of a field, 3.42:1 on the surface. The lighter grey of the mock-up (--line-soft) is 1.48:1, and the
     track is what says the switch is there (WCAG 1.4.11).
   */
   background: var(--line-strong);
@@ -282,7 +282,11 @@ button.kit-switch[aria-checked='true'] .kit-knob {
   font-weight: 600;
 }
 
-/* The drop of a status: a mark of 12, a pin of 24 in a list, of 28 on a page. */
+/*
+  The drop of a status: a mark of 12, a pin of 24 in a list, of 28 on a page. A white ring, and one
+  pixel of --stage-edge outside it (FRU-334): the grey of « to do » is 1.39:1 on white, the edge
+  3.42:1, and blueberry and cherry are under 3:1 on the dark surface, where the edge is 5.18:1.
+*/
 .kit-drop {
   box-sizing: border-box;
   display: inline-flex;
@@ -294,7 +298,9 @@ button.kit-switch[aria-checked='true'] .kit-knob {
   border: 2px solid var(--on-stage);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  box-shadow: var(--shadow-drop);
+  box-shadow:
+    0 0 0 1px var(--stage-edge),
+    var(--shadow-drop);
 }
 
 .kit-drop[data-size='page'] {
@@ -306,11 +312,11 @@ button.kit-switch[aria-checked='true'] .kit-knob {
   width: 12px;
   height: 12px;
   border: 0;
-  box-shadow: none;
+  box-shadow: 0 0 0 1px var(--stage-edge);
 }
 
 .kit-drop-number {
-  color: var(--on-stage);
+  color: var(--drop-on, var(--on-stage));
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -318,14 +324,17 @@ button.kit-switch[aria-checked='true'] .kit-knob {
 }
 
 .kit-drop[data-stage='seeded'] {
+  --drop-on: var(--on-stage-seeded);
   background: var(--stage-seeded);
 }
 
 .kit-drop[data-stage='green'] {
+  --drop-on: var(--on-stage-green);
   background: var(--stage-green);
 }
 
 .kit-drop[data-stage='ripening'] {
+  --drop-on: var(--on-stage-ripening);
   background: var(--stage-ripening);
 }
 

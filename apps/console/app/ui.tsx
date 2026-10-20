@@ -578,10 +578,12 @@ const STATUS_COLOURS = {
 
 /**
  * The drop of a status. It is a picture for the eye only: the word of the status is always written
- * beside it, because the amber is 2.15:1 on white and a colour alone tells nothing to many people.
+ * beside it, because the grey of « to do » is 1.39:1 on white and a colour alone tells nothing to many people.
  */
 export function StatusDot({ status, size = 9 }: { status: Status; size?: 9 | 10 | 11 }) {
-  return <span aria-hidden="true" className={`kit-drop ${STATUS_COLOURS[status]}`} data-size={size} />;
+  return (
+    <span aria-hidden="true" className={`kit-drop ${STATUS_COLOURS[status]}`} data-size={size} data-status={status} />
+  );
 }
 
 type StatusBarProps = {

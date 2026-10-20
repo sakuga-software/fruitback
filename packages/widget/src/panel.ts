@@ -436,6 +436,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fruitback-pin-color);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
 }
 /* A forced palette drops the fill and the shadow: the chip of a shown status is then its outline. */
 @media (forced-colors: active) {
@@ -454,7 +455,7 @@ const STYLES = `
 .fruitback-config-check[hidden] { display: none; }
 /*
   The switch of the mock-up: 36 × 20, a knob of 16 px, the ink when on. Off, it takes the edge of a
-  field and not the #d6d3d1 of the mock-up: 1.4:1 on the surface would not show where it is (3.49:1).
+  field and not the light grey of the mock-up: 1.48:1 on the surface would not show where it is (3.42:1).
 */
 .fruitback-config-check input {
   appearance: none;

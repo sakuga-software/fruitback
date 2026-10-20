@@ -916,6 +916,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fruitback-sidebar-stage);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
 }
 .fruitback-sidebar-panel {
   flex: 1 1 auto;
@@ -990,7 +991,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fruitback-sidebar-stage);
-  box-shadow: 0 2px 6px rgba(28, 25, 23, 0.2);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge), 0 2px 6px rgba(24, 24, 27, 0.2);
 }
 .fruitback-sidebar-pin > span {
   transform: rotate(45deg);
@@ -1022,7 +1023,7 @@ const STYLES = `
   border-top: 1px solid var(--fruitback-color-border);
 }
 .fruitback-sidebar-unplaced[hidden] { display: none; }
-/* The title of the board, in capitals. Its words in the muted text: the brown of the board is 3.8:1 on the dark surface. */
+/* The title of the board, in capitals. Its words in the muted text, and its drop in the grey of a note with no place. */
 .fruitback-sidebar-unplaced-title {
   display: flex;
   align-items: center;
@@ -1109,7 +1110,7 @@ const STYLES = `
   font-size: 12px;
   cursor: pointer;
 }
-/* Off, the edge of a field and not the light grey of the kit: 3.49:1 on the surface shows where it is. */
+/* Off, the edge of a field and not the light grey of the kit: 3.42:1 on the surface shows where it is. */
 .fruitback-sidebar-pins input {
   appearance: none;
   -webkit-appearance: none;
