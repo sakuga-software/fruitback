@@ -241,6 +241,11 @@ search reads these columns only. The name of an author is the name of a member's
 now, read from the account at each request and not kept in the index; a member who left the
 workspace is shown with no name.
 
+**The side panel of the extension lists the same rows, for one site** (FRU-306,
+`GET /session/notes`), to the same people, with fewer columns: no place, no channel and no delivery.
+It reads no data the console does not, and keeps none: the panel holds a page of the list while it is
+open.
+
 ### The administrator of the instance, and what each of their reads leaves (FRU-261)
 
 **Whoever runs a worker reads its database, and needs no console for it.** On the Cloud that is

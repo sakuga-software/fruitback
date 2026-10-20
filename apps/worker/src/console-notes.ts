@@ -157,7 +157,7 @@ export type AuthorView =
   | { kind: 'you' | 'owner' | 'admin' | 'member' | 'guest'; name: string }
   | { kind: 'former-member' | 'verified' | 'anonymous' };
 
-function authorView(author: ListedNote['author'], account: string): AuthorView {
+export function authorView(author: ListedNote['author'], account: string): AuthorView {
   if (author.kind === 'member') {
     if (author.member === undefined) return { kind: 'former-member' };
     if (author.account === account) return { kind: 'you', name: author.member.name };

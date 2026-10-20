@@ -856,6 +856,32 @@ tell it which note carries which reference (raised by the heavy review of #306; 
 - **« Send again » is `manage-sites`**, and reaches only a delivery of a connector of the workspace
   in the address: the note of another workspace is `404`.
 
+**The extension reads the same rows for one whole site** (FRU-306), for the scope « Whole site » of
+its side panel: `GET /session/notes?site=<id>&stage=&q=&cursor=&limit=`, the same query of the index
+with the same restrictions, and less. What it reads and what it does not:
+
+- **The rows of the index only**: the id the widget gave the note, its excerpt of 64 characters at
+  most, its page, its stage, its author as the console names it, its date. **Never the text of a
+  note, never its replies, never the selector or the component**: the panel opens the page of the
+  note, and the widget reads the note there with `GET /feedback` and its own rules. No place, no
+  channel, no delivery, no counts by place, for any role. No `mine` and no `place` filter: the
+  route reads `site`, `stage`, `q`, `cursor` and `limit`, and ignores any other field.
+- **The session is read again in the store at each call** (`sessionWrites`, as the routes that
+  write): a session that ended or was disconnected in « My account », a suspended account, and a
+  pairing of a workspace whose person is no longer a member get `401`, whatever their access token
+  still says (test:`answers 401 to the cookie of the console, to no token, and to a session that ended`,
+  test:`answers 401 to a member who left, whose token is still in date`). The cookie of the console
+  is not read here: `401`.
+- **The site is one the person reads now**: any site of a workspace the account is a member of, or
+  of the workspace of a pairing; for a guest, a site shared with them (FRU-250). Any other site, and
+  every site of a suspended workspace (FRU-282), answers `404`, as a site that does not exist
+  (test:`gives a guest the site shared with them, and answers 404 for the site that is not`,
+  test:`answers 404 to a person of another workspace, and to a site of a suspended workspace`).
+- **The reference and its link are read with `see-tracker` only, and a guest's search does not
+  read them** (test:`gives a guest nothing of where the notes went, and no search on the references`).
+- **No cache of its own**: `Cache-Control: no-store`, and the index is the one source; the rate
+  limit of every route applies. Each guard above has a test that fails without it.
+
 With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from
 that database on every request. A site is a client of one workspace, so a session reaches it only through
 the `ws` check above. A site read by `members` is `read: 'authenticated'`; one read by `everyone` is
