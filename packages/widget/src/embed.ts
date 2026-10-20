@@ -224,8 +224,11 @@ export type Fruitback = {
   notesState(): ReadState;
   /** Scrolls to the pin of a note and opens its thread, as a row of the list does. `false`: not drawn. */
   focusNote(id: string): boolean;
-  /** Shows the pin of a note above the others, a fifth bigger: the row open in a list. `undefined`: none. */
-  markNote(id: string | undefined): void;
+  /**
+   * Shows the pin of a note above the others, a fifth bigger: the row open in a list. `undefined`:
+   * none. `false`: no pin of that note on the page.
+   */
+  markNote(id: string | undefined): boolean;
   /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.

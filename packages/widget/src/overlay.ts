@@ -163,9 +163,9 @@ export type Overlay = {
   select(id: string): boolean;
   /**
    * Shows the pin of this note above the others, a fifth bigger (FRU-299): the row a list outside
-   * the page has open. `undefined` lets it go. Kept across a draw.
+   * the page has open. `undefined` lets it go. Kept across a draw. `false`: no pin of that note.
    */
-  mark(id: string | undefined): void;
+  mark(id: string | undefined): boolean;
   destroy(): void;
 };
 
@@ -623,10 +623,15 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     },
     mark(id) {
       marked = id;
+      let found = false;
       for (const entry of placed) {
-        if (id !== undefined && entry.issue.seed.id === id) entry.pin.dataset.fruitbackMarked = '';
-        else delete entry.pin.dataset.fruitbackMarked;
+        if (id !== undefined && entry.issue.seed.id === id) {
+          entry.pin.dataset.fruitbackMarked = '';
+          found = true;
+        } else delete entry.pin.dataset.fruitbackMarked;
       }
+
+      return id === undefined || found;
     },
     select(id) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);

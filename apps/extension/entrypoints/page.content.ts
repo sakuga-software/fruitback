@@ -193,10 +193,7 @@ export default defineContentScript({
         if (widget !== undefined && message.command === 'focus-note' && message.note !== undefined) {
           done = widget.focusNote(message.note);
         }
-        if (widget !== undefined && message.command === 'mark-note') {
-          widget.markNote(message.note);
-          done = true;
-        }
+        if (widget !== undefined && message.command === 'mark-note') done = widget.markNote(message.note);
         const answer = (outcome?: string): void =>
           window.postMessage(
             {

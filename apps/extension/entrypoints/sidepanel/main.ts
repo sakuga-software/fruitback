@@ -104,7 +104,12 @@ async function look(): Promise<void> {
 async function readNotes(): Promise<void> {
   const reading = followed?.tabId;
   const answer = await askOrNothing('notes');
-  if (followed?.tabId !== reading) return;
+  if (followed?.tabId !== reading) {
+    // The tab changed under the read: a row asked for on the tab of before opens nothing (review).
+    pendingOpen = undefined;
+
+    return;
+  }
   notes = notesOf(answer);
   // The open row of a note that is gone closes.
   if (Array.isArray(notes) && open !== undefined && !notes.some((note) => note.id === open)) open = undefined;

@@ -201,8 +201,12 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
         .filter((pin) => pin.dataset.fruitbackMarked !== undefined)
         .map((pin) => pin.querySelector('.fruitback-pin-badge')?.textContent?.trim());
 
-    widget.markNote('seed-2');
+    assert.equal(widget.markNote('seed-2'), true);
     assert.deepEqual(marked(), ['2']);
+    // A note with no pin here: said, and no pin marked (raised in review).
+    assert.equal(widget.markNote('nobody'), false);
+    assert.deepEqual(marked(), []);
+    widget.markNote('seed-2');
     await widget.refresh();
     assert.deepEqual(marked(), ['2'], 'a read lost the mark');
     widget.markNote(undefined);
