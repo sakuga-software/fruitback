@@ -4,6 +4,7 @@ import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type OrphanList, createOrphanList } from './orphans.ts';
 import { mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
+import { CAPTURE_START } from './host.ts';
 
 /**
  * The list on its own. How it behaves inside the overlay is settled in `overlay.test.ts`; what is
@@ -207,6 +208,21 @@ describe('the chip in the capsule of the dock (FRU-303)', () => {
     assert.equal(announcer?.parentElement, page.document.body);
     assert.equal(announcer?.textContent, '1 detached note');
     assert.ok(list.owns(root.querySelector('.fruitback-orphans-toggle') as Node));
+  });
+
+  it('folds its list when a capture starts and hides the chip', () => {
+    const page = mountPage('<main></main><div id="dock"></div>');
+    const dock = page.query('#dock');
+    list = createOrphanList({ document: page.document, host: page.document.body, dock });
+    list.update([issue('sd_1', 'Une note')]);
+    const toggle = page.document.querySelector('.fruitback-orphans-toggle') as HTMLElement;
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+    dock.dispatchEvent(new (page.view as unknown as typeof globalThis).Event(CAPTURE_START));
+
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal((page.document.querySelector('.fruitback-orphans-list') as HTMLElement).hidden, true);
   });
 
   it('says « 2 détachées » in French', () => {

@@ -495,6 +495,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // which takes their place: Enter there still stops the capture.
     const active = deepActiveElement(document);
     if (active !== null && dock.contains(active) && !banner.contains(active)) halt.focus();
+    // What the capsule holds folds what it opened: the list of the detached notes listens.
+    dock.dispatchEvent(new (view?.Event ?? Event)(CAPTURE_START));
   }
 
   function stop(): void {
@@ -629,6 +631,12 @@ export function readableName(element: Element): string {
 
   return text.length > 80 ? `${text.slice(0, 79)}…` : text;
 }
+
+/**
+ * The event the capsule of the dock hears when a capture starts and hides its controls (FRU-303).
+ * The list of the detached notes, which opens above its chip, folds on it.
+ */
+export const CAPTURE_START = 'fruitback-capture-start';
 
 /**
  * What the frame of a capture writes for an element (FRU-303): its tag, then its id or the class

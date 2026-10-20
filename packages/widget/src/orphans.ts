@@ -2,6 +2,7 @@ import { type SeedIssue } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
+import { CAPTURE_START } from './host.ts';
 
 /**
  * The notes whose element is gone (FRU-12).
@@ -87,6 +88,14 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
     toggle.setAttribute('aria-expanded', String(opening));
   });
 
+  // A capture hides the capsule's controls, the chip among them: the list folds with it, so it is
+  // not open again when the capture ends (FRU-303).
+  const fold = (): void => {
+    list.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+  options.dock?.addEventListener(CAPTURE_START, fold);
+
   root.append(toggle, list);
 
   // A sibling of the root, because the root is hidden while the list is empty (FRU-51).
@@ -142,6 +151,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         .find((item) => (item as HTMLElement).dataset.fruitbackOrphan === id)
         ?.querySelector<HTMLElement>('.fruitback-orphans-note') ?? undefined,
     destroy() {
+      options.dock?.removeEventListener(CAPTURE_START, fold);
       announcer.remove();
       root.remove();
       style.remove();
