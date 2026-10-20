@@ -131,6 +131,7 @@ describe('createEditor', () => {
 
 describe('createEditor.save (FRU-301)', () => {
   const base = { mode: 'private' as const, endpoint: 'https://feedback.acme.dev', clientId: 'acme', enabled: true };
+  const activated: string[] = [];
   const editorWith = (stored: Record<string, SiteConfig>, written: [string, SiteConfig][], fail = false) =>
     createEditor({
       request: () => Promise.resolve(true),
@@ -140,7 +141,11 @@ describe('createEditor.save (FRU-301)', () => {
         return fail ? Promise.reject(new Error('lost')) : Promise.resolve();
       },
       current: () => stored,
-      activate: () => Promise.resolve(),
+      activate: (pattern) => {
+        activated.push(pattern);
+
+        return Promise.resolve();
+      },
       stored: () => Promise.resolve(stored),
     });
 
@@ -157,6 +162,8 @@ describe('createEditor.save (FRU-301)', () => {
         { mode: 'private', endpoint: 'https://other.acme.dev', clientId: 'b', enabled: true, label: 'Acme' },
       ],
     ]);
+    // On: its open tabs get the scripts, as after « Add » (raised in review).
+    assert.deepEqual(activated.splice(0), ['https://acme.dev']);
   });
 
   it('keeps the mount of a site of a workspace while its worker stays, and drops it when the worker changes', async () => {
@@ -182,6 +189,8 @@ describe('createEditor.save (FRU-301)', () => {
         { mode: 'team', endpoint: 'https://feedback.acme.dev', enabled: false },
       ],
     );
+    // Off: nothing to activate.
+    assert.deepEqual(activated.splice(0), []);
   });
 
   it('refuses a bad field without writing, and says a write that was not confirmed', async () => {

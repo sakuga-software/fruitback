@@ -92,7 +92,8 @@ export function createEditor({ request, write, current, activate, stored }: Edit
     /**
      * The panel of a rule (FRU-301): its mode, its worker, its client id, under the same checks as a
      * new rule. Answers the problem to show, or `''` once it is stored. It keeps the rule on or off
-     * as it was, and asks for nothing: the sites of the pattern do not change. What the mode carries
+     * as it was, and asks for nothing: the sites of the pattern do not change. A rule that is on is
+     * activated in its open tabs, as after « Add ». What the mode carries
      * besides (the label of a private rule, the mount of a site of a workspace) stays while the mode
      * stays.
      */
@@ -117,6 +118,8 @@ export function createEditor({ request, write, current, activate, stored }: Edit
 
         return STORE_PROBLEM;
       }
+      // A rule that is on runs in the tabs open on it, as after « Add » and a switch (raised in review).
+      if (kept.enabled) await activate(pattern);
 
       return '';
     },

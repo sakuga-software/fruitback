@@ -210,9 +210,17 @@ function drawTable(): void {
   }
 }
 
+/**
+ * Each choice counts one: the panel of a choice is drawn only if no later choice was made while it
+ * read the session (raised in review: A, B, then A again drew A twice).
+ */
+let choice = 0;
+
 /** Opens the panel of a rule, the form of a new one, or nothing. */
 function choose(pattern: string | undefined): void {
   chosen = pattern;
+  choice += 1;
+  const mine = choice;
   drawTable();
   if (pattern === undefined) {
     shown = undefined;
@@ -231,7 +239,7 @@ function choose(pattern: string | undefined): void {
   // Not read yet (a rule just added): the next list opens it, and what is shown stays until then.
   if (row === undefined) return;
   void pairedAs(row.site).then((name) => {
-    if (chosen !== pattern) return;
+    if (mine !== choice) return;
     const said = element('p', '', 'problem');
     const aside = rulePanel(document, {
       ...panelOptions(row, name),
