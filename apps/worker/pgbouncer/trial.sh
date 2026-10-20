@@ -58,8 +58,13 @@ healthy() {
   done
   return 1
 }
-# The lock of the migrations (postgres-migrate.ts) and the one of the role of administrator.
-MIGRATION_LOCK=$((0x46525542))
+# The lock of the migrations and the one of the role of administrator, read from the code of the
+# worker: a trial that measured a lock the worker no longer takes would say nothing true.
+SRC=$HERE/../src
+MIGRATION_LOCK=$(sed -n 's/^const MIGRATION_LOCK = \(0x[0-9A-Fa-f_]*\);$/\1/p' "$SRC/postgres-migrate.ts" | tr -d _)
+ADMIN_ROLE_LOCK=$(sed -n 's/^export const ADMIN_ROLE_LOCK = \([0-9]*\);$/\1/p' "$SRC/instance-admin-postgres.ts")
+[ -n "$MIGRATION_LOCK" ] && [ -n "$ADMIN_ROLE_LOCK" ] || { echo "trial: the two locks are not where trial.sh reads them" >&2; exit 1; }
+MIGRATION_LOCK=$((MIGRATION_LOCK))
 
 say "pool_mode=$MODE schema=$TABLES"
 DC up -d --wait postgres pgbouncer >/dev/null 2>&1 || { say "the database or the pooler did not start"; exit 1; }
@@ -107,10 +112,10 @@ wait
 sleep 1
 say "   that lock still held by the server once its client left: $(SQL "SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND objid=424242")"
 say "SET search_path, then the next client sees: $(BOUNCER -c 'SET search_path TO elsewhere' >/dev/null 2>&1; BOUNCER -c 'SHOW search_path' 2>&1)"
-(BOUNCER -c 'BEGIN' -c 'SELECT pg_advisory_xact_lock(1179796036)' -c 'SELECT pg_sleep(3)' -c 'COMMIT' >/dev/null 2>&1) &
+(BOUNCER -c 'BEGIN' -c "SELECT pg_advisory_xact_lock($ADMIN_ROLE_LOCK)" -c 'SELECT pg_sleep(3)' -c 'COMMIT' >/dev/null 2>&1) &
 sleep 0.5
 started=$(date +%s)
-BOUNCER -c 'SELECT pg_advisory_xact_lock(1179796036)' >/dev/null 2>&1
+BOUNCER -c "SELECT pg_advisory_xact_lock($ADMIN_ROLE_LOCK)" >/dev/null 2>&1
 say "pg_advisory_xact_lock held 3 s in a transaction (the lock of the role): the second client waited $(($(date +%s) - started)) s"
 wait
 say "set_config('synchronous_commit', 'off', true), then the next statement: $(BOUNCER -c "SELECT set_config('synchronous_commit', 'off', true)" -c 'SHOW synchronous_commit' 2>&1 | tr '\n' ' ')"
