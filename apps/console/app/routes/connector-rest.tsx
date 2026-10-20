@@ -4,6 +4,7 @@ import { msg, t } from '../i18n';
 import { known } from '../listed';
 import { Button, Choice, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 import {
   BlockTitle,
   Disconnect,
@@ -112,7 +113,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
               <li key={site.id}>
                 <Choice
                   compact
-                  label={new URL(site.origin).host}
+                  label={siteLabel(site.origin)}
                   value={sends ? THERE : HERE}
                   disabled={!manages || full || writing}
                   onChange={(value) => void place(site, value)}

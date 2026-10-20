@@ -17,8 +17,9 @@ const WILDCARD = '*.';
 /**
  * The pattern a person typed, in the one spelling the store keys on, or `undefined`.
  *
- * With no scheme, `https://` is used. A wildcard is the whole first label only, and it takes no
- * port: a match pattern cannot say which ports it covers in every browser. A bare `*` is refused,
+ * With no scheme, the scheme follows the host (FRU-314): `http://` for a host of this machine or of
+ * the local network, `https://` for every other (`defaultScheme`). A wildcard is the whole first
+ * label only, and it takes no port: a match pattern cannot say which ports it covers in every browser. A bare `*` is refused,
  * because it is the permission for every site that FRU-41 refused to ask for.
  *
  * A wildcard also needs a base with at least two labels, and no IP address. The background registers
@@ -27,7 +28,7 @@ const WILDCARD = '*.';
  */
 export function parseSitePattern(input: string): string | undefined {
   const value = input.trim().replace(/\/\*?$/, '');
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `${defaultScheme(value)}://${value}`;
   const separator = withScheme.indexOf('://');
   const scheme = withScheme.slice(0, separator).toLowerCase();
   const rest = withScheme.slice(separator + 3);
@@ -54,6 +55,42 @@ export function parseSitePattern(input: string): string | undefined {
   }
 
   return `${scheme}://${WILDCARD}${url.hostname}`;
+}
+
+/**
+ * The scheme of a pattern typed with none (FRU-314). `http` for a host of this machine or of the
+ * local network, where a dev server or an internal staging has no certificate; `https` for every
+ * other host.
+ *
+ * Local: `localhost` and `*.localhost`, `127.0.0.0/8`, `[::1]`, `*.local`, and the private ranges
+ * `10/8`, `172.16/12`, `192.168/16`. The console reads an address by the same rule
+ * (`apps/console/app/site-address.ts`), and both tests hold the same table.
+ */
+export function defaultScheme(withoutScheme: string): 'http' | 'https' {
+  let hostname: string;
+  try {
+    hostname = new URL(`http://${withoutScheme.trim()}`).hostname;
+  } catch {
+    return 'https';
+  }
+
+  return isLocalHost(hostname.replace(/^\*\./, '').replace(/\.$/, '')) ? 'http' : 'https';
+}
+
+function isLocalHost(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local')) return true;
+  if (hostname === '[::1]') return true;
+
+  const ip = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(hostname);
+  if (ip === null) return false;
+  const [first, second] = [Number(ip[1]), Number(ip[2])];
+
+  return (
+    first === 127 ||
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 }
 
 /**

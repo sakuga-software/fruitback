@@ -16,6 +16,7 @@ import { problemOf } from '../problems';
 import { withStrong } from '../sign-in-form';
 import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 
 /**
  * The invitation that waits for the person who is signed in (FRU-104), as screen 03 of the mockup of
@@ -42,13 +43,7 @@ const ROLE_MEANS: Readonly<Record<string, string>> = {
 
 /** The hosts of the sites an invitation of a guest names (FRU-250), « staging.acme.dev ». */
 function hostsOf(invitation: Invitation): string | undefined {
-  const hosts = (invitation.sites ?? []).map((site) => {
-    try {
-      return new URL(site.origin).host;
-    } catch {
-      return site.origin;
-    }
-  });
+  const hosts = (invitation.sites ?? []).map((site) => siteLabel(site.origin));
 
   return hosts.length === 0 ? undefined : hosts.join(', ');
 }
@@ -345,7 +340,7 @@ function Away() {
  */
 function Joined({ workspace, name, site }: { workspace: string; name: string; site: Site | undefined }) {
   useLocale();
-  const host = site === undefined ? undefined : new URL(site.origin).host;
+  const host = site === undefined ? undefined : siteLabel(site.origin);
   // Not on the mockup, which leaves no way on but the extension: the console is where the person
   // connects their browser today.
   const console = (

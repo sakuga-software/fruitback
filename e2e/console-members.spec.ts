@@ -312,7 +312,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   await expect(tom.nth(3)).toHaveText('14 Jul 2026Remove');
   await expect(cells(page, 'Nora').nth(1)).toHaveText('Member');
   await expect(cells(page, 'Inès Morel').nth(1)).toHaveText('Guest');
-  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('staging.acme.dev');
+  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('https://staging.acme.dev');
   expect.soft(await painted(tom.nth(1), 'color')).toEqual(rgb(INK));
   // Nobody removes themselves here.
   await expect(row(page, 'Ana (you)').getByRole('button')).toHaveCount(0);
@@ -486,8 +486,8 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   await expectNoViolation(page, 'the form of a guest');
 
   await sitesList(page).click();
-  await expect(page.getByRole('option')).toHaveText(['staging.acme.dev', 'acme.dev']);
-  await page.getByRole('option', { name: 'acme.dev', exact: true }).click();
+  await expect(page.getByRole('option')).toHaveText(['https://staging.acme.dev', 'https://acme.dev']);
+  await page.getByRole('option', { name: 'https://acme.dev', exact: true }).click();
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect
@@ -766,7 +766,11 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
   await expect(table(page).locator('thead th')).toHaveText(['Person', 'Role', 'Sites']);
   await expect(table(page).locator('tbody tr')).toHaveCount(1);
   // Their site is the one the worker lists to them (FRU-250).
-  await expect(table(page).locator('tbody td')).toHaveText(['AAna (you)ana@acme.dev', 'Guest', 'staging.acme.dev']);
+  await expect(table(page).locator('tbody td')).toHaveText([
+    'AAna (you)ana@acme.dev',
+    'Guest',
+    'https://staging.acme.dev',
+  ]);
   await expect(page.getByRole('form')).toHaveCount(0);
   await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
   expect(refused.read).toEqual([]);

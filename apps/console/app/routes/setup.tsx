@@ -19,6 +19,7 @@ import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
 import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
+import { siteLabel } from '../site-address';
 
 /**
  * The setup, on one screen (FRU-239, screen 01 of the mockup of 2026-10-13): « Your account »,
@@ -304,7 +305,7 @@ export default function Setup() {
       <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
         {stage.kind === 'install' ? (
           <BrowserFrame
-            address={new URL(stage.site.origin).host}
+            address={siteLabel(stage.site.origin)}
             // A picture of an example page, not the site of the person: the caption says so.
             caption={t('An example page. Pins show the same way on your site.')}
           >

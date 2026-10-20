@@ -20,6 +20,7 @@ import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -186,8 +187,11 @@ export default function Notes() {
 
   const [typed, setTyped] = useTypedSearch(filters.q, (q) => filter({ q }, true));
 
-  const hostOf = (id: string) =>
-    typeof sites === 'string' ? undefined : sites.find((site) => site.id === id)?.origin.replace(/^https?:\/\//, '');
+  const hostOf = (id: string) => {
+    const origin = typeof sites === 'string' ? undefined : sites.find((site) => site.id === id)?.origin;
+
+    return origin === undefined ? undefined : siteLabel(origin);
+  };
   const filtered = FILTERS.some((name) => filters[name] !== '');
 
   return (
@@ -248,7 +252,7 @@ export default function Notes() {
                   { value: 'every', label: t('Every site') },
                   ...(typeof sites === 'string'
                     ? []
-                    : sites.map((site) => ({ value: site.id, label: site.origin.replace(/^https?:\/\//, '') }))),
+                    : sites.map((site) => ({ value: site.id, label: siteLabel(site.origin) }))),
                 ]}
               />
             </div>

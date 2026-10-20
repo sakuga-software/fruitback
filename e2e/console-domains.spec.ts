@@ -94,7 +94,9 @@ async function open(page: Page): Promise<void> {
 /** The proof of a domain is under the row of a site, behind « Preview builds » of its menu (FRU-243). */
 async function openPreviews(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
   await open(page);
-  await page.getByRole('button', { name: locale === 'en' ? 'More for acme.dev' : 'Plus pour acme.dev' }).click();
+  await page
+    .getByRole('button', { name: locale === 'en' ? 'More for https://acme.dev' : 'Plus pour https://acme.dev' })
+    .click();
   await page.getByRole('menuitem', { name: locale === 'en' ? 'Preview builds' : 'Previews' }).click();
 }
 
@@ -135,7 +137,7 @@ test('a domain is added, shows its record, is proven by the worker, and covers t
   await expect(row.getByText(RECORD.value, { exact: true })).toHaveCount(0);
 
   await row.getByRole('button', { name: /Site whose previews are \*\.preview\.acme\.dev/ }).click();
-  await page.getByRole('option', { name: 'acme.dev', exact: true }).click();
+  await page.getByRole('option', { name: 'https://acme.dev', exact: true }).click();
   await expect.poll(() => worker.covered).toEqual([{ site: 's1' }]);
 });
 
@@ -171,10 +173,10 @@ test('a proof that is lost says so, in French, and offers no site', async ({ pag
 test('a member who is no admin has no way to the domain section', async ({ page }) => {
   await stubWorker(page, 'en', { role: 'member' });
   await open(page);
-  await expect(page.getByText('acme.dev', { exact: true })).toBeVisible();
+  await expect(page.getByText('https://acme.dev', { exact: true })).toBeVisible();
 
   // The menu of a site has « Install » alone for a member: no way to the proof of a domain.
-  await page.getByRole('button', { name: 'More for acme.dev' }).click();
+  await page.getByRole('button', { name: 'More for https://acme.dev' }).click();
   await expect(page.getByRole('menuitem')).toHaveText(['Install']);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toHaveCount(0);

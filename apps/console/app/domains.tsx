@@ -6,6 +6,7 @@ import { type Listed, edited, known } from './listed';
 import { copyText, problemOf } from './problems';
 import { Button, Card, Chip, Choice, Field, Problem } from './ui';
 import { useLocale } from './use-locale';
+import { siteLabel } from './site-address';
 
 /**
  * The domains a workspace proves it owns, to cover the previews of a site (FRU-103).
@@ -239,7 +240,7 @@ function DomainRow({
           onChange={(value) => void cover(value)}
           options={[
             { value: NONE, label: t('No site') },
-            ...(known(sites) ?? []).map((site) => ({ value: site.id, label: new URL(site.origin).host })),
+            ...(known(sites) ?? []).map((site) => ({ value: site.id, label: siteLabel(site.origin) })),
           ]}
         />
       ) : null}

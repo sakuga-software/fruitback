@@ -8,6 +8,7 @@ import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
 import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
+import { siteLabel } from '../site-address';
 
 /**
  * Every note of the instance, and where it is stored now: screen 20 of the mockup of 2026-10-13
@@ -236,7 +237,7 @@ export default function AdminNotes() {
 function NoteRow({ note }: { note: InstanceNote }) {
   useLocale();
   const { author, place } = note;
-  const host = note.site.origin.replace(/^https?:\/\//, '');
+  const host = siteLabel(note.site.origin);
 
   return (
     <tr>

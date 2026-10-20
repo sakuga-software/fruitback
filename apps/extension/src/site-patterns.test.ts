@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { coversOrigin, lendsSession, parseSitePattern, resolveSite } from './site-patterns.ts';
+import { coversOrigin, defaultScheme, lendsSession, parseSitePattern, resolveSite } from './site-patterns.ts';
 import { parseSite, type SiteConfig } from './sites.ts';
 
 const on = (clientId: string): SiteConfig => ({
@@ -18,7 +18,7 @@ describe('parseSitePattern', () => {
     assert.equal(parseSitePattern('https://acme.dev:443/*'), 'https://acme.dev');
   });
 
-  it('reads a host with no scheme as https', () => {
+  it('reads a public host with no scheme as https', () => {
     assert.equal(parseSitePattern('acme.dev'), 'https://acme.dev');
     assert.equal(parseSitePattern('*.staging.acme.dev'), 'https://*.staging.acme.dev');
   });
@@ -69,6 +69,44 @@ describe('parseSitePattern', () => {
       assert.equal(parseSitePattern(origin), origin);
       assert.equal(parseSitePattern(new URL(origin).origin), origin);
     }
+  });
+});
+
+/** The table `apps/console/app/site-address.test.ts` holds too: both apps read a host alike. */
+const SCHEMES: ReadonlyArray<readonly [string, 'http' | 'https']> = [
+  ['localhost:5187', 'http'],
+  ['LOCALHOST', 'http'],
+  ['shop.localhost:3000', 'http'],
+  ['127.0.0.1:8080', 'http'],
+  ['127.12.0.9', 'http'],
+  ['[::1]:5177', 'http'],
+  ['10.0.4.2', 'http'],
+  ['172.16.0.1', 'http'],
+  ['172.31.255.254:8443', 'http'],
+  ['192.168.1.20:5173', 'http'],
+  ['staging.local', 'http'],
+  ['*.acme.local', 'http'],
+  ['staging.acme.dev', 'https'],
+  ['172.15.0.1', 'https'],
+  ['172.32.0.1', 'https'],
+  ['192.169.0.1', 'https'],
+  ['11.0.0.1', 'https'],
+  ['localhost.acme.dev', 'https'],
+  ['local.acme.dev', 'https'],
+  ['[2001:db8::1]', 'https'],
+];
+
+describe('a pattern typed with no scheme (FRU-314)', () => {
+  it('chooses http for a local host and https for every other, by the table of the console', () => {
+    for (const [host, scheme] of SCHEMES) assert.equal(defaultScheme(host), scheme, host);
+  });
+
+  it('stores a local host the way the browser opens it', () => {
+    assert.equal(parseSitePattern('localhost:5187'), 'http://localhost:5187');
+    assert.equal(parseSitePattern('192.168.1.20:5173'), 'http://192.168.1.20:5173');
+    assert.equal(parseSitePattern('[::1]:3000'), 'http://[::1]:3000');
+    assert.equal(parseSitePattern('*.acme.local'), 'http://*.acme.local');
+    assert.equal(parseSitePattern('https://localhost:5187'), 'https://localhost:5187');
   });
 });
 

@@ -165,7 +165,7 @@ test('an administrator reads every note: the text of a kept note, the excerpt an
   await expect(sent.nth(0)).toContainText('Kept in Linear. Fruitback keeps the first 64 characters.');
   await expect(sent.nth(1)).toHaveText('Acme web');
   await expect(sent.nth(2)).toHaveText('To do');
-  await expect(sent.nth(3)).toHaveText('Verified by staging.acme.dev');
+  await expect(sent.nth(3)).toHaveText('Verified by https://staging.acme.dev');
   await expect(sent.nth(4)).toContainText('Linear');
   await expect(sent.nth(4).getByRole('link', { name: 'ACM-151' })).toHaveAttribute(
     'href',

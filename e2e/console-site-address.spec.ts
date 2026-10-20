@@ -3,8 +3,9 @@ import { WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The address of a site, typed in the console (FRU-167): on the Sites screen, in the card of a
- * workspace with no site (FRU-243), and at the second step of the set-up (FRU-239). A host with no scheme is read as `https://`, and what is not an address gets the sentence
- * of the console instead of the bubble of the browser.
+ * workspace with no site (FRU-243), and at the second step of the set-up (FRU-239). A host with no
+ * scheme is read as `https://`, or `http://` when it is local (FRU-314), and what is not an address
+ * gets the sentence of the console instead of the bubble of the browser.
  *
  * The worker is answered by stubs, which keep what the console sent.
  */
@@ -25,7 +26,12 @@ async function stubWorker(page: Page): Promise<string[]> {
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') {
-      if (request.method() === 'GET') return json({ sites: [] });
+      const sites = sent.map((url, index) => ({
+        id: `s${index + 1}`,
+        origin: new URL(url).origin,
+        visibility: 'members',
+      }));
+      if (request.method() === 'GET') return json({ sites });
       const { url } = request.postDataJSON() as { url: string };
       sent.push(url);
 
@@ -56,6 +62,19 @@ for (const screen of screens) {
     await page.getByRole('button', { name: screen.submit, exact: true }).click();
     await expect.poll(() => sent).toEqual(['https://staging.acme.dev']);
     await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
+  test(`on ${screen.name}, a local host with no scheme is added as http, and written with it (FRU-314)`, async ({
+    page,
+  }) => {
+    const sent = await stubWorker(page);
+    await page.goto(`${CONSOLE}${screen.path}`);
+
+    await page.getByRole('textbox', { name: 'Site address' }).fill('localhost:5187');
+    await page.getByRole('button', { name: screen.submit, exact: true }).click();
+    await expect.poll(() => sent).toEqual(['http://localhost:5187']);
+    // The scheme stays on the screen: the site that was added is the one the person opens.
+    await expect(page.getByText('http://localhost:5187', { exact: true }).first()).toBeVisible();
   });
 
   test(`on ${screen.name}, what is not an address gets the sentence of the console`, async ({ page }) => {

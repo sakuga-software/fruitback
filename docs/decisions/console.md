@@ -181,7 +181,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **The extension is in no store yet** (FRU-130): « Add to Chrome » and « Get the Firefox add-on »
   lead to the page of the documentation that says how to install it.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
-  (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
+  (FRU-167). A host with no scheme is `http://` when it is local (`localhost`, `*.localhost`,
+  `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
+  as in the extension (FRU-314): the address kept is the one the person opens. **A site is written
+  with its scheme on every screen** (`siteLabel`): two sites that differ by their scheme alone read
+  as two, and « Open » opens the one that was added. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
   console never showed. The worker still decides what a site is.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the

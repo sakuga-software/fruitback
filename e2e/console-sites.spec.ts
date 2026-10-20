@@ -153,12 +153,14 @@ async function open(page: Page): Promise<void> {
 }
 
 const table = (page: Page) => page.getByRole('region', { name: 'Sites' });
+/** A site is written with its scheme (FRU-314): a host alone is read as its https origin. */
+const origin = (host: string) => (host.includes('://') ? host : `https://${host}`);
 const row = (page: Page, host: string) =>
   table(page)
     .locator('tbody tr')
-    .filter({ has: page.getByText(host, { exact: true }) })
+    .filter({ has: page.getByText(origin(host), { exact: true }) })
     .first();
-const more = (page: Page, host: string) => page.getByRole('button', { name: `More for ${host}`, exact: true });
+const more = (page: Page, host: string) => page.getByRole('button', { name: `More for ${origin(host)}`, exact: true });
 
 async function expectNoViolation(page: Page, name: string): Promise<void> {
   const results = await new AxeBuilder({ page }).include('main').analyze();
@@ -253,7 +255,7 @@ test('the list is the table of the mockup, with its six columns and the legend o
   expectBox(await box(first), { x: 298, height: 68.2 }, 2, 'the first row');
 
   // The site: its host at 600, and who sees its notes under it.
-  const host = first.getByText('staging.acme.dev', { exact: true });
+  const host = first.getByText('https://staging.acme.dev', { exact: true });
   expect.soft(await styles(host, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '14px' });
   expect.soft(await painted(host, 'color')).toEqual(rgb(INK));
   const audience = first.getByText('Members of Acme', { exact: true });
@@ -444,7 +446,7 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
     ]);
   // The site is a row of the table, and how to put Fruitback on it is open under it.
   await expect(row(page, 'acme.dev').getByText('Everyone who visits')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Install on https://acme.dev' })).toBeVisible();
   await expect(card).toHaveCount(0);
 });
 
@@ -578,7 +580,7 @@ test('« Add a site » opens the form above the table, and a refusal keeps what 
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
   await expect(row(page, 'docs.acme.dev').getByText('Members of Acme')).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Install on docs.acme.dev' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Install on https://docs.acme.dev' })).toBeVisible();
   await expect(form).toHaveCount(0);
   expect(worker.sent.at(-1)).toEqual({
     method: 'POST',
@@ -594,7 +596,7 @@ test('the menu of a row is walked with the keyboard, and what it opens gives foc
 
   await button.focus();
   await page.keyboard.press('Enter');
-  const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
+  const menu = page.getByRole('menu', { name: 'More for https://staging.acme.dev' });
   await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Preview builds', 'Remove']);
   await expect(menu.getByRole('menuitem', { name: 'Install' })).toBeFocused();
   await page.waitForTimeout(250);
@@ -609,7 +611,7 @@ test('the menu of a row is walked with the keyboard, and what it opens gives foc
   // « Install »: the two ways to put Fruitback on the site, under its row.
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter');
-  const install = page.getByRole('region', { name: 'Install on staging.acme.dev' });
+  const install = page.getByRole('region', { name: 'Install on https://staging.acme.dev' });
   await expect(install.getByRole('button', { name: 'Copy the script' })).toBeVisible();
   await expect(install.getByRole('button', { name: 'Connect this browser' })).toBeVisible();
   expect((await box(install)).y).toBeGreaterThanOrEqual((await box(row(page, 'staging.acme.dev'))).y);
@@ -626,9 +628,12 @@ test('the menu of a row is walked with the keyboard, and what it opens gives foc
   await expect(previews.getByText('No domain yet. A site covers its own address only.')).toBeVisible();
   // One thing is open at a time, on one row at a time.
   await more(page, 'acme.dev').click();
-  await page.getByRole('menu', { name: 'More for acme.dev' }).getByRole('menuitem', { name: 'Install' }).click();
+  await page
+    .getByRole('menu', { name: 'More for https://acme.dev' })
+    .getByRole('menuitem', { name: 'Install' })
+    .click();
   await expect(previews).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Install on https://acme.dev' })).toBeVisible();
 });
 
 test('what is typed in the form stays when the form goes and comes back', async ({ page }) => {
@@ -673,8 +678,8 @@ test('removing a site asks twice, and a site that is still there says so on its 
   };
 
   await ask();
-  const group = page.getByRole('group', { name: 'Remove staging.acme.dev' });
-  await expect(group.getByText(/The widget stops on staging\.acme\.dev/)).toBeVisible();
+  const group = page.getByRole('group', { name: 'Remove https://staging.acme.dev' });
+  await expect(group.getByText(/The widget stops on https:\/\/staging\.acme\.dev/)).toBeVisible();
   await expect(group.getByRole('button', { name: 'Keep it' })).toBeFocused();
   expect(worker.sent).toEqual([]);
   await expectNoViolation(page, 'the second time of a removal');
@@ -685,13 +690,13 @@ test('removing a site asks twice, and a site that is still there says so on its 
   // The worker refuses: the site stays, and its row says why.
   worker.refuses = { status: 403, error: 'forbidden' };
   await ask();
-  await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
+  await group.getByRole('button', { name: 'Remove https://staging.acme.dev' }).click();
   await expect(page.getByRole('alert')).toHaveText('Only an owner or an admin of the workspace removes a site.');
   await expect(row(page, 'staging.acme.dev')).toBeVisible();
 
   worker.refuses = undefined;
-  await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
-  await expect(page.getByText('staging.acme.dev', { exact: true })).toHaveCount(0);
+  await group.getByRole('button', { name: 'Remove https://staging.acme.dev' }).click();
+  await expect(page.getByText('https://staging.acme.dev', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
   // The row and its button are gone: focus is on the table, and not back at the top of the page.
   await expect(table(page)).toBeFocused();
@@ -706,7 +711,7 @@ test('when the last site is removed, focus goes to the field of the card', async
   await open(page);
   await more(page, 'preview.lumen.studio').click();
   await page.getByRole('menuitem', { name: 'Remove' }).click();
-  await page.getByRole('button', { name: 'Remove preview.lumen.studio' }).click();
+  await page.getByRole('button', { name: 'Remove https://preview.lumen.studio' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'No site yet' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Site address' })).toBeFocused();
 });
@@ -785,7 +790,7 @@ for (const locale of ['en', 'fr'] as const) {
       expect.soft(inside.x, `${name}: left`).toBeGreaterThanOrEqual(around.x);
       expect.soft(inside.x + inside.width, `${name}: right`).toBeLessThanOrEqual(around.x + around.width);
     };
-    const button = page.getByRole('button', { name: `${words.more} staging.acme.dev`, exact: true });
+    const button = page.getByRole('button', { name: `${words.more} https://staging.acme.dev`, exact: true });
     await button.click();
     await page.getByRole('menuitem', { name: words.install, exact: true }).click();
     expect.soft(await sideScroll(page), 'the installation').toBe(0);
@@ -865,7 +870,7 @@ test('every text of the list is at 4.5:1 on what is behind it, a row under the p
   const first = row(page, 'staging.acme.dev');
   const texts: [string, Locator][] = [
     ['a column header', table(page).locator('thead th').first()],
-    ['a host', first.getByText('staging.acme.dev', { exact: true })],
+    ['a host', first.getByText('https://staging.acme.dev', { exact: true })],
     ['who sees the notes', first.getByText('Members of Acme', { exact: true })],
     ['a tracker', first.getByText('Linear', { exact: true })],
     ['a place in a tracker', first.getByText('Team Acme web', { exact: true })],

@@ -75,7 +75,7 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     await page.getByRole('button', { name: 'Add site' }).click();
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
-    await expect(page.getByText('staging.acme.dev', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('https://staging.acme.dev', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Members of Acme Studio see the notes')).toBeVisible();
 
     // Somebody who comes back is where they left: the front door leads to the sites now.
@@ -220,7 +220,8 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     // A typing mistake, seen at once: the form opens with its values, and the site is replaced.
     await page.getByRole('button', { name: 'Change' }).click();
     const address = page.getByRole('textbox', { name: 'Site address' });
-    await expect(address).toHaveValue('stagin.acme.dev');
+    // The address comes back with its scheme, so an http site stays http (FRU-314).
+    await expect(address).toHaveValue('https://stagin.acme.dev');
     await address.fill('staging.acme.dev');
     await page.getByText('Everyone who visits', { exact: true }).click();
     await page.getByRole('button', { name: 'Save' }).click();
@@ -240,9 +241,9 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Change' }).click();
     await page.getByRole('textbox', { name: 'Site address' }).fill('preview.acme.dev');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('preview.acme.dev', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('https://preview.acme.dev', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'is still in your sites' })).toHaveText(
-      'staging.acme.dev is still in your sites, with its notes. Remove it in Sites if you no longer review it.',
+      'https://staging.acme.dev is still in your sites, with its notes. Remove it in Sites if you no longer review it.',
     );
     expect((await sites()).toSorted()).toEqual(['https://preview.acme.dev', 'https://staging.acme.dev']);
   });
@@ -623,7 +624,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
       'Waiting for your first note. Open the site, click Leave feedback, then any part of the page.',
     );
-    await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute(
       'href',
       'https://staging.acme.dev',
     );
@@ -967,7 +968,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       await expect(page.locator('main ol > li[aria-current="step"]')).toContainText('3');
       await check('step 3, with a long host');
       // The long host reads in full: it takes the lines it needs.
-      const host = page.getByText(LONG_HOST, { exact: true }).first();
+      const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       expect(await violations(page)).toEqual([]);
       await context.close();

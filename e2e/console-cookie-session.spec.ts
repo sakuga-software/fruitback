@@ -105,7 +105,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     // A site added from the list, with the cookie: a change, from the origin of the console.
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     await page.getByRole('button', { name: 'Add site', exact: true }).click();
-    await expect(page.getByText('staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(page.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
   });
 
   test('takes the token of a link out of the address bar, for a link that works and for one that does not (FRU-207)', async ({
@@ -208,7 +208,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await expect(page.getByRole('alert').filter({ hasText: /signed out|session ended/ })).toHaveCount(0);
     await expect(field).toHaveValue('staging.acme.dev');
     await page.getByRole('button', { name: 'Add site', exact: true }).click();
-    await expect(page.getByText('staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(page.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
   });
 
   test('ends the session on the worker when the person signs out', async ({ page, context }) => {
