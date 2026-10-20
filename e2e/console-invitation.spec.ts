@@ -81,7 +81,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(CONSOLE);
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
-    await expect(owner.getByText('staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(owner.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
@@ -122,10 +122,10 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(paul.getByRole('status')).toHaveText(
       'One more thing: the extension shows the notes on staging.acme.dev and lets you leave yours.',
     );
-    await expect(paul.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute('href', SITE);
+    await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
     await expect(paul).toHaveURL(`${CONSOLE}/w/${workspace}/sites`);
-    await expect(paul.getByText('staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(paul.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
 
     // The owner sees Paul as a member, and the invitation is gone.
     await owner.reload();
@@ -134,7 +134,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
 
     // Paul connects his browser: the pairing page opens with a code after the `#`.
     // « Install » is in the menu of the row of the site, for a member too (FRU-243).
-    await paul.getByRole('button', { name: 'More for staging.acme.dev' }).click();
+    await paul.getByRole('button', { name: 'More for https://staging.acme.dev' }).click();
     await paul.getByRole('menuitem', { name: 'Install' }).click();
     const opened = pauls.waitForEvent('page');
     await paul.getByRole('button', { name: 'Connect this browser' }).click();
@@ -381,7 +381,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await expect(join).toBeVisible();
 
     const title = page.getByRole('heading', { level: 1 });
-    await expect(title).toHaveText('Review staging.acme.dev with Havane');
+    await expect(title).toHaveText('Review https://staging.acme.dev with Havane');
     expectNear(await boxOf(title), { x: 500, y: 203, width: 440, height: 64.4 }, 'title');
     await expect(
       page.getByText(
@@ -389,7 +389,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
       ),
     ).toBeVisible();
     await expect(page.locator('dl > div')).toHaveCount(3);
-    await expect(page.locator('dl')).toHaveText(`Signed in as${INVITED}RoleGuestSitestaging.acme.dev`);
+    await expect(page.locator('dl')).toHaveText(`Signed in as${INVITED}RoleGuestSitehttps://staging.acme.dev`);
     expectNear(await boxOf(join), { x: 500, y: 507, width: 440, height: 44 }, '« Join »');
     expect(await violations(page)).toEqual([]);
   });
@@ -403,7 +403,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await page.goto(`${CONSOLE}/invitations`);
     await page.getByRole('button', { name: 'Join Havane' }).click();
     await expect(page.getByRole('heading', { name: 'You are in' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute(
       'href',
       'https://staging.acme.dev',
     );
@@ -431,7 +431,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     const add = page.getByRole('link', { name: 'Add to Chrome' });
     expectNear(await boxOf(add), { x: 500, y: 361 - 24, width: 167.1, height: 44 }, '« Add to Chrome »');
     expectNear(
-      await boxOf(page.getByRole('link', { name: 'Open staging.acme.dev' })),
+      await boxOf(page.getByRole('link', { name: 'Open https://staging.acme.dev' })),
       { x: 687, y: 363 - 24, width: 159.9, height: 41 },
       '« Open the site »',
     );

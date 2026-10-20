@@ -424,7 +424,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   // Who left it.
   await expect(first.locator('td').nth(2)).toHaveText('AnaYou');
   await expect(row(page, 'The order form').locator('td').nth(2)).toHaveText('VisitorAnonymous');
-  await expect(row(page, 'The checkout button').locator('td').nth(2)).toHaveText('VisitorVerified by acme.dev');
+  await expect(row(page, 'The checkout button').locator('td').nth(2)).toHaveText('VisitorVerified by https://acme.dev');
   await expect(row(page, 'cream').locator('td').nth(2)).toHaveText('Camille DurandGuest');
   await expect(row(page, 'yearly toggle').locator('td').nth(2)).toHaveText('Marc PetitAdmin');
 

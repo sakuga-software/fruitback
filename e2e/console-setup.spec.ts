@@ -75,7 +75,7 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     await page.getByRole('button', { name: 'Add site' }).click();
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
-    await expect(page.getByText('staging.acme.dev', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('https://staging.acme.dev', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Members of Acme Studio see the notes')).toBeVisible();
 
     // Somebody who comes back is where they left: the front door leads to the sites now.
@@ -240,9 +240,9 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     await page.getByRole('button', { name: 'Change' }).click();
     await page.getByRole('textbox', { name: 'Site address' }).fill('preview.acme.dev');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('preview.acme.dev', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('https://preview.acme.dev', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'is still in your sites' })).toHaveText(
-      'staging.acme.dev is still in your sites, with its notes. Remove it in Sites if you no longer review it.',
+      'https://staging.acme.dev is still in your sites, with its notes. Remove it in Sites if you no longer review it.',
     );
     expect((await sites()).toSorted()).toEqual(['https://preview.acme.dev', 'https://staging.acme.dev']);
   });
@@ -623,7 +623,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(
       'Waiting for your first note. Open the site, click Leave feedback, then any part of the page.',
     );
-    await expect(page.getByRole('link', { name: 'Open staging.acme.dev' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute(
       'href',
       'https://staging.acme.dev',
     );

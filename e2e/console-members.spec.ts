@@ -312,7 +312,7 @@ test('the list is the table of the mockup, with what the worker of today says of
   await expect(tom.nth(3)).toHaveText('14 Jul 2026Remove');
   await expect(cells(page, 'Nora').nth(1)).toHaveText('Member');
   await expect(cells(page, 'Inès Morel').nth(1)).toHaveText('Guest');
-  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('staging.acme.dev');
+  await expect(cells(page, 'Inès Morel').nth(2)).toHaveText('https://staging.acme.dev');
   expect.soft(await painted(tom.nth(1), 'color')).toEqual(rgb(INK));
   // Nobody removes themselves here.
   await expect(row(page, 'Ana (you)').getByRole('button')).toHaveCount(0);
@@ -486,8 +486,8 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   await expectNoViolation(page, 'the form of a guest');
 
   await sitesList(page).click();
-  await expect(page.getByRole('option')).toHaveText(['staging.acme.dev', 'acme.dev']);
-  await page.getByRole('option', { name: 'acme.dev', exact: true }).click();
+  await expect(page.getByRole('option')).toHaveText(['https://staging.acme.dev', 'https://acme.dev']);
+  await page.getByRole('option', { name: 'https://acme.dev', exact: true }).click();
   await email(page).fill('zoe@client.fr');
   await invite(page).click();
   await expect

@@ -272,7 +272,7 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     'border-bottom-width': '1px',
   });
   expect
-    .soft(await styles(sender.getByText('staging.acme.dev', { exact: true }), ['font-weight']))
+    .soft(await styles(sender.getByText('https://staging.acme.dev', { exact: true }), ['font-weight']))
     .toEqual({ 'font-weight': '600' });
   const others = card.getByRole('heading', { level: 3, name: 'Other sites' });
   expect((await box(card.locator('[data-site="support.acme.dev"]'))).y).toBeGreaterThan((await box(others)).y);
