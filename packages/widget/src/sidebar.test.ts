@@ -519,7 +519,7 @@ describe('the way into the list (FRU-129)', () => {
     const button = host.root.querySelector<HTMLElement>('[data-fruitback-host-list]');
 
     assert.ok(button !== null);
-    assert.equal(button.getAttribute('aria-label'), 'Show every note of this page');
+    assert.equal(button.getAttribute('aria-label'), 'Show every note in a sidebar');
     button.click();
     assert.equal(asked, 1);
   });

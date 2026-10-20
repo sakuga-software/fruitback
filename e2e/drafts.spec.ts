@@ -68,7 +68,7 @@ test('notes kept for later outlive a reload, and go in one request from the list
   await mount(page, 'drafts');
   await expect(drafts).toHaveCount(2);
 
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await expect(list.getByText('Kept for later, not sent yet')).toBeVisible();
   await list.getByRole('button', { name: 'Send the 2 notes' }).click();
@@ -107,7 +107,7 @@ test('a failed send of the drafts says why, and keeps them', async ({ page }) =>
         : route.fallback(),
   );
 
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await list.getByRole('button', { name: 'Send 1 note' }).click();
   await expect(list.locator('[data-fruitback-drafts-sent]')).toHaveText(/^Too many notes just now/);
@@ -128,7 +128,7 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(composer.violations).toEqual([]);
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-    await page.getByRole('button', { name: 'Show every note of this page' }).click();
+    await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     await expect(page.getByText('Kept for later, not sent yet')).toBeVisible();
     const list = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(list.violations).toEqual([]);

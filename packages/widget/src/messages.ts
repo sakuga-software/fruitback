@@ -28,12 +28,14 @@ export const ENGLISH = {
   // The launch button while the session of the extension has ended (FRU-315): it opens the sign-in.
   'launch.signIn': 'Sign in to leave notes',
   'widget.label': 'Fruitback feedback',
-  // The banner of a capture (FRU-258). `capture.bannerTouch` is the same sentence on a touch screen,
-  // which has no Escape key and no arrows (FRU-157): it then stands alone beside `capture.stop`.
-  'capture.banner': 'Click the part of the page your note is about',
+  // The banner of a capture, in the dark capsule (FRU-258, FRU-303). `capture.bannerTouch` is the
+  // same sentence on a touch screen, which has no Escape key and no arrows (FRU-157): it then stands
+  // alone beside `capture.stop`.
+  'capture.banner': 'Point at an element, or use the arrow keys',
   'capture.bannerTouch': 'Tap the part of the page your note is about',
-  'capture.escape': 'Esc to stop',
-  'capture.stop': 'Stop',
+  // The key drawn on the way out, before its word. A drawing: the button is named by `capture.stop`.
+  'capture.escape': 'Esc',
+  'capture.stop': 'Cancel',
   // Read after the banner by a screen reader, and not drawn: it follows `capture.escape`.
   'capture.instructions': 'Or move with the arrow keys and press Enter.',
   'capture.element': '{tag}: {text}',
@@ -126,15 +128,17 @@ export const ENGLISH = {
   'thread.link': '{identifier}',
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
+  // The chip of the capsule of the dock (FRU-303), beside its dashed drop: the drop says « note ».
+  'orphans.chip': { one: '{count} detached', other: '{count} detached' },
   'orphans.entry': '{stage} · {note}',
 
   // The list of every note of the page (FRU-129). `sidebar.open` and `sidebar.dialog` must stay
   // different: they name the button and its dialog.
   // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
   // or a test that looks for « Note … » must find one.
-  'sidebar.open': 'Show every note of this page',
+  'sidebar.open': 'Show every note in a sidebar',
   // The same button while the notes of the page could not be read (FRU-316): its dot says why.
-  'sidebar.openFailed': 'Show every note of this page. They could not be read.',
+  'sidebar.openFailed': 'Show every note in a sidebar. They could not be read.',
   // The name of the dialog, and the title its head shows (FRU-259).
   'sidebar.dialog': 'Notes on this page',
   'sidebar.close': 'Close the notes',

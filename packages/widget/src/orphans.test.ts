@@ -1,9 +1,11 @@
 import { afterEach, describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type OrphanList, createOrphanList } from './orphans.ts';
 import { mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
+import { CAPTURE_START } from './events.ts';
 
 /**
  * The list on its own. How it behaves inside the overlay is settled in `overlay.test.ts`; what is
@@ -187,5 +189,78 @@ describe('announcing detached notes (FRU-51)', () => {
     const region = page.document.querySelector('[data-fruitback-orphans-announcer]');
     assert.equal(region?.getAttribute('role'), 'status');
     assert.equal(list?.owns(region as Node), true, 'the overlay would take a new announcement for a page change');
+  });
+});
+
+describe('the chip in the capsule of the dock (FRU-303)', () => {
+  it('is the first control of the capsule, says « 1 detached », and announces the whole sentence', () => {
+    const page = mountPage('<main></main><div id="dock"><button id="launch">Leave feedback</button></div>');
+    const dock = page.query('#dock');
+    list = createOrphanList({ document: page.document, host: page.document.body, dock });
+
+    list.update([issue('sd_1', 'Une note')]);
+
+    const root = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
+    assert.equal(dock.firstElementChild, root, 'the chip is not at the start of the capsule');
+    assert.ok(root.hasAttribute('data-fruitback-docked'));
+    assert.equal(root.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached');
+    // The live region stays outside the capsule, and says the sentence with its noun.
+    const announcer = page.document.querySelector('[data-fruitback-orphans-announcer]');
+    assert.equal(announcer?.parentElement, page.document.body);
+    assert.equal(announcer?.textContent, '1 detached note');
+    assert.ok(list.owns(root.querySelector('.fruitback-orphans-toggle') as Node));
+  });
+
+  it('folds its list when a capture starts and hides the chip', () => {
+    const page = mountPage('<main></main><div id="dock"></div>');
+    const dock = page.query('#dock');
+    list = createOrphanList({ document: page.document, host: page.document.body, dock });
+    list.update([issue('sd_1', 'Une note')]);
+    const toggle = page.document.querySelector('.fruitback-orphans-toggle') as HTMLElement;
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+    dock.dispatchEvent(new (page.view as unknown as typeof globalThis).Event(CAPTURE_START));
+
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal((page.document.querySelector('.fruitback-orphans-list') as HTMLElement).hidden, true);
+  });
+
+  it('says « 2 détachées » in French', () => {
+    const page = mountPage('<main></main><div id="dock"></div>');
+    list = createOrphanList({
+      document: page.document,
+      host: page.document.body,
+      dock: page.query('#dock'),
+      translator: createTranslator({ locale: 'fr' }),
+    });
+
+    list.update([issue('sd_1', 'Une'), issue('sd_2', 'Deux')]);
+
+    assert.equal(page.document.querySelector('.fruitback-orphans-toggle')?.textContent, '2 détachées');
+  });
+
+  it('floats alone above the corner without a capsule, with the whole sentence', () => {
+    const page = mount();
+    list?.update([issue('sd_1', 'Une note')]);
+    const root = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
+    assert.equal(root.parentElement, page.document.body);
+    assert.equal(root.hasAttribute('data-fruitback-docked'), false);
+    assert.equal(root.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached note');
+  });
+});
+
+describe('the imports of the list', () => {
+  it('hears the start of a capture from a module that imports nothing, not from the host (FRU-303)', () => {
+    // The host loads the engine of the capture and every module of the dock. The list importing it
+    // for one name would load all of that with it, and the first import of the list from the host
+    // would read the name before it exists.
+    const imports = (file: string) =>
+      [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/^import .* from '(.+)';$/gm)].map(
+        (match) => match[1],
+      );
+
+    assert.ok(!imports('./orphans.ts').includes('./host.ts'));
+    assert.deepEqual(imports('./events.ts'), []);
   });
 });

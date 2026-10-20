@@ -464,7 +464,7 @@ test('a session that ended: the widget says so at once, opens the popup, and the
   const signIn = page.getByRole('button', { name: 'Sign in to leave notes' });
   await expect(signIn).toBeVisible();
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await expect(page.getByText('Sign in to see the notes of this page.')).toBeVisible();
   await page.getByRole('button', { name: 'Close the notes' }).click();
 

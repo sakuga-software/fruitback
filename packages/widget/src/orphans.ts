@@ -2,6 +2,7 @@ import { type SeedIssue } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
+import { CAPTURE_START } from './events.ts';
 
 /**
  * The notes whose element is gone (FRU-12).
@@ -40,6 +41,11 @@ export type OrphanListOptions = {
   document?: Document;
   /** Where to render — the Shadow root, in practice. */
   host: Element | ShadowRoot;
+  /**
+   * The capsule of the dock (FRU-303). Given, the chip is its first control and the list opens above
+   * it. Left out, the chip floats on its own above the corner, as it did before the capsule.
+   */
+  dock?: Element;
   /** The reporter asked to look at this note. */
   onSelect?: (issue: SeedIssue) => void;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
@@ -60,6 +66,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   root.className = 'fruitback-orphans';
   root.dataset.fruitbackOrphans = '';
   root.hidden = true;
+  if (options.dock !== undefined) root.dataset.fruitbackDocked = '';
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
@@ -81,6 +88,14 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
     toggle.setAttribute('aria-expanded', String(opening));
   });
 
+  // A capture hides the capsule's controls, the chip among them: the list folds with it, so it is
+  // not open again when the capture ends (FRU-303).
+  const fold = (): void => {
+    list.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+  options.dock?.addEventListener(CAPTURE_START, fold);
+
   root.append(toggle, list);
 
   // A sibling of the root, because the root is hidden while the list is empty (FRU-51).
@@ -91,7 +106,9 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  options.host.append(style, root, announcer);
+  options.host.append(style, announcer);
+  if (options.dock === undefined) options.host.append(root);
+  else options.dock.prepend(root);
 
   /** What is on screen, so an unchanged set costs no DOM writes at all. */
   let drawn = '';
@@ -122,7 +139,9 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         return;
       }
 
-      toggleCount.textContent = t.plural('orphans.count', issues.length);
+      // « 1 detached » on the chip of the capsule, where the drop says the rest. Alone, the chip
+      // says « 1 detached note ».
+      toggleCount.textContent = t.plural(options.dock === undefined ? 'orphans.count' : 'orphans.chip', issues.length);
 
       list.replaceChildren(...issues.map((issue) => entry(document, issue, t, options.onSelect)));
     },
@@ -132,6 +151,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         .find((item) => (item as HTMLElement).dataset.fruitbackOrphan === id)
         ?.querySelector<HTMLElement>('.fruitback-orphans-note') ?? undefined,
     destroy() {
+      options.dock?.removeEventListener(CAPTURE_START, fold);
       announcer.remove();
       root.remove();
       style.remove();
@@ -213,12 +233,12 @@ const STYLES = `
 .fruitback-orphans {
   position: fixed;
   /*
-    Stacked above the widget's own dock rather than in the opposite corner. Claiming a second corner
-    of someone else's page is how a widget ends up on top of their cookie banner or their support
-    chat — and it put this drawer under the playground's toolbar the first time.
+    Alone, stacked above the corner of the dock rather than in the opposite corner. Claiming a second
+    corner of someone else's page is how a widget ends up on top of their cookie banner or their
+    support chat. In the capsule (FRU-303) it is not fixed at all: see below.
   */
   inset-inline-end: 16px;
-  bottom: 60px;
+  bottom: 84px;
   z-index: 2147483000;
   max-width: 300px;
   font: 13px/1.45 var(--fruitback-font-sans);
@@ -242,11 +262,47 @@ const STYLES = `
   padding: 7px 12px;
   border: 0;
   border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-warning);
-  color: var(--fruitback-color-on-warning);
+  /* The brown of a pin whose element is gone, and the foreground every pin writes on its stage. */
+  --fruitback-pin-color: var(--fruitback-color-unplaced);
+  background: var(--fruitback-pin-color);
+  color: var(--fruitback-color-on-stage);
   font: 600 12px/1 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
+}
+/*
+  In the capsule of the dock (FRU-303): its first control, 44 px tall like the others, with the
+  brown pill of 36 px of the mock-up inside a transparent border. The list opens above the capsule.
+*/
+.fruitback-orphans[data-fruitback-docked] { position: relative; inset: auto; z-index: auto; max-width: none; }
+.fruitback-orphans[data-fruitback-docked] .fruitback-orphans-toggle {
+  gap: 7px;
+  height: 44px;
+  padding-inline: 12px 14px;
+  border: 4px solid transparent;
+  background: var(--fruitback-pin-color) padding-box;
+  font-size: 13px;
+  letter-spacing: -0.006em;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.fruitback-orphans-toggle .fruitback-icon { width: 13px; height: 13px; }
+.fruitback-orphans[data-fruitback-docked] .fruitback-orphans-list {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  inset-inline-end: 0;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 48px));
+  /*
+    No higher than the room above the capsule: 24 px under it, 52 px of capsule, 12 px of gap, and
+    16 px left at the top of the window. A low window scrolls the list, and never pushes it out.
+    Never under one row of 44 px either: a window lower than that has no room for any list.
+  */
+  max-height: max(44px, min(220px, calc(100vh - 104px)));
+  margin: 0;
+}
+@media (forced-colors: active) {
+  .fruitback-orphans-toggle { border-color: Canvas; outline: 1px solid ButtonText; outline-offset: -5px; }
 }
 .fruitback-orphans-list {
   display: block;

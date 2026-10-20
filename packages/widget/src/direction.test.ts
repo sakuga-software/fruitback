@@ -18,7 +18,8 @@ const FILES = ['host.ts', 'overlay.ts', 'composer.ts', 'panel.ts', 'orphans.ts',
 
 /** Positions against the page: document coordinates, or a shape that points at an element. */
 const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
-  'host.ts': ['.fruitback-panel', '.fruitback-highlight'],
+  // The name on the frame is centred: the middle has no side (FRU-303).
+  'host.ts': ['.fruitback-panel', '.fruitback-highlight', '.fruitback-highlight-tag'],
   'overlay.ts': ['.fruitback-overlay', '.fruitback-pin', '.fruitback-pin-badge'],
   'composer.ts': ['.fruitback-composer'],
   'panel.ts': [],

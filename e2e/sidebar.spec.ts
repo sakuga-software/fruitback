@@ -39,7 +39,7 @@ async function plant(page: Page, card: string, note: string): Promise<void> {
 
 test('the list shows every note, and a note chosen there opens its thread', async ({ page }) => {
   await mount(page, 'sidebar');
-  const open = page.getByRole('button', { name: 'Show every note of this page' });
+  const open = page.getByRole('button', { name: 'Show every note in a sidebar' });
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
 
   // Empty first: the control for the two entries below.
@@ -84,7 +84,7 @@ test('a note far down the page is brought into view when it is chosen', async ({
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(target).not.toBeInViewport();
 
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await page.getByRole('dialog', { name: 'Notes on this page' }).getByRole('tab', { name: 'All 1' }).click();
   await page.getByRole('dialog', { name: 'Notes on this page' }).locator('[data-fruitback-note]').click();
 
@@ -162,7 +162,7 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   await mount(page, `sidebar-measures-${test.info().retry}`);
   await eightNotes(page);
   const dock = page.locator('.fruitback-dock');
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await expect(list).toBeVisible();
   const read = (selector: string, properties: string[]) =>
@@ -405,7 +405,7 @@ test('the list lies over the page: the page keeps its width when the list opens 
     });
   const before = await pageBox();
 
-  await page.getByRole('button', { name: 'Show every note of this page' }).click();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await expect(page.getByRole('dialog', { name: 'Notes on this page' })).toBeVisible();
   expect(await pageBox()).toBe(before);
 
@@ -422,7 +422,7 @@ test('a note whose element is gone is in « Could not be placed », and not amon
   await page.locator('#email-field').scrollIntoViewIfNeeded();
   await plantOn(page, '#email-field', 'On a field that goes');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
-  const open = page.getByRole('button', { name: 'Show every note of this page' });
+  const open = page.getByRole('button', { name: 'Show every note in a sidebar' });
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
   const unplaced = list.getByRole('group', { name: 'Could not be placed · 1' });
 
@@ -475,7 +475,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
     await mount(page, `sidebar-axe-${scheme}`);
     await plant(page, 'card-latte', `Seen by axe, ${scheme}`);
-    await page.getByRole('button', { name: 'Show every note of this page' }).click();
+    await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     await expect(page.getByRole('dialog', { name: 'Notes on this page' })).toBeVisible();
 
     const scan = async (): Promise<string[]> => {

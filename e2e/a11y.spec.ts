@@ -14,9 +14,9 @@ async function walkTo(page: Page, target: Locator): Promise<void> {
   for (let step = 0; step < 400; step += 1) {
     await page.keyboard.press('ArrowDown');
     const [want, got] = await Promise.all([target.boundingBox(), highlight.boundingBox()]);
-    // The frame stands 6 px off the element on every side (FRU-258).
-    if (want !== null && got !== null && Math.abs(want.x - 6 - got.x) < 2 && Math.abs(want.y - 6 - got.y) < 2) {
-      if (Math.abs(want.width + 12 - got.width) < 2 && Math.abs(want.height + 12 - got.height) < 2) return;
+    // The frame stands 5 px off the element on every side: 2 px of line, 3 px off (FRU-303).
+    if (want !== null && got !== null && Math.abs(want.x - 5 - got.x) < 2 && Math.abs(want.y - 5 - got.y) < 2) {
+      if (Math.abs(want.width + 10 - got.width) < 2 && Math.abs(want.height + 10 - got.height) < 2) return;
     }
   }
   throw new Error('the keyboard cursor never reached the target');

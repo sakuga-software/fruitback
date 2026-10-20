@@ -90,12 +90,15 @@ test('the panel belongs to the widget, so the page cannot restyle it', async ({ 
 });
 
 test('pointing at the settings button never captures it', async ({ page }) => {
-  // The widget already excludes itself from hit testing; the gear is new chrome inside the same
-  // Shadow root, so this is the assertion that it was not forgotten.
+  // The widget already excludes itself from hit testing. Since FRU-303 the gear stands aside while a
+  // capture runs, in the dark capsule: it cannot be pointed at, and it opens the settings after it.
   await openPlayground(page, 'config-ignore');
+  const gear = page.getByLabel('Open Fruitback settings');
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
-  await page.getByLabel('Open Fruitback settings').click();
+  await expect(gear).toBeHidden();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await gear.click();
 
   await expect(page.locator(panel)).toBeVisible();
   await expect(page.getByPlaceholder('What should change?')).toBeHidden();

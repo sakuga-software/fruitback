@@ -35,7 +35,9 @@ test('what the shortcut sends starts a capture on the tab, and Esc stops it', as
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-shortcut');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  // By its attribute: the capsule hides it while a capture runs (FRU-303), and a role query skips it.
+  const launch = page.locator('[data-fruitback-host-launch]');
+  await expect(launch).toHaveText('Leave feedback');
   await expect(launch).toHaveAttribute('aria-pressed', 'false');
 
   // The message of `runShortcut`, sent from where the listener runs.

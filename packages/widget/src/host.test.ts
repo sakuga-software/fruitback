@@ -1,10 +1,20 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { type CaptureEngine } from './engine.ts';
-import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
+import { type CaptureHost, type CaptureTarget, createCaptureHost, shortSelector } from './host.ts';
 import { type MountedPage, keyboardEventCtor, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
 import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
+
+/**
+ * What a part of the banner draws: its text, or each of its children with its tag when it has
+ * some, so the key and the word of the way out are read apart rather than as one run of text.
+ */
+function drawn(part: Element): string {
+  if (part.children.length === 0) return part.textContent ?? '';
+
+  return [...part.children].map((child) => `${child.tagName.toLowerCase()} ${child.textContent}`).join(' + ');
+}
 
 /**
  * The engine is faked here on purpose. happy-dom has no layout and no `elementsFromPoint`, so asking
@@ -111,10 +121,10 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
   });
 
-  it('says what a capture asks for in a banner, with the key and the button that stop it (FRU-258)', () => {
+  it('says what a capture asks for in the capsule, with the key and the button that stop it (FRU-258, FRU-303)', () => {
     mount(() => null);
     const banner = host?.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
-    const parts = () => [...banner.children].map((part) => `${part.tagName.toLowerCase()}: ${part.textContent}`);
+    const parts = () => [...banner.children].map((part) => `${part.tagName.toLowerCase()}: ${drawn(part)}`);
 
     // In the tree and empty at rest: a live region that was hidden announces nothing when it comes back.
     assert.equal(banner.getAttribute('role'), 'status');
@@ -122,12 +132,18 @@ describe('the chrome the reporter sees (FRU-36)', () => {
 
     host?.start();
     assert.deepEqual(parts(), [
-      'span: Click the part of the page your note is about',
-      'span: Esc to stop',
+      'span: Point at an element, or use the arrow keys',
       // Read and not drawn: how a keyboard moves.
       'span: Or move with the arrow keys and press Enter.',
-      'button: Stop',
+      // The key and the word, each in its own part: the key is drawn, the word names the button.
+      'button: kbd Esc + span Cancel',
     ]);
+    // The key is a drawing: the button is named by its word.
+    const key = banner.querySelector('kbd');
+    assert.equal(key?.getAttribute('aria-hidden'), 'true');
+    assert.equal(key?.textContent, 'Esc');
+    // The banner is in the capsule of the dock: the way out is where the way in was.
+    assert.equal(banner.parentElement, host?.dock);
 
     host?.stop();
     assert.deepEqual(parts(), []);
@@ -161,11 +177,11 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     const announcer = host.root.querySelector('[data-fruitback-announcer]');
 
     const banner = host.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
-    const said = () => [...banner.children].map((part) => part.textContent);
+    const said = () => [...banner.children].map((part) => drawn(part));
 
     host.start();
     // No key to name, and no arrows: the sentence and the button, which is the only way out.
-    assert.deepEqual(said(), ['Tap the part of the page your note is about', 'Stop']);
+    assert.deepEqual(said(), ['Tap the part of the page your note is about', 'span Cancel']);
     assert.equal(launchButton().textContent, 'Leave feedback');
     assert.equal(announcer?.textContent, '');
     host.stop();
@@ -173,9 +189,9 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     // The same device with a mouse plugged in: read again at the next start.
     coarse.value = false;
     host.start();
-    assert.equal(said()[0], 'Click the part of the page your note is about');
-    assert.equal(said()[1], 'Esc to stop');
-    assert.match(said()[2] ?? '', /arrow keys/);
+    assert.equal(said()[0], 'Point at an element, or use the arrow keys');
+    assert.match(said()[1] ?? '', /arrow keys/);
+    assert.equal(said()[2], 'kbd Esc + span Cancel');
   });
 
   it('keeps the host label over a translated one, before and after a capture (FRU-37)', () => {
@@ -194,7 +210,7 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     assert.equal(launchButton().textContent, 'Feedback, please');
     host?.start();
     assert.equal(launchButton().textContent, 'Feedback, please');
-    assert.equal(host?.root.querySelector('.fruitback-banner-stop')?.textContent, 'Arrêter');
+    assert.equal(host?.root.querySelector('.fruitback-banner-stop')?.textContent, 'ÉchapArrêter');
     host?.stop();
     assert.equal(launchButton().textContent, 'Feedback, please');
   });
@@ -286,14 +302,14 @@ describe('createCaptureHost', () => {
 
     const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, 'block');
-    // The frame stands 6 px off the element on every side, as the mock-up draws it (FRU-258).
-    assert.equal(highlight.style.left, '4px');
-    assert.equal(highlight.style.top, '14px');
-    assert.equal(highlight.style.width, '112px');
-    assert.equal(highlight.style.height, '42px');
+    // The frame is a line of 2 px, 3 px off the element, as an outline draws it (FRU-303).
+    assert.equal(highlight.style.left, '5px');
+    assert.equal(highlight.style.top, '15px');
+    assert.equal(highlight.style.width, '110px');
+    assert.equal(highlight.style.height, '40px');
   });
 
-  it('writes the name of the component on the frame, and nothing when the page gives none (FRU-258)', async () => {
+  it('writes a short selector and the component on the frame, the selector alone without one (FRU-258, FRU-303)', async () => {
     const names: (string | undefined)[] = ['CheckoutCta', undefined, '<b>Bold</b>'];
     const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
     let asked = 0;
@@ -318,7 +334,7 @@ describe('createCaptureHost', () => {
     moveOver(page);
     await settle();
     assert.equal(tag.hidden, false);
-    assert.equal(tag.textContent, 'CheckoutCta');
+    assert.equal(tag.textContent, 'button#cta · <CheckoutCta>');
     // For the eye: the note carries the name, and a screen reader hears the element.
     assert.equal(tag.getAttribute('aria-hidden'), 'true');
     // The pointer moves on the same element: the engine is asked once.
@@ -327,19 +343,20 @@ describe('createCaptureHost', () => {
     await settle();
     assert.equal(asked, 1);
 
-    // A new capture asks again, and a page with no component shows no label.
+    // A new capture asks again, and a page with no component shows the selector alone.
     host.stop();
     host.start();
     moveOver(page);
     await settle();
-    assert.equal(tag.hidden, true);
+    assert.equal(tag.hidden, false);
+    assert.equal(tag.textContent, 'button#cta');
 
     host.stop();
     host.start();
     moveOver(page);
     await settle();
     // As text: a name is whatever the page called its component.
-    assert.equal(tag.textContent, '<b>Bold</b>');
+    assert.equal(tag.textContent, 'button#cta · <<b>Bold</b>>');
     assert.equal(tag.querySelector('b'), null);
   });
 
@@ -358,8 +375,8 @@ describe('createCaptureHost', () => {
 
     assert.equal(host?.capturing(), false);
     assert.equal(highlight.style.display, 'block');
-    assert.equal(highlight.style.left, '4px');
-    assert.equal(highlight.querySelector('.fruitback-highlight-tag')?.textContent, 'CheckoutCta');
+    assert.equal(highlight.style.left, '5px');
+    assert.equal(highlight.querySelector('.fruitback-highlight-tag')?.textContent, 'button#cta · <CheckoutCta>');
 
     host?.release();
     assert.equal(highlight.style.display, 'none');
@@ -381,17 +398,17 @@ describe('createCaptureHost', () => {
     host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
     const highlight = host.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     host.hold(page.query('#cta'));
-    assert.equal(highlight.style.left, '4px');
+    assert.equal(highlight.style.left, '5px');
 
     // A second capture borrows the frame for what the pointer is over.
     host.start();
     under.element = page.query('p');
     moveOver(page);
-    assert.equal(highlight.style.left, '294px');
+    assert.equal(highlight.style.left, '295px');
 
     host.stop();
     assert.equal(highlight.style.display, 'block');
-    assert.equal(highlight.style.left, '4px');
+    assert.equal(highlight.style.left, '5px');
 
     host.release();
     assert.equal(highlight.style.display, 'none');
@@ -439,7 +456,7 @@ describe('createCaptureHost', () => {
     holds.next = true;
     await choose();
     assert.equal(highlight.style.display, 'block');
-    assert.equal(highlight.style.left, '294px');
+    assert.equal(highlight.style.left, '295px');
   });
 
   it('takes the frame away at the choice for a caller that holds nothing', async () => {
@@ -640,6 +657,58 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     }
   });
 
+  it('gives focus to the way out when the launch button had it, and Enter there stops or selects (FRU-303)', async () => {
+    // The capsule hides the launch button while a capture runs: focus must not fall to the page.
+    const targets: CaptureTarget[] = [];
+    const page = mountKeyboard({ onSelect: (target) => targets.push(target) });
+    launchButton().focus();
+    host?.start();
+    const halt = host?.root.querySelector('.fruitback-banner-stop') as HTMLElement;
+    assert.ok(deepActiveElement(page.document) === halt, 'focus did not move to the way out');
+
+    // With an element highlighted, Enter on the way out chooses it, as it did on the launch button.
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+    assert.equal(press(page, 'Enter').defaultPrevented, true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(targets[0]?.element.id, 'cta');
+    // The way out left with the banner: focus is back on the launch button, for the dialog to return to.
+    assert.ok(deepActiveElement(page.document) === launchButton(), 'focus fell out of the widget');
+
+    // With nothing highlighted, Enter is left to the way out, which stops the capture.
+    launchButton().focus();
+    host?.start();
+    assert.ok(deepActiveElement(page.document) === halt);
+    assert.equal(press(page, 'Enter').defaultPrevented, false);
+  });
+
+  it('gives focus to the way out when the gear or the list had it, as the shortcut may start a capture then', () => {
+    for (const control of ['.fruitback-configure', '.fruitback-listing']) {
+      const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+      host = createCaptureHost({
+        document: page.document,
+        engine: fakeEngine(page, () => null),
+        onSelect: () => {},
+        onConfigure: () => {},
+        onList: () => {},
+      });
+      (host.root.querySelector(control) as HTMLElement).focus();
+      host.start();
+      const halt = host.root.querySelector('.fruitback-banner-stop') as HTMLElement;
+      assert.ok(deepActiveElement(page.document) === halt, `focus stayed on the hidden ${control}`);
+      host.destroy();
+      host = null;
+    }
+  });
+
+  it('leaves focus where it is when a capture starts from elsewhere, as the shortcut of the extension does', () => {
+    const page = mountKeyboard();
+    const outside = page.query('#cta') as HTMLElement;
+    outside.focus();
+    host?.start();
+    assert.ok(deepActiveElement(page.document) === outside);
+  });
+
   it('leaves Enter to the launch button while nothing is highlighted', () => {
     const page = mountKeyboard();
     host?.start();
@@ -778,6 +847,65 @@ describe('selecting an element without a pointer (FRU-51)', () => {
   });
 });
 
+describe('the capsule of the dock (FRU-303)', () => {
+  it('holds the list, the gear and the launch button in this order, and the banner last', () => {
+    mount(
+      () => null,
+      () => {},
+      { onList: () => {}, onConfigure: () => {} },
+    );
+    const dock = host?.dock as HTMLElement;
+    assert.ok(dock.matches('[data-fruitback-dock]'));
+    assert.deepEqual(
+      [...dock.children].map((child) => child.className),
+      ['fruitback-listing', 'fruitback-configure', 'fruitback-launch', 'fruitback-banner'],
+    );
+    // No second landmark: the host element is the region, and it has the name.
+    assert.equal(dock.getAttribute('role'), null);
+    assert.equal(host?.root.host.getAttribute('aria-label'), 'Fruitback feedback');
+    assert.equal(dock.querySelector('.fruitback-listing')?.getAttribute('aria-label'), 'Show every note in a sidebar');
+    assert.equal(dock.querySelector('.fruitback-configure')?.getAttribute('aria-label'), 'Open Fruitback settings');
+  });
+
+  it('says « Laisser une note » in French, and « Annuler » with the key « Échap » on the way out', () => {
+    mount(
+      () => null,
+      () => {},
+      { translator: createTranslator({ locale: 'fr' }) },
+    );
+    assert.equal(launchButton().textContent, 'Laisser une note');
+    host?.start();
+    const banner = host?.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
+    assert.equal(
+      banner.querySelector('.fruitback-banner-ask')?.textContent,
+      'Pointez un élément, ou utilisez les flèches',
+    );
+    assert.equal(banner.querySelector('kbd')?.textContent, 'Échap');
+    assert.equal(banner.querySelector('.fruitback-banner-stop span')?.textContent, 'Annuler');
+  });
+});
+
+describe('shortSelector (FRU-303)', () => {
+  it('writes the tag, then the id or the first class, as a stylesheet would', () => {
+    const page = mountPage(
+      '<button class="primary add">A</button><input id="email"><main></main><p id="two words" class="x">B</p>' +
+        '<a id=":r7:" class="css-1x2y3z link">C</a>' +
+        '<span class="button tag">D</span><span class="tag">E</span><button class="button chip--md chip lone">F</button>',
+    );
+    assert.equal(shortSelector(page.query('button')), 'button.add');
+    assert.equal(shortSelector(page.query('input')), 'input#email');
+    assert.equal(shortSelector(page.query('main')), 'main');
+    // An id with a space selects nothing: the class is written instead.
+    assert.equal(shortSelector(page.query('p')), 'p.x');
+    // A generated id and a generated class are skipped, as the selector of the note skips them.
+    assert.equal(shortSelector(page.query('a')), 'a.link');
+    // The class the fewest elements share, and never the name of the tag again.
+    // On a tie the last, which is where a design system puts the class of the author; no modifier.
+    assert.equal(shortSelector(page.query('button.lone')), 'button.lone');
+    assert.equal(shortSelector(page.query('span.button')), 'span.tag');
+  });
+});
+
 describe('the button of the list when the notes could not be read (FRU-316)', () => {
   it('wears a dot, says it in its name, and the sentence is announced once', () => {
     mount(
@@ -792,7 +920,7 @@ describe('the button of the list when the notes could not be read (FRU-316)', ()
 
     host?.readFailed(true, 'The notes of this page could not be read. They are not lost.');
     assert.equal(dot.hidden, false);
-    assert.equal(listing.getAttribute('aria-label'), 'Show every note of this page. They could not be read.');
+    assert.equal(listing.getAttribute('aria-label'), 'Show every note in a sidebar. They could not be read.');
     assert.equal(announcer.textContent, 'The notes of this page could not be read. They are not lost.');
 
     // Said once: the same failure again announces nothing new.
@@ -802,7 +930,7 @@ describe('the button of the list when the notes could not be read (FRU-316)', ()
 
     host?.readFailed(false, '');
     assert.equal(dot.hidden, true);
-    assert.equal(listing.getAttribute('aria-label'), 'Show every note of this page');
+    assert.equal(listing.getAttribute('aria-label'), 'Show every note in a sidebar');
   });
 });
 

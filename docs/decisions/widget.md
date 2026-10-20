@@ -295,17 +295,34 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     corner: it draws around the element, not on it. The drop is outside the top-left corner, its
     point on the inner corner of the frame. Open, the frame takes its colour at 12 %. The tint
     under the pointer of FRU-158 is kept; the mock-up draws the open one only.
-  - **The dock**: 24 px from the corner, 10 px between two controls, each 44 px high, on every
-    screen and not on a touch screen only. The launch button takes the strong accent under the
-    pointer and while a capture runs. It has no `aria-pressed` yet: it changes its words then, and
-    a switch that changes its name says two things at once. The state comes with the banner of
-    FRU-258, when the name stays. Its drop is
-    the mark, 12 by 15 px (`mark` in `icons.ts`), not the pin.
-  - **Kept, though the mock-up does not draw it**: the button of the list, left of the gear, in
-    its shape (the script alone has no other way to the list); the gear of Phosphor, at the 18 px
-    of the mock-up, whose own gear is another drawing; and the name of the gear, « Open Fruitback
-    settings »: the mock-up names it « Fruitback settings », which is the name of the dialog it
-    opens, and two controls with one name cannot be told apart (`docs/translating.md`).
+  - **The dock is one capsule** (FRU-303, mock-up of 2026-10-20), 24 px from the corner, on the
+    surface, with the border, the round ends and the shadow of the mock-up. In it, in this order:
+    the chip of the detached notes (« 1 detached », in the brown of « closed »), the list, the gear,
+    and the launch button. Held by `e2e/dock.spec.ts` on computed styles, with the animations off.
+    - **Every control in it is 44 px**, and draws the shape of the mock-up inside a transparent
+      border: 36 px for the list, the gear, the chip and the way out of a capture, 40 px for the
+      launch button. The capsule is then the 52 px of the mock-up, and no target is under 44 px.
+      The cost: two controls stand 8 px apart where the mock-up has 4.
+    - **The overlay puts the chip at the start of the capsule**: `createOverlay({ dock: host.dock })`.
+      Without `dock` the chip floats alone above the corner, as before. The detached chip floated at
+      `bottom: 60px` and covered the dock; `e2e/dock.spec.ts` plants that rule back as its control
+      and sees the overlap. Its list opens above the capsule.
+    - **The list and the gear are drawings on the capsule**, in the subtle text (`#57534e`, not the
+      `#44403c` of the mock-up: that one is the chip, which the dark scheme cannot hold on its
+      surface), with a sunken fill under the pointer. The list is a panel beside the page, drawn
+      in `icons.ts`. It opens the list in the page. The side panel of the extension (FRU-296) is not
+      on `main`: when it is, the button will ask the extension first.
+    - **No landmark of its own.** The host element is already the region « Fruitback feedback »:
+      a second region with that name is two landmarks a screen reader cannot tell apart.
+    - **The launch button's drop is the mark**, 11 by 14 px (`mark` in `icons.ts`), not the pin.
+      Its name in French is « Laisser une note »; the `label` of the host wins.
+    - **In a forced palette** every border is painted, the transparent ones too, and fills are
+      dropped: the borders take `Canvas`, and the launch button and the way out draw their shape
+      with an outline of `ButtonText`.
+  - **Kept, though the mock-up does not draw it**: the gear of Phosphor, whose own gear is another
+    drawing; and the name of the gear, « Open Fruitback settings »: the mock-up names it
+    « Fruitback settings », which is the name of the dialog it opens, and two controls with one
+    name cannot be told apart (`docs/translating.md`).
 
 - **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
   held by `e2e/thread.spec.ts` on computed styles.
@@ -341,18 +358,29 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
 - **The capture and the composer have the measures of the mock-up** (FRU-258, screen 15). Read in
   its CSS, held by `e2e/capture.spec.ts` and `e2e/composer.spec.ts` on computed styles.
-  - **A banner says what a capture asks for**: a dark pill at the top of the window, in its middle,
-    with « Click the part of the page your note is about », « Esc to stop » and a button « Stop ».
-    It is 16 px from the top: the mock-up draws it at 88 px, under the header of its example site.
-    It is the one `role="status"` that speaks at a start, always in the tree and empty at rest. How
-    a keyboard moves is in it, read and not drawn. On a touch screen it says « Tap… », names no
-    key, and « Stop » is 44 px. Under 480 px the sentence wraps.
-  - **The launch button keeps its name and says `aria-pressed`.** It said « Esc to cancel » while a
-    capture ran. « Stop » and Escape give focus back to it.
-  - **The frame of a capture stands 6 px off the element**, 2 px of accent, on the accent at 6 %.
-    **The name of the component is written on it** when the engine knows one, 30 px above the
-    element, and nothing otherwise. The engine is asked once for each element of a capture. The
-    label is `aria-hidden`: the note carries the name, and a screen reader hears the element.
+  - **A capture turns the capsule of the dock dark** (FRU-303): the ink of the mock-up, in both
+    schemes, 46 px tall, in its corner. It holds the banner: « Point at an element, or use the
+    arrow keys » in 12 px, then the way out, the key « Esc » drawn as a key and « Cancel ». The
+    launch button, the list, the gear and the chip stand aside. The banner of FRU-258 sat at the
+    top of the window; the way out is now where the way in was. The banner is the one
+    `role="status"` that speaks at a start, always in the tree and empty at rest. How a keyboard
+    moves is in it, read and not drawn. The key is `aria-hidden`: the button is named « Cancel ».
+    On a touch screen it says « Tap… » and draws no key.
+  - **The launch button keeps its name and says `aria-pressed`.** Hidden while a capture runs, it
+    gives its focus to the way out, where Enter still stops the capture, or chooses the element the
+    keyboard reached. « Cancel », Escape and a choice give focus back to the launch button, so a
+    dialog opened by the choice returns there. A start from elsewhere (the shortcut of the
+    extension) leaves focus where it is.
+  - **The frame of a capture is a line of 2 px, 3 px off the element**, as an outline would draw it,
+    with nothing over the element: a tint hid the colour the note is about. Its corners are those of
+    the element grown by 5 px, so a round button gets a round frame.
+    **What the note points at is written above it, centred**: « button.add · <Button> » in the mono
+    of a selector, the short selector alone when the engine knows no component. The short selector
+    is the tag and the stable id, or the stable class the fewest elements share (the last on a tie,
+    never a modifier): a design system writes « button button--md add », and « button.button »
+    says nothing. The engine is asked once for each element of a capture. The label is
+    `aria-hidden` and takes no click: the note carries the name, and a screen reader hears the
+    element.
   - **The frame stays on the chosen element while the composer is open**: `init` calls
     `host.hold(element)` at the choice and `host.release()` at the close. A host that assembles the
     parts itself and calls neither keeps what it had, a frame that goes at the choice. **The banner does not stay, and one click is still one note.** The mock-up draws
@@ -835,7 +863,7 @@ with no context and no instruction added.
   not the rule that paints them: text that the reset painted black, and a label that kept the
   foreground of the accent on the chip.
 - **On a touch screen, no control is under 24 × 24 px** (WCAG 2.5.8), and the close buttons and the
-  three buttons of the dock are 44 px (FRU-157). The rule is `@media (pointer: coarse)` in each
+  controls of the dock are 44 px (FRU-157, FRU-303). The rule is `@media (pointer: coarse)` in each
   module, and the glyph keeps its size: the button grows around it. A box or a radio is measured by
   its label, which a tap toggles. The fields are at 16 px there, because iOS Safari zooms the page
   into a smaller field and stays zoomed. The banner of a capture says `capture.bannerTouch` and
@@ -1124,7 +1152,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
 - **`failed` is seen on the page, with no list opened** (FRU-316). The button of the list wears a dot
   of the accent, ringed by the button's own colour (`Mark` in forced colours), and its name says it:
-  « Show every note of this page. They could not be read. ». The sentence of the list is announced
+  « Show every note in a sidebar. They could not be read. ». The sentence of the list is announced
   once by the widget's own status region, when the failure starts and no capture holds that region.
   While `failed`, the widget reads again every 30 s and at once on `online`; one timer at most, none
   after `destroy` (a read in flight answers after it: without that guard a destroyed widget read on

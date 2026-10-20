@@ -96,7 +96,7 @@ test('a note whose element is gone lands in the detached list, and one merely mo
 
   const drawer = page.locator('[data-fruitback-orphans]');
   await expect(drawer).toBeVisible();
-  await expect(drawer.locator('.fruitback-orphans-toggle')).toHaveText(/1 detached note/);
+  await expect(drawer.locator('.fruitback-orphans-toggle')).toHaveText('1 detached');
 
   await drawer.locator('.fruitback-orphans-toggle').click();
   await expect(drawer.locator('.fruitback-orphans-item')).toHaveCount(1);
