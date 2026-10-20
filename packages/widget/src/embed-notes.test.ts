@@ -270,6 +270,17 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.equal(await widget.checkNote('nobody', 'fixed'), 'refused');
   });
 
+  it('says « try again » while another verdict on the note is being written', async () => {
+    const transport = async (request: TransportRequest): Promise<TransportResponse> =>
+      request.method === 'GET'
+        ? { ok: true, status: 200, body: JSON.stringify({ issues: [MINE, CLOSED] }) }
+        : { ok: false, status: 409, body: JSON.stringify({ error: 'check-in-progress' }) };
+    const widget = widgetOn(mounted(), { transport });
+    await widget.refresh();
+
+    assert.equal(await widget.checkNote('seed-1', 'fixed'), 'retry');
+  });
+
   it('says why a verdict did not go, and reads nothing then', async () => {
     for (const [status, outcome] of [
       [409, 'refused'],

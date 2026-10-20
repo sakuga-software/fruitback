@@ -264,8 +264,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Too many requests just now. Try again in a minute.': 'Trop de demandes à l’instant. Réessayez dans une minute.',
   'Your session ended. Sign in again from the Fruitback button, then try again.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis réessayez.',
-  'This note can no longer be checked. The list is read again.':
-    'Cette note ne peut plus être vérifiée. La liste est relue.',
+  'This note can no longer be checked here. The list is read again.':
+    'Cette note ne peut plus être vérifiée ici. La liste est relue.',
 
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':

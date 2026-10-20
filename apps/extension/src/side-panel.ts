@@ -589,7 +589,7 @@ export const CHECK_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
   retry: msg('Did not go through. Try again.'),
   wait: msg('Too many requests just now. Try again in a minute.'),
   'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then try again.'),
-  refused: msg('This note can no longer be checked. The list is read again.'),
+  refused: msg('This note can no longer be checked here. The list is read again.'),
 };
 
 /** The field of a reply, under its note, as the thread of the widget has it. */

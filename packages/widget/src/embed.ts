@@ -1109,7 +1109,8 @@ async function sendReply(
 
 /**
  * A verdict on a note (FRU-294), through the transport of the host. `refused`: the worker said no for
- * this reader or this note (`403`, `404`, `409`); nothing moved, and trying again does not change it.
+ * this reader or this note (`403`, `404`, a `409` of a note not done or checked already); nothing
+ * moved, and trying again does not change it. `409 check-in-progress` is `retry`.
  */
 async function sendCheck(
   options: FruitbackOptions,
@@ -1126,6 +1127,9 @@ async function sendCheck(
   });
   if (response.status === 429) return 'wait';
   if (response.status === 401) return 'signed-out';
+  // Another verdict on this note is being written (FRU-294): it is the moment, not a refusal, and a
+  // second try once it is written is answered (raised in review).
+  if (response.status === 409 && errorOf(response.body) === 'check-in-progress') return 'retry';
   if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
 
   return response.ok ? 'sent' : 'retry';
