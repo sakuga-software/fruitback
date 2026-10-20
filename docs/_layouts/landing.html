@@ -234,12 +234,18 @@
           </div>
           <div class="codes">
             <p class="code-title">Two files, five lines of <code>.env</code>, one command</p>
-            <pre><code><span class="prompt">$</span> curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
+            <pre
+              tabindex="0"
+              aria-label="The commands that start an instance"
+            ><code><span class="prompt">$</span> curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
 <span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
 <span class="comment"># fill the five lines .env names</span>
 <span class="prompt">$</span> docker compose up -d --wait</code></pre>
             <p class="code-title">Then one tag on the site, which the console gives you:</p>
-            <pre><code>&lt;script src="https://cdn.acme.dev/fruitback.iife.js"
+            <pre
+              tabindex="0"
+              aria-label="The tag of the site"
+            ><code>&lt;script src="https://cdn.acme.dev/fruitback.iife.js"
   data-fruitback-endpoint="https://api.feedback.acme.dev"
   data-fruitback-client="site_…" defer&gt;&lt;/script&gt;</code></pre>
           </div>
