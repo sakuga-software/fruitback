@@ -590,8 +590,9 @@ test('at 390 px a long address keeps one line on its row, and its state goes und
   const line = address.locator('[data-source-line]');
   // One line, cut at its end: the whole address is in the title of the line, and in the panel.
   const box = await line.boundingBox();
-  const lineHeight = await line.evaluate((element) => parseFloat(getComputedStyle(element).lineHeight));
-  expect(box?.height ?? 0).toBeLessThanOrEqual(lineHeight + 1);
+  // `leading-auto` computes to « normal », so one line is measured against the size of the font.
+  const fontSize = await line.evaluate((element) => parseFloat(getComputedStyle(element).fontSize));
+  expect(box?.height ?? 0).toBeLessThan(fontSize * 2);
   expect(await line.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   await expect(address.locator('[title]')).toHaveAttribute('title', long.replace(/^REST · /, ''));
   // The state is under the address, not in the middle of it.

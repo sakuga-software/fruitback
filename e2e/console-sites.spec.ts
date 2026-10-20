@@ -798,8 +798,9 @@ for (const locale of ['en', 'fr'] as const) {
     await seen(under, 'the installation');
     await frame.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
     await seen(under, 'the installation, the table scrolled to its end');
-    // The script is one long line: it scrolls in its own block, and does not widen the table.
-    expect.soft(await page.locator('pre').evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
+    // The script breaks inside its attributes (FRU-321): nothing of it is past its block, and it does
+    // not widen the table.
+    expect.soft(await page.locator('pre').evaluate((pre) => pre.scrollWidth <= pre.clientWidth)).toBe(true);
     expect.soft(await frame.evaluate((element) => element.scrollWidth), 'the table, with the script').toBe(860);
     await frame.evaluate((element) => element.scrollTo({ left: 0 }));
     await button.click();
