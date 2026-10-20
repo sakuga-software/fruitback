@@ -16,18 +16,9 @@ test('a first install opens the page that says to pin Fruitback, then to sign in
   await expect(welcome).toHaveTitle('Welcome to Fruitback');
   await expect(welcome.locator('ol > li > strong')).toHaveText(['Pin Fruitback', 'Sign in']);
   await expect(welcome.getByText('Click the Fruitback icon, then Sign in with email.')).toBeVisible();
-
-  // « Open Fruitback » opens the popup, or says where the icon is when the browser does not let it.
-  await welcome.getByRole('button', { name: 'Open Fruitback' }).click();
-  const said = welcome.getByRole('status');
-  await expect
-    .poll(async () => {
-      const text = await said.textContent();
-      const popup = extension.context.pages().some((page) => page.url().endsWith('/popup.html'));
-
-      return popup || text === 'Your browser did not open it from this page: click the Fruitback icon in the toolbar.';
-    })
-    .toBe(true);
+  // What « Open Fruitback » does when the browser refuses is `src/welcome.test.ts`: a headless
+  // Chromium opens no popup a page can see, and refuses nothing either.
+  await expect(welcome.getByRole('button', { name: 'Open Fruitback' })).toBeVisible();
 
   // Only one welcome page: the background opens it at the install, not at each start.
   expect(extension.context.pages().filter((page) => page.url() === url)).toHaveLength(1);

@@ -429,15 +429,17 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     );
     expectNear(await boxOf(status), { x: 500, y: 261, width: 440, height: 48 }, 'confirmation');
     const add = page.getByRole('link', { name: 'Install the extension (beta)' });
-    expectNear(await boxOf(add), { x: 500, y: 361 - 24, width: 167.1, height: 44 }, '« Install the extension (beta) »');
+    // « Install the extension (beta) » (FRU-318) and « Open https://… » (FRU-314) are longer than the
+    // words of the mockup: the link to the site goes under the button.
+    expectNear(await boxOf(add), { x: 500, y: 361 - 24, width: 244.3, height: 44 }, '« Install the extension (beta) »');
     expectNear(
       await boxOf(page.getByRole('link', { name: 'Open https://staging.acme.dev' })),
-      { x: 687, y: 363 - 24, width: 159.9, height: 41 },
+      { x: 500, y: 391.2, width: 208.8, height: 41 },
       '« Open the site »',
     );
     expectNear(
       await boxOf(page.getByRole('link', { name: 'Install it in Firefox (beta)' })),
-      { x: 595, y: 454 - 24, width: 151.8, height: 17 },
+      { x: 595, y: 481.2, width: 164.1, height: 17 },
       'Firefox',
     );
     // The extension is in no store yet: both links lead to the page that says how to install it.
