@@ -1,4 +1,6 @@
 import {
+  type CommandResponseMessage,
+  MAX_ID_LENGTH,
   PANEL_LIMITS,
   type PageCounts,
   NOTES_READINGS,
@@ -36,7 +38,7 @@ export function panelEvent(message: unknown): { open?: string } | undefined {
   const { type, open } = message as Record<string, unknown>;
   if (type !== PANEL_EVENT_TYPE) return undefined;
 
-  return typeof open === 'string' && open !== '' && open.length <= 100 ? { open } : {};
+  return typeof open === 'string' && open !== '' && open.length <= MAX_ID_LENGTH ? { open } : {};
 }
 
 /**
@@ -109,7 +111,7 @@ export function acceptedRequest(
 
   return {
     command: known,
-    ...(typeof note === 'string' && note !== '' && note.length <= 100 ? { note } : {}),
+    ...(typeof note === 'string' && note !== '' && note.length <= MAX_ID_LENGTH ? { note } : {}),
     ...(typeof body === 'string' && body.length <= PANEL_LIMITS.text ? { body } : {}),
   };
 }
@@ -130,5 +132,20 @@ export function parseAnswer(value: unknown): TabCommandAnswer {
     ...(listed === undefined ? {} : { notes: listed }),
     ...(replied === undefined ? {} : { outcome: replied }),
     ...(why === undefined ? {} : { reading: why }),
+  };
+}
+
+/**
+ * The answer the isolated world hands back for a response of the main world: every field the
+ * response carries, in one answer (raised in review: `done` and `outcome` travel together).
+ */
+export function answerOf(message: CommandResponseMessage): TabCommandAnswer {
+  return {
+    done: message.done,
+    ...(message.busy === true ? { busy: true as const } : {}),
+    ...(message.counts === undefined ? {} : { counts: message.counts }),
+    ...(message.notes === undefined ? {} : { notes: message.notes }),
+    ...(message.outcome === undefined ? {} : { outcome: message.outcome }),
+    ...(message.reading === undefined ? {} : { reading: message.reading }),
   };
 }

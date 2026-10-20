@@ -4,6 +4,7 @@ import { CHANNEL, PANEL_LIMITS, parseBridgeMessage, parsePanelNotes } from './pr
 import {
   PANEL_EVENT_TYPE,
   acceptedCommand,
+  answerOf,
   acceptedRequest,
   commandTimeout,
   panelEvent,
@@ -207,5 +208,35 @@ describe('the commands of the side panel (FRU-299)', () => {
       kind: 'notes-changed',
       open: 'seed-1',
     });
+  });
+});
+
+describe('the answer the bridge hands back (raised in review)', () => {
+  it('carries done and the outcome of a reply together, and every field of the response', () => {
+    assert.deepEqual(answerOf({ channel: CHANNEL, kind: 'command-response', id: 'c1', done: true, outcome: 'sent' }), {
+      done: true,
+      outcome: 'sent',
+    });
+    assert.deepEqual(
+      answerOf({
+        channel: CHANNEL,
+        kind: 'command-response',
+        id: 'c1',
+        done: false,
+        outcome: 'wait',
+        reading: 'failed',
+      }),
+      { done: false, outcome: 'wait', reading: 'failed' },
+    );
+    // The same answer the panel reads after the runtime message: nothing dropped on the way.
+    const crossed = parseBridgeMessage({
+      channel: CHANNEL,
+      kind: 'command-response',
+      id: 'c1',
+      done: true,
+      outcome: 'sent',
+    });
+    assert.ok(crossed?.kind === 'command-response');
+    assert.deepEqual(parseAnswer(answerOf(crossed)), { done: true, outcome: 'sent' });
   });
 });

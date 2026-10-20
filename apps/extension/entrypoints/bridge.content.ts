@@ -14,7 +14,13 @@ import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 import { randomId } from '../src/relay-transport.ts';
-import { PANEL_EVENT_TYPE, type TabCommandAnswer, acceptedRequest, commandTimeout } from '../src/tab-command.ts';
+import {
+  PANEL_EVENT_TYPE,
+  type TabCommandAnswer,
+  acceptedRequest,
+  answerOf,
+  commandTimeout,
+} from '../src/tab-command.ts';
 
 /**
  * The half that can reach the browser, in the isolated world (FRU-41, FRU-57).
@@ -108,14 +114,7 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'command-response') {
-        commands.get(message.id)?.({
-          done: message.done,
-          ...(message.busy === true ? { busy: true as const } : {}),
-          ...(message.counts === undefined ? {} : { counts: message.counts }),
-          ...(message.notes === undefined ? {} : { notes: message.notes }),
-          ...(message.outcome === undefined ? {} : { outcome: message.outcome }),
-          ...(message.reading === undefined ? {} : { reading: message.reading }),
-        });
+        commands.get(message.id)?.(answerOf(message));
         commands.delete(message.id);
 
         return;

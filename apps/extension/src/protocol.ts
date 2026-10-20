@@ -43,7 +43,11 @@ const ALLOWED_HEADERS = ['Content-Type'];
 const MAX_BODY_BYTES = 64 * 1_024;
 
 /** Long enough for a UUID, short enough that a page cannot post a megabyte of it. */
-const MAX_ID_LENGTH = 100;
+/**
+ * The longest id the channel carries: a request, a note. A seed id of the widget is 15 characters
+ * (`sd_` and 12 hex), an issue id of a tracker well under this.
+ */
+export const MAX_ID_LENGTH = 100;
 
 /**
  * How long the background lets one relayed call run before it aborts it.

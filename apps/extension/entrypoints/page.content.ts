@@ -214,7 +214,14 @@ export default defineContentScript({
             '*',
           );
         if (widget !== undefined && message.command === 'reply' && message.note !== undefined) {
-          void widget.replyTo(message.note, message.body ?? '').then(
+          // Answered whatever happens, a throw included: the panel holds « Sending… » until it is.
+          let sending: Promise<string>;
+          try {
+            sending = widget.replyTo(message.note, message.body ?? '');
+          } catch {
+            sending = Promise.resolve('retry');
+          }
+          void sending.then(
             (outcome) => {
               done = outcome === 'sent';
               answer(outcome);
