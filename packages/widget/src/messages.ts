@@ -123,9 +123,9 @@ export const ENGLISH = {
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',
   'thread.uncertain': 'Element found by its position, not by its identity — the page may have changed under the pin.',
-  // The identifier alone (FRU-256): the widget does not know the name of the store behind the worker.
-  // A message all the same, so that a language can put a word around it.
-  'thread.link': '{identifier}',
+  // The identifier and an arrow, in a chip (FRU-256, FRU-304): the widget does not know the name of
+  // the store behind the worker. A message all the same, so that a language can put a word around it.
+  'thread.link': '{identifier} →',
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   // The chip of the capsule of the dock (FRU-303), beside its dashed drop: the drop says « note ».
@@ -141,6 +141,8 @@ export const ENGLISH = {
   'sidebar.openFailed': 'Show every note in a sidebar. They could not be read.',
   // The name of the dialog, and the title its head shows (FRU-259).
   'sidebar.dialog': 'Notes on this page',
+  // The way back from the thread of a note to the rows of the list, where the thread took their place (FRU-312).
+  'sidebar.back': 'All notes',
   'sidebar.close': 'Close the notes',
   // The three tabs. `sidebar.tabs` names their group; a number follows each word.
   'sidebar.tabs': 'Which notes',

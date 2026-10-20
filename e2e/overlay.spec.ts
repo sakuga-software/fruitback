@@ -103,27 +103,38 @@ test('each of the five statuses has the colour of the mock-up of 2026-10-20, and
 
         return [
           (pin as HTMLElement).dataset.fruitbackStage,
-          { fill: style.backgroundColor, text: style.color, frame: getComputedStyle(pin).borderTopColor },
+          // The frame is drawn only while the note is pointed at or open (FRU-304): its colour is set at rest.
+          {
+            fill: style.backgroundColor,
+            text: style.color,
+            frame: (pin as HTMLElement).style.getPropertyValue('--fruitback-pin-color'),
+          },
         ];
       }),
     ),
   );
 
   const white = 'rgb(255, 255, 255)';
-  const status = (fill: string, text = white) => ({ fill, text, frame: fill });
+  const status = (fill: string, stage: string, text = white) => ({
+    fill,
+    text,
+    frame: `var(--fruitback-stage-${stage})`,
+  });
   expect(drawn).toEqual({
-    seeded: status('rgb(106, 121, 80)'),
-    green: status('rgb(86, 128, 46)'),
+    seeded: status('rgb(106, 121, 80)', 'seeded'),
+    green: status('rgb(86, 128, 46)', 'green'),
     // The amber of 2026-10-20 holds white, 4.78:1 (FRU-292).
-    ripening: status('rgb(172, 95, 0)'),
-    ripe: status('rgb(221, 44, 39)'),
-    composted: status('rgb(141, 110, 99)'),
+    ripening: status('rgb(172, 95, 0)', 'ripening'),
+    ripe: status('rgb(221, 44, 39)', 'ripe'),
+    composted: status('rgb(141, 110, 99)', 'composted'),
   });
 });
 
-test('a pin and its frame have the measures of the mock-up, at each of the five statuses (FRU-252)', async ({
+test('a pin and its frame have the measures of the mock-up, at each of the five statuses (FRU-252, FRU-304)', async ({
   page,
 }) => {
+  // The drop lands without its animation: measured as it is drawn at rest.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await openPlayground(page, 'pin-measures');
   const targets = [
     '[data-testid="card-espresso"] .add',
@@ -134,8 +145,6 @@ test('a pin and its frame have the measures of the mock-up, at each of the five 
   ];
   for (const [index, target] of targets.entries()) await plantPin(page, page.locator(target), `Mesure ${index + 1}`);
   await page.mouse.move(0, 0);
-  // The entrance of a drop scales it: measured once it has landed.
-  await page.waitForTimeout(600);
 
   const stages: string[] = [];
   for (const [index, target] of targets.entries()) {
@@ -151,72 +160,76 @@ test('a pin and its frame have the measures of the mock-up, at each of the five 
 
       return {
         stage: (frame as HTMLElement).dataset.fruitbackStage ?? '',
-        // The frame: 4 px off the element on every side, 2 px thick, 6 px of corner, no fill at rest.
+        // The frame: 5 px off the element on every side, a line of 2 px, transparent at rest.
         outset: [
           element.left - box.left,
           element.top - box.top,
           box.right - element.right,
           box.bottom - element.bottom,
         ],
-        border: `${frameStyle.borderTopWidth} ${frameStyle.borderTopStyle}`,
-        radius: frameStyle.borderTopLeftRadius,
-        fill: frameStyle.backgroundColor,
-        frameIsStage: frameStyle.borderTopColor === badgeStyle.backgroundColor,
-        // The drop: 26 px, outside the top-left corner of the frame. Its point is on the inner corner
-        // of the 2 px border, as in the mock-up, so it is 2 px short of the element and never on it.
-        drop: [Math.round(drop.width), Math.round(drop.height)],
-        corner: [Math.round(box.left - drop.right), Math.round(box.top - drop.bottom)],
+        border: `${frameStyle.borderTopWidth} ${frameStyle.borderTopStyle} ${frameStyle.borderTopColor}`,
+        // The drop: 28 px, a ring of 2 px of white, turned by 45 degrees.
+        drop: [badge.offsetWidth, badge.offsetHeight],
+        ring: `${badgeStyle.borderTopWidth} ${badgeStyle.borderTopStyle} ${badgeStyle.borderTopColor}`,
+        transform: badgeStyle.transform,
+        // Its point is the lowest point of the turned box, on the top edge of the element and 16 px
+        // in from its start, or in its middle when it is narrower than 32 px.
+        tip: [
+          Math.round(drop.left + drop.width / 2 - (element.left + Math.min(16, element.width / 2))),
+          Math.round(drop.bottom - element.top),
+        ],
         shape: `${badgeStyle.borderTopLeftRadius} ${badgeStyle.borderBottomLeftRadius}`,
         shadow: badgeStyle.boxShadow,
         number: badge.textContent,
         font: `${glyph.fontSize} ${glyph.fontWeight}`,
         name: badge.getAttribute('aria-label'),
         expanded: badge.getAttribute('aria-expanded'),
+        top: element.top,
       };
     }, target);
 
     stages.push(measured.stage);
+    // An element at the top of the page has no room for the drop above it: its point goes down.
+    const tipBelow = measured.top < 34 ? Math.round(34 - measured.top) : 0;
     expect(measured, `pin ${index + 1}`).toMatchObject({
-      outset: [4, 4, 4, 4],
-      border: '2px solid',
-      radius: '6px',
-      fill: 'rgba(0, 0, 0, 0)',
-      frameIsStage: true,
-      drop: [26, 26],
-      corner: [-2, -2],
+      outset: [5, 5, 5, 5],
+      border: '2px solid rgba(0, 0, 0, 0)',
+      drop: [28, 28],
+      ring: '2px solid rgb(255, 255, 255)',
+      // rotate(-45deg) as a matrix.
+      transform: 'matrix(0.707107, -0.707107, 0.707107, 0.707107, 0, 0)',
       shape: '50% 0px',
       shadow: 'rgba(28, 25, 23, 0.28) 0px 3px 10px 0px',
       number: String(index + 1),
-      font: '13px 600',
+      font: '12px 700',
       expanded: 'false',
     });
+    expect(Math.abs(measured.tip[0] ?? 99), `pin ${index + 1}: x of the point`).toBeLessThanOrEqual(1);
+    expect(Math.abs((measured.tip[1] ?? 99) - tipBelow), `pin ${index + 1}: y of the point`).toBeLessThanOrEqual(1);
     expect(measured.name).toMatch(new RegExp(`^Note ${index + 1}, [a-z ]+: Mesure ${index + 1}$`));
   }
   expect(new Set(stages).size, `stages: ${stages.join(', ')}`).toBe(5);
 
-  // Open, the frame takes its colour at 12 %, and the pin says it is open.
+  // Open: the frame in the colour of the status, 3 px off the element, and the drop grows by 15 %.
   const open = pinFor(page, 'Mesure 3');
   await badgeFor(page, 'Mesure 3').click();
   await page.mouse.move(0, 0);
   await expect(badgeFor(page, 'Mesure 3')).toHaveAttribute('aria-expanded', 'true');
-  const tint = await open.evaluate((frame) => {
+  const opened = await open.evaluate((frame) => {
     const style = getComputedStyle(frame);
+    const badge = frame.querySelector('.fruitback-pin-badge') as HTMLElement;
 
-    return { stage: style.borderTopColor, fill: style.backgroundColor };
+    return {
+      frame: style.borderTopColor,
+      fill: style.backgroundColor,
+      drop: getComputedStyle(badge).backgroundColor,
+      transform: getComputedStyle(badge).transform,
+    };
   });
-  // The colour of the stage at 12 %: `color(srgb r g b / 0.12)`, the same three channels as the border.
-  const channels = (colour: string) => (colour.match(/[\d.]+/g) ?? []).map(Number);
-  const [red = 0, green = 0, blue = 0] = channels(tint.stage);
-  const [fillRed = 0, fillGreen = 0, fillBlue = 0, alpha = 0] = channels(tint.fill);
-  expect(tint.fill).toMatch(/^color\(srgb /);
-  expect(alpha).toBeCloseTo(0.12, 2);
-  for (const [stage, fill] of [
-    [red, fillRed],
-    [green, fillGreen],
-    [blue, fillBlue],
-  ] as const) {
-    expect(fill).toBeCloseTo(stage / 255, 2);
-  }
+  expect(opened.frame).toBe(opened.drop);
+  expect(opened.fill).toBe('rgba(0, 0, 0, 0)');
+  // rotate(-45deg) scale(1.15): 1.15 × 0.707107.
+  expect(opened.transform).toBe('matrix(0.813173, -0.813173, 0.813173, 0.813173, 0, 0)');
 });
 
 function assertDistinct(stages: (string | undefined)[]): void {

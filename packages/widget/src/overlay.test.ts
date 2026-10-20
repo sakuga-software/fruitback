@@ -46,11 +46,14 @@ describe('createOverlay', () => {
     overlay.render([issueOnCta()]);
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    // The frame stands 4 px off the element on every side, as the mock-up draws it (FRU-252).
-    assert.equal(pin.style.left, '96px');
-    assert.equal(pin.style.top, '196px');
-    assert.equal(pin.style.width, '208px');
-    assert.equal(pin.style.height, '48px');
+    // The frame stands 5 px off the element on every side: a line of 2 px, 3 px off (FRU-304).
+    assert.equal(pin.style.left, '95px');
+    assert.equal(pin.style.top, '195px');
+    assert.equal(pin.style.width, '210px');
+    assert.equal(pin.style.height, '50px');
+    // The point of the drop is 16 px in from the start corner of the element, on its top edge.
+    assert.equal(pin.style.getPropertyValue('--fruitback-pin-tip-x'), '21px');
+    assert.equal(pin.style.getPropertyValue('--fruitback-pin-tip-y'), '5px');
     assert.equal(pin.dataset.fruitbackStrategy, 'selector');
   });
 
@@ -196,9 +199,9 @@ describe('createOverlay', () => {
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.dataset.fruitbackStrategy, 'orphan');
     assert.ok(pin.className.includes('fruitback-pin-orphan'));
-    // 10% of 1000 across, 20% down: the box the note was planted on, and the frame 4 px off it.
-    assert.equal(pin.style.left, '96px');
-    assert.equal(pin.style.top, '196px');
+    // 10% of 1000 across, 20% down: the box the note was planted on, and the frame 5 px off it.
+    assert.equal(pin.style.left, '95px');
+    assert.equal(pin.style.top, '195px');
   });
 
   it('marks a pin it placed by position rather than recognised', () => {
@@ -237,7 +240,7 @@ describe('createOverlay', () => {
     setRect(page.query('button'), { left: 100, top: 460, width: 200, height: 40 });
     overlay.reposition();
 
-    assert.equal((page.document.querySelector('[data-fruitback-pin]') as HTMLElement).style.top, '456px');
+    assert.equal((page.document.querySelector('[data-fruitback-pin]') as HTMLElement).style.top, '455px');
   });
 
   it('falls back to the remembered box when the element is torn out of the page', () => {
@@ -251,8 +254,8 @@ describe('createOverlay', () => {
     overlay.reposition();
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.style.left, '96px');
-    assert.equal(pin.style.top, '196px');
+    assert.equal(pin.style.left, '95px');
+    assert.equal(pin.style.top, '195px');
     assert.ok(pin.className.includes('fruitback-pin-orphan'), 'the pin should show that it lost its element');
   });
 
@@ -317,7 +320,7 @@ describe('createOverlay', () => {
     // The stylesheet is what turns the slot into a distance.
     assert.match(
       page.document.querySelector('style')?.textContent ?? '',
-      /right: calc\(100% \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
+      /left: calc\(var\(--fruitback-pin-tip-x, 0px\) - 16px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
     );
 
     // Each badge still opens its own note.
@@ -325,52 +328,55 @@ describe('createOverlay', () => {
     assert.equal(page.document.querySelector('.fruitback-thread-note')?.textContent, 'Note 2');
   });
 
-  it('keeps the badges above an element too close to the left edge for them (FRU-158)', () => {
-    // Outside the corner means left of the element. A button 10 px from the edge of the page would put
-    // its badge off the page, where nothing can click it.
-    const page = mountPage(`${PAGE}<p id="edge">Au bord</p>`, { width: 1_000, height: 1_000 });
+  it('points the drop at its element, and lowers it at the top of the document (FRU-304)', () => {
+    // A drop is 34 px tall above its point: at the top of the page, the point goes down by what is missing.
+    const page = mountPage(`${PAGE}<p id="top">En haut</p><i id="thin">i</i>`, { width: 1_000, height: 1_000 });
     setDocumentSize(page.document, 1_000, 1_000);
     setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
-    setRect(page.query('#edge'), { left: 10, top: 400, width: 100, height: 20 });
+    setRect(page.query('#top'), { left: 300, top: 10, width: 100, height: 20 });
+    setRect(page.query('#thin'), { left: 500, top: 300, width: 10, height: 20 });
     overlay = createOverlay({ document: page.document });
-
-    const onCta = (n: number) =>
+    const on = (id: string, selector: string, tag: string) =>
       seedIssueFixture({
-        id: `issue_${n}`,
-        seed: { ...issueOnCta().seed, id: `sd_cta_${n}` },
+        id: `issue_${id}`,
+        seed: seedFixture({ id, anchor: { selector, tag, bounds: { xPct: 1, yPct: 1, wPct: 1, hPct: 1 } } }),
       });
-    const edge = seedIssueFixture({
-      id: 'issue_edge',
-      seed: seedFixture({
-        id: 'sd_edge',
-        anchor: { selector: '#edge', tag: 'p', text: 'Au bord', bounds: { xPct: 1, yPct: 40, wPct: 10, hPct: 2 } },
-      }),
-    });
-    // 100 px leaves room for three badges on the left (26 + 2 × 30 = 86), not for four.
-    overlay.render([onCta(1), onCta(2), onCta(3), edge]);
-    const tight = () =>
-      [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')]
-        .filter((pin) => pin.classList.contains('fruitback-pin-tight'))
-        .map((pin) => pin.dataset.fruitbackPin);
-    assert.deepEqual(tight(), ['sd_edge']);
+    overlay.render([on('sd_top', '#top', 'p'), on('sd_thin', '#thin', 'i')]);
+    const tip = (id: string) => {
+      const pin = page.document.querySelector<HTMLElement>(`[data-fruitback-pin="${id}"]`) as HTMLElement;
 
-    overlay.render([onCta(1), onCta(2), onCta(3), onCta(4)]);
-    assert.deepEqual(tight(), ['sd_cta_1', 'sd_cta_2', 'sd_cta_3', 'sd_cta_4']);
+      return [pin.style.getPropertyValue('--fruitback-pin-tip-x'), pin.style.getPropertyValue('--fruitback-pin-tip-y')];
+    };
+    // 10 px from the top: 24 px are missing above it, and the point goes 24 px into the element.
+    assert.deepEqual(tip('sd_top'), ['21px', '29px']);
+    // An element narrower than 32 px: its middle.
+    assert.deepEqual(tip('sd_thin'), ['10px', '5px']);
   });
 
-  it('tints the frame only while its note is pointed at, focused or open (FRU-158)', () => {
-    // A tint left on greyed every annotated element, and a page with many notes became hard to read.
+  it('draws no pin on the page for a note whose element is gone: it is in the dock (FRU-304)', () => {
+    const page = mountWithCta();
+    page.query('button').remove();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const sheet = (page.document.querySelector('style')?.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.match(sheet, /\.fruitback-pin-orphan:not\(\[data-fruitback-draft\]\) \{ display: none; \}/);
+    assert.ok(page.document.querySelector('[data-fruitback-pin]')?.classList.contains('fruitback-pin-orphan'));
+  });
+
+  it('shows the frame only while its note is pointed at, focused or open (FRU-158, FRU-304)', () => {
+    // A frame left on lined every annotated element, and a page with many notes became hard to read.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
     const sheet = page.document.querySelector('style')?.textContent ?? '';
     const pinRule = /\.fruitback-pin \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    assert.match(pinRule, /border: 2px solid transparent/);
     assert.doesNotMatch(pinRule, /background/);
     // In a rule of its own: a browser with no :has() drops the whole rule that names it.
     const rules = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
     const openRule = /[^}]*\.fruitback-pin\[data-fruitback-open\][^{]*\{[^}]*\}/.exec(rules)?.[0] ?? '';
-    assert.match(openRule, /background: color-mix/);
+    assert.match(openRule, /border-color: var\(--fruitback-pin-color\)/);
     assert.doesNotMatch(openRule, /:has\(/);
   });
 
@@ -397,7 +403,8 @@ describe('createOverlay', () => {
     overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
 
     const badge = page.document.querySelector('.fruitback-pin-badge');
-    assert.equal(badge?.getAttribute('title'), 'SKG-742 · Closed');
+    // « Closed · the note », as the mock-up writes it (FRU-304).
+    assert.match(badge?.getAttribute('title') ?? '', /^Closed · \S/);
   });
 
   it('closes the thread with a drawing rather than a character (FRU-36)', () => {
@@ -460,7 +467,7 @@ describe('createOverlay', () => {
     assert.match(thread.textContent ?? '', /Commander/);
   });
 
-  it('lays the bubble out as the mock-up does: a head, the note, and the replies apart (FRU-256)', () => {
+  it('lays the bubble out as the mock-up does: a head, the note, and the replies apart (FRU-256, FRU-304)', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([
@@ -476,18 +483,31 @@ describe('createOverlay', () => {
     const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
     const classes = (parent: Element) => [...parent.children].map((child) => child.className);
     assert.deepEqual(classes(thread), ['fruitback-thread-head', 'fruitback-thread-body', 'fruitback-thread-answers']);
-    // The head: the state behind its drop, the way out, and the cross. The way out left the foot.
+    // The head: the state behind its drop, since when, the way out, and the cross.
     const head = thread.querySelector('.fruitback-thread-head') as HTMLElement;
-    assert.deepEqual(classes(head), ['fruitback-thread-stage', 'fruitback-thread-link', 'fruitback-thread-close']);
+    assert.deepEqual(classes(head), [
+      'fruitback-thread-stage',
+      'fruitback-thread-age',
+      'fruitback-thread-link',
+      'fruitback-thread-close',
+    ]);
     assert.equal(head.querySelector('.fruitback-thread-drop')?.getAttribute('aria-hidden'), 'true');
     assert.equal(head.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
-    // The identifier alone: no arrow, and no name of a store the widget does not know.
-    assert.equal(head.querySelector('a')?.textContent, 'SKG-742');
+    // The age of the state, from the last change the store reports, with the day in its title.
+    assert.ok((head.querySelector('.fruitback-thread-age')?.textContent ?? '') !== '');
+    assert.ok((head.querySelector('.fruitback-thread-age')?.getAttribute('title') ?? '') !== '');
+    // The identifier and an arrow, in a chip: no name of a store the widget does not know.
+    assert.equal(head.querySelector('a')?.textContent, 'SKG-742 →');
     assert.deepEqual(classes(thread.querySelector('.fruitback-thread-body') as HTMLElement), [
       'fruitback-thread-note',
       'fruitback-thread-meta',
       'fruitback-thread-source',
     ]);
+    // « Replies » above the list, and the initial of who answered in a round (FRU-304).
+    const answers = thread.querySelector('.fruitback-thread-answers') as HTMLElement;
+    assert.equal(answers.querySelector('.fruitback-thread-answers-title')?.textContent, 'Replies');
+    assert.equal(thread.querySelector('.fruitback-thread-reply-avatar')?.textContent, 'A');
+    assert.equal(thread.querySelector('.fruitback-thread-reply-avatar')?.getAttribute('aria-hidden'), 'true');
     // Who answered is told apart from when: the name has its own element, which the stylesheet inks.
     assert.equal(thread.querySelector('.fruitback-thread-reply-name')?.textContent, 'Alice');
     assert.match(thread.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /^Alice · /);
@@ -495,7 +515,7 @@ describe('createOverlay', () => {
     assert.equal(thread.querySelector('form, textarea, input') === null, true);
   });
 
-  it('shows the component and the file behind the element, and nothing when the note has none (FRU-256)', () => {
+  it('shows the selector, then the component and the file, and the selector alone without them (FRU-256, FRU-304)', () => {
     const lineFor = (source: SeedIssue['seed']['source']) => {
       const page = mountWithCta();
       const issue = issueOnCta();
@@ -503,7 +523,12 @@ describe('createOverlay', () => {
       overlay = createOverlay({ document: page.document });
       overlay.render([{ ...issue, seed: source === undefined ? seed : { ...seed, source } }]);
       (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-      const line = page.document.querySelector('.fruitback-thread-source');
+      // The selector the note carries, always first.
+      assert.equal(
+        page.document.querySelector('.fruitback-thread-source > .fruitback-thread-selector')?.textContent,
+        issue.seed.anchor.selector,
+      );
+      const line = page.document.querySelector('.fruitback-thread-component');
       const text = line === null ? null : line.textContent;
       overlay.destroy();
       overlay = null;
@@ -513,15 +538,15 @@ describe('createOverlay', () => {
 
     assert.equal(
       lineFor({ component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42, column: 7 }),
-      'HeroBanner · src/components/Hero.tsx:42',
+      '<HeroBanner> · src/components/Hero.tsx:42',
     );
-    assert.equal(lineFor({ component: 'HeroBanner' }), 'HeroBanner');
+    assert.equal(lineFor({ component: 'HeroBanner' }), '<HeroBanner>');
     assert.equal(lineFor({ file: 'src/components/Hero.tsx' }), 'src/components/Hero.tsx');
     // A page with no React, or a production build: no line, and no empty box in its place.
     assert.equal(lineFor(undefined), null);
     assert.equal(lineFor({ line: 42 }), null);
     // As text: a name is whatever the page called its component.
-    assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<img src=x onerror=alert(1)>');
+    assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<<img src=x onerror=alert(1)>>');
   });
 
   it('opens the thread on the badge: the note, the state and the way to Linear', () => {
@@ -623,8 +648,8 @@ describe('the page changing underneath', () => {
     await settle();
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.style.left, '396px', 'the pin followed its element');
-    assert.equal(pin.style.top, '596px');
+    assert.equal(pin.style.left, '395px', 'the pin followed its element');
+    assert.equal(pin.style.top, '595px');
     assert.deepEqual(resolved, ['selector'], 'and the host was told, rather than asked to notice');
   });
 
@@ -827,41 +852,16 @@ describe('the team’s replies', () => {
 });
 
 describe('the reading direction and the dates (FRU-38)', () => {
-  it('opens the thread on the pin’s start edge, and leaves the pin where it is', () => {
-    // The window is 1000 px wide and the bubble 360: with the element in its middle, there is no room
-    // beside the frame on either side (346 − 26 − 360 and 654 + 26 + 360 both leave the window).
-    const placedBy = (translator: ReturnType<typeof createTranslator>) => {
-      const page = mountWithCta();
-      setRect(page.query('button'), { left: 350, top: 200, width: 300, height: 40 });
-      overlay = createOverlay({ document: page.document, translator });
-      overlay.render([issueOnCta()]);
-      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-      const placed = { pin: pin.style.left, thread: thread.style.left };
-      overlay.destroy();
-      overlay = null;
-
-      return placed;
-    };
-
-    assert.deepEqual(placedBy(createTranslator()), { pin: '346px', thread: '346px' });
-    // The pin is geometry and does not move; the thread's right edge meets the pin's (346 + 308 - 360).
-    assert.deepEqual(placedBy(createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '346px',
-      thread: '294px',
-    });
-  });
-
-  it('opens the thread beside the frame when the window has the room, as the mock-up draws it (FRU-256)', () => {
+  it('opens the thread 26 px past the point of the drop, on its end side, or on the other one (FRU-304)', () => {
     const placedBy = (left: number, translator = createTranslator()) => {
       const page = mountWithCta();
       setRect(page.query('button'), { left, top: 200, width: 200, height: 40 });
       overlay = createOverlay({ document: page.document, translator });
       overlay.render([issueOnCta()]);
       (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
       const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-      const placed = { left: thread.style.left, top: thread.style.top };
+      const placed = { pin: pin.style.left, left: thread.style.left, top: thread.style.top };
       overlay.destroy();
       overlay = null;
 
@@ -869,13 +869,26 @@ describe('the reading direction and the dates (FRU-38)', () => {
     };
     const hebrew = createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } });
 
-    // The frame is 96 to 304, 196 down: 26 px past its end edge, and 32 px above its top.
-    assert.deepEqual(placedBy(100), { left: '330px', top: '164px' });
-    // Right to left, the end edge is the left one: 596 − 26 − 360.
-    assert.deepEqual(placedBy(600, hebrew), { left: '210px', top: '164px' });
-    // No room past the end edge: under the pin, as before (196 + 48 + 8).
-    assert.deepEqual(placedBy(600), { left: '596px', top: '252px' });
-    assert.deepEqual(placedBy(100, hebrew), { left: '8px', top: '252px' });
+    // The point is at 116, 200: the thread starts 26 px past it, 8 px above the top of the drop (200 − 34 − 8).
+    assert.deepEqual(placedBy(100), { pin: '95px', left: '142px', top: '158px' });
+    // Right to left, the end side is the left one: 616 − 26 − 344.
+    assert.deepEqual(placedBy(600, hebrew), { pin: '595px', left: '246px', top: '158px' });
+    // No room on the end side: the other one, 716 − 26 − 344. The pin is geometry and does not move.
+    assert.deepEqual(placedBy(700), { pin: '695px', left: '346px', top: '158px' });
+    assert.deepEqual(placedBy(100, hebrew), { pin: '95px', left: '142px', top: '158px' });
+  });
+
+  it('opens the thread under its pin when the window has no room on either side', () => {
+    // A phone: 390 px leave no room for 344 px and 26 px on either side of the point.
+    const page = mountPage(PAGE, { width: 390, height: 844 });
+    setDocumentSize(page.document, 390, 844);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    // Under the frame (195 + 50 + 8), and inside the window: 390 − 344 − 8.
+    assert.deepEqual({ left: thread.style.left, top: thread.style.top }, { left: '38px', top: '253px' });
   });
 
   it('opens the thread inside the window when the page is scrolled sideways (FRU-68)', () => {
@@ -895,16 +908,14 @@ describe('the reading direction and the dates (FRU-38)', () => {
       return placed;
     };
 
-    // On screen at document x 2000, with no room past the frame, the thread opens under its pin.
-    assert.deepEqual(placedBy(500), { pin: '1996px', thread: '1996px' });
-    // Near the right edge of the window it stops 8px short of it: 1500 + 1000 - 360 - 8.
-    assert.deepEqual(placedBy(900), { pin: '2396px', thread: '2132px' });
-    // With room past the frame, it opens beside it, and that too is counted from the scroll: 1596 + 208 + 26.
-    assert.deepEqual(placedBy(100), { pin: '1596px', thread: '1830px' });
-    // Right to left, near the left edge of the window, it stops 8px after it: 1500 + 8.
+    // On screen at document x 2000: past the point, counted from the scroll (2016 + 26).
+    assert.deepEqual(placedBy(500), { pin: '1995px', thread: '2042px' });
+    // Near the right edge of the window, on the other side of the point: 2416 − 26 − 344.
+    assert.deepEqual(placedBy(900), { pin: '2395px', thread: '2046px' });
+    // Right to left, near the left edge of the window, on the end side after all: 1516 + 26.
     assert.deepEqual(placedBy(0, createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '1496px',
-      thread: '1508px',
+      pin: '1495px',
+      thread: '1542px',
     });
   });
 
@@ -1156,6 +1167,36 @@ describe('the thread and the keyboard (FRU-51)', () => {
       page.document.activeElement === entry,
       'focus went to the pin instead of the entry that opened the thread',
     );
+  });
+
+  it('places the thread of a detached note from the position its hidden pin keeps (FRU-304)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          id: 'sd_gone',
+          note: 'Disparu',
+          anchor: {
+            selector: '#gone',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+    // The drop of a detached note is not drawn on the page: the chip of the dock lists it.
+    const pin = page.document.querySelector('.fruitback-pin-orphan') as HTMLElement;
+    assert.ok(pin !== null, 'the detached note has no pin');
+    // Its place is written on it all the same, and the thread is measured from that, not from a box.
+    assert.ok(Number.parseFloat(pin.style.left) > 0 && Number.parseFloat(pin.style.top) > 0, 'the pin has no place');
+
+    (page.document.querySelector('.fruitback-orphans-note') as HTMLButtonElement).click();
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    assert.ok(thread !== null, 'the entry opened no thread');
+    assert.ok(Number.parseFloat(thread.style.left) > 0, 'the thread is at the left edge');
+    assert.ok(Number.parseFloat(thread.style.top) > 0, 'the thread is at the top edge');
   });
 
   it('keeps focus on the detached-note entry across a render, for its thread and for the entry itself', () => {

@@ -32,7 +32,9 @@ function mount(entries: SidebarEntry[] = [], more: Partial<Parameters<typeof cre
     document: page.document,
     host: page.query('#widget'),
     entries: () => state.entries,
-    onSelect: (id) => chosen.push(id),
+    onSelect: (id) => {
+      chosen.push(id);
+    },
     translator: createTranslator({ locale: 'en', now: () => Date.parse('2026-10-09T12:00:00.000Z') }),
     ...more,
   });
@@ -503,14 +505,15 @@ describe('the list as a dialog (FRU-129)', () => {
   });
 });
 
-describe('the way into the list (FRU-129)', () => {
-  const engine = {
-    elementAt: () => null,
-    grabbable: () => true,
-    boundsOf: () => ({ left: 0, top: 0, width: 0, height: 0 }),
-    sourceOf: async () => undefined,
-  };
+/** No engine at all: these tests never point at the page. */
+const engine = {
+  elementAt: () => null,
+  grabbable: () => true,
+  boundsOf: () => ({ left: 0, top: 0, width: 0, height: 0 }),
+  sourceOf: async () => undefined,
+};
 
+describe('the way into the list (FRU-129)', () => {
   it('is a button of the dock, with a name that is not the name of its dialog', () => {
     const page = mountPage('<main></main>');
     let asked = 0;
@@ -564,6 +567,175 @@ describe('the way into the list (FRU-129)', () => {
     assert.equal(overlay.select('sd_one'), true);
     assert.equal(overlay.threadOpen(), true);
     assert.match(host.root.querySelector('[role="dialog"]')?.textContent ?? '', /On the button/);
+  });
+});
+
+describe('the thread of a note in place of the rows (FRU-312)', () => {
+  /** The list and the pins, wired as `embed.ts` wires them. */
+  function wired() {
+    const page = mountPage('<main><button data-testid="cta">Commander</button></main>', {
+      width: 1_440,
+      height: 900,
+    });
+    setDocumentSize(page.document, 1_440, 900);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    const host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
+    cleanup.push(() => host.destroy());
+    const issues = ['sd_one', 'sd_two'].map((id, index) =>
+      seedIssueFixture({
+        id: `issue_${id}`,
+        identifier: `ID-${index + 1}`,
+        seed: seedFixture({
+          id,
+          note: `Note ${index + 1}`,
+          anchor: {
+            selector: '[data-testid="cta"]',
+            tag: 'button',
+            text: 'Commander',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    );
+    let sidebar: Sidebar | undefined;
+    const overlay = createOverlay({ document: page.document, host: host.root, onThread: () => sidebar?.mark() });
+    cleanup.push(() => overlay.destroy());
+    overlay.render(issues);
+    sidebar = createSidebar({
+      document: page.document,
+      host: host.root,
+      entries: () => issues.map((issue, index) => ({ issue, placement: 'found' as const, number: index + 1 })),
+      onSelect: (id, home) => overlay.select(id, home),
+      onBack: () => overlay.closeThread(),
+      current: () => overlay.openId(),
+    });
+    const list = sidebar;
+    cleanup.push(() => list.destroy());
+    const root = host.root.querySelector('[data-fruitback-sidebar]') as HTMLElement;
+    const rows = () => [...root.querySelectorAll<HTMLElement>('.fruitback-sidebar-list [data-fruitback-note]')];
+    const detail = root.querySelector('[data-fruitback-sidebar-detail]') as HTMLElement;
+    const panel = root.querySelector('.fruitback-sidebar-panel') as HTMLElement;
+    const escape = () =>
+      deepActiveElement(page.document)?.dispatchEvent(
+        new (keyboardEventCtor(page))('keydown', { key: 'Escape', bubbles: true, composed: true }),
+      );
+
+    return { page, host, overlay, sidebar: list, root, rows, detail, panel, escape, issues };
+  }
+
+  it('shows the thread in the column of the list, under its head, and not on the page', () => {
+    const { page, host, sidebar, root, rows, detail, panel } = wired();
+    sidebar.open();
+    rows()[1]?.click();
+
+    assert.equal(detail.hidden, false);
+    assert.equal(panel.hidden, true);
+    // The head of the list stays: its title and its cross.
+    assert.equal((root.querySelector('.fruitback-sidebar-head') as HTMLElement).hidden, false);
+    const thread = detail.querySelector('[data-fruitback-thread]') as HTMLElement;
+    assert.equal(thread.dataset.fruitbackThread, 'sd_two');
+    assert.ok(thread.hasAttribute('data-fruitback-home'));
+    // Not on the page: the overlay holds no thread of its own.
+    assert.equal(host.root.querySelectorAll('[data-fruitback-thread]').length, 1);
+    assert.equal(detail.querySelector('[data-fruitback-sidebar-back]')?.textContent, '←All notes');
+    // Focus in the thread, on its cross.
+    assert.ok(deepActiveElement(page.document)?.classList.contains('fruitback-thread-close'));
+  });
+
+  it('goes back to the rows on « All notes », on Escape and on the cross, with focus on the row', () => {
+    const { page, overlay, sidebar, rows, detail, panel, escape } = wired();
+    sidebar.open();
+    const focusedRow = () => (deepActiveElement(page.document) as HTMLElement | null)?.dataset.fruitbackNote;
+
+    rows()[1]?.click();
+    (detail.querySelector('[data-fruitback-sidebar-back]') as HTMLElement).click();
+    assert.equal(detail.hidden, true);
+    assert.equal(panel.hidden, false);
+    assert.equal(overlay.threadOpen(), false);
+    assert.equal(focusedRow(), 'sd_two');
+
+    rows()[0]?.click();
+    escape();
+    assert.equal(detail.hidden, true);
+    assert.equal(overlay.threadOpen(), false);
+    // Escape went back to the rows, and did not close the list.
+    assert.equal(sidebar.isOpen, true);
+    assert.equal(focusedRow(), 'sd_one');
+
+    rows()[0]?.click();
+    (detail.querySelector('.fruitback-thread-close') as HTMLElement).click();
+    assert.equal(detail.hidden, true);
+    assert.equal(focusedRow(), 'sd_one');
+  });
+
+  it('keeps the thread in the list across a read that draws the pins again, and goes back when its note goes', () => {
+    const { page, overlay, sidebar, rows, detail, panel, issues } = wired();
+    sidebar.open();
+    rows()[1]?.click();
+
+    // A read answers while the thread is read: the pins are drawn again, the thread stays in the list.
+    overlay.render([...issues]);
+    assert.equal(detail.hidden, false);
+    assert.equal(panel.hidden, true);
+    assert.equal(overlay.threadOpen(), true);
+    assert.equal(
+      (detail.querySelector('[data-fruitback-thread]') as HTMLElement | null)?.dataset.fruitbackThread,
+      'sd_two',
+    );
+    assert.ok(deepActiveElement(page.document)?.classList.contains('fruitback-thread-close'));
+
+    // A read where the note is gone: the thread closes, and the list shows its rows again.
+    overlay.render([issues[0]!]);
+    assert.equal(overlay.threadOpen(), false);
+    assert.equal(detail.hidden, true);
+    assert.equal(panel.hidden, false);
+  });
+
+  it('leaves focus on the page when a click there closes the thread, and gives it to the row from the thread', () => {
+    const { page, sidebar, rows, detail } = wired();
+    const view = page.view as unknown as typeof globalThis;
+    sidebar.open();
+
+    rows()[0]?.click();
+    // A press on the page, outside the list: focus goes to the page, and the click closes the thread.
+    const main = page.query('main') as HTMLElement;
+    main.dispatchEvent(new view.Event('pointerdown', { bubbles: true, composed: true }));
+    (deepActiveElement(page.document) as HTMLElement | null)?.blur();
+    main.click();
+    assert.equal(detail.hidden, true);
+    assert.equal(deepActiveElement(page.document), page.document.body);
+
+    // From the thread, its cross gives focus to the row of its note.
+    rows()[1]?.click();
+    (detail.querySelector('.fruitback-thread-close') as HTMLElement).click();
+    assert.equal(detail.hidden, true);
+    assert.equal((deepActiveElement(page.document) as HTMLElement | null)?.dataset.fruitbackNote, 'sd_two');
+  });
+
+  it('closes the thread with the list, and shows the rows when the list opens again', () => {
+    const { overlay, sidebar, rows, detail, panel } = wired();
+    sidebar.open();
+    rows()[0]?.click();
+    sidebar.close();
+    assert.equal(overlay.threadOpen(), false);
+    sidebar.open();
+    assert.equal(detail.hidden, true);
+    assert.equal(panel.hidden, false);
+  });
+
+  it('keeps the rows when the chosen note has no thread to show', () => {
+    const page = mountPage('<main><div id="widget"></div></main>');
+    const sidebar = createSidebar({
+      document: page.document,
+      host: page.query('#widget'),
+      entries: () => [{ issue: note('a', 'One'), placement: 'found' }],
+      onSelect: () => false,
+    });
+    cleanup.push(() => sidebar.destroy());
+    sidebar.open();
+    (page.document.querySelector('[data-fruitback-note]') as HTMLElement).click();
+    assert.equal((page.document.querySelector('[data-fruitback-sidebar-detail]') as HTMLElement).hidden, true);
+    assert.equal((page.document.querySelector('.fruitback-sidebar-panel') as HTMLElement).hidden, false);
   });
 });
 

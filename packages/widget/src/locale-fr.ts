@@ -87,7 +87,7 @@ export const FRENCH: Catalog = {
   'thread.orphan': 'Élément introuvable — position approximative.',
   'thread.uncertain':
     'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
-  'thread.link': '{identifier}',
+  'thread.link': '{identifier} →',
 
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.chip': { one: '{count} détachée', other: '{count} détachées' },
@@ -96,6 +96,7 @@ export const FRENCH: Catalog = {
   'sidebar.open': 'Voir toutes les notes dans un panneau',
   'sidebar.openFailed': 'Voir toutes les notes dans un panneau. Elles n’ont pas pu être lues.',
   'sidebar.dialog': 'Notes de cette page',
+  'sidebar.back': 'Toutes les notes',
   'sidebar.close': 'Fermer les notes',
   'sidebar.tabs': 'Quelles notes',
   'sidebar.tabOpen': 'Ouvertes',

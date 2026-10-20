@@ -540,7 +540,15 @@ describe('every word the widget shows', () => {
     ];
     // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
     // Matched whole: as a part, « i » would take that letter out of every other text.
-    const selectors = new Set(['main', 'i']);
+    // And the selector a note carries, in the block of its thread (FRU-304).
+    const selectors = new Set([
+      'main',
+      'i',
+      '[data-testid="cta"]',
+      '#gone',
+      '#renamed',
+      '[data-testid="checkout-cta"]',
+    ]);
     const untranslated = snapshots.filter((text) => {
       if (selectors.has(text)) return false;
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));

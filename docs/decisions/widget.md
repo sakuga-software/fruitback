@@ -291,10 +291,23 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     of one status apart, and how every spec finds a pin. The mock-up also writes « , open » in the
     name of the open pin, beside `aria-expanded="true"`: the attribute alone is kept, or a screen
     reader says it twice.
-  - **The frame stands 4 px off its element** on every side (`FRAME_OUTSET`), 2 px thick, 6 px of
-    corner: it draws around the element, not on it. The drop is outside the top-left corner, its
-    point on the inner corner of the frame. Open, the frame takes its colour at 12 %. The tint
-    under the pointer of FRU-158 is kept; the mock-up draws the open one only.
+  - **The drop of the mock-up of 2026-10-20** (FRU-304): 28 px, a ring of 2 px of the foreground of
+    the stages (white), turned by 45 degrees so that its sharp corner points down, the number in
+    12 px 700, turned back upright. **Its point is on the element**: on its top edge, 16 px in from
+    its start corner, or in its middle when it is narrower than 32 px. At the top of the document,
+    with less than 34 px above the element, the point goes down into it by what is missing. Open,
+    the drop grows to 115 %, above the others. Held by `e2e/overlay.spec.ts` (± 1 px).
+  - **The frame shows only while its note is pointed at, focused or open**: a line of 2 px, 3 px
+    off the element (`FRAME_OUTSET` is 5), in the colour of the status, as an outline would draw
+    it, and with no fill. At rest it is transparent: the mock-up draws the drop alone.
+  - **Found by position, not by identity**: the same drop, its ring dashed, and the frame dashed when
+    it shows. The number stays: the list needs it. The legend of the mock-up writes « ≈ » in the drop;
+    the name of the pin and the thread say it in words.
+  - **Detached: listed in the dock, not on the page.** A note whose element is gone draws no pin
+    (`display: none`); the chip of the capsule counts it and its list opens its thread. A note kept
+    for later keeps its pin where it was planted.
+  - **The title of a drop is « In progress · the note »**, as the mock-up writes it. Its name keeps
+    « Note 2, in progress: the note », with the number.
   - **The dock is one capsule** (FRU-303, mock-up of 2026-10-20), 24 px from the corner, on the
     surface, with the border, the round ends and the shadow of the mock-up. In it, in this order:
     the chip of the detached notes (« 1 detached », in the brown of « closed »), the list, the gear,
@@ -326,22 +339,29 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
 - **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
   held by `e2e/thread.spec.ts` on computed styles.
-  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
-    to the store, the cross), the note (its text, who and when, the component), the replies. 360 px
-    wide, 14 px of corner, no border and no coloured top: the shadow is the edge, and the colour of
-    the status is the drop beside its word.
-  - **It opens beside the frame**: 26 px past its end edge and 32 px above its top (30 and 36 px
-    from the element), which is where the mock-up puts it. When the window has no room there, it opens under the pin as before, or
-    above it. That is every phone: the mock-up draws no phone, and the bubble keeps the place it
-    had, at the width the window leaves.
-  - **The component and the file are shown**, « HeroBanner · src/components/Hero.tsx:42 », from the
-    `source` the note already carries. Only the copied text said it before. A note with none has no
-    line.
-  - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note ».
-  - **The link is the identifier alone, « ACM-142 »**, where the mock-up writes « ACM-142 in
-    Linear ». The widget does not know which store is behind the worker (FRU-31), and the worker
-    does not say its name: saying it is a new field of a public response, which is not this
-    change. The arrow went with the move to the head.
+  - **Three parts, each behind a rule**: a head (the drop and the word of the status, its age, the
+    way out to the store, the cross), the note (its text, who and when, the block of mono), the
+    replies. 344 px wide (FRU-304), a border of 1 px, 14 px of corner and the shadow of the thread.
+    The colour of the status is the drop beside its word.
+  - **It opens beside the drop** (FRU-304): 26 px past its point on the end side of the reading
+    direction, or on the other side when the window has no room there; 8 px above the top of the
+    drop, and never nearer than 24 px to the top or the bottom of the window. When neither side has
+    the room, it opens under the pin as before, or above it. That is every phone.
+  - **The age of the status**, « yesterday », « 2 days ago », in 12 px, from the last change the
+    store reports (`updatedAt`), with the day in its title. The mock-up words it per status
+    (« since yesterday », « for 1 day »): one relative date says it in every language the widget has.
+  - **The block of mono** (FRU-304): the selector the note carries, in 12 px, then
+    « <HeroBanner> · src/components/Hero.tsx:42 » in 11 px, from its `source`. A note with no source
+    has the selector alone. On the warm surface, with a border and 6 px of corner.
+  - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note »:
+    the mock-up names it « Close », and two crosses of the widget can be on screen. The cross is
+    28 px drawn and 44 px to press.
+  - **The link is the identifier and an arrow, « ACM-142 → »**, in a chip of the sunken surface, 44 px
+    to press. The widget does not know which store is behind the worker (FRU-31), so it does not
+    write « in Linear ». A store with no address of an issue has no chip.
+  - **« Replies »**, in 11 px capitals, above the replies or above « No reply yet. ». Each reply has
+    the initial of who wrote it in a round of 24 px, then « **Léa** · 1 day ago » in 11 px, then its
+    text in 13 px.
   - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
     « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
   - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a
@@ -1097,33 +1117,30 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   else would have.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
-- **Several notes on one spot fan their badges out** (FRU-155), one step of 30 px (a 26 px drop and
-  a 4 px gap) to the left for each note before it, in render order (to the right until FRU-158). Before, the badges lay on one
+- **Several notes on one spot fan their badges out** (FRU-155), one step of 30 px (a 28 px drop and
+  a 2 px gap) to the right for each note before it, in render order (FRU-304; to the left from
+  FRU-158 to FRU-304). Before, the badges lay on one
   point: one drop showed, and only the last one took the click. Each note keeps its own drop, its own
   stage colour and its own thread, so a reviewer counts the drops and opens each one; no count badge,
-  no shared thread. The key is the pin's top-left corner, rounded to the pixel, and not the element:
+  no shared thread. The key is the point of the drop, rounded to the pixel, and not the element:
   two elements of the same box (a wrapper and its only child) hide each other just the same. The
   fan stays physical, like the pin, in both reading directions. `e2e/pin-stack.spec.ts` plants three
   notes on one button and reaches each badge with the pointer. Open question in the ticket: a count
   on one pin, if a spot ever carries more notes than its element is wide.
-- **A pin does not cover what it annotates** (FRU-158).
-  - **The badge sits outside the top-left corner of its element**, up and to the left, its sharp
-    corner on the corner of the frame and not one pixel over the element: the drop is turned by
-    -90deg instead of -45deg, so it points down and in. Above the element is where its label, its
-    title or its price is written, and the badge hid the first digit of « 19 € ». Left of an element
-    is usually a margin or the padding of its container.
-  - **Not enough room on the left** (less than 26 px from the edge of the document, plus 30 px per
-    other note on the spot): the badges go back above the element, going right, with the class
-    `fruitback-pin-tight`. A badge off the page cannot be clicked at all, and that is worse than one
-    over a word.
-  - **The frame is drawn always and tinted only while its badge is pointed at or focused, or its
-    thread is open**, through `:has()`. A tint left on greyed every annotated element, and a page
-    with many notes became hard to read. A browser with no `:has()` shows the tint for an open thread
-    only.
-  - `e2e/pin-placement.spec.ts` plants a note on each « Ajouter » and one on a price, and checks that
-    no badge overlaps the glyphs of a card title or price (measured on a `Range`, not on the box).
-  - Open questions in the ticket: a key or a dock button to see the bare page for a moment; the
-    nearest free margin rather than a fixed corner.
+- **A pin does not cover what it annotates** (FRU-158, FRU-304).
+  - **The drop stands above its element and covers nothing of it**: its point is on the top edge.
+    FRU-158 had put the badge outside the top-left corner, turned by -90deg, because above an element
+    is where its label or its price is written, and the badge hid the first digit of « 19 € ». The
+    mock-up of 2026-10-20 points the drop down at the element, and FRU-304 follows it: text written
+    less than 34 px above an element can be under its drop again. The frame of the note, under the
+    pointer, says which element it is about. Arbitrated by the agent on 2026-10-20, and put to the
+    orchestrator.
+  - **The frame shows only while its badge is pointed at or focused, or its thread is open**,
+    through `:has()`. Left on, it lined every annotated element, and a page with many notes became
+    hard to read. A browser with no `:has()` shows it for an open thread only.
+  - `e2e/pin-placement.spec.ts` checks that no drop is over its own element, and that every drop is
+    on the page.
+  - Open question in the ticket: a key or a dock button to see the bare page for a moment.
 - `createOverlay({ host })` takes where to render. It defaults to `<body>`; FRU-3's Shadow root
   passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
@@ -1136,9 +1153,13 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 ### The rules, in short
 
 - **`sidebar.ts` lists what `overlay.resolutions()` holds**, so it costs no request and leaves out a
-  stage the reporter hid, like the copied text. A third button of the dock opens it. Choosing a note
-  calls `overlay.select`, which scrolls to the element, or to the pin of a detached note, and opens
-  the thread.
+  stage the reporter hid, like the copied text. A button of the dock opens it. Choosing a note
+  calls `overlay.select(id, home)`, which scrolls to the element and opens its thread **in the
+  column of the list, in place of the rows** (FRU-312). The thread on the page covered the rows at
+  1440 px and the head of the sheet at 390 px. The head of the list stays; « All notes » (« Toutes
+  les notes »), Escape, the cross of the thread or a click on the page bring the rows back, with
+  focus on the row of the note. The thread there has no place, no border and no shadow of its own
+  (`data-fruitback-home`). A thread opened from a pin still opens on the page.
 - **It is a dialog that is not modal**, like the thread: the page stays usable beside it and a
   reviewer goes from note to note. It takes focus, gives it back to what opened it, and keeps its
   own Escape: the thread closes on an Escape of the document, and one key must close one thing.
