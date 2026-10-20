@@ -69,6 +69,8 @@ export const ENGLISH = {
   'composer.keptWithoutPicture': 'Kept for later, without the picture',
   // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.
   'composer.keep': 'Keep for later',
+  // The text left on this element came back, from a reload or a closed composer (FRU-311).
+  'composer.restored': 'Draft restored',
   'composer.kept': 'Kept for later',
   'composer.failed': 'Did not go through — your text is kept, try again',
   // Why a send failed, when trying again at once will not help (FRU-156).

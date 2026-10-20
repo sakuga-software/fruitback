@@ -85,6 +85,12 @@ export type CaptureHost = {
    * page says it without the list being opened.
    */
   readFailed(failed: boolean, sentence: string): void;
+
+  /**
+   * Choose an element as a click of a capture would, with its component, and hand it to
+   * `onSelect` (FRU-311): the note left on it comes back when its page comes back.
+   */
+  choose(element: Element): void;
   destroy(): void;
 };
 
@@ -501,6 +507,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       else if (capturing) unsaid = sentence;
       else announcer.textContent = sentence;
     },
+    choose: select,
     destroy() {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);

@@ -45,6 +45,7 @@ export const FRENCH: Catalog = {
   'composer.sentWithoutPicture': 'Envoyée, sans l’image',
   'composer.keptWithoutPicture': 'Gardée pour plus tard, sans l’image',
   'composer.keep': 'Garder pour plus tard',
+  'composer.restored': 'Brouillon restauré',
   'composer.kept': 'Gardée pour plus tard',
   'composer.failed': 'Pas envoyée — le texte est gardé, réessayez',
   'composer.failedWait': 'Trop de notes en ce moment. Le texte est gardé : renvoyez-le dans une minute.',

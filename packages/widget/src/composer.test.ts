@@ -33,7 +33,7 @@ let mounted: MountedPage | null = null;
 
 function mount(
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void | SendFailure | SentWithoutPicture>,
-  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose'> = {},
+  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
@@ -54,6 +54,7 @@ function press(key: string, modifiers: { metaKey?: boolean; ctrlKey?: boolean } 
 const field = () => composer?.element.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
 const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
 const closeButton = () => composer?.element.querySelector('[data-fruitback-close]') as HTMLButtonElement;
+const cancelButton = () => composer?.element.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
 describe('what the popover looks like (FRU-36)', () => {
@@ -1306,5 +1307,94 @@ describe('keep for later (FRU-124)', () => {
     assert.equal(keepButton().disabled, true);
     assert.deepEqual(kept, ['Pour plus tard', 'Pour plus tard']);
     assert.deepEqual(sent, [], 'keeping a note sent it');
+  });
+});
+
+describe('the text being written, saved as it is typed (FRU-311)', () => {
+  /** What the host would keep, for the one element of these tests. */
+  function saved() {
+    const writes: string[] = [];
+    let text: string | undefined;
+
+    return {
+      writes,
+      autosave: {
+        read: () => text,
+        write: (next: string) => {
+          writes.push(next);
+          text = next === '' ? undefined : next;
+        },
+      },
+    };
+  }
+
+  function type(value: string): void {
+    field().value = value;
+    const EventCtor = (mounted as MountedPage).view as unknown as { Event: typeof Event };
+    field().dispatchEvent(new EventCtor.Event('input', { bubbles: true }));
+  }
+
+  it('writes each change of the field', () => {
+    const { writes, autosave } = saved();
+    mount(async () => true, { autosave });
+    composer?.open(ANCHOR);
+
+    type('Le prix');
+    type('Le prix du Latte');
+
+    assert.deepEqual(writes, ['Le prix', 'Le prix du Latte']);
+  });
+
+  for (const [way, leave] of [
+    ['Esc', () => press('Escape')],
+    ['the cross', () => closeButton().click()],
+    ['Cancel', () => cancelButton().click()],
+  ] as const) {
+    it(`gives the text back after ${way}, and says « Draft restored »`, () => {
+      const { autosave } = saved();
+      mount(async () => true, { autosave });
+      composer?.open(ANCHOR);
+      type('Le prix devrait être 18 €');
+
+      leave();
+      assert.equal(composer?.element.hidden, true);
+      composer?.open(ANCHOR);
+
+      assert.equal(field().value, 'Le prix devrait être 18 €');
+      assert.equal(statusText(), 'Draft restored');
+      assert.equal(composer?.state(), 'idle');
+      // The sentence goes once the person types again.
+      type('Le prix devrait être 18 €, pas 19 €');
+      assert.equal(statusText(), '');
+    });
+  }
+
+  it('opens empty and silent when nothing was saved', () => {
+    const { writes, autosave } = saved();
+    mount(async () => true, { autosave });
+    composer?.open(ANCHOR);
+    press('Escape');
+
+    assert.equal(field().value, '');
+    assert.equal(statusText(), '');
+    assert.deepEqual(writes, [], 'a composer opened and closed with nothing typed saved something');
+  });
+
+  it('says « Brouillon restauré » in French', () => {
+    const { autosave } = saved();
+    autosave.write('Une note');
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async () => true,
+      autosave,
+      translator: createTranslator({ language: 'fr' }),
+    });
+    composer.open(ANCHOR);
+
+    assert.equal(statusText(), 'Brouillon restauré');
   });
 });

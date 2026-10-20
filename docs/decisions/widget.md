@@ -1203,6 +1203,34 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - `e2e/drafts.spec.ts` keeps two notes, reloads, sends them from the list in one request and reads
   them back from the worker; a `429` keeps the draft and says why; axe in both schemes.
 
+## The note being written, saved as it is typed (FRU-311)
+
+### The rules, in short
+
+- **Each change of the field is saved**, for its page and its element (`typing.ts`), in
+  `sessionStorage` under `<configKey>:typing`: per tab, like the drafts, for the same reasons. A
+  storage that refuses keeps the text in memory for the page. Twenty texts a tab at most.
+- **Esc, « Cancel » and the cross close and keep the text.** No question, no modal: the gesture stays
+  quick (arbitrated by the orchestrator on 2026-10-20, FRU-310, with the audit's option A). The
+  composer opened again on that element gives the text back and says « Draft restored »
+  (« Brouillon restauré »), in the muted status line, until the person types.
+- **A reload, or a navigation back to the page, opens the composer by itself** on the element of the
+  text written last on that page (`restoreTyping` in `embed.ts`), with the text and the same
+  sentence. The element is found as a pin is, **and only by its identity**: a text must not come back
+  on the element that took the place of its own. Once for each visit of a page, never over somebody
+  who writes, chooses or reads a thread, and never before a link to a note, which the address asked
+  for.
+- **A note sent, or kept for later, leaves**, for the element it was sent about: the composer can be
+  open on another one when the answer comes. A field emptied by hand leaves too: that is the way to
+  give a text up. A composer opened and closed with nothing typed writes nothing.
+- **Pointed at another element while open, the composer keeps its text** (FRU-258), and the saved text
+  moves with it.
+- **`init` does it.** A host that assembles the parts itself (the playground) passes `autosave` to
+  `createComposer`, or saves nothing, as before.
+- `typing.test.ts`, the `autosave` tests of `composer.test.ts`, and `e2e/composer-autosave.spec.ts`
+  (a reload, Esc, « Cancel », the cross, and the witness that another element opens empty and that
+  nothing typed saves nothing).
+
 ## A link that opens a note on its page (FRU-253)
 
 ### The rules, in short

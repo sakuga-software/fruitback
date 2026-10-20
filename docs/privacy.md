@@ -331,6 +331,12 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   reporter chose to keep for later and has not sent yet** (FRU-124), each a whole seed, with the name
   they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
   the tab. Any script of the page can read them while they are there.
+- `sessionStorage`, under `fruitback:config:typing` (or the `configKey` with `:typing`): **the note
+  being written, as it is typed** (FRU-311), with the address of its page and the anchor of its
+  element, so that a reload or a closed composer does not lose it. Twenty at most. It goes when the
+  note is sent or kept for later, when the field is emptied, and with the tab. Any script of the page
+  can read it, as it can already read the field while somebody types: the widget's Shadow root is
+  open.
 - **The rules of the extension leave the browser only when the reviewer asks** (FRU-72). With
   « Keep my rules in the account of this browser » ticked in the options page, the extension copies
   its rules to `storage.sync`, which the vendor of the browser keeps with the reviewer's account

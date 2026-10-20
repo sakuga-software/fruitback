@@ -245,6 +245,7 @@ describe('every word the widget shows', () => {
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean | SendFailure | SentWithoutPicture) => void = () => {};
     let keptAnswer: true | SentWithoutPicture = true;
+    let restoredText: string | undefined;
     const places = createOfferedDestinations();
     places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
     const composer = createComposer({
@@ -254,6 +255,8 @@ describe('every word the widget shows', () => {
       onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture>((resolve) => (answer = resolve)),
       // Offered, so « Keep for later » is drawn (FRU-124).
       keep: { offered: () => true, onKeep: async () => keptAnswer },
+      // A text saved for the element comes back with « Draft restored » (FRU-311).
+      autosave: { read: () => restoredText, write: () => {} },
       // Two places, so the line of where a note goes is drawn. The second has no name of its own.
       destinations: {
         offered: places.get,
@@ -448,6 +451,12 @@ describe('every word the widget shows', () => {
     (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();
     await settle();
     snapshots.push(...shown(host.root));
+    // A text saved for this element, given back (FRU-311).
+    composer.close();
+    restoredText = 'NOTE SAVED';
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    snapshots.push(...shown(host.root));
+    restoredText = undefined;
 
     // The copy button, with a clipboard that takes the text and then with one that refuses it.
     const copy = host.root.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;

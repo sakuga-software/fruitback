@@ -106,6 +106,24 @@ export type ComposerOptions = {
   picture?: PictureChoice;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+  /**
+   * Where the text being written is saved as it is typed (FRU-311). The host knows the element and
+   * the page; the composer knows the text. Left out: nothing is saved, as before.
+   */
+  autosave?: Autosave;
+};
+
+/**
+ * The text of the element the composer is open on, saved at each change of the field (FRU-311).
+ *
+ * `read` is asked at each open on a new element: a text found there comes back, and the composer
+ * says « Draft restored ». `write` is called with each change of the field. Esc, « Cancel » and the
+ * cross write nothing: the text stays saved. The host forgets it once the note is planted or kept
+ * for later, for the element it was sent about: the composer may be open on another one by then.
+ */
+export type Autosave = {
+  read(): string | undefined;
+  write(text: string): void;
 };
 
 export type PictureChoice = {
@@ -327,7 +345,8 @@ export function createComposer(options: ComposerOptions): Composer {
     }
 
     session += 1;
-    field.value = '';
+    const restored = options.autosave?.read() ?? '';
+    field.value = restored;
     showPicture();
     askForNameOrNot();
     keep.hidden = options.keep?.offered() !== true;
@@ -339,6 +358,8 @@ export function createComposer(options: ComposerOptions): Composer {
     foldPlaces(true);
     drawDestinations();
     setState('idle');
+    // Said, and quietly: the person finds the text they left, and knows why it is there.
+    if (restored !== '') status.textContent = t.text('composer.restored');
     focus.remember();
     root.hidden = false;
     place(anchor);
@@ -528,6 +549,12 @@ export function createComposer(options: ComposerOptions): Composer {
   cancel.addEventListener('click', close);
   // The cross and « Cancel » do the same thing: the head holds a way out wherever the eye is.
   shut.addEventListener('click', close);
+  // Each change is saved (FRU-311): a reload, Esc, « Cancel » or the cross no longer loses it. The
+  // sentence « Draft restored » has done its job once the person types.
+  field.addEventListener('input', () => {
+    options.autosave?.write(field.value);
+    if (state === 'idle') status.textContent = '';
+  });
   field.addEventListener('keydown', (event) => {
     const key = event as KeyboardEvent;
     // ⌘/Ctrl+Enter sends, because a plain Enter belongs to the note.
