@@ -576,8 +576,16 @@ test('a status that is chosen is sent, and the drop beside it follows', async ({
       body: { showComments: true, stages: { st0: 'ripe' } },
     });
   await expect(first.getByRole('button', { name: /Status for Triage/ })).toContainText('Done');
-  expect(await painted(first.locator('.kit-drop'), 'backgroundColor')).toEqual(rgb(DONE));
-  expect(before).not.toEqual(rgb(DONE));
+  // The colour of « Done » is the token of the console (FRU-334), read where the page defines it:
+  // a change of the palette changes app.css and not this test.
+  const token = (name: string) =>
+    page.evaluate((property) => getComputedStyle(document.documentElement).getPropertyValue(property).trim(), name);
+  const done = await token('--color-status-done');
+  expect(done).toMatch(/^#[0-9a-f]{6}$/i);
+  expect(await painted(first.locator('.kit-drop'), 'backgroundColor')).toEqual(rgb(done));
+  // The control: before the choice, the drop had the colour of another status, so the drop did follow.
+  expect(before).not.toEqual(rgb(done));
+  expect(before).toEqual(rgb(await token('--color-status-new')));
 });
 
 test('at 390 px a long address keeps one line on its row, and its state goes under it (FRU-321)', async ({ page }) => {
