@@ -186,7 +186,12 @@ export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
   // a deletion then take their locks in one order: an owner and an administrator who delete one
   // workspace at the same moment wait for each other, where the other order ended one of them on a
   // deadlock (seen by the heavy review of #364).
-  await db.execute(sql`SELECT 1 FROM organization WHERE id = ${workspace} FOR UPDATE`);
+  // `NO KEY UPDATE`, which waits for the `FOR UPDATE` of the deletion by an administrator as well.
+  await db
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, workspace))
+    .for('no key update');
   const ids = await db.select({ id: sites.id }).from(sites).where(eq(sites.workspace_id, workspace));
   await dropKeptNotes(
     db,
