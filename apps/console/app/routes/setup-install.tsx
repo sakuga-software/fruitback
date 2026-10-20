@@ -1,7 +1,7 @@
 import type { Site, Workspace } from '../api';
 import { ago } from '../ago';
 import { locale, t } from '../i18n';
-import { EXTENSION_GUIDE, snippetFor, useConnect, useCopy } from '../install-options';
+import { BY_SIGN_IN, CONNECT_PAGE, EXTENSION_GUIDE, snippetFor, useConnect, useCopy } from '../install-options';
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
@@ -11,8 +11,9 @@ import { siteLabel } from '../site-address';
 /**
  * Step 3: the two ways to put Fruitback on the site, each in its card, then what to do on the site.
  *
- * The extension does not « sign in with this account » here yet: a browser is connected from here,
- * with a code that nobody types, until the popup asks by itself (FRU-238, FRU-251). The step waits
+ * « Connect this browser » opens `/connect` on Fruitback Cloud (FRU-313): the popup signs in with the
+ * account, as everywhere. A self-hosted console still opens the pairing link of its worker, with a
+ * code that nobody types (FRU-238). The step waits
  * for the first note (`setup.tsx` reads the site again), and « Open the console » stays, for a person
  * who does not send one now.
  */
@@ -38,7 +39,13 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
               <Away />
             </Button>
             <div>
-              <LinkButton onClick={connect}>{t('Connect this browser')}</LinkButton>
+              {BY_SIGN_IN ? (
+                <LinkButton href={CONNECT_PAGE} newTab>
+                  {t('Connect this browser')}
+                </LinkButton>
+              ) : (
+                <LinkButton onClick={connect}>{t('Connect this browser')}</LinkButton>
+              )}
             </div>
           </div>
           {problem === undefined ? null : <Problem>{t(problem)}</Problem>}

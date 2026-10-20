@@ -1185,7 +1185,8 @@ on a list. The rate limiter is what protects them, which is why it runs above th
 | `GET /pair`             | the page a pairing link opens: static, no script            |
 
 **A reviewer connects the extension from the console**: « Connect this browser », on « Put it on the
-site » or on « Sites ». An operator can also mint a pairing code on the container, never over HTTP,
+site » or on « Sites », opens the pairing link of your worker (on Fruitback Cloud the same button
+leads to the sign-in of the popup instead, FRU-313). An operator can also mint a pairing code on the container, never over HTTP,
 for one workspace and one of its members (FRU-277). The workspace id is in the address of the console,
 `/w/<id>/sites`, and the workspace must have a site. `--subject` is the id of the member's account,
 which the database gives from their address:

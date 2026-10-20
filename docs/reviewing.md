@@ -48,8 +48,9 @@ run there.
 **Sign in with email**, **Google** or **GitHub**: all three open the console in a tab, which signs
 you in its own way and shows a word. Check that the popup shows the same word, then approve in the
 console; the popup picks the sign-in up by itself, even when it was closed meanwhile. Invited by a
-client or a team? Use the email the invitation was sent to. The console's **Connect this browser** button, which opens a pairing link, still
-works too. Then, on a site of one of your workspaces, the popup names the workspace, how many notes
+client or a team? Use the email the invitation was sent to. On Fruitback Cloud, the console's
+**Connect this browser** button leads to the same: a page that says to click the Fruitback icon and
+sign in. On a server you run yourself, it opens a pairing link of that server instead. Then, on a site of one of your workspaces, the popup names the workspace, how many notes
 wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
 only, and the widget appears, reading and writing as you. Once it is on, the popup has a switch to
 turn it off and on, the notes of the page by stage, **Leave feedback** and **Show every note of the

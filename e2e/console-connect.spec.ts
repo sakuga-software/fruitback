@@ -447,3 +447,49 @@ test.describe('Connect this browser (FRU-240)', () => {
     await context.close();
   });
 });
+
+/**
+ * « Connect this browser » from the console of Fruitback Cloud (FRU-313): `/connect` says to sign in
+ * from the popup. It mints no code and asks the worker nothing, so the page is the same signed in or
+ * not. Which consoles lead here is `connectsBySignIn` of `instance.ts`: the console of these specs
+ * is self-hosted, and still pairs.
+ */
+test.describe('the way to connect a browser from the console of the Cloud (FRU-313)', () => {
+  for (const locale of ['en', 'fr'] as const) {
+    test(`says the three steps of the popup, and asks the worker nothing, in ${locale}`, async ({ browser }) => {
+      const context = await browser.newContext({ locale: locale === 'en' ? 'en-US' : 'fr-FR' });
+      const page = await context.newPage();
+      const asked: string[] = [];
+      await page.route(`${WORKER_ORIGIN}/**`, (route) => {
+        const { pathname } = new URL(route.request().url());
+        asked.push(`${route.request().method()} ${pathname}`);
+
+        return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
+      });
+      await page.goto(`${CONSOLE}/connect`);
+
+      await expect(page.locator('main h1')).toHaveText(
+        locale === 'en' ? 'Connect this browser' : 'Connecter ce navigateur',
+      );
+      await expect(page.locator('main ol > li > strong')).toHaveText(
+        locale === 'en'
+          ? ['Click the Fruitback icon', 'Press Sign in with email', 'Check the word, then press Connect']
+          : [
+              'Cliquez sur l’icône Fruitback',
+              'Appuyez sur Se connecter par e-mail',
+              'Vérifiez le mot, puis appuyez sur Connecter',
+            ],
+      );
+      await expect(
+        page.getByRole('link', {
+          name: locale === 'en' ? 'Install the extension (beta)' : 'Installer l’extension (bêta)',
+        }),
+      ).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
+      // No code is minted: the console asks the worker for nothing that pairs.
+      expect(asked.filter((call) => call.endsWith('/connect') || call.includes('/session/'))).toEqual([]);
+      expect(await sideScroll(page)).toBe(0);
+      await expectNoViolation(page, `the page /connect in ${locale}`);
+      await context.close();
+    });
+  }
+});

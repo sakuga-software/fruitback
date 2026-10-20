@@ -102,6 +102,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+- **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
+  On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
+  button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
+  email », the word. It mints no code and reads nothing, and the session is the one of the account,
+  so the popup offers « Add to … and turn on » after it like after any sign-in. The worker's page
+  `/pair` held a session of one workspace, in the words of a worker. **A self-hosted console keeps
+  the pairing link** (`useConnect`): the extension of the store signs in to the Cloud alone
+  (`WXT_FRUITBACK_CLOUD`), so it cannot sign in to that worker.
 - **« Connect this browser » answers the extension, and only on a press** (FRU-240, screen 04 of the
   mockup of 2026-10-13, routes of FRU-238). The extension opens `/connect/<request>`; the page reads
   `GET /console/connect/<request>` and shows the word, the browser, the account and its workspaces

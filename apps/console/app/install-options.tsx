@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { API, type Site, type Workspace, call, pairingLink } from './api';
 import { msg, t } from './i18n';
+import { connectsBySignIn } from './instance';
 import { copyText, problemOf } from './problems';
 import { Button, Problem, Snippet } from './ui';
 import { useLocale } from './use-locale';
@@ -42,7 +43,16 @@ export function useCopy(text: string): { copied: 'no' | 'yes' | 'refused'; copy:
 }
 
 /**
- * Connects the browser of the person: a code is made, and the pairing page of the worker opens with
+ * Where « Connect this browser » leads on Fruitback Cloud (FRU-313): a page of the console that says
+ * to sign in from the popup. It mints nothing, and the session is the one of the account.
+ */
+export const CONNECT_PAGE = '/connect';
+
+/** Whether this console connects a browser by the sign-in of the popup, or by a pairing link. */
+export const BY_SIGN_IN = connectsBySignIn(API);
+
+/**
+ * Connects the browser of the person on a self-hosted instance: a code is made, and the pairing page of the worker opens with
  * it in another tab. `link` is that page, for a browser that blocked the tab.
  */
 export function useConnect(workspace: Workspace): {
@@ -105,9 +115,15 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
             'Nothing to change on the site. Connect this browser, then click the Fruitback icon on the page that opens.',
           )}
         </p>
-        <Button tone="outline" onClick={connect}>
-          {t('Connect this browser')}
-        </Button>
+        {BY_SIGN_IN ? (
+          <Button tone="outline" href={CONNECT_PAGE} newTab>
+            {t('Connect this browser')}
+          </Button>
+        ) : (
+          <Button tone="outline" onClick={connect}>
+            {t('Connect this browser')}
+          </Button>
+        )}
         {problem === undefined ? null : (
           <div className="mt-2">
             <Problem>{t(problem)}</Problem>

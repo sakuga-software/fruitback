@@ -402,6 +402,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A page opened in a new tab. If it did not, open': 'Une page s’est ouverte dans un nouvel onglet. Sinon, ouvrez',
   'this link': 'ce lien',
   ': it works once, for fifteen minutes.': ' : il fonctionne une fois, pendant quinze minutes.',
+  'This browser was not connected. Try again.': 'Ce navigateur n’a pas été connecté. Réessayez.',
 
   'You are not signed in yet': 'Vous n’êtes pas encore connecté',
   'Fruitback did not answer. Your link still works.': 'Fruitback n’a pas répondu. Votre lien fonctionne toujours.',
@@ -419,7 +420,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only an owner or an admin of the workspace removes a site.':
     'Seul un propriétaire ou un administrateur du workspace retire un site.',
   'This site is still here. Try again.': 'Ce site est toujours là. Réessayez.',
-  'This browser was not connected. Try again.': 'Ce navigateur n’a pas été connecté. Réessayez.',
   'The browser refused the copy. Select the script above and copy it by hand.':
     'Le navigateur a refusé la copie. Sélectionnez le script ci-dessus et copiez-le à la main.',
   'The browser refused the copy. Select the secret above and copy it by hand.':
@@ -637,6 +637,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Rien à déployer. Convient au site d’un client auquel vous ne pouvez pas toucher.',
   'Add it, then connect this browser: a page opens, and you click the Fruitback icon there.':
     'Ajoutez-la, puis connectez ce navigateur : une page s’ouvre, et vous y cliquez sur l’icône Fruitback.',
+  // « Connect this browser », from the console (FRU-313).
+  'The extension signs in with your account, in three steps.':
+    'L’extension se connecte avec votre compte, en trois étapes.',
+  'Click the Fruitback icon': 'Cliquez sur l’icône Fruitback',
+  'in the toolbar. Not there? Open the puzzle piece at the right of the address bar.':
+    'dans la barre d’outils. Absente ? Ouvrez la pièce de puzzle à droite de la barre d’adresse.',
+  'Press Sign in with email': 'Appuyez sur Se connecter par e-mail',
+  'in the popup. A tab of the console opens with a word.':
+    'dans le popup. Un onglet de la console s’ouvre avec un mot.',
+  'Check the word, then press Connect': 'Vérifiez le mot, puis appuyez sur Connecter',
+  'in that tab. The popup shows the same word.': 'dans cet onglet. Le popup affiche le même mot.',
+  'No extension in this browser yet?': 'Pas encore d’extension dans ce navigateur ?',
   'Script tag': 'Balise de script',
   'Before the closing body tag. Members see their pins on every visit.':
     'Avant la balise body fermante. Les membres voient leurs pins à chaque visite.',
