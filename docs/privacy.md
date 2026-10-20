@@ -325,6 +325,24 @@ what it writes each time.
   row in `admin_actions` (`account-deleted`) for each workspace of the account, with the address of
   the account, and **the owners of each workspace read it**.
 
+### What the extension declares to Firefox (FRU-333)
+
+Firefox asks a new extension to declare what it sends out of the browser, and shows that list when
+somebody installs it. The extension declares five categories, all required, with the name Mozilla
+gives each one:
+
+| Category                    | What the extension sends                                                 |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `websiteContent`            | the selector, the excerpt of the element text, the page title, a picture |
+| `browsingActivity`          | the address of the page of the note                                      |
+| `personalCommunications`    | the text of the note                                                     |
+| `personallyIdentifyingInfo` | a typed name, or the name and the address of a member in team mode       |
+| `authenticationInfo`        | the session of the account that the extension keeps                      |
+
+The list says what the extension can send, not what each note holds: a note with no typed name, for
+example, carries no name. It goes to the worker named in the extension, and nowhere else. Because
+Firefox shows this list itself only from Firefox 140, the extension asks for Firefox 140 or later.
+
 ### What stays in the reporter's browser
 
 Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.

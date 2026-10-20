@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
 import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
+import { DATA_COLLECTION_PERMISSIONS, FIREFOX_MIN_VERSION } from './src/data-collection.ts';
 import { MANIFEST_COMMANDS } from './src/shortcut.ts';
 
 /** Where the licence lives in the output, and where it is copied from (FRU-82). */
@@ -76,7 +77,11 @@ export default defineConfig({
     // install. The browser owns the key, so the page never sees it: see `src/shortcut.ts`.
     commands: MANIFEST_COMMANDS,
     browser_specific_settings: {
-      gecko: { id: 'fruitback@sakuga-software.com', strict_min_version: '128.0' },
+      gecko: {
+        id: 'fruitback@sakuga-software.com',
+        strict_min_version: FIREFOX_MIN_VERSION,
+        data_collection_permissions: DATA_COLLECTION_PERMISSIONS,
+      },
     },
   },
 });
