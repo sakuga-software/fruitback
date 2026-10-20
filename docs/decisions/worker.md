@@ -2761,7 +2761,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Six reads, and nine writes** (FRU-280 to FRU-284): `instance`, `workspaces` (`q`, `show` of `all`,
+- **Six reads, and ten writes** (FRU-280 to FRU-285): `instance`, `workspaces` (`q`, `show` of `all`,
   `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
   `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator, the
   suspension of an account, the suspension of a workspace, its deletion and the five writes in a
@@ -2800,7 +2800,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
   (measured by a review on a worker, FRU-261). The decision of Mathieu says « le premier compte ». An
   instance with no administrator gets one from its operator in the database, and FRU-280 refuses
   to take the role from the last one. A table of accounts emptied again gives the role to the next
-  account: no route deletes an account, and a mark that the instance was set up once was not taken.
+  account: the route that deletes an account (FRU-285) keeps the last administrator and the one who
+  asks, and a mark that the instance was set up once was not taken.
   test:`gives the role to no later account, after the role is taken away or written another way`.
 - **The trace is written by the worker, before the answer.** « Each read is traced » is a promise
   only if a read cannot leave without its row. It traces nothing that the operator does in the
@@ -2816,7 +2817,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
 ### What it does not do
 
 - No write but the role (FRU-280), the suspension of an account (FRU-281), the suspension of a
-  workspace (FRU-282), its deletion (FRU-284) and the writes in a workspace (FRU-283). The suspension of an account writes `banned`, and
+  workspace (FRU-282), its deletion (FRU-284), the writes in a workspace (FRU-283) and the deletion
+  of an account (FRU-285). The suspension of an account writes `banned`, and
   empties `banReason` and `banExpires`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
@@ -3153,6 +3155,27 @@ Decision 2 of 2026-10-19: « Directes, tracées ».
 - **The trace** is one row of `admin_actions` for each change, with `workspace_id`, the person and
   `{ role }` in `detail` (and `previous` for the owner). The owners read it in `actions` of
   `/admin-reads`, with `role`.
+
+## An administrator deletes an account (FRU-285)
+
+D5 of FRU-260, and decision 3 of 2026-10-19: « Refusé tant qu'il y a des workspaces ».
+
+### The rules, in short
+
+- **`POST /console/admin/users/<id>/deletion`, body `{ email }`**, behind `instanceAdminOf`. The
+  address is the confirmation, as the name is for a workspace (FRU-284). `200 { user: { id, email },
+workspaces }`; `409 sole-owner` with `workspaces`, `409 self-deletion`, `409 last-admin`,
+  `409 email-mismatch`; `400 invalid-email`; `404` for an account that does not exist.
+- **One transaction** (`deleteAccount` of `instance-admin-postgres.ts`): the lock of the role, the
+  account `FOR UPDATE`, the rule of the last administrator before the check of the caller (as in
+  `setInstanceAdmin`), the address, the workspaces of the account `FOR UPDATE`, the owners counted,
+  one action for each workspace, then `DELETE FROM "user"`. The foreign keys do the rest.
+- **The sessions of the extension** are in another store: `endSessionsOf({ subject })` runs before the
+  transaction (after a first pass of the checks alone, so a refusal ends nothing) and after it.
+- **`soleOwner`** on each workspace of `GET /console/admin/users` says that the account owns it alone:
+  the console holds « Delete » and lists those workspaces before the person presses anything.
+- **The notes** are not touched. Their rows of the index lose the account (`ON DELETE SET NULL`), and
+  the list says `former-member`, as for a member who left.
 
 ## The notes of a site that goes (FRU-194)
 

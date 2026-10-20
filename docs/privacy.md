@@ -309,6 +309,14 @@ what it writes each time.
   of the workspace read these rows** beside the reads. An invitation by an administrator is an
   invitation like any other: its address, its role, its end, and its message when the instance sends
   mail. It names the administrator as the one who invites.
+- **An administrator of the instance can delete an account** (FRU-285), after typing its address,
+  except one that owns a workspace alone, their own, and the last administrator's. It deletes the
+  account, its sessions in the console and in the extension, its ways to sign in, its memberships,
+  the invitations it made and the sites shared with it. **Its notes stay**: their text, in Fruitback
+  or in the tracker, and the name the tracker got with them; the console lists them as of a
+  « Former member », with no name. `forget` deletes the notes of a person. The deletion leaves one
+  row in `admin_actions` (`account-deleted`) for each workspace of the account, with the address of
+  the account, and **the owners of each workspace read it**.
 
 ### What stays in the reporter's browser
 

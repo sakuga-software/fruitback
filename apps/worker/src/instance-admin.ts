@@ -65,6 +65,9 @@ import type { SignUp } from './sign-up.ts';
  *   transaction under the lock of the role, and leaves an action that the owners of the workspace
  *   read. The rules of the routes of the members hold: a workspace keeps an owner, a role is one of
  *   `GIVEN_ROLES`, an invitation one of `admin` and `member`, and a suspended workspace refuses them.
+ * - **Deletion of an account** (FRU-285): `POST /console/admin/users/<id>/deletion`, body `{ email }`.
+ *   Refused while the account owns a workspace alone, for the administrator themselves, and for the
+ *   last administrator. Its sessions of the console and of the extension end, and its notes stay.
  */
 
 /** Where the routes of the administrator of the instance are. */
@@ -102,6 +105,7 @@ export const ADMIN_WRITES = [
   'owner',
   'invitation',
   'new-workspace',
+  'account-deletion',
 ] as const;
 export type AdminWrite = (typeof ADMIN_WRITES)[number];
 
@@ -152,6 +156,11 @@ export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; 
   },
   // Not `POST /console/admin/workspaces`: that path is the list, which a `GET` reads.
   { write: 'new-workspace', pattern: /^\/console\/admin\/new-workspace$/, example: '/console/admin/new-workspace' },
+  {
+    write: 'account-deletion',
+    pattern: /^\/console\/admin\/users\/([A-Za-z0-9_-]{1,80})\/deletion$/,
+    example: '/console/admin/users/acc_00000000000000000000/deletion',
+  },
 ];
 
 /** The kinds of action that `admin_actions` keeps. */
@@ -168,6 +177,7 @@ export const ADMIN_ACTIONS = [
   'owner-changed',
   'member-invited',
   'workspace-created',
+  'account-deleted',
 ] as const;
 export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
 
@@ -283,6 +293,20 @@ export type WorkspaceCreation =
   | { ok: true; workspace: WorkspaceName; owner: { id: string; email: string } }
   | { ok: false; refused: 'not-admin' | 'unknown-account' | 'suspended-account' };
 
+/**
+ * What a deletion of an account gives (FRU-285):
+ * - `ok`: the account is gone; `workspaces` are the ones it was a member of;
+ * - `unknown-account`, `not-admin`: nothing to find;
+ * - `self-deletion`: the administrator asked to delete their own account;
+ * - `last-admin`: the account is the last administrator of the instance;
+ * - `email-mismatch`: the address in the body is not the one of the account;
+ * - `sole-owner`: the account owns these workspaces alone (« Refusé tant qu'il y a des workspaces »).
+ */
+export type AccountDeletion =
+  | { ok: true; account: { id: string; email: string }; workspaces: WorkspaceName[] }
+  | { ok: false; refused: 'unknown-account' | 'not-admin' | 'self-deletion' | 'last-admin' | 'email-mismatch' }
+  | { ok: false; refused: 'sole-owner'; workspaces: WorkspaceName[] };
+
 /** How long an invitation of an administrator waits, as one of a member (`INVITATION_SECONDS` of `auth.ts`). */
 export const ADMIN_INVITATION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -353,7 +377,8 @@ export type AdminUser = {
   instanceAdmin: boolean;
   /** An administrator of the instance suspended the account (FRU-281). */
   suspended: boolean;
-  workspaces: (WorkspaceName & { role: string })[];
+  /** `soleOwner`: the account owns this workspace alone (FRU-285), so it cannot be deleted yet. */
+  workspaces: (WorkspaceName & { role: string; soleOwner?: true })[];
   /** The ways the person signed in: `email`, `github`, `google`. */
   providers: string[];
   /** The last day the person was seen in one of their workspaces (FRU-249), as `YYYY-MM-DD`. */
@@ -532,6 +557,19 @@ export type InstanceAdminReads = {
   ): Promise<AdminInvitation>;
   /** Whether a message of an invitation left (FRU-269), as the route of a member keeps it. */
   noteMailed(invitation: string, mailed: boolean): Promise<void>;
+  /**
+   * Deletes an account (FRU-285) when `email` is its address, and writes the action for each of its
+   * workspaces. Refused while it owns a workspace alone. The checks, the actions and the deletion are
+   * in one transaction, under the lock of `setInstanceAdmin`.
+   */
+  deleteAccount(
+    actor: Pick<Account, 'id' | 'email'>,
+    target: string,
+    email: string,
+    now: number,
+    /** `check`: the checks alone, and nothing is written. */
+    options?: { check?: boolean },
+  ): Promise<AccountDeletion>;
   /** Makes a workspace whose owner is the account of `email` (FRU-283). */
   createWorkspace(
     actor: Pick<Account, 'id' | 'email'>,
@@ -955,6 +993,62 @@ async function writeInWorkspace(
   }
 }
 
+/** What a refused deletion of an account answers (FRU-285). */
+const ACCOUNT_DELETION_REFUSED: Record<
+  Exclude<Extract<AccountDeletion, { ok: false }>['refused'], 'sole-owner'>,
+  { status: number; error: string }
+> = {
+  'unknown-account': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+  'self-deletion': { status: 409, error: 'self-deletion' },
+  'last-admin': { status: 409, error: 'last-admin' },
+  'email-mismatch': { status: 409, error: 'email-mismatch' },
+};
+
+/**
+ * `POST /console/admin/users/<id>/deletion`, body `{ email }` (FRU-285).
+ *
+ * WARNING: the sessions of the extension are in another store, so the order is the rule, as for a
+ * restoration (`changeSuspension`): they end before the transaction, so a deletion that then fails
+ * leaves no session that a retry would miss, and again after it, for a pairing made in between.
+ * A refusal ends nothing.
+ */
+async function deleteAccount(
+  request: Request,
+  target: string,
+  admin: Account,
+  reads: InstanceAdminReads,
+  endSessionsOf: (account: string, now: number) => Promise<void>,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const fields = await fieldsOf(request);
+  const email = typeof fields.email === 'string' ? normalizeEmail(fields.email) : undefined;
+  if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+
+  // The refusals that need no write are read first: a refused deletion ends no session.
+  const known = await reads.deleteAccount(admin, target, email, now, { check: true });
+  if (!known.ok) {
+    if (known.refused === 'sole-owner')
+      return json(409, { error: 'sole-owner', workspaces: known.workspaces }, headers);
+    const { status, error } = ACCOUNT_DELETION_REFUSED[known.refused];
+
+    return json(status, { error }, headers);
+  }
+  await endSessionsOf(target, now);
+  const deleted = await reads.deleteAccount(admin, target, email, now);
+  if (!deleted.ok) {
+    if (deleted.refused === 'sole-owner')
+      return json(409, { error: 'sole-owner', workspaces: deleted.workspaces }, headers);
+    const { status, error } = ACCOUNT_DELETION_REFUSED[deleted.refused];
+
+    return json(status, { error }, headers);
+  }
+  await endSessionsOf(target, now);
+
+  return json(200, { user: deleted.account, workspaces: deleted.workspaces }, headers);
+}
+
 /** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
 async function changeRole(
   request: Request,
@@ -1017,6 +1111,10 @@ export async function handleInstanceAdmin(
         if (context.afterDeletion === undefined) return notFound();
 
         return deleteWorkspace(request, target, admin, reads, context.afterDeletion, now, headers);
+      case 'account-deletion':
+        if (context.endSessionsOf === undefined) return notFound();
+
+        return deleteAccount(request, target, admin, reads, context.endSessionsOf, now, headers);
       case 'member-role':
       case 'member-add':
       case 'owner':

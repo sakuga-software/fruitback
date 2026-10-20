@@ -1788,7 +1788,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   up before it. **A later account never becomes the administrator**, also when no account has the
   role: an instance that loses its last administrator has none until its operator writes the role in
   the database. The route below never takes the role from the last one. An instance whose accounts are all deleted is empty again, and
-  its next account is its first: no route deletes an account, so only the operator can get there.
+  its next account is its first. The route that deletes an account (FRU-285, below) never deletes
+  the administrator who asks, nor the last one, so only the operator can get there.
 - **The admin plugin of better-auth is not mounted, and the worker refuses to start with it**
   (`REFUSED_PLUGINS`): it serves fifteen routes under `/console/auth/admin/`, one of which signs in as
   another person. The worker keeps its four columns of `user` only. Each route of the plugin answers
@@ -1807,8 +1808,8 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
   No route of the administrator writes anything but the trace, except the role, the suspension of
-  an account, the suspension of a workspace, the deletion of a workspace and the writes in a
-  workspace below.
+  an account, the suspension of a workspace, the deletion of a workspace, the writes in a
+  workspace and the deletion of an account below.
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
@@ -1974,6 +1975,32 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   `owner-changed`, `member-invited`, `workspace-created`) with the workspace, the address of the
   person and the role given, and **the owners of the workspace read it beside the reads**. A call
   that changes nothing writes no row.
+
+- **Who deletes an account, and what stays** (FRU-285, D5 of FRU-260, decision 3 of 2026-10-19:
+  « Refusé tant qu'il y a des workspaces »). An administrator only, with
+  `POST /console/admin/users/<id>/deletion` and `{ email }`, the address of the account, behind the
+  same guard. The route refuses with `409`:
+  - `sole-owner`, with the workspaces that the account owns alone: **an account that owns a workspace
+    alone is not deleted**, until another account owns it or the workspace is deleted:
+    test:`refuses an account that owns a workspace alone, and lists those workspaces, until it has another owner`;
+  - `self-deletion`, `email-mismatch`, and `last-admin` for the last administrator. The checks and the
+    deletion are one transaction under the lock of the role, with the workspaces of the account held
+    `FOR UPDATE`, so two administrators who delete each other leave one:
+    test:`deletes one of them: the other gets « last-admin », and one administrator stays`.
+
+  **What goes**: the account, its sessions of the console, its ways to sign in, its memberships, the
+  invitations it made and the sites shared with it, by the foreign keys; and **every session of the
+  extension of the account**, ended before the transaction and again after it:
+  test:`ends the sessions of the extension of the account, of its account and of each workspace, by the real transport`.
+  An access token of an account lives its ten minutes, as one of a suspended account, and reaches no
+  site: the account is in no workspace. **What stays**: its notes. A note keeps its text and stays in
+  its tracker; the list of a workspace names its author « Former member », with no name, as for a
+  member who left (FRU-244):
+  test:`keeps the notes of the account, which the list names as of a former member, with no name`.
+  `forget` stays the way to delete the notes of a person. Each deletion writes one row in
+  `admin_actions` (`account-deleted`) for each workspace of the account, before the row goes, and
+  **the owners of each read it**, with the address of the account:
+  test:`writes one action for each workspace of the account, that their owners read after it goes`.
 
 ### Personal data
 

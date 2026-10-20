@@ -8,6 +8,7 @@ import { invitation, member, organization, session, user } from './auth-schema.t
 import type {
   AdminAction,
   AdminActionKind,
+  AccountDeletion,
   AdminInvitation,
   MemberAddition,
   MemberRoleChange,
@@ -562,7 +563,11 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           ? [[], [], []]
           : await Promise.all([
               query(
-                sql`SELECT m."userId" AS person, o.id, o.name, m.role
+                sql`SELECT m."userId" AS person, o.id, o.name, m.role,
+                           (m.role = 'owner' AND NOT EXISTS (
+                             SELECT 1 FROM member other
+                              WHERE other."organizationId" = m."organizationId" AND other.role = 'owner'
+                                AND other."userId" <> m."userId")) AS sole
                       FROM member m JOIN organization o ON o.id = m."organizationId"
                      WHERE m."userId" IN ${among(ids)}
                      ORDER BY m."createdAt", o.id`,
@@ -596,6 +601,8 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
               id: String(each.id),
               name: String(each.name),
               role: String(each.role),
+              // The account owns this workspace alone (FRU-285): it cannot be deleted before another owner.
+              ...(each.sole === true ? { soleOwner: true as const } : {}),
             })),
             providers: of(providers, row.id).map((each) => String(each.provider)),
             ...(typeof row.seen === 'string' ? { lastSeen: row.seen } : {}),
@@ -1152,6 +1159,87 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
         });
 
         return { ok: true, workspace, owner };
+      });
+    },
+
+    async deleteAccount(actor, target, email, now, options = {}) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<AccountDeletion> => {
+        const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+        // WARNING: the lock comes before every read, as in `setInstanceAdmin`: a deletion changes who
+        // counts as an administrator, so it waits for a change of the role, and the other way.
+        await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+        const [row] = await rowsIn(
+          sql`SELECT email, (${IS_ADMIN}) AS admin FROM "user" WHERE id = ${target} FOR UPDATE`,
+        );
+        if (row === undefined) return { ok: false, refused: 'unknown-account' };
+        if (target === actor.id) return { ok: false, refused: 'self-deletion' };
+        if (row.admin === true) {
+          const [counted] = await rowsIn(sql`SELECT count(*)::int AS n FROM "user" WHERE ${IS_ADMIN}`);
+          if (number(counted?.n) <= 1) return { ok: false, refused: 'last-admin' };
+        }
+        // After the rule of the last administrator, as in `setInstanceAdmin`: of two administrators
+        // who delete each other, the second learns why.
+        const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+        if (String(row.email) !== email) return { ok: false, refused: 'email-mismatch' };
+        // The workspaces of the account are held, as a write of an administrator holds one (FRU-283):
+        // a change of their owners waits, and the count below is the one that holds at the deletion.
+        const workspaces = await rowsIn(
+          sql`SELECT o.id, o.name FROM organization o
+               WHERE o.id IN (SELECT "organizationId" FROM member WHERE "userId" = ${target})
+               ORDER BY o.id FOR UPDATE`,
+        );
+        const sole = await rowsIn(
+          sql`SELECT o.id, o.name FROM member m JOIN organization o ON o.id = m."organizationId"
+               WHERE m."userId" = ${target} AND m.role = 'owner'
+                 AND NOT EXISTS (SELECT 1 FROM member other
+                                  WHERE other."organizationId" = m."organizationId" AND other.role = 'owner'
+                                    AND other."userId" <> m."userId")
+               ORDER BY o.name, o.id`,
+        );
+        if (sole.length > 0) {
+          return {
+            ok: false,
+            refused: 'sole-owner',
+            workspaces: sole.map((each) => ({ id: String(each.id), name: String(each.name) })),
+          };
+        }
+
+        // A check alone stops here, and the transaction writes nothing.
+        if (options.check === true) {
+          return {
+            ok: true,
+            account: { id: target, email: String(row.email) },
+            workspaces: workspaces.map((workspace) => ({ id: String(workspace.id), name: String(workspace.name) })),
+          };
+        }
+        // The owners of each workspace of the account read the action, written before the row goes:
+        // `target_account_id` empties with the account, and `target_email` keeps who it was.
+        const each = (workspace: string | null) => ({
+          id: newId('ada'),
+          at: now,
+          actor_account_id: actor.id,
+          actor_email: actor.email,
+          action: 'account-deleted' as const,
+          target_account_id: target,
+          target_email: String(row.email),
+          workspace_id: workspace,
+        });
+        await db
+          .insert(admin_actions)
+          .values(workspaces.length === 0 ? [each(null)] : workspaces.map((workspace) => each(String(workspace.id))));
+        // The foreign keys take its sessions of the console, its ways to sign in, its memberships, the
+        // invitations it made and the sites shared with it. A note keeps its text and the name in it,
+        // and its row in the index forgets the account (`ON DELETE SET NULL`).
+        await db.delete(user).where(eq(user.id, target));
+
+        return {
+          ok: true,
+          account: { id: target, email: String(row.email) },
+          workspaces: workspaces.map((workspace) => ({ id: String(workspace.id), name: String(workspace.name) })),
+        };
       });
     },
 
