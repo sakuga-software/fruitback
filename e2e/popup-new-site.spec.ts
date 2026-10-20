@@ -4,7 +4,8 @@ import { type LoadedExtension, PLAYGROUND_ORIGIN, openBareSite, openPopup, test 
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * A site of no workspace in the popup (FRU-255, screen 08): « Add to {workspace} and turn on ».
+ * A site of no workspace in the popup (FRU-255; screen 2 of FRU-298): « Turn Fruitback on for this
+ * site? », its « Workspace » and « Turn on », then screen 3 with what the worker says of the site.
  *
  * The account is signed in through the routes of FRU-238, and `GET` and `POST /session/sites` are
  * answered here in the shape of the worker half (#310): the worker of the suite does not have that
@@ -88,7 +89,7 @@ async function sitesRoute(
   context: BrowserContext,
   workspaces: { id: string; name: string; role: string; canAddSite: boolean }[],
 ) {
-  const sites: { id: string; origin: string; visibility: string; workspace: string }[] = [];
+  const sites: Record<string, unknown>[] = [];
   const posted: { body: unknown; authorization: string | null }[] = [];
   await context.route(`${CLOUD}/session/sites`, async (route) => {
     const request = route.request();
@@ -101,7 +102,13 @@ async function sitesRoute(
         visibility: 'members',
         workspace: body.workspace,
       };
-      sites.push(site);
+      // Listed after, with what FRU-295 adds for an account: where the notes go, and the fixes to check.
+      sites.push({
+        ...site,
+        destination: { label: 'Linear · Northwind' },
+        toCheck: 2,
+        notes: { seeded: 1, green: 1, ripening: 1, ripe: 2, composted: 0 },
+      });
 
       return route.fulfill({ status: 201, json: { site } });
     }
@@ -135,7 +142,9 @@ async function reEnabled(popup: Page): Promise<() => Promise<number>> {
   return () => popup.evaluate(() => (globalThis as unknown as { reEnabled: { count: number } }).reEnabled.count);
 }
 
-test('a site of no workspace: added to one and turned on, in one click (08)', async ({ extension }) => {
+test('a site of no workspace: added to one and turned on, in one click, then screen 3 says what waits (FRU-298)', async ({
+  extension,
+}) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site');
   const { posted } = await sitesRoute(extension.context, [
@@ -146,38 +155,48 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await signedIn(extension, page, 'req_add_1');
 
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 380, height: 500 });
-  await expect(popup.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
-  await expect(popup.getByText('Not in a workspace yet')).toBeVisible();
+  await popup.setViewportSize({ width: 380, height: 580 });
+  await expect(popup.getByRole('heading', { level: 1, name: 'Turn Fruitback on for this site?' })).toBeVisible();
+  await expect(popup.locator('.kit-site-host')).toHaveText('localhost:5177');
+  await expect(popup.getByText('Not in your sites yet')).toBeVisible();
   // Only where the account may add a site: not Lumen, where it is a guest.
   const list = popup.getByRole('combobox', { name: 'Workspace' });
   await expect(list.locator('option')).toHaveText(['Sakuga', 'Northwind']);
+  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd')).toHaveText(
+    'Your team and invited guests',
+  );
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
-  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 73, width: 348 }, 'title');
-  expectNear(await boxOf(list), { x: 16, y: 219, width: 348, height: 40 }, 'list');
-  expectNear(await boxOf(popup.getByRole('button', { name: /^Add to/ })), { x: 16, width: 348, height: 46 }, 'add');
+  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
+  expectNear(await boxOf(popup.getByRole('button', { name: 'Turn on' })), { x: 24, width: 332, height: 46 }, 'turn on');
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of no workspace');
 
   await list.selectOption('ws_2');
-  await popup.getByRole('button', { name: 'Add to Northwind and turn on' }).click();
+  await popup.getByRole('button', { name: 'Turn on' }).click();
 
-  // 07: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
+  // 3: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
-  await expect(popup.getByText('On · Northwind')).toBeVisible();
-  // Screen 07 of an account, against the mock-up: the switch and the two actions where it has them.
-  await popup.setViewportSize({ width: 380, height: 540 });
-  // The parts of the kit (FRU-293) in the shell of 380 × 580 (FRU-297); the screen itself is FRU-298.
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 320, y: 81, width: 44, height: 26 }, 'switch');
+  // What the worker says of the site (FRU-295), once it answers: the tracker, and what waits.
+  await expect(popup.locator('.kit-site-state')).toHaveText('On · notes go to Linear');
+  await expect(popup.locator('.site-lines .kit-row-title')).toHaveText(['2 fixes to check', '3 open notes']);
+  await expect(popup.locator('.site-lines .kit-row-subtitle')).toHaveText([
+    'Marked done by the team',
+    'New, to do or in progress',
+  ]);
+  // Screen 3 of an account, against the mock-up (`popup-3-site-on.png`).
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 312, width: 44, height: 26 }, 'switch');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, y: 420, width: 348, height: 46 },
+    { x: 24, width: 332, height: 56 },
     'leave',
   );
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, y: 474, width: 348, height: 44 },
-    'every note',
+    await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
+    { x: 24, width: 332, height: 44 },
+    'sidebar',
   );
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  await clean(popup, 'the popup on a site that is on, for an account');
   expect(posted).toEqual([
     { body: { workspace: 'ws_2', origin: PLAYGROUND_ORIGIN }, authorization: 'Bearer add-access' },
   ]);
@@ -213,10 +232,14 @@ test('a site added, whose rule is not stored, is drawn as it is: a site of the w
     runtime.sendMessage = (message: unknown) =>
       JSON.stringify(message).includes('site-mutation') ? Promise.reject(new Error('lost')) : send(message);
   });
-  await popup.getByRole('button', { name: 'Add to Sakuga and turn on' }).click();
+  await popup.getByRole('button', { name: 'Turn on' }).click();
 
-  await expect(popup.getByRole('button', { name: 'Turn on here' })).toBeVisible();
-  await expect(popup.getByText('In Sakuga · members see the notes')).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Turn on' })).toBeVisible();
+  await expect(popup.getByText('In Sakuga · not on in this browser')).toBeVisible();
+  // FRU-298: where the notes of that site go, as the worker lists it now.
+  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Notes go to' }).locator('dd')).toHaveText(
+    'Linear · Northwind',
+  );
 });
 
 test('an add refused for its session keeps the buttons off until the popup is drawn again', async ({ extension }) => {
@@ -235,7 +258,7 @@ test('an add refused for its session keeps the buttons off until the popup is dr
   );
 
   const popup = await openPopup(extension, page);
-  const add = popup.getByRole('button', { name: 'Add to Sakuga and turn on' });
+  const add = popup.getByRole('button', { name: 'Turn on' });
   await expect(add).toBeEnabled();
   const turnedOn = await reEnabled(popup);
   const redrawn = popup.waitForFunction((button) => button !== null && !button.isConnected, await add.elementHandle());
@@ -256,7 +279,7 @@ test('a site of no workspace, for an account that may add none: who can, and no 
 
   const popup = await openPopup(extension, page);
   await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toBeVisible();
-  await expect(popup.getByRole('button', { name: /^Add to/ })).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: 'Turn on' })).toHaveCount(0);
   await clean(popup, 'the popup on a site of no workspace, without the right to add one');
   expect(posted).toEqual([]);
 });
@@ -285,10 +308,10 @@ test('a Fruitback that does not answer is said, not read as « ask an admin »',
   await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toHaveCount(0);
   down = false;
   await popup.getByRole('button', { name: 'Try again' }).click();
-  await expect(popup.getByRole('button', { name: 'Add to Sakuga and turn on' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Turn on' })).toBeVisible();
 });
 
-test('a site of no workspace speaks French, with one workspace and its name in the button', async ({ extension }) => {
+test('a site of no workspace speaks French, with one workspace and no list', async ({ extension }) => {
   await extension.context.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
   });
@@ -298,10 +321,11 @@ test('a site of no workspace speaks French, with one workspace and its name in t
   await signedIn(extension, page, 'req_add_3');
 
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 380, height: 500 });
-  await expect(popup.getByText('Dans aucun workspace pour l’instant')).toBeVisible();
+  await popup.setViewportSize({ width: 380, height: 580 });
+  await expect(popup.getByText('Pas encore dans vos sites')).toBeVisible();
+  await expect(popup.getByRole('heading', { level: 1, name: 'Activer Fruitback sur ce site ?' })).toBeVisible();
   await expect(popup.getByRole('combobox')).toHaveCount(0);
-  await expect(popup.getByRole('button', { name: 'Ajouter à Sakuga et activer' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Activer', exact: true })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of no workspace, in French');
 });

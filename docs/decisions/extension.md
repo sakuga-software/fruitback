@@ -409,7 +409,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   FRU-299. `src/side-panel.ts` holds the parts, with no `browser`.
 - **The click on the icon keeps the popup.** The background sets
   `setPanelBehavior({ openPanelOnActionClick: false })` at install and at each update. The panel
-  opens from « Show every note of the page » of the popup, and later from the preference « Open
+  opens from « Show all notes in a sidebar » of the popup, and later from the preference « Open
   notes in the sidebar » (FRU-302).
 - **`openPanel` is called in the click, before any `await`.** Both browsers open a panel only in a
   gesture of the person; an `await` first drops it. On Chrome it opens the global panel of the
@@ -697,53 +697,65 @@ The polling is the worker's pace (`interval`, 5 s, believed between 2 and 60), a
 `410`, a `400` and a `404` end the request as expired. An outage keeps it.
 
 What is not done here: the account's own shape of `GET /session/sites` (several workspaces), its
-counts and the switch of screen 07 are FRU-254; adding a site from the popup is FRU-255, screen 08,
+counts and the switch of the site are FRU-254 (screen 3 of FRU-298); adding a site from the popup is FRU-255 (screen 2 of FRU-298),
 which replaced the fields of before for a person signed in on a site of no rule.
 
-## A site of a workspace in the popup (FRU-254)
+## A site of a workspace in the popup (FRU-254, FRU-298)
 
 ### The rules, in short
 
-- **06, a site a workspace lists and this browser has not turned on**: its host, the workspace and who
-  reads its notes, the counts of the site when Fruitback gives them (FRU-237), and « Turn on here ».
+- **Screen 2 (FRU-298), « Turn Fruitback on for this site? »**: the tile and the host, « In {workspace}
+  · not on in this browser » for a site a workspace lists and this browser has not turned on, or « Not
+  in your sites yet » for a site of no workspace. Then the terms of the kit: « Notes go to » (the
+  `destination` of FRU-295; left out when the worker did not say, never « nowhere ») and « Who sees
+  the notes » (`members`: « Your team and invited guests »; `everyone`: « Everyone who visits the
+  site »), each with « Change », which opens the sites of the workspace in the console (none when the
+  console is not known). « Turn on » and « Your browser will ask to allow this site once. ».
   `GET /session/sites` is read in both shapes: a pairing's session names one `workspace`; an
   account's (FRU-238) names its `workspaces`, each with the role held there, and each site says which
   it is of. A site of a workspace the answer does not list is dropped; counts that are not five whole
   numbers are dropped.
-- **07, that site turned on here, by its own origin**: a switch (`role="switch"`) in place of « Turn
-  off here », the notes of the page by stage, « Leave feedback » and « Show every note of the page ».
-  A wildcard of previews keeps the screen of before: the switch would turn off every site the rule
-  covers. Off, the screen has the switch only.
+- **Screen 3 (FRU-298), a site turned on here, by its own origin**: the site with a switch
+  (`role="switch"`, « On »), « On · notes go to {tracker} » (the tracker of the destination) or « On ·
+  {workspace} »; « Leave feedback », the tall button of the kit, with « or press Alt Shift F on the
+  page » from `commands.getAll()` (no line without a shortcut; the signs of Chrome on macOS, `⌥⇧F`,
+  are one key each); « {n} fixes to check » (`toCheck`, an account's only, hidden at 0) and « {n} open
+  notes » (New, To do and In progress of the site, « No open note » at 0), plural by
+  `Intl.PluralRules`; and « Show all notes in a sidebar ». A line and « Show all notes in a sidebar »
+  open the side panel on the tab, in the click (FRU-296). A wildcard of previews keeps the screen of
+  before: the switch would turn off every site the rule covers. Off, the screen has the switch only.
+- **What the worker says of the site is added after the screen is drawn**: the switch does not wait
+  for the worker. The lines come from `GET /session/sites` (`offerFor`), as screen 2 reads them; a
+  worker that does not answer leaves them out rather than zeros. The counts of the page are no longer
+  in the popup: they live in the side panel (FRU-299). The command `counts` stays in the bridge, and
+  the popup no longer asks it.
 - **The popup asks the widget of its tab, and only that one** (`tab-command.ts`): `tabs.sendMessage`
   to the isolated world, which takes a command from a page of this extension only (no `sender.tab`,
   this extension's id), and posts it to the main world, where the widget the extension mounted
   answers. A site's own widget (team mode) is not ours to drive. No permission: `tabs.sendMessage`
   needs none.
-- **The counts of « On this page » are the widget's** (`pageCounts`), from the read it already made:
-  the popup makes no call to the worker for them. No answer in 1.5 s, or no read yet: the section is
-  left out rather than drawn with zeros.
 - **A page can post the command into the main world too, and gains nothing**: the widget's Shadow
-  root is open, so a page can already press every one of its buttons, and the answer is five numbers.
+  root is open, so a page can already press every one of its buttons.
 
-## A site of no workspace, added from the popup (FRU-255)
+## A site of no workspace, added from the popup (FRU-255, FRU-298)
 
 ### The rules, in short
 
-- **08, signed in on a site no workspace of the account lists**: « Not in a workspace yet », the
-  workspaces where the account may add a site (`canAddSite`, read now by the worker), and « Add to
-  {workspace} and turn on ». One such workspace: no list, its name in the button. None: « Ask an admin
-  of your workspace to add this site. », and no button. No « Every preview build too »: no preview
-  without the proof of FRU-103 (Q4).
+- **Screen 2, signed in on a site no workspace of the account lists**: « Not in your sites yet », the
+  workspaces where the account may add a site (`canAddSite`, read now by the worker) as a « Workspace »
+  line with its list when there are several, « Who sees the notes » (a site is added for the members
+  of its workspace), and « Turn on ». None: « Ask an admin of your workspace to add this site. », and
+  no button. No « Every preview build too »: no preview without the proof of FRU-103 (Q4).
 - **The access to the site is asked for first, in the click**, then the site is added
-  (`POST /session/sites`, the worker half), then the rule is stored as the one click of 06 stores it.
-  A refusal of the browser adds nothing, and « Grant access » asks again. The site the worker answers
-  must be the origin of the tab, in the workspace chosen, or nothing is stored.
+  (`POST /session/sites`, the worker half), then the rule is stored as the one click of a site of a
+  workspace stores it. A refusal of the browser adds nothing, and « Grant access » asks again. The
+  site the worker answers must be the origin of the tab, in the workspace chosen, or nothing is stored.
 - A refused add says why: the role does not allow it, too many sites in the hour, Fruitback did not
   answer; a session that ended draws the screen of a sign-in that ended.
-- **08 has no fields.** A site of no workspace that one browser alone should cover (a private
-  site, a worker of its own) is set in the settings, one click away (« Settings and every site »), as
-  the person with no account reaches it. 08 is drawn only signed in to the build's Fruitback, so a
-  build without one never asks for the workspaces.
+- **This screen has no fields.** A site of no workspace that one browser alone should cover (a private
+  site, a worker of its own) is set in the settings, one click away, as the person with no account
+  reaches it. It is drawn only signed in to the build's Fruitback, so a build without one never asks
+  for the workspaces.
 
 ## A session that ended, met by the relay (FRU-238)
 

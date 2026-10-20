@@ -63,17 +63,19 @@ There is nothing to type, and four steps.
 
    ![The word in the console, to check against the popup, with Connect](assets/guide-word.png)
 
-3. **Turn it on.** On a site of one of your workspaces, the popup names the workspace, how many notes
-   wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
-   only, and the widget appears, reading and writing as you. On a site of none of your workspaces,
-   an owner or an admin gets **Add to {workspace} and turn on** instead: the browser asks for access
-   to the site, the site is added to that workspace, for its members only, and the widget appears.
+3. **Turn it on.** On a site of one of your workspaces, the popup asks **Turn Fruitback on for this
+   site?**, says where its notes go and who sees them, and offers **Turn on**. One click: the browser
+   asks for access to that site only, and the widget appears, reading and writing as you. On a site
+   of none of your workspaces, an owner or an admin gets the same question with **Turn on**, and a
+   list of the workspaces when there are several: the browser asks for access to the site, the site
+   is added to that workspace, for its members only, and the widget appears.
 
-   ![The popup on a site of the workspace, with Turn on here](assets/guide-turn-on.png)
+   ![The popup on a site of the workspace, with Turn on](assets/guide-turn-on.png)
 
-4. **Leave a note.** Once it is on, the popup has a switch to turn it off and on, the notes of the
-   page by stage, **Leave feedback** and **Show every note of the page**, which opens the side panel
-   of the browser beside the page: **Notes on this page**, with **Open** and **Done**, the replies of
+4. **Leave a note.** Once it is on, the popup has a switch to turn it off and on, **Leave feedback**
+   with its keys, the fixes the team marked done for you to check and the open notes of the site, and
+   **Show all notes in a sidebar**; a click on a line opens the side panel too. The side panel opens
+   beside the page: **Notes on this page**, with **Open** and **Done**, the replies of
    a note, **Show on the page**, and **Reply** where your role may reply. A click on a pin opens its
    row; the panel follows the tab you look at. **Alt+Shift+F**
    (Option+Shift+F on a Mac) starts a note too, on a site that is on: the page of the extension shows

@@ -4,9 +4,9 @@ import { type LoadedExtension, mintPairing, openBareSite, openPopup, test } from
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * A site of a workspace in the popup (FRU-254): « Turn on here » (06), then the switch, the notes of
- * the page and the two actions (07), in the real extension, against the second worker of the suite,
- * whose workspace lists the playground.
+ * A site of a workspace in the popup (FRU-254, FRU-298): « Turn Fruitback on for this site? » (2),
+ * then the switch, « Leave feedback », what waits and the side panel (3), in the real extension,
+ * against the second worker of the suite, whose workspace lists the playground.
  */
 
 /** The one `chrome.*` call of this spec, from the service worker: the contexts of the extension. */
@@ -70,109 +70,124 @@ async function reopen(extension: LoadedExtension, page: Page, previous?: Page): 
   return openPopup(extension, page);
 }
 
-test('a site of the workspace: one click, then the switch, the notes of the page and the two actions', async ({
+test('2 then 3: a site of the workspace turns on in one click, then the switch, « Leave feedback », what waits and the side panel (FRU-298)', async ({
   extension,
 }) => {
   await paired(extension);
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-workspace');
 
-  // 06: the workspace, who reads the notes, and one click.
+  // 2: the question, who reads the notes, and one click.
   let popup = await reopen(extension, page);
-  await popup.setViewportSize({ width: 380, height: 420 });
-  await expect(popup.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
-  await expect(popup.getByText(/^In Playground · (members see|everyone sees) the notes$/)).toBeVisible();
-  await expect(popup.getByText('Chrome asks for access to this site only.')).toBeVisible();
-  await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
-  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 73, width: 348 }, 'title');
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Turn on here' })),
-    // Without the counts of FRU-237 the block stays at the foot: the mock-up has a foot of the account.
-    { x: 16, width: 348, height: 46 },
-    'turn on',
+  await popup.setViewportSize({ width: 380, height: 580 });
+  await expect(popup.getByRole('heading', { level: 1, name: 'Turn Fruitback on for this site?' })).toBeVisible();
+  await expect(popup.locator('.kit-site-host')).toHaveText('localhost:5177');
+  await expect(popup.getByText('In Playground · not on in this browser')).toBeVisible();
+  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd')).toHaveText(
+    /^(Your team and invited guests|Everyone who visits the site)$/,
   );
+  await expect(popup.getByText('Your browser will ask to allow this site once.')).toBeVisible();
+  await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
+  // The boxes of the mock-up (`popup-2-site-not-added.png`): 24 px around, the title at 22 px.
+  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
+  expectNear(await boxOf(popup.getByRole('button', { name: 'Turn on' })), { x: 24, width: 332, height: 46 }, 'turn on');
   await clean(popup, 'the popup on a site of the workspace');
 
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
-  // 07: on, with the switch; the widget is on the page.
+  await popup.getByRole('button', { name: 'Turn on' }).click();
+  // 3: on, with the switch; the widget is on the page.
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
-  await expect(popup.getByText('On · Playground')).toBeVisible();
+  await expect(popup.locator('.kit-site-state')).toHaveText(/^On · /);
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 
-  // A note, then the counts of the page: the pins the page shows.
+  // A note, then « 1 open note », as the worker counts the notes of the site (FRU-237).
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What should change?').fill('Planté depuis un site du workspace');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
-  popup = await reopen(extension, page, popup);
-  await popup.setViewportSize({ width: 380, height: 540 });
-  const section = popup.getByRole('region', { name: /^On this page/ });
-  await expect(section).toContainText('1 note');
-  const rows = section.getByRole('listitem');
-  await expect(rows).toHaveCount(5);
-  await expect(rows.nth(0)).toHaveText(/New\s*1/);
-  await expect(rows.nth(4)).toHaveText(/Closed\s*0/);
-  // The drops of the kit (FRU-293): a mark of 12 px in the colour of each status.
+  // The count of the worker is read through its cache (15 s): asked again until it says one more.
+  await expect
+    .poll(
+      async () => {
+        popup = await reopen(extension, page, popup);
+        await expect(popup.getByRole('switch')).toBeVisible();
+
+        return popup
+          .locator('.site-lines .kit-row-title')
+          .last()
+          .textContent({ timeout: 3_000 })
+          .catch(() => '');
+      },
+      { timeout: 40_000, intervals: [3_000] },
+    )
+    .toMatch(/^\d+ open notes?$/);
+  await popup.setViewportSize({ width: 380, height: 580 });
+  // A session of a pairing names no « fixes to check » (an account's only, FRU-295).
+  await expect(popup.locator('.kit-row-title', { hasText: /fix/ })).toHaveCount(0);
+  // The drop of the line: a mark of 12 px in the colour of In progress (FRU-293).
   expect(
-    await section.locator('.kit-drop').evaluateAll((drops) =>
+    await popup.locator('.site-lines .kit-drop').evaluateAll((drops) =>
       drops.map((drop) => {
         const drawn = getComputedStyle(drop);
 
         return `${drawn.width} ${drawn.height} ${drawn.backgroundColor}`;
       }),
     ),
-  ).toEqual(
-    ['rgb(106, 121, 80)', 'rgb(86, 128, 46)', 'rgb(172, 95, 0)', 'rgb(221, 44, 39)', 'rgb(141, 110, 99)'].map(
-      (fill) => `12px 12px ${fill}`,
-    ),
-  );
-  // The switch of the kit (FRU-293): 44 × 26.
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 320, y: 81, width: 44, height: 26 }, 'switch');
-  // A session of a pairing keeps its row under the actions, so their size is measured here, and
-  // their place on the screen of an account (`popup-new-site.spec.ts`).
-  await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
+  ).toEqual(['12px 12px rgb(172, 95, 0)']);
+  // The boxes of the mock-up (`popup-3-site-on.png`).
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 312, width: 44, height: 26 }, 'switch');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, width: 348, height: 46 },
+    { x: 24, width: 332, height: 56 },
     'leave',
   );
   expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, width: 348, height: 44 },
-    'every note',
+    await boxOf(popup.getByRole('button', { name: 'Show all notes in a sidebar' })),
+    { x: 24, width: 332, height: 44 },
+    'sidebar',
   );
-  // The keyboard: the gear, the switch, then the two actions.
+  // The keys of « Leave feedback », as the browser has them (FRU-291).
+  await expect(popup.locator('.shortcut-line')).toHaveText(/^or press .+ on the page$/);
+  expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
+  // A session of a pairing keeps its row.
+  await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
+  // The keyboard: the gear, the switch, « Leave feedback », the line, then the side panel.
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     await popup.keyboard.press('Tab');
     stops.push(
       await popup.evaluate(
-        () => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? '',
+        () =>
+          document.activeElement?.getAttribute('aria-label') ??
+          document.activeElement?.querySelector('.kit-row-title')?.textContent ??
+          document.activeElement?.textContent ??
+          '',
       ),
     );
   }
-  expect(stops).toEqual([
-    'Account and settings',
-    'Fruitback on localhost:5177',
-    'Leave feedback',
-    'Show every note of the page',
-  ]);
+  expect(stops[0]).toBe('Account and settings');
+  expect(stops[1]).toBe('Fruitback on localhost:5177');
+  expect(stops[2]).toBe('Leave feedback');
+  expect(stops[3]).toMatch(/open notes?$/);
+  expect(stops[4]).toBe('Show all notes in a sidebar');
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on');
 
-  // « Show every note of the page »: the side panel of the browser opens (FRU-296), and the popup
-  // goes. `e2e/side-panel.spec.ts` reads the panel.
-  await popup.getByRole('button', { name: 'Show every note of the page' }).click();
+  // A click on a line opens the side panel of the browser on the tab (FRU-296), and the popup goes.
+  // `e2e/side-panel.spec.ts` reads the panel.
+  const panels = () =>
+    extension.worker.evaluate(async () => (await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })).length);
+  await popup.locator('.site-lines .kit-row').last().click();
   await expect.poll(() => popup.isClosed()).toBe(true);
-  await expect
-    .poll(() =>
-      extension.worker.evaluate(
-        async () => (await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })).length,
-      ),
-    )
-    .toBe(1);
+  await expect.poll(panels).toBe(1);
+
+  // « Show all notes in a sidebar » opens it too.
+  popup = await reopen(extension, page);
+  await popup.getByRole('button', { name: 'Show all notes in a sidebar' }).click();
+  await expect.poll(() => popup.isClosed()).toBe(true);
+  await expect.poll(panels).toBe(1);
 
   // « Leave feedback »: the widget waits for an element.
   popup = await reopen(extension, page);
@@ -200,7 +215,7 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await popup.getByRole('switch').click();
   await expect(popup.getByRole('switch')).not.toBeChecked();
   await expect(popup.getByText('Off · Playground')).toBeVisible();
-  await expect(popup.getByRole('region', { name: /^On this page/ })).toHaveCount(0);
+  await expect(popup.locator('.site-lines')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(0);
   await popup.getByRole('switch').click();
@@ -208,44 +223,6 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-});
-
-test('screen 07 is drawn before the page answers how many notes it shows, and the notes come after', async ({
-  extension,
-}) => {
-  // The answers of the widget of the page are held in its own world, until the spec lets them go.
-  await extension.context.addInitScript(() => {
-    const held: (() => void)[] = [];
-    const scope = window as unknown as { __releaseCounts?: () => void };
-    scope.__releaseCounts = () => {
-      for (const send of held.splice(0)) send();
-    };
-    const post = window.postMessage.bind(window);
-    window.postMessage = ((message: unknown, ...rest: unknown[]) => {
-      const answer = message as { kind?: string; counts?: unknown };
-      if (answer?.kind === 'command-response' && answer.counts !== undefined) {
-        held.push(() => (post as (...all: unknown[]) => void)(message, ...rest));
-
-        return;
-      }
-      (post as (...all: unknown[]) => void)(message, ...rest);
-    }) as typeof window.postMessage;
-  });
-  await paired(extension);
-  const page = await extension.context.newPage();
-  await openBareSite(page, 'popup-workspace-held');
-  let popup = await reopen(extension, page);
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
-
-  popup = await reopen(extension, page, popup);
-  // The switch and the actions are there while the page holds its answer.
-  await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
-  await expect(popup.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
-  await expect(popup.getByRole('region', { name: /^On this page/ })).toHaveCount(0);
-
-  await page.evaluate(() => (window as unknown as { __releaseCounts: () => void }).__releaseCounts());
-  await expect(popup.getByRole('region', { name: /^On this page/ })).toContainText('0 notes');
 });
 
 test('the popup on a site of the workspace speaks French', async ({ extension }) => {
@@ -256,12 +233,16 @@ test('the popup on a site of the workspace speaks French', async ({ extension })
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-workspace-fr');
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 380, height: 540 });
-
-  await expect(popup.getByText(/^Dans Playground · /)).toBeVisible();
-  await expect(popup.getByText('Chrome demande l’accès à ce site seulement.')).toBeVisible();
-  await popup.getByRole('button', { name: 'Activer ici' }).click();
+  await popup.setViewportSize({ width: 380, height: 580 });
+  await expect(popup.getByRole('heading', { level: 1, name: 'Activer Fruitback sur ce site ?' })).toBeVisible();
+  await expect(popup.getByText(/^Dans Playground · pas activé dans ce navigateur$/)).toBeVisible();
+  await expect(popup.getByText('Votre navigateur demandera une fois l’accès à ce site.')).toBeVisible();
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  await clean(popup, 'the popup on a site of the workspace, in French');
+  await popup.getByRole('button', { name: 'Activer', exact: true }).click();
   await expect(popup.getByRole('switch', { name: 'Fruitback sur localhost:5177' })).toBeChecked();
+  await expect(popup.getByRole('button', { name: 'Laisser une note' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Voir toutes les notes dans un panneau' })).toBeVisible();
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on, in French');
 });

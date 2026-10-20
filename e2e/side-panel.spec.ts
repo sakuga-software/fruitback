@@ -167,7 +167,7 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   const page = await extension.context.newPage();
   await openBareSite(page, 'side-panel');
   const popup = await openPopup(extension, page);
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 
@@ -178,7 +178,9 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
     );
   expect(await panels()).toEqual([]);
 
-  await popup.getByRole('button', { name: 'Show every note of the page' }).click();
+  await popup
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
   await expect.poll(() => popup.isClosed()).toBe(true);
   await expect.poll(panels).toEqual([`chrome-extension://${extension.id}/sidepanel.html`]);
 
@@ -247,7 +249,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const page = await extension.context.newPage();
   await openBareSite(page, 'side-panel-notes');
   const popup = await openPopup(extension, page);
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 
   // Five notes, through the widget the extension mounted.
@@ -267,7 +269,9 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
 
   // The panel, from the popup.
   const again = await openPopup(extension, page);
-  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
   await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).tabs.length).toBe(2);
 
   // The same numbers as the pins; Open and Done count the stages of the pins.
@@ -382,7 +386,7 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
   const page = await extension.context.newPage();
   await openBareSite(page, 'side-panel-check');
   const popup = await openPopup(extension, page);
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 
   // Four notes of the person. The team marks the second and the third done, and closes the fourth,
@@ -423,7 +427,9 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
     .toBe(2);
 
   const again = await openPopup(extension, page);
-  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
   await expect.poll(async () => (await readyBlock(page).catch(() => ({ items: [] }))).items.length).toBe(2);
   const said = await words(page);
   const ready = await readyBlock(page);
@@ -460,7 +466,7 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
   const page = await extension.context.newPage();
   await openBareSite(page, 'side-panel-no-widget');
   const popup = await openPopup(extension, page);
-  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 
   // The bridge stays, the widget goes: the page answers `no-widget`, and no `notes-changed` follows.
@@ -468,7 +474,9 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveCount(0);
 
   const again = await openPopup(extension, page);
-  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
   // The panel first follows the tab and reads: « Reading… » (`no-widget`). Polled on what it shows,
   // never on what it does not: a panel not drawn yet has no « Reading… » either (it made this flaky).
   const shows = () =>

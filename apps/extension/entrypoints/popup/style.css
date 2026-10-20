@@ -475,61 +475,6 @@ body.popup-page {
   text-underline-offset: 3px;
 }
 
-/* 06 and 07 (FRU-254): a site of a workspace. */
-.popup .site-heading h1 + .subtitle {
-  margin: 2px 0 0;
-  color: var(--muted);
-}
-
-.popup .site-counts {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.popup .site-counts p {
-  margin: 0;
-}
-
-.popup .site-total {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.popup .stage-bar {
-  display: flex;
-  gap: 2px;
-  height: 8px;
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-}
-
-.popup .site-detail {
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.popup .stage-seeded {
-  background: var(--stage-seeded);
-}
-
-.popup .stage-green {
-  background: var(--stage-green);
-}
-
-.popup .stage-ripening {
-  background: var(--stage-ripening);
-}
-
-.popup .stage-ripe {
-  background: var(--stage-ripe);
-}
-
-.popup .stage-composted {
-  background: var(--stage-composted);
-}
-
 /* The action, at the foot of the body: the screen reads top down, and the button waits at the end. */
 .popup .action-block {
   display: flex;
@@ -545,9 +490,41 @@ body.popup-page {
   text-align: center;
 }
 
-.popup-site-on .popup-body {
-  gap: 18px;
-  padding-top: 18px;
+/*
+  2 · Signed in, site not added (FRU-298): 24 px around, 22 between the blocks; the title of 22 px,
+  the terms of the kit, and « Turn on » with its line at the foot.
+*/
+.popup-screen-2 .popup-body {
+  gap: 22px;
+  padding: 24px;
+}
+
+.popup-screen-2 h1 {
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.popup-screen-2 .action-block .note {
+  font-size: 13px;
+  color: var(--subtle);
+}
+
+.popup-screen-2 .kit-dl select {
+  height: 34px;
+  margin: 2px 0 0;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+/*
+  3 · Site on (FRU-298): 20 px above, 24 around, 20 between the blocks. The site and its switch,
+  « Leave feedback » and its keys, the lines of what waits, and the side panel at the foot.
+*/
+.popup-screen-3 .popup-body {
+  gap: 20px;
+  padding: 20px 24px 24px;
 }
 
 .popup .site-row {
@@ -557,48 +534,43 @@ body.popup-page {
   gap: 16px;
 }
 
-.popup .page-notes h2 {
+.popup .site-row .kit-site {
+  min-width: 0;
+}
+
+.popup .leave-block {
   display: flex;
-  justify-content: space-between;
-  margin: 0 0 6px;
-  font-size: 14px;
-  font-weight: 600;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.popup .page-total {
-  color: var(--muted);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-
-.popup .page-notes ul {
+/* 12 px under the button, as the mock-up has it: 20 of the column less 12. */
+.popup .shortcut-line {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  color: var(--subtle);
+  font-size: 13px;
+  text-align: center;
 }
 
-.popup .page-notes li {
+.popup .site-lines {
   display: flex;
+  flex-direction: column;
+}
+
+.popup .site-lines:empty {
+  display: none;
+}
+
+.popup .action-block .kit-secondary {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 0;
+  justify-content: center;
+  gap: 8px;
 }
 
-.popup .page-notes li:not(:last-child) {
-  border-bottom: 1px solid var(--line);
-}
-
-.popup .stage-word {
-  flex: 1;
-}
-
-.popup .count {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.popup .count.zero {
-  color: var(--muted);
+.popup .panel-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* A line that says nothing takes no gap of the column: the boxes stay where the mock-up has them. */
@@ -607,8 +579,7 @@ body.popup-page {
   display: none;
 }
 
-/* 08 (FRU-255): the form of a site of no workspace. */
-.popup-new-site .popup-body,
+/* The form of a rule (the fields, asked for). */
 .popup .site-form {
   display: flex;
   flex: 1 1 auto;

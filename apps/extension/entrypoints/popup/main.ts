@@ -11,6 +11,7 @@ import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
 import { type StoredSession, describeIdentity } from '../../src/session.ts';
+import { currentShortcut } from '../../src/shortcut.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
@@ -32,7 +33,6 @@ import {
   type ConnectState,
   type PendingConnect,
   type StartFailure,
-  browserLabel,
   forgetConnect,
   pollConnect,
   startConnect,
@@ -50,9 +50,9 @@ import { type PanelApis, openPanelOrPage } from '../../src/side-panel.ts';
 import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
-  newSite,
-  showPageCounts,
-  siteInWorkspace,
+  keysOfShortcut,
+  showSiteFacts,
+  turnOnScreen,
   siteOn,
   connecting,
   hostOf,
@@ -488,20 +488,34 @@ function cloudSeams(): CloudSeams {
   };
 }
 
+/** The sites of a workspace in the console, where « Change » leads (FRU-298). */
+function consoleSites(account: Account | undefined, workspace: string): (() => void) | undefined {
+  if (account?.console === undefined) return undefined;
+  const base = account.console.endsWith('/') ? account.console : `${account.console}/`;
+  const url = new URL(`w/${encodeURIComponent(workspace)}/sites`, base).toString();
+
+  return () => {
+    void browser.tabs.create({ url });
+    window.close();
+  };
+}
+
 /**
- * 06 (FRU-254): the one click (FRU-101). The browser asks for this site only, and the click is the
- * gesture that permission needs: nothing is awaited before `turnOn` asks.
+ * 2 (FRU-298): a site of a workspace, not on in this browser. The one click (FRU-101): the browser
+ * asks for this site only, and the click is the gesture that permission needs, so nothing is awaited
+ * before `turnOn` asks.
  */
 function offered(origin: string, offer: Offer, account: Account | undefined): HTMLElement {
   const problem = element('p', '', 'problem');
   const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
-  const screen = siteInWorkspace(document, {
+  const change = consoleSites(account, offer.workspace.id);
+  const screen = turnOnScreen(document, {
     origin,
     workspace: offer.workspace.name,
+    ...(offer.site.destination === undefined ? {} : { destination: offer.site.destination.label }),
     visibility: offer.site.visibility,
-    ...(offer.site.notes === undefined ? {} : { counts: offer.site.notes }),
-    browserName: browserName(navigator.userAgent),
     ...(account === undefined ? {} : { account }),
+    ...(change === undefined ? {} : { onChange: change }),
     onTurnOn: turn,
     onSettings: openSettings,
   });
@@ -511,8 +525,8 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
 }
 
 /**
- * 08 (FRU-255): a site of no workspace of the account. The workspaces where it may add one are read
- * now; none, and the popup says who can.
+ * 2 (FRU-298, FRU-255): a site of no workspace of the account. The workspaces where it may add one
+ * are read now; none, and the popup says who can. « Turn on » adds it, then turns it on.
  */
 async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
   const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
@@ -520,16 +534,16 @@ async function siteOfNoWorkspace(origin: string, account: Account | undefined): 
   if (listed === undefined) return unreachableScreen(account);
   const workspaces = listed;
   const problem = element('p', '', 'problem');
-  const add = (id: string): void => {
-    const workspace = workspaces.find((each) => each.id === id);
-    if (workspace !== undefined) addAndTurnOn(origin, workspace, problem);
-  };
-  const screen = newSite(document, {
+  const screen = turnOnScreen(document, {
     origin,
+    // A site is added for the members of its workspace: the worker's default.
+    visibility: 'members',
     workspaces,
-    browserName: browserName(navigator.userAgent),
     ...(account === undefined ? {} : { account }),
-    onAdd: add,
+    onTurnOn: (id) => {
+      const workspace = workspaces.find((each) => each.id === id);
+      if (workspace !== undefined) addAndTurnOn(origin, workspace, problem);
+    },
     onSettings: openSettings,
   });
   screen.querySelector('.action-block')?.append(problem);
@@ -597,13 +611,6 @@ const ADD_PROBLEM: Record<Exclude<AddFailure, 'signed-out'>, string> = {
   unavailable: msg('Fruitback did not answer. Try again.'),
 };
 
-/** « Chrome asks for access… »: the browser of this popup, by the name its person knows. */
-function browserName(userAgent: string): string {
-  const name = browserLabel(userAgent).split(' on ')[0] ?? '';
-
-  return name === 'A browser' || name === '' ? t('Your browser') : name;
-}
-
 /**
  * A rule this extension stored for a site of a workspace, on its own origin: the screen of the
  * switch (07). A wildcard of previews keeps the screen of before, whose words say that it switches
@@ -624,10 +631,22 @@ async function siteOfWorkspaceOn(
   const paired = account === undefined ? (await sessions.list())[site.endpoint] : undefined;
   const person = account ?? (paired === undefined ? undefined : { name: describeIdentity(paired.identity) });
   const problem = element('p', '', 'problem');
+  // FRU-296: the panel of the browser, opened in this click (before any `await`: the browser opens it
+  // only in a gesture). A browser with no panel shows the list of the widget in the page. « Show all
+  // notes in a sidebar », and a click on « fixes to check » or « open notes » (FRU-298).
+  const openPanel = (): void =>
+    void openPanelOrPage(
+      browser as unknown as PanelApis,
+      { ...(tab?.id === undefined ? {} : { tabId: tab.id }) },
+      async () => (await askTab(tab, 'show-notes')).done,
+    ).then((shown) => (shown === 'nothing' ? showProblem(problem, t(NOT_THERE)) : window.close()));
+  // FRU-291: the keys of « Leave feedback », as the person set them. None: no line.
+  const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
   const screen = siteOn(document, {
     origin,
     workspace,
     on: site.enabled,
+    ...(shortcut === undefined ? {} : { shortcut: keysOfShortcut(shortcut) }),
     ...(person === undefined ? {} : { account: person }),
     onToggle: (on) => {
       if (!on) {
@@ -647,27 +666,32 @@ async function siteOfWorkspaceOn(
         // Said only when the widget is there and said no: no answer is a page that is not ready.
         else showProblem(problem, t(busy === true ? NOT_NOW_WRITING : NOT_THERE));
       }),
-    // FRU-296: the panel of the browser, opened in this click (before any `await`: the browser opens
-    // it only in a gesture). A browser with no panel shows the list of the widget in the page.
-    onShowEveryNote: () =>
-      void openPanelOrPage(
-        browser as unknown as PanelApis,
-        { ...(tab?.id === undefined ? {} : { tabId: tab.id }) },
-        async () => (await askTab(tab, 'show-notes')).done,
-      ).then((shown) => (shown === 'nothing' ? showProblem(problem, t(NOT_THERE)) : window.close())),
+    onOpenPanel: openPanel,
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem);
   // A session of a pairing is not in the head as an account is: its row, and its log out, stay here.
   if (paired !== undefined) screen.querySelector('.popup-body')?.append(...(await session(site)));
-  // What the widget of the tab shows now, added when it answers: the screen does not wait for it, and
-  // a page that does not answer leaves the section out rather than zeros. Not for a screen that is
-  // gone by then.
+  // FRU-298: where the notes go, the fixes to check and the open notes of the site, as the worker
+  // lists them (FRU-295), added when it answers: the screen does not wait for it, and a worker that
+  // does not answer leaves the lines out rather than zeros. Not for a screen that is gone by then.
   if (site.enabled) {
     const screenNow = drawn;
-    void askTab(tab, 'counts').then(({ counts }) => {
-      if (counts !== undefined && screenNow === drawn) showPageCounts(screen, counts);
-    });
+    void offerFor(origin, cloudSeams())
+      .catch(() => undefined)
+      .then((listed) => {
+        if (listed === undefined || screenNow !== drawn) return;
+        const { notes, destination, toCheck } = listed.site;
+        showSiteFacts(
+          screen,
+          { workspace, on: site.enabled, onOpenPanel: openPanel },
+          {
+            ...(destination === undefined ? {} : { destination: destination.label }),
+            ...(toCheck === undefined ? {} : { toCheck }),
+            ...(notes === undefined ? {} : { open: notes.seeded + notes.green + notes.ripening }),
+          },
+        );
+      });
   }
 
   return screen;
