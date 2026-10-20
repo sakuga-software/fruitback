@@ -490,6 +490,21 @@ describe('the members of a suspended workspace (FRU-282)', () => {
       read.push(await said('POST', `/console/workspaces/${on.acme}/sites`, token, { url: 'https://new.acme.dev' }));
       read.push(await said('POST', `${ORG}/update`, token, { organizationId: on.acme, data: { name: 'Renamed' } }));
     }
+    // The extension: the sites of a session of the account and of a session of the workspace, and
+    // the widget on the site of the workspace.
+    const ofAccount = await accountSession(on.world, on.alice);
+    for (const token of [ofAccount, on.member]) {
+      const sites = await on.call('GET', '/session/sites', { token, origin: EXTENSION });
+      read.push(`GET /session/sites ${sites.status} ${await sites.text()}`);
+    }
+    const widget = await on.call('GET', `/feedback?url=${encodeURIComponent(PAGE)}&client=${on.site.id}`, {
+      origin: ACME,
+    });
+    read.push(`GET /feedback ${widget.status} ${await widget.text()}`);
+    // A sign-in link sent while suspended: the mail that the worker sends.
+    await signInTo(on.world, 'carl@acme.dev');
+    assert.ok(on.world.mail.sent.length > 0, 'the control: the worker sent mail');
+    read.push(...on.world.mail.sent.map((message) => `mail ${JSON.stringify(message)}`));
     for (const answer of read) assert.ok(!answer.includes('NOTE-OF-THE-ADMINISTRATOR'), answer);
     // The reads did happen: the suspension is said, with its day.
     assert.ok(read.some((answer) => answer.includes('"suspendedAt"')));
