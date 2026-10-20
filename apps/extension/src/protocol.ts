@@ -198,6 +198,10 @@ export type CommandMessage = {
   kind: 'command';
   id: string;
   command: TabCommand;
+  /** The note of `focus-note` and `reply` (FRU-299): the id of its seed. */
+  note?: string;
+  /** The text of `reply`. */
+  body?: string;
 };
 
 export type CommandResponseMessage = {
@@ -209,13 +213,123 @@ export type CommandResponseMessage = {
   /** The widget is there, and said no: somebody writes a note. */
   busy?: true;
   counts?: PageCounts;
+  /** The answer of `notes` (FRU-299): the notes the pins show. */
+  notes?: PanelNote[];
+  /** The answer of `reply`: sent, or why not. */
+  outcome?: ReplyOutcome;
 };
 
-export const TAB_COMMANDS = ['leave-feedback', 'show-notes', 'counts'] as const;
+/**
+ * FRU-299: the widget the extension mounted says that its notes changed, or which note was opened
+ * on the page. It carries no note: the side panel then asks for them with `notes`, as for any read.
+ * The page can post one too, and buys a read of its own notes, or an open row.
+ */
+export type NotesChangedMessage = {
+  channel: typeof CHANNEL;
+  kind: 'notes-changed';
+  open?: string;
+};
+
+export const TAB_COMMANDS = [
+  'leave-feedback',
+  'show-notes',
+  'counts',
+  // FRU-299: the side panel.
+  'notes',
+  'focus-note',
+  'mark-note',
+  'reply',
+] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 
 const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 export type PageCounts = Record<(typeof STAGES)[number], number>;
+
+/** What `reply` answers: the reply is in the store, or why it is not. */
+export const REPLY_OUTCOMES = ['sent', 'retry', 'wait', 'signed-out', 'refused'] as const;
+export type ReplyOutcome = (typeof REPLY_OUTCOMES)[number];
+
+/** A note of the page as the side panel lists it (FRU-299): the `PageNote` of the widget, parsed. */
+export type PanelNote = {
+  id: string;
+  number?: number;
+  stage: (typeof STAGES)[number];
+  note: string;
+  author?: string;
+  mine?: true;
+  createdAt: string;
+  updatedAt: string;
+  replies: { author?: string; body: string; createdAt: string }[];
+  canReply: boolean;
+  placement: 'found' | 'approximate' | 'detached';
+};
+
+/** The bounds of what a page may hand the panel: it crosses a world the page writes in. */
+export const PANEL_LIMITS = { notes: 500, replies: 200, text: 10_000, name: 200, date: 64 } as const;
+const PLACEMENTS = ['found', 'approximate', 'detached'] as const;
+
+function boundedString(value: unknown, max: number): string | undefined {
+  return typeof value === 'string' && value.length <= max ? value : undefined;
+}
+
+/**
+ * The notes, or nothing. An entry that is not a note, or is longer than a note can be, is dropped,
+ * and the others are kept; a list longer than `PANEL_LIMITS.notes` is refused whole.
+ */
+export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
+  if (!Array.isArray(value) || value.length > PANEL_LIMITS.notes) return undefined;
+  const notes: PanelNote[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const id = parseId(entry.id);
+    const stage = STAGES.find((each) => each === entry.stage);
+    const placement = PLACEMENTS.find((each) => each === entry.placement);
+    const note = boundedString(entry.note, PANEL_LIMITS.text);
+    const createdAt = boundedString(entry.createdAt, PANEL_LIMITS.date);
+    const updatedAt = boundedString(entry.updatedAt, PANEL_LIMITS.date);
+    const author = entry.author === undefined ? undefined : boundedString(entry.author, PANEL_LIMITS.name);
+    const number =
+      typeof entry.number === 'number' && Number.isSafeInteger(entry.number) && entry.number > 0
+        ? entry.number
+        : undefined;
+    if (!Array.isArray(entry.replies) || entry.replies.length > PANEL_LIMITS.replies) continue;
+    const replies: PanelNote['replies'] = [];
+    for (const reply of entry.replies) {
+      if (!isRecord(reply)) continue;
+      const body = boundedString(reply.body, PANEL_LIMITS.text);
+      const at = boundedString(reply.createdAt, PANEL_LIMITS.date);
+      const by = reply.author === undefined ? undefined : boundedString(reply.author, PANEL_LIMITS.name);
+      if (body === undefined || at === undefined || (reply.author !== undefined && by === undefined)) continue;
+      replies.push({ ...(by === undefined ? {} : { author: by }), body, createdAt: at });
+    }
+    if (
+      id === undefined ||
+      stage === undefined ||
+      placement === undefined ||
+      note === undefined ||
+      createdAt === undefined ||
+      updatedAt === undefined ||
+      (entry.author !== undefined && author === undefined)
+    ) {
+      continue;
+    }
+    notes.push({
+      id,
+      ...(number === undefined ? {} : { number }),
+      stage,
+      note,
+      ...(author === undefined ? {} : { author }),
+      ...(entry.mine === true ? { mine: true as const } : {}),
+      createdAt,
+      updatedAt,
+      replies,
+      canReply: entry.canReply === true,
+      placement,
+    });
+  }
+
+  return notes;
+}
 
 /** Five whole numbers, or nothing. */
 export function parsePageCounts(value: unknown): PageCounts | undefined {
@@ -234,6 +348,7 @@ export type BridgeMessage =
   | MountMessage
   | CommandMessage
   | CommandResponseMessage
+  | NotesChangedMessage
   | UnmountMessage
   | ReadyMessage
   | AnnounceMessage
@@ -269,6 +384,11 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'capture-response') return parseCaptureResponse(data);
   if (data.kind === 'command') return parseCommand(data);
   if (data.kind === 'command-response') return parseCommandResponse(data);
+  if (data.kind === 'notes-changed') {
+    const open = parseId(data.open);
+
+    return { channel: CHANNEL, kind: 'notes-changed', ...(open === undefined ? {} : { open }) };
+  }
   if (data.kind !== 'mount') return undefined;
 
   const { endpoint, clientId, label, relay, locale } = data;
@@ -401,14 +521,25 @@ function parseCommand(data: Record<string, unknown>): CommandMessage | undefined
   const id = parseId(data.id);
   const command = TAB_COMMANDS.find((each) => each === data.command);
   if (id === undefined || command === undefined) return undefined;
+  const note = parseId(data.note);
+  const body = boundedString(data.body, PANEL_LIMITS.text);
 
-  return { channel: CHANNEL, kind: 'command', id, command };
+  return {
+    channel: CHANNEL,
+    kind: 'command',
+    id,
+    command,
+    ...(note === undefined ? {} : { note }),
+    ...(body === undefined ? {} : { body }),
+  };
 }
 
 function parseCommandResponse(data: Record<string, unknown>): CommandResponseMessage | undefined {
   const id = parseId(data.id);
   if (id === undefined) return undefined;
   const counts = parsePageCounts(data.counts);
+  const notes = parsePanelNotes(data.notes);
+  const outcome = REPLY_OUTCOMES.find((each) => each === data.outcome);
 
   return {
     channel: CHANNEL,
@@ -417,6 +548,8 @@ function parseCommandResponse(data: Record<string, unknown>): CommandResponseMes
     done: data.done === true,
     ...(data.busy === true ? { busy: true as const } : {}),
     ...(counts === undefined ? {} : { counts }),
+    ...(notes === undefined ? {} : { notes }),
+    ...(outcome === undefined ? {} : { outcome }),
   };
 }
 

@@ -161,6 +161,11 @@ export type Overlay = {
    * drawn: a stage the reporter hid, or a note that is gone.
    */
   select(id: string): boolean;
+  /**
+   * Shows the pin of this note above the others, a fifth bigger (FRU-299): the row a list outside
+   * the page has open. `undefined` lets it go. Kept across a draw.
+   */
+  mark(id: string | undefined): void;
   destroy(): void;
 };
 
@@ -389,6 +394,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     draw();
   }
 
+  /** The note a list outside the page has open (FRU-299): its pin stays marked across a draw. */
+  let marked: string | undefined;
+
   function draw(): void {
     const refocus = focusedTarget();
     closeThread(false);
@@ -414,6 +422,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       .map((issue) => {
         const resolution = resolveAnchor(issue.seed.anchor, { document });
         const pin = buildPin(document, issue, resolution, t);
+        if (marked !== undefined && issue.seed.id === marked) pin.dataset.fruitbackMarked = '';
         const entry = { issue, resolution, pin };
 
         pin.querySelector('.fruitback-pin-badge')?.addEventListener('click', (event) => {
@@ -611,6 +620,13 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
       // The top of its frame, in document coordinates, against the bottom edge of the window.
       return (Number.parseFloat(entry.pin.style.top) || 0) >= view.scrollY + view.innerHeight;
+    },
+    mark(id) {
+      marked = id;
+      for (const entry of placed) {
+        if (id !== undefined && entry.issue.seed.id === id) entry.pin.dataset.fruitbackMarked = '';
+        else delete entry.pin.dataset.fruitbackMarked;
+      }
     },
     select(id) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);
@@ -1190,6 +1206,9 @@ const STYLES = `
   background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
 }
 .fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }
+/* The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger. */
+.fruitback-pin[data-fruitback-marked] { z-index: 1; }
+.fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
 .fruitback-pin-orphan { border-style: dotted; }
 .fruitback-pin-badge {
   position: absolute;

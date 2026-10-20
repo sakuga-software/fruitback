@@ -13,7 +13,7 @@ import { captureAnchor } from './anchor.ts';
 import { resolveAnchor } from './resolve.ts';
 import { type TypingPlace, createTypingStore } from './typing.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
-import { feedbackAsText, placementOf } from './export.ts';
+import { type FeedbackPlacement, feedbackAsText, placementOf } from './export.ts';
 import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
@@ -210,11 +210,56 @@ export type Fruitback = {
    * reads the page again. Without `onSignIn` this does nothing.
    */
   signedOut(ended: boolean): void;
+  /**
+   * The notes of the page, for a list that is not on the page (FRU-299): the side panel of the
+   * extension. The notes the pins show, with their numbers, from the last read: no request. The
+   * notes of a stage the reporter hid are left out, as on the page. Nothing until a read of this page
+   * answered: an empty list would then say there are no notes.
+   */
+  pageNotes(): PageNote[] | undefined;
+  /** Scrolls to the pin of a note and opens its thread, as a row of the list does. `false`: not drawn. */
+  focusNote(id: string): boolean;
+  /** Shows the pin of a note above the others, a fifth bigger: the row open in a list. `undefined`: none. */
+  markNote(id: string | undefined): void;
+  /**
+   * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
+   * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
+   */
+  replyTo(id: string, body: string): Promise<'sent' | ReplyFailure | 'refused'>;
+  /**
+   * Tells a list outside the page when to read `pageNotes` again (a read, a hidden stage, a note
+   * kept) and which note was opened on the page. Answers the way to stop.
+   */
+  watchNotes(listener: (change: NotesChange) => void): () => void;
   destroy(): void;
 };
 
 /** The notes the page shows, by stage. */
 export type PageCounts = Record<SeedStage, number>;
+
+/** A note of the page, as `pageNotes` gives it (FRU-299). Plain data: it crosses a `postMessage`. */
+export type PageNote = {
+  /** The id `focusNote` and `replyTo` take: the id of the seed. */
+  id: string;
+  /** The number its pin carries. */
+  number?: number;
+  stage: SeedStage;
+  note: string;
+  /** The name the reporter gave, if any. */
+  author?: string;
+  /** The reader wrote it, with the session of their account (FRU-294). */
+  mine?: true;
+  createdAt: string;
+  updatedAt: string;
+  /** Oldest first. */
+  replies: { author?: string; body: string; createdAt: string }[];
+  /** Whether this reader may reply, as the thread offers it. */
+  canReply: boolean;
+  placement: FeedbackPlacement;
+};
+
+/** What changed for a list outside the page: the notes, or the note opened on the page. */
+export type NotesChange = { kind: 'list' } | { kind: 'open'; id: string };
 
 /**
  * The transport this mount uses.
@@ -338,7 +383,11 @@ export function init(options: FruitbackOptions): Fruitback {
     onResolve: () => sidebar.refresh(),
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
     // the thread would have no row to give focus back to.
-    onThread: () => sidebar.mark(),
+    onThread: () => {
+      sidebar.mark();
+      const open = overlay.openId();
+      if (open !== undefined) tellNotes({ kind: 'open', id: open });
+    },
     ...(options.replies === false
       ? {}
       : {
@@ -355,6 +404,18 @@ export function init(options: FruitbackOptions): Fruitback {
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
   const readerIdentity: ReaderIdentity = { identified: false, canReply: false };
+  // FRU-299: a list outside the page, told when to read the notes again. A listener that throws is
+  // the list's problem, never the page's.
+  const notesWatchers = new Set<(change: NotesChange) => void>();
+  const tellNotes = (change: NotesChange): void => {
+    for (const watcher of notesWatchers) {
+      try {
+        watcher(change);
+      } catch {
+        // Nothing: see above.
+      }
+    }
+  };
   // The notes kept for later, per tab (FRU-124). Next to the config, under its key.
   const drafts = createDraftStore({
     storage: sessionStorageOf(view),
@@ -390,6 +451,7 @@ export function init(options: FruitbackOptions): Fruitback {
       host.readFailed(readState === 'failed', translator.text('sidebar.failed'));
       retryWhileFailing();
       sidebar.refresh();
+      tellNotes({ kind: 'list' });
       // A link to a note waits for the notes: this is when they are in hand.
       openLinked();
       // A page whose elements came with the read gets its note back now, if the mount was too early.
@@ -632,12 +694,14 @@ export function init(options: FruitbackOptions): Fruitback {
   const stopFollowingDrafts = drafts.subscribe(() => {
     show(readIssues);
     sidebar.refresh();
+    tellNotes({ kind: 'list' });
   });
 
   // A preference change redraws from the issues already held, so it costs no request.
   const unsubscribe = config.subscribe(() => {
     overlay.refilter();
     sidebar.refresh();
+    tellNotes({ kind: 'list' });
   });
 
   let page = canonicalizePageUrl(view.location.href);
@@ -708,6 +772,55 @@ export function init(options: FruitbackOptions): Fruitback {
       return true;
     },
     showEveryNote: () => sidebar.open(),
+    pageNotes() {
+      if (readState !== 'read') return undefined;
+      const replies = options.replies !== false && readerIdentity.canReply;
+
+      return entries()
+        .filter(({ issue }) => !config.get().hiddenStages.includes(issue.stage))
+        .map(({ issue, placement, number }) => ({
+          id: issue.seed.id,
+          ...(number === undefined ? {} : { number }),
+          stage: issue.stage,
+          note: issue.seed.note,
+          ...(issue.seed.reporter?.name === undefined ? {} : { author: issue.seed.reporter.name }),
+          ...(issue.mine === true ? { mine: true as const } : {}),
+          createdAt: issue.seed.createdAt,
+          updatedAt: issue.updatedAt,
+          replies: (issue.comments ?? []).map((comment) => ({
+            ...(comment.author === undefined ? {} : { author: comment.author }),
+            body: comment.body,
+            createdAt: comment.createdAt,
+          })),
+          canReply: replies,
+          placement,
+        }));
+    },
+    focusNote: (id) => overlay.select(id),
+    markNote: (id) => overlay.mark(id),
+    async replyTo(id, body) {
+      const issue = readIssues.find((each) => each.seed.id === id);
+      if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {
+        return 'refused';
+      }
+      const sent = await sendReply(
+        options,
+        view,
+        issue,
+        body.trim(),
+        readerIdentity.identified ? undefined : config.get().reporterName,
+      ).catch((): ReplyFailure => 'retry');
+      if (typeof sent === 'string') return sent;
+      // The reply as the store wrote it is in the next read: the pins, the thread and the lists.
+      await read();
+
+      return 'sent';
+    },
+    watchNotes(listener) {
+      notesWatchers.add(listener);
+
+      return () => notesWatchers.delete(listener);
+    },
     pageCounts() {
       if (readState !== 'read') return undefined;
       const counts: PageCounts = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
@@ -732,6 +845,7 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     destroy() {
       destroyed = true;
+      notesWatchers.clear();
       if (retrying !== 0) view.clearTimeout(retrying);
       view.removeEventListener('online', onOnline);
       stopWatchingUrl();

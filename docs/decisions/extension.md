@@ -420,8 +420,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   `windows.onFocusChanged`, and a change of the rules). It reads the address of the tab itself:
   the browser gives it only for a site the extension has access to, so any other tab reads « not
   on ». It reads no worker and keeps nothing.
-- **Until FRU-299, the panel offers « Show the notes on the page »**, the in-page list of the widget,
-  so that the button of the popup loses nothing on the day it opens the panel.
+- **The panel lists the notes of the page (FRU-299)**: see the next section.
 
 ### What was measured, and what was not
 
@@ -437,6 +436,34 @@ did not change: the fields of 760 px and the file input of the browser are as th
   only in the handler of a user action, which the popup button is, and the sidebar has the same
   `tabs` API. If a Firefox does not open it, the in-page list stays: the popup keeps it for a browser
   with no panel API.
+
+## « Notes on this page », in the side panel (FRU-299)
+
+### The rules, in short
+
+- **The panel asks the widget of the tab; it reads no worker.** `notes` answers `pageNotes()` of
+  the widget: the notes its pins show, with their numbers, from its last read, and none of a stage
+  the reporter hid. One read, the same numbers as the pins, no second model and no cache.
+- **The widget says when to ask again.** `watchNotes` of the widget tells of each read, hidden
+  stage and kept note, and of the note opened on the page (a click on its pin); `page.content.ts`
+  posts `notes-changed`, and the bridge sends it to the panel. The panel takes it from the tab it
+  follows only.
+- **Four commands**, beside the three of the popup: `notes`, `focus-note` (scroll to the pin and
+  open its thread), `mark-note` (the pin of the open row stands out: a fifth bigger, above the
+  others) and `reply` (the reply path of the thread, then a read). A reply waits 20 s for its answer;
+  the others 1.5 s, as before.
+- **Open and Done.** Open is New, To do and In progress; Done is Done and Closed (FRU-300 takes out
+  the notes to check). A row is the drop of the kit with the number of its pin, the note, and
+  « {stage} · {who} · {age} »: « You » for a note of the reader (`mine`), the name given, or
+  « Anonymous ».
+- **What somebody types in a reply stays.** The panel draws again at each change; the text, the
+  caret and the focus are put back. A reply that did not go keeps its text and says why.
+- **The foot names the host and the workspace of the rule**, which the extension stores. The
+  destination of FRU-295 is a read of the worker, which the panel does not make; it comes when the
+  background holds it.
+- **No shell head in the panel.** The mock-up (`ExtSidebar`) opens on « Notes on this page »; the
+  head of FRU-296 is gone.
+- **Not yet**: « Search and options » (FRU-307) is not drawn; « Ready to check » is FRU-300.
 
 ## The rules in the reviewer's other browsers (FRU-72)
 

@@ -102,8 +102,8 @@ function panelWords(page: Page) {
     page,
     `({
       title: document.querySelector('h2')?.textContent ?? '',
-      site: document.querySelector('.panel-site')?.textContent ?? null,
-      lines: [...document.querySelectorAll('.panel-body p')].map((line) => line.textContent),
+      site: document.querySelector('.panel-where')?.textContent?.split(' · ')[0] ?? null,
+      lines: [...document.querySelectorAll('.panel-state p')].map((line) => line.textContent),
       close: document.querySelector('button.panel-close')?.getAttribute('aria-label') ?? null,
     })`,
   );
@@ -167,8 +167,124 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   await expect.poll(() => panelWords(page)).toMatchObject({ site: null, lines: [...said.notOn] });
   await page.bringToFront();
   await expect.poll(() => panelWords(page)).toMatchObject({ site: new URL(PLAYGROUND_ORIGIN).host });
+});
 
-  // « Show the notes on the page »: the list of the widget opens in the page, until FRU-299.
-  await inPanel(page, `document.querySelector('.panel-body button').click()`);
-  await expect(page.getByRole('dialog', { name: 'Notes on this page' })).toBeVisible();
+/** A note on `selector`, with the widget the extension mounted on a site of the workspace. */
+async function plantOn(page: Page, selector: string, note: string): Promise<void> {
+  await page.locator('[data-fruitback-host-launch]').click();
+  await page.locator(selector).click();
+  await page.locator('[data-fruitback-note]:visible').fill(note);
+  await page.locator('[data-fruitback-send]').click();
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
+}
+
+/** What the panel lists: each row with the number of its drop, its note, and whether it is open. */
+function panelRows(page: Page) {
+  return inPanel<{ tabs: string[]; rows: { number: string; note: string; open: boolean }[] }>(
+    page,
+    `({
+      tabs: [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+      rows: [...document.querySelectorAll('li[data-note]')].map((row) => ({
+        number: row.querySelector('.kit-drop-number')?.textContent ?? '',
+        note: row.querySelector('.panel-row-note')?.textContent ?? '',
+        open: row.querySelector('.panel-row-head')?.getAttribute('aria-expanded') === 'true',
+      })),
+    })`,
+  );
+}
+
+/** A click in the panel, on the button of a row with these words. */
+function clickInRow(page: Page, note: string, label: string): Promise<unknown> {
+  return inPanel(
+    page,
+    `(() => {
+      const row = [...document.querySelectorAll('li[data-note]')].find((each) => each.querySelector('.panel-row-note')?.textContent === ${JSON.stringify(note)});
+      const button = label === 'row' ? row?.querySelector('.panel-row-head') : [...(row?.querySelectorAll('button') ?? [])].find((each) => each.textContent === ${JSON.stringify(label)});
+      button?.click();
+      return button !== undefined;
+    })()`,
+  );
+}
+
+test('« Notes on this page » lists the pins of the page, opens a row from a pin, shows a note, and replies (FRU-299)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-notes');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+
+  // Five notes, through the widget the extension mounted.
+  const places = [
+    '[data-testid="card-espresso"] .add',
+    '[data-testid="card-latte"] .add',
+    '[data-testid="card-mocha"] .add',
+    '[data-testid="card-espresso"] h3',
+    '[data-testid="card-latte"] h3',
+  ];
+  for (const [index, place] of places.entries()) await plantOn(page, place, `Panel note ${index + 1}`);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(5);
+
+  // The panel, from the popup.
+  const again = await openPopup(extension, page);
+  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).tabs.length).toBe(2);
+
+  // The same numbers as the pins; Open and Done count the stages of the pins.
+  const pins = await page.locator('[data-fruitback-pin]').evaluateAll((all) =>
+    all.map((pin) => ({
+      number: pin.querySelector('.fruitback-pin-badge')?.textContent?.trim() ?? '',
+      done: ['ripe', 'composted'].includes((pin as HTMLElement).dataset.fruitbackStage ?? ''),
+    })),
+  );
+  const open = pins.filter((pin) => !pin.done);
+  const done = pins.filter((pin) => pin.done);
+  const listed = await panelRows(page);
+  expect(listed.tabs).toEqual([`Open · ${open.length}`, `Done · ${done.length}`]);
+  expect(listed.rows.map((row) => row.number).sort()).toEqual(open.map((pin) => pin.number).sort());
+
+  // A click on a pin opens its row in the panel.
+  const first = page
+    .locator('[data-fruitback-pin]')
+    .filter({ hasText: open[0]?.number ?? '' })
+    .first();
+  await first.locator('.fruitback-pin-badge').click();
+  await expect
+    .poll(async () => (await panelRows(page)).rows.filter((row) => row.open).map((row) => row.number))
+    .toEqual([open[0]?.number]);
+  await page.keyboard.press('Escape');
+
+  // « Show on the page »: the thread of the note opens on the page.
+  const target = (await panelRows(page)).rows[0];
+  expect(target).toBeDefined();
+  await clickInRow(page, target?.note ?? '', 'row');
+  await expect.poll(() => clickInRow(page, target?.note ?? '', 'Show on the page')).toBe(true);
+  await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // « Reply »: the reply is in the thread of the widget.
+  await expect.poll(() => clickInRow(page, target?.note ?? '', 'Reply')).toBe(true);
+  await inPanel(
+    page,
+    `(() => {
+      const field = document.querySelector('.panel-reply-field');
+      field.value = 'Answered from the side panel';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('.panel-reply-form').requestSubmit();
+    })()`,
+  );
+  await expect
+    .poll(() => inPanel<string>(page, `document.querySelector('.panel-replies')?.textContent ?? ''`), {
+      timeout: 20_000,
+    })
+    .toContain('Answered from the side panel');
+  await clickInRow(page, target?.note ?? '', 'Show on the page');
+  await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText('Answered from the side panel');
+
+  // The panel read no worker: every read went through the widget of the tab.
+  const fetched = await inPanel<string[]>(page, `performance.getEntriesByType('resource').map((entry) => entry.name)`);
+  expect(fetched.filter((url) => !url.startsWith('chrome-extension://'))).toEqual([]);
 });

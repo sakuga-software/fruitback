@@ -150,7 +150,8 @@ export default defineContentScript({
         message.kind === 'relay-request' ||
         message.kind === 'capture-request' ||
         message.kind === 'command-response' ||
-        message.kind === 'sign-in'
+        message.kind === 'sign-in' ||
+        message.kind === 'notes-changed'
       ) {
         return;
       }
@@ -176,18 +177,46 @@ export default defineContentScript({
           counts = widget.pageCounts();
           done = counts !== undefined;
         }
-        window.postMessage(
-          {
-            channel: CHANNEL,
-            kind: 'command-response',
-            id: message.id,
-            done,
-            // The widget is ours and said no to a choice: somebody writes a note.
-            ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
-            ...(counts === undefined ? {} : { counts }),
-          },
-          '*',
-        );
+        // FRU-299: the side panel. The notes the pins show, a note shown on the page, a reply.
+        let notes: ReturnType<NonNullable<typeof widget>['pageNotes']>;
+        if (widget !== undefined && message.command === 'notes') {
+          notes = widget.pageNotes();
+          done = notes !== undefined;
+        }
+        if (widget !== undefined && message.command === 'focus-note' && message.note !== undefined) {
+          done = widget.focusNote(message.note);
+        }
+        if (widget !== undefined && message.command === 'mark-note') {
+          widget.markNote(message.note);
+          done = true;
+        }
+        const answer = (outcome?: string): void =>
+          window.postMessage(
+            {
+              channel: CHANNEL,
+              kind: 'command-response',
+              id: message.id,
+              done,
+              // The widget is ours and said no to a choice: somebody writes a note.
+              ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
+              ...(counts === undefined ? {} : { counts }),
+              ...(notes === undefined ? {} : { notes }),
+              ...(outcome === undefined ? {} : { outcome }),
+            },
+            '*',
+          );
+        if (widget !== undefined && message.command === 'reply' && message.note !== undefined) {
+          void widget.replyTo(message.note, message.body ?? '').then(
+            (outcome) => {
+              done = outcome === 'sent';
+              answer(outcome);
+            },
+            () => answer('retry'),
+          );
+
+          return;
+        }
+        answer();
 
         return;
       }
@@ -262,6 +291,14 @@ export default defineContentScript({
         captureScreenshot,
       });
       mounted = signature;
+      // FRU-299: the side panel asks for the notes again when they change, and opens the row of a
+      // note opened on the page. Stopped with the widget, by `destroy`.
+      widget.watchNotes((change) =>
+        window.postMessage(
+          { channel: CHANNEL, kind: 'notes-changed', ...(change.kind === 'open' ? { open: change.id } : {}) },
+          '*',
+        ),
+      );
     });
 
     // The isolated script may have decided before this listener existed — it has no way to know when

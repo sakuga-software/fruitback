@@ -2,12 +2,18 @@ import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
+import type { PanelNote } from './protocol.ts';
 import {
   type PanelApis,
+  type PanelOptions,
+  type PanelState,
+  REPLY_PROBLEM,
+  ageOf,
   keepPopupOnActionClick,
   openPanel,
   openPanelOrPage,
   panelPage,
+  tabOf,
   webHost,
 } from './side-panel.ts';
 
@@ -19,8 +25,6 @@ import {
 function page(): Document {
   return new HappyDomWindow({ url: 'chrome-extension://fruitback/sidepanel.html' }).document as unknown as Document;
 }
-
-const nothing = () => {};
 
 afterEach(() => setLanguage('en'));
 
@@ -100,48 +104,259 @@ describe('opening the panel (FRU-296)', () => {
   });
 });
 
-describe('the page of the panel (FRU-296)', () => {
-  it('has the head of the shell, « Notes on this page » and « Close the sidebar »', () => {
-    let closed = 0;
-    const root = panelPage(page(), { tab: { kind: 'not-on' }, onClose: () => (closed += 1), onShowOnPage: nothing });
+describe('the page of the panel (FRU-296, FRU-299)', () => {
+  const NOW = Date.parse('2026-10-20T12:00:00Z');
+  const note = (fields: Partial<PanelNote> & Pick<PanelNote, 'id' | 'stage'>): PanelNote => ({
+    note: `Note ${fields.id}`,
+    createdAt: '2026-10-19T12:00:00Z',
+    updatedAt: '2026-10-19T12:00:00Z',
+    replies: [],
+    canReply: true,
+    placement: 'found',
+    ...fields,
+  });
+  const NOTES: PanelNote[] = [
+    note({ id: 'b', number: 3, stage: 'green', note: 'Could the title mention Bordeaux?', mine: true }),
+    note({ id: 'a', number: 4, stage: 'seeded', author: 'Léa', createdAt: '2026-10-20T11:20:00Z' }),
+    note({ id: 'c', number: 1, stage: 'ripe', canReply: false }),
+    note({ id: 'd', number: 2, stage: 'ripening' }),
+  ];
+  const handlers = (): Omit<PanelOptions, 'state' | 'tab'> & { calls: string[] } => {
+    const calls: string[] = [];
 
-    assert.equal(root.querySelector('.kit-head .kit-brand')?.textContent, 'Fruitback');
+    return {
+      calls,
+      now: NOW,
+      onClose: () => calls.push('close'),
+      onLeave: () => calls.push('leave'),
+      onTab: (tab) => calls.push(`tab:${tab}`),
+      onToggle: (id) => calls.push(`toggle:${id}`),
+      onShow: (id) => calls.push(`show:${id}`),
+      onReplyOpen: (id) => calls.push(`reply:${id}`),
+      onReplyInput: (text) => calls.push(`input:${text}`),
+      onReplySend: () => calls.push('send'),
+      onReplyCancel: () => calls.push('cancel'),
+      onRetry: () => calls.push('retry'),
+      onSettings: () => calls.push('settings'),
+    };
+  };
+  const on = (notes: PanelNote[] | 'reading' | 'failed'): PanelState => ({
+    kind: 'on',
+    host: 'staging.acme.dev',
+    where: 'Acme',
+    notes,
+  });
+
+  it('has « Notes on this page » and « Close the sidebar »', () => {
+    const options = handlers();
+    const root = panelPage(page(), { ...options, state: { kind: 'not-on' }, tab: 'open' });
+
     assert.equal(root.querySelector('h2')?.textContent, 'Notes on this page');
     const close = root.querySelector<HTMLButtonElement>('button.panel-close');
     assert.equal(close?.getAttribute('aria-label'), 'Close the sidebar');
     close?.click();
-    assert.equal(closed, 1);
+    assert.deepEqual(options.calls, ['close']);
   });
 
-  it('says why it shows nothing on a page Fruitback is not on', () => {
-    const root = panelPage(page(), { tab: { kind: 'not-on' }, onClose: nothing, onShowOnPage: nothing });
+  it('says why it shows nothing on a page Fruitback is not on, and offers nothing', () => {
+    const root = panelPage(page(), { ...handlers(), state: { kind: 'not-on' }, tab: 'open' });
 
     assert.deepEqual(
-      [...root.querySelectorAll('.panel-body p')].map((line) => line.textContent),
+      [...root.querySelectorAll('p')].map((line) => line.textContent),
       ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
     );
-    assert.equal(root.querySelector('.panel-body button'), null);
+    assert.equal(root.querySelectorAll('button').length, 1, 'only « Close the sidebar »');
   });
 
-  it('names the site of the tab, and shows its notes on the page at a click', () => {
-    let shown = 0;
+  it('offers « Leave feedback », and names the site and its workspace at the foot with « Settings »', () => {
+    const options = handlers();
+    const root = panelPage(page(), { ...options, state: on([]), tab: 'open' });
+    const leave = [...root.querySelectorAll('button')].find((each) => each.textContent === 'Leave feedback');
+
+    assert.ok(leave?.classList.contains('kit-primary'));
+    assert.equal(leave?.dataset.size, 'panel');
+    assert.equal(
+      root.querySelector('.panel-hint')?.textContent,
+      'Then click the part of the page you want to comment on',
+    );
+    assert.equal(root.querySelector('.panel-where')?.textContent, 'staging.acme.dev · Acme');
+    leave?.click();
+    [...root.querySelectorAll<HTMLButtonElement>('.panel-foot button')]
+      .find((each) => each.textContent === 'Settings')
+      ?.click();
+    assert.deepEqual(options.calls, ['leave', 'settings']);
+  });
+
+  it('counts « Open » and « Done », and lists each by the number of its pin', () => {
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'open' });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('[role="tab"]')].map((tab) => [tab.textContent, tab.getAttribute('aria-selected')]),
+      [
+        ['Open · 3', 'true'],
+        ['Done · 1', 'false'],
+      ],
+    );
+    assert.deepEqual(
+      [...root.querySelectorAll('li[data-note]')].map((row) => row.querySelector('.kit-drop-number')?.textContent),
+      ['2', '3', '4'],
+    );
+    const third = root.querySelector('li[data-note="b"]');
+    assert.equal(third?.querySelector('.panel-row-note')?.textContent, 'Could the title mention Bordeaux?');
+    assert.equal(third?.querySelector('.panel-row-meta')?.textContent, 'To do · You · yesterday');
+    assert.equal(root.querySelector('li[data-note="a"] .panel-row-meta')?.textContent, 'New · Léa · 40 minutes ago');
+    assert.equal(
+      root.querySelector('li[data-note="d"] .panel-row-meta')?.textContent,
+      'In progress · Anonymous · yesterday',
+    );
+    assert.equal(third?.querySelector('.kit-drop')?.getAttribute('data-stage'), 'green');
+  });
+
+  it('lists done and closed notes under « Done »', () => {
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done' });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('li[data-note]')].map((row) => row.getAttribute('data-note')),
+      ['c'],
+    );
+  });
+
+  it('opens a row: its replies, « Show on the page », and « Reply » where the reader may reply', () => {
+    const options = handlers();
+    const withReply = NOTES.map((each) =>
+      each.id === 'b'
+        ? {
+            ...each,
+            replies: [{ author: 'Léa', body: 'Planned with the new hero copy.', createdAt: '2026-10-19T16:00:00Z' }],
+          }
+        : each,
+    );
+    const root = panelPage(page(), { ...options, state: on(withReply), tab: 'open', open: 'b' });
+    const row = root.querySelector('li[data-note="b"]');
+
+    assert.equal(row?.querySelector('.panel-row-head')?.getAttribute('aria-expanded'), 'true');
+    assert.equal(root.querySelector('li[data-note="a"] .panel-row-head')?.getAttribute('aria-expanded'), 'false');
+    assert.equal(row?.querySelector('.panel-reply-meta')?.textContent, 'Léa · 20 hours ago');
+    assert.equal(row?.querySelector('.panel-reply-body')?.textContent, 'Planned with the new hero copy.');
+    const links = [...(row?.querySelectorAll<HTMLButtonElement>('.panel-row-links button') ?? [])];
+    assert.deepEqual(
+      links.map((link) => link.textContent),
+      ['Show on the page', 'Reply'],
+    );
+    for (const link of links) link.click();
+    row?.querySelector<HTMLButtonElement>('.panel-row-head')?.click();
+    assert.deepEqual(options.calls, ['show:b', 'reply:b', 'toggle:b']);
+  });
+
+  it('offers no « Reply » on a note the reader may not reply to', () => {
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done', open: 'c' });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('li[data-note="c"] .panel-row-links button')].map((link) => link.textContent),
+      ['Show on the page'],
+    );
+  });
+
+  it('keeps the text of a reply, sends it, and says why it did not go without clearing it', () => {
+    const options = handlers();
     const root = panelPage(page(), {
-      tab: { kind: 'on', host: 'staging.acme.dev', tabId: 4 },
-      onClose: nothing,
-      onShowOnPage: () => (shown += 1),
+      ...options,
+      state: on(NOTES),
+      tab: 'open',
+      open: 'b',
+      replying: { id: 'b', text: 'Merci', problem: REPLY_PROBLEM.retry },
+    });
+    const field = root.querySelector<HTMLTextAreaElement>('textarea');
+
+    assert.equal(field?.value, 'Merci');
+    assert.equal(field?.getAttribute('aria-label'), 'Your reply');
+    assert.equal(
+      root.querySelector('.panel-reply-problem')?.textContent,
+      'The reply did not go through. Your text is kept. Try again.',
+    );
+    root
+      .querySelector('form')
+      ?.dispatchEvent(
+        new (root.ownerDocument.defaultView as unknown as typeof globalThis).Event('submit', { cancelable: true }),
+      );
+    assert.deepEqual(options.calls, ['send']);
+  });
+
+  it('shows « Sending… » and no second send while a reply is on its way', () => {
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: on(NOTES),
+      tab: 'open',
+      open: 'b',
+      replying: { id: 'b', text: 'Merci', sending: true },
     });
 
-    assert.equal(root.querySelector('.panel-site')?.textContent, 'staging.acme.dev');
-    root.querySelector<HTMLButtonElement>('.panel-body button')?.click();
-    assert.equal(shown, 1);
+    assert.equal(root.querySelector<HTMLButtonElement>('.panel-send')?.textContent, 'Sending…');
+    assert.equal(root.querySelector<HTMLButtonElement>('.panel-send')?.disabled, true);
+    assert.equal(root.querySelector<HTMLTextAreaElement>('textarea')?.disabled, true);
+  });
+
+  it('says it reads, says a failed read with « Try again », and says an empty page', () => {
+    const options = handlers();
+    const reading = panelPage(page(), { ...options, state: on('reading'), tab: 'open' });
+    assert.equal(reading.querySelector('[role="status"]')?.textContent, 'Reading the notes of this page…');
+
+    const failed = panelPage(page(), { ...options, state: on('failed'), tab: 'open' });
+    assert.match(failed.querySelector('[role="alert"]')?.textContent ?? '', /could not be read\. They are not lost\./);
+    failed.querySelector<HTMLButtonElement>('[role="alert"] button')?.click();
+    assert.deepEqual(options.calls, ['retry']);
+
+    const empty = panelPage(page(), { ...options, state: on([]), tab: 'open' });
+    assert.equal(empty.querySelector('.panel-empty-title')?.textContent, 'No notes on this page yet');
+    assert.equal(empty.querySelector('[role="tablist"]'), null);
   });
 
   it('is in French for a French reader', () => {
     setLanguage('fr');
-    const root = panelPage(page(), { tab: { kind: 'not-on' }, onClose: nothing, onShowOnPage: nothing });
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'open', open: 'b' });
 
     assert.equal(root.querySelector('h2')?.textContent, 'Notes de cette page');
     assert.equal(root.querySelector('button.panel-close')?.getAttribute('aria-label'), 'Fermer le panneau');
+    assert.ok([...root.querySelectorAll('button')].some((each) => each.textContent === 'Laisser une note'));
+    assert.deepEqual(
+      [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+      ['Ouvertes · 3', 'Terminées · 1'],
+    );
+    assert.equal(root.querySelector('li[data-note="b"] .panel-row-meta')?.textContent, 'À faire · Vous · hier');
+    assert.deepEqual(
+      [...root.querySelectorAll('li[data-note="b"] .panel-row-links button')].map((link) => link.textContent),
+      ['Voir sur la page', 'Répondre'],
+    );
+  });
+});
+
+describe('the tab of a note, and its age', () => {
+  it('puts new, to do and in progress under « Open », done and closed under « Done »', () => {
+    const of = (stage: PanelNote['stage']) =>
+      tabOf({
+        id: 'x',
+        stage,
+        note: '',
+        createdAt: '',
+        updatedAt: '',
+        replies: [],
+        canReply: false,
+        placement: 'found',
+      });
+    assert.deepEqual((['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map(of), [
+      'open',
+      'open',
+      'open',
+      'done',
+      'done',
+    ]);
+  });
+
+  it('says an age in words, and nothing for a date that does not parse', () => {
+    const now = Date.parse('2026-10-20T12:00:00Z');
+    assert.equal(ageOf('2026-10-20T11:59:50Z', now), 'now');
+    assert.equal(ageOf('2026-10-20T10:00:00Z', now), '2 hours ago');
+    assert.equal(ageOf('not a date', now), '');
   });
 });
 
