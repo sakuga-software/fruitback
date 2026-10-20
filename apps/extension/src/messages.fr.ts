@@ -5,6 +5,7 @@
  * shows, and on a translation that lost a placeholder.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
+  'This preference could not be saved. Try again.': 'Cette préférence n’a pas pu être enregistrée. Réessayez.',
   // FRU-298: the screens 2 and 3 of the popup.
   'Not in your sites yet': 'Pas encore dans vos sites',
   'In {workspace} · not on in this browser': 'Dans {workspace} · pas activé dans ce navigateur',

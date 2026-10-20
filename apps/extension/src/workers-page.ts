@@ -1,4 +1,4 @@
-import { t } from './i18n.ts';
+import { msg, t } from './i18n.ts';
 import { keys, toggle } from './kit.ts';
 import { keysOfShortcut } from './popup-view.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
@@ -236,16 +236,20 @@ function sessionLines(document: Document, card: WorkerCard): HTMLElement[] {
 export type PreferencesOptions = {
   /** `undefined`: the browser has no panel to open from the icon (Firefox), and the row is not drawn. */
   panelOnClick?: boolean;
-  onPanelOnClick: (on: boolean) => void;
+  /** Each change is a write: a write that fails puts the control back, and says so (review). */
+  onPanelOnClick: (on: boolean) => Promise<void> | void;
   name: string;
-  onName: (name: string) => void;
+  onName: (name: string) => Promise<void> | void;
   /** The keys of « Leave feedback », as the browser has them: `Alt+Shift+F`. None: not set. */
   shortcut?: string;
   /** Opens the shortcut settings of the browser. None: the row says where to look. */
   onShortcut?: () => void;
   synced: boolean;
-  onSynced: (on: boolean) => void;
+  onSynced: (on: boolean) => Promise<void> | void;
 };
+
+/** What a preference whose write failed says: the control is back where it was. */
+export const PREFERENCE_NOT_SAVED = msg('This preference could not be saved. Try again.');
 
 /** The longest name, as the widget keeps it (`REPORTER_NAME_MAX`). */
 export const NAME_MAX = 120;
@@ -274,6 +278,22 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   title.id = 'prefs-title';
   section.setAttribute('aria-labelledby', title.id);
   const card = make(document, 'div', 'pref-card');
+  const problem = make(document, 'p', 'pref-problem');
+  problem.setAttribute('role', 'status');
+  /** Writes, and puts the control back when the write fails: the page never shows a value not kept. */
+  const save = (write: Promise<void> | void, undo: () => void): void => {
+    problem.textContent = '';
+    void Promise.resolve(write).catch((error: unknown) => {
+      console.error('[fruitback] a preference was not saved', error);
+      undo();
+      problem.textContent = t(PREFERENCE_NOT_SAVED);
+    });
+  };
+  /** A switch of the kit, flipped back. */
+  const flipBack = (control: HTMLElement, on: boolean): void => {
+    const knob = control.matches('[role="switch"]') ? control : control.querySelector('[role="switch"]');
+    knob?.setAttribute('aria-checked', String(!on));
+  };
 
   if (options.panelOnClick !== undefined) {
     card.append(
@@ -281,12 +301,16 @@ export function preferencesSection(document: Document, options: PreferencesOptio
         document,
         t('Open notes in the sidebar'),
         t('Instead of floating pins only, on every site you review.'),
-        toggle(document, {
-          checked: options.panelOnClick,
-          label: t('Open notes in the sidebar'),
-          size: 'preference',
-          onChange: options.onPanelOnClick,
-        }),
+        (() => {
+          const control: HTMLElement = toggle(document, {
+            checked: options.panelOnClick,
+            label: t('Open notes in the sidebar'),
+            size: 'preference',
+            onChange: (on) => save(options.onPanelOnClick(on), () => flipBack(control, on)),
+          });
+
+          return control;
+        })(),
       ),
     );
   }
@@ -297,7 +321,16 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   name.value = options.name;
   name.autocomplete = 'name';
   name.setAttribute('aria-label', t('Name on my notes'));
-  name.addEventListener('change', () => options.onName(name.value.trim()));
+  let keptName = options.name;
+  name.addEventListener('change', () => {
+    const typed = name.value.trim();
+    const before = keptName;
+    keptName = typed;
+    save(options.onName(typed), () => {
+      keptName = before;
+      name.value = before;
+    });
+  });
   card.append(
     row(document, t('Name on my notes'), t('Prefilled in private mode. Team mode signs with your session.'), name),
   );
@@ -329,14 +362,19 @@ export function preferencesSection(document: Document, options: PreferencesOptio
       t(
         'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
       ),
-      toggle(document, {
-        checked: options.synced,
-        label: t('Keep my rules in the account of this browser'),
-        size: 'preference',
-        onChange: options.onSynced,
-      }),
+      (() => {
+        const control: HTMLElement = toggle(document, {
+          checked: options.synced,
+          label: t('Keep my rules in the account of this browser'),
+          size: 'preference',
+          onChange: (on) => save(options.onSynced(on), () => flipBack(control, on)),
+        });
+
+        return control;
+      })(),
     ),
   );
+  card.append(problem);
   section.append(title, card);
 
   return section;

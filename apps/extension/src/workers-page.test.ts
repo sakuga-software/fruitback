@@ -5,6 +5,7 @@ import { setLanguage } from './i18n.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
 import {
   type WorkerCard,
+  PREFERENCE_NOT_SAVED,
   preferencesSection,
   redrawWorkers,
   shortcutKeys,
@@ -285,7 +286,10 @@ describe('« Preferences » (FRU-302)', () => {
     const calls: string[] = [];
     const section = preferencesSection(
       page(),
-      options({ onPanelOnClick: (on) => calls.push(`panel:${on}`), onSynced: (on) => calls.push(`sync:${on}`) }),
+      options({
+        onPanelOnClick: (on) => void calls.push(`panel:${on}`),
+        onSynced: (on) => void calls.push(`sync:${on}`),
+      }),
     );
     const switches = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
 
@@ -307,7 +311,7 @@ describe('« Preferences » (FRU-302)', () => {
   it('keeps the name as it is typed, trimmed, at most 120 characters', () => {
     const names: string[] = [];
     const document = page();
-    const section = preferencesSection(document, options({ name: 'Camille', onName: (name) => names.push(name) }));
+    const section = preferencesSection(document, options({ name: 'Camille', onName: (name) => void names.push(name) }));
     const input = section.querySelector<HTMLInputElement>('.pref-name');
 
     assert.equal(input?.value, 'Camille');
@@ -326,5 +330,61 @@ describe('« Preferences » (FRU-302)', () => {
     assert.deepEqual(shortcutKeys('Alt+Shift+F'), ['Alt', 'Shift', 'F']);
     // Chrome on macOS: one sign for each key, with no `+`.
     assert.deepEqual(shortcutKeys('⌥⇧F'), ['⌥', '⇧', 'F']);
+  });
+});
+
+describe('« Preferences » whose write failed (raised in review)', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const refuse = () => Promise.reject(new Error('QUOTA_BYTES quota exceeded'));
+
+  it('puts each control back where it was, and says the preference was not saved', async () => {
+    const section = preferencesSection(page(), {
+      panelOnClick: false,
+      onPanelOnClick: refuse,
+      name: 'Ana',
+      onName: refuse,
+      synced: true,
+      onSynced: refuse,
+    });
+    const [panel, synced] = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+    const name = section.querySelector<HTMLInputElement>('input.pref-name');
+    if (panel === undefined || synced === undefined || name === null) throw new Error('no control');
+
+    panel.click();
+    assert.equal(panel.getAttribute('aria-checked'), 'true');
+    await settle();
+    assert.equal(panel.getAttribute('aria-checked'), 'false', 'the switch shows a value that was not kept');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, PREFERENCE_NOT_SAVED);
+
+    synced.click();
+    await settle();
+    assert.equal(synced.getAttribute('aria-checked'), 'true');
+
+    name.value = 'Camille Durand';
+    name.dispatchEvent(new (name.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    await settle();
+    assert.equal(name.value, 'Ana', 'the field shows a name that was not kept');
+  });
+
+  it('says nothing when the write goes through, and clears what a failed one said', async () => {
+    let fail = true;
+    const section = preferencesSection(page(), {
+      panelOnClick: false,
+      onPanelOnClick: () => (fail ? refuse() : Promise.resolve()),
+      name: '',
+      onName: () => Promise.resolve(),
+      synced: false,
+      onSynced: () => Promise.resolve(),
+    });
+    const panel = section.querySelector<HTMLButtonElement>('[role="switch"]');
+    if (panel === null) throw new Error('no switch');
+    panel.click();
+    await settle();
+    assert.equal(section.querySelector('.pref-problem')?.textContent, PREFERENCE_NOT_SAVED);
+    fail = false;
+    panel.click();
+    await settle();
+    assert.equal(panel.getAttribute('aria-checked'), 'true');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, '');
   });
 });

@@ -683,16 +683,16 @@ async function preferences(): Promise<HTMLElement> {
   return preferencesSection(document, {
     // The icon opens the panel only where the browser has one to open (Chrome): no row on Firefox.
     ...(panel ? { panelOnClick: stored[PANEL_ON_CLICK_KEY] === true } : {}),
-    onPanelOnClick: (on) => void browser.storage.local.set({ [PANEL_ON_CLICK_KEY]: on }),
+    onPanelOnClick: (on) => browser.storage.local.set({ [PANEL_ON_CLICK_KEY]: on }),
     name: typeof stored[NOTES_NAME_KEY] === 'string' ? stored[NOTES_NAME_KEY] : '',
     onName: (name) =>
-      void (name === ''
+      name === ''
         ? browser.storage.local.remove(NOTES_NAME_KEY)
-        : browser.storage.local.set({ [NOTES_NAME_KEY]: name })),
+        : browser.storage.local.set({ [NOTES_NAME_KEY]: name }),
     ...(shortcut === undefined ? {} : { shortcut }),
     ...(onShortcut === undefined ? {} : { onShortcut }),
     synced: stored[SYNC_SETTING] === true,
-    onSynced: (on) => void browser.storage.local.set({ [SYNC_SETTING]: on }),
+    onSynced: (on) => browser.storage.local.set({ [SYNC_SETTING]: on }),
   });
 }
 

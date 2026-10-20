@@ -753,3 +753,15 @@ button.pref-link {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* A preference whose write failed: the control is back, and the card says so. */
+.pref-problem {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--alert-text);
+  font-size: 13px;
+}
+
+.pref-problem:empty {
+  display: none;
+}

@@ -525,6 +525,9 @@ did not change: the fields of 760 px and the file input of the browser are as th
   it never builds the widget again over a note being written; the next mount takes it.
 - **« Leave feedback shortcut »** shows the keys of `commands.getAll()` and opens the shortcut settings
   of the browser; **« Keep my rules in the account of this browser »** is the copy of FRU-72, moved.
+- **A preference is a write, and a write can fail** (a full storage): the control goes back where it
+  was and the card says « This preference could not be saved. Try again. », so the page never shows
+  a value the extension did not keep.
 
 ## The rules in the reviewer's other browsers (FRU-72)
 
