@@ -1,4 +1,5 @@
 import { msg, t } from './i18n.ts';
+import { primaryButton, secondaryButton, statusDrop, toggle } from './kit.ts';
 
 /**
  * The parts of the popup of the mock-up of 2026-10-13 (FRU-251): the shell every screen shares, and
@@ -138,11 +139,10 @@ export function hostOf(origin: string): string {
   }
 }
 
-/** A main action of the popup: 44 px, the corner of 10 px. */
+/** A main action of the popup: the main button of the kit (FRU-293), 46 px, the corner of 10 px. */
 export function action(document: Document, label: string, onClick: () => void): HTMLButtonElement {
-  const button = element(document, 'button', label, 'action');
-  button.type = 'button';
-  button.addEventListener('click', onClick);
+  const button = primaryButton(document, label, onClick);
+  button.classList.add('action');
 
   return button;
 }
@@ -400,24 +400,20 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
       'subtitle',
     ),
   );
-  const toggle = element(document, 'button', '', 'switch');
-  toggle.type = 'button';
-  toggle.setAttribute('role', 'switch');
-  toggle.setAttribute('aria-checked', String(options.on));
-  toggle.setAttribute('aria-label', t('Fruitback on {host}', { host }));
-  toggle.append(element(document, 'span', '', 'knob'));
-  toggle.addEventListener('click', () => options.onToggle(!options.on));
+  const onOff = toggle(document, {
+    checked: options.on,
+    label: t('Fruitback on {host}', { host }),
+    onChange: options.onToggle,
+  });
   const row = element(document, 'div', '', 'site-row');
-  row.append(titles, toggle);
+  row.append(titles, onOff);
 
   const body: Node[] = [row];
   // Off: the widget left the tab, so there is nothing of the page to count and nothing to ask of it.
   if (options.on) {
     if (options.pageCounts !== undefined) body.push(pageSection(document, options.pageCounts));
     const act = element(document, 'div', '', 'action-block');
-    const every = element(document, 'button', t('Show every note of the page'), 'secondary-action');
-    every.type = 'button';
-    every.addEventListener('click', options.onShowEveryNote);
+    const every = secondaryButton(document, t('Show every note of the page'), options.onShowEveryNote);
     act.append(action(document, t('Leave feedback'), options.onLeaveFeedback), every);
     body.push(act);
   }
@@ -455,9 +451,7 @@ function pageSection(document: Document, counts: Counts): HTMLElement {
   const list = element(document, 'ul', '');
   for (const [stage, word] of STAGE_WORDS) {
     const item = element(document, 'li', '');
-    const drop = element(document, 'span', '', 'drop');
-    drop.classList.add(`stage-${stage}`);
-    drop.setAttribute('aria-hidden', 'true');
+    const drop = statusDrop(document, { stage });
     const count = element(document, 'span', String(counts[stage]), 'count');
     // A zero in the muted grey, still at 5.28:1.
     count.classList.toggle('zero', counts[stage] === 0);
@@ -519,8 +513,8 @@ export function newSite(document: Document, options: NewSiteOptions): HTMLElemen
     });
   }
 
-  const submit = element(document, 'button', addLabel(only.name), 'action');
-  submit.type = 'submit';
+  const submit = primaryButton(document, addLabel(only.name), undefined, { type: 'submit' });
+  submit.classList.add('action');
   const act = element(document, 'div', '', 'action-block');
   act.append(
     submit,

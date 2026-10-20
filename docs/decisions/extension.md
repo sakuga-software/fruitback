@@ -271,6 +271,31 @@ three were settled on 2026-10-12 by the orchestrator of the agents, to whom Math
 current decisions, with the simplest answer that fits what exists. The layout of the options page
 did not change: the fields of 760 px and the file input of the browser are as they were.
 
+## The kit of the extension (FRU-293)
+
+### The rules, in short
+
+- **One source for the parts the popup, the side panel and the page share.** `src/kit.ts` builds
+  them, with no `browser`, so `kit.test.ts` reads each on happy-dom; `src/kit.css` gives their
+  measures on the tokens. The popup and the options page link `kit.css` after `popup/style.css`.
+- **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px, the drop and
+  « Fruitback », the button of the account of 44 px), the main button (46 px; 56 px with the drop
+  for the action of a site; 48 px in the panel), the second button (44 px), the text button
+  (« Change », a target of 44 px), the switch (44 × 26, 36 × 22 in a table, 40 × 24 in the
+  preferences), the tile and the line of a site, the drop of a status (a mark of 12 px, a pin of
+  24 or 28 px with its number), the row of a list (52 px and a chevron), the `dl`, the alert, the
+  keys of a shortcut and the segmented tabs.
+- **Every control is a native `button` of type `button`**: Space and Enter press it, and it takes
+  the focus ring. The tabs have the keyboard of a tab list: the chosen tab is the one stop, and the
+  arrows, Home and End move and choose.
+- **No rule of `kit.css` writes a colour.** test:`writes no colour in its sheet: each one is a token`.
+- **A switch that is off is drawn in `--line-strong` (3.49:1), not in the lighter grey of the
+  mock-up (1.48:1)**: its track is what says that the control is there (WCAG 1.4.11).
+- **The current popup takes the kit** for its main and second buttons, its switch and the drops of
+  the notes of the page. Its screens do not change: the four screens of the mock-up are FRU-297
+  and FRU-298, which take the head and the other parts. `e2e/popup-layout.spec.ts` reads the
+  measures of the kit on computed styles, in both schemes and in both languages.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

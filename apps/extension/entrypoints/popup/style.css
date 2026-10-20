@@ -54,6 +54,15 @@
   /* The tile of a site that is on. */
   --tile-on: #2f4f3a;
   --on-tile: #fff;
+  /* The dot of the account, and the tile of a site nobody added (FRU-293). */
+  --avatar-surface: #e7e5e4;
+  --on-avatar: #44403c;
+  /* The words of a problem, under its title. */
+  --alert-body: #44403c;
+  /* The number on the drop of a status, and its edge. */
+  --on-stage: #fff;
+  /* The knob of a switch, on the accent and on the grey of off. */
+  --knob: #fff;
   /* The five statuses of a note, as the widget draws them on the page. */
   --stage-seeded: #6a7950;
   --stage-green: #56802e;
@@ -64,6 +73,9 @@
   --shadow-xs: 0 1px 3px rgba(28, 25, 23, 0.15);
   --shadow-popup: 0 8px 28px rgba(28, 25, 23, 0.14);
   --shadow-panel: -8px 0 24px rgba(28, 25, 23, 0.06);
+  /* The drop of a status in a list, and the knob of the switch of a table. */
+  --shadow-drop: 0 2px 6px rgba(28, 25, 23, 0.22);
+  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
   --radius-control: 6px;
   --radius-field: 8px;
   /* A main action and a tile. */
@@ -108,6 +120,9 @@
     --ready-line: #7c2d12;
     --ready-divider: #431407;
     --selection: #7c2d12;
+    --avatar-surface: #44403c;
+    --on-avatar: #f5f5f4;
+    --alert-body: #d6d3d1;
     --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
     --shadow-popup: 0 8px 28px rgba(0, 0, 0, 0.5);
     --shadow-panel: -8px 0 24px rgba(0, 0, 0, 0.4);
@@ -388,22 +403,9 @@ body.popup-page {
   color: var(--muted);
 }
 
-/* The one thing a screen is for: full width, not a pill (the buttons of the popup take 10 px). */
-.popup button.action {
-  height: 44px;
+/* The one thing a screen is for: the main button of the kit, 6 px under what the screen says. */
+.popup .popup-body > .action {
   margin-top: 6px;
-  padding: 0 16px;
-  border-radius: var(--radius-action);
-  font-size: 14px;
-}
-
-.popup button.action:hover {
-  background: var(--accent-strong);
-}
-
-.popup button.action:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 /* A link that does something here rather than going somewhere: a button that reads as a link. */
@@ -534,10 +536,6 @@ body.popup-page {
   margin-top: auto;
 }
 
-.popup .action-block .action {
-  margin-top: 0;
-}
-
 .popup .action-block .note {
   margin: 0;
   font-size: 12px;
@@ -559,37 +557,6 @@ body.popup-page {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-
-/* A switch, as the mock-up draws it: 40 × 24, the knob slides 16 px. */
-.popup button.switch {
-  position: relative;
-  flex: none;
-  width: 40px;
-  height: 24px;
-  padding: 0;
-  border-radius: var(--radius-pill);
-  background: var(--line-strong);
-  transition: background 0.2s;
-}
-
-.popup button.switch[aria-checked='true'] {
-  background: var(--text);
-}
-
-.popup .switch .knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--surface);
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.popup .switch[aria-checked='true'] .knob {
-  transform: translateX(16px);
 }
 
 .popup .page-notes h2 {
@@ -623,15 +590,6 @@ body.popup-page {
   border-bottom: 1px solid var(--line);
 }
 
-/* The pin of the widget, small: a drop that points down and to the left. */
-.popup .drop {
-  flex: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-90deg);
-}
-
 .popup .stage-word {
   flex: 1;
 }
@@ -643,21 +601,6 @@ body.popup-page {
 
 .popup .count.zero {
   color: var(--muted);
-}
-
-.popup button.secondary-action {
-  height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-action);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 14px;
-}
-
-.popup button.secondary-action:hover {
-  border-color: var(--text);
-  background: var(--surface-raised);
 }
 
 /* A line that says nothing takes no gap of the column: the boxes stay where the mock-up has them. */

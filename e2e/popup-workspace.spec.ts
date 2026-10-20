@@ -85,7 +85,7 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Turn on here' })),
     // Without the counts of FRU-237 the block stays at the foot: the mock-up has a foot of the account.
-    { x: 16, width: 328, height: 44 },
+    { x: 16, width: 328, height: 46 },
     'turn on',
   );
   await clean(popup, 'the popup on a site of the workspace');
@@ -111,18 +111,33 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toHaveText(/New\s*1/);
   await expect(rows.nth(4)).toHaveText(/Closed\s*0/);
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 304, y: 85, width: 40, height: 24 }, 'switch');
+  // The drops of the kit (FRU-293): a mark of 12 px in the colour of each status.
+  expect(
+    await section.locator('.kit-drop').evaluateAll((drops) =>
+      drops.map((drop) => {
+        const drawn = getComputedStyle(drop);
+
+        return `${drawn.width} ${drawn.height} ${drawn.backgroundColor}`;
+      }),
+    ),
+  ).toEqual(
+    ['rgb(106, 121, 80)', 'rgb(86, 128, 46)', 'rgb(172, 95, 0)', 'rgb(221, 44, 39)', 'rgb(141, 110, 99)'].map(
+      (fill) => `12px 12px ${fill}`,
+    ),
+  );
+  // The switch of the kit (FRU-293): 44 × 26.
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 300, y: 84, width: 44, height: 26 }, 'switch');
   // A session of a pairing keeps its row under the actions, so their size is measured here, and
   // their place on the screen of an account (`popup-new-site.spec.ts`).
   await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, width: 328, height: 44 },
+    { x: 16, width: 328, height: 46 },
     'leave',
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, width: 328, height: 40 },
+    { x: 16, width: 328, height: 44 },
     'every note',
   );
   // The keyboard: the gear, the switch, then the two actions.

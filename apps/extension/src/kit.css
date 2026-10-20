@@ -1,0 +1,482 @@
+/*
+  The kit of the extension (FRU-293), as the mock-up of 2026-10-20 draws it: src/kit.ts builds the
+  parts, this sheet gives their measures. Every colour is a token of entrypoints/popup/style.css,
+  which the popup and the page of the extension load first. design-tokens.test.ts holds that no rule
+  here writes a colour.
+*/
+
+.kit-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The head of a shell: 52 px, the drop and the name, the account at the end. */
+.kit-head {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.kit-head:has(.kit-avatar) {
+  padding: 0 8px 0 16px;
+}
+
+.kit-brand {
+  margin-inline-end: auto;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* The button of the account: a target of 44 px around a dot of 28. */
+button.kit-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+}
+
+.kit-avatar-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background: var(--avatar-surface);
+  color: var(--on-avatar);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* The main action: 46 px, the corner of 10. */
+button.kit-primary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-action);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.kit-primary:hover {
+  background: var(--accent-strong);
+}
+
+button.kit-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The action of a site: 56 px, the drop before the words. */
+button.kit-primary[data-size='tall'] {
+  height: 56px;
+  border-radius: var(--radius-card);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+button.kit-primary[data-size='tall'] .kit-mark {
+  color: currentColor;
+}
+
+/* The action of the side panel. */
+button.kit-primary[data-size='panel'] {
+  height: 48px;
+  border-radius: var(--radius-card);
+  font-weight: 650;
+}
+
+/* A second action: 44 px, a border on the surface. */
+button.kit-secondary {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line-control);
+  border-radius: var(--radius-action);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.kit-secondary:hover {
+  border-color: var(--text);
+  background: var(--surface-raised);
+}
+
+/* « Change »: a word in the accent, in a target of 44 px. */
+button.kit-text {
+  height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.kit-text:hover {
+  color: var(--accent-strong);
+}
+
+/* A switch: 44 × 26, a knob of 20 that slides 18 px. */
+button.kit-switch {
+  --kit-switch-width: 44px;
+  --kit-switch-height: 26px;
+  --kit-knob: 20px;
+  position: relative;
+  flex: none;
+  width: var(--kit-switch-width);
+  height: var(--kit-switch-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  /*
+    Off: the edge of a field, 3.49:1 on the surface. The lighter grey of the mock-up (--line-soft) is 1.48:1, and the
+    track is what says the switch is there (WCAG 1.4.11).
+  */
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button.kit-switch[data-size='table'] {
+  --kit-switch-width: 36px;
+  --kit-switch-height: 22px;
+  --kit-knob: 16px;
+}
+
+button.kit-switch[data-size='preference'] {
+  --kit-switch-width: 40px;
+  --kit-switch-height: 24px;
+  --kit-knob: 18px;
+}
+
+button.kit-switch[aria-checked='true'] {
+  background: var(--accent);
+}
+
+.kit-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: var(--kit-knob);
+  height: var(--kit-knob);
+  border-radius: var(--radius-pill);
+  background: var(--knob);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button.kit-switch[data-size='table'] .kit-knob {
+  box-shadow: var(--shadow-knob);
+}
+
+button.kit-switch[aria-checked='true'] .kit-knob {
+  transform: translateX(calc(var(--kit-switch-width) - var(--kit-knob) - 6px));
+}
+
+/* The word beside a switch, « On », in a target of 44 px. */
+.kit-switch-field {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.kit-switch-word {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* The tile of a site. */
+.kit-tile {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-action);
+  background: var(--avatar-surface);
+  color: var(--on-avatar);
+  font-weight: 700;
+}
+
+.kit-tile[data-on='true'] {
+  background: var(--tile-on);
+  color: var(--on-tile);
+}
+
+.kit-site {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.kit-site-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kit-site-host {
+  font-size: 15px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.kit-site-state {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.kit-site-state[data-paused='true'] {
+  color: var(--alert-text);
+  font-weight: 600;
+}
+
+/* The drop of a status: a mark of 12, a pin of 24 in a list, of 28 on a page. */
+.kit-drop {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--on-stage);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: var(--shadow-drop);
+}
+
+.kit-drop[data-size='page'] {
+  width: 28px;
+  height: 28px;
+}
+
+.kit-drop[data-size='mark'] {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  box-shadow: none;
+}
+
+.kit-drop-number {
+  color: var(--on-stage);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(45deg);
+}
+
+.kit-drop[data-stage='seeded'] {
+  background: var(--stage-seeded);
+}
+
+.kit-drop[data-stage='green'] {
+  background: var(--stage-green);
+}
+
+.kit-drop[data-stage='ripening'] {
+  background: var(--stage-ripening);
+}
+
+.kit-drop[data-stage='ripe'] {
+  background: var(--stage-ripe);
+}
+
+.kit-drop[data-stage='composted'] {
+  background: var(--stage-composted);
+}
+
+/* A row that leads somewhere: 52 px, the drop, the words, the chevron. */
+button.kit-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.kit-row-words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kit-row-title {
+  font-weight: 650;
+}
+
+.kit-row-subtitle {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.kit-chevron {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+/* Terms and values, between two rules. */
+.kit-dl {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.kit-dl-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.kit-dl-entry + .kit-dl-entry {
+  border-top: 1px solid var(--line);
+}
+
+.kit-dl-words {
+  min-width: 0;
+}
+
+.kit-dl dt {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.kit-dl dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A problem: 16 px of padding, the corner of 12. */
+.kit-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--alert-line);
+  border-radius: var(--radius-card);
+  background: var(--alert-surface);
+}
+
+.kit-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--alert-text);
+  font-weight: 650;
+}
+
+.kit-alert-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.kit-alert-body {
+  color: var(--alert-body);
+}
+
+/* A key of a shortcut. */
+.kit-kbd {
+  padding: 0 5px;
+  border: 1px solid var(--line-control);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Segmented tabs: a rail of 3 px, a tab of 40 px (the panel) or 28 px (the page). */
+.kit-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-action);
+  background: var(--surface-sunken);
+}
+
+button.kit-tab {
+  flex: 1 1 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--subtle);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kit-tabs[data-size='page'] button.kit-tab {
+  height: 28px;
+  border-radius: var(--radius-control);
+}
+
+button.kit-tab[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}

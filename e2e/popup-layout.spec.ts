@@ -132,6 +132,90 @@ for (const language of ['en', 'fr'] as const) {
     // The row of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
     await expectLaidOut(offered, 'site turned on', 5);
+
+    // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
+    // 2026-10-20, the accent of the extension, and no word cut.
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await offered.emulateMedia({ colorScheme });
+      // Out of every button, and past the 0.2 s the switch takes to change its colour.
+      await offered.mouse.move(0, 0);
+      await offered.waitForTimeout(400);
+      const kit = await readKit(offered);
+      const where = `${language}, ${colorScheme}`;
+      expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
+        height: 46,
+        radius: '10px',
+        font: '15px 600',
+        fill: ACCENT[colorScheme],
+      });
+      expect.soft(kit.secondary, `${where}: the second button`).toMatchObject({
+        height: 44,
+        radius: '10px',
+        font: '14px 600',
+        edge: CONTROL_EDGE[colorScheme],
+      });
+      expect.soft(kit.switch, `${where}: the switch`).toEqual({ width: 44, height: 26, fill: ACCENT[colorScheme] });
+      expect.soft(kit.knob, `${where}: the knob`).toEqual({ width: 20, height: 20, right: 3 });
+      expect.soft(kit.cut, `${where}: a word cut`).toEqual([]);
+    }
+    await offered.emulateMedia({ colorScheme: 'light' });
+
+    // A switch is a button: Space and Enter press it.
+    const onOff = offered.getByRole('switch');
+    await onOff.focus();
+    await offered.keyboard.press('Space');
+    await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    // The screen of a site that is off is drawn again, with no action: the next key goes to its switch.
+    await expect(offered.locator('.kit-primary')).toHaveCount(0);
+    await offered.getByRole('switch').focus();
+    await offered.keyboard.press('Enter');
+    await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    await expect(offered.locator('.kit-primary')).toHaveCount(1);
+  });
+}
+
+/** The accent of the extension in each scheme (FRU-292). */
+const ACCENT = { light: 'rgb(194, 65, 12)', dark: 'rgb(251, 146, 60)' } as const;
+/** The edge of a second button: `--line-control`. */
+const CONTROL_EDGE = { light: 'rgb(168, 162, 158)', dark: 'rgb(120, 113, 108)' } as const;
+/** The parts of the kit on the screen of a site that is on. */
+function readKit(popup: Page) {
+  return popup.evaluate(() => {
+    const style = (selector: string) => {
+      const node = document.querySelector(selector);
+      if (node === null) throw new Error(`no ${selector}`);
+
+      return { node, style: getComputedStyle(node), box: node.getBoundingClientRect() };
+    };
+    const primary = style('.kit-primary');
+    const secondary = style('.kit-secondary');
+    const toggle = style('.kit-switch');
+    const knob = style('.kit-knob');
+
+    return {
+      primary: {
+        height: primary.box.height,
+        radius: primary.style.borderRadius,
+        font: `${primary.style.fontSize} ${primary.style.fontWeight}`,
+        fill: primary.style.backgroundColor,
+      },
+      secondary: {
+        height: secondary.box.height,
+        radius: secondary.style.borderRadius,
+        font: `${secondary.style.fontSize} ${secondary.style.fontWeight}`,
+        edge: secondary.style.borderTopColor,
+      },
+      switch: { width: toggle.box.width, height: toggle.box.height, fill: toggle.style.backgroundColor },
+      // Checked: the knob sits 3 px from the right end of the track.
+      knob: {
+        width: knob.box.width,
+        height: knob.box.height,
+        right: Math.round(toggle.box.right - knob.box.right),
+      },
+      cut: [...document.querySelectorAll<HTMLElement>('.kit-primary, .kit-secondary')]
+        .filter((button) => button.scrollWidth > button.clientWidth)
+        .map((button) => button.textContent),
+    };
   });
 }
 

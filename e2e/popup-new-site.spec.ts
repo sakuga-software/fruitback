@@ -155,7 +155,7 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 77, width: 328 }, 'title');
   expectNear(await boxOf(list), { x: 16, y: 242, width: 328, height: 40 }, 'list');
-  expectNear(await boxOf(popup.getByRole('button', { name: /^Add to/ })), { x: 16, width: 328, height: 44 }, 'add');
+  expectNear(await boxOf(popup.getByRole('button', { name: /^Add to/ })), { x: 16, width: 328, height: 46 }, 'add');
   await clean(popup, 'the popup on a site of no workspace');
 
   await list.selectOption('ws_2');
@@ -166,15 +166,16 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await expect(popup.getByText('On · Northwind')).toBeVisible();
   // Screen 07 of an account, against the mock-up: the switch and the two actions where it has them.
   await popup.setViewportSize({ width: 360, height: 540 });
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 304, y: 85, width: 40, height: 24 }, 'switch');
+  // The parts of the kit (FRU-293): the switch of 44 × 26, the main button of 46 px, the second of 44.
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 300, y: 84, width: 44, height: 26 }, 'switch');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, y: 388, width: 328, height: 44 },
+    { x: 16, y: 382, width: 328, height: 46 },
     'leave',
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, y: 440, width: 328, height: 40 },
+    { x: 16, y: 436, width: 328, height: 44 },
     'every note',
   );
   expect(posted).toEqual([

@@ -373,7 +373,7 @@ describe('a site of a workspace, on here (07, FRU-254)', () => {
       'button: Leave feedback',
       'button: Show every note of the page',
     ]);
-    for (const selector of ['[role="switch"]', '.action', '.secondary-action'])
+    for (const selector of ['[role="switch"]', '.action', '.kit-secondary'])
       (root.querySelector(selector) as HTMLElement).click();
     assert.deepEqual(done, ['switch false', 'leave', 'every']);
   });
