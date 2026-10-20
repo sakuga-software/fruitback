@@ -766,7 +766,11 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
   await expect(table(page).locator('thead th')).toHaveText(['Person', 'Role', 'Sites']);
   await expect(table(page).locator('tbody tr')).toHaveCount(1);
   // Their site is the one the worker lists to them (FRU-250).
-  await expect(table(page).locator('tbody td')).toHaveText(['AAna (you)ana@acme.dev', 'Guest', 'staging.acme.dev']);
+  await expect(table(page).locator('tbody td')).toHaveText([
+    'AAna (you)ana@acme.dev',
+    'Guest',
+    'https://staging.acme.dev',
+  ]);
   await expect(page.getByRole('form')).toHaveCount(0);
   await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
   expect(refused.read).toEqual([]);

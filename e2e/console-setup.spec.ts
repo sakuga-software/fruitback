@@ -220,7 +220,8 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     // A typing mistake, seen at once: the form opens with its values, and the site is replaced.
     await page.getByRole('button', { name: 'Change' }).click();
     const address = page.getByRole('textbox', { name: 'Site address' });
-    await expect(address).toHaveValue('stagin.acme.dev');
+    // The address comes back with its scheme, so an http site stays http (FRU-314).
+    await expect(address).toHaveValue('https://stagin.acme.dev');
     await address.fill('staging.acme.dev');
     await page.getByText('Everyone who visits', { exact: true }).click();
     await page.getByRole('button', { name: 'Save' }).click();
@@ -967,7 +968,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       await expect(page.locator('main ol > li[aria-current="step"]')).toContainText('3');
       await check('step 3, with a long host');
       // The long host reads in full: it takes the lines it needs.
-      const host = page.getByText(LONG_HOST, { exact: true }).first();
+      const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
       expect(await violations(page)).toEqual([]);
       await context.close();

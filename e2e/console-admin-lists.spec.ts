@@ -600,7 +600,7 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   await expect(panel(page).getByRole('listitem')).toHaveText([
     'Tom MarchalOwner',
     'Nadia BenaliMember',
-    'support.acme.devEveryone who visits',
+    'https://support.acme.devEveryone who visits',
   ]);
   await expect(panel(page).getByRole('link', { name: 'Manage in Users' })).toHaveAttribute(
     'href',

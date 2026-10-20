@@ -120,7 +120,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     // Joined: the screen says so, names the site of the workspace, and leads to the console.
     await expect(paul.getByRole('heading', { name: 'You are in' })).toBeVisible();
     await expect(paul.getByRole('status')).toHaveText(
-      'One more thing: the extension shows the notes on staging.acme.dev and lets you leave yours.',
+      'One more thing: the extension shows the notes on https://staging.acme.dev and lets you leave yours.',
     );
     await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
@@ -425,7 +425,7 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     // two, so what follows is 24 px higher.
     const status = page.getByRole('status');
     await expect(status).toHaveText(
-      'One more thing: the extension shows the notes on staging.acme.dev and lets you leave yours.',
+      'One more thing: the extension shows the notes on https://staging.acme.dev and lets you leave yours.',
     );
     expectNear(await boxOf(status), { x: 500, y: 261, width: 440, height: 48 }, 'confirmation');
     const add = page.getByRole('link', { name: 'Add to Chrome' });

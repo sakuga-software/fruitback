@@ -679,7 +679,7 @@ test('removing a site asks twice, and a site that is still there says so on its 
 
   await ask();
   const group = page.getByRole('group', { name: 'Remove https://staging.acme.dev' });
-  await expect(group.getByText(/The widget stops on staging\.acme\.dev/)).toBeVisible();
+  await expect(group.getByText(/The widget stops on https:\/\/staging\.acme\.dev/)).toBeVisible();
   await expect(group.getByRole('button', { name: 'Keep it' })).toBeFocused();
   expect(worker.sent).toEqual([]);
   await expectNoViolation(page, 'the second time of a removal');
@@ -711,7 +711,7 @@ test('when the last site is removed, focus goes to the field of the card', async
   await open(page);
   await more(page, 'preview.lumen.studio').click();
   await page.getByRole('menuitem', { name: 'Remove' }).click();
-  await page.getByRole('button', { name: 'Remove preview.lumen.studio' }).click();
+  await page.getByRole('button', { name: 'Remove https://preview.lumen.studio' }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'No site yet' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Site address' })).toBeFocused();
 });
