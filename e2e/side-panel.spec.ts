@@ -71,6 +71,31 @@ async function inPanel<T>(page: Page, expression: string): Promise<T> {
   }
 }
 
+/**
+ * The words of the panel in each language. The account of the suite may read French, and the panel
+ * speaks the language of the account, as the popup does: the spec reads which one it speaks.
+ */
+const WORDS = {
+  en: {
+    title: 'Notes on this page',
+    close: 'Close the sidebar',
+    notOn: ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
+  },
+  fr: {
+    title: 'Notes de cette page',
+    close: 'Fermer le panneau',
+    notOn: [
+      'Fruitback n’est pas activé sur cette page.',
+      'Activez-le depuis le bouton Fruitback de la barre d’outils.',
+    ],
+  },
+} as const;
+
+/** The words of the language the panel speaks now. */
+async function words(page: Page): Promise<(typeof WORDS)[keyof typeof WORDS]> {
+  return (await inPanel<string>(page, 'document.documentElement.lang')).startsWith('fr') ? WORDS.fr : WORDS.en;
+}
+
 /** What the panel shows: the title, the site it names, and the lines it says. */
 function panelWords(page: Page) {
   return inPanel<{ title: string; site: string | null; lines: string[]; close: string | null }>(
@@ -131,24 +156,15 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
   await expect.poll(panels).toEqual([`chrome-extension://${extension.id}/sidepanel.html`]);
 
   // The panel names the site of the tab.
-  await expect
-    .poll(() => panelWords(page))
-    .toMatchObject({
-      title: 'Notes on this page',
-      site: new URL(PLAYGROUND_ORIGIN).host,
-      close: 'Close the sidebar',
-    });
+  await expect.poll(async () => (await panelWords(page)).site).toBe(new URL(PLAYGROUND_ORIGIN).host);
+  const said = await words(page);
+  expect(await panelWords(page)).toMatchObject({ title: said.title, close: said.close });
 
   // Another tab, on a page Fruitback is not on: the panel says so. Back: the site again.
   const other = await extension.context.newPage();
   await other.goto(`${AUTHENTICATED_WORKER_ORIGIN}/health`);
   await other.bringToFront();
-  await expect
-    .poll(() => panelWords(page))
-    .toMatchObject({
-      site: null,
-      lines: ['Fruitback is not on for this page.', 'Turn it on from the Fruitback button in the toolbar.'],
-    });
+  await expect.poll(() => panelWords(page)).toMatchObject({ site: null, lines: [...said.notOn] });
   await page.bringToFront();
   await expect.poll(() => panelWords(page)).toMatchObject({ site: new URL(PLAYGROUND_ORIGIN).host });
 
