@@ -227,7 +227,8 @@ h2 {
 
 .frame-bar em {
   margin-left: 14px;
-  color: var(--muted);
+  /* The muted grey is 3.9:1 on the bar; this one is 6.2:1 (axe, FRU-322). */
+  color: #57534e;
   font-size: 12px;
   font-style: normal;
 }

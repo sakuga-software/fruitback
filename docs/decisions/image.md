@@ -381,3 +381,31 @@ What it took was mostly measuring, because four things the documentation said we
   the loop, restores in one-off containers, and starts the worker only when a flag says every restore
   succeeded. Measured in bash and zsh: with both files the pin and the pairing code came back; with
   one missing, the worker was created and never started.
+
+## The guides on fruitback.com (FRU-322)
+
+### The rules, in short
+
+- **A step a reader acts on has its picture**, taken from the build of the day, in the light scheme.
+  `docs/reviewing.md` shows the welcome page, the signed-out popup, the word on both sides, « Turn
+  on here » and a note being written; `docs/install.md` shows the card of the script. The captures
+  are cut from the e2e specs that already reach each state (`popup-sign-in`, `console-connect`,
+  `popup-workspace`, `extension-welcome`): take them again from there when a screen changes.
+- **The colours of code blocks and quotes are ours, not the theme's.** `docs/assets/css/style.scss`
+  imports `jekyll-theme-primer` and overrides the Rouge palette and `blockquote`. Each colour holds
+  4.5:1 at least on `#f6f8fa` and `#f4f4f4`.
+
+### The measurements
+
+axe 4 (`color-contrast`) on the published pages, 2026-10-20, light and dark (the theme has no dark
+scheme, so both read the same):
+
+| Pages                                                                                              |    Before | With the override |
+| -------------------------------------------------------------------------------------------------- | --------: | ----------------: |
+| index, reviewing, install, modes, self-hosting, privacy, rest-connector, translating, architecture | 166 nodes |                 0 |
+
+The failures were the Rouge builtins (`#0086b3`, 3.89:1), comments (`#999988`, 2.71:1), numbers
+(`#009999`, 3.27:1), diff headers (`#999999`, `#aaaaaa`), the code of a quote (`#6a737d` on
+`#f4f4f4`, 4.37:1), and the address in the drawn browser bar of the landing (`#78716c` on `#ece7e1`,
+3.9:1, now `#57534e`). « With the override » is the same run with the stylesheet injected into the
+published pages: Jekyll did not run locally.

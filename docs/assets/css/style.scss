@@ -1,0 +1,74 @@
+---
+---
+
+@import '{{ site.theme }}';
+
+/*
+  The colours of the code blocks and the quotes of the guides (FRU-322). The theme's Rouge palette
+  put builtins at 3.89:1, comments at 2.71:1 and numbers at 3.27:1 on #f6f8fa, and a quote's code at
+  4.37:1: axe on fruitback.com, 2026-10-20. These hold 4.5:1 at least on #f6f8fa and on #f4f4f4.
+*/
+.highlight .c,
+.highlight .c1,
+.highlight .cm,
+.highlight .cp,
+.highlight .cs,
+.highlight .cd,
+.highlight .gh,
+.highlight .gu {
+  color: #57606a;
+}
+.highlight .nb,
+.highlight .bp,
+.highlight .na,
+.highlight .no,
+.highlight .ss,
+.highlight .m,
+.highlight .mi,
+.highlight .mf,
+.highlight .mh,
+.highlight .mo,
+.highlight .il {
+  color: #0550ae;
+}
+.highlight .nv,
+.highlight .vc,
+.highlight .vg,
+.highlight .vi,
+.highlight .nn,
+.highlight .nc,
+.highlight .nf,
+.highlight .ne {
+  color: #953800;
+}
+.highlight .s,
+.highlight .s1,
+.highlight .s2,
+.highlight .sb,
+.highlight .sc,
+.highlight .sd,
+.highlight .se,
+.highlight .sh,
+.highlight .si,
+.highlight .sx,
+.highlight .sr {
+  color: #0a3069;
+}
+.highlight .k,
+.highlight .kc,
+.highlight .kd,
+.highlight .kn,
+.highlight .kp,
+.highlight .kr,
+.highlight .kt,
+.highlight .o,
+.highlight .ow {
+  color: #cf222e;
+}
+.highlight .nt {
+  color: #116329;
+}
+blockquote,
+blockquote code {
+  color: #57606a;
+}
