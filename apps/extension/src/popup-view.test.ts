@@ -5,15 +5,15 @@ import { setLanguage } from './i18n.ts';
 import {
   connecting,
   loading,
-  newSite,
+  keysOfShortcut,
   notAWebPage,
   problem,
   shell,
-  showPageCounts,
+  showSiteFacts,
   signInStop,
   signedOut,
-  siteInWorkspace,
   siteOn,
+  turnOnScreen,
 } from './popup-view.ts';
 
 /**
@@ -267,242 +267,253 @@ describe('4 · a problem, with its fix (FRU-297)', () => {
   });
 });
 
-describe('a site of a workspace, not on here (06, FRU-254)', () => {
-  const COUNTS = { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 };
-  const base = {
-    origin: ORIGIN,
-    workspace: 'Sakuga',
-    visibility: 'members' as const,
-    browserName: 'Chrome',
-    onTurnOn: nothing,
-    onSettings: nothing,
-  };
+describe('2 · a site of a workspace, not on here (FRU-298)', () => {
+  const offer = (extra: Partial<Parameters<typeof turnOnScreen>[1]> = {}, calls: string[] = []) =>
+    turnOnScreen(page(), {
+      origin: 'https://preview.northwind.io',
+      workspace: 'Northwind',
+      destination: 'Linear · Northwind',
+      visibility: 'members',
+      onChange: () => calls.push('change'),
+      onTurnOn: (workspace) => calls.push(`turn-on:${workspace ?? ''}`),
+      onSettings: nothing,
+      ...extra,
+    });
 
-  it('names the workspace, who sees the notes, how many wait, and offers one click', () => {
-    let turned = 0;
-    const root = siteInWorkspace(page(), { ...base, counts: COUNTS, onTurnOn: () => (turned += 1) });
+  it('asks the question of the mock-up, says where the notes go and who sees them, and turns on in one click', () => {
+    const calls: string[] = [];
+    const screen = offer({}, calls);
 
-    assert.equal(root.querySelector('h1')?.textContent, 'staging.acme.dev');
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'In Sakuga · members see the notes');
-    assert.equal(root.querySelector('.site-total')?.textContent, '12 notes wait on this site');
-    const bar = root.querySelector('.stage-bar');
-    assert.equal(bar?.getAttribute('role'), 'img');
-    assert.equal(bar?.getAttribute('aria-label'), '3 new, 2 to do, 4 in progress, 2 done, 1 closed');
-    // Each segment as wide as its share: its flex grows by its count.
+    assert.ok(screen.classList.contains('popup-screen-2'));
+    assert.equal(screen.querySelector('.kit-site-host')?.textContent, 'preview.northwind.io');
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'In Northwind · not on in this browser');
+    assert.equal(screen.querySelector('.kit-tile')?.getAttribute('data-on'), 'false');
+    assert.equal(screen.querySelector('h1')?.textContent, 'Turn Fruitback on for this site?');
     assert.deepEqual(
-      [...(bar?.children ?? [])].map((segment) => [
-        segment.className,
-        (segment as HTMLElement).style.flex.split(' ')[0],
+      [...screen.querySelectorAll('.kit-dl-entry')].map((entry) => [
+        entry.querySelector('dt')?.textContent,
+        entry.querySelector('dd')?.textContent,
+        entry.querySelector('button')?.textContent,
       ]),
       [
-        ['stage-seeded', '3'],
-        ['stage-green', '2'],
-        ['stage-ripening', '4'],
-        ['stage-ripe', '2'],
-        ['stage-composted', '1'],
+        ['Notes go to', 'Linear · Northwind', 'Change'],
+        ['Who sees the notes', 'Your team and invited guests', 'Change'],
       ],
     );
     assert.equal(
-      root.querySelector('.site-detail')?.textContent,
-      '3 new · 2 to do · 4 in progress · 2 done · 1 closed',
+      screen.querySelector('.action-block .note')?.textContent,
+      'Your browser will ask to allow this site once.',
     );
-    assert.equal(root.querySelector('.note')?.textContent, 'Chrome asks for access to this site only.');
-    assert.deepEqual(stops(root), ['button: Account and settings', 'button: Turn on here']);
-    (root.querySelector('.action') as HTMLElement).click();
-    assert.equal(turned, 1);
+    assert.deepEqual(stops(screen), [
+      'button: Account and settings',
+      'button: Change',
+      'button: Change',
+      'button: Turn on',
+    ]);
+
+    screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
+    screen.querySelector<HTMLButtonElement>('.kit-dl button')?.click();
+    assert.deepEqual(calls, ['turn-on:', 'change']);
   });
 
-  it('says everyone sees the notes of a site open to everyone, and one note in the singular', () => {
-    const root = siteInWorkspace(page(), {
-      ...base,
+  it('leaves « Notes go to » out when the worker did not say, « Change » out with no console, and says everyone', () => {
+    const screen = offer({ visibility: 'everyone' });
+    const bare = turnOnScreen(page(), {
+      origin: 'https://preview.northwind.io',
+      workspace: 'Northwind',
       visibility: 'everyone',
-      counts: { ...COUNTS, seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
+      onTurnOn: nothing,
+      onSettings: nothing,
     });
 
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'In Sakuga · everyone sees the notes');
-    assert.equal(root.querySelector('.site-total')?.textContent, '1 note waits on this site');
-    // A stage with no note draws no segment of the bar.
-    assert.equal(root.querySelector('.stage-bar')?.children.length, 1);
+    assert.equal(
+      screen.querySelectorAll('.kit-dl-entry')[1]?.querySelector('dd')?.textContent,
+      'Everyone who visits the site',
+    );
+    assert.deepEqual(
+      [...bare.querySelectorAll('.kit-dl-entry dt')].map((term) => term.textContent),
+      ['Who sees the notes'],
+    );
+    assert.equal(bare.querySelector('.kit-dl button'), null);
   });
 
-  it('leaves the counts out when Fruitback gave none, and draws no bar for a site with no note', () => {
-    assert.equal(siteInWorkspace(page(), base).querySelector('.site-counts'), null);
-    const empty = siteInWorkspace(page(), {
-      ...base,
-      counts: { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 },
-    });
-    assert.equal(empty.querySelector('.site-total')?.textContent, '0 notes wait on this site');
-    assert.equal(empty.querySelector('.stage-bar'), null);
+  it('speaks French', () => {
+    setLanguage('fr');
+    const screen = offer();
+
+    assert.equal(screen.querySelector('h1')?.textContent, 'Activer Fruitback sur ce site ?');
+    assert.equal(screen.querySelector('.action-block button')?.textContent, 'Activer');
+    assert.equal(screen.querySelector('dt')?.textContent, 'Les notes vont vers');
   });
 });
 
-describe('a site of a workspace, on here (07, FRU-254)', () => {
-  const PAGE = { seeded: 2, green: 1, ripening: 3, ripe: 2, composted: 0 };
-  const base = {
-    origin: ORIGIN,
-    workspace: 'Sakuga',
-    on: true,
-    onToggle: nothing,
-    onLeaveFeedback: nothing,
-    onShowEveryNote: nothing,
-    onSettings: nothing,
-  };
-
-  it('has a named switch, the notes of the page by stage, and the two actions', () => {
-    const done: string[] = [];
-    const root = siteOn(page(), {
-      ...base,
-      pageCounts: PAGE,
-      onToggle: (on) => done.push(`switch ${on}`),
-      onLeaveFeedback: () => done.push('leave'),
-      onShowEveryNote: () => done.push('every'),
+describe('2 · a site of no workspace (FRU-298, FRU-255)', () => {
+  const fresh = (workspaces: { id: string; name: string }[], calls: string[] = []) =>
+    turnOnScreen(page(), {
+      origin: 'https://preview.northwind.io',
+      visibility: 'members',
+      workspaces,
+      onTurnOn: (workspace) => calls.push(`turn-on:${workspace ?? ''}`),
+      onSettings: nothing,
     });
 
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'On · Sakuga');
-    const toggle = root.querySelector('[role="switch"]');
-    assert.equal(toggle?.getAttribute('aria-checked'), 'true');
-    assert.equal(toggle?.getAttribute('aria-label'), 'Fruitback on staging.acme.dev');
-    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'On this page8 notes');
-    assert.equal(root.querySelector('.page-notes')?.getAttribute('aria-labelledby'), 'page-notes-title');
-    assert.deepEqual(
-      [...root.querySelectorAll('.page-notes li')].map((row) => [
-        row.querySelector('.stage-word')?.textContent,
-        row.querySelector('.count')?.textContent,
-        row.querySelector('.count')?.classList.contains('zero'),
-      ]),
+  it('with one workspace: no list, and « Turn on » adds the site to it', () => {
+    const calls: string[] = [];
+    const screen = fresh([{ id: 'w1', name: 'Northwind' }], calls);
+
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'Not in your sites yet');
+    assert.equal(screen.querySelector('select'), null);
+    screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
+    assert.deepEqual(calls, ['turn-on:w1']);
+  });
+
+  it('with two: a line « Workspace » with its list, and « Turn on » follows the choice', () => {
+    const calls: string[] = [];
+    const screen = fresh(
       [
-        ['New', '2', false],
-        ['To do', '1', false],
-        ['In progress', '3', false],
-        ['Done', '2', false],
-        ['Closed', '0', true],
+        { id: 'w1', name: 'Northwind' },
+        { id: 'w2', name: 'Acme' },
       ],
+      calls,
     );
-    assert.deepEqual(stops(root), [
+    const select = screen.querySelector('select');
+    if (select === null) throw new Error('no list');
+
+    assert.equal(screen.querySelector('.kit-dl-entry dt')?.textContent, 'Workspace');
+    assert.equal(select.getAttribute('aria-label'), 'Workspace');
+    select.value = 'w2';
+    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    screen.querySelector<HTMLButtonElement>('.action-block button')?.click();
+    assert.deepEqual(calls, ['turn-on:w2']);
+  });
+
+  it('with none: says who can add it, and has nothing to press but the account', () => {
+    const screen = fresh([]);
+
+    assert.equal(screen.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
+    assert.deepEqual(stops(screen), ['button: Account and settings']);
+  });
+});
+
+describe('3 · a site on (FRU-298)', () => {
+  const on = (extra: Partial<Parameters<typeof siteOn>[1]> = {}, calls: string[] = []) =>
+    siteOn(page(), {
+      origin: ORIGIN,
+      workspace: 'Acme',
+      on: true,
+      shortcut: ['Alt', 'Shift', 'F'],
+      onToggle: (value) => calls.push(`toggle:${value}`),
+      onLeaveFeedback: () => calls.push('leave'),
+      onOpenPanel: () => calls.push('panel'),
+      onSettings: nothing,
+      ...extra,
+    });
+
+  it('has the site and its named switch, « Leave feedback » with its keys, and the side panel', () => {
+    const calls: string[] = [];
+    const screen = on({}, calls);
+
+    assert.ok(screen.classList.contains('popup-screen-3'));
+    // The host is the title of the screen (axe `page-has-heading-one`).
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
+    assert.equal(screen.querySelector('[role="switch"]')?.getAttribute('aria-label'), 'Fruitback on staging.acme.dev');
+    assert.equal(screen.querySelector('.kit-switch-word')?.textContent, 'On');
+    assert.equal(screen.querySelector('.kit-primary')?.getAttribute('data-size'), 'tall');
+    assert.equal(screen.querySelector('.shortcut-line')?.textContent, 'or press Alt Shift F on the page');
+    assert.deepEqual(
+      [...screen.querySelectorAll('.shortcut-line kbd')].map((key) => key.textContent),
+      ['Alt', 'Shift', 'F'],
+    );
+    // No line of what waits before the worker said.
+    assert.equal(screen.querySelectorAll('.kit-row').length, 0);
+    assert.deepEqual(stops(screen), [
       'button: Account and settings',
       'button: Fruitback on staging.acme.dev',
       'button: Leave feedback',
-      'button: Show every note of the page',
+      'button: Show all notes in a sidebar',
     ]);
-    for (const selector of ['[role="switch"]', '.action', '.kit-secondary'])
-      (root.querySelector(selector) as HTMLElement).click();
-    assert.deepEqual(done, ['switch false', 'leave', 'every']);
+
+    screen.querySelector<HTMLButtonElement>('.kit-primary')?.click();
+    screen.querySelector<HTMLButtonElement>('.action-block .kit-secondary')?.click();
+    screen.querySelector<HTMLButtonElement>('[role="switch"]')?.click();
+    assert.deepEqual(calls, ['leave', 'panel', 'toggle:false']);
   });
 
-  it('off: says so, turns on with the switch, and has nothing of the page', () => {
-    let next: boolean | undefined;
-    const root = siteOn(page(), { ...base, on: false, pageCounts: PAGE, onToggle: (on) => (next = on) });
+  it('has no line of keys when the browser has no shortcut', () => {
+    const screen = on({ shortcut: [] });
 
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'Off · Sakuga');
-    assert.equal(root.querySelector('[role="switch"]')?.getAttribute('aria-checked'), 'false');
-    assert.equal(root.querySelector('.page-notes'), null);
-    assert.equal(root.querySelector('.action'), null);
-    (root.querySelector('[role="switch"]') as HTMLElement).click();
-    assert.equal(next, true);
+    assert.equal(screen.querySelector('.shortcut-line'), null);
   });
 
-  it('leaves the section out when the widget of the tab did not say, rather than drawing zeros', () => {
-    const root = siteOn(page(), base);
+  it('off: says so, and has nothing else but the switch', () => {
+    const screen = on({ on: false });
 
-    assert.equal(root.querySelector('.page-notes'), null);
-    assert.ok(root.querySelector('.action'));
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'Off · Acme');
+    assert.equal(screen.querySelector('.kit-primary'), null);
+    assert.equal(screen.querySelector('.kit-secondary'), null);
   });
 
-  it('speaks French', () => {
-    setLanguage('fr');
-    const root = siteOn(page(), { ...base, pageCounts: { ...PAGE, seeded: 1, green: 0, ripening: 0, ripe: 0 } });
+  it('adds what the worker says when it answers: the tracker, the fixes to check and the open notes, which open the panel', () => {
+    const calls: string[] = [];
+    const screen = on({}, calls);
+    showSiteFacts(
+      screen,
+      { workspace: 'Acme', on: true, onOpenPanel: () => calls.push('panel') },
+      { destination: 'Linear · Acme', toCheck: 2, open: 3 },
+    );
 
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'Activé · Sakuga');
-    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'Sur cette page1 note');
-    assert.equal(root.querySelector('.action')?.textContent, 'Laisser une note');
-  });
-});
-
-describe('the notes of the page, added to a screen 07 already drawn (FRU-254)', () => {
-  const base = {
-    origin: ORIGIN,
-    workspace: 'Sakuga',
-    on: true,
-    onToggle: nothing,
-    onLeaveFeedback: nothing,
-    onShowEveryNote: nothing,
-    onSettings: nothing,
-  };
-  const COUNTS = { seeded: 1, green: 0, ripening: 2, ripe: 0, composted: 0 };
-
-  it('goes above the two actions, once', () => {
-    const root = siteOn(page(), base);
-    assert.equal(root.querySelector('.page-notes'), null);
-
-    showPageCounts(root, COUNTS);
-    showPageCounts(root, COUNTS);
-
-    assert.equal(root.querySelectorAll('.page-notes').length, 1);
-    assert.equal(root.querySelector('.page-notes')?.nextElementSibling?.className, 'action-block');
-    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'On this page3 notes');
-  });
-
-  it('is not added to a screen that is off', () => {
-    const root = siteOn(page(), { ...base, on: false });
-
-    showPageCounts(root, COUNTS);
-
-    assert.equal(root.querySelector('.page-notes'), null);
-  });
-});
-
-describe('a site of no workspace (08, FRU-255)', () => {
-  const SAKUGA = { id: 'ws_1', name: 'Sakuga' };
-  const NORTHWIND = { id: 'ws_2', name: 'Northwind' };
-  const base = { origin: 'https://preview.client.fr', browserName: 'Chrome', onAdd: nothing, onSettings: nothing };
-
-  it('with one workspace: no list, its name in the button, and the add goes to it', () => {
-    const added: string[] = [];
-    const root = newSite(page(), { ...base, workspaces: [SAKUGA], onAdd: (id) => added.push(id) });
-
-    assert.equal(root.querySelector('h1')?.textContent, 'preview.client.fr');
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'Not in a workspace yet');
-    assert.equal(root.querySelector('select'), null);
-    assert.deepEqual(stops(root), ['button: Account and settings', 'button: Add to Sakuga and turn on']);
-    (root.querySelector('form') as HTMLFormElement).requestSubmit();
-    assert.deepEqual(added, ['ws_1']);
-    // Nothing about previews: no proof of the domain, no preview (Q4).
-    assert.doesNotMatch(root.textContent ?? '', /preview build/i);
-  });
-
-  it('with two: a list named « Workspace », and the button follows the choice', () => {
-    const added: string[] = [];
-    const root = newSite(page(), { ...base, workspaces: [SAKUGA, NORTHWIND], onAdd: (id) => added.push(id) });
-    const select = root.querySelector('select') as HTMLSelectElement;
-
-    assert.equal(root.querySelector('label.field')?.firstChild?.textContent, 'Workspace');
+    assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · notes go to Linear');
     assert.deepEqual(
-      [...select.options].map((option) => [option.value, option.textContent]),
+      [...screen.querySelectorAll('.kit-row')].map((row) => [
+        row.querySelector('.kit-row-title')?.textContent,
+        row.querySelector('.kit-row-subtitle')?.textContent,
+        row.querySelector('.kit-drop')?.getAttribute('data-stage'),
+      ]),
       [
-        ['ws_1', 'Sakuga'],
-        ['ws_2', 'Northwind'],
+        ['2 fixes to check', 'Marked done by the team', 'ripe'],
+        ['3 open notes', 'New, to do or in progress', 'ripening'],
       ],
     );
-    select.value = 'ws_2';
-    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
-    assert.equal(root.querySelector('.action')?.textContent, 'Add to Northwind and turn on');
-    (root.querySelector('form') as HTMLFormElement).requestSubmit();
-    assert.deepEqual(added, ['ws_2']);
+    for (const row of screen.querySelectorAll<HTMLButtonElement>('.kit-row')) row.click();
+    assert.deepEqual(calls, ['panel', 'panel']);
   });
 
-  it('with none: says who can add it, and has no button', () => {
-    const root = newSite(page(), { ...base, workspaces: [] });
-
-    assert.equal(root.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
-    assert.equal(root.querySelector('.action'), null);
-    assert.deepEqual(stops(root), ['button: Account and settings']);
+  it('hides « fixes to check » at zero, says « No open note », and the singular of one', () => {
+    const screen = on();
+    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 0, open: 0 });
+    assert.deepEqual(
+      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
+      ['No open note'],
+    );
+    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 1, open: 1 });
+    assert.deepEqual(
+      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
+      ['1 fix to check', '1 open note'],
+    );
   });
 
-  it('speaks French', () => {
+  it('speaks French, with the plural rules of French', () => {
     setLanguage('fr');
-    const root = newSite(page(), { ...base, workspaces: [SAKUGA] });
+    const screen = on();
+    showSiteFacts(screen, { workspace: 'Acme', on: true, onOpenPanel: nothing }, { toCheck: 2, open: 1 });
 
-    assert.equal(root.querySelector('.subtitle')?.textContent, 'Dans aucun workspace pour l’instant');
-    assert.equal(root.querySelector('.action')?.textContent, 'Ajouter à Sakuga et activer');
+    assert.equal(screen.querySelector('.kit-primary')?.textContent, 'Laisser une note');
+    assert.equal(screen.querySelector('.shortcut-line')?.textContent, 'ou appuyez sur Alt Shift F sur la page');
+    assert.deepEqual(
+      [...screen.querySelectorAll('.kit-row-title')].map((title) => title.textContent),
+      ['2 corrections à vérifier', '1 note ouverte'],
+    );
+    assert.equal(
+      screen.querySelector('.action-block .kit-secondary')?.textContent,
+      'Voir toutes les notes dans un panneau',
+    );
+  });
+});
+
+describe('the keys of a shortcut (FRU-298)', () => {
+  it('splits « Alt+Shift+F », and the signs of Chrome on macOS one by one', () => {
+    assert.deepEqual(keysOfShortcut('Alt+Shift+F'), ['Alt', 'Shift', 'F']);
+    assert.deepEqual(keysOfShortcut('⌥⇧F'), ['⌥', '⇧', 'F']);
   });
 });

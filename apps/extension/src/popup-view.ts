@@ -1,5 +1,17 @@
-import { msg, t } from './i18n.ts';
-import { alertBox, head, primaryButton, secondaryButton, siteLine, statusDrop, toggle } from './kit.ts';
+import { language, t } from './i18n.ts';
+import {
+  type Definition,
+  alertBox,
+  definitions,
+  head,
+  keys,
+  listRow,
+  primaryButton,
+  secondaryButton,
+  siteLine,
+  textButton,
+  toggle,
+} from './kit.ts';
 
 /**
  * The screens of the popup. The shell and the screens 1 and 4 are those of the mock-up of 2026-10-20
@@ -24,7 +36,7 @@ export type ShellOptions = {
   /** Screen 1 has no button of the account: its foot leads to the page of the extension. */
   accountButton?: boolean;
   /** The screen of the mock-up the shell holds, for its measures. */
-  screen?: 1 | 4;
+  screen?: 1 | 2 | 3 | 4;
 };
 
 export function element<K extends keyof HTMLElementTagNameMap>(
@@ -286,277 +298,311 @@ export function loading(document: Document, options: { onSettings: () => void })
   return shell(document, { onSettings: options.onSettings }, said);
 }
 
-/** The five stages, in the order of the mock-up, with the word of each (the widget's own words). */
-const STAGE_WORDS = [
-  ['seeded', msg('New')],
-  ['green', msg('To do')],
-  ['ripening', msg('In progress')],
-  ['ripe', msg('Done')],
-  ['composted', msg('Closed')],
-] as const;
-
-export type Counts = Record<(typeof STAGE_WORDS)[number][0], number>;
-
-function total(counts: Counts): number {
-  return STAGE_WORDS.reduce((sum, [stage]) => sum + counts[stage], 0);
+/** « Who sees the notes », as the mock-up says each visibility. */
+export function visibilityWords(visibility: 'members' | 'everyone'): string {
+  return visibility === 'everyone' ? t('Everyone who visits the site') : t('Your team and invited guests');
 }
 
-/** « 3 new, 2 to do, 4 in progress, 2 done, 1 closed »: the name of the bar, and its caption. */
-export function countsSentence(counts: Counts, separator: string): string {
-  return STAGE_WORDS.map(([stage, word]) => `${counts[stage]} ${t(word).toLocaleLowerCase()}`).join(separator);
-}
-
-export type SiteInWorkspaceOptions = {
+export type TurnOnOptions = {
   origin: string;
-  workspace: string;
+  /** A site of a workspace that is not on in this browser: its workspace. None: a site of no workspace. */
+  workspace?: string;
+  /** Where its notes go (FRU-295), when the worker said. None: the line is not drawn. */
+  destination?: string;
   visibility: 'members' | 'everyone';
-  /** The counts of the site (FRU-237), when Fruitback gave them. */
-  counts?: Counts;
-  /** « Chrome », « Firefox »: the browser that asks for the access. */
-  browserName: string;
+  /**
+   * A site of no workspace: the workspaces where the account may add it. None: the screen says who
+   * can. More than one: a « Workspace » line with its list.
+   */
+  workspaces?: { id: string; name: string }[];
   account?: Account;
-  onTurnOn: () => void;
+  /** « Change »: the site in the console. None: no « Change ». */
+  onChange?: () => void;
+  /** « Turn on », with the workspace chosen for a site of no workspace. */
+  onTurnOn: (workspace?: string) => void;
   onSettings: () => void;
 };
 
-/** 06: a site of a workspace of the account, not turned on in this browser. One click. */
-export function siteInWorkspace(document: Document, options: SiteInWorkspaceOptions): HTMLElement {
-  const heading = element(document, 'div', '', 'site-heading');
-  heading.append(
-    element(document, 'h1', hostOf(options.origin)),
-    element(
+/**
+ * 2 · Signed in, site not added (FRU-298): « Turn Fruitback on for this site? ». A site of a
+ * workspace that is off in this browser, or a site of no workspace, which « Turn on » adds first.
+ */
+export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLElement {
+  const host = hostOf(options.origin);
+  const site = siteLine(document, {
+    host,
+    state:
+      options.workspace === undefined
+        ? t('Not in your sites yet')
+        : t('In {workspace} · not on in this browser', { workspace: options.workspace }),
+    on: false,
+  });
+  const frame = (...body: Node[]): HTMLElement => {
+    const root = shell(
       document,
-      'p',
-      options.visibility === 'everyone'
-        ? t('In {workspace} · everyone sees the notes', { workspace: options.workspace })
-        : t('In {workspace} · members see the notes', { workspace: options.workspace }),
-      'subtitle',
-    ),
-  );
+      {
+        onSettings: options.onSettings,
+        screen: 2,
+        ...(options.account === undefined ? {} : { account: options.account }),
+      },
+      ...body,
+    );
+    root.classList.add('popup-turn-on');
 
-  const body: Node[] = [heading];
-  if (options.counts !== undefined) body.push(siteCounts(document, options.counts));
+    return root;
+  };
+
+  const addable = options.workspaces ?? [];
+  const [first] = addable;
+  // A site of no workspace, and no workspace where the account may add it: who can, and nothing to press.
+  if (options.workspace === undefined && first === undefined) {
+    return frame(
+      hostAsTitle(site),
+      element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+    );
+  }
+
+  const change = (): HTMLButtonElement | undefined =>
+    options.onChange === undefined ? undefined : textButton(document, t('Change'), options.onChange);
+  const entries: Definition[] = [];
+  if (options.destination !== undefined) {
+    const where = change();
+    entries.push({
+      term: t('Notes go to'),
+      value: options.destination,
+      ...(where === undefined ? {} : { action: where }),
+    });
+  }
+  const who = change();
+  entries.push({
+    term: t('Who sees the notes'),
+    value: visibilityWords(options.visibility),
+    ...(who === undefined ? {} : { action: who }),
+  });
+  const facts = definitions(document, entries);
+
+  let chosen = first?.id;
+  if (addable.length > 1) {
+    const select = element(document, 'select', '');
+    select.name = 'workspace';
+    select.setAttribute('aria-label', t('Workspace'));
+    for (const workspace of addable) {
+      const option = element(document, 'option', workspace.name);
+      option.value = workspace.id;
+      select.append(option);
+    }
+    select.addEventListener('change', () => {
+      chosen = select.value;
+    });
+    const entry = element(document, 'div', '', 'kit-dl-entry');
+    const value = element(document, 'dd', '');
+    value.append(select);
+    entry.append(element(document, 'dt', t('Workspace')), value);
+    facts.prepend(entry);
+  }
 
   const act = element(document, 'div', '', 'action-block');
   act.append(
-    action(document, t('Turn on here'), options.onTurnOn),
-    element(document, 'p', t('{browser} asks for access to this site only.', { browser: options.browserName }), 'note'),
+    action(document, t('Turn on'), () => options.onTurnOn(options.workspace === undefined ? chosen : undefined)),
+    element(document, 'p', t('Your browser will ask to allow this site once.'), 'note'),
   );
-  body.push(act);
 
-  return shell(
-    document,
-    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
-    ...body,
-  );
+  return frame(site, element(document, 'h1', t('Turn Fruitback on for this site?')), facts, act);
 }
 
-function siteCounts(document: Document, counts: Counts): HTMLElement {
-  const block = element(document, 'div', '', 'site-counts');
-  const all = total(counts);
-  block.append(
-    element(
-      document,
-      'p',
-      all === 1 ? t('1 note waits on this site') : t('{count} notes wait on this site', { count: String(all) }),
-      'site-total',
-    ),
-  );
-  if (all > 0) {
-    const bar = element(document, 'div', '', 'stage-bar');
-    bar.setAttribute('role', 'img');
-    bar.setAttribute('aria-label', countsSentence(counts, ', '));
-    for (const [stage] of STAGE_WORDS) {
-      if (counts[stage] === 0) continue;
-      const segment = element(document, 'span', '', `stage-${stage}`);
-      segment.style.flex = String(counts[stage]);
-      bar.append(segment);
-    }
-    const detail = element(document, 'p', countsSentence(counts, ' · '), 'site-detail');
-    // Said by the bar already: read once.
-    detail.setAttribute('aria-hidden', 'true');
-    block.append(bar, detail);
-  }
-
-  return block;
-}
+/** What the worker says of a site that is on (FRU-295), read after the screen is drawn. */
+export type SiteFacts = {
+  /** « Linear · Northwind ». */
+  destination?: string;
+  /** The notes of the person the team marked done, not checked yet. */
+  toCheck?: number;
+  /** The notes of the site that are New, To do or In progress. */
+  open?: number;
+};
 
 export type SiteOnOptions = {
   origin: string;
   workspace: string;
   on: boolean;
-  /** What the widget of the tab shows now, or nothing when it did not say. */
-  pageCounts?: Counts;
+  /** The keys of « Leave feedback », as the browser has them. None: no line. */
+  shortcut?: string[];
+  facts?: SiteFacts;
   account?: Account;
   onToggle: (on: boolean) => void;
   onLeaveFeedback: () => void;
-  onShowEveryNote: () => void;
+  /** Opens the side panel: « Show all notes in a sidebar », and a click on a line. */
+  onOpenPanel: () => void;
   onSettings: () => void;
 };
 
-/** 07: a site of a workspace, turned on here: the switch, the notes of the page, and two actions. */
+/**
+ * The host of a screen with no other title, as its `h1` (axe `page-has-heading-one`): screen 3, and
+ * screen 2 with nothing to turn on. It keeps the size of the host of the kit.
+ */
+function hostAsTitle(site: HTMLElement): HTMLElement {
+  const host = site.querySelector('.kit-site-host');
+  if (host === null) return site;
+  const title = site.ownerDocument.createElement('h1');
+  title.className = host.className;
+  title.textContent = host.textContent;
+  host.replaceWith(title);
+
+  return site;
+}
+
+/** The state line of a site that is on: where its notes go, or its workspace. */
+function onState(workspace: string, on: boolean, destination: string | undefined): string {
+  if (!on) return t('Off · {workspace}', { workspace });
+  // « Linear · Northwind » → « Linear »: the tracker, as the mock-up says it under the host.
+  const tracker = destination?.split(' · ')[0]?.trim();
+
+  return tracker === undefined || tracker === ''
+    ? t('On · {workspace}', { workspace })
+    : t('On · notes go to {tracker}', { tracker });
+}
+
+/** 3 · Site on (FRU-298): the switch, « Leave feedback », what waits, and the side panel. */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
-  const titles = element(document, 'div', '', 'site-heading');
-  titles.append(
-    element(document, 'h1', host),
-    element(
-      document,
-      'p',
-      options.on
-        ? t('On · {workspace}', { workspace: options.workspace })
-        : t('Off · {workspace}', { workspace: options.workspace }),
-      'subtitle',
-    ),
-  );
-  const onOff = toggle(document, {
-    checked: options.on,
-    label: t('Fruitback on {host}', { host }),
-    onChange: options.onToggle,
-  });
   const row = element(document, 'div', '', 'site-row');
-  row.append(titles, onOff);
+  row.append(
+    hostAsTitle(
+      siteLine(document, {
+        host,
+        state: onState(options.workspace, options.on, options.facts?.destination),
+        on: options.on,
+      }),
+    ),
+    toggle(document, {
+      checked: options.on,
+      label: t('Fruitback on {host}', { host }),
+      word: options.on ? t('On') : t('Off'),
+      onChange: options.onToggle,
+    }),
+  );
 
   const body: Node[] = [row];
-  // Off: the widget left the tab, so there is nothing of the page to count and nothing to ask of it.
+  // Off: the widget left the tab, so there is nothing to leave and nothing to show.
   if (options.on) {
-    if (options.pageCounts !== undefined) body.push(pageSection(document, options.pageCounts));
-    const act = element(document, 'div', '', 'action-block');
-    const every = secondaryButton(document, t('Show every note of the page'), options.onShowEveryNote);
-    act.append(action(document, t('Leave feedback'), options.onLeaveFeedback), every);
-    body.push(act);
+    const leave = element(document, 'div', '', 'leave-block');
+    leave.append(primaryButton(document, t('Leave feedback'), options.onLeaveFeedback, { size: 'tall' }));
+    const keyNames = options.shortcut ?? [];
+    if (keyNames.length > 0) {
+      const [before, after] = t('or press {keys} on the page').split('{keys}');
+      const line = element(document, 'p', '', 'shortcut-line');
+      line.append(before ?? '', keys(document, keyNames), after ?? '');
+      leave.append(line);
+    }
+    const waiting = element(document, 'div', '', 'site-lines');
+    const bottom = element(document, 'div', '', 'action-block');
+    const every = secondaryButton(document, t('Show all notes in a sidebar'), options.onOpenPanel);
+    every.prepend(panelIcon(document));
+    bottom.append(every);
+    body.push(leave, waiting, bottom);
   }
 
   const root = shell(
     document,
-    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
+    {
+      onSettings: options.onSettings,
+      screen: 3,
+      ...(options.account === undefined ? {} : { account: options.account }),
+    },
     ...body,
   );
   root.classList.add('popup-site-on');
+  if (options.facts !== undefined) showSiteFacts(root, options, options.facts);
 
   return root;
 }
 
 /**
- * The notes of the page, added to a screen 07 already drawn (FRU-254): the popup does not wait for
- * the widget of the tab before it shows the switch. Nothing for a screen that is off, or that has them.
+ * What the worker says of the site, added to a screen 3 already drawn: the popup does not wait for
+ * the worker before it shows the switch. The state line names the tracker; « fixes to check » is
+ * drawn above 0, « open notes » whenever it is known.
  */
-export function showPageCounts(screen: HTMLElement, counts: Counts): void {
-  const actions = screen.querySelector('.popup-body > .action-block');
-  if (actions === null || screen.querySelector('.page-notes') !== null) return;
-  actions.before(pageSection(screen.ownerDocument, counts));
-}
-
-function pageSection(document: Document, counts: Counts): HTMLElement {
-  const section = element(document, 'section', '', 'page-notes');
-  const title = element(document, 'h2', '');
-  title.id = 'page-notes-title';
-  section.setAttribute('aria-labelledby', title.id);
-  const all = total(counts);
-  title.append(
-    element(document, 'span', t('On this page')),
-    element(document, 'span', all === 1 ? t('1 note') : t('{count} notes', { count: String(all) }), 'page-total'),
-  );
-  const list = element(document, 'ul', '');
-  for (const [stage, word] of STAGE_WORDS) {
-    const item = element(document, 'li', '');
-    const drop = statusDrop(document, { stage });
-    const count = element(document, 'span', String(counts[stage]), 'count');
-    // A zero in the muted grey, still at 5.28:1.
-    count.classList.toggle('zero', counts[stage] === 0);
-    item.append(drop, element(document, 'span', t(word), 'stage-word'), count);
-    list.append(item);
-  }
-  section.append(title, list);
-
-  return section;
-}
-
-export type NewSiteOptions = {
-  origin: string;
-  /** The workspaces where the account may add a site. None: the popup says who can. */
-  workspaces: { id: string; name: string }[];
-  browserName: string;
-  account?: Account;
-  onAdd: (workspace: string) => void;
-  onSettings: () => void;
-};
-
-/** 08 (FRU-255): a site of no workspace of the account. Add it to one, and turn it on. */
-export function newSite(document: Document, options: NewSiteOptions): HTMLElement {
-  const heading = element(document, 'div', '', 'site-heading');
-  heading.append(
-    element(document, 'h1', hostOf(options.origin)),
-    element(document, 'p', t('Not in a workspace yet'), 'subtitle'),
-  );
-
-  const [only] = options.workspaces;
-  if (only === undefined) {
-    return shell(
-      document,
-      { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
-      heading,
-      element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+export function showSiteFacts(
+  screen: HTMLElement,
+  options: Pick<SiteOnOptions, 'workspace' | 'on' | 'onOpenPanel'>,
+  facts: SiteFacts,
+): void {
+  const document = screen.ownerDocument;
+  const state = screen.querySelector('.kit-site-state');
+  if (state !== null) state.textContent = onState(options.workspace, options.on, facts.destination);
+  const lines = screen.querySelector('.site-lines');
+  if (lines === null) return;
+  const rows: HTMLElement[] = [];
+  if (facts.toCheck !== undefined && facts.toCheck > 0) {
+    rows.push(
+      listRow(document, {
+        title: plural(
+          facts.toCheck,
+          t('1 fix to check'),
+          t('{count} fixes to check', { count: String(facts.toCheck) }),
+        ),
+        subtitle: t('Marked done by the team'),
+        stage: 'ripe',
+        onClick: options.onOpenPanel,
+      }),
     );
   }
-
-  const form = element(document, 'form', '', 'site-form');
-  form.noValidate = true;
-  let chosen = only;
-  const fields: Node[] = [];
-  // One workspace: no list, its name is in the button.
-  if (options.workspaces.length > 1) {
-    const label = element(document, 'label', t('Workspace'), 'field');
-    const select = element(document, 'select', '');
-    select.name = 'workspace';
-    for (const workspace of options.workspaces) {
-      const option = element(document, 'option', workspace.name);
-      option.value = workspace.id;
-      select.append(option);
-    }
-    label.append(select);
-    fields.push(label);
-    select.addEventListener('change', () => {
-      chosen = options.workspaces.find((workspace) => workspace.id === select.value) ?? only;
-      submit.textContent = addLabel(chosen.name);
-    });
+  if (facts.open !== undefined) {
+    rows.push(
+      listRow(document, {
+        title:
+          facts.open === 0
+            ? t('No open note')
+            : plural(facts.open, t('1 open note'), t('{count} open notes', { count: String(facts.open) })),
+        subtitle: t('New, to do or in progress'),
+        stage: 'ripening',
+        onClick: options.onOpenPanel,
+      }),
+    );
   }
-
-  const submit = primaryButton(document, addLabel(only.name), undefined, { type: 'submit' });
-  submit.classList.add('action');
-  const act = element(document, 'div', '', 'action-block');
-  act.append(
-    submit,
-    element(document, 'p', t('{browser} asks for access to this site only.', { browser: options.browserName }), 'note'),
-  );
-  form.append(
-    element(
-      document,
-      'p',
-      t(
-        'Add it to review it. Nothing goes on the site: members with the extension see the notes, visitors see nothing.',
-      ),
-      'lead',
-    ),
-    ...fields,
-    act,
-  );
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    options.onAdd(chosen.id);
-  });
-
-  const root = shell(
-    document,
-    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
-    heading,
-    form,
-  );
-  root.classList.add('popup-new-site');
-
-  return root;
+  lines.replaceChildren(...rows);
 }
 
-function addLabel(workspace: string): string {
-  return t('Add to {workspace} and turn on', { workspace });
+/** One or many, by the rules of the language of the popup: « 1 fix », « 2 fixes ». */
+function plural(count: number, one: string, other: string): string {
+  return new Intl.PluralRules(language()).select(count) === 'one' ? one : other;
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** The panel of « Show all notes in a sidebar », 16 px, in the colour of its button. */
+function panelIcon(document: Document): SVGSVGElement {
+  const drawing = document.createElementNS(SVG, 'svg');
+  drawing.setAttribute('viewBox', '0 0 16 16');
+  drawing.setAttribute('aria-hidden', 'true');
+  drawing.setAttribute('class', 'panel-icon');
+  const frame = document.createElementNS(SVG, 'rect');
+  for (const [name, value] of [
+    ['x', '2'],
+    ['y', '3'],
+    ['width', '12'],
+    ['height', '10'],
+    ['rx', '2'],
+  ] as const) {
+    frame.setAttribute(name, value);
+  }
+  const bar = document.createElementNS(SVG, 'path');
+  bar.setAttribute('d', 'M6 3v10');
+  for (const shape of [frame, bar]) {
+    shape.setAttribute('fill', 'none');
+    shape.setAttribute('stroke', 'currentColor');
+    shape.setAttribute('stroke-width', '1.4');
+  }
+  drawing.append(frame, bar);
+
+  return drawing;
+}
+
+/**
+ * The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. Chrome on macOS writes
+ * them with no `+`, a sign each (`⌥⇧F`): each sign is then a key of its own.
+ */
+export function keysOfShortcut(shortcut: string): string[] {
+  const parts = shortcut.includes('+') ? shortcut.split('+') : [...shortcut.replace(/\s+/gu, '')];
+
+  return parts.map((key) => key.trim()).filter((key) => key !== '');
 }

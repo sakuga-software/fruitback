@@ -382,19 +382,26 @@ button.kit-row {
 }
 
 .kit-dl-entry {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  column-gap: 8px;
   padding: 10px 0;
+}
+
+.kit-dl-entry > dt,
+.kit-dl-entry > dd:not(.kit-dl-action) {
+  grid-column: 1;
+}
+
+.kit-dl dd.kit-dl-action {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-weight: inherit;
 }
 
 .kit-dl-entry + .kit-dl-entry {
   border-top: 1px solid var(--line);
-}
-
-.kit-dl-words {
-  min-width: 0;
 }
 
 .kit-dl dt {

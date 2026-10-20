@@ -128,12 +128,13 @@ for (const language of ['en', 'fr'] as const) {
     // 4. A site of the workspace: one click turns it on.
     sites.push({ id: 'site_1', origin: PLAYGROUND_ORIGIN, visibility: 'members' });
     const offered = await openPopup(extension, page);
-    const turnOn = offered.getByRole('button', { name: /^(Turn on here|Activer ici)$/ });
+    const turnOn = offered.getByRole('button', { name: /^(Turn on|Activer)$/ });
     await expect(turnOn).toBeVisible();
     await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on (FRU-254): the gear, the switch and the two actions; the head names the
-    // person of the pairing.
+    // 5. The site turned on (FRU-298): the gear, the switch, « Leave feedback » and « Show all notes in
+    // a sidebar »; the head names the person of the pairing. The worker of this spec says nothing of
+    // the notes of the site, so no line of what waits.
     await turnOn.click();
     await expect(offered.getByRole('switch')).toBeChecked();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
@@ -156,10 +157,11 @@ for (const language of ['en', 'fr'] as const) {
         .toBe(ACCENT[colorScheme]);
       const kit = await readKit(offered);
       const where = `${language}, ${colorScheme}`;
+      // « Leave feedback » of screen 3 (FRU-298): the tall button of the kit, 56 px, the corner of 12.
       expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
-        height: 46,
-        radius: '10px',
-        font: '15px 600',
+        height: 56,
+        radius: '12px',
+        font: '16px 650',
         fill: ACCENT[colorScheme],
       });
       expect.soft(kit.secondary, `${where}: the second button`).toMatchObject({

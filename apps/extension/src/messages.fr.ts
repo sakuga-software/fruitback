@@ -5,6 +5,26 @@
  * shows, and on a translation that lost a placeholder.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
+  // FRU-298: the screens 2 and 3 of the popup.
+  'Not in your sites yet': 'Pas encore dans vos sites',
+  'In {workspace} · not on in this browser': 'Dans {workspace} · pas activé dans ce navigateur',
+  'Turn Fruitback on for this site?': 'Activer Fruitback sur ce site ?',
+  'Notes go to': 'Les notes vont vers',
+  'Who sees the notes': 'Qui voit les notes',
+  'Turn on': 'Activer',
+  'Your browser will ask to allow this site once.': 'Votre navigateur demandera une fois l’accès à ce site.',
+  'Your team and invited guests': 'Votre équipe et les invités',
+  'Everyone who visits the site': 'Tous ceux qui visitent le site',
+  'On · notes go to {tracker}': 'Activé · les notes vont vers {tracker}',
+  'or press {keys} on the page': 'ou appuyez sur {keys} sur la page',
+  '1 fix to check': '1 correction à vérifier',
+  '{count} fixes to check': '{count} corrections à vérifier',
+  'Marked done by the team': 'Marquées terminées par l’équipe',
+  'No open note': 'Aucune note ouverte',
+  '1 open note': '1 note ouverte',
+  '{count} open notes': '{count} notes ouvertes',
+  'New, to do or in progress': 'Nouvelles, à faire ou en cours',
+  'Show all notes in a sidebar': 'Voir toutes les notes dans un panneau',
   // The page that opens at install (FRU-318).
   'Welcome to Fruitback': 'Bienvenue dans Fruitback',
   'Fruitback is installed': 'Fruitback est installé',
@@ -99,31 +119,17 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'In progress': 'En cours',
   Done: 'Terminé',
   Closed: 'Fermé',
-  'In {workspace} · members see the notes': 'Dans {workspace} · les membres voient les notes',
-  'In {workspace} · everyone sees the notes': 'Dans {workspace} · tout le monde voit les notes',
-  '1 note waits on this site': '1 note attend sur ce site',
-  '{count} notes wait on this site': '{count} notes attendent sur ce site',
   'Turn on here': 'Activer ici',
-  '{browser} asks for access to this site only.': '{browser} demande l’accès à ce site seulement.',
   'On · {workspace}': 'Activé · {workspace}',
   'Off · {workspace}': 'Désactivé · {workspace}',
   'Fruitback on {host}': 'Fruitback sur {host}',
-  'On this page': 'Sur cette page',
-  '1 note': '1 note',
-  '{count} notes': '{count} notes',
   'Leave feedback': 'Laisser une note',
-  'Show every note of the page': 'Voir toutes les notes de la page',
-  'Your browser': 'Votre navigateur',
   'A note is being written on the page. Send it or close it first.':
     'Une note est en cours d’écriture sur la page. Envoyez-la ou fermez-la d’abord.',
   'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
   // A site of no workspace (FRU-255).
-  'Not in a workspace yet': 'Dans aucun workspace pour l’instant',
   'Ask an admin of your workspace to add this site.': 'Demandez à un admin de votre workspace d’ajouter ce site.',
-  'Add it to review it. Nothing goes on the site: members with the extension see the notes, visitors see nothing.':
-    'Ajoutez-le pour le relire. Rien n’est posé sur le site : les membres qui ont l’extension voient les notes, les visiteurs ne voient rien.',
   Workspace: 'Workspace',
-  'Add to {workspace} and turn on': 'Ajouter à {workspace} et activer',
   'Your role in this workspace does not let you add a site.':
     'Votre rôle dans ce workspace ne permet pas d’ajouter un site.',
   'Too many sites were added in the last hour. Try again later.':
