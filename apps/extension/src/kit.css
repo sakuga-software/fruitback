@@ -18,8 +18,8 @@
 }
 
 /* The head of a shell: 52 px, the drop and the name, the account at the end. */
+/* 52 px, then its rule: 53 px from the top to the body, as the mock-up draws it. */
 .kit-head {
-  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -50,6 +50,11 @@ button.kit-avatar {
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
+}
+
+.kit-gear {
+  width: 16px;
+  height: 16px;
 }
 
 .kit-avatar-dot {

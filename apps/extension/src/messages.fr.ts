@@ -7,17 +7,24 @@
 export const FRENCH: Readonly<Record<string, string>> = {
   // The popup.
   // The shell and the sign-in (FRU-251).
-  'Signed in as {name}': 'Connecté en tant que {name}',
-  'Settings and every site': 'Réglages et tous les sites',
+  // Screens 1 and 4 of the mock-up of 2026-10-20 (FRU-297).
+  'Comment on any website, right on the page': 'Commentez n’importe quel site, directement sur la page',
+  'Sign in once. Fruitback then works on every site your team reviews.':
+    'Connectez-vous une fois. Fruitback fonctionne ensuite sur chaque site que votre équipe relit.',
+  'Sign in with email': 'Se connecter par e-mail',
+  'Invited by a client or a team?': 'Invité par un client ou une équipe ?',
+  'Use the email the invitation was sent to.': 'Utilisez l’adresse à laquelle l’invitation a été envoyée.',
+  'Use your own Fruitback server': 'Utiliser votre propre serveur Fruitback',
+  Paused: 'En pause',
+  "Fruitback can't open this page": 'Fruitback ne peut pas ouvrir cette page',
+  'Access to {host} was removed in your browser settings. Your notes are safe.':
+    'L’accès à {host} a été retiré dans les réglages de votre navigateur. Vos notes sont en sécurité.',
+  'Allow access again': 'Autoriser à nouveau',
+  'Turn off for this site': 'Désactiver pour ce site',
+  "Fruitback can't reach {worker}": 'Fruitback ne joint pas {worker}',
   // The kit (FRU-293).
   'Account and settings': 'Compte et réglages',
   'Open the console': 'Ouvrir la console',
-  'Running your own Fruitback?': 'Vous hébergez votre propre Fruitback ?',
-  'Connect it in settings': 'Connectez-le dans les réglages',
-  'Sign in to see and leave notes here': 'Connectez-vous pour voir et laisser des notes ici',
-  'One account for the console and this extension. The sign-in opens in a tab, and this popup picks it up by itself.':
-    'Un seul compte pour la console et cette extension. La connexion s’ouvre dans un onglet, et ce popup la reprend tout seul.',
-  'Sign in to Fruitback': 'Se connecter à Fruitback',
   'Check that the tab shows the same word': 'Vérifiez que l’onglet affiche le même mot',
   'Waiting for you to connect in the tab…': 'En attente de votre connexion dans l’onglet…',
   'Start again': 'Recommencer',

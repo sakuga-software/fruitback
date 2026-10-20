@@ -53,9 +53,13 @@ describe('the kit of the extension (FRU-293)', () => {
     assert.equal(opened, 1);
   });
 
-  it('heads a shell with no button when nobody is signed in', () => {
-    const root = head(page());
-    assert.equal(root.querySelector('button'), null);
+  it('heads a shell with no button when it opens nothing, and with the gear when nobody is signed in', () => {
+    assert.equal(head(page()).querySelector('button'), null);
+    const root = head(page(), { onAccount: () => {} });
+    const avatar = root.querySelector('button.kit-avatar');
+    assert.equal(avatar?.getAttribute('aria-label'), 'Account and settings');
+    assert.equal(avatar?.textContent, '');
+    assert.ok(avatar?.querySelector('.kit-avatar-dot svg.kit-gear') !== null);
   });
 
   it('names the account in French', () => {

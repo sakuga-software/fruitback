@@ -80,7 +80,7 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(popup.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
   await expect(popup.getByText(/^In Playground · (members see|everyone sees) the notes$/)).toBeVisible();
   await expect(popup.getByText('Chrome asks for access to this site only.')).toBeVisible();
-  await expect(popup.getByRole('img', { name: `Signed in as ${NAME}` })).toHaveCount(0);
+  await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 77, width: 328 }, 'title');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Turn on here' })),
@@ -152,7 +152,7 @@ test('a site of the workspace: one click, then the switch, the notes of the page
     );
   }
   expect(stops).toEqual([
-    'Settings and every site',
+    'Account and settings',
     'Fruitback on localhost:5177',
     'Leave feedback',
     'Show every note of the page',

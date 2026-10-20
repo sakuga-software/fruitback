@@ -75,9 +75,9 @@ async function signedIn(extension: LoadedExtension, page: Page, request: string)
   );
   const popup = await openPopup(extension, page);
   const opened = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: /^(Sign in to Fruitback|Se connecter à Fruitback)$/ }).click();
+  await popup.getByRole('button', { name: /^(Sign in with email|Se connecter par e-mail)$/ }).click();
   await (await opened).close();
-  await expect(popup.getByRole('img', { name: /^(Signed in as|Connecté en tant que) Camille Durand$/ })).toBeVisible({
+  await expect(popup.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('C', {
     timeout: 15_000,
   });
   await popup.close();

@@ -51,8 +51,9 @@ import {
   hostOf,
   loading,
   notAWebPage,
+  problem,
   shell,
-  signInProblem,
+  signInStop,
   signedOut,
 } from '../../src/popup-view.ts';
 
@@ -175,6 +176,7 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
     canSignIn: CLOUD !== undefined,
     connect: stillWaiting && pendingNow === undefined ? 'none' : claimed,
     rule: found !== undefined,
+    accessRemoved: found !== undefined && found.site.enabled && !(await holdsAccess(found.pattern)),
     ruleWantsSession: found !== undefined && (await wantsSession(found.site)),
     offer: offer !== undefined,
     account: accountState,
@@ -221,7 +223,6 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
 
     case 'connecting':
       return connecting(document, {
-        origin,
         word: facts.pending?.word ?? '',
         unanswered: state.unanswered,
         onStartAgain: () => signIn(origin, true),
@@ -229,24 +230,21 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       });
 
     case 'sign-in-problem':
-      return signInProblem(document, {
-        origin,
-        problem: state.problem,
+      return signedOut(document, {
+        canSignIn: CLOUD !== undefined,
+        stop: signInStop(state.problem),
         onSignIn: () => signIn(origin, true),
         onSettings: openSettings,
       });
 
     case 'unreachable':
-      return signInProblem(document, {
-        origin,
-        problem: 'unavailable',
-        onSignIn: () => void render(),
-        onSettings: openSettings,
-      });
+      return unreachableScreen(account);
+
+    case 'no-access':
+      return siteWithoutAccess(origin, facts.found as ResolvedSite, account);
 
     case 'signed-out':
       return signedOut(document, {
-        origin,
         canSignIn: state.canSignIn,
         ended: state.ended,
         onSignIn: () => signIn(origin, false),
@@ -284,6 +282,59 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       return frame(...body);
     }
   }
+}
+
+/** 4 (FRU-297): the account is kept, and its Fruitback did not answer. */
+function unreachableScreen(account: Account | undefined): HTMLElement {
+  return problem(document, {
+    title: t("Fruitback can't reach {worker}", { worker: hostOf(CLOUD ?? '') }),
+    text: t('Check the connection, then try again.'),
+    primary: { label: t('Try again'), onClick: () => void render() },
+    onSettings: openSettings,
+    ...(account === undefined ? {} : { account }),
+  });
+}
+
+/** Whether the browser still grants the sites of a rule: access can be removed in its settings. */
+async function holdsAccess(pattern: string): Promise<boolean> {
+  return browser.permissions.contains({ origins: [matchPatternFor(pattern)] }).catch(() => true);
+}
+
+/**
+ * 4 · A problem, with its fix (FRU-297): the rule is on, and the browser took its access away.
+ *
+ * « Allow access again » asks in the click itself: an await before `permissions.request` would lose
+ * the gesture. « Turn off for this site » keeps the rule, off.
+ */
+function siteWithoutAccess(origin: string, { pattern, site }: ResolvedSite, account: Account | undefined): HTMLElement {
+  const host = hostOf(origin);
+  const screen = problem(document, {
+    site: origin,
+    title: t("Fruitback can't open this page"),
+    text: t('Access to {host} was removed in your browser settings. Your notes are safe.', { host }),
+    primary: {
+      label: t('Allow access again'),
+      onClick: () =>
+        void browser.permissions
+          .request({ origins: [matchPatternFor(pattern)] })
+          .then(async (granted) => {
+            if (!granted) return;
+            await activateOpenTabs(pattern);
+            await render();
+          })
+          .catch(failed(said)),
+    },
+    secondary: {
+      label: t('Turn off for this site'),
+      onClick: () => void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(said)),
+    },
+    onSettings: openSettings,
+    ...(account === undefined ? {} : { account }),
+  });
+  const said = element('p', '', 'problem');
+  screen.querySelector('.popup-body')?.append(said);
+
+  return screen;
 }
 
 /**
@@ -382,8 +433,14 @@ const PROBLEM_OF_START: Record<StartFailure, 'unavailable' | 'untrusted'> = {
   'untrusted-console': 'untrusted',
 };
 
-function problemScreen(origin: string, problem: 'unavailable' | 'untrusted' | 'blocked'): HTMLElement {
-  return signInProblem(document, { origin, problem, onSignIn: () => signIn(origin, true), onSettings: openSettings });
+/** 1, with what stopped the sign-in in an alert above the ways to sign in again (FRU-297). */
+function problemScreen(origin: string, stopped: 'unavailable' | 'untrusted' | 'blocked'): HTMLElement {
+  return signedOut(document, {
+    canSignIn: CLOUD !== undefined,
+    stop: signInStop(stopped),
+    onSignIn: () => signIn(origin, true),
+    onSettings: openSettings,
+  });
 }
 
 /**
@@ -455,14 +512,7 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
 async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
   const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
   // Fruitback said nothing: that is an outage, not « ask an admin ».
-  if (listed === undefined) {
-    return signInProblem(document, {
-      origin,
-      problem: 'unavailable',
-      onSignIn: () => void render(),
-      onSettings: openSettings,
-    });
-  }
+  if (listed === undefined) return unreachableScreen(account);
   const workspaces = listed;
   const problem = element('p', '', 'problem');
   const add = (id: string): void => {

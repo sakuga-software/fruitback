@@ -159,7 +159,7 @@ export async function addRule(
  *
  * The popup acts on the active tab of its window. It opens behind the site, so the site stays that tab.
  */
-export async function openPopup(extension: LoadedExtension, site: Page, origin = PLAYGROUND_ORIGIN): Promise<Page> {
+export async function openPopup(extension: LoadedExtension, site: Page, _origin = PLAYGROUND_ORIGIN): Promise<Page> {
   await site.bringToFront();
   const url = `chrome-extension://${extension.id}/popup.html`;
   await extension.worker.evaluate(async (popupUrl) => {
@@ -170,8 +170,10 @@ export async function openPopup(extension: LoadedExtension, site: Page, origin =
   await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
   if (popup === undefined) throw new Error('the popup did not open');
 
-  // Every screen of a page names its host, as the mock-up writes it (FRU-251): `localhost:5177`.
-  await expect(popup.getByText(new URL(origin).host, { exact: true })).toBeVisible();
+  // A screen is drawn: the shell, past the screen that says it is loading. Screen 1 of the mock-up
+  // of 2026-10-20 names no host (FRU-297), so the host is no longer what says the popup is ready.
+  await expect(popup.locator('.popup .popup-body')).toBeVisible();
+  await expect(popup.getByRole('status').filter({ hasText: /^(Loading…|Chargement…)$/ })).toHaveCount(0);
 
   return popup;
 }

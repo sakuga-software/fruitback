@@ -4,8 +4,8 @@ import { type LoadedExtension, PLAYGROUND_ORIGIN, addRule, openBareSite, openPop
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * « Sign in to Fruitback » in the real extension (FRU-251): the shell of the popup against the mock-up
- * (screen 05), its keyboard and its contrasts, and every screen of a sign-in.
+ * The sign-in in the real extension (FRU-251, FRU-297): screen 1 of the popup against the mock-up of
+ * 2026-10-20, its keyboard and its contrasts, and every screen of a sign-in.
  *
  * The Fruitback of the build is the second worker of the suite: `pnpm e2e` builds the extension with
  * `WXT_FRUITBACK_CLOUD` set to it. The routes of the sign-in (FRU-238) are answered here, in the shape
@@ -36,11 +36,13 @@ async function boxOf(locator: Locator): Promise<Box> {
  */
 const FONT_OF_THE_MOCKUP = process.platform === 'darwin';
 
-function expectNear(built: Box, mockup: Box, name: string): void {
+function expectNear(built: Box, mockup: Partial<Box>, name: string): void {
   if (!FONT_OF_THE_MOCKUP) return;
   for (const side of ['x', 'y', 'width', 'height'] as const) {
+    const drawn = mockup[side];
+    if (drawn === undefined) continue;
     expect
-      .soft(Math.abs(built[side] - mockup[side]), `${name}: ${side} is ${built[side]}, the mock-up has ${mockup[side]}`)
+      .soft(Math.abs(built[side] - drawn), `${name}: ${side} is ${built[side]}, the mock-up has ${drawn}`)
       .toBeLessThanOrEqual(2);
   }
 }
@@ -156,67 +158,69 @@ async function tabStops(popup: Page, count: number): Promise<string[]> {
   return stops;
 }
 
-test('signed out, the popup is the mock-up: its boxes, its keyboard, its contrasts (05)', async ({ extension }) => {
+test('signed out, the popup is screen 1 of the mock-up: its boxes, its keyboard, its contrasts (FRU-297)', async ({
+  extension,
+}) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-signed-out');
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 360, height: 420 });
+  await popup.setViewportSize({ width: 380, height: 580 });
 
-  await expect(popup.getByRole('heading', { level: 1, name: 'Sign in to see and leave notes here' })).toBeVisible();
-  await expect(popup.getByText('localhost:5177', { exact: true })).toBeVisible();
-  await expect(popup.getByText('Running your own Fruitback?')).toBeVisible();
-  // Signed out: no person in the head, and none of the words the popup no longer says.
-  await expect(popup.getByRole('img', { name: /^Signed in as/ })).toHaveCount(0);
+  await expect(
+    popup.getByRole('heading', { level: 1, name: 'Comment on any website, right on the page' }),
+  ).toBeVisible();
+  await expect(popup.getByText('Invited by a client or a team?')).toBeVisible();
+  // Signed out: no button of the account, and none of the words the popup no longer says.
+  await expect(popup.getByRole('button', { name: 'Account and settings' })).toHaveCount(0);
   await expect(popup.locator('body')).not.toContainText(/worker|rule|client id|pair/i);
 
-  // The boxes of `measures.json`, `05-popup-signed-out-default@360`.
-  expectNear(
-    await boxOf(popup.getByRole('img', { name: 'Fruitback' })),
-    { x: 16, y: 20, width: 82, height: 16 },
-    'logo',
-  );
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Settings and every site' })),
-    { x: 314, y: 10, width: 36, height: 36 },
-    'gear',
-  );
-  expectNear(
-    await boxOf(popup.getByRole('heading', { level: 1 })),
-    { x: 16, y: 111, width: 328, height: 23.4 },
-    'title',
-  );
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Sign in to Fruitback' })),
-    { x: 16, y: 231, width: 328, height: 46 },
-    'sign in',
-  );
-  expectNear(
-    await boxOf(popup.getByRole('button', { name: 'Connect it in settings' })),
-    { x: 195, y: 388, width: 134.9, height: 16 },
-    'settings link',
-  );
-  // Everywhere: the popup is 360 px wide, and nothing leaves it.
-  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
-  const action = popup.getByRole('button', { name: 'Sign in to Fruitback' });
+  // The boxes of screen 1 of the mock-up (popup/ExtPopups.dc.html, measured in a browser), ± 2 px.
+  for (const [name, box] of [
+    ['Comment on any website, right on the page', { x: 24, y: 85, width: 332, height: 52.8 }],
+    ['Sign in with email', { x: 24, y: 211.8, width: 332, height: 46 }],
+    ['Google', { x: 24, y: 267.8, width: 161, height: 44 }],
+    ['GitHub', { x: 195, y: 267.8, width: 161, height: 44 }],
+    ['Invited by a client or a team?', { x: 24, y: 464.5, width: 332 }],
+    ['Use your own Fruitback server', { x: 24, y: 547.5 }],
+  ] as const) {
+    expectNear(await boxOf(popup.getByText(name, { exact: true })), box, name);
+  }
+  // Everywhere: the popup is 380 px wide, and nothing leaves it.
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  const action = popup.getByRole('button', { name: 'Sign in with email' });
   expect(await action.evaluate((button) => getComputedStyle(button).borderRadius)).toBe('10px');
-  // The main button of the kit (FRU-293).
-  expect((await boxOf(action)).height).toBe(46);
 
-  // The keyboard meets the gear, the sign-in, then the link, and sees where it is.
-  expect(await tabStops(popup, 3)).toEqual([
-    'Settings and every site',
-    'Sign in to Fruitback',
-    'Connect it in settings',
-  ]);
+  // The keyboard meets the three ways in, then the link, and sees where it is.
+  expect(await tabStops(popup, 4)).toEqual(['Sign in with email', 'Google', 'GitHub', 'Use your own Fruitback server']);
   expect(await popup.evaluate(() => getComputedStyle(document.activeElement as Element).outlineStyle)).toBe('solid');
 
   await clean(popup, 'the popup signed out');
 
-  // The gear and the link open the settings.
+  // The link of the foot opens the page of the extension.
   const settings = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Connect it in settings' }).click();
+  await popup.getByRole('button', { name: 'Use your own Fruitback server' }).click();
   expect((await settings).url()).toBe(`chrome-extension://${extension.id}/options.html`);
 });
+
+for (const way of ['Google', 'GitHub'] as const) {
+  test(`« ${way} » opens the sign-in of the console, as « Sign in with email » does (FRU-297)`, async ({
+    extension,
+  }) => {
+    const request = requestOf(`approved-${way}`);
+    await signInRoutes(extension.context, request);
+    const page = await extension.context.newPage();
+    await openBareSite(page, `popup-sign-in-${way}`);
+    const popup = await openPopup(extension, page);
+
+    const consoleTab = extension.context.waitForEvent('page');
+    await popup.getByRole('button', { name: way, exact: true }).click();
+    // No surface of authentication of the extension: the console's own page, which offers its methods.
+    expect((await consoleTab).url()).toBe(`${CONSOLE}/connect/${request}`);
+    await expect(
+      popup.getByRole('heading', { level: 1, name: 'Check that the tab shows the same word' }),
+    ).toBeVisible();
+  });
+}
 
 test('a sign-in the console approves: the word, the tab, then the person, and the claim nowhere it must not be', async ({
   extension,
@@ -231,7 +235,7 @@ test('a sign-in the console approves: the word, the tab, then the person, and th
 
   // From the keyboard: the click is what the access to Fruitback is asked in.
   const consoleTab = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).focus();
+  await popup.getByRole('button', { name: 'Sign in with email' }).focus();
   await popup.keyboard.press('Enter');
   const approving = await consoleTab;
   expect(approving.url()).toBe(`${CONSOLE}/connect/${request}`);
@@ -248,8 +252,7 @@ test('a sign-in the console approves: the word, the tab, then the person, and th
 
   claim.answer = 'approved';
   // The popup claims on its own, at the pace the worker asked: nobody clicks anything.
-  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
-  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toHaveText('C');
+  await expect(popup.getByRole('button', { name: 'Account and settings' })).toHaveText('C', { timeout: 15_000 });
   await expect(popup.getByText('camille@acme.dev', { exact: true })).toBeVisible();
   await expect(popup.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', `${CONSOLE}/`);
   await clean(popup, 'the popup signed in');
@@ -284,7 +287,7 @@ test('a sign-in refused in the console says so once, then the popup asks again',
   const popup = await openPopup(extension, page);
 
   const consoleTab = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await consoleTab;
   await expect(popup.getByText(WORD, { exact: true })).toBeVisible();
 
@@ -299,7 +302,9 @@ test('a sign-in refused in the console says so once, then the popup asks again',
   await popup.close();
 
   const again = await openPopup(extension, page);
-  await expect(again.getByRole('heading', { level: 1, name: 'Sign in to see and leave notes here' })).toBeVisible();
+  await expect(
+    again.getByRole('heading', { level: 1, name: 'Comment on any website, right on the page' }),
+  ).toBeVisible();
 });
 
 test('a sign-in nobody approved in time, and « Start again »', async ({ extension }) => {
@@ -310,7 +315,7 @@ test('a sign-in nobody approved in time, and « Start again »', async ({ extens
   const popup = await openPopup(extension, page);
 
   let opened = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await opened;
   await expect(popup.getByText(WORD, { exact: true })).toBeVisible();
 
@@ -323,7 +328,7 @@ test('a sign-in nobody approved in time, and « Start again »', async ({ extens
 
   claim.answer = 'expired';
   await expect(popup.getByRole('alert')).toHaveText('The tab was not approved in time.', { timeout: 15_000 });
-  await expect(popup.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
 });
 
 test('a console of another site is not opened, and a Fruitback that does not answer is said', async ({ extension }) => {
@@ -334,7 +339,7 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   await signInRoutes(extension.context, requestOf('untrusted'), { console: 'https://evil.example' });
   const popup = await openPopup(extension, page);
   const pages = extension.context.pages().length;
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await expect(popup.getByRole('alert')).toHaveText('Fruitback named a console that is not its own.');
   expect(extension.context.pages()).toHaveLength(pages);
   expect(await stored(extension, 'session')).not.toContain(CLAIM);
@@ -344,7 +349,7 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   await extension.context.unroute(`${CLOUD}/session/connect`);
   await signInRoutes(extension.context, requestOf('down'), { start: (route) => route.abort('connectionrefused') });
   const down = await openPopup(extension, page);
-  await down.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await down.getByRole('button', { name: 'Sign in with email' }).click();
   await expect(down.getByRole('heading', { level: 1, name: 'Fruitback did not answer.' })).toBeVisible();
   await expect(down.getByRole('alert')).toHaveText('Check the connection, then try again.');
   await expect(down.getByRole('button', { name: 'Try again' })).toBeVisible();
@@ -360,9 +365,9 @@ test('a session of the account that ended asks to sign in again; one Fruitback c
   await openBareSite(page, 'popup-sign-in-ended');
   const popup = await openPopup(extension, page);
   const opened = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await opened;
-  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
+  await expect(popup.getByRole('button', { name: 'Account and settings' })).toHaveText('C', { timeout: 15_000 });
   await popup.close();
 
   // The access token goes, so the next popup refreshes; Fruitback does not answer.
@@ -386,7 +391,7 @@ test('a session of the account that ended asks to sign in again; one Fruitback c
   );
   const ended = await openPopup(extension, page);
   await expect(ended.getByRole('heading', { level: 1, name: 'Your sign-in ended' })).toBeVisible();
-  await expect(ended.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await expect(ended.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   expect(await stored(extension, 'local')).not.toContain('e2e-refresh-1');
 });
 
@@ -400,9 +405,9 @@ test('a session of the account that ended draws no person in the head, on a site
   await openBareSite(page, 'popup-sign-in-ended-rule');
   const popup = await openPopup(extension, page);
   const opened = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await opened;
-  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
+  await expect(popup.getByRole('button', { name: 'Account and settings' })).toHaveText('C', { timeout: 15_000 });
   await popup.close();
   await addRule(extension, { mode: 'team', endpoint: CLOUD });
 
@@ -416,7 +421,7 @@ test('a session of the account that ended draws no person in the head, on a site
   const after = await openPopup(extension, page);
   await expect(after.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
   await expect(after.getByText(`Rule: ${'http://localhost:5177'}`)).toBeVisible();
-  await expect(after.getByRole('img', { name: /^Signed in as/ })).toHaveCount(0);
+  await expect(after.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
   await expect(after.getByRole('link', { name: 'Open the console' })).toHaveCount(0);
 });
 
@@ -429,9 +434,9 @@ test('a session that ended keeps the note, and the popup offers to sign in again
   await openBareSite(page, 'popup-session-ended-write');
   const popup = await openPopup(extension, page);
   const opened = extension.context.waitForEvent('page');
-  await popup.getByRole('button', { name: 'Sign in to Fruitback' }).click();
+  await popup.getByRole('button', { name: 'Sign in with email' }).click();
   await opened;
-  await expect(popup.getByRole('img', { name: 'Signed in as Camille Durand' })).toBeVisible({ timeout: 15_000 });
+  await expect(popup.getByRole('button', { name: 'Account and settings' })).toHaveText('C', { timeout: 15_000 });
   await popup.close();
 
   // The site of the workspace, turned on as the one click of 06 stores it.
@@ -461,27 +466,29 @@ test('a session that ended keeps the note, and the popup offers to sign in again
 
   // The popup offers the one thing that makes the site work again.
   const after = await openPopup(extension, page);
-  await expect(after.getByRole('heading', { level: 1, name: 'Sign in to see and leave notes here' })).toBeVisible();
-  await expect(after.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await expect(
+    after.getByRole('heading', { level: 1, name: 'Comment on any website, right on the page' }),
+  ).toBeVisible();
+  await expect(after.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
 });
 
-test('the popup signed out speaks French, and keeps to its 360 px', async ({ extension }) => {
+test('the popup signed out speaks French, and keeps to its 380 px', async ({ extension }) => {
   await extension.context.addInitScript(() => {
     Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
   });
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-signed-out-fr');
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 360, height: 420 });
+  await popup.setViewportSize({ width: 380, height: 580 });
 
   await expect(
-    popup.getByRole('heading', { level: 1, name: 'Connectez-vous pour voir et laisser des notes ici' }),
+    popup.getByRole('heading', { level: 1, name: 'Commentez n’importe quel site, directement sur la page' }),
   ).toBeVisible();
-  await expect(popup.getByRole('button', { name: 'Se connecter à Fruitback' })).toBeVisible();
-  await expect(popup.getByRole('button', { name: 'Réglages et tous les sites' })).toBeVisible();
-  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await expect(popup.getByRole('button', { name: 'Se connecter par e-mail' })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Utiliser votre propre serveur Fruitback' })).toBeVisible();
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   // The foot holds on one line or wraps inside the popup, never past it.
   const foot = await boxOf(popup.locator('.popup-foot'));
-  expect(foot.x + foot.width).toBeLessThanOrEqual(360);
+  expect(foot.x + foot.width).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup signed out, in French');
 });
