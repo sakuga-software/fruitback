@@ -720,6 +720,8 @@ export function init(options: FruitbackOptions): Fruitback {
     below: (id) => overlay.below(id),
     // The dock stands aside while the list is open, so the list holds the way to a new note.
     leave: { label: options.label ?? translator.text('launch.label'), onLeave: () => host.start() },
+    // « Show pins on the page » (FRU-308): the switch hides them while the list is open.
+    pins: { show: (on) => overlay.showPins(on) },
     readState: () => (ended ? 'signed-out' : readState),
     onSignIn: signIn,
     onRetry: () => {

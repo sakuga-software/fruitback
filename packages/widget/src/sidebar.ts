@@ -3,7 +3,7 @@ import { type Draft } from './drafts.ts';
 import { type FeedbackEntry } from './export.ts';
 import { deepActiveElement } from './focus.ts';
 import { createIcon } from './icons.ts';
-import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
+import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { onStageToken, stageToken } from './theme.ts';
 
 /**
@@ -17,10 +17,11 @@ import { onStageToken, stageToken } from './theme.ts';
  * goes from note to note without opening it again. So it takes focus when it opens, gives it back to
  * what opened it, and closes on Escape. It sets no `aria-modal` and holds no Tab.
  *
- * Since FRU-259 it is the list of the mock-up of 2026-10-13: three tabs, « Open », « Done » and
- * « All », a row for each note with the number its pin carries, and a section of its own for the
- * notes whose element is gone. **It lies over the page and does not push it**: the mock-up narrows
- * its example site, and a margin put on the page of somebody else breaks a layout nobody here read.
+ * Since FRU-308 it is the board « Sidebar mode » of the mock-up of 2026-10-20: « This page », a
+ * search, a chip for each status, a row for each note with the number its pin carries, the notes
+ * whose element is gone at the bottom, and a foot with « Leave feedback » and « Show pins on the
+ * page ». **It lies over the page and does not push it** (A19): the board narrows its example site,
+ * and a margin put on the page of somebody else breaks a layout nobody here read.
  */
 export type Sidebar = {
   open(): void;
@@ -84,6 +85,11 @@ export type SidebarOptions = {
    * label of the launch button, so a host that named it reads one name. Left out: no button.
    */
   leave?: { label: string; onLeave: () => void };
+  /**
+   * The pins of the page, for « Show pins on the page » (FRU-308). The switch hides them while the
+   * list is open; the list shows them again when it closes. Left out: no switch.
+   */
+  pins?: { show(on: boolean): void };
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -96,22 +102,22 @@ export type SidebarEntry = FeedbackEntry & { number?: number };
 const EXCERPT_MAX_LENGTH = 90;
 
 /**
- * Which notes a tab shows. « Open » is what is left to do: new, to do, in progress. « Done » is the
- * rest: done, and closed. A note is in one or the other, so « All » counts the two.
+ * The chips of the board, in its order (FRU-308): « All », then a status each. « Closed » is not on
+ * the board: its chip shows only while a note of the page is closed, or while it is the one chosen.
  */
-const TABS = ['open', 'done', 'all'] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABEL = {
-  open: 'sidebar.tabOpen',
-  done: 'sidebar.tabDone',
-  all: 'sidebar.tabAll',
-} as const satisfies Record<Tab, MessageKey>;
-const DONE_STAGES: readonly string[] = ['ripe', 'composted'];
+const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+type Stage = (typeof STAGES)[number];
+type Chosen = 'all' | Stage;
 
-function inTab(tab: Tab, entry: SidebarEntry): boolean {
-  if (tab === 'all') return true;
+/** Whether this note has these words, in its text or in the identifier of its store. */
+function matches(entry: SidebarEntry, query: string): boolean {
+  if (query === '') return true;
+  const words = query.toLocaleLowerCase();
 
-  return DONE_STAGES.includes(entry.issue.stage) === (tab === 'done');
+  return (
+    entry.issue.seed.note.toLocaleLowerCase().includes(words) ||
+    (entry.issue.identifier ?? '').toLocaleLowerCase().includes(words)
+  );
 }
 
 export function createSidebar(options: SidebarOptions): Sidebar {
@@ -128,7 +134,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   root.dataset.fruitbackSidebar = '';
   root.hidden = true;
   root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-labelledby', 'fruitback-sidebar-title');
+  // Its name is « Notes on this page », and its head says « Notes »: a name that starts like the one
+  // of the thread, « Note 3 », would make one locator find two dialogs.
+  root.setAttribute('aria-label', t.text('sidebar.dialog'));
 
   // A div, not a header: see `panel.ts` for why the chrome of the widget uses no generic tag.
   const head = document.createElement('div');
@@ -138,20 +146,92 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   const title = document.createElement('span');
   title.id = 'fruitback-sidebar-title';
   title.className = 'fruitback-sidebar-title';
-  title.textContent = t.text('sidebar.dialog');
-  // Which page: the host and the path, as the address bar writes them.
+  title.textContent = t.text('sidebar.title');
+  // Which site: its host, as the address bar writes it.
   const address = document.createElement('span');
   address.className = 'fruitback-sidebar-address';
-  heading.append(title, address);
+  heading.append(createIcon(document, 'drop'), title, address);
+  const floating = document.createElement('button');
+  floating.type = 'button';
+  floating.className = 'fruitback-sidebar-icon';
+  floating.dataset.fruitbackFloating = '';
+  floating.setAttribute('aria-label', t.text('sidebar.floating'));
+  floating.title = t.text('sidebar.floating');
+  floating.append(createIcon(document, 'list'));
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'fruitback-sidebar-close';
+  close.className = 'fruitback-sidebar-icon fruitback-sidebar-close';
   close.setAttribute('aria-label', t.text('sidebar.close'));
   close.append(createIcon(document, 'close'));
-  head.append(heading, close);
+  head.append(heading, floating, close);
 
+  // « This page », the search and the chips of the statuses (FRU-308).
   const actions = document.createElement('div');
   actions.className = 'fruitback-sidebar-actions';
+  // The scope of the board, with its one part: the script reads the notes of this page only, and has
+  // no route for the whole site. Words, not a tab: a list of one tab chooses nothing.
+  const scope = document.createElement('p');
+  scope.className = 'fruitback-sidebar-scope';
+  const scopeWords = document.createElement('span');
+  scope.append(scopeWords);
+  const searchBox = document.createElement('label');
+  searchBox.className = 'fruitback-sidebar-search';
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'fruitback-sidebar-search-field';
+  search.placeholder = t.text('sidebar.search');
+  search.setAttribute('aria-label', t.text('sidebar.search'));
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  searchBox.append(createIcon(document, 'search'), search);
+  let query = '';
+  search.addEventListener('input', () => {
+    query = search.value.trim();
+    draw();
+  });
+  // The page must not take the keys typed here: the capture mode and the shortcuts of a site listen
+  // on the document. Escape still reaches the list, which closes on it.
+  search.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') event.stopPropagation();
+  });
+
+  let chosen: Chosen = 'all';
+  const chipGroup = document.createElement('div');
+  chipGroup.className = 'fruitback-sidebar-chips';
+  chipGroup.setAttribute('role', 'group');
+  chipGroup.setAttribute('aria-label', t.text('sidebar.stages'));
+  const chips = new Map<Chosen, { button: HTMLButtonElement; word: string; count: HTMLSpanElement }>();
+  for (const name of ['all', ...STAGES] as const) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'fruitback-sidebar-chip';
+    button.dataset.fruitbackChip = name;
+    if (name !== 'all') {
+      // The drop of the status, for the eye: the chip says it in words.
+      const dot = document.createElement('span');
+      dot.className = 'fruitback-sidebar-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      dot.style.setProperty('--fruitback-sidebar-stage', stageToken(name));
+      button.append(dot);
+    }
+    const word = name === 'all' ? t.text('sidebar.all') : t.stage(name);
+    const label = document.createElement('span');
+    label.textContent = word;
+    const count = document.createElement('span');
+    count.className = 'fruitback-sidebar-count';
+    button.append(label, count);
+    button.addEventListener('click', () => {
+      chosen = name;
+      draw();
+    });
+    chips.set(name, { button, word, count });
+    chipGroup.append(button);
+  }
+  actions.append(scope, searchBox, chipGroup);
+
+  // The foot of the board: the way to a new note, and the switch of the pins.
+  const foot = document.createElement('div');
+  foot.className = 'fruitback-sidebar-foot';
   const leave = document.createElement('button');
   leave.type = 'button';
   leave.className = 'fruitback-sidebar-leave';
@@ -165,36 +245,25 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       shut();
       options.leave?.onLeave();
     });
-    actions.append(leave);
+    foot.append(leave);
   }
+  const pinsRow = document.createElement('label');
+  pinsRow.className = 'fruitback-sidebar-pins';
+  const pinsWords = document.createElement('span');
+  pinsWords.textContent = t.text('sidebar.showPins');
+  const pinsSwitch = document.createElement('input');
+  pinsSwitch.type = 'checkbox';
+  pinsSwitch.setAttribute('role', 'switch');
+  pinsSwitch.dataset.fruitbackShowPins = '';
+  pinsSwitch.checked = true;
+  pinsSwitch.addEventListener('change', () => options.pins?.show(pinsSwitch.checked));
+  pinsRow.append(pinsWords, pinsSwitch);
+  if (options.pins !== undefined) foot.append(pinsRow);
 
-  let tab: Tab = 'open';
-  const tablist = document.createElement('div');
-  tablist.className = 'fruitback-sidebar-tabs';
-  tablist.setAttribute('role', 'tablist');
-  tablist.setAttribute('aria-label', t.text('sidebar.tabs'));
-  const tabs = new Map<Tab, HTMLButtonElement>();
-  for (const name of TABS) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.id = `fruitback-sidebar-tab-${name}`;
-    button.className = 'fruitback-sidebar-tab';
-    button.dataset.fruitbackTab = name;
-    button.setAttribute('role', 'tab');
-    button.setAttribute('aria-controls', 'fruitback-sidebar-panel');
-    // Focus too: a click gives a button no focus in every browser, and the row that had it may be
-    // one the chosen tab does not show.
-    button.addEventListener('click', () => choose(name, true));
-    tabs.set(name, button);
-    tablist.append(button);
-  }
-  actions.append(tablist);
-
-  // What the chosen tab shows. It scrolls, and everything under the tabs is in it.
+  // The rows, and everything under the filters. It scrolls.
   const panel = document.createElement('div');
   panel.id = 'fruitback-sidebar-panel';
   panel.className = 'fruitback-sidebar-panel';
-  panel.setAttribute('role', 'tabpanel');
 
   const empty = document.createElement('p');
   empty.className = 'fruitback-sidebar-empty';
@@ -319,7 +388,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   home.className = 'fruitback-sidebar-home';
   detail.append(back, home);
 
-  root.append(head, actions, panel, detail);
+  root.append(head, actions, panel, detail, foot);
   options.host.append(style, root);
 
   /** The shadow host, which the dock reads: it stands aside while the list is open. */
@@ -395,7 +464,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const entries = options.entries();
     const placed = entries.filter((entry) => entry.placement !== 'detached');
     const detached = entries.filter((entry) => entry.placement === 'detached');
-    const inThisTab = placed.filter((entry) => inTab(tab, entry));
+    const found = placed.filter((entry) => matches(entry, query));
+    const shownHere = (entry: SidebarEntry): boolean =>
+      matches(entry, query) && (chosen === 'all' || entry.issue.stage === chosen);
+    const rows = placed.filter(shownHere);
+    const lostRows = detached.filter(shownHere);
     // The note that has focus keeps it across a draw: the pins change while somebody reads the list.
     const active = deepActiveElement(document);
     const focusedId =
@@ -407,28 +480,28 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const asking = failing || retrying;
     const known = state === 'read' || entries.length > 0;
 
-    address.textContent = view === null ? '' : `${view.location.host}${view.location.pathname}`;
-    for (const name of TABS) {
-      const button = tabs.get(name) as HTMLButtonElement;
-      const selected = name === tab;
-      button.setAttribute('aria-selected', String(selected));
-      // One stop for the three: the arrows go from one tab to the next.
-      button.tabIndex = selected ? 0 : -1;
-      // « Open 6 », one text, so the name of the tab reads with its space. No number while no read
-      // answered: zero notes would be a guess.
-      const word = t.text(TAB_LABEL[name]);
-      const label = failing || !known ? word : `${word} ${placed.filter((entry) => inTab(name, entry)).length}`;
-      if (button.textContent !== label) button.textContent = label;
+    address.textContent = view === null ? '' : `· ${view.location.host}`;
+    // No number while no read answered: zero notes would be a guess. The scope counts the notes a pin
+    // shows, like the chips: the detached ones have their own count, at the bottom.
+    scopeWords.textContent =
+      failing || !known ? t.text('sidebar.scope') : t.text('sidebar.scopeCount', { count: placed.length });
+    for (const [name, { button, word, count }] of chips) {
+      const number = found.filter((entry) => name === 'all' || entry.issue.stage === name).length;
+      button.setAttribute('aria-pressed', String(name === chosen));
+      // « Closed » is not on the board: shown while a note of the page is closed, or while chosen.
+      button.hidden = name === 'composted' && number === 0 && chosen !== 'composted';
+      count.textContent = failing || !known ? '' : String(number);
+      // « All 4 », with its space: two spans read as one word, « All4 », in an accessible name.
+      button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${number}`);
     }
-    panel.setAttribute('aria-labelledby', `fruitback-sidebar-tab-${tab}`);
-    // The notes kept for later are what is left to do: at the head of « Open », and nowhere else.
-    drawDrafts(tab === 'open');
+    // The notes kept for later are what is left to do: at the head of the list, with every status.
+    drawDrafts(chosen === 'all');
 
-    let nothing: 'sidebar.emptyTab' | 'sidebar.loading' | 'sidebar.empty' = 'sidebar.emptyTab';
+    let nothing: 'sidebar.noMatch' | 'sidebar.loading' | 'sidebar.empty' = 'sidebar.noMatch';
     if (state === 'pending') nothing = 'sidebar.loading';
     else if (entries.length === 0) nothing = 'sidebar.empty';
     empty.textContent = t.text(nothing);
-    empty.hidden = asking || inThisTab.length > 0;
+    empty.hidden = asking || rows.length > 0 || lostRows.length > 0;
     // Set only when it changes, so a draw does not announce the same words again.
     let message = '';
     if (signedOut) message = t.text('sidebar.signedOut');
@@ -442,12 +515,12 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     leave.hidden = signedOut;
     const leaving = !asking && failed.contains(active);
     failed.hidden = !asking;
-    list.hidden = asking || inThisTab.length === 0;
+    list.hidden = asking || rows.length === 0;
     const current = options.current?.();
-    list.replaceChildren(...(asking ? [] : inThisTab.map((entry) => item(entry, current))));
-    unplaced.hidden = asking || detached.length === 0;
-    unplacedWords.textContent = detached.length === 0 ? '' : t.text('sidebar.unplaced', { count: detached.length });
-    unplacedList.replaceChildren(...(asking ? [] : detached.map((entry) => lost(entry, current))));
+    list.replaceChildren(...(asking ? [] : rows.map((entry) => item(entry, current))));
+    unplaced.hidden = asking || lostRows.length === 0;
+    unplacedWords.textContent = lostRows.length === 0 ? '' : t.plural('sidebar.unplaced', lostRows.length);
+    unplacedList.replaceChildren(...(asking ? [] : lostRows.map((entry) => lost(entry, current))));
     // The read answered: focus goes to the first note, or to the close button of an empty list.
     if (leaving) (panel.querySelector<HTMLElement>('[data-fruitback-note]') ?? close).focus();
 
@@ -458,29 +531,6 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       (again ?? close).focus();
     }
   }
-
-  /** Another tab. Focus follows the choice: that is what the arrows are for, and a click says the same. */
-  function choose(next: Tab, focus: boolean): void {
-    tab = next;
-    draw();
-    if (focus) tabs.get(next)?.focus();
-  }
-
-  tablist.addEventListener('keydown', (event) => {
-    const [back, forth] = t.direction === 'rtl' ? ['ArrowRight', 'ArrowLeft'] : ['ArrowLeft', 'ArrowRight'];
-    const at = TABS.indexOf(tab);
-    let to: number | undefined;
-    if (event.key === forth) to = (at + 1) % TABS.length;
-    else if (event.key === back) to = (at + TABS.length - 1) % TABS.length;
-    else if (event.key === 'Home') to = 0;
-    else if (event.key === 'End') to = TABS.length - 1;
-    if (to === undefined) return;
-
-    // The page must not scroll, and the capture mode must not move its cursor, on the same key.
-    event.preventDefault();
-    event.stopPropagation();
-    choose(TABS[to] as Tab, true);
-  });
 
   function drawDrafts(here: boolean): void {
     const kept = here ? (options.drafts?.() ?? []) : [];
@@ -522,6 +572,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     return text;
   }
 
+  /** The status in the words of the store, like the thread, and the stage when it has none. */
+  function statusOf(issue: SidebarEntry['issue']): string {
+    return issue.stateName || t.stage(issue.stage);
+  }
+
   function item({ issue, placement, number }: SidebarEntry, current: string | undefined): HTMLElement {
     const row = document.createElement('li');
     const button = document.createElement('button');
@@ -542,21 +597,36 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     digit.textContent = number === undefined ? '' : String(number);
     pin.append(digit);
 
+    // « In progress · FRU-128 … 2 days ago », as the board writes the top line of a row.
+    const top = document.createElement('span');
+    top.className = 'fruitback-sidebar-top';
+    const status = document.createElement('span');
+    status.className = 'fruitback-sidebar-status';
+    status.textContent = statusOf(issue);
+    top.append(status);
+    if (issue.identifier) {
+      const id = document.createElement('span');
+      id.className = 'fruitback-sidebar-id';
+      id.textContent = issue.identifier;
+      top.append(id);
+    }
+    const written = new Date(issue.seed.createdAt);
+    const known = !Number.isNaN(written.getTime());
+    const age = document.createElement('span');
+    age.className = 'fruitback-sidebar-age';
+    age.textContent = known ? t.relative(written) : issue.seed.createdAt;
+    if (known) age.title = t.date(written);
+    top.append(age);
+
     const meta = document.createElement('span');
     meta.className = 'fruitback-sidebar-meta';
     const who = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
-    const written = new Date(issue.seed.createdAt);
-    const known = !Number.isNaN(written.getTime());
     const replies = issue.comments?.length ?? 0;
     meta.textContent = [
-      // The store's own word for the state, like the thread, and the stage when it has none.
-      issue.stateName || t.stage(issue.stage),
       who,
-      known ? t.relative(written) : issue.seed.createdAt,
-      ...(replies > 0 ? [t.plural('sidebar.replies', replies)] : []),
+      replies > 0 ? t.plural('sidebar.replies', replies) : t.text('sidebar.noReply'),
       ...(placement === 'approximate' ? [t.text('sidebar.approximate')] : []),
     ].join(' · ');
-    if (known) meta.title = t.date(written);
     // Its own element: the page scrolls under the list, and only these words change then.
     const below = document.createElement('span');
     below.className = 'fruitback-sidebar-below';
@@ -565,7 +635,10 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     below.hidden = options.below?.(issue.seed.id) !== true;
     meta.append(below);
 
-    button.append(pin, words(issue.seed.note, 'fruitback-sidebar-note'), meta);
+    const body = document.createElement('span');
+    body.className = 'fruitback-sidebar-body';
+    body.append(top, words(issue.seed.note, 'fruitback-sidebar-note'), meta);
+    button.append(pin, body);
     row.append(button);
 
     return row;
@@ -582,7 +655,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     button.addEventListener('click', () => showNote(issue.seed.id));
     const why = document.createElement('span');
     why.className = 'fruitback-sidebar-meta';
-    why.textContent = t.text('sidebar.unplacedWhy');
+    why.textContent = [
+      statusOf(issue),
+      ...(issue.identifier ? [issue.identifier] : []),
+      t.text('sidebar.unplacedWhy'),
+    ].join(' · ');
     button.append(words(issue.seed.note, 'fruitback-sidebar-lost-note'), why);
     row.append(button);
 
@@ -630,6 +707,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const inside = active !== null && root.contains(active);
     root.hidden = true;
     stopFollowing();
+    // Back to floating pins: the switch hides them while the list is open, and no longer.
+    if (!pinsSwitch.checked) {
+      pinsSwitch.checked = true;
+      options.pins?.show(true);
+    }
     // Before focus goes back: the dock is hidden while the list is open, and a hidden button takes none.
     shell?.removeAttribute('data-fruitback-listing');
     // Only when focus was in the list: a reviewer who clicked on the page keeps focus where they put it.
@@ -638,6 +720,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   }
 
   close.addEventListener('click', shut);
+  floating.addEventListener('click', shut);
   root.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     // The thread closes on Escape from the document. This Escape is for the list only: from a
@@ -704,15 +787,18 @@ const STYLES = `
   z-index: 2147483050;
   display: flex;
   flex-direction: column;
-  width: 380px;
+  width: 392px;
   max-width: 100vw;
+  box-sizing: border-box;
   border-inline-start: 1px solid var(--fruitback-color-border);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 14px/1.45 var(--fruitback-font-sans);
-  box-shadow: var(--fruitback-shadow-lg);
+  /* The shadow of the board, cast over the page, which is at the start side of the list. */
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.06);
   animation: fruitback-sidebar-in var(--fruitback-duration-fast) ease-out;
 }
+.fruitback-sidebar:dir(rtl) { box-shadow: 10px 0 30px rgba(0, 0, 0, 0.06); }
 .fruitback-sidebar[hidden] { display: none; }
 @keyframes fruitback-sidebar-in {
   from { opacity: 0; }
@@ -723,78 +809,126 @@ const STYLES = `
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-block: 12px;
-  padding-inline: 18px 10px;
-  border-bottom: 1px solid var(--fruitback-color-border);
+  padding-block: 16px 12px;
+  padding-inline: 18px 12px;
 }
-.fruitback-sidebar-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.fruitback-sidebar-title { font-weight: 600; font-size: 15px; }
-/* anywhere: an address has no space to wrap at. */
-.fruitback-sidebar-address { font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
-.fruitback-sidebar-close {
+.fruitback-sidebar-heading { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.fruitback-sidebar-heading .fruitback-icon { flex: none; width: 16px; height: 16px; color: var(--fruitback-color-accent); }
+.fruitback-sidebar-title { flex: none; font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+/* anywhere: a host has no space to wrap at. */
+.fruitback-sidebar-address { min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+.fruitback-sidebar-icon {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 0;
-  border-radius: var(--fruitback-radius-field);
-  background: var(--fruitback-color-surface);
+  border-radius: var(--fruitback-radius-md);
+  background: transparent;
   color: var(--fruitback-color-text-muted);
-  font-size: 15px;
-  line-height: 1;
   cursor: pointer;
 }
-.fruitback-sidebar-close:hover { background: var(--fruitback-color-surface-sunken); }
-.fruitback-sidebar-actions { flex: none; display: flex; flex-direction: column; gap: 14px; padding: 14px 18px 0; }
-.fruitback-sidebar-leave {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 40px;
-  border: 0;
-  border-radius: var(--fruitback-radius-pill);
-  background: var(--fruitback-color-accent);
-  color: var(--fruitback-color-on-accent);
-  font: 600 13px/1.45 var(--fruitback-font-sans);
-  letter-spacing: -0.006em;
-  cursor: pointer;
+.fruitback-sidebar-icon .fruitback-icon { width: 17px; height: 17px; }
+.fruitback-sidebar-close .fruitback-icon { width: 14px; height: 14px; }
+.fruitback-sidebar-icon:hover { background: var(--fruitback-color-surface-sunken); color: var(--fruitback-color-text); }
+.fruitback-sidebar button:focus-visible, .fruitback-sidebar input:focus-visible {
+  outline: 2px solid var(--fruitback-color-accent);
+  outline-offset: 2px;
 }
-/* The drop of the mark, taller than wide, as on the launch button. */
-.fruitback-sidebar-leave[hidden] { display: none; }
-.fruitback-sidebar-leave .fruitback-icon { width: 12px; height: 15px; }
-.fruitback-sidebar-leave:hover { background: var(--fruitback-color-accent-strong); }
-.fruitback-sidebar-tabs {
+.fruitback-sidebar-actions {
+  flex: none;
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 18px 12px;
+  border-bottom: 1px solid var(--fruitback-color-border);
+}
+/* The rail of the scope, with its one part drawn as the chosen tab of the board. */
+.fruitback-sidebar-scope {
+  margin: 0;
   padding: 3px;
   border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-surface-sunken);
 }
-.fruitback-sidebar-tab {
-  flex: 1;
+.fruitback-sidebar-scope > span {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
-  min-width: 0;
-  border: 0;
+  height: 30px;
   border-radius: var(--fruitback-radius-field);
-  background: transparent;
-  color: var(--fruitback-color-text-subtle);
-  font: 600 13px/1.45 var(--fruitback-font-sans);
-  cursor: pointer;
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xs);
+  font-size: 12px;
+  font-weight: 600;
 }
-.fruitback-sidebar-tab[aria-selected='true'] {
+.fruitback-sidebar-search { position: relative; display: block; }
+.fruitback-sidebar-search .fruitback-icon {
+  position: absolute;
+  inset-inline-start: 10px;
+  top: 9px;
+  width: 15px;
+  height: 15px;
+  color: var(--fruitback-color-text-muted);
+  pointer-events: none;
+}
+.fruitback-sidebar-search-field {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: 32px 10px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
-  box-shadow: var(--fruitback-shadow-xs);
+  font: 13px/1.45 var(--fruitback-font-sans);
 }
-.fruitback-sidebar-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 8px 16px; }
+.fruitback-sidebar-search-field::placeholder { color: var(--fruitback-color-text-muted); opacity: 1; }
+.fruitback-sidebar-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fruitback-sidebar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-sidebar-chip[hidden] { display: none; }
+.fruitback-sidebar-chip[aria-pressed='true'] {
+  border-color: var(--fruitback-color-text);
+  background: var(--fruitback-color-surface-sunken);
+}
+.fruitback-sidebar-count { color: var(--fruitback-color-text-muted); font-weight: 500; }
+.fruitback-sidebar-count:empty { display: none; }
+/* The drop of a status, 9 px, the point down. */
+.fruitback-sidebar-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--fruitback-sidebar-stage);
+}
+.fruitback-sidebar-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 12px;
+}
+.fruitback-sidebar-panel[hidden] { display: none; }
 .fruitback-sidebar-empty { margin: 0; padding: 12px 10px; color: var(--fruitback-color-text-muted); }
-.fruitback-sidebar-drafts { margin: 0 2px 10px; padding: 10px; border-radius: var(--fruitback-radius-md); box-shadow: inset 0 0 0 1px var(--fruitback-color-border); font-size: 13px; }
+.fruitback-sidebar-drafts { margin: 0 2px 6px; padding: 10px; border-radius: var(--fruitback-radius-md); box-shadow: inset 0 0 0 1px var(--fruitback-color-border); font-size: 13px; }
 .fruitback-sidebar-drafts[hidden] { display: none; }
 .fruitback-sidebar-drafts-title { margin: 0 0 6px; font-weight: 600; font-size: 12px; }
 .fruitback-sidebar-drafts-list { margin: 0 0 10px; padding: 0; list-style: none; }
@@ -819,47 +953,56 @@ const STYLES = `
   font-weight: 600;
   cursor: pointer;
 }
-.fruitback-sidebar-list { margin: 0; padding: 0; list-style: none; }
+.fruitback-sidebar-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .fruitback-sidebar-list[hidden] { display: none; }
 .fruitback-sidebar-list > li, .fruitback-sidebar-unplaced-list > li { list-style: none; }
-.fruitback-sidebar-list > li + li { margin-top: 2px; }
 .fruitback-sidebar-item {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 2px 10px;
+  display: flex;
+  gap: 12px;
   width: 100%;
-  padding: 12px 10px;
+  box-sizing: border-box;
+  padding: 12px;
   border: 0;
   border-radius: var(--fruitback-radius-md);
   background: none;
   color: var(--fruitback-color-text);
+  font: inherit;
   text-align: start;
   cursor: pointer;
 }
-.fruitback-sidebar-item:hover, .fruitback-sidebar-lost:hover { background: var(--fruitback-color-surface-raised); }
-/* The note whose thread is open. After the pointer, so it holds under it too. */
+.fruitback-sidebar-item:hover { background: var(--fruitback-color-surface-raised); }
+/* The note whose thread is open: the card of the board. After the pointer, so it holds under it too. */
 .fruitback-sidebar-item[aria-current='true'], .fruitback-sidebar-lost[aria-current='true'] {
-  background: var(--fruitback-color-surface-sunken);
+  background: var(--fruitback-color-surface-warm);
+  box-shadow: inset 0 0 0 1px var(--fruitback-color-border);
 }
-/* The silhouette of the pin, which is not in the scale and is not settable (see theme.ts). */
+/* The drop of the pin, 24 px, the point down, with a white edge as on the page. */
 .fruitback-sidebar-pin {
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 24px;
-  margin-block-start: 2px;
-  margin-inline-start: 2px;
+  box-sizing: border-box;
+  margin-top: 2px;
+  border: 2px solid #fff;
   border-radius: 50% 50% 50% 0;
-  transform: rotate(-90deg);
+  transform: rotate(-45deg);
   background: var(--fruitback-sidebar-stage);
+  box-shadow: 0 2px 6px rgba(28, 25, 23, 0.2);
 }
 .fruitback-sidebar-pin > span {
-  transform: rotate(90deg);
+  transform: rotate(45deg);
   color: var(--fruitback-sidebar-on-stage);
-  font: 600 12px/1 var(--fruitback-font-sans);
+  font: 700 11px/1 var(--fruitback-font-sans);
 }
-/* Two lines at most, as the mock-up cuts it: the whole note is in its thread. */
+.fruitback-sidebar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fruitback-sidebar-top { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; }
+.fruitback-sidebar-status { font-weight: 600; letter-spacing: -0.006em; }
+.fruitback-sidebar-id { color: var(--fruitback-color-text-muted); }
+.fruitback-sidebar-age { margin-inline-start: auto; color: var(--fruitback-color-text-muted); white-space: nowrap; }
+/* Two lines at most: the whole note is in its thread. */
 .fruitback-sidebar-note {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -868,44 +1011,49 @@ const STYLES = `
   overflow-wrap: anywhere;
 }
 .fruitback-sidebar-draft .fruitback-sidebar-note { display: block; }
-.fruitback-sidebar-meta { color: var(--fruitback-color-text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.fruitback-sidebar-meta { color: var(--fruitback-color-text-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .fruitback-sidebar-below[hidden] { display: none; }
 .fruitback-sidebar-unplaced {
-  margin: 18px 10px 0;
-  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 8px 4px;
   border-top: 1px solid var(--fruitback-color-border);
 }
 .fruitback-sidebar-unplaced[hidden] { display: none; }
+/* The title of the board, in capitals. Its words in the muted text: the brown of the board is 3.8:1 on the dark surface. */
 .fruitback-sidebar-unplaced-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  color: var(--fruitback-color-text-muted);
+  font-size: 11px;
   font-weight: 600;
-  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-/* The dashed drop of a note with no place, in the amber the mock-up gives it. */
 .fruitback-sidebar-unplaced-title .fruitback-icon { width: 12px; height: 15px; color: var(--fruitback-color-unplaced); }
-.fruitback-sidebar-unplaced-list { margin: 0; padding: 0; list-style: none; }
-.fruitback-sidebar-unplaced-list > li + li { margin-top: 10px; }
-/* A button that reads as its text: the note and what became of it. The fill of a row, 8 px around
-   the words, without moving them off the edge of the title. */
+.fruitback-sidebar-unplaced-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* A dashed card, as the board draws it: it still opens the thread of its note. */
 .fruitback-sidebar-lost {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: calc(100% + 16px);
-  margin: -8px;
-  padding: 8px;
-  border: 0;
+  gap: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px dashed var(--fruitback-color-unplaced);
   border-radius: var(--fruitback-radius-md);
-  background: none;
+  background: var(--fruitback-color-surface-warm);
   color: var(--fruitback-color-text);
+  font: inherit;
   text-align: start;
   cursor: pointer;
 }
+.fruitback-sidebar-lost:hover { background: var(--fruitback-color-surface-raised); }
 .fruitback-sidebar-lost-note { overflow-wrap: anywhere; }
-.fruitback-sidebar-actions[hidden], .fruitback-sidebar-panel[hidden], .fruitback-sidebar-detail[hidden] { display: none; }
+.fruitback-sidebar-actions[hidden], .fruitback-sidebar-detail[hidden] { display: none; }
 /* The thread of a note in place of the rows (FRU-312): the way back, then the thread, which scrolls. */
 .fruitback-sidebar-detail { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .fruitback-sidebar-back {
@@ -924,10 +1072,82 @@ const STYLES = `
   cursor: pointer;
 }
 .fruitback-sidebar-back:hover { background: var(--fruitback-color-surface-raised); color: var(--fruitback-color-text); }
+.fruitback-sidebar-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 18px 18px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-sidebar-foot:empty { display: none; }
+.fruitback-sidebar-leave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 600 13px/1.45 var(--fruitback-font-sans);
+  letter-spacing: -0.006em;
+  cursor: pointer;
+}
+.fruitback-sidebar-leave[hidden] { display: none; }
+/* The drop of the mark, taller than wide, as on the launch button. */
+.fruitback-sidebar-leave .fruitback-icon { width: 12px; height: 15px; }
+.fruitback-sidebar-leave:hover { background: var(--fruitback-color-accent-strong); }
+/* A row of words and its switch, 32 × 18 as the board draws it: the whole row toggles it. */
+.fruitback-sidebar-pins {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--fruitback-color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+/* Off, the edge of a field and not the light grey of the kit: 3.49:1 on the surface shows where it is. */
+.fruitback-sidebar-pins input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-border-strong);
+  cursor: pointer;
+  transition: background var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+.fruitback-sidebar-pins input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+.fruitback-sidebar-pins input:checked { background: var(--fruitback-color-text); }
+.fruitback-sidebar-pins input:checked::before { transform: translateX(14px); }
+.fruitback-sidebar-pins input:checked:dir(rtl)::before { transform: translateX(-14px); }
+@media (forced-colors: active) {
+  .fruitback-sidebar-pins input { border: 1px solid ButtonText; }
+  .fruitback-sidebar-pins input::before { background: ButtonText; }
+  .fruitback-sidebar-pins input:checked { background: Highlight; }
+  .fruitback-sidebar-chip[aria-pressed='true'] { outline: 2px solid Highlight; }
+}
 @media (prefers-reduced-motion: reduce) {
   .fruitback-sidebar { animation: none; }
+  .fruitback-sidebar-pins input, .fruitback-sidebar-pins input::before { transition: none; }
 }
-/* A sheet at the bottom of a phone, as before: the mock-up draws no phone. */
+/* A sheet at the bottom of a phone, as before: the board draws no phone. */
 @media (max-width: 480px) {
   .fruitback-sidebar {
     inset-block-start: auto;
@@ -936,12 +1156,15 @@ const STYLES = `
     border-inline-start: 0;
     border-radius: var(--fruitback-radius-lg) var(--fruitback-radius-lg) 0 0;
   }
-  .fruitback-sidebar-panel { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .fruitback-sidebar-foot { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
-/* A thumb, not a pointer (FRU-157): the close button and the tabs are 44 px, and the head keeps its height. */
+/* A thumb, not a pointer (FRU-157): the buttons of the head, the chips and the field are 44 px. */
 @media (pointer: coarse) {
-  .fruitback-sidebar-close { width: 44px; height: 44px; margin-block: -4px; margin-inline-end: -4px; }
-  .fruitback-sidebar-leave, .fruitback-sidebar-tab { height: 44px; }
+  .fruitback-sidebar-icon { width: 44px; height: 44px; margin-block: -6px; }
+  .fruitback-sidebar-close { margin-inline-end: -6px; }
+  .fruitback-sidebar-chip, .fruitback-sidebar-search-field { min-height: 44px; }
+  .fruitback-sidebar-search .fruitback-icon { top: 14px; }
+  .fruitback-sidebar-pins { min-height: 44px; }
   .fruitback-sidebar-retry, .fruitback-sidebar-send { min-height: 44px; }
 }
 `;

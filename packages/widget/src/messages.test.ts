@@ -369,6 +369,8 @@ describe('every word the widget shows', () => {
       },
       onSelect: () => {},
       readState: () => listed.state,
+      // « Show pins on the page » (FRU-308).
+      pins: { show: () => {} },
     });
     cleanup.push(() => sidebar.destroy());
     sidebar.open();
@@ -544,6 +546,8 @@ describe('every word the widget shows', () => {
       'ELEMENT',
       // The word of the store for a state, which the row of a note shows as the thread does (FRU-259).
       'In Progress',
+      // The identifier of the store, which the top line of a row shows (FRU-308).
+      'SKG-901',
       // A note kept for later, and the path of its page (FRU-124).
       'NOTE KEPT',
       '/pricing',

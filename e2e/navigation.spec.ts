@@ -77,7 +77,7 @@ test('a note sent after a navigation goes to the page where it was written', asy
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await open.click();
   // « All »: whether the store in memory made it an open note or a done one is not this test's.
-  await list.getByRole('tab', { name: 'All 1' }).click();
+  await list.getByRole('button', { name: 'All 1', exact: true }).click();
   const entry = list.locator('[data-fruitback-note]');
   await expect(entry).toHaveCount(1);
   await expect(entry).toContainText(note);
