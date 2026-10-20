@@ -1,10 +1,11 @@
 import { afterEach, describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type OrphanList, createOrphanList } from './orphans.ts';
 import { mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
-import { CAPTURE_START } from './host.ts';
+import { CAPTURE_START } from './events.ts';
 
 /**
  * The list on its own. How it behaves inside the overlay is settled in `overlay.test.ts`; what is
@@ -246,5 +247,20 @@ describe('the chip in the capsule of the dock (FRU-303)', () => {
     assert.equal(root.parentElement, page.document.body);
     assert.equal(root.hasAttribute('data-fruitback-docked'), false);
     assert.equal(root.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached note');
+  });
+});
+
+describe('the imports of the list', () => {
+  it('hears the start of a capture from a module that imports nothing, not from the host (FRU-303)', () => {
+    // The host loads the engine of the capture and every module of the dock. The list importing it
+    // for one name would load all of that with it, and the first import of the list from the host
+    // would read the name before it exists.
+    const imports = (file: string) =>
+      [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/^import .* from '(.+)';$/gm)].map(
+        (match) => match[1],
+      );
+
+    assert.ok(!imports('./orphans.ts').includes('./host.ts'));
+    assert.deepEqual(imports('./events.ts'), []);
   });
 });

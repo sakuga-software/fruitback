@@ -2,7 +2,7 @@ import { type SeedIssue } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
-import { CAPTURE_START } from './host.ts';
+import { CAPTURE_START } from './events.ts';
 
 /**
  * The notes whose element is gone (FRU-12).

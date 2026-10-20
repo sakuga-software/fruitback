@@ -3,6 +3,7 @@ import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
 import { isStableClass, isStableId } from './selector.ts';
 import { deepActiveElement } from './focus.ts';
+import { CAPTURE_START } from './events.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
@@ -639,12 +640,6 @@ export function readableName(element: Element): string {
 
   return text.length > 80 ? `${text.slice(0, 79)}…` : text;
 }
-
-/**
- * The event the capsule of the dock hears when a capture starts and hides its controls (FRU-303).
- * The list of the detached notes, which opens above its chip, folds on it.
- */
-export const CAPTURE_START = 'fruitback-capture-start';
 
 /**
  * What the frame of a capture writes for an element (FRU-303): its tag, then its id or the class
