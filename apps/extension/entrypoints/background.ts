@@ -24,7 +24,7 @@ import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts
 import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
-import { runShortcut } from '../src/shortcut.ts';
+import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 
@@ -383,7 +383,9 @@ export default defineBackground(() => {
   });
   // FRU-291: the key of the manifest starts a note on the tab it was pressed on. See `runShortcut`.
   browser.commands.onCommand.addListener((command, tab) => {
-    runShortcut(command, tab, (tabId, message) => browser.tabs.sendMessage(tabId, message));
+    void tabOfCommand(tab, () => browser.tabs.query({ active: true, currentWindow: true })).then((pressedOn) =>
+      runShortcut(command, pressedOn, (tabId, message) => browser.tabs.sendMessage(tabId, message)),
+    );
   });
   // Created at each start of the service worker: `create` replaces the alarm of the same name.
   void browser.alarms

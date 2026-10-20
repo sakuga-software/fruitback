@@ -9,6 +9,7 @@ import {
   SUGGESTED_KEY,
   currentShortcut,
   runShortcut,
+  tabOfCommand,
   tabCommandFor,
 } from './shortcut.ts';
 
@@ -70,5 +71,13 @@ describe('the shortcut that starts a note (FRU-291)', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(rejected, true);
+  });
+
+  it('falls back on the active tab when the browser gives the command no tab (review of #368)', async () => {
+    assert.deepEqual(await tabOfCommand({ id: 7 }, async () => [{ id: 9 }]), { id: 7 });
+    assert.deepEqual(await tabOfCommand(undefined, async () => [{ id: 9 }]), { id: 9 });
+    assert.deepEqual(await tabOfCommand({}, async () => [{ id: 9 }]), { id: 9 });
+    assert.equal(await tabOfCommand(undefined, async () => []), undefined);
+    assert.equal(await tabOfCommand(undefined, async () => Promise.reject(new Error('no window'))), undefined);
   });
 });
