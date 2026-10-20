@@ -368,6 +368,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
   settings**: `commands.openShortcutSettings()` where the browser has it (Firefox 137), the page of
   Chromium otherwise. A Firefox older than 137 has neither, so the line says where to look. One line,
   on its own, so the screen of preferences of FRU-302 can take it whole.
+- **The tab is the one `onCommand` gives, or the active tab of the window** (`tabOfCommand`) when a
+  browser gives none: Chrome passes it since 86, Firefox since 126.
 - **A tab with no widget does nothing.** No bridge answers there; the refusal is caught.
 
 ### The reasons, and what was measured
