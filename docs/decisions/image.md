@@ -387,10 +387,13 @@ What it took was mostly measuring, because four things the documentation said we
 ### The rules, in short
 
 - **A step a reader acts on has its picture**, taken from the build of the day, in the light scheme.
-  `docs/reviewing.md` shows the welcome page, the signed-out popup, the word on both sides, « Turn
-  on here » and a note being written; `docs/install.md` shows the card of the script. The captures
-  are cut from the e2e specs that already reach each state (`popup-sign-in`, `console-connect`,
-  `popup-workspace`, `extension-welcome`): take them again from there when a screen changes.
+  `docs/reviewing.md` shows the welcome page, the signed-out popup, the word on both sides, the popup
+  that asks to turn a site on, and a note being written; `docs/install.md` shows the card of the
+  script. The captures are cut from the e2e specs that already reach each state (`popup-sign-in`, `console-connect`,
+  `popup-new-site` for « Turn Fruitback on for this site? » with an account, `extension-welcome`, and
+  the composer of the playground for the note): take them again from there when a screen changes.
+  Before a capture, move the pointer off what was pressed: a button under it is drawn in its hover
+  colour.
 - **The colours of code blocks and quotes are ours, not the theme's.** `docs/assets/css/style.scss`
   imports `jekyll-theme-primer` and overrides the Rouge palette and `blockquote`. Each colour holds
   4.5:1 at least on `#f6f8fa` and `#f4f4f4`.
