@@ -6,22 +6,31 @@ FRU-128). It is for whoever operates that deployment. A self-hoster reads
 
 ## Where it runs
 
-Dokploy project `fruitback-cloud` on `em-sakuga-01`. Two applications follow `main`:
+Dokploy project `fruitback-cloud` on `em-sakuga-01`, as services of Docker Swarm. The worker and the
+console follow `main` with « Auto Deploy »: Dokploy builds each one from the repository on the host at
+each push, and the image of the worker is `fruitback-cloud-worker-a9zdeo:latest`, built there. It is
+not pulled from GHCR, so it has no digest (FRU-183, read on 2026-10-12).
 
-| Application | Address             | Holds                                                 |
-| ----------- | ------------------- | ----------------------------------------------------- |
-| `worker`    | `api.fruitback.com` | the volume `fruitback-cloud-data`, mounted on `/data` |
-| `console`   | `app.fruitback.com` | static files, and no secret                           |
+| Application | Address             | Swarm service                     | Holds                                                 |
+| ----------- | ------------------- | --------------------------------- | ----------------------------------------------------- |
+| `worker`    | `api.fruitback.com` | `fruitback-cloud-worker-a9zdeo`   | the volume `fruitback-cloud-data`, mounted on `/data` |
+| `console`   | `app.fruitback.com` | `fruitback-cloud-console-kxezkm`  | static files, and no secret                           |
+| `postgres`  | none: no port       | `fruitback-cloud-postgres-u6qxzp` | the database: PostgreSQL 17                           |
 
-`/data` holds three SQLite files: `fb.db` (the notes), `sessions.db` (the sessions) and `accounts.db`
-(the accounts, the workspaces, the sites and the encrypted keys of the connectors).
+**Dokploy adds a suffix to the name of a service.** The database service is
+`fruitback-cloud-postgres-u6qxzp`, not `fruitback-cloud-postgres`: the commands below set
+`PG_SERVICE` to it, and `snapshot-pg.sh` reads it from its crontab line.
 
-**After the move of the storage (switch 1, FRU-145), the accounts and the sessions are in PostgreSQL**:
-a database service `postgres` in the same Dokploy project, which publishes no port, and
-`FRUITBACK_DATABASE_URL` in the environment of the worker. `fb.db` stays on the volume, and so do
-`accounts.db` and `sessions.db`: switch 1 reads them and never writes them, and they are its way back
-until its point of no return. Until that day, the section « The database » below describes what is
-ready, and nothing of it runs.
+**The data is in PostgreSQL**: the accounts and the sessions since switch 1 (2026-10-12), the notes
+since switch 1 bis (2026-10-15, `/health` says `"store":"postgres"`). better-auth signs the console in
+since switch 2 (2026-10-12). The worker reaches the database by its internal host on the network
+`dokploy-network`, with `FRUITBACK_DATABASE_URL`. `/data` still holds the three SQLite files of
+before, `fb.db`, `sessions.db` and `accounts.db`, which nothing reads (see « What is backed up »).
+
+**The files of the host are in `/home/mheos/fruitback-cloud/`**, and `snapshot-pg.sh` runs from the
+crontab of the user `mheos`. This runbook said `/root/fruitback/` before: that folder is not the one
+in use. The dumps taken by hand before each switch are in dated folders there, for example
+`switch1-20261012/` and `switch1bis-20261016/`.
 
 ## What is backed up
 
@@ -87,8 +96,7 @@ the snapshot was made; the notes file in the volume is then left as it is. Then 
 
 ## The database (FRU-143)
 
-Nothing here runs yet. It is what the host does once the accounts and the sessions are in PostgreSQL,
-and the « What to do on the host » list says when.
+It runs since switch 1 (2026-10-12). « What to do on the host » says what was done, and what was not.
 
 ### What is backed up
 
@@ -124,7 +132,8 @@ rclone copy scaleway:backup-elastic-metal/20261009/fruitback-cloud-data.tar.gz /
   test -s /tmp/restore/data/snapshots/fruitback.pgdump
 
 # 2. Stop the worker, restore the dump in a new database, exchange the names, start the worker.
-PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-postgres | head -1) &&
+PG_SERVICE=fruitback-cloud-postgres-u6qxzp &&
+  PG=$(docker ps -q --filter label=com.docker.swarm.service.name=$PG_SERVICE | head -1) &&
   test -n "$PG" &&
   docker service scale fruitback-cloud-worker-a9zdeo=0 &&
   docker cp /tmp/restore/data/snapshots/fruitback.pgdump "$PG:/tmp/fruitback.pgdump" &&
@@ -183,30 +192,32 @@ it is needed.
 
 ### What to do on the host, and in which order
 
-For the operator. **No agent did any of this**: no database was created, no service, no crontab line.
-Steps 1 to 3 come before switch 1 (the runbook of FRU-145), step 4 after it.
+For the operator. Steps 1 to 3 were done on 2026-10-12, for switch 1 (FRU-183). **Step 4 was not
+done**: the dump was never restored on the host.
 
-1. **Create the database in Dokploy**, in the project `fruitback-cloud`: a PostgreSQL 17 service
-   named so that its Swarm service is `fruitback-cloud-postgres`, with no external port. The user and
-   the database are `fruitback`. If Dokploy names the service otherwise, set `PG_SERVICE` on the
-   crontab line of step 3.
-2. **Give it a random password of 32 characters or more, letters and digits, and keep it in the
-   Keychain** of the operator (`fruitback-cloud-postgres-password`), as the two other secrets. The
-   password is in no backup, but the volume of the database is in the archive of 03:00, and it holds
-   the verifier of the password: a short one can be guessed from a copy of the archive (`SECURITY.md`).
-3. **Copy `snapshot-pg.sh` next to `snapshot.sh` on the host, and add it to the crontab, before
-   `snapshot.sh`:**
+1. **The database in Dokploy**, in the project `fruitback-cloud`: a PostgreSQL 17 service with no
+   external port, user and database `fruitback`. Dokploy named its Swarm service
+   `fruitback-cloud-postgres-u6qxzp`, so the crontab line of step 3 sets `PG_SERVICE`.
+2. **A random password of letters and digits** (40 characters on the Cloud), kept in the Keychain of
+   the operator (`fruitback-cloud-postgres-password`), as the other secrets. The password is in no
+   backup, but the volume of the database is in the archive of 03:00, and it holds the verifier of
+   the password: a short one can be guessed from a copy of the archive (`SECURITY.md`).
+   **`postgres.create` of the API of Dokploy answers with the password in its body.** Do not print
+   that answer, in a terminal or in a log: read the password from the Keychain.
+3. **`snapshot-pg.sh` in `/home/mheos/fruitback-cloud/`, in the crontab of `mheos`**, at 02:40,
+   before `snapshot.sh`:
 
    ```cron
-   40 2 * * * sh /root/fruitback/snapshot-pg.sh >> /var/log/fruitback-snapshot.log 2>&1
+   40 2 * * * PG_SERVICE=fruitback-cloud-postgres-u6qxzp sh /home/mheos/fruitback-cloud/snapshot-pg.sh >> <its log> 2>&1
    ```
 
-   Run it once by hand. It must write `fruitback.pgdump … bytes`, and `/data/snapshots/` in the
-   volume of the worker must hold the file. Before switch 1 the database has no table yet: the dump
-   is small, and that is expected.
+   Where its log goes on the host is not recorded here. It was run by hand before and after switch 1,
+   and ended with `exit 0`. Run by hand, it must write `fruitback.pgdump … bytes`, and
+   `/data/snapshots/` in the volume of the worker must hold the file.
 
-4. **After switch 1**, the next morning: the log has the line of `snapshot-pg.sh` at 02:40, and the
-   archive of 03:00 holds `snapshots/fruitback.pgdump`. Restore it once on a copy, with step 2 above.
+4. **Not done yet:** the log has the line of `snapshot-pg.sh` at 02:40, and the archive of 03:00 holds
+   `snapshots/fruitback.pgdump`. Restore it once on a copy, with step 2 above, and write the date and
+   the counts here, by a pull request.
 
 `FRUITBACK_AUTH_SECRET` came with better-auth (FRU-144), which stays off on a worker that does not
 have it. When the Cloud sets it, it joins the secrets that are in no backup, and step 2 of this list.
@@ -253,9 +264,14 @@ window.
 In the commands, `$PG` is the container of the database and `$WORKER` the Swarm service of the worker:
 
 ```bash
-PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-postgres | head -1) && test -n "$PG"
+PG_SERVICE=fruitback-cloud-postgres-u6qxzp
+PG=$(docker ps -q --filter label=com.docker.swarm.service.name=$PG_SERVICE | head -1) && test -n "$PG"
 WORKER=fruitback-cloud-worker-a9zdeo
 ```
+
+On the Cloud, on 2026-10-12, `D_new` was not a digest of GHCR: it was the image that Dokploy built
+from `9e6c792`, kept on the host under the tag `fruitback-worker-switch1:9e6c792`. See « Going back
+to an image of before » below.
 
 1. **`D_new`, with the configuration of SQLite unchanged.** The code changes before the data. Check
    `/health` and a sign-in to the console, then check that the command is in the image:
@@ -707,6 +723,36 @@ an address that has no account, opens the console on « Set up a workspace », a
 
 A value that is neither `invited` nor `anyone` stops the worker at its start, with its sentence on
 `/health`.
+
+## Going back to an image of before, on this host
+
+**The rollback of Swarm does not bring the image of before back here.** The worker is updated with
+`start-first` and `FailureAction: rollback`, and its image is the tag `:latest`, built on the host.
+On 2026-10-12 at 22:35, a merge of `main` (#222, FRU-150) was deployed by « Auto Deploy », and its
+image refused to start on the configuration of then. Swarm rolled back to the image before, which
+was the same tag `:latest`, so it started the image that refused again. **The worker answered `502`
+from 22:36 to 22:37:27.** (FRU-183, comment of switch 1.)
+
+Where this runbook says « the image of before, by its digest », the Cloud has no digest. What was
+done on 2026-10-12:
+
+- « Auto Deploy » was turned off on the worker and the console, and both were built from the branch
+  `cloud/pre-fru150` (`9e6c792`) instead of `main`, until switch 2 was done. Then they came back to
+  `main`, and « Auto Deploy » was turned on again.
+- The image that ran before a change was kept on the host under a tag of its own, so that it does not
+  move with `:latest`: `fruitback-worker-switch1:9e6c792` before switch 1, and
+  `fruitback-worker-keep:switch2-9e6c792` before FRU-150.
+
+**Before a merge whose image cannot start on the configuration of the host** (a variable that it
+requires or refuses), change the configuration first, or turn « Auto Deploy » off: the merge deploys
+by itself.
+
+## The rate limit of the Cloud
+
+The worker of the Cloud has **`RATE_LIMIT_PER_MINUTE=300`** in its environment, since 2026-10-12. The
+default, `20` a minute for each address, blocked the console: the console, the widget and the
+extension of one person share one address, and « Sign out » answered `429`. `saveEnvironment`
+replaces the whole environment: keep this line when you build it again.
 
 ## The OAuth applications
 

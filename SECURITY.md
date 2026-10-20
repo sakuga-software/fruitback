@@ -2137,6 +2137,63 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   **the owners of each read it**, with the address of the account:
   test:`writes one action for each workspace of the account, that their owners read after it goes`.
 
+### Fruitback Cloud: what its host holds, and who reaches it (FRU-106)
+
+This is about the instance that Sakuga runs, `api.fruitback.com` and `app.fruitback.com`, and not
+about a self-hosted one. Its runbook is [apps/worker/cloud/README.md](apps/worker/cloud/README.md).
+Each fact below comes from that runbook or from the record of the deployment (FRU-183, FRU-106);
+what is not recorded is said so.
+
+**The host is `em-sakuga-01`** (Paris), a Dokploy on Docker Swarm, **shared with other projects of
+Sakuga**: the Cloud has no host of its own. A dedicated host is a decision to take again before the
+first client from outside (FRU-106, decision of 2026-10-20). So whatever reaches that host, that
+Docker or that Dokploy for another project reaches the Cloud too.
+
+**What the host holds:**
+
+- **The worker, and its environment, which holds every secret**: the address and password of the
+  database (`FRUITBACK_DATABASE_URL`), `FRUITBACK_AUTH_SECRET`, `FRUITBACK_IDENTITY_SECRET`,
+  `FRUITBACK_SECRETS_KEY`, the secrets of the OAuth applications (GitHub, Google, Linear), and the key
+  that sends the e-mail (Scaleway Transactional Email, an IAM application limited to that service on
+  the project of `mail.fruitback.com`). No secret is in the image, in a row of the database, in a
+  backup or in this repository.
+- **The database**, PostgreSQL 17, with everything that
+  [What the database keeps](#what-the-database-keeps-and-who-reads-it) lists: the notes, the accounts,
+  the sessions as digests, and the keys of the connectors encrypted with `FRUITBACK_SECRETS_KEY`. It
+  publishes no port. The worker reaches it on the network `dokploy-network`, without TLS: the two
+  are on one host. What else is on that network is not recorded here.
+- **The volume of the database**: the files of a database that runs, with the verifier of its
+  password. The password is 40 random letters and digits.
+- **The volume of the worker** (`/data`): the dump of each night (`snapshots/fruitback.pgdump`, all of
+  the database, in the clear), and the three SQLite files of before with their copies. Those hold the
+  accounts, sessions as digests and notes of before 2026-10-15/16; they go when the archive of 30 days
+  no longer holds them (about 2026-11-15).
+- **Dumps taken by hand** before each switch, in dated folders of `/home/mheos/fruitback-cloud/`.
+- **The console**: static files, and no secret. It serves the script of the widget itself: no
+  third-party CDN sees the address of the visitors of a site (FRU-106).
+
+**What leaves the host:** each night at 03:00, the backup of the host archives every Docker volume
+to the bucket `backup-elastic-metal` on Scaleway Object Storage, for 30 days. That archive therefore
+holds the dumps, the volume of the database and the files of before: all the data, and none of the
+secrets. **Not recorded here:** whether that archive is encrypted, whether the bucket is versioned or
+locked, and whether a second copy is kept elsewhere (FRU-183, Q5).
+
+**Where the secrets are apart from the host:** the Keychain of the operator's machine, one entry each.
+That Keychain is their only copy off the host; whether it is backed up is not recorded here.
+
+**Who reaches it:**
+
+- **Whoever has access to Dokploy**, by its interface or its API, reads the environment of the
+  worker, so every secret above. With them, a dump becomes a set of working keys.
+- **Whoever can run Docker on the host** (root, and the user `mheos`, whose crontab runs the dump)
+  reads the database, the volumes and the environment of each container.
+- **Whoever reads the bucket** reads all the data of the archive, in the clear, without the secrets;
+  and the verifier of the database password, from the volume of the database.
+- **Whoever holds the Keychain of the operator** holds the secrets, without the data.
+
+**Not in place yet** (FRU-106, left to the operator): an alert on the read probe (`/health` does not
+read the database), and a restore of a dump tried on the host.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user
