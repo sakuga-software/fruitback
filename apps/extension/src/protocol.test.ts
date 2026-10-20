@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CHANNEL, parseBridgeMessage, parseRelayRequest, parseRelayResponse } from './protocol.ts';
+import { CHANNEL, NAME_MAX, parseBridgeMessage, parseRelayRequest, parseRelayResponse } from './protocol.ts';
 
 describe('parseBridgeMessage', () => {
   it('accepts a mount the isolated world sent', () => {
@@ -30,6 +30,27 @@ describe('parseBridgeMessage', () => {
     });
 
     assert.deepEqual(Object.keys(parsed ?? {}).sort(), ['channel', 'clientId', 'endpoint', 'kind']);
+  });
+
+  it('carries the name of « Name on my notes » to the page, and nothing else for it (FRU-302)', () => {
+    const mount = (name: unknown) =>
+      parseBridgeMessage({
+        channel: CHANNEL,
+        kind: 'mount',
+        endpoint: 'https://feedback.acme.dev',
+        clientId: 'acme',
+        name,
+      });
+
+    // The contract of the seam: the page script gives it to the widget as `reporterName`.
+    assert.equal((mount('Camille Durand') as { name?: string }).name, 'Camille Durand');
+    assert.equal((mount('x'.repeat(NAME_MAX)) as { name?: string }).name?.length, NAME_MAX);
+    // Too long, empty, or not a string: the mount goes on, with no name.
+    for (const name of ['x'.repeat(NAME_MAX + 1), '', 42, { first: 'Camille' }, undefined]) {
+      const parsed = mount(name);
+      assert.equal(parsed?.kind, 'mount', JSON.stringify(name));
+      assert.equal('name' in (parsed ?? {}), false, JSON.stringify(name));
+    }
   });
 
   it('accepts a ready, which travels the other way', () => {

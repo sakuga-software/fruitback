@@ -580,6 +580,9 @@ async function renderWorkers(): Promise<void> {
     counted.set(site.endpoint, (counted.get(site.endpoint) ?? 0) + 1);
   }
   for (const endpoint of Object.keys(held)) if (!counted.has(endpoint)) counted.set(endpoint, 0);
+  // The code of a link is spent once its worker holds a session: a log out later does not offer it
+  // again (raised in review).
+  if (linked !== undefined && held[linked.endpoint] !== undefined) linked = undefined;
   if (linked !== undefined && !counted.has(linked.endpoint)) counted.set(linked.endpoint, 0);
   const cards: WorkerCard[] = [...counted.entries()]
     .sort(([a], [b]) => a.localeCompare(b))

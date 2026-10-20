@@ -87,6 +87,20 @@ export const PANEL_ON_CLICK_KEY = 'openNotesInSidebar';
  * a site that is on; the popup everywhere else, which is where a site is turned on. Chrome keeps
  * one behaviour for the whole browser, so the background sets it again when the tab changes.
  */
+/**
+ * Whether the click on the icon opens the panel (FRU-302): asked for, on a site that is on, and whose
+ * session is held. A site of the workspace whose session ended opens the popup, which is where the
+ * person signs in again: the panel would only say so, and the icon would never reach the popup
+ * (raised in review).
+ */
+export function iconOpensPanel(
+  wanted: boolean,
+  site: { enabled: boolean } | undefined,
+  sessionWanted: boolean,
+): boolean {
+  return wanted && site?.enabled === true && !sessionWanted;
+}
+
 export async function setPanelOnClick(apis: PanelApis, wanted: boolean, siteOn: boolean): Promise<void> {
   await apis.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: wanted && siteOn });
 }

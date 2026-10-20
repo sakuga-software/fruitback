@@ -401,6 +401,12 @@ test('« Workers and sessions » pairs with a code, says who, logs out, and take
   await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue(linked.code);
   await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toBeFocused();
 
+  // Paired with it, then logged out: the code of the link is spent, and the field is empty (review).
+  await card.getByRole('button', { name: /^(Pair|Appairer)$/ }).click();
+  await expect(card.locator('.worker-who')).toContainText('Camille Durand');
+  await card.getByRole('button', { name: /^(Log out|Se déconnecter)$/ }).click();
+  await expect(card.getByLabel(/^(Pairing code|Code d’appairage)$/)).toHaveValue('');
+
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     const { violations } = await new AxeBuilder({ page }).include('section#workers').include('section#prefs').analyze();

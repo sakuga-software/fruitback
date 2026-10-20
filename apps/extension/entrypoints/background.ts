@@ -27,7 +27,13 @@ import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browse
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
-import { PANEL_ON_CLICK_KEY, type PanelApis, keepPopupOnActionClick, setPanelOnClick } from '../src/side-panel.ts';
+import {
+  PANEL_ON_CLICK_KEY,
+  type PanelApis,
+  iconOpensPanel,
+  keepPopupOnActionClick,
+  setPanelOnClick,
+} from '../src/side-panel.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -327,8 +333,11 @@ export default defineBackground(() => {
     let siteOn = false;
     if (wanted && active?.url !== undefined) {
       try {
-        const origin = new URL(active.url).origin;
-        siteOn = (await readSite(origin))?.enabled === true;
+        const site = await readSite(new URL(active.url).origin);
+        const ended =
+          site !== undefined &&
+          wantsSession(site, cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD), await sessions.list());
+        siteOn = iconOpensPanel(wanted, site, ended);
       } catch {
         siteOn = false;
       }
@@ -346,8 +355,12 @@ export default defineBackground(() => {
   browser.windows.onFocusChanged.addListener(followPanelOnClick);
   // The local area only, by its own event: the listener of every area below stays the one that reads
   // the sessions (`session-previews.test.ts`).
+  // A session made or ended changes it too: a site whose session ended opens the popup (review).
   browser.storage.local.onChanged.addListener((changes) => {
-    if (changes[PANEL_ON_CLICK_KEY] !== undefined || changes.sites !== undefined) followPanelOnClick();
+    const keys = Object.keys(changes);
+    if (changes[PANEL_ON_CLICK_KEY] !== undefined || changes.sites !== undefined || touchesARefreshToken(keys)) {
+      followPanelOnClick();
+    }
   });
 
   browser.runtime.onInstalled.addListener((details) => {
