@@ -21,7 +21,8 @@ import { problemOf } from '../problems';
 import { Button, Choice, DataTable, Field, LinkButton, PageHead, Problem, StatusBar } from '../ui';
 import { useLocale } from '../use-locale';
 import { useWide } from '../wide';
-import { SuspendedSince, dayOf } from './admin-instance';
+import { dayOf } from '../ago';
+import { SuspendedSince } from './admin-instance';
 import {
   AdminPanel,
   Cut,
@@ -51,11 +52,12 @@ import { siteLabel } from '../site-address';
  * member of (FRU-261). The panel reads its workspace again, and leaves one more trace there.
  */
 
-/** The filters of the worker (`WORKSPACE_FILTERS`). The worker has no filter for the mockup's « Suspended ». */
+/** The filters of the worker (`WORKSPACE_FILTERS`), « Suspended » of the mockup included (FRU-328). */
 const SHOW = [
   { value: 'all', label: msg('All workspaces') },
   { value: 'attention', label: msg('Needs a look') },
   { value: 'empty', label: msg('No site yet') },
+  { value: 'suspended', label: msg('Suspended') },
 ] as const;
 
 const ROLES: Readonly<Record<string, string>> = {

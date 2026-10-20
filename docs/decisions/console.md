@@ -395,8 +395,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of a workspace shows `GET /console/admin/workspaces/<id>`, which the page reads once for each
   workspace while the screen is open: the panel moves at 1280 px, and a move or a second opening
   is no new trace. The panel of a person is its row, as the worker has no route for one person.
-  Both screens say under their lead that the owners see the read. **The filters are the worker's** (`attention`, `empty`;
-  `admins`, `alone`), with no count on an option: the worker counts the filter it answers only.
+  Both screens say under their lead that the owners see the read. **The filters are the worker's** (`attention`, `empty`,
+  `suspended` since FRU-328; `admins`, `alone`), with no count on an option: the worker counts the filter it answers only.
   « Manage in Users » searches the address of the first owner: the search of the people does not
   match a workspace. « Last seen » is a day, as on Members. **Not copied from the mockup**: every
   action (« New workspace », « Invite someone », « Send them again », « Suspend » of a workspace,
@@ -461,11 +461,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   what it does, the reason or « No reason was given. », and « Restore »; an active one has « Suspend »
   in the foot, above « Delete the workspace », as screen 18 draws it. **The row and the panel change
   in place** after a `200`, from its answer: each read leaves a trace with the owners. After the
-  answer, focus goes to the button that says the state now. **Not done**: the filter « Suspended »
-  (the worker has none), and a banner for the members of a suspended workspace, which `/console/me`
-  answers and no screen shows yet. `e2e/console-admin-lists.spec.ts` holds the row, the panel and
-  Instance, both confirmations, the request with and without a reason, « Keep it » and Escape, each
-  refusal, the busy button, French, 390 px and axe.
+  answer, focus goes to the button that says the state now. `e2e/console-admin-lists.spec.ts` holds
+  the row, the panel and Instance, both confirmations, the request with and without a reason, « Keep
+  it » and Escape, each refusal, the busy button, French, 390 px and axe.
+- **A member of a suspended workspace reads a banner at the top of its console** (FRU-328), above
+  every section, in the column of the section and not in the rail: « This workspace has been
+  suspended since {day}. », what still works (they read it, nothing changes, its sites take no notes),
+  and to contact the administrator of the instance. **No reason**: it is a note of the administrator,
+  which only their panel shows, and the worker answers it to nobody else. **A write that
+  the worker refuses with `409 workspace-suspended`** says « This workspace is suspended, so nothing
+  in it can change. Contact the administrator of this instance. » where the screen says its refusals,
+  in place of « Try again », and keeps what was typed: `problemOf` knows the code for every screen,
+  and `writeProblemOf` for the screens that name their own sentences. The same refusal shows the
+  banner (`onWorkspaceSuspended` of `api.ts`), with the day of the `409`, when the suspension came
+  after `/console/me` was read. The filter « Suspended » of Workspaces is the one of the mockup, and
+  asks the worker `show=suspended`: a workspace restored under that filter stays in the list until it
+  is read again, as each read leaves a trace. `e2e/console-suspended.spec.ts` holds the banner on each
+  section, its day or no day, no reason, its contrast, the refusal of a site and of an invitation, the
+  control of another `409`, French, 390 px and axe; `e2e/console-admin-lists.spec.ts` holds the filter.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

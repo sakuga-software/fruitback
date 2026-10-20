@@ -324,6 +324,16 @@ describe('what the administrator reads (FRU-261)', () => {
     assert.deepEqual(await search('q=%25'), []);
     assert.deepEqual(await search('show=attention'), [beta]);
     assert.deepEqual(await search('show=empty'), [alpha]);
+    // FRU-328: `suspended` shows only the workspaces that have a row of suspension.
+    assert.deepEqual(await search('show=suspended'), []);
+    const suspended = await callOn(on, 'POST', `${ADMIN_PATH}/workspaces/${alpha}/suspension`, {
+      token: ana.token,
+      body: { suspended: true },
+    });
+    assert.equal(suspended.status, 200, await suspended.text());
+    assert.deepEqual(await search('show=suspended'), [alpha]);
+    assert.deepEqual(await search('show=suspended&q=beta'), []);
+    assert.deepEqual(await search('show=all'), [beta, alpha]);
     assert.equal((await get(on, `${ADMIN_PATH}/workspaces?show=everything`, ana.token)).status, 400);
   });
 

@@ -16,6 +16,7 @@ import {
   setPlaces,
 } from '../api';
 import { msg, t } from '../i18n';
+import { writeProblemOf } from '../problems';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Chip, Choice, LinkButton, Problem, SidePanel, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
@@ -104,7 +105,7 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
       }
       // What the screen shows must be what the worker keeps.
       setSettings(kept.current);
-      setProblem(msg('This setting did not change. Try again.'));
+      setProblem(writeProblemOf(set, msg('This setting did not change. Try again.')));
     });
   }
 
@@ -225,7 +226,7 @@ export function LinearPanel({ id, base, connector, sites, manages, onChanged, on
     setWriting(true);
     setProblem(undefined);
     const set = await setPlaces(base, site, places);
-    if (!set.ok) setProblem(msg('The destinations of this site did not change. Try again.'));
+    if (!set.ok) setProblem(writeProblemOf(set, msg('The destinations of this site did not change. Try again.')));
     await onChanged();
     setWriting(false);
   }
@@ -252,7 +253,7 @@ export function LinearPanel({ id, base, connector, sites, manages, onChanged, on
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
     if (removed.ok) return onRemoved();
-    setProblem(msg('This source is still connected. Try again.'));
+    setProblem(writeProblemOf(removed, msg('This source is still connected. Try again.')));
   }
 
   const listed = known(sites) ?? [];

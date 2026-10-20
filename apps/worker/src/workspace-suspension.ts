@@ -8,7 +8,8 @@ import type { AccountStore, WorkspaceSuspension } from './accounts.ts';
  *   extension find each of them as a site that does not exist: the same status, and the same body.
  *   The notes stay in the database.
  * - **Its members read.** They sign in, and the console reads everything as before. `/console/me`
- *   says `suspended`, `suspendedAt` and `reason` for each workspace, for the banner.
+ *   says `suspended` and `suspendedAt` for each workspace, for the banner. **Never the reason**
+ *   (FRU-328): it is a note of the administrator of the instance, and only their routes answer it.
  * - **Every write of the workspace is refused** by `refusedWhileSuspended`, with `409` and
  *   `workspace-suspended`. Each dispatcher that writes a workspace asks it before its routes: the
  *   console API, the routes of the organization plugin, and the way back from Linear.
@@ -33,6 +34,21 @@ export function suspensionView(suspension: WorkspaceSuspension | undefined): {
 }
 
 export type SuspensionFields = ReturnType<typeof suspensionView>;
+
+/**
+ * How a workspace says its suspension to one of its members (FRU-328): the state and the day.
+ *
+ * WARNING: no reason. The reason is a note of the administrator of the instance: `suspensionView`
+ * answers it on the routes of the administrator only. Every answer that a member reads takes this one.
+ */
+export function memberSuspensionView(suspension: WorkspaceSuspension | undefined): {
+  suspended: boolean;
+  suspendedAt?: string;
+} {
+  const { reason: _, ...view } = suspensionView(suspension);
+
+  return view;
+}
 
 /** The answer to a write of a suspended workspace. */
 export const SUSPENDED_STATUS = 409;
@@ -68,7 +84,7 @@ function allowed(write: WorkspaceWrite): boolean {
 /**
  * The refusal of a write of `workspace` while it is suspended, or `undefined` when the write goes on.
  * `asker` is `invited` for a person who is not a member yet: they read that the workspace is
- * suspended, but not since when nor why, which only its members read.
+ * suspended, but not since when, which only its members read. Nobody reads why here (FRU-328).
  *
  * WARNING: call it after the role of the caller is read. A person who is not a member must get the
  * `404` of a workspace that does not exist, and not learn that this one is suspended.
@@ -83,7 +99,7 @@ export async function refusedWhileSuspended(
   if (allowed(write)) return undefined;
   const suspension = await accounts.suspension(workspace);
   if (suspension === undefined) return undefined;
-  const { suspended: _, ...since } = suspensionView(suspension);
+  const { suspended: _, ...since } = memberSuspensionView(suspension);
   const told = asker === 'member' ? since : {};
 
   return new Response(JSON.stringify({ error: SUSPENDED_ERROR, ...told }), {

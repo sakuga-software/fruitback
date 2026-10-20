@@ -10,7 +10,7 @@ import {
   instanceFacts,
   instanceWorkspaces,
 } from '../api';
-import { ago } from '../ago';
+import { ago, dayOf } from '../ago';
 import { locale, msg, t } from '../i18n';
 import { useCopy } from '../install-options';
 import { type Listed, listedOf } from '../listed';
@@ -44,7 +44,6 @@ const SIGN_UP = [
 ] as const;
 
 /** « 3 Oct », as the mockup writes a day: the day first, in the language of the console. */
-const DAYS = { en: 'en-GB', fr: 'fr' } as const;
 
 /** How long the worker answers since it started. */
 function uptime(startedAt: string, now: number): string {
@@ -62,18 +61,6 @@ function setBy(variables: readonly string[]): string {
   const list = new Intl.ListFormat(locale(), { type: 'conjunction' }).format(variables);
 
   return t('Set by {variables} in the environment.', { variables: list });
-}
-
-/** The day a workspace was made, with its year when it is not this year. */
-export function dayOf(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-
-  return date.toLocaleDateString(DAYS[locale()], {
-    day: 'numeric',
-    month: 'short',
-    ...(date.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' as const }),
-  });
 }
 
 export default function AdminInstance() {

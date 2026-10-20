@@ -325,7 +325,7 @@ export const ADMIN_PAGE = 100;
 export const ADMIN_QUERY_LENGTH = 200;
 
 /** What each list can show. `all` is the default. */
-export const WORKSPACE_FILTERS = ['all', 'attention', 'empty'] as const;
+export const WORKSPACE_FILTERS = ['all', 'attention', 'empty', 'suspended'] as const;
 export const USER_FILTERS = ['all', 'admins', 'alone'] as const;
 
 export type AdminQuery<Show extends string> = { q?: string; show: Show };
@@ -431,7 +431,8 @@ export function isWorkspaceAction(action: string): action is WorkspaceActionKind
 /**
  * One action of an administrator, as the owners of the workspace read it. The `action` tells the shape:
  * - an action on a member (FRU-281) always has `target`, the member;
- * - an action on the workspace (FRU-282) has no `target`, and has the `reason` of the suspension if one was given.
+ * - an action on the workspace (FRU-282) has no `target`, and no `reason`: the reason of a suspension
+ *   is a note of the administrator of the instance, which `actions` answers to them only (FRU-328).
  */
 export type TracedAction =
   | {
@@ -446,7 +447,6 @@ export type TracedAction =
       action: WorkspaceActionKind;
       at: string;
       admin: { email: string; name?: string };
-      reason?: string;
     };
 
 /** What the administrator reads and writes in the database. `instance-admin-postgres.ts` is the one store. */

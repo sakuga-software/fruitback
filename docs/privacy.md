@@ -287,12 +287,14 @@ what it writes each time.
   beside the reads. A row keeps both addresses after the accounts go, and stays after its workspace
   goes. Nothing deletes a row: it lives as long as the database.
 - **A suspended workspace** (FRU-282) has one row in `workspace_suspensions`: its moment, and the
-  reason that the administrator wrote, if any, of 200 characters at most. **Every member of the
-  workspace reads the reason**, a guest included, in `/console/me`: write nothing in it that a member
-  must not read. The restoration deletes the row. Each suspension and each restoration also leaves a
-  row in `admin_actions` (`workspace-suspended`, `workspace-restored`), with the workspace and the
-  reason in its `detail`, and **the owners of the workspace read it** beside the reads: the reason of
-  a suspension that ended stays there, as long as the database. A suspension deletes no note: the
+  reason that the administrator wrote, if any, of 200 characters at most. **Only the administrators
+  of the instance read the reason** (FRU-328): a member, a guest or an owner of the workspace reads
+  that it is suspended and since when, in `/console/me` and in the refusal of a write, and never why.
+  The restoration deletes the row. Each suspension and each restoration also leaves a row in
+  `admin_actions` (`workspace-suspended`, `workspace-restored`), with the workspace and the reason in
+  its `detail`: **the owners of the workspace read who acted and when** beside the reads, without the
+  reason, and the administrators read the reason too. The reason of a suspension that ended stays
+  there, as long as the database. A suspension deletes no note: the
   notes that Fruitback keeps, their replies, the pictures and the deliveries that wait stay, and a
   restoration serves them again. While it lasts, the widget takes no note on its sites, and no
   delivery goes to its receiving addresses. Its owner can delete the workspace, which deletes all of

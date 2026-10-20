@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { type Connector, call } from '../api';
 import { msg, t } from '../i18n';
-import { copyText } from '../problems';
+import { copyText, writeProblemOf } from '../problems';
 import { Button, Field, LinkButton, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 import { KEY_PROBLEMS } from './connector-parts';
@@ -38,7 +38,9 @@ export function AddLinear({ base, onDone }: { base: string; onDone: (connector: 
     const added = await call<Connector>('POST', `${base}/connectors`, { kind: 'linear', apiKey });
     setBusy(false);
     if (added.ok) return onDone(added.data);
-    setProblem(KEY_PROBLEMS[added.error] ?? msg('The key could not be kept just now. Try again.'));
+    setProblem(
+      KEY_PROBLEMS[added.error] ?? writeProblemOf(added, msg('The key could not be kept just now. Try again.')),
+    );
   }
 
   return (
@@ -95,7 +97,10 @@ export function AddRest({
     });
     setBusy(false);
     if (!added.ok) {
-      return setProblem(ADDRESS_PROBLEMS[added.error] ?? msg('The address could not be kept just now. Try again.'));
+      return setProblem(
+        ADDRESS_PROBLEMS[added.error] ??
+          writeProblemOf(added, msg('The address could not be kept just now. Try again.')),
+      );
     }
     // The secret stays here: the screen is handed the connector without it, and can keep none.
     const { secret: fresh, ...connector } = added.data;

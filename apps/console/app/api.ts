@@ -9,13 +9,18 @@
  */
 
 import { locale } from './i18n.ts';
+import { WORKSPACE_SUSPENDED_ERROR } from './problems.ts';
 import { API, UNREACHABLE, reach } from './transport.ts';
 
 export { API, UNREACHABLE, onReachability } from './transport.ts';
 
 export type Account = { id: string; email: string; name?: string; locale?: string };
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
-export type Workspace = { id: string; name: string; role: Role };
+/**
+ * A workspace of the person, as `/console/me` lists it. A suspended one says since when (FRU-282),
+ * and never why (FRU-328): the reason is a note of the administrator, which only their routes answer.
+ */
+export type Workspace = Omit<WorkspaceSuspension, 'reason'> & { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
@@ -137,6 +142,20 @@ function send(method: string, to: string, body?: unknown): Promise<Response | un
   return reach(to, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 
+type SuspendedListener = (suspendedAt: string | undefined) => void;
+const suspendedListeners = new Set<SuspendedListener>();
+
+/**
+ * Tells the listener when a write was refused because the workspace is suspended (FRU-328), with the
+ * day the worker says to a member. The frame of the workspace shows its banner then, also when the
+ * suspension came after `/console/me` was read. Returns how to stop.
+ */
+export function onWorkspaceSuspended(listener: SuspendedListener): () => void {
+  suspendedListeners.add(listener);
+
+  return () => void suspendedListeners.delete(listener);
+}
+
 type SignedOutListener = () => void;
 const signedOutListeners = new Set<SignedOutListener>();
 
@@ -159,6 +178,10 @@ async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
   const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
 
   if (response.ok) return { ok: true, data: body };
+  if (response.status === 409 && named === WORKSPACE_SUSPENDED_ERROR) {
+    const since = (body as { suspendedAt?: unknown }).suspendedAt;
+    for (const listener of suspendedListeners) listener(typeof since === 'string' ? since : undefined);
+  }
 
   return {
     ok: false,
