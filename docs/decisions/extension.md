@@ -414,7 +414,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **`openPanel` is called in the click, before any `await`.** Both browsers open a panel only in a
   gesture of the person; an `await` first drops it. On Chrome it opens the global panel of the
   window of the tab (`sidePanel.open({ tabId })`); on Firefox, `sidebarAction.open()`. A browser
-  with neither keeps the list of the widget in the page (`show-notes`), as before.
+  with neither, or one that refuses to open it, shows the list of the widget in the page
+  (`show-notes`), as before (`openPanelOrPage`).
 - **The panel follows the active tab of its window** (`tabs.onActivated`, `tabs.onUpdated`,
   `windows.onFocusChanged`, and a change of the rules). It reads the address of the tab itself:
   the browser gives it only for a site the extension has access to, so any other tab reads « not

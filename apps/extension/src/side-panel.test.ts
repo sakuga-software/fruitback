@@ -1,8 +1,15 @@
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
-import { type PanelApis, keepPopupOnActionClick, openPanel, panelPage, webHost } from './side-panel.ts';
+import {
+  type PanelApis,
+  keepPopupOnActionClick,
+  openPanel,
+  openPanelOrPage,
+  panelPage,
+  webHost,
+} from './side-panel.ts';
 
 /**
  * The side panel (FRU-296): the gesture that opens it in each browser, the behaviour of the icon,
@@ -52,6 +59,34 @@ describe('opening the panel (FRU-296)', () => {
     };
 
     await assert.rejects(openPanel(apis, { tabId: 1 }) as Promise<void>, /user gesture/);
+  });
+
+  it('shows the list of the page when the browser has no panel, or refuses to open it', async () => {
+    const quiet = mock.method(console, 'error', () => {});
+    const page = (answer: boolean) => {
+      const asked: string[] = [];
+
+      return { asked, inPage: async () => (asked.push('page'), answer) };
+    };
+    const refusing: PanelApis = { sidePanel: { open: () => Promise.reject(new Error('no gesture')) } };
+    const throwing: PanelApis = {
+      sidebarAction: {
+        open: () => {
+          throw new Error('not in a user action');
+        },
+      },
+    };
+
+    const opened = page(true);
+    assert.equal(await openPanelOrPage({ sidePanel: { open: async () => {} } }, { tabId: 1 }, opened.inPage), 'panel');
+    assert.deepEqual(opened.asked, [], 'the page was asked although the panel opened');
+    for (const apis of [{}, refusing, throwing]) {
+      const fallback = page(true);
+      assert.equal(await openPanelOrPage(apis, { tabId: 1 }, fallback.inPage), 'page');
+      assert.deepEqual(fallback.asked, ['page']);
+    }
+    assert.equal(await openPanelOrPage(refusing, { tabId: 1 }, page(false).inPage), 'nothing');
+    quiet.mock.restore();
   });
 
   it('keeps the popup on the click of the icon, and asks nothing of Firefox', async () => {

@@ -46,6 +46,36 @@ export function openPanel(apis: PanelApis, where: { tabId?: number; windowId?: n
 }
 
 /**
+ * The panel, or the list of the page when the browser has no panel or refuses to open it (a Firefox
+ * that does not take the gesture, a Chrome that throws): what was asked is shown either way.
+ * `openPanel` is called first, in the click. Answers what was shown, or `nothing` when the page did
+ * not answer either.
+ */
+export async function openPanelOrPage(
+  apis: PanelApis,
+  where: { tabId?: number; windowId?: number },
+  inPage: () => Promise<boolean>,
+): Promise<'panel' | 'page' | 'nothing'> {
+  let opened: Promise<void> | undefined;
+  try {
+    opened = openPanel(apis, where);
+  } catch (error) {
+    opened = Promise.reject(error);
+  }
+  if (opened !== undefined) {
+    try {
+      await opened;
+
+      return 'panel';
+    } catch (error) {
+      console.error('[fruitback] the side panel did not open', error);
+    }
+  }
+
+  return (await inPage()) ? 'page' : 'nothing';
+}
+
+/**
  * The click on the toolbar icon keeps the popup. The panel opens from the popup, and later from the
  * preference « Open notes in the sidebar » (FRU-302). Chrome's default is the same; it is written
  * here so that the choice is in the code, not in a default that can change.
