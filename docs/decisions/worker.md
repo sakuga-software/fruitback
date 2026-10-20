@@ -3597,7 +3597,12 @@ tables, its journal and its people`. A person of one is not a person of the othe
   A warning and not a refusal (decided on 2026-10-13, on delegation of Mathieu): an operator may
   share a database on purpose.
 - **It does not work through a pooler that shares sessions.** The search path and the advisory lock
-  are the state of a session. PgBouncer in transaction mode loses both. Not tried here.
+  are the state of a session. Measured with PgBouncer 1.26.1 (FRU-267, `apps/worker/pgbouncer/trial.sh`):
+  session mode keeps both, and two workers start together; transaction mode gives the search path to
+  the next client, loses the lock of the migrations (the unlock runs on another connection and the
+  lock stays held), and two workers that start together on an empty schema migrate at once and fail.
+  The guard of the search path does not see it: every connection of one worker sets the same path.
+  `docs/self-hosting.md`, « Behind a connection pooler », has the table.
 - **It does not move a database from `public`**, and does not copy from one schema to another.
 - **PGlite holds one schema per case as before.** The tests that need two roles, two schemas of one
   database or a setting of the database run on a real server (`test:postgres`, 17 in CI).
