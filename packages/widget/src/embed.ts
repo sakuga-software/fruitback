@@ -236,6 +236,12 @@ export type Fruitback = {
    */
   markNote(id: string | undefined): boolean;
   /**
+   * Shows or hides the pins of the page (FRU-307): « Show pins on the page » of the side panel, the
+   * same switch as the list of the page (`Overlay.showPins`, FRU-308). The pin of an open thread stays.
+   * The notes are still read, and every list still has them.
+   */
+  showPins(shown: boolean): void;
+  /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
    */
@@ -858,6 +864,7 @@ export function init(options: FruitbackOptions): Fruitback {
     notesState: () => readState,
     focusNote: (id) => overlay.select(id),
     markNote: (id) => overlay.mark(id),
+    showPins: (shown) => overlay.showPins(shown),
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.seed.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

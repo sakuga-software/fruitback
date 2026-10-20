@@ -341,4 +341,33 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The client id is required.': 'L’identifiant du client est requis.',
   'A team-mode worker must be on https (localhost excepted).':
     'Un worker en mode équipe doit être en https (sauf localhost).',
+  // FRU-307: « Search and options ».
+  'Search and options': 'Recherche et options',
+  Scope: 'Portée',
+  'This page': 'Cette page',
+  'This page · {count}': 'Cette page · {count}',
+  'Whole site': 'Tout le site',
+  'Whole site · {count}': 'Tout le site · {count}',
+  'Search notes': 'Chercher dans les notes',
+  'Searches the first words of each note': 'Cherche dans les premiers mots de chaque note',
+  Status: 'Statut',
+  All: 'Toutes',
+  'Show pins on the page': 'Afficher les épingles sur la page',
+  '1 detached note': '1 note détachée',
+  '{count} detached notes': '{count} notes détachées',
+  '{stage} · the element it pointed at is gone': '{stage} · l’élément qu’elle visait n’existe plus',
+  'The notes of the whole site cannot be read from this browser.':
+    'Les notes de tout le site ne peuvent pas être lues depuis ce navigateur.',
+  'Reading the notes of the whole site…': 'Lecture des notes de tout le site…',
+  'No note matches.': 'Aucune note ne correspond.',
+  'Notes of the whole site': 'Notes de tout le site',
+  'Showing {shown} of {total}': '{shown} sur {total}',
+  'Reading…': 'Lecture…',
+  'The next notes could not be read.': 'Les notes suivantes n’ont pas pu être lues.',
+  'Show more': 'Voir plus',
+  'The notes of the whole site could not be read. They are not lost.':
+    'Les notes de tout le site n’ont pas pu être lues. Elles ne sont pas perdues.',
+  'Shows the note on this page': 'Montre la note sur cette page',
+  'Opens {path} in a new tab': 'Ouvre {path} dans un nouvel onglet',
+  'Open {reference} →': 'Ouvrir {reference} →',
 };

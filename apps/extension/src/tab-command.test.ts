@@ -139,6 +139,12 @@ describe('the commands of the side panel (FRU-299)', () => {
     );
   });
 
+  it('take « Show pins on the page » from the side panel, off and on (FRU-307)', () => {
+    assert.deepEqual(acceptedRequest(tabCommand('hide-pins'), PANEL, ID, ORIGIN), { command: 'hide-pins' });
+    assert.deepEqual(acceptedRequest(tabCommand('show-pins'), PANEL, ID, ORIGIN), { command: 'show-pins' });
+    assert.equal(acceptedRequest({ type: 'fruitback-tab-command', command: 'pins' }, PANEL, ID, ORIGIN), undefined);
+  });
+
   it('take a verdict from the side panel, and only one of the two the worker knows (FRU-300)', () => {
     assert.deepEqual(acceptedRequest(tabCommand('check', { note: 'seed-1', verdict: 'wrong' }), PANEL, ID, ORIGIN), {
       command: 'check',

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { type Page, expect } from '@playwright/test';
 import { type LoadedExtension, PLAYGROUND_ORIGIN, mintPairing, openBareSite, openPopup, test } from './extension.ts';
 import { pinFor } from './pin.ts';
@@ -61,7 +63,12 @@ async function inPanel<T>(page: Page, expression: string): Promise<T> {
     });
     await cdp.send('Target.sendMessageToTarget', {
       sessionId,
-      message: JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }),
+      message: JSON.stringify({
+        id: 1,
+        method: 'Runtime.evaluate',
+        // A promise is awaited: axe answers one (FRU-307).
+        params: { expression, returnByValue: true, awaitPromise: true },
+      }),
     });
     const value = await answer;
     await cdp.send('Target.detachFromTarget', { sessionId });
@@ -491,4 +498,160 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
   expect(await inPanel<string>(page, `document.querySelector('.panel-failed p')?.textContent ?? ''`)).toMatch(
     /did not start on this page|n’a pas démarré sur cette page/,
   );
+});
+
+/** The source of axe, run in the panel: Playwright hands the panel over as no `Page` for `AxeBuilder`. */
+function axeSource(): string {
+  const playwrightAxe = createRequire(import.meta.url).resolve('@axe-core/playwright');
+
+  return readFileSync(createRequire(playwrightAxe).resolve('axe-core/axe.min.js'), 'utf8');
+}
+
+/** The rows the panel lists now: the words of each, and the path of a row of the whole site. */
+function searchRows(page: Page) {
+  return inPanel<{ note: string; meta: string; hollow: boolean }[]>(
+    page,
+    `[...document.querySelectorAll('.panel-notes li[data-note]')].map((row) => ({
+      note: row.querySelector('.panel-row-note')?.textContent ?? '',
+      meta: row.querySelector('.panel-row-meta')?.textContent ?? '',
+      hollow: row.querySelector('.kit-drop')?.getAttribute('data-hollow') === 'true',
+    }))`,
+  );
+}
+
+/** Types in the search of the panel, as a person does: the value, then an `input` event. */
+function search(page: Page, words: string): Promise<unknown> {
+  return inPanel(
+    page,
+    `(() => {
+      const field = document.querySelector('.search-input');
+      field.value = ${JSON.stringify(words)};
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`,
+  );
+}
+
+/** A click on the first element of the panel that `selector` finds, with these words if given. */
+function clickPanel(page: Page, selector: string, text?: RegExp): Promise<boolean> {
+  return inPanel<boolean>(
+    page,
+    `(() => {
+      const pattern = ${text === undefined ? 'null' : `new RegExp(${JSON.stringify(text.source)})`};
+      const found = [...document.querySelectorAll(${JSON.stringify(selector)})].find((each) => pattern === null || pattern.test(each.textContent));
+      found?.click();
+      return found !== undefined;
+    })()`,
+  );
+}
+
+test('« Search and options »: the search, « Whole site » over three pages, the chips, a note of another page, the pins (FRU-307)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  // A word no other spec writes: the whole site holds the notes of every spec of the suite.
+  const tag = `zq${Date.now().toString(36)}`;
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-search-a');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(page, '[data-testid="card-espresso"] .add', `Search ${tag} espresso`);
+  await plantOn(page, '[data-testid="card-latte"] .add', 'A plain note of the first page');
+  // Two more pages of the same site, one note each.
+  for (const [name, card] of [
+    ['side-panel-search-b', 'latte'],
+    ['side-panel-search-c', 'mocha'],
+  ] as const) {
+    const other = await extension.context.newPage();
+    await openBareSite(other, name);
+    await expect(other.locator('[data-fruitback-host-launch]')).toBeVisible();
+    await plantOn(other, `[data-testid="card-${card}"] .add`, `Search ${tag} ${card}`);
+    await other.close();
+  }
+  await page.bringToFront();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
+
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ tabs: [], rows: [] }))).rows.length).toBe(2);
+
+  // The magnifier opens the options; the search filters the notes of the page.
+  expect(await clickPanel(page, 'button.panel-search')).toBe(true);
+  await expect
+    .poll(() =>
+      inPanel<string | null>(page, `document.querySelector('button.panel-search')?.getAttribute('aria-expanded')`),
+    )
+    .toBe('true');
+  await search(page, tag);
+  await expect.poll(async () => (await searchRows(page)).map((row) => row.note)).toEqual([`Search ${tag} espresso`]);
+
+  // « Whole site »: the notes of the three pages, from the worker, the other pages hollow.
+  expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);
+  await expect.poll(async () => (await searchRows(page)).length, { timeout: 15_000 }).toBe(3);
+  const site = await searchRows(page);
+  expect(site.map((row) => row.note).sort()).toEqual(
+    [`Search ${tag} espresso`, `Search ${tag} latte`, `Search ${tag} mocha`].sort(),
+  );
+  expect(
+    site
+      .filter((row) => row.hollow)
+      .map((row) => row.note)
+      .sort(),
+  ).toEqual([`Search ${tag} latte`, `Search ${tag} mocha`].sort());
+  expect(
+    await inPanel<string | null>(page, `document.querySelector('.search-scope [data-tab="site"]')?.textContent`),
+  ).toMatch(/ · 3$/);
+
+  // A chip filters, and its count follows the search.
+  const chips = () =>
+    inPanel<string[]>(
+      page,
+      `[...document.querySelectorAll('.search-chip')].map((chip) => chip.dataset.stage + ' ' + chip.querySelector('.search-chip-count').textContent)`,
+    );
+  expect(await chips()).toEqual(['all 3', 'seeded 3', 'green 0', 'ripening 0', 'ripe 0']);
+  expect(await clickPanel(page, '.search-chip[data-stage="ripening"]')).toBe(true);
+  await expect.poll(async () => (await searchRows(page)).length).toBe(0);
+  expect(await clickPanel(page, '.search-chip[data-stage="seeded"]')).toBe(true);
+  await expect.poll(async () => (await searchRows(page)).length).toBe(3);
+  await search(page, `${tag} mocha`);
+  await expect.poll(chips, { timeout: 15_000 }).toEqual(['all 1', 'seeded 1', 'green 0', 'ripening 0', 'ripe 0']);
+
+  // axe, in the panel, with the options open.
+  const violations = await inPanel<{ id: string; nodes: number }[]>(
+    page,
+    `(async () => {
+      ${axeSource()}
+      const result = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } });
+      return result.violations.map((violation) => ({ id: violation.id, nodes: violation.nodes.length }));
+    })()`,
+  );
+  expect(violations).toEqual([]);
+
+  // « Show pins on the page »: off hides the pins of the tab, on shows them again.
+  expect(await clickPanel(page, '.search-pins [role="switch"]')).toBe(true);
+  await expect(page.locator('[data-fruitback-pin]').first()).toBeHidden();
+  expect(await clickPanel(page, '.search-pins [role="switch"]')).toBe(true);
+  await expect(page.locator('[data-fruitback-pin]').first()).toBeVisible();
+
+  // A note of another page: its page opens in a new tab, and the widget there opens its thread.
+  const opened = extension.context.waitForEvent('page');
+  expect(await clickPanel(page, '.site-row .panel-row-head', /mocha/)).toBe(true);
+  const tab = await opened;
+  await expect(tab).toHaveURL(/side-panel-search-c/);
+  await expect(tab.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText(`Search ${tag} mocha`, {
+    timeout: 20_000,
+  });
+  // The panel follows the new tab, with the row of the note open.
+  await expect
+    .poll(
+      async () =>
+        (await panelRows(tab).catch(() => ({ rows: [] }))).rows.filter((row) => row.open).map((row) => row.note),
+      {
+        timeout: 15_000,
+      },
+    )
+    .toEqual([`Search ${tag} mocha`]);
 });

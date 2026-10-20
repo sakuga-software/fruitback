@@ -194,6 +194,11 @@ export default defineContentScript({
           done = widget.focusNote(message.note);
         }
         if (widget !== undefined && message.command === 'mark-note') done = widget.markNote(message.note);
+        // FRU-307: « Show pins on the page » of the side panel.
+        if (widget !== undefined && (message.command === 'hide-pins' || message.command === 'show-pins')) {
+          widget.showPins(message.command === 'show-pins');
+          done = true;
+        }
         const answer = (outcome?: string): void =>
           window.postMessage(
             {

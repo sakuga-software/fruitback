@@ -35,6 +35,7 @@ const VIEWS = [
   './site-page.ts',
   './share-rules.ts',
   './side-panel.ts',
+  './search-options.ts',
   './welcome.ts',
   './workers-page.ts',
 ] as const;

@@ -466,7 +466,9 @@ run, and neither the refresh nor the upgrade writes that key. A refresh that the
 only the run it spent, and mints no epoch that would end the pairing.
 
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
-background service worker, which refreshes, and the popup, which pairs and logs out.
+background service worker, which refreshes, and the popup, which pairs and logs out. The side panel
+is one more page of the extension, and so one more trusted context: it reads the access token only to
+ask `GET /session/notes` for « Whole site » (FRU-307), and sends nothing of it to the tab.
 `chrome.storage.session` keeps its default access level, which excludes content scripts, and nothing
 about a session travels on the `window.postMessage` bridge. A browser profile is now part of this
 boundary: somebody who can read a reviewer's profile can read their refresh token, and revoking it is

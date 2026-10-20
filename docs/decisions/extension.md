@@ -432,7 +432,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **The panel follows the active tab of its window** (`tabs.onActivated`, `tabs.onUpdated`,
   `windows.onFocusChanged`, and a change of the rules). It reads the address of the tab itself:
   the browser gives it only for a site the extension has access to, so any other tab reads « not
-  on ». It reads no worker and keeps nothing.
+  on ». It keeps nothing. It reads the worker for one thing only, the scope « Whole site » of
+  « Search and options » (FRU-307, see below).
 - **The panel lists the notes of the page (FRU-299)**: see the next section.
 
 ### What was measured, and what was not
@@ -454,7 +455,8 @@ did not change: the fields of 760 px and the file input of the browser are as th
 
 ### The rules, in short
 
-- **The panel asks the widget of the tab; it reads no worker.** `notes` answers `pageNotes()` of
+- **The panel asks the widget of the tab for the notes of the page; it reads no worker for them.**
+  Only « Whole site » of « Search and options » reads one (FRU-307, below). `notes` answers `pageNotes()` of
   the widget: the notes its pins show, with their numbers, from its last read, and none of a stage
   the reporter hid. One read, the same numbers as the pins, no second model and no cache.
 - **The widget says when to ask again.** `watchNotes` of the widget tells of each read, hidden
@@ -489,7 +491,39 @@ did not change: the fields of 760 px and the file input of the browser are as th
   background holds it.
 - **No shell head in the panel.** The mock-up (`ExtSidebar`) opens on « Notes on this page »; the
   head of FRU-296 is gone.
-- **Not yet**: « Search and options » (FRU-307) is not drawn.
+
+## « Search and options », in the side panel (FRU-307)
+
+### The rules, in short
+
+- **Behind the magnifier of the head** (`ExtSidebar`), the controls of the board « Sidebar mode »:
+  the scope « This page · {n} » / « Whole site · {n} », « Search notes », the chips All, New, To do,
+  In progress and Done with their counts (`aria-pressed`), and « Show pins on the page » at the foot.
+  `src/search-options.ts` draws them, with no `browser`.
+- **While it is open, one list stands in for « Ready to check » and the tabs**: the chips do what
+  Open and Done did. Closing it gives the panel of FRU-299 and FRU-300 back as it was.
+- **« This page » filters the notes the widget read**: every word of the search in the whole text of
+  the note or the name of its author, without case or accents. The notes that lost their element
+  (`placement: 'detached'`) are listed at the end, under « {n} detached note(s) », with « the element
+  it pointed at is gone ».
+- **« Whole site » reads `GET /session/notes` (FRU-306) of the worker of the rule, with the session
+  of this browser**, as the popup reads `GET /session/sites`. Only a rule the extension mounts in team
+  mode with a session held for its worker has it; a private site, or a site that embeds its own
+  widget, has no scope. **The worker is the one source**: one page of 50, its `total`, « Show more »
+  for the next; a new search (after 300 ms without typing) or a new opening asks again, and nothing is
+  stored. The answer holds excerpts of 64 characters: the hint says « Searches the first words of each
+  note », and an excerpt of 64 ends with « … ». The chips count the notes read; « Showing {n} of
+  {total} » says when there are more.
+- **A row of another page opens that page in a new tab**, never in the tab of the reader, where a
+  note may be half written. The panel follows the new tab, opens the row of the note once the widget
+  there read it, and opens its thread on the page (`focus-note`). A row of the page of the tab (a
+  filled drop, « This page ») opens its thread at once. A row with a reference links to the tracker
+  (« Open {reference} → », `noreferrer`).
+- **« Show pins on the page »** sends `hide-pins` or `show-pins` to the widget of the tab
+  (`showPins`): the overlay is hidden, a thread on the page closes, the notes are still read and
+  listed. A new tab shows its pins; the pins come back when the panel closes.
+- **What somebody types in the search stays**: the field, its caret and its focus are put back after
+  each draw, as for a reply.
 
 ## « Ready to check », in the side panel (FRU-300)
 
