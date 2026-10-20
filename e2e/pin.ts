@@ -167,3 +167,27 @@ export async function storedSeeds(page: Page): Promise<StoredSeed[]> {
     return issues.map((issue) => issue.seed);
   }, WORKER_ORIGIN);
 }
+
+/**
+ * Waits until React has hydrated the page.
+ *
+ * The server sends the page whole, so its heading is visible before React runs. Until React
+ * hydrates, an element holds no fiber, and a note planted on it has no `source`: no component, no
+ * file. That is right for the product, and it failed the spec that reads the component (FRU-186):
+ * under load the click came first, about one run in twenty. With the scripts of the page held back
+ * three seconds, it fails every time. The sign is the fiber that React puts on the element, read in
+ * the world of the page.
+ */
+export async function hydrated(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const button = document.querySelector('[data-testid="card-latte"] .add');
+
+          return button !== null && Object.getOwnPropertyNames(button).some((name) => name.startsWith('__reactFiber$'));
+        }),
+      { message: 'React never hydrated the page', timeout: 15_000 },
+    )
+    .toBe(true);
+}
