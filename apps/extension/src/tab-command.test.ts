@@ -1,7 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHANNEL, parseBridgeMessage } from './protocol.ts';
-import { acceptedCommand, parseAnswer, tabCommand } from './tab-command.ts';
+import { CHANNEL, PANEL_LIMITS, parseBridgeMessage, parsePanelNotes } from './protocol.ts';
+import {
+  PANEL_EVENT_TYPE,
+  acceptedCommand,
+  answerOf,
+  acceptedRequest,
+  commandTimeout,
+  panelEvent,
+  parseAnswer,
+  tabCommand,
+} from './tab-command.ts';
 
 const ID = 'abcdefghijklmnop';
 const ORIGIN = `chrome-extension://${ID}/`;
@@ -78,5 +87,156 @@ describe('the command on the channel of the page', () => {
         done: false,
       },
     );
+  });
+});
+
+describe('the commands of the side panel (FRU-299)', () => {
+  const PANEL = { id: ID, url: `${ORIGIN}sidepanel.html` };
+  const NOTE = {
+    id: 'seed-1',
+    number: 3,
+    stage: 'green',
+    note: 'Could the title mention Bordeaux?',
+    author: 'Léa',
+    mine: true,
+    createdAt: '2026-10-19T12:00:00Z',
+    updatedAt: '2026-10-19T12:00:00Z',
+    replies: [{ author: 'Marc', body: 'Planned.', createdAt: '2026-10-19T16:00:00Z' }],
+    canReply: true,
+    placement: 'found',
+  } as const;
+
+  it('are taken from the side panel, with the note and the text they carry', () => {
+    assert.deepEqual(acceptedRequest(tabCommand('notes'), PANEL, ID, ORIGIN), { command: 'notes' });
+    assert.deepEqual(acceptedRequest(tabCommand('focus-note', { note: 'seed-1' }), PANEL, ID, ORIGIN), {
+      command: 'focus-note',
+      note: 'seed-1',
+    });
+    assert.deepEqual(acceptedRequest(tabCommand('reply', { note: 'seed-1', body: 'Merci' }), PANEL, ID, ORIGIN), {
+      command: 'reply',
+      note: 'seed-1',
+      body: 'Merci',
+    });
+  });
+
+  // The planted violation of the ticket: a page that forges the command, through the bridge of its tab.
+  it('are refused when a page sends them', () => {
+    const page = { id: ID, tab: { id: 4 }, url: 'https://acme.dev/' };
+    for (const command of ['notes', 'focus-note', 'mark-note', 'reply'] as const) {
+      assert.equal(acceptedRequest(tabCommand(command, { note: 'seed-1', body: 'x' }), page, ID, ORIGIN), undefined);
+    }
+  });
+
+  it('drop a note id or a text longer than the bounds', () => {
+    assert.deepEqual(
+      acceptedRequest(
+        tabCommand('reply', { note: 'x'.repeat(101), body: 'y'.repeat(PANEL_LIMITS.text + 1) }),
+        PANEL,
+        ID,
+        ORIGIN,
+      ),
+      { command: 'reply' },
+    );
+  });
+
+  it('give a reply the time of the worker, and the others the time of the page', () => {
+    assert.equal(commandTimeout('reply'), 20_000);
+    assert.equal(commandTimeout('notes'), 1_500);
+  });
+
+  it('carry the note and the text across the channel of the page, bounded', () => {
+    assert.deepEqual(
+      parseBridgeMessage({
+        channel: CHANNEL,
+        kind: 'command',
+        id: 'c1',
+        command: 'reply',
+        note: 'seed-1',
+        body: 'Merci',
+      }),
+      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply', note: 'seed-1', body: 'Merci' },
+    );
+    assert.deepEqual(
+      parseBridgeMessage({ channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply', note: 7, body: {} }),
+      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply' },
+    );
+  });
+
+  it('read the notes and the outcome of a reply in an answer', () => {
+    assert.deepEqual(parseAnswer({ done: true, notes: [NOTE] }), { done: true, notes: [NOTE] });
+    assert.deepEqual(parseAnswer({ done: false, outcome: 'wait' }), { done: false, outcome: 'wait' });
+    assert.deepEqual(parseAnswer({ done: false, outcome: 'boom' }), { done: false });
+    // Why there are no notes (raised in review).
+    assert.deepEqual(parseAnswer({ done: false, reading: 'failed' }), { done: false, reading: 'failed' });
+    assert.deepEqual(parseAnswer({ done: false, reading: 'no-widget' }), { done: false, reading: 'no-widget' });
+    assert.deepEqual(parseAnswer({ done: false, reading: 'gone' }), { done: false });
+  });
+
+  it('keep the notes that are notes, and drop the others', () => {
+    const bad = [
+      { ...NOTE, id: '' },
+      { ...NOTE, stage: 'lost' },
+      { ...NOTE, note: 'x'.repeat(PANEL_LIMITS.text + 1) },
+      { ...NOTE, author: 7 },
+      { ...NOTE, replies: 'none' },
+      { ...NOTE, placement: 'somewhere' },
+      'not a note',
+    ];
+    assert.deepEqual(parsePanelNotes([NOTE, ...bad]), [NOTE]);
+    // A number that is not a whole positive number goes, the note stays.
+    const { number: _number, ...withoutNumber } = NOTE;
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, number: -1 }]), [withoutNumber]);
+    // A reply that is not one goes, the note stays.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ body: 3 }, ...NOTE.replies] }]), [NOTE]);
+    // `mine` is `true` or nothing.
+    const { mine: _mine, ...notMine } = NOTE;
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, mine: 'yes' }]), [notMine]);
+  });
+
+  it('refuse a list longer than a page can hold', () => {
+    assert.equal(parsePanelNotes(Array.from({ length: PANEL_LIMITS.notes + 1 }, () => NOTE)), undefined);
+    assert.equal(parsePanelNotes('notes'), undefined);
+  });
+
+  it('read an event of the widget: read again, or open a note', () => {
+    assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE }), {});
+    assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE, open: 'seed-1' }), { open: 'seed-1' });
+    assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE, open: 'x'.repeat(101) }), {});
+    assert.equal(panelEvent({ type: 'something-else' }), undefined);
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'notes-changed', open: 'seed-1', extra: 1 }), {
+      channel: CHANNEL,
+      kind: 'notes-changed',
+      open: 'seed-1',
+    });
+  });
+});
+
+describe('the answer the bridge hands back (raised in review)', () => {
+  it('carries done and the outcome of a reply together, and every field of the response', () => {
+    assert.deepEqual(answerOf({ channel: CHANNEL, kind: 'command-response', id: 'c1', done: true, outcome: 'sent' }), {
+      done: true,
+      outcome: 'sent',
+    });
+    assert.deepEqual(
+      answerOf({
+        channel: CHANNEL,
+        kind: 'command-response',
+        id: 'c1',
+        done: false,
+        outcome: 'wait',
+        reading: 'failed',
+      }),
+      { done: false, outcome: 'wait', reading: 'failed' },
+    );
+    // The same answer the panel reads after the runtime message: nothing dropped on the way.
+    const crossed = parseBridgeMessage({
+      channel: CHANNEL,
+      kind: 'command-response',
+      id: 'c1',
+      done: true,
+      outcome: 'sent',
+    });
+    assert.ok(crossed?.kind === 'command-response');
+    assert.deepEqual(parseAnswer(answerOf(crossed)), { done: true, outcome: 'sent' });
   });
 });

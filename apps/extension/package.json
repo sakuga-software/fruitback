@@ -44,6 +44,7 @@
           "{workspaceRoot}/docs/privacy.md",
           "{workspaceRoot}/SECURITY.md",
           "{workspaceRoot}/apps/worker/LICENSE",
+          "{workspaceRoot}/apps/worker/src/app.ts",
           "{workspaceRoot}/apps/worker/src/pair-page.ts",
           "{workspaceRoot}/apps/worker/src/session.ts"
         ]

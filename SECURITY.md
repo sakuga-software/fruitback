@@ -1780,9 +1780,21 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
   (`setPanelBehavior({ openPanelOnActionClick: false })`). No page can open the panel.
 - **What it reads.** The address of the active tab of its window, as the popup does: the browser
   gives it only for a site the extension has access to, or after the click on its icon. With it, the
-  rule of that site from the extension's storage. It reads no worker and keeps nothing. Its one
-  command to the tab, « Show the notes on the page », is a command of the popup (`show-notes`),
-  under the same guard: the bridge takes it from a page of the extension only (`acceptedCommand`).
+  rule of that site from the extension's storage. It reads no worker and keeps nothing.
+- **What it asks the widget of the tab (FRU-299).** Four commands, under the guard of the popup's:
+  the bridge takes them from a page of the extension only, never from a content script or another
+  extension (`acceptedRequest`; test:`are refused when a page sends them`). `notes` answers the notes
+  the widget already read for its pins: no request. `focus-note` and `mark-note` move and mark a pin.
+  `reply` sends a reply by the path of the thread of the widget (FRU-257): the same route, the same
+  transport, so the relay in team mode, and the same rule of who may reply. The widget answers only
+  for the widget the extension mounted; a site's own widget is the site's.
+- **What the page can do with it.** The answer of `notes` crosses the main world, which the page
+  writes in: a page can hand the panel notes of its own making, as it can already draw anything in
+  its own tab. The panel bounds them (`parsePanelNotes`: 500 notes, 10,000 characters a text) and
+  writes them as text, never as markup. The widget tells the panel when its notes change
+  (`notes-changed`, then a message of the bridge); the message carries no note, only « read again »
+  and the id of a note to open, and the panel takes it from the tab it follows only. A page that
+  forges one buys a read of its own notes, or an open row.
 
 ### The picture of a note, taken by the extension (FRU-44)
 

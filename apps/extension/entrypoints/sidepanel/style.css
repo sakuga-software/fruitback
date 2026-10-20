@@ -1,6 +1,6 @@
 /*
-  The side panel (FRU-296), on the tokens of popup/style.css and the kit. The browser sets its width;
-  the mock-up draws it at 400 px. The list of the notes comes with FRU-299.
+  The side panel (FRU-296, FRU-299), as `ExtSidebar` of the mock-up of 2026-10-20 draws it, on the
+  tokens of popup/style.css and the kit. The browser sets its width; the mock-up draws it at 400 px.
 */
 body.side-panel-page {
   min-width: 0;
@@ -18,6 +18,11 @@ body.side-panel-page {
   min-height: 100vh;
 }
 
+.side-panel p {
+  margin: 0;
+}
+
+/* The head: the title and « Close the sidebar ». */
 .panel-head {
   display: flex;
   align-items: center;
@@ -55,19 +60,12 @@ button.panel-close:hover {
   height: 15px;
 }
 
-.panel-body {
+/* A page Fruitback is not on. */
+.panel-state {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 20px 20px;
-}
-
-.panel-body p {
-  margin: 0;
-}
-
-.panel-site {
-  font-weight: 650;
+  gap: 4px;
+  padding: 8px 20px 20px;
 }
 
 .panel-state-title {
@@ -76,4 +74,259 @@ button.panel-close:hover {
 
 .panel-state-text {
   color: var(--subtle);
+}
+
+/* « Leave feedback », and what to do next. */
+.panel-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-action .kit-primary {
+  gap: 8px;
+}
+
+.panel-action .kit-primary .kit-mark {
+  width: 15px;
+  height: 15px;
+}
+
+.panel-hint {
+  color: var(--subtle);
+  font-size: 12px;
+  text-align: center;
+}
+
+.panel-notes {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.panel-tabs {
+  margin: 16px 20px 6px;
+}
+
+.panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 4px 8px 16px;
+  list-style: none;
+}
+
+.panel-row {
+  padding: 12px;
+  border-radius: var(--radius-action);
+}
+
+.panel-row[data-open='true'] {
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+button.panel-row-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+.panel-row-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panel-row-note {
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.panel-row-meta {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.panel-row-stage {
+  color: var(--text);
+  font-weight: 650;
+}
+
+/* An open row: its replies, then « Show on the page » and « Reply ». */
+.panel-row-more {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 4px 36px;
+}
+
+.panel-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.panel-reply {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: var(--radius-field);
+  background: var(--surface-sunken);
+}
+
+.panel-reply-meta {
+  font-size: 12px;
+}
+
+.panel-reply-meta strong {
+  font-weight: 650;
+}
+
+.panel-reply-body {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.panel-row-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+button.panel-link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.panel-reply-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-reply-field {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.panel-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+button.panel-send {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-weight: 600;
+}
+
+button.panel-send:disabled {
+  opacity: 0.6;
+}
+
+.panel-reply-problem {
+  color: var(--alert-text);
+  font-size: 13px;
+}
+
+/* Reading, a failed read, a tab with no note. */
+.panel-reading,
+.panel-none {
+  padding: 16px 20px;
+  color: var(--subtle);
+}
+
+.panel-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 16px 20px;
+}
+
+/* No note on the page. */
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 32px;
+  text-align: center;
+}
+
+.panel-empty-drop {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border: 2px dashed var(--line-control);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+}
+
+.panel-empty-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.panel-empty-text {
+  max-width: 280px;
+  color: var(--subtle);
+}
+
+/* The foot: the site, its workspace, and « Settings ». */
+.panel-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.panel-foot button.panel-link {
+  min-height: 24px;
 }

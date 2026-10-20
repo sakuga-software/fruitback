@@ -14,10 +14,13 @@ import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 import { randomId } from '../src/relay-transport.ts';
-import { type TabCommandAnswer, acceptedCommand } from '../src/tab-command.ts';
-
-/** How long the popup's command waits for the widget: the main world answers at once, or is not there. */
-const COMMAND_TIMEOUT_MS = 1_500;
+import {
+  PANEL_EVENT_TYPE,
+  type TabCommandAnswer,
+  acceptedRequest,
+  answerOf,
+  commandTimeout,
+} from '../src/tab-command.ts';
 
 /**
  * The half that can reach the browser, in the isolated world (FRU-41, FRU-57).
@@ -111,12 +114,18 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'command-response') {
-        commands.get(message.id)?.({
-          done: message.done,
-          ...(message.busy === true ? { busy: true as const } : {}),
-          ...(message.counts === undefined ? {} : { counts: message.counts }),
-        });
+        commands.get(message.id)?.(answerOf(message));
         commands.delete(message.id);
+
+        return;
+      }
+
+      // FRU-299: the notes of the widget changed, or a note was opened on the page. The side panel
+      // of this window, if one is open, asks for the notes again; nothing else listens.
+      if (message?.kind === 'notes-changed') {
+        void browser.runtime
+          .sendMessage({ type: PANEL_EVENT_TYPE, ...(message.open === undefined ? {} : { open: message.open }) })
+          .catch(() => undefined);
 
         return;
       }
@@ -149,20 +158,20 @@ export default defineContentScript({
     // FRU-254: « Leave feedback », « Show every note of the page », and the counts of « On this
     // page ». Taken from a page of this extension only: see `acceptedCommand`.
     browser.runtime.onMessage.addListener((message: unknown, sender) => {
-      const command = acceptedCommand(message, sender, browser.runtime.id, browser.runtime.getURL('/'));
-      if (command === undefined) return undefined;
+      const request = acceptedRequest(message, sender, browser.runtime.id, browser.runtime.getURL('/'));
+      if (request === undefined) return undefined;
 
       return new Promise<TabCommandAnswer>((resolve) => {
         const id = randomId(window);
         const timer = setTimeout(() => {
           commands.delete(id);
           resolve({ done: false });
-        }, COMMAND_TIMEOUT_MS);
+        }, commandTimeout(request.command));
         commands.set(id, (answer) => {
           clearTimeout(timer);
           resolve(answer);
         });
-        post({ channel: CHANNEL, kind: 'command', id, command });
+        post({ channel: CHANNEL, kind: 'command', id, ...request });
       });
     });
 

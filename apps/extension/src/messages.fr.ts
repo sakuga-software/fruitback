@@ -210,7 +210,45 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Close the sidebar': 'Fermer le panneau',
   'Fruitback is not on for this page.': 'Fruitback n’est pas activé sur cette page.',
   'Turn it on from the Fruitback button in the toolbar.': 'Activez-le depuis le bouton Fruitback de la barre d’outils.',
-  'Show the notes on the page': 'Voir les notes sur la page',
+  // FRU-299: « Notes on this page ».
+  You: 'Vous',
+  Anonymous: 'Anonyme',
+  'Then click the part of the page you want to comment on': 'Puis cliquez sur la partie de la page à commenter',
+  Settings: 'Réglages',
+  'Reading the notes of this page…': 'Lecture des notes de cette page…',
+  'The notes of this page could not be read. They are not lost.':
+    'Les notes de cette page n’ont pas pu être lues. Elles ne sont pas perdues.',
+  'No notes on this page yet': 'Aucune note sur cette page pour l’instant',
+  'Press Leave feedback, click anything that looks wrong and write what you expected. The team gets it right away.':
+    'Appuyez sur Laisser une note, cliquez sur ce qui ne va pas et écrivez ce que vous attendiez. L’équipe la reçoit tout de suite.',
+  'Open · {count}': 'Ouvertes · {count}',
+  'Done · {count}': 'Terminées · {count}',
+  'Done notes': 'Notes terminées',
+  'Open notes': 'Notes ouvertes',
+  'No note is done yet.': 'Aucune note n’est terminée pour l’instant.',
+  'No note is open.': 'Aucune note n’est ouverte.',
+  Replies: 'Réponses',
+  'Show on the page': 'Voir sur la page',
+  Reply: 'Répondre',
+  'Your reply': 'Votre réponse',
+  Cancel: 'Annuler',
+  'Sending…': 'Envoi…',
+  Send: 'Envoyer',
+  'The reply did not go through. Your text is kept. Try again.':
+    'La réponse n’est pas partie. Votre texte est gardé. Réessayez.',
+  'Too many replies just now. Your text is kept. Try again in a minute.':
+    'Trop de réponses à l’instant. Votre texte est gardé. Réessayez dans une minute.',
+  'Your session ended. Sign in again from the Fruitback button, then send.':
+    'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis envoyez.',
+  'You cannot reply to this note any more.': 'Vous ne pouvez plus répondre à cette note.',
+  'This page was open before Fruitback was on. Reload it to see its notes.':
+    'Cette page était ouverte avant que Fruitback soit activé. Rechargez-la pour voir ses notes.',
+  'Reload the page': 'Recharger la page',
+  'Your session ended. Sign in again from the Fruitback button.':
+    'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback.',
+  '{host} runs its own Fruitback.': '{host} a son propre Fruitback.',
+  'Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.':
+    'Ses notes sont sur la page, dans sa propre liste. Ce panneau liste les notes d’un site où Fruitback se monte.',
 
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':
