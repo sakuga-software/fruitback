@@ -412,7 +412,7 @@ export function init(options: FruitbackOptions): Fruitback {
       try {
         watcher(change);
       } catch {
-        // Nothing: see above.
+        // Swallowed on purpose: see above.
       }
     }
   };
