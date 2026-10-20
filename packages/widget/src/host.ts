@@ -218,6 +218,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   });
 
   let capturing = false;
+  /** The failure of a read that came during a capture, said when the capture ends (FRU-316). */
+  let unsaid = '';
   let hovered: Element | null = null;
   /** The element the frame is held on after a choice, from `hold` to `release`. */
   let chosen: Element | null = null;
@@ -463,7 +465,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // The frame goes back to the element that is held, if one is: the capture borrowed it.
     if (chosen === null) highlight.style.display = 'none';
     else hold(chosen);
-    announcer.textContent = '';
+    // A failure of the read that came during the capture is said now that the region is free.
+    announcer.textContent = unsaid;
+    unsaid = '';
   }
 
   button.addEventListener('click', () => (capturing ? stop() : start()));
@@ -491,9 +495,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       if (alert.hidden === !failed) return;
       alert.hidden = !failed;
       listing.setAttribute('aria-label', t.text(failed ? 'sidebar.openFailed' : 'sidebar.open'));
-      // Said once, when it starts: a screen reader hears it at the load, with no list to open. Not
-      // over a capture, whose words the same region holds.
-      if (failed && !capturing) announcer.textContent = sentence;
+      // Said once, when it starts: a screen reader hears it at the load, with no list to open. A
+      // capture holds the same region for its own words: the sentence waits for its end (review).
+      if (!failed) unsaid = '';
+      else if (capturing) unsaid = sentence;
+      else announcer.textContent = sentence;
     },
     destroy() {
       document.removeEventListener('mousemove', onMove, true);

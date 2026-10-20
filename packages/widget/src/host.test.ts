@@ -805,3 +805,27 @@ describe('the button of the list when the notes could not be read (FRU-316)', ()
     assert.equal(listing.getAttribute('aria-label'), 'Show every note of this page');
   });
 });
+
+describe('a failure of the read that comes during a capture (FRU-316)', () => {
+  it('is said when the capture ends, and not if the read came back meanwhile', () => {
+    mount(
+      () => null,
+      () => {},
+      { onList: () => {} },
+    );
+    const announcer = host?.root.querySelector('[data-fruitback-announcer]') as HTMLElement;
+
+    host?.start();
+    host?.readFailed(true, 'The notes of this page could not be read. They are not lost.');
+    assert.notEqual(announcer.textContent, 'The notes of this page could not be read. They are not lost.');
+    host?.stop();
+    assert.equal(announcer.textContent, 'The notes of this page could not be read. They are not lost.');
+
+    host?.readFailed(false, '');
+    host?.start();
+    host?.readFailed(true, 'Failed');
+    host?.readFailed(false, '');
+    host?.stop();
+    assert.equal(announcer.textContent, '');
+  });
+});
