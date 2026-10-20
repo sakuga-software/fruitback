@@ -1957,9 +1957,11 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
 - **Who suspends a workspace, and what a suspended workspace does** (FRU-282, « Lecture seule, avec
   un bandeau »). An administrator only, with `POST /console/admin/workspaces/<id>/suspension` and
   `{ suspended: true | false, reason? }`, behind the same guard. The reason is one line of 200
-  characters at most. The worker answers it to every member of the workspace, in `/console/me` and
-  in the `409` of a write; **the console shows it to the administrators of the instance only**: the
-  banner of a member says the day and who to ask, and no reason (FRU-328). An administrator can suspend a
+  characters at most, and **only the routes of the administrators of the instance answer it**
+  (FRU-328): `/console/me`, the `409` of a write and the trace that the owners read say that the
+  workspace is suspended and since when, never why, to its owners, members and guests alike:
+  test:`answers the reason on no route that a member reads, and on the routes of the administrator (FRU-328)`.
+  The banner of a member says the day and who to ask. An administrator can suspend a
   workspace that they are a member of. The check of the role and the write are in one transaction,
   under the lock of the role, so an administrator whose role is being removed is refused:
   test:`refuses the suspension: it waits for the removal, then reads that the account is no administrator`.
@@ -1994,7 +1996,7 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
 
   Each change writes one row in `admin_actions` (`workspace-suspended`, `workspace-restored`) with the
   workspace and the reason, in the transaction of the change, and **the owners read it beside the
-  reads**. A call that changes nothing writes no row, and a suspended workspace keeps its first
+  reads**, without the reason. A call that changes nothing writes no row, and a suspended workspace keeps its first
   reason. The tokens of the extension stay valid: they reach no site of the workspace. A session that
   a suspension leaves is ended by nothing, so a restoration gives it back its sites:
   test:`keeps the sessions of the extension: the same tokens read the sites again after the restoration`.

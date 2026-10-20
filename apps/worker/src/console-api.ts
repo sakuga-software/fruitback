@@ -52,7 +52,7 @@ import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } fro
 import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
-import { refusedWhileSuspended, suspensionView } from './workspace-suspension.ts';
+import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
 
 /**
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
@@ -435,11 +435,12 @@ export async function handleConsoleApi(
       {
         account,
         instanceAdmin,
-        // FRU-282: each workspace says whether it is suspended, since when and why, for the banner.
+        // FRU-282: each workspace says whether it is suspended, and since when, for the banner.
+        // Not why (FRU-328): the reason is a note of the administrator of the instance.
         workspaces: memberships.map(({ workspace, role, suspension }) => ({
           ...workspace,
           role,
-          ...suspensionView(suspension),
+          ...memberSuspensionView(suspension),
         })),
       },
       headers,

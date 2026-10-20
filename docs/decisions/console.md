@@ -467,8 +467,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **A member of a suspended workspace reads a banner at the top of its console** (FRU-328), above
   every section, in the column of the section and not in the rail: « This workspace has been
   suspended since {day}. », what still works (they read it, nothing changes, its sites take no notes),
-  and to contact the administrator of the instance. **No reason**: the worker answers it in
-  `/console/me`, but it is a note of the administrator, which only their panel shows. **A write that
+  and to contact the administrator of the instance. **No reason**: it is a note of the administrator,
+  which only their panel shows, and the worker answers it to nobody else. **A write that
   the worker refuses with `409 workspace-suspended`** says « This workspace is suspended, so nothing
   in it can change. Contact the administrator of this instance. » where the screen says its refusals,
   in place of « Try again », and keeps what was typed: `problemOf` knows the code for every screen,

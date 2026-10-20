@@ -18,9 +18,9 @@ export type Account = { id: string; email: string; name?: string; locale?: strin
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
 /**
  * A workspace of the person, as `/console/me` lists it. A suspended one says since when (FRU-282),
- * and a `reason`, which no screen of a member shows (FRU-328): it is a note of the administrator.
+ * and never why (FRU-328): the reason is a note of the administrator, which only their routes answer.
  */
-export type Workspace = WorkspaceSuspension & { id: string; name: string; role: Role };
+export type Workspace = Omit<WorkspaceSuspension, 'reason'> & { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */

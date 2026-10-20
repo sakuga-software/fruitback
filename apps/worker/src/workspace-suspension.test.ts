@@ -442,9 +442,9 @@ describe('the members of a suspended workspace (FRU-282)', () => {
       workspaces: Record<string, unknown>[];
     };
     const [acme] = me.workspaces;
-    assert.deepEqual(Object.keys(acme ?? {}), ['id', 'name', 'role', 'suspended', 'suspendedAt', 'reason']);
+    // No reason (FRU-328): it is a note of the administrator of the instance.
+    assert.deepEqual(Object.keys(acme ?? {}), ['id', 'name', 'role', 'suspended', 'suspendedAt']);
     assert.equal(acme?.suspended, true);
-    assert.equal(acme?.reason, 'impayé');
     const globex = (await (await on.call('GET', '/console/me', { token: on.alice.token })).json()) as {
       workspaces: Record<string, unknown>[];
     };
@@ -459,6 +459,45 @@ describe('the members of a suspended workspace (FRU-282)', () => {
     }
     for (const path of [`list-members?organizationId=${on.acme}`, `list-invitations?organizationId=${on.acme}`]) {
       assert.equal((await on.call('GET', `${ORG}/${path}`, { token: on.alice.token })).status, 200, path);
+    }
+  });
+
+  it('answers the reason on no route that a member reads, and on the routes of the administrator (FRU-328)', async () => {
+    const on = await anInstance();
+    const NOTE = 'NOTE-OF-THE-ADMINISTRATOR unpaid since October';
+    await suspend(on, on.acme, NOTE);
+    const said = async (method: string, path: string, token: string, body?: unknown) => {
+      const answer = await on.call(method, path, { token, ...(body === undefined ? {} : { body }) });
+
+      return `${method} ${path} ${answer.status} ${await answer.text()}`;
+    };
+
+    // What the owner and a member of the workspace read: every read of the console and of the
+    // organization plugin, the trace of the administrators, and the refusal of a write.
+    const read: string[] = [];
+    for (const token of [on.alice.token, on.carl.token]) {
+      read.push(await said('GET', '/console/me', token));
+      for (const rest of ['/sites', '/connectors', '/notes', '/domains', '/members/seen', '/admin-reads']) {
+        read.push(await said('GET', `/console/workspaces/${on.acme}${rest}`, token));
+      }
+      for (const path of [
+        `list-members?organizationId=${on.acme}`,
+        `list-invitations?organizationId=${on.acme}`,
+        `get-full-organization?organizationId=${on.acme}`,
+      ]) {
+        read.push(await said('GET', `${ORG}/${path}`, token));
+      }
+      read.push(await said('POST', `/console/workspaces/${on.acme}/sites`, token, { url: 'https://new.acme.dev' }));
+      read.push(await said('POST', `${ORG}/update`, token, { organizationId: on.acme, data: { name: 'Renamed' } }));
+    }
+    for (const answer of read) assert.ok(!answer.includes('NOTE-OF-THE-ADMINISTRATOR'), answer);
+    // The reads did happen: the suspension is said, with its day.
+    assert.ok(read.some((answer) => answer.includes('"suspendedAt"')));
+    assert.ok(read.some((answer) => answer.includes('workspace-suspended')));
+
+    // The control: the routes of the administrator of the instance answer the reason.
+    for (const path of [`${ADMIN_PATH}/workspaces`, `${ADMIN_PATH}/workspaces/${on.acme}`, `${ADMIN_PATH}/actions`]) {
+      assert.ok((await said('GET', path, on.root.token)).includes(NOTE), path);
     }
   });
 
@@ -486,7 +525,7 @@ describe('the members of a suspended workspace (FRU-282)', () => {
 });
 
 describe('the trace of a suspension of a workspace (FRU-282)', () => {
-  it('writes one action for each change, with the reason, that the owners and the administrators read', async () => {
+  it('writes one action for each change: the owners read who and when, the administrators the reason too', async () => {
     const on = await anInstance();
     await suspend(on, on.acme, 'impayé');
     await suspend(on, on.acme, 'twice');
@@ -497,18 +536,19 @@ describe('the trace of a suspension of a workspace (FRU-282)', () => {
       await on.call('GET', `/console/workspaces/${on.acme}/admin-reads`, { token: on.alice.token })
     ).json()) as { actions: Record<string, unknown>[] };
     assert.deepEqual(
-      traced.actions.map(({ action, admin, reason, target }) => ({ action, admin, reason, target })),
+      traced.actions.map(({ action, admin, target }) => ({ action, admin, target })),
       [
-        { action: 'workspace-restored', admin: { email: 'root@instance.dev' }, reason: 'payé', target: undefined },
-        { action: 'workspace-suspended', admin: { email: 'root@instance.dev' }, reason: 'impayé', target: undefined },
+        { action: 'workspace-restored', admin: { email: 'root@instance.dev' }, target: undefined },
+        { action: 'workspace-suspended', admin: { email: 'root@instance.dev' }, target: undefined },
       ],
     );
-    // The shape of `TracedAction` for an action on the workspace: no `target` key at all, not even null.
+    // The shape of `TracedAction` for an action on the workspace: no `target` key at all, not even
+    // null, and no `reason` (FRU-328): the administrators read it below.
     assert.deepEqual(
       traced.actions.map((each) => Object.keys(each).toSorted()),
       [
-        ['action', 'admin', 'at', 'reason'],
-        ['action', 'admin', 'at', 'reason'],
+        ['action', 'admin', 'at'],
+        ['action', 'admin', 'at'],
       ],
     );
     const ofGlobex = (await (
@@ -745,7 +785,8 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       assert.equal(refused.status, SUSPENDED_STATUS, `${write.method} ${rest}: ${await refused.clone().text()}`);
       const body = (await refused.json()) as Record<string, unknown>;
       assert.equal(body.error, SUSPENDED_ERROR);
-      assert.equal(body.reason, 'impayé');
+      // The day, for the banner, and no reason (FRU-328).
+      assert.deepEqual(Object.keys(body).toSorted(), ['error', 'suspendedAt'], `${write.method} ${rest}`);
       assert.deepEqual(await snapshot(), before, `${write.method} ${rest} wrote while suspended`);
 
       await restore(fx, fx.acme);
@@ -820,13 +861,14 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       const before = await snapshot();
       const refused = await on.call('POST', `${ORG}${path.slice('/organization'.length)}`, { token, body });
       assert.equal(refused.status, SUSPENDED_STATUS, `${path}: ${await refused.clone().text()}`);
-      // The reason is for the members: a person invited reads that the workspace is suspended, and no more.
+      // A member reads since when, and a person invited only that the workspace is suspended. Nobody
+      // reads the reason here (FRU-328).
       const said = (await refused.json()) as { error: string; reason?: string; suspendedAt?: string };
       assert.equal(said.error, SUSPENDED_ERROR);
       const toMember = path !== '/organization/accept-invitation';
       assert.deepEqual(
         [said.reason, said.suspendedAt !== undefined],
-        toMember ? ['impayé', true] : [undefined, false],
+        toMember ? [undefined, true] : [undefined, false],
         path,
       );
       assert.equal(await snapshot(), before, `${path} wrote while suspended`);

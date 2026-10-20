@@ -134,13 +134,6 @@ const roleIn = (detail: string | null): { role?: string } => {
   return typeof role === 'string' && role !== '' ? { role } : {};
 };
 
-/** The reason that `detail` of an action holds, for its owners (FRU-282). */
-const reasonIn = (detail: string | null): { reason?: string } => {
-  const reason = detailOf(detail)?.reason;
-
-  return typeof reason === 'string' && reason !== '' ? { reason } : {};
-};
-
 function noStages(): StageCounts {
   return Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])) as StageCounts;
 }
@@ -1280,10 +1273,9 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       return rows.flatMap((row): TracedAction[] => {
         if (!(ADMIN_ACTIONS as readonly string[]).includes(row.action)) return [];
         const admin = { email: row.actor_now ?? row.actor_email, ...named(row.actor_name) };
-        // An action on the workspace (FRU-282) has no member as its target, and says its reason.
-        if (isWorkspaceAction(row.action)) {
-          return [{ action: row.action, at: iso(row.at), admin, ...reasonIn(row.detail) }];
-        }
+        // An action on the workspace (FRU-282) has no member as its target. Its owners read who and
+        // when, and not the reason (FRU-328): a note of the administrator, which `actions` answers.
+        if (isWorkspaceAction(row.action)) return [{ action: row.action, at: iso(row.at), admin }];
         const targetEmail = row.target_now ?? row.target_email;
         if (targetEmail === null) return [];
 

@@ -13,7 +13,10 @@ const CONSOLE = 'http://localhost:5178';
 const SUSPENDED_AT = new Date(Date.UTC(new Date().getUTCFullYear(), 8, 30, 9)).toISOString();
 const DAY = new Date(SUSPENDED_AT).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const DAY_FR = new Date(SUSPENDED_AT).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-/** The note of the administrator: no screen of a member shows it. */
+/**
+ * The note of the administrator. The worker answers it to them only (FRU-328): the stub sends it all
+ * the same, as a worker of before did, and no screen of a member shows it.
+ */
 const REASON = 'Unpaid invoice of September';
 const SUSPENDED = { ...ACME, suspended: true, suspendedAt: SUSPENDED_AT, reason: REASON };
 

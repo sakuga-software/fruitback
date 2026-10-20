@@ -116,8 +116,7 @@ export default function WorkspaceFrame() {
  * Says to a member that an administrator of the instance suspended the workspace (FRU-328): since
  * when, what still works, and who to ask. Every write of the workspace is refused while it shows.
  *
- * WARNING: no reason. `/console/me` answers the reason of the administrator, and it stays a note of
- * the administrator: their screen shows it, no screen of a member does.
+ * No reason: it is a note of the administrator of the instance, which the worker answers to them only.
  */
 export function SuspendedBanner({ workspace }: { workspace: Workspace }) {
   useLocale();
