@@ -53,46 +53,111 @@ function press(key: string, modifiers: { metaKey?: boolean; ctrlKey?: boolean } 
 
 const field = () => composer?.element.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
 const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
-const closeButton = () => composer?.element.querySelector('[data-fruitback-close]') as HTMLButtonElement;
+/** The head lost its cross in FRU-305: « Cancel » and Escape close the composer. */
+const closeButton = () => composer?.element.querySelector('[data-fruitback-close]') ?? null;
 const cancelButton = () => composer?.element.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
+/** The card of a failed send (FRU-305): its title, then the sentence of its cause. */
+const failedText = () =>
+  [...(composer?.element.querySelectorAll('[data-fruitback-failed] p') ?? [])].map((p) => p.textContent).join(' ');
+/** The title of the card of a sent note (FRU-305). */
+const sentTitle = () => composer?.element.querySelector('[data-fruitback-sent-title]')?.textContent ?? '';
 
 describe('what the popover looks like (FRU-36)', () => {
-  it('writes Send alone, and draws the cross that closes without sending (FRU-258)', () => {
+  it('writes Send behind the drop of the mark, and has no cross: Cancel and Escape close it (FRU-305)', () => {
     // The icon is appended after the template is parsed, because an SVG written into an innerHTML
-    // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
-    // name of the cross is its label alone.
+    // string lands in the HTML namespace and renders nothing at all.
     mount(async () => {});
 
-    // The mock-up writes the word and no drop: the drop is the mark of the launch button and of the pins.
-    assert.equal(sendButton().querySelector('svg'), null);
+    assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the drop of Send is not drawn');
     assert.equal(sendButton().textContent, 'Send');
-    assert.ok(closeButton().querySelector('svg.fruitback-icon'), 'the cross is not drawn');
-    assert.equal(closeButton().textContent, '');
-    assert.equal(closeButton().getAttribute('aria-label'), 'Close without sending');
+    assert.equal(closeButton(), null);
   });
 
-  it('has a head: its title, and what the note is about when the element says something (FRU-258)', () => {
+  it('has a head: what the note points at, in mono, with what the element says as its title (FRU-305)', () => {
     mount(async () => {});
-    const title = () => composer?.element.querySelector('[data-fruitback-title]') as HTMLElement;
     const about = () => composer?.element.querySelector('[data-fruitback-about]') as HTMLElement;
 
-    composer?.open(ANCHOR, 'Fell shell jacket');
-    assert.equal(title().textContent, 'New note');
-    assert.equal(about().textContent, 'on Fell shell jacket');
-    assert.equal(about().hidden, false);
+    composer?.open(ANCHOR, 'button.add · <AddToCart>', 'Ajouter');
+    assert.equal(about().textContent, 'button.add · <AddToCart>');
+    assert.equal(about().title, 'Ajouter');
 
-    // An element with no text: the title alone, and no « on » left hanging.
-    composer?.close();
-    composer?.open(ANCHOR);
-    assert.equal(about().textContent, '');
-    assert.equal(about().hidden, true);
-
-    // As text: it is whatever the page wrote in its element.
+    // As text: it is whatever the page called its element.
     composer?.close();
     composer?.open(ANCHOR, '<img src=x onerror=alert(1)>');
-    assert.equal(about().textContent, 'on <img src=x onerror=alert(1)>');
+    assert.equal(about().textContent, '<img src=x onerror=alert(1)>');
     assert.equal(about().querySelector('img'), null);
+  });
+
+  it('labels the note « Your comment » and the name « Name (optional) », and asks for the name in the open (FRU-305)', () => {
+    mount(async () => {});
+    composer?.open(ANCHOR);
+    const labels = [...(composer?.element.querySelectorAll('.fruitback-composer-label') ?? [])].map(
+      (label) => label.textContent,
+    );
+    assert.deepEqual(labels, ['Your comment', 'Name (optional)']);
+    // A label wraps its field: it is the name of the field.
+    assert.equal(field().closest('label')?.querySelector('.fruitback-composer-label')?.textContent, 'Your comment');
+    const name = composer?.element.querySelector('[data-fruitback-name]') as HTMLInputElement;
+    assert.equal(name.closest('[data-fruitback-who]')?.hasAttribute('hidden'), false);
+    assert.equal(composer?.element.querySelector('[data-fruitback-identify]'), null);
+  });
+
+  it('says where the note lands in the foot: the one place, or the team (FRU-305)', () => {
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    const lands = () => composer?.element.querySelector('[data-fruitback-lands]') as HTMLElement;
+    const offered: Destination[][] = [[], [{ id: 'a', label: 'Linear · Northwind' }]];
+    for (const places of offered) {
+      composer = createComposer({
+        document: page.document,
+        host,
+        onSubmit: async () => true,
+        destinations: {
+          offered: () => places,
+          subscribe: () => () => {},
+          remembered: () => undefined,
+          remember: () => {},
+        },
+      });
+      composer.open(ANCHOR);
+      assert.equal(
+        lands().textContent,
+        places.length === 0 ? 'Sent to the team' : 'Lands in Linear · Northwind as a new issue',
+      );
+      composer.destroy();
+      composer = null;
+    }
+  });
+
+  it('offers « Pick again » only to a host that can start a capture, and keeps the text when it does (FRU-305)', () => {
+    let asked = 0;
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async () => true,
+      onPickAgain: () => (asked += 1),
+    });
+    composer.open(ANCHOR, 'button.add');
+    field().value = 'Half a note';
+    const pick = composer.element.querySelector('[data-fruitback-pick]') as HTMLButtonElement;
+    assert.equal(pick.hidden, false);
+    assert.equal(pick.textContent, 'Pick again');
+    pick.click();
+    assert.equal(asked, 1);
+    // The host chooses again and opens the composer on the new element: nothing written goes.
+    composer.open({ left: 400, top: 500, bottom: 540, right: 600 }, 'h3.title');
+    assert.equal(field().value, 'Half a note');
+    composer.destroy();
+    composer = null;
+
+    mount(async () => {});
+    const pickOf = (open: Composer | null) => open?.element.querySelector('[data-fruitback-pick]') as HTMLButtonElement;
+    assert.equal(pickOf(composer as Composer | null).hidden, true);
   });
 
   it('keeps what was written when the open composer is pointed at another element', async () => {
@@ -118,8 +183,9 @@ describe('what the popover looks like (FRU-36)', () => {
 
     assert.equal(field().value, 'Half a note');
     assert.equal(name.value, 'Bob', 'the name that was typed gave way to the one remembered');
-    assert.equal(composer?.element.querySelector('[data-fruitback-about]')?.textContent, 'on The second element');
-    assert.equal(composer?.element.style.getPropertyValue('--fruitback-composer-left'), '394px');
+    assert.equal(composer?.element.querySelector('[data-fruitback-about]')?.textContent, 'The second element');
+    // On the start edge of the frame, 5 px off the element (FRU-303).
+    assert.equal(composer?.element.style.getPropertyValue('--fruitback-composer-left'), '395px');
 
     // The control: closed and opened again, it is a new note.
     composer?.close();
@@ -154,29 +220,64 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'failed');
     assert.equal(field().value, 'A note on its way');
-    assert.match(statusText(), /Did not go through/);
+    assert.match(failedText(), /^Did not go through Your text is kept\./);
   });
 
-  it('closes on the cross like on Cancel, and gives the note up', () => {
+  it('closes on Cancel, and gives the note up', () => {
     let closed = 0;
     mount(async () => true, { onClose: () => (closed += 1) });
     composer?.open(ANCHOR);
     field().value = 'Une note';
 
-    closeButton().click();
+    cancelButton().click();
 
     assert.equal(composer?.element.hidden, true);
     assert.equal(closed, 1);
   });
 
-  it('confirms in words, with no strawberry in front of them', async () => {
+  it('confirms in a card, with no strawberry in front of the words (FRU-305)', async () => {
     mount(async () => {});
     composer?.open(ANCHOR);
 
     sendButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(statusText(), 'Sent');
+    assert.equal(sentTitle(), 'Sent');
+    const sent = (composer as Composer).element;
+    assert.equal((sent.querySelector('[data-fruitback-sent]') as HTMLElement).hidden, false);
+    // No way to an issue it was not told about.
+    assert.equal((sent.querySelector('[data-fruitback-sent-open]') as HTMLElement).hidden, true);
+  });
+
+  it('says « Sent as » the identifier, with the number of the pin and the way to the issue (FRU-305)', async () => {
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit: async () => ({ sentAs: { identifier: 'FRU-134', url: 'https://linear.app/x/FRU-134', number: 5 } }),
+    });
+    composer.open(ANCHOR);
+    field().value = 'Une note';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(sentTitle(), 'Sent as FRU-134');
+    assert.equal(composer.element.querySelector('[data-fruitback-sent-drop]')?.textContent, '5');
+    assert.equal(
+      composer.element.querySelector('[data-fruitback-sent-text]')?.textContent,
+      'The pin stays here and follows the issue’s status.',
+    );
+    const open = composer.element.querySelector('[data-fruitback-sent-open]') as HTMLAnchorElement;
+    assert.equal(open.hidden, false);
+    assert.equal(open.textContent, 'Open →');
+    assert.equal(open.getAttribute('href'), 'https://linear.app/x/FRU-134');
+    // The card is read where focus is: on its link.
+    assert.ok(deepActiveElement(page.document) === open);
+    // A click anywhere else closes it at once.
+    page.document.body.click();
+    assert.equal(composer.element.hidden, true);
   });
 
   it('says when a note kept for later has no picture, and not that it was sent (FRU-238)', async () => {
@@ -202,7 +303,7 @@ describe('what the popover looks like (FRU-36)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     assert.equal(composer?.state(), 'sent');
-    assert.equal(statusText(), 'Sent, without the picture');
+    assert.equal(sentTitle(), 'Sent, without the picture');
   });
 });
 
@@ -254,8 +355,8 @@ describe('createComposer', () => {
     release();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'sent');
-    // The word the product uses, not "sent".
-    assert.match(statusText(), /^Sent$/);
+    // The word the product uses, in the card of a sent note (FRU-305).
+    assert.equal(sentTitle(), 'Sent');
   });
 
   it('refuses to plant the same note twice', async () => {
@@ -310,12 +411,14 @@ describe('createComposer', () => {
 
       assert.equal(composer?.state(), 'failed');
       assert.equal(field().value, `Une note, ${failure}`);
-      said[failure] = statusText();
+      said[failure] = failedText();
       composer?.destroy();
       composer = null;
     }
 
-    assert.equal(said.retry, 'Did not go through — your text is kept, try again');
+    // « Did not go through », then the sentence of the cause (FRU-305).
+    assert.equal(said.retry, 'Did not go through Your text is kept. Try again, or copy it before closing the page.');
+    for (const sentence of Object.values(said)) assert.match(sentence, /^Did not go through /);
     assert.match(said.wait ?? '', /in a minute/);
     assert.match(said.refused ?? '', /tell the team of the site/);
     assert.match(said['too-large'] ?? '', /shorten it/);
@@ -415,7 +518,10 @@ describe('createComposer', () => {
     const status = composer?.element.querySelector('[data-fruitback-status]');
     assert.equal(status?.getAttribute('role'), 'status');
     assert.equal(status?.getAttribute('aria-live'), 'polite');
-    assert.equal(field().getAttribute('aria-label'), 'What should change?');
+    // A failure is said at once, in the card that holds it (FRU-305).
+    assert.equal(composer?.element.querySelector('[data-fruitback-failed]')?.getAttribute('role'), 'alert');
+    // Named by its label, « Your comment »; the placeholder says what to write.
+    assert.equal(field().closest('label')?.textContent?.trim(), 'Your comment');
     assert.equal(field().placeholder, 'What should change?');
   });
 
@@ -455,12 +561,12 @@ describe('createComposer', () => {
       return left;
     };
 
-    // On the edge of the frame, which stands 6 px off the element (FRU-258).
-    assert.equal(placedLeft(createTranslator()), '494px');
-    // 706 minus the popover's 360: its right edge sits on the right edge of the frame.
+    // On the edge of the frame, which stands 5 px off the element (FRU-258, FRU-303).
+    assert.equal(placedLeft(createTranslator()), '495px');
+    // 705 minus the popover’s 360: its right edge sits on the right edge of the frame.
     assert.equal(
       placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } })),
-      '346px',
+      '345px',
     );
   });
 
@@ -482,7 +588,7 @@ describe('createComposer', () => {
     };
 
     // The element is on screen at document x 2000, so the popover opens there.
-    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '1994px');
+    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '1995px');
     // Near the right edge of the window it stops 10px short of it: 1500 + 1000 - 360 - 10.
     assert.equal(placedLeft({ left: 2_400, top: 200, bottom: 240, right: 2_450 }), '2130px');
     // Right to left, near the left edge of the window, it stops 10px after it: 1500 + 10.
@@ -517,9 +623,9 @@ describe('createComposer', () => {
     // 600 − 40 − 240: its bottom edge ends 40 px over the element, the name of the component between them.
     assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }), { top: '320px', side: 'above' });
     // No room above: under the frame, 6 px off the element, and 10 px more.
-    assert.deepEqual(placed({ left: 100, top: 200, bottom: 240, right: 300 }), { top: '256px', side: 'below' });
+    assert.deepEqual(placed({ left: 100, top: 200, bottom: 240, right: 300 }), { top: '255px', side: 'below' });
     // The window, not the document, says what room there is: scrolled, the same element has none above.
-    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }, 400), { top: '656px', side: 'below' });
+    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }, 400), { top: '655px', side: 'below' });
     // Room on neither side, for an element as tall as the window: it stays in the window, at its bottom.
     assert.deepEqual(placed({ left: 100, top: 100, bottom: 950, right: 300 }), { top: '750px', side: 'below' });
   });
@@ -546,7 +652,7 @@ describe('createComposer', () => {
 
     composer?.open(ANCHOR);
     assert.equal(label().hidden, false);
-    assert.equal(label().textContent?.trim(), 'Attach a picture of this element');
+    assert.equal(label().textContent?.trim(), 'Attach a picture of the element');
     assert.equal(box().checked, false, 'the box was ticked by default');
     assert.equal(attach, false, 'opening the composer changed the preference');
 
@@ -593,14 +699,15 @@ describe('createComposer', () => {
 describe('saying who you are, or not', () => {
   const query = (page: MountedPage, selector: string) => page.document.querySelector(selector) as HTMLElement;
 
-  it('is anonymous by default: the fields are hidden and nothing is claimed', async () => {
+  it('is anonymous by default: the name is empty, and nothing is claimed', async () => {
     // Anonymous has to stay the path of least resistance. It is the default in the contract too —
-    // an absent reporter, not an empty one.
+    // an absent reporter, not an empty one. The field is in sight since FRU-305, and empty.
     const seen: (SeedReporter | undefined)[] = [];
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, true);
+    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, false);
+    assert.equal((query(page, '[data-fruitback-name]') as HTMLInputElement).value, '');
     (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
     query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
@@ -608,15 +715,13 @@ describe('saying who you are, or not', () => {
     assert.deepEqual(seen, [undefined]);
   });
 
-  it('reveals the fields when asked, and says so to a screen reader', () => {
+  it('names the field « Name (optional) » by its label, with no link to open it (FRU-305)', () => {
     const { page } = mount(async () => true);
     composer?.open(ANCHOR);
-    const toggle = query(page, '[data-fruitback-identify]');
 
-    toggle.click();
-
-    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, false);
-    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(page.document.querySelector('[data-fruitback-identify]'), null);
+    const name = query(page, '[data-fruitback-name]');
+    assert.equal(name.closest('label')?.textContent?.trim(), 'Name (optional)');
   });
 
   it('passes what was typed, trimmed, and leaves an empty field out', async () => {
@@ -722,7 +827,6 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     assert.equal(input(page, '[data-fruitback-name]').value, 'Alice');
     assert.equal(input(page, '[data-fruitback-remember]').checked, true);
     assert.equal(query(page, '[data-fruitback-who]').hidden, false, 'the name the note is signed with is hidden');
-    assert.equal(query(page, '[data-fruitback-identify]').getAttribute('aria-expanded'), 'true');
   });
 
   it('keeps the name when the send fails, because the choice was made before it', async () => {
@@ -772,7 +876,6 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter), { memory, identified: true });
     composer?.open(ANCHOR);
 
-    assert.equal(query(page, '[data-fruitback-identify]').hidden, true);
     assert.equal(query(page, '[data-fruitback-who]').hidden, true);
     await send(page);
 
@@ -785,11 +888,10 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     const seen: (SeedReporter | undefined)[] = [];
     let identified = false;
     const { page } = mount(async (_note, reporter) => void seen.push(reporter), { identified: () => identified });
-    const asked = () => !query(page, '[data-fruitback-identify]').hidden;
+    const asked = () => !query(page, '[data-fruitback-who]').hidden;
 
     composer?.open(ANCHOR);
     assert.equal(asked(), true);
-    query(page, '[data-fruitback-identify]').click();
     input(page, '[data-fruitback-name]').value = 'Alice';
 
     // The answer changes while somebody types: the field stays, and the note goes with the name.
@@ -853,10 +955,10 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     sendButton().focus();
     assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
-    // The cross of the head is the first control (FRU-258); the note field keeps the focus of the open.
-    assert.ok(active() === closeButton(), 'Tab on the last control did not go back to the first');
+    // The field of the note is the first control since the head lost its cross (FRU-305).
+    assert.ok(active() === field(), 'Tab on the last control did not go back to the first');
 
-    assert.equal(keyOn(closeButton(), 'Tab', true).defaultPrevented, true);
+    assert.equal(keyOn(field(), 'Tab', true).defaultPrevented, true);
     assert.ok(active() === sendButton(), 'Shift+Tab on the first control did not go to the last');
   });
 
@@ -878,7 +980,7 @@ describe('the popover as a dialog (FRU-51)', () => {
     cancelButton().focus();
     keyOn(cancelButton(), 'Tab');
 
-    assert.ok(active() === closeButton(), 'the disabled send button is still in the cycle');
+    assert.ok(active() === field(), 'the disabled send button is still in the cycle');
   });
 
   it('closes on Escape from any control, and the Escape goes no further', () => {
@@ -939,7 +1041,7 @@ describe('the popover as a dialog (FRU-51)', () => {
     assert.equal(sendButton().disabled, true);
 
     assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
-    assert.ok(active() === closeButton(), 'Tab from the disabled send button left the popover');
+    assert.ok(active() === field(), 'Tab from the disabled send button left the popover');
   });
 
   it('brings Tab back in after a click moved focus to the page, in both directions', () => {
@@ -949,7 +1051,7 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     outside.focus();
     assert.equal(keyOn(outside, 'Tab').defaultPrevented, true);
-    assert.ok(active() === closeButton(), 'Tab from the page left the popover behind');
+    assert.ok(active() === field(), 'Tab from the page left the popover behind');
 
     outside.focus();
     keyOn(outside, 'Tab', true);
@@ -1347,7 +1449,6 @@ describe('the text being written, saved as it is typed (FRU-311)', () => {
 
   for (const [way, leave] of [
     ['Esc', () => press('Escape')],
-    ['the cross', () => closeButton().click()],
     ['Cancel', () => cancelButton().click()],
   ] as const) {
     it(`gives the text back after ${way}, and says « Draft restored »`, () => {
@@ -1442,7 +1543,10 @@ describe('a send refused for a session that ended (FRU-315)', () => {
     field().value = 'x';
     sendButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(statusText(), 'Your session has ended. Your text is kept: sign in again, then send it.');
+    assert.equal(
+      failedText(),
+      'Did not go through Your session has ended. Your text is kept: sign in again, then send it.',
+    );
     assert.equal(signInButton().hidden, true);
   });
 });

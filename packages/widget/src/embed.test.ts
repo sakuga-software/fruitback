@@ -235,12 +235,12 @@ describe('reading pins', () => {
       clientId: 'acme',
       identityToken: () => 't',
     });
-    assert.equal((shadowOf(named).querySelector('[data-fruitback-identify]') as HTMLElement).hidden, true);
+    assert.equal((shadowOf(named).querySelector('[data-fruitback-who]') as HTMLElement).hidden, true);
     withToken.destroy();
 
     const anonymous = mountWithCta();
     const without = init({ document: anonymous.document, endpoint: ENDPOINT, clientId: 'acme' });
-    assert.equal((shadowOf(anonymous).querySelector('[data-fruitback-identify]') as HTMLElement).hidden, false);
+    assert.equal((shadowOf(anonymous).querySelector('[data-fruitback-who]') as HTMLElement).hidden, false);
     without.destroy();
   });
 
@@ -355,7 +355,7 @@ describe('reading pins', () => {
     const asked = async () => {
       await widget.refresh();
 
-      return !(shadowOf(page).querySelector('[data-fruitback-identify]') as HTMLElement).hidden;
+      return !(shadowOf(page).querySelector('[data-fruitback-who]') as HTMLElement).hidden;
     };
 
     assert.deepEqual(

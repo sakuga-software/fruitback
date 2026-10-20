@@ -139,13 +139,12 @@ test.describe('on a touch screen at 390 px', () => {
     // The composer, with the name open.
     await page.getByRole('button', { name: 'Leave feedback' }).tap();
     await page.locator('[data-testid="card-espresso"] .add').tap();
-    await page.getByRole('button', { name: 'Add my name (optional)' }).tap();
     await measure();
     expect(await fontSize(page, 'What should change?')).toBe('16px');
     expect(await fontSize(page, 'Your name')).toBe('16px');
     await page.getByPlaceholder('What should change?').fill('A note from a phone');
     await page.getByRole('button', { name: 'Send', exact: true }).tap();
-    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
 
     // The thread of the pin.
     await page

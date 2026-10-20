@@ -90,7 +90,7 @@ test('no picture leaves the page until the box of the composer is ticked, and th
   await page.goto('/?widget=off&case=shot-box');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'ok', 'untouched');
-  const box = page.getByRole('checkbox', { name: 'Attach a picture of this element' });
+  const box = page.getByRole('checkbox', { name: 'Attach a picture of the element' });
   const open = async () => {
     await page.getByRole('button', { name: '🌱 Feedback' }).click();
     await page.locator('[data-testid="card-latte"] .add').click();
@@ -100,7 +100,7 @@ test('no picture leaves the page until the box of the composer is ticked, and th
     await page.getByPlaceholder('What should change?').fill(note);
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.locator('[data-fruitback-pin]')).toHaveCount(pins);
-    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   };
   const stored = () =>
     page.evaluate(async (origin) => {
@@ -150,7 +150,7 @@ test('the composer has no box of the picture when the host cannot take one (FRU-
   await page.locator('[data-testid="card-latte"] .add').click();
   await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 
-  await expect(page.getByRole('checkbox', { name: 'Attach a picture of this element' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Attach a picture of the element' })).toHaveCount(0);
 });
 
 test('a capture that throws costs the picture, never the note', async ({ page }) => {

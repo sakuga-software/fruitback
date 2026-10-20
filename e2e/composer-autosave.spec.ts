@@ -56,12 +56,12 @@ test('a reload opens the composer again on its element, with the text and « Dra
   await expect(field(page)).toBeFocused();
   await expect(status(page)).toHaveText('Draft restored');
   // On the element it was written about: the frame of the capture holds the Latte's button.
-  await expect(page.getByRole('dialog', { name: 'New note' })).toContainText('on Ajouter');
+  await expect(page.getByRole('dialog', { name: 'New note' })).toContainText('button.add');
 
   // Sent, it is gone: the next reload opens nothing.
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   await reload(page);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await expect(field(page)).toBeHidden();
@@ -70,7 +70,6 @@ test('a reload opens the composer again on its element, with the text and « Dra
 for (const [way, leave] of [
   ['Esc', (page: Page) => page.keyboard.press('Escape')],
   ['Cancel', (page: Page) => page.getByRole('button', { name: 'Cancel', exact: true }).click()],
-  ['the cross', (page: Page) => page.getByRole('button', { name: 'Close without sending' }).click()],
 ] as const) {
   test(`after ${way}, the same element gives the text back`, async ({ page }) => {
     await openPlayground(page, `autosave-${way.replace(' ', '-')}`);

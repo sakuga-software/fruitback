@@ -113,7 +113,8 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
         const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
         return {
           text: root?.textContent ?? '',
-          status: root?.querySelector('.fruitback-composer-status')?.textContent ?? '',
+          // The card of a sent note says « Sent », or « Sent as » its identifier (FRU-305).
+          status: root?.querySelector('[data-fruitback-sent-title]')?.textContent?.slice(0, 4) ?? '',
         };
       });
       sent = read.text;

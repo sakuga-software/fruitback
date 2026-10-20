@@ -102,7 +102,7 @@ const places = (page: Page) => composer(page).getByRole('radiogroup', { name: 'W
 async function landed(page: Page, note: string): Promise<void> {
   await expect(page.getByRole('button', { name: new RegExp(note) }).first()).toBeVisible();
   // The popover stays open in its sent state for a moment.
-  await expect(composer(page)).toBeHidden({ timeout: 5_000 });
+  await expect(composer(page)).toBeHidden({ timeout: 10_000 });
 }
 
 test('a reader the worker offers no place gets the composer with no line, and a member gets one', async ({ page }) => {

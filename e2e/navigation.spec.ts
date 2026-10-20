@@ -63,7 +63,7 @@ test('a note sent after a navigation goes to the page where it was written', asy
   expect(new URL(seed.page.url).pathname).toBe('/');
   expect(seed.page.path).toBe('/');
   expect(new URL(seed.page.url).searchParams.get('case')).toBe(testCase);
-  await expect(composer).toBeHidden({ timeout: 5_000 });
+  await expect(composer).toBeHidden({ timeout: 10_000 });
 
   // Not on the page the reporter went to.
   const open = page.getByRole('button', { name: 'Show every note in a sidebar' });

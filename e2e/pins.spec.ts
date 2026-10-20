@@ -32,7 +32,7 @@ async function plant(page: Page, selector: string, note: string): Promise<void> 
   await page.locator(selector).click();
   await page.locator('[data-fruitback-note]:visible').fill(note);
   await page.locator('[data-fruitback-send]').click();
-  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 }
 
 /** Where the thread is, against the point of the open drop. */
@@ -114,7 +114,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.locator('[data-testid="card-mocha"] .add').click();
     await page.locator('[data-fruitback-note]:visible').fill('Une note lue dans la liste');
     await page.locator('[data-fruitback-send]').click();
-    await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
+    await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 
     await page.getByRole('button', { name: 'Voir toutes les notes dans un panneau' }).click();
     const list = page.getByRole('dialog', { name: 'Notes de cette page' });

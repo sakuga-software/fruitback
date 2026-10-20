@@ -414,12 +414,34 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     sentence of a failed send), its head names the new element, and it moves to it; the frame of
     the first does not come back. While a note is sending, a choice is let go: the note in flight
     is about the element before, and a failure must still find its text.
-  - **The composer**: 360 px, a head (« New note », « on » and what the element says on one line,
-    a cross « Close without sending » that does what « Cancel » does), the note, a foot behind a
-    rule. It opens **above** its element, 40 px over its top, on the edge of the frame; below when
-    there is no room above. It rises from the corner nearest to its element, with no fade.
-    « Send » is the word alone. The drop that pointed at the element is gone.
-  - **« Attach a picture of this element » is the preference of the settings panel**, shown beside
+  - **The composer of the mock-up of 2026-10-20** (FRU-305): 360 px with a border of 1 px. It
+    opens **above** its element, 40 px over its top, on the edge of the frame (5 px off the
+    element); below when there is no room above. It rises from the corner nearest to its element,
+    with no fade. Held by `e2e/composer.spec.ts` on computed styles.
+    - **The head**, on the warm surface: the drop of « new », what the note points at in mono
+      (« button.add · <AddToCart> », as the frame writes it: `aboutTarget` in `host.ts`), with what
+      the element says as its title, and « Pick again ». « Pick again » is the seam `onPickAgain`:
+      `init` starts a capture over the open composer, which keeps the text and moves to the element
+      chosen. The cross is gone: « Cancel » and Escape close it. The dialog keeps the name
+      « New note », where the ticket writes « Leave a note »: every spec and every screen reader
+      knew it by that name, and it does not repeat the launch button.
+    - **The body**: « Your comment » above the field of 96 px (its label, which names it; the
+      placeholder « What should change? » stays), « Name (optional) » above a field of 36 px in
+      sight (the link « Add my name (optional) » is gone; a signed reader still sees no field),
+      « Remember me on this site », and the box of the picture, in the accent. The e-mail of the
+      mock-up is not there: a new personal datum (FRU-58, open question 2).
+    - **The foot**: « Lands in {place} as a new issue » when a member sees one place, « Sent to the
+      team » otherwise; with several places, the line of the body that lets a member choose stays,
+      and the foot says nothing. « Cancel » and « Send », 34 px drawn and 44 px to press, « Send »
+      with the drop of the mark.
+    - **Sent**: a card takes the place of the composer for 4 s, or until a click anywhere else: the
+      drop of « new » with the number of its pin, « Sent as DEV-3 », « The pin stays here and
+      follows the issue's status. » in green, and « Open → » when the reader may open the issue.
+      `init` finds them in the read that follows the send, by the id of the seed (`onSeed` of
+      `plant`). It said « Sent » for 1.1 s before. A note kept for later still says so in the foot.
+    - **Failed**: a card above the foot, `role="alert"`: « Did not go through », then the sentence of
+      its cause (FRU-156). The text stays in the field.
+  - **« Attach a picture of the element » is the preference of the settings panel**, shown beside
     the note (`PictureChoice`, a seam like `NameMemory`). It is there only when the host gave
     `captureScreenshot`, **the composer never ticks it**, and a tick is kept at once. The mock-up
     shows it ticked because its person chose it. Nothing new is read, sent or kept: the same
@@ -427,7 +449,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     box never ticked and reads no picture, then ticks it and reads one.
   - **No « As Mathieu, Sakuga ».** A read says that the worker would sign the note (`identified`),
     not the name nor the workspace. Saying them is a new field of a public response of the worker.
-    A signed reader sees no line; a visitor keeps « Add my name (optional) ».
+    A signed reader sees no line; a visitor keeps the field « Name (optional) ».
   - **Kept, though the mock-up does not draw it**: « Keep for later », a ghost like « Cancel »; the
     line of the destination, under the note; the sentences of a failed send, « Sending… » and
     « Sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
@@ -642,9 +664,18 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
+- **The panel of the mock-up of 2026-10-20** (FRU-305): a head with the drop of the mark in the
+  accent, « Settings » and a cross of 28 px drawn in 44 px. **« Pins shown » is a chip for each
+  status**: 30 px drawn in a target of 44 px, the drop of its colour and its name; shown, the sunken
+  fill and the strong edge. The box stays, over the whole chip and out of sight, so the keyboard,
+  a click and a screen reader find a box. **The two settings are switches** (36 × 20, `role="switch"`),
+  on in the ink of the text, off in the edge of a field (the #d6d3d1 of the mock-up is 1.4:1 on
+  the surface and would not show where it is), at the end of a row of 44 px that toggles them.
+  « Open notes in a sidebar » and « Connection » (worker, client) are not drawn: the first waits for
+  the preference of FRU-302, and the widget keeps neither `endpoint` nor `clientId` (FRU-89).
 - **The panel offers a box only for the stages the worker reports** (FRU-32). `OfferedStages` is kept
   out of `ConfigStore`, because a copy in `localStorage` would outlive a change of store. A stage the
-  reporter hid stays hidden in the config. `.fruitback-config-check[hidden]` needs its own
+  reporter hid stays hidden in the config. `.fruitback-config-chip[hidden]` needs its own
   `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
 
 ### The reasons, and the history

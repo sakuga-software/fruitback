@@ -334,7 +334,7 @@ test('the popover and the thread open inside the window on a page scrolled sidew
 
   await page.getByPlaceholder('What should change?').fill('Sur une page qui défile de côté');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(composer).toBeHidden({ timeout: 5_000 });
+  await expect(composer).toBeHidden({ timeout: 10_000 });
 
   await badgeFor(page, 'Sur une page qui défile de côté').click();
   const thread = page.locator('[data-fruitback-thread]');

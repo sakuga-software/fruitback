@@ -3,6 +3,7 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
+import { stageToken } from './theme.ts';
 
 /**
  * The settings panel, opened from the floating button (FRU-14).
@@ -96,19 +97,33 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
   const stageLabels = new Map<SeedStage, HTMLLabelElement>();
   for (const stage of SEED_STAGES) {
-    const { input, label } = checkbox(document, `stage-${stage}`, t.stage(stage));
+    // A chip for each status (FRU-305): the drop of its colour and its name. The box stays, out of
+    // sight and in the order of the keyboard.
+    const { input, label } = checkbox(document, `stage-${stage}`, t.stage(stage), 'chip');
+    const drop = document.createElement('span');
+    drop.className = 'fruitback-config-chip-drop';
+    drop.setAttribute('aria-hidden', 'true');
+    drop.style.setProperty('--fruitback-pin-color', stageToken(stage));
+    input.after(drop);
     stageInputs.set(stage, input);
     stageLabels.set(stage, label);
     stages.append(label);
   }
 
+  // Two switches, as the mock-up draws them (FRU-305). Still boxes, which say « on » and « off ».
   const { input: hideResolved, label: hideResolvedLabel } = checkbox(
     document,
     'hide-resolved',
     t.text('settings.hideResolved'),
+    'switch',
   );
 
-  const { input: screenshot, label: screenshotLabel } = checkbox(document, 'screenshot', t.text('settings.screenshot'));
+  const { input: screenshot, label: screenshotLabel } = checkbox(
+    document,
+    'screenshot',
+    t.text('settings.screenshot'),
+    'switch',
+  );
 
   const close = document.createElement('button');
   close.type = 'button';
@@ -123,15 +138,22 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   head.className = 'fruitback-config-head';
   const title = document.createElement('span');
   title.className = 'fruitback-config-title';
-  title.textContent = t.text('settings.title');
+  // The drop of the mark in the accent, before the word (FRU-305).
+  const mark = createIcon(document, 'mark');
+  const words = document.createElement('span');
+  words.textContent = t.text('settings.title');
+  title.append(mark, words);
   head.append(title, close);
 
   const stagesTitle = document.createElement('p');
   stagesTitle.className = 'fruitback-config-legend';
   stagesTitle.textContent = t.text('settings.stages');
 
-  root.append(head, stagesTitle, stages, hideResolvedLabel);
-  if (options.screenshotSupported === true) root.append(screenshotLabel);
+  const body = document.createElement('div');
+  body.className = 'fruitback-config-body';
+  body.append(stagesTitle, stages, hideResolvedLabel);
+  if (options.screenshotSupported === true) body.append(screenshotLabel);
+  root.append(head, body);
   if (options.exportText !== undefined) root.append(copySection(options.exportText));
   options.host.append(style, root);
   const focus = holdFocus(root, () => panel.close());
@@ -290,22 +312,31 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   return panel;
 }
 
+/**
+ * A box and its words. `chip`: a status, drawn as a chip whose box is out of sight (FRU-305).
+ * `switch`: a row of words and a switch at its end, which is the box drawn otherwise, with the role
+ * that says « on » and « off ».
+ */
 function checkbox(
   document: Document,
   name: string,
   text: string,
+  kind: 'chip' | 'switch',
 ): { label: HTMLLabelElement; input: HTMLInputElement } {
   const label = document.createElement('label');
-  label.className = 'fruitback-config-check';
+  label.className = kind === 'chip' ? 'fruitback-config-chip' : 'fruitback-config-check';
 
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.name = name;
+  if (kind === 'switch') input.setAttribute('role', 'switch');
 
   const span = document.createElement('span');
   span.textContent = text;
 
-  label.append(input, span);
+  // The words first and the switch at the end of the row; the box first in a chip.
+  if (kind === 'switch') label.append(span, input);
+  else label.append(input, span);
 
   return { label, input };
 }
@@ -315,10 +346,10 @@ const STYLES = `
 .fruitback-panel-config {
   position: fixed;
   inset-inline-end: 16px;
-  bottom: 68px;
+  bottom: 84px;
   z-index: 2147483000;
-  width: 280px;
-  padding: 14px;
+  width: 320px;
+  border: 1px solid var(--fruitback-color-border);
   border-radius: var(--fruitback-radius-lg);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
@@ -327,45 +358,151 @@ const STYLES = `
   box-shadow: var(--fruitback-shadow-lg);
 }
 .fruitback-panel-config[hidden] { display: none; }
-.fruitback-config-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fruitback-config-title { font-weight: 600; letter-spacing: -0.006em; }
+/* The head of the mock-up of 2026-10-20 (FRU-305): the drop in the accent, « Settings », the cross. */
+.fruitback-config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 14px 12px;
+  padding-inline: 16px 12px;
+  border-bottom: 1px solid var(--fruitback-color-border);
+}
+.fruitback-config-title { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.006em; }
+.fruitback-config-title .fruitback-icon { width: 11px; height: 14px; color: var(--fruitback-color-accent); }
+/* The cross: 28 px drawn, 44 px to press, the margins give the difference back to the head. */
 .fruitback-config-close {
   display: grid;
   place-items: center;
-  border: 0;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  border: 8px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 8px);
   background: none;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
-.fruitback-config-close:hover { color: var(--fruitback-color-text); }
-.fruitback-config-legend { margin: 12px 0 4px; font-size: 12px; color: var(--fruitback-color-text-muted); }
-.fruitback-config-stages { display: flex; flex-direction: column; gap: 2px; }
-.fruitback-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fruitback-config-close:hover { color: var(--fruitback-color-text); background: var(--fruitback-color-surface-sunken) padding-box; }
+.fruitback-config-body { display: flex; flex-direction: column; padding: 14px 16px 12px; }
+.fruitback-config-legend { margin: 0 0 6px; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/* « Pins shown »: a chip for each status, on as many lines as it takes. */
+.fruitback-config-stages { display: flex; flex-wrap: wrap; gap: 0 8px; margin-bottom: 4px; }
+/*
+  A chip of 30 px, inside a transparent border that makes it 44 px to press. Its edge is an inset
+  shadow, drawn inside that border: grey when the status is shown, the strong edge of a field and the
+  sunken fill when it is.
+*/
+.fruitback-config-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border: 7px solid transparent;
+  border-inline-width: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface) padding-box;
+  box-shadow: inset 0 0 0 1px var(--fruitback-color-border);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-config-chip:has(input:checked) {
+  background: var(--fruitback-color-surface-sunken) padding-box;
+  box-shadow: inset 0 0 0 1px var(--fruitback-color-border-strong);
+}
+.fruitback-config-chip:has(input:focus-visible) { outline: 2px solid var(--fruitback-color-accent); outline-offset: -5px; }
+.fruitback-config-chip[hidden] { display: none; }
+/*
+  The box of a chip: out of sight over the whole chip, so a click on the chip is a click on the box,
+  still in the order of the keyboard, and still named by the words of its chip.
+*/
+.fruitback-config-chip { position: relative; }
+.fruitback-config-chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.fruitback-config-chip-drop {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: var(--fruitback-pin-color);
+}
+/* A forced palette drops the fill and the shadow: the chip of a shown status is then its outline. */
+@media (forced-colors: active) {
+  .fruitback-config-chip { border-color: Canvas; outline: 1px solid GrayText; outline-offset: -8px; }
+  .fruitback-config-chip:has(input:checked) { outline-color: Highlight; outline-width: 2px; }
+}
+/* A row of words and a switch at its end, 44 px tall: the whole row toggles it. */
+.fruitback-config-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
 .fruitback-config-check[hidden] { display: none; }
+/*
+  The switch of the mock-up: 36 × 20, a knob of 16 px, the ink when on. Off, it takes the edge of a
+  field and not the #d6d3d1 of the mock-up: 1.4:1 on the surface would not show where it is (3.49:1).
+*/
 .fruitback-config-check input {
-  /*
-    all:initial in the host reset sets appearance to none, which is its initial value — so a native
-    checkbox draws nothing at all. The boxes were invisible while still being checkable, which no
-    unit test could see. Restored here, next to the size that depends on it.
-  */
-  appearance: auto;
-  -webkit-appearance: checkbox;
-  width: 14px;
-  height: 14px;
-  accent-color: var(--fruitback-color-accent);
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-border-strong);
+  cursor: pointer;
+  transition: background var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+.fruitback-config-check input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xs);
+  transition: transform var(--fruitback-duration-fast) var(--fruitback-ease-out);
+}
+.fruitback-config-check input:checked { background: var(--fruitback-color-text); }
+.fruitback-config-check input:checked::before { transform: translateX(16px); }
+.fruitback-config-check input:checked:dir(rtl)::before { transform: translateX(-16px); }
+.fruitback-config-check input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+@media (forced-colors: active) {
+  .fruitback-config-check input { border: 1px solid ButtonText; }
+  .fruitback-config-check input::before { background: ButtonText; }
+  .fruitback-config-check input:checked { background: Highlight; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fruitback-config-check input, .fruitback-config-check input::before { transition: none; }
 }
 .fruitback-config-copy {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
+  padding: 10px 16px 14px;
   border-top: 1px solid var(--fruitback-color-border);
 }
 .fruitback-config-copy-button {
+  min-height: 36px;
   border: 1px solid var(--fruitback-color-border-strong);
   border-radius: var(--fruitback-radius-pill);
   padding: 6px 12px;
@@ -387,23 +524,11 @@ const STYLES = `
   font: 11px/1.4 ui-monospace, monospace;
   resize: vertical;
 }
-.fruitback-panel-config > .fruitback-config-check {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--fruitback-color-border);
-}
-.fruitback-panel-config > .fruitback-config-check + .fruitback-config-check {
-  margin-top: 6px;
-  padding-top: 0;
-  border-top: 0;
-}
 @media (max-width: 480px) {
   .fruitback-panel-config { inset-inline: 8px; width: auto; }
 }
-/* A thumb, not a pointer (FRU-157): a box is toggled by its whole row, and the row is tall enough. */
+/* A thumb, not a pointer (FRU-157): the copy button is 44 px. */
 @media (pointer: coarse) {
-  .fruitback-config-close { min-width: 44px; min-height: 44px; margin-block: -12px; margin-inline-end: -14px; }
-  .fruitback-config-check { min-height: 36px; }
-  .fruitback-config-copy-button { min-height: 36px; }
+  .fruitback-config-copy-button { min-height: 44px; }
 }
 `;

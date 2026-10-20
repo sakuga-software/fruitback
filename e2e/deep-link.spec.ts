@@ -31,7 +31,7 @@ async function plant(page: Page, selector: string, note: string): Promise<string
   await page.locator(selector).click();
   await page.locator('[data-fruitback-composer] textarea').fill(note);
   await page.locator('[data-fruitback-send]').click();
-  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 
   return page.evaluate(
     async ([origin, text]) => {

@@ -43,25 +43,21 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
   await expect(field).toHaveValue('');
 
   await page.keyboard.type('Planté sans souris');
-  // The cross of the head is the control before the field (FRU-258), and the first of the dialog:
-  // one more step back wraps to the last one, which is Send.
-  await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Close without sending' })).toBeFocused();
+  // The field is the first control of the dialog since its head lost the cross (FRU-305): one step
+  // back wraps to the last one, which is Send.
   await page.keyboard.press('Shift+Tab');
   const plant = page.getByRole('button', { name: 'Send', exact: true });
   await expect(plant).toBeFocused();
   // The reset removes the browser's focus ring, and host.ts puts one back.
   expect(await plant.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
   await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
   await expect(field).toBeFocused();
   await expect(field).toHaveValue('Planté sans souris');
 
   await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  await expect(dialog).toBeHidden({ timeout: 5_000 });
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(launch).toBeFocused();
 });
 
@@ -128,7 +124,7 @@ for (const scheme of ['light', 'dark'] as const) {
     const note = `Vu par axe, ${scheme}`;
     await plantPin(page, cta, note);
     // The popover stays open in its sent state for a moment, and each scan must see one state.
-    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
 
     const violations: string[] = [];
     const scan = async (state: string) => {

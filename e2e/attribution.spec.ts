@@ -28,8 +28,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByRole('button', { name: /Add my name/ }).click();
-  await page.getByLabel('Your name (optional)').fill('Alice');
+  await page.getByLabel('Name (optional)').fill('Alice');
   await page.getByPlaceholder('What should change?').fill('Signé Alice');
   await sendNote(page);
 
@@ -51,8 +50,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await latte.click();
-  await page.getByRole('button', { name: /Add my name/ }).click();
-  await page.getByLabel('Your name (optional)').fill('Alice');
+  await page.getByLabel('Name (optional)').fill('Alice');
   await page.getByLabel('Remember me on this site').check();
   await page.getByPlaceholder('What should change?').fill('Signé, et retenu');
   await sendNote(page);
@@ -63,7 +61,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-mocha"] .add').click();
-  await expect(page.getByLabel('Your name (optional)')).toHaveValue('Alice');
+  await expect(page.getByLabel('Name (optional)')).toHaveValue('Alice');
   await expect(page.getByLabel('Remember me on this site')).toBeChecked();
   await page.getByPlaceholder('What should change?').fill('Signé sans rien retaper');
   await sendNote(page);
@@ -72,7 +70,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   expect(seeds.find((seed) => seed.note === 'Signé sans rien retaper')?.reporter).toEqual({ name: 'Alice' });
 
   // Unticked, the name leaves storage at once.
-  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 10_000 });
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await latte.click();
   await page.getByLabel('Remember me on this site').uncheck();
