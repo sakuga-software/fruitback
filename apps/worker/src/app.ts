@@ -995,6 +995,30 @@ const CHECK_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/check$/;
 
 const VERDICTS: readonly CheckVerdict[] = ['fixed', 'wrong'];
 
+/** How long one verdict holds its note against a second one, at most: a worker that dies while it writes (FRU-294). */
+export const CHECK_LOCK_MS = 15_000;
+
+/**
+ * The account that left a note, as the index keeps it (FRU-294). An index that does not answer is a
+ * store that does not answer: `502`, and the person tries again. Never « nobody », which would refuse
+ * the author as if they were somebody else.
+ */
+async function indexedAuthorOf(
+  index: NoteIndex | undefined,
+  workspace: string,
+  site: string,
+  seed: string,
+): Promise<string | undefined> {
+  if (index === undefined) return undefined;
+  try {
+    return (await index.authors(workspace, site, [seed])).get(seed);
+  } catch (error) {
+    throw new StoreError(
+      `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 /**
  * `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` (FRU-294).
  *
@@ -1084,44 +1108,64 @@ async function postCheck(
       );
       if (found === undefined) continue;
 
-      const author = (await context.noteIndex?.authors(workspace, clientId, [found.seed.id]))?.get(found.seed.id);
+      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
       const manages = reach !== undefined && can(reach.role, 'manage-sites');
       if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
       if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
       if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
       if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
-      if (!(await checkReplyLimit(kv, context.clientIp))) return json(429, { error: 'rate-limited' }, corsHeaders);
+      // No count of its own, as for the reply of a member (FRU-257): only a member gives a verdict,
+      // and the limit of all requests applies above.
+      // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
+      // and would write two verdicts. The second is refused while the first is written; after it, the
+      // read under the key sees the verdict of the first.
+      const lock = `fruitback:check:${clientId}:${found.seed.id}`;
+      if ((await kv.incr(lock, CHECK_LOCK_MS)) > 1) return json(409, { error: 'check-in-progress' }, corsHeaders);
+      try {
+        // Read again under the key: a request that read the note before another wrote its verdict
+        // takes the key after it, and must see that verdict.
+        const now = (await store.findForPage({ url, clientId }, target, route.policy)).find(
+          (each) => each.id === found.id,
+        );
+        if (now === undefined) break;
+        if (now.stage !== 'ripe') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
+        if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
+        const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
+        const membership = memberships.find((each) => each.workspace.id === workspace);
+        if (person === undefined || membership === undefined) {
+          return json(401, { error: 'identity-required' }, corsHeaders);
+        }
+        const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
+        const answer = await store.check?.(
+          { issue: found.id, clientId },
+          {
+            verdict: verdict as CheckVerdict,
+            author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+            ...typed,
+          },
+          target,
+          route.policy,
+        );
+        if (answer === undefined) break;
+        await invalidatePages(kv, [url]);
+        // The stage the store answers now, for the counts of the console and of the extension.
+        await indexed(context.noteIndex, (index) =>
+          index.refresh(
+            workspace,
+            clientId,
+            placeOf(target),
+            [{ ...now, stage: answer.stage, comments: [...(now.comments ?? []), answer.comment] }],
+            Date.now(),
+            { verdicts: true },
+          ),
+        );
 
-      const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
-      const membership = memberships.find((each) => each.workspace.id === workspace);
-      if (person === undefined || membership === undefined)
-        return json(401, { error: 'identity-required' }, corsHeaders);
-      const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
-      const answer = await store.check?.(
-        { issue: found.id, clientId },
-        {
-          verdict: verdict as CheckVerdict,
-          author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
-          ...typed,
-        },
-        target,
-        route.policy,
-      );
-      if (answer === undefined) break;
-      await invalidatePages(kv, [url]);
-      // The stage the store answers now, for the counts of the console and of the extension.
-      await indexed(context.noteIndex, (index) =>
-        index.refresh(
-          workspace,
-          clientId,
-          placeOf(target),
-          [{ ...found, stage: answer.stage, comments: [...(found.comments ?? []), answer.comment] }],
-          Date.now(),
-          { verdicts: true },
-        ),
-      );
-
-      return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
+        return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
+      } finally {
+        // Freed once the store answered, whatever it said: the store holds the verdict from then on,
+        // and the guards above read it there. A verdict that failed is not refused on its retry.
+        await kv.set(lock, '0', 1).catch(() => undefined);
+      }
     }
 
     return json(404, { error: 'not-found' }, corsHeaders);

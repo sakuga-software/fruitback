@@ -1718,6 +1718,13 @@ same transaction).
   cache (`409 not-done`), and not confirmed already (`409 already-checked`): a « Still wrong » does
   not reopen a note that the team did not close.
   test:`answers 409 on a note that is not done, and on a note confirmed already, and writes nothing`.
+  **One verdict at a time on a note**: a second one sent while the first is written is
+  `409 check-in-progress`, held by a key of the shared `kv` for the time of the write (15 s at most),
+  and the note is read again under the key, so a request that read it before another wrote reads the
+  verdict after. test:`writes one verdict for two sent together, and answers 409 to the other`,
+  test:`writes one verdict when the second request read the note before the first wrote, and took the key after`.
+- **An index that does not answer is `502 store-unavailable`**, never a refusal of the author: the
+  person tries again. test:`answers 502 when the index of the notes does not answer, never a refusal of the author`.
 - **Which note.** As for a reply: the route reads the page for the site and writes only under a note
   that the read answers, else `404`. test:`answers 404 for the id of a note of another site`.
 - **What goes to the tracker.** The name of the account and the name of the workspace, on the line
@@ -1728,8 +1735,9 @@ same transaction).
   test:`reads a verdict in either language of a team, and no reply of the page as one`.
 - **Where not.** A site whose store takes no reply takes no verdict: an address that only receives,
   a tracker whose workspace hides its replies, GitHub. `403 checks-not-taken`.
-- **How much.** A text of at most 2 000 characters, like a reply. **5 verdicts a minute from one
-  address**, in the count of the replies with no session.
+- **How much.** A text of at most 2 000 characters, like a reply. **No count of its own**: only a
+  member gives a verdict, and a member's reply is not counted either (FRU-257); the limit of all
+  requests applies. test:`takes more verdicts of members from one address than the replies of visitors allow`.
 - **What a read says.** `GET /feedback` adds `checked: { by, at }` to a done note whose newest verdict
   is « fixed », read in its replies: anybody who reads the replies of the page reads it. It adds
   `mine: true` to the notes that the reader left, **for a session of the workspace and nobody

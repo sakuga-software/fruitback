@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { REPLY_LENGTH } from './app.ts';
+import { REPLY_LIMIT } from './rate-limit.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
-import { resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
+import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
+import { type SeedStore, StoreError } from './store.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { checkedOf, verdictOf } from './reply-text.ts';
@@ -85,7 +87,7 @@ function check(
   site: string,
   issue: string,
   body: Record<string, unknown>,
-  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex } = {},
+  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex; store?: SeedStore } = {},
 ): Promise<Answer> {
   const token = options.cookie ?? options.token;
 
@@ -97,6 +99,7 @@ function check(
     {
       ...(options.ip === undefined ? {} : { clientIp: options.ip }),
       ...(options.noteIndex === undefined ? {} : { noteIndex: options.noteIndex }),
+      ...(options.store === undefined ? {} : { store: options.store }),
     },
   ).then(answerOf);
 }
@@ -306,5 +309,126 @@ describe('what a read says of the verdicts (FRU-294)', () => {
       ]),
       undefined,
     );
+  });
+});
+
+describe('a verdict, when two come at once or a store fails (FRU-294, heavy review)', () => {
+  it('writes one verdict for two sent together, and answers 409 to the other', async () => {
+    const { world, site, member, owner, note } = await aDoneNote();
+    // A tracker that takes its time: the second request reads the note while the first writes.
+    const memory = createMemoryStore();
+    const slow: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return memory.check?.(...args);
+      },
+    };
+
+    const answers = await Promise.all([
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow }),
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow }),
+    ]);
+
+    assert.deepEqual(answers.map((answer) => answer.status).sort(), [201, 409]);
+    const [issue] = await read(world, site.id, owner);
+    assert.equal(issue?.comments?.length, 1);
+  });
+
+  it('writes one verdict when the second request read the note before the first wrote, and took the key after', async () => {
+    const { world, site, member, owner, note } = await aDoneNote();
+    // The first request writes for 150 ms, and the second reads the note during that write. The
+    // second then waits on the index past the end of the first, and takes the key that it gave back.
+    const memory = createMemoryStore();
+    const slow: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return memory.check?.(...args);
+      },
+    };
+    const real = world.context.noteIndex as NoteIndex;
+    let asked = 0;
+    const late: NoteIndex = {
+      ...real,
+      authors: async (...args) => {
+        asked += 1;
+        if (asked === 2) await new Promise((resolve) => setTimeout(resolve, 400));
+        return real.authors(...args);
+      },
+    };
+
+    const answers = await Promise.all([
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow, noteIndex: late }),
+      new Promise((resolve) => setTimeout(resolve, 60)).then(() =>
+        check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow, noteIndex: late }),
+      ),
+    ]);
+
+    assert.deepEqual(
+      answers.map((answer) => [answer.status, answer.body.error]),
+      [
+        [201, undefined],
+        [409, 'already-checked'],
+      ],
+    );
+    const [issue] = await read(world, site.id, owner);
+    assert.equal(issue?.comments?.length, 1);
+  });
+
+  it('frees the note when the store fails, so the retry writes it', async () => {
+    const { world, site, member, note } = await aDoneNote();
+    const memory = createMemoryStore();
+    let fails = 1;
+    const flaky: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        if (fails-- > 0) throw new StoreError('Linear could not be reached');
+        return memory.check?.(...args);
+      },
+    };
+
+    assert.equal(
+      (await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: flaky })).status,
+      502,
+    );
+    assert.equal(
+      (await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: flaky })).status,
+      201,
+    );
+  });
+
+  it('answers 502 when the index of the notes does not answer, never a refusal of the author', async () => {
+    const { world, site, member, note } = await aDoneNote();
+    const real = world.context.noteIndex as NoteIndex;
+    const down: NoteIndex = {
+      ...real,
+      authors: async () => {
+        throw new Error('the database did not answer');
+      },
+    };
+
+    const answer = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, noteIndex: down });
+
+    assert.equal(answer.status, 502);
+    assert.equal(answer.body.error, 'store-unavailable');
+  });
+});
+
+describe('how many verdicts (FRU-294)', () => {
+  it('takes more verdicts of members from one address than the replies of visitors allow', async () => {
+    const { world, site, member, bobs } = await aDoneNote();
+    const ip = '198.51.100.9';
+    const notes = [];
+    for (let index = 0; index <= REPLY_LIMIT; index += 1) {
+      const note = await noteOf(world, site.id, `sd_many_${index}`, bobs.accessToken);
+      setMemoryIssueState(note.id, DONE);
+      notes.push(note);
+    }
+
+    for (const note of notes) {
+      const answer = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, ip });
+      assert.equal(answer.status, 201, JSON.stringify(answer.body));
+    }
   });
 });
