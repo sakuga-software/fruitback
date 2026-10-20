@@ -28,6 +28,9 @@ import { startServer } from './server.ts';
  * - **One workspace and one site**, `playground`, at the origin of the playground. A worker with a
  *   database serves the sites of its workspaces and nothing else, and the playground signs nobody in.
  *   `FRUITBACK_DEV_VISIBILITY=members` makes the site one that only a session of the workspace reads.
+ * - **`POST /__dev/stage`** `{ note, stage }` (FRU-300), which moves a note of the database to a
+ *   stage, as a team moves an issue in its tracker. No route of the worker does it: the store is the
+ *   tracker's. The specs of « Looks fixed » need a note the team marked done.
  * - **`POST /__dev/pair`**, which answers a pairing code and its link for the workspace. The `pair`
  *   command is another process: it cannot reach a database that lives in this one.
  */
@@ -90,6 +93,34 @@ export async function seedDevWorkspace(
   return { workspace: workspace.id, owner: owner.id };
 }
 
+const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'];
+
+/** `POST /__dev/stage`: the note whose seed has this id goes to this stage. `404` for no such note. */
+async function moveStage(database: PgDatabase, incoming: IncomingMessage, response: ServerResponse): Promise<void> {
+  try {
+    const asked = await bodyOf(incoming);
+    if (typeof asked.note !== 'string' || typeof asked.stage !== 'string' || !STAGES.includes(asked.stage)) {
+      response.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'note and stage' }));
+
+      return;
+    }
+    const pool = await database.pool();
+    const client = await pool.connect();
+    try {
+      const moved = await client.query(
+        "UPDATE seeds SET stage = $1, updated_at = $3 WHERE (seed::jsonb ->> 'id') = $2",
+        [asked.stage, asked.note, Date.now()],
+      );
+      const count = (moved as { rowCount?: number | null }).rowCount ?? 0;
+      response.writeHead(count > 0 ? 200 : 404, { 'Content-Type': 'application/json' }).end(JSON.stringify({ count }));
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    response.writeHead(500, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(error) }));
+  }
+}
+
 async function bodyOf(incoming: IncomingMessage): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   for await (const chunk of incoming) chunks.push(chunk as Buffer);
@@ -129,6 +160,11 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   const serve = server.listeners('request') as ((incoming: IncomingMessage, response: ServerResponse) => void)[];
   server.removeAllListeners('request');
   server.on('request', (incoming: IncomingMessage, response: ServerResponse) => {
+    if (incoming.method === 'POST' && incoming.url === '/__dev/stage') {
+      void moveStage(database, incoming, response);
+
+      return;
+    }
     if (incoming.method !== 'POST' || incoming.url !== '/__dev/pair') {
       for (const listener of serve) listener(incoming, response);
 

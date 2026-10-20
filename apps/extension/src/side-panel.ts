@@ -1,6 +1,6 @@
 import { language, msg, t } from './i18n.ts';
 import { dropMark, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
-import type { NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
+import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
 
 /**
  * The side panel of the browser (FRU-296, FRU-299): its place in the manifest, the gesture that
@@ -149,6 +149,10 @@ export type PanelOptions = {
   open?: string;
   /** The note whose reply field is open, and what is written in it. */
   replying?: { id: string; text: string; sending?: boolean; problem?: string };
+  /** The note whose verdict is on its way, or why the last one did not go (FRU-300). */
+  checking?: { id: string; sending?: CheckVerdict; problem?: string };
+  /** The notes the reader reopened from this panel, and when: their rows say so (FRU-300). */
+  reopened?: Record<string, string>;
   /** Now, for the ages: a test sets it. */
   now?: number;
   onClose: () => void;
@@ -163,6 +167,7 @@ export type PanelOptions = {
   onRetry: () => void;
   onReload: () => void;
   onSettings: () => void;
+  onVerdict: (id: string, verdict: CheckVerdict) => void;
 };
 
 function make<K extends keyof HTMLElementTagNameMap>(
@@ -218,6 +223,14 @@ export function tabOf(note: PanelNote): NotesTab {
   return note.stage === 'ripe' || note.stage === 'composted' ? 'done' : 'open';
 }
 
+/**
+ * A note the reader left that the team marked done, and that nobody confirmed (FRU-300): it waits in
+ * « Ready to check », and not in « Done ». `mine` and `checked` are the worker's word (FRU-294).
+ */
+export function toCheck(note: PanelNote): boolean {
+  return note.stage === 'ripe' && note.mine === true && note.checked === undefined;
+}
+
 /** The order of the pins: by their number, the notes with no number last. */
 function byNumber(a: PanelNote, b: PanelNote): number {
   return (a.number ?? Number.MAX_SAFE_INTEGER) - (b.number ?? Number.MAX_SAFE_INTEGER);
@@ -232,11 +245,12 @@ const UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
   ['minute', 60],
 ];
 
-/** « 1 day ago », « 40 min ago », in the language of the reader. Nothing for a date that does not parse. */
+/** « just now », « 1 day ago », in the language of the reader. Nothing for a date that does not parse. */
 export function ageOf(iso: string, now: number): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return '';
   const seconds = Math.round((then - now) / 1000);
+  if (Math.abs(seconds) < 60) return t('just now');
   const format = new Intl.RelativeTimeFormat(language(), { numeric: 'auto', style: 'long' });
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size) return format.format(Math.round(seconds / size), unit);
@@ -251,6 +265,20 @@ function authorOf(note: PanelNote): string {
   const name = note.author?.trim();
 
   return name === undefined || name === '' ? t('Anonymous') : name;
+}
+
+/** What a row says after its stage: who checked or reopened it, or who wrote it when. */
+function saidOf(note: PanelNote, now: number, reopenedAt: string | undefined): string {
+  if (note.checked !== undefined && note.stage === 'ripe') {
+    return note.mine === true
+      ? t('Checked by you · {age}', { age: ageOf(note.checked.at, now) })
+      : t('Checked by {name} · {age}', { name: note.checked.by, age: ageOf(note.checked.at, now) });
+  }
+  if (reopenedAt !== undefined && tabOf(note) === 'open') {
+    return t('Reopened by you · {age}', { age: ageOf(reopenedAt, now) });
+  }
+
+  return `${authorOf(note)} · ${ageOf(note.createdAt, now)}`;
 }
 
 /** The page of the panel. */
@@ -372,8 +400,10 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
     return [empty];
   }
 
+  const ready = notes.filter(toCheck).sort(byNumber);
   const open = notes.filter((note) => tabOf(note) === 'open').sort(byNumber);
-  const done = notes.filter((note) => tabOf(note) === 'done').sort(byNumber);
+  // A note to check waits in its block, not in « Done ».
+  const done = notes.filter((note) => tabOf(note) === 'done' && !toCheck(note)).sort(byNumber);
   const tabs = segmentedTabs(document, {
     label: t('Notes on this page'),
     size: 'panel',
@@ -390,7 +420,7 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
   list.setAttribute('role', 'tabpanel');
   list.setAttribute('aria-label', options.tab === 'done' ? t('Done notes') : t('Open notes'));
   for (const note of shown) list.append(noteRow(document, options, note));
-  const parts: Node[] = [tabs, list];
+  const parts: Node[] = ready.length > 0 ? [readyBlock(document, options, ready), tabs, list] : [tabs, list];
   if (shown.length === 0) {
     parts.push(
       make(document, 'p', 'panel-none', options.tab === 'done' ? t('No note is done yet.') : t('No note is open.')),
@@ -419,9 +449,11 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
   if (note.number === undefined) drop.dataset.size = 'list';
   const words = make(document, 'span', 'panel-row-words');
   const meta = make(document, 'span', 'panel-row-meta');
+  const reopenedAt = options.reopened?.[note.id];
+  // FRU-300: a verdict says itself on its row: the store moved the note, the panel names who did.
   meta.append(
     make(document, 'strong', 'panel-row-stage', t(STAGE_WORD[note.stage])),
-    ` · ${authorOf(note)} · ${ageOf(note.createdAt, now)}`,
+    ` · ${saidOf(note, now, reopenedAt)}`,
   );
   words.append(make(document, 'span', 'panel-row-note', note.note), meta);
   head.append(drop, words);
@@ -457,6 +489,114 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
 
   return row;
 }
+
+const SVG_CHECK = 'M3.5 8.5 L6.5 11.5 L12.5 4.5';
+
+/** The tick of « Looks fixed », 15 px. */
+function tick(document: Document): SVGSVGElement {
+  const drawing = document.createElementNS(SVG, 'svg');
+  drawing.setAttribute('viewBox', '0 0 16 16');
+  drawing.setAttribute('aria-hidden', 'true');
+  drawing.setAttribute('class', 'ready-tick');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('d', SVG_CHECK);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.8');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  drawing.append(path);
+
+  return drawing;
+}
+
+/**
+ * Who marked a note done, as its replies say: the author of the newest reply of the tracker, never one
+ * written from a page, or nobody known.
+ */
+function fixedLine(note: PanelNote, now: number): string {
+  // A reply written from a page carries a name the page typed: it says nobody fixed anything (review).
+  const last = [...note.replies]
+    .reverse()
+    .find((reply) => reply.fromPage !== true && (reply.author ?? '').trim() !== '');
+  if (last?.author !== undefined) {
+    return t('Fixed by {name} · {age}', { name: last.author.trim(), age: ageOf(last.createdAt, now) });
+  }
+
+  return t('Marked done · {age}', { age: ageOf(note.updatedAt, now) });
+}
+
+/**
+ * « Ready to check » (FRU-300): the notes of the reader that the team says are fixed, each with
+ * « Looks fixed » and « Still wrong ». After a verdict the panel reads the page again: the store
+ * moved the note, and the list says where it is now. Nothing moves before that.
+ */
+function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[]): HTMLElement {
+  const now = options.now ?? Date.now();
+  const block = make(document, 'section', 'ready');
+  const title = make(document, 'h3', 'ready-title', t('Ready to check · {count}', { count: ready.length }));
+  title.id = 'ready-title';
+  block.setAttribute('aria-labelledby', title.id);
+  block.append(
+    title,
+    make(document, 'p', 'ready-text', t('The team says these are fixed. Do they look right to you?')),
+  );
+  const list = make(document, 'ul', 'ready-list');
+  for (const note of ready) {
+    const item = make(document, 'li', 'ready-item');
+    item.dataset.note = note.id;
+    const head = make(document, 'div', 'ready-head');
+    const words = make(document, 'div', 'ready-words');
+    words.append(
+      make(document, 'span', 'ready-note', note.note),
+      make(document, 'span', 'ready-meta', fixedLine(note, now)),
+    );
+    head.append(
+      statusDrop(document, { stage: 'ripe', ...(note.number === undefined ? {} : { number: note.number }) }),
+      words,
+    );
+    const checking = options.checking?.id === note.id ? options.checking : undefined;
+    const sending = checking?.sending !== undefined;
+    const actions = make(document, 'div', 'ready-actions');
+    const fixed = make(document, 'button', 'ready-fixed');
+    fixed.type = 'button';
+    fixed.append(tick(document), checking?.sending === 'fixed' ? t('Sending…') : t('Looks fixed'));
+    const wrong = make(
+      document,
+      'button',
+      'ready-wrong',
+      checking?.sending === 'wrong' ? t('Sending…') : t('Still wrong'),
+    );
+    wrong.type = 'button';
+    for (const [button, verdict] of [
+      [fixed, 'fixed'],
+      [wrong, 'wrong'],
+    ] as const) {
+      // Both wait while one verdict is written: a second would be refused, and say nothing true.
+      button.disabled = sending;
+      button.addEventListener('click', () => options.onVerdict(note.id, verdict));
+    }
+    actions.append(fixed, wrong);
+    item.append(head, actions);
+    if (checking?.problem !== undefined) {
+      const problem = make(document, 'p', 'ready-problem', t(checking.problem));
+      problem.setAttribute('role', 'alert');
+      item.append(problem);
+    }
+    list.append(item);
+  }
+  block.append(list);
+
+  return block;
+}
+
+/** What a verdict that did not go says (FRU-300). Nothing moved. */
+export const CHECK_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
+  retry: msg('Did not go through. Try again.'),
+  wait: msg('Too many requests just now. Try again in a minute.'),
+  'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then try again.'),
+  refused: msg('This note can no longer be checked here. The list is read again.'),
+};
 
 /** The field of a reply, under its note, as the thread of the widget has it. */
 function replyForm(

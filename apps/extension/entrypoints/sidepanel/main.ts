@@ -1,11 +1,13 @@
 import { browser } from 'wxt/browser';
 import { language, setLanguage } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
+import type { CheckVerdict } from '../../src/protocol.ts';
 import {
   type NotesTab,
   type PanelNotes,
   type PanelOptions,
   type PanelState,
+  CHECK_PROBLEM,
   REPLY_PROBLEM,
   notesOf,
   openOnRead,
@@ -14,7 +16,13 @@ import {
   webHost,
 } from '../../src/side-panel.ts';
 import { readSite } from '../../src/sites.ts';
-import { type TabCommandAnswer, panelEvent, parseAnswer, tabCommand } from '../../src/tab-command.ts';
+import {
+  type TabCommandAnswer,
+  type TabCommandArguments,
+  panelEvent,
+  parseAnswer,
+  tabCommand,
+} from '../../src/tab-command.ts';
 import type { TabCommand } from '../../src/protocol.ts';
 
 /**
@@ -41,19 +49,23 @@ let notes: PanelNotes = 'reading';
 let tab: NotesTab = 'open';
 let open: string | undefined;
 let replying: PanelOptions['replying'];
+/** The verdict on its way, or why the last one did not go (FRU-300). */
+let checking: PanelOptions['checking'];
+/** The notes reopened from this panel, and when: « Reopened by you ». Gone with the panel. */
+const reopened: Record<string, string> = {};
 /** Each look at the tab counts one: an older one that answers late does not draw over a newer one. */
 let looks = 0;
 /** The note a click on a pin asked to open, until a list that holds it is read. */
 let pendingOpen: string | undefined;
 
-async function ask(command: TabCommand, args: { note?: string; body?: string } = {}): Promise<TabCommandAnswer> {
+async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
 }
 
 /** The answer of the widget of the tab, or nothing when nothing on the page answers. */
 async function askOrNothing(
   command: TabCommand,
-  args: { note?: string; body?: string } = {},
+  args: TabCommandArguments = {},
 ): Promise<TabCommandAnswer | undefined> {
   if (followed === undefined) return undefined;
   const raw: unknown = await browser.tabs.sendMessage(followed.tabId, tabCommand(command, args)).catch(() => undefined);
@@ -180,6 +192,8 @@ function draw(): void {
       tab,
       ...(open === undefined ? {} : { open }),
       ...(replying === undefined ? {} : { replying }),
+      ...(checking === undefined ? {} : { checking }),
+      reopened,
       onClose: () => window.close(),
       onLeave: () => void ask('leave-feedback'),
       onTab: (chosen) => {
@@ -216,10 +230,36 @@ function draw(): void {
         if (followed !== undefined) void browser.tabs.reload(followed.tabId);
       },
       onSettings: () => void browser.runtime.openOptionsPage(),
+      onVerdict: (id, verdict) => void sendVerdict(id, verdict),
     }),
   );
   if (app.firstElementChild instanceof HTMLElement) app.firstElementChild.dataset.state = state().kind;
   refocus(key, caret);
+}
+
+/**
+ * « Looks fixed » or « Still wrong » (FRU-300), by the widget of the tab, then a read: the store moved
+ * the note, and the list says where it is now. Nothing moves before that answer.
+ */
+async function sendVerdict(id: string, verdict: CheckVerdict): Promise<void> {
+  if (checking?.sending !== undefined) return;
+  checking = { id, sending: verdict };
+  draw();
+  const { outcome } = await ask('check', { note: id, verdict });
+  if (outcome === 'sent') {
+    checking = undefined;
+    if (verdict === 'wrong') reopened[id] = new Date().toISOString();
+    open = id;
+    // The note is in Done when it looks fixed, back in Open when it is still wrong.
+    tab = verdict === 'fixed' ? 'done' : 'open';
+    await readNotes();
+
+    return;
+  }
+  checking = { id, problem: CHECK_PROBLEM[outcome ?? 'retry'] };
+  // A note the worker no longer takes a verdict on: the list of now says why.
+  if (outcome === 'refused') await readNotes();
+  else draw();
 }
 
 async function sendReply(): Promise<void> {

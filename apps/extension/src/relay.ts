@@ -30,6 +30,12 @@ export const FEEDBACK_PATH = '/feedback';
  */
 export const REPLY_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/replies$/;
 
+/**
+ * The path of a verdict on one note (FRU-294, FRU-300): « Looks fixed » or « Still wrong », from the
+ * side panel through the widget. The same shape as a reply: `FEEDBACK_PATH`, the id, then `/check`.
+ */
+export const CHECK_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/check$/;
+
 export type RelaySeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
@@ -141,7 +147,8 @@ function isTimeout(error: unknown): boolean {
 /**
  * The one URL this origin's widget is allowed to ask for.
  *
- * An allowlist of two paths, the notes and a reply under one note, so a route the widget grows
+ * An allowlist of three paths, the notes, a reply under one note, and a verdict on one note
+ * (FRU-300), so a route the widget grows
  * later is refused here until somebody adds it — rather than the relay becoming a way to reach
  * anything on that worker. The origin and
  * the path are compared apart because an endpoint may carry a path of its own
@@ -157,7 +164,10 @@ function targets(url: string, endpoint: string): boolean {
     if (target.pathname === worker.pathname) return true;
     const base = worker.pathname.slice(0, -FEEDBACK_PATH.length);
 
-    return target.pathname.startsWith(base) && REPLY_PATH.test(target.pathname.slice(base.length));
+    if (!target.pathname.startsWith(base)) return false;
+    const rest = target.pathname.slice(base.length);
+
+    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest);
   } catch {
     return false;
   }

@@ -128,7 +128,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     await widget.refresh();
 
     assert.deepEqual(widget.pageNotes()?.[0]?.replies, [
-      { author: 'Dev', body: 'Seen, thanks.\nTwo lines.', createdAt: '2026-10-20T09:00:00.000Z' },
+      { author: 'Dev', body: 'Seen, thanks.\nTwo lines.', createdAt: '2026-10-20T09:00:00.000Z', fromPage: true },
     ]);
   });
 
@@ -254,5 +254,61 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     await widget.refresh();
 
     assert.equal(told.length, before);
+  });
+
+  it('sends a verdict on a note by the transport of the host, then reads again (FRU-300)', async () => {
+    const { requests, transport } = worker({ canReply: true });
+    const widget = widgetOn(mounted(), { transport });
+    await widget.refresh();
+    const reads = requests.filter((request) => request.method === 'GET').length;
+
+    assert.equal(await widget.checkNote('seed-1', 'wrong'), 'sent');
+    const posted = requests.find((request) => request.method === 'POST') as TransportRequest;
+    assert.equal(posted.url, `${ENDPOINT}/feedback/issue_1/check?client=acme`);
+    assert.deepEqual(JSON.parse(posted.body ?? '{}'), { url: 'https://preview.acme.test/pricing', verdict: 'wrong' });
+    assert.equal(requests.filter((request) => request.method === 'GET').length, reads + 1, 'no read after the verdict');
+    assert.equal(await widget.checkNote('nobody', 'fixed'), 'refused');
+  });
+
+  it('says « try again » while another verdict on the note is being written', async () => {
+    const transport = async (request: TransportRequest): Promise<TransportResponse> =>
+      request.method === 'GET'
+        ? { ok: true, status: 200, body: JSON.stringify({ issues: [MINE, CLOSED] }) }
+        : { ok: false, status: 409, body: JSON.stringify({ error: 'check-in-progress' }) };
+    const widget = widgetOn(mounted(), { transport });
+    await widget.refresh();
+
+    assert.equal(await widget.checkNote('seed-1', 'fixed'), 'retry');
+  });
+
+  it('says why a verdict did not go, and reads nothing then', async () => {
+    for (const [status, outcome] of [
+      [409, 'refused'],
+      [403, 'refused'],
+      [429, 'wait'],
+      [401, 'signed-out'],
+      [500, 'retry'],
+    ] as const) {
+      const { requests, transport } = worker({}, status);
+      const widget = widgetOn(mounted(), { transport });
+      await widget.refresh();
+      const reads = requests.filter((request) => request.method === 'GET').length;
+      assert.equal(await widget.checkNote('seed-1', 'fixed'), outcome, String(status));
+      assert.equal(requests.filter((request) => request.method === 'GET').length, reads, String(status));
+    }
+  });
+
+  it('gives who confirmed a done note', async () => {
+    const page = mounted();
+    const confirmed = { ...CLOSED, stage: 'ripe' as const, checked: { by: 'Camille', at: '2026-10-20T10:00:00.000Z' } };
+    const transport = async (request: TransportRequest): Promise<TransportResponse> => ({
+      ok: true,
+      status: 200,
+      body: request.method === 'GET' ? JSON.stringify({ issues: [confirmed] }) : '{}',
+    });
+    const widget = widgetOn(page, { transport });
+    await widget.refresh();
+
+    assert.deepEqual(widget.pageNotes()?.[0]?.checked, { by: 'Camille', at: '2026-10-20T10:00:00.000Z' });
   });
 });

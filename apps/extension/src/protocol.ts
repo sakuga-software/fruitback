@@ -206,7 +206,13 @@ export type CommandMessage = {
   note?: string;
   /** The text of `reply`. */
   body?: string;
+  /** The verdict of `check` (FRU-300). */
+  verdict?: CheckVerdict;
 };
+
+/** « Looks fixed » and « Still wrong », as the worker names them (FRU-294). */
+export const CHECK_VERDICTS = ['fixed', 'wrong'] as const;
+export type CheckVerdict = (typeof CHECK_VERDICTS)[number];
 
 export type CommandResponseMessage = {
   channel: typeof CHANNEL;
@@ -247,6 +253,8 @@ export const TAB_COMMANDS = [
   'reply',
   // The read of the widget, again: « Try again » of a read that failed.
   'reread',
+  // FRU-300: « Looks fixed » / « Still wrong ».
+  'check',
 ] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 
@@ -271,7 +279,10 @@ export type PanelNote = {
   mine?: true;
   createdAt: string;
   updatedAt: string;
-  replies: { author?: string; body: string; createdAt: string }[];
+  /** `fromPage`: written from a page, under a name the page typed (FRU-257); else the tracker's. */
+  replies: { author?: string; body: string; createdAt: string; fromPage?: true }[];
+  /** Who said it looks fixed, and when (FRU-294). */
+  checked?: { by: string; at: string };
   canReply: boolean;
   placement: 'found' | 'approximate' | 'detached';
 };
@@ -312,7 +323,12 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
       const at = boundedString(reply.createdAt, PANEL_LIMITS.date);
       const by = reply.author === undefined ? undefined : boundedString(reply.author, PANEL_LIMITS.name);
       if (body === undefined || at === undefined || (reply.author !== undefined && by === undefined)) continue;
-      replies.push({ ...(by === undefined ? {} : { author: by }), body, createdAt: at });
+      replies.push({
+        ...(by === undefined ? {} : { author: by }),
+        body,
+        createdAt: at,
+        ...(reply.fromPage === true ? { fromPage: true as const } : {}),
+      });
     }
     if (
       id === undefined ||
@@ -325,6 +341,14 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
     ) {
       continue;
     }
+    const checked = isRecord(entry.checked)
+      ? {
+          by: boundedString(entry.checked.by, PANEL_LIMITS.name),
+          at: boundedString(entry.checked.at, PANEL_LIMITS.date),
+        }
+      : undefined;
+    const confirmed =
+      checked?.by !== undefined && checked.at !== undefined ? { by: checked.by, at: checked.at } : undefined;
     notes.push({
       id,
       ...(number === undefined ? {} : { number }),
@@ -335,6 +359,7 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
       createdAt,
       updatedAt,
       replies,
+      ...(confirmed === undefined ? {} : { checked: confirmed }),
       canReply: entry.canReply === true,
       placement,
     });
@@ -535,6 +560,7 @@ function parseCommand(data: Record<string, unknown>): CommandMessage | undefined
   if (id === undefined || command === undefined) return undefined;
   const note = parseId(data.note);
   const body = boundedString(data.body, PANEL_LIMITS.text);
+  const verdict = CHECK_VERDICTS.find((each) => each === data.verdict);
 
   return {
     channel: CHANNEL,
@@ -543,6 +569,7 @@ function parseCommand(data: Record<string, unknown>): CommandMessage | undefined
     command,
     ...(note === undefined ? {} : { note }),
     ...(body === undefined ? {} : { body }),
+    ...(verdict === undefined ? {} : { verdict }),
   };
 }
 

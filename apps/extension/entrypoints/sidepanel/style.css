@@ -330,3 +330,107 @@ button.panel-send:disabled {
 .panel-foot button.panel-link {
   min-height: 24px;
 }
+
+/* « Ready to check » (FRU-300): between « Leave feedback » and the tabs. */
+.ready {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 6px;
+  border-bottom: 1px solid var(--ready-line);
+  background: var(--ready-surface);
+}
+
+.ready-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ready-text {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.ready-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ready-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--ready-divider);
+}
+
+.ready-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ready-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ready-note {
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ready-meta {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.ready-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-left: 36px;
+}
+
+.ready-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: var(--radius-action);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 650;
+}
+
+button.ready-fixed {
+  border: 1px solid var(--success-line);
+  color: var(--success);
+}
+
+button.ready-wrong {
+  border: 1px solid var(--line-control);
+  color: var(--text);
+}
+
+.ready-actions button:disabled {
+  opacity: 0.6;
+}
+
+.ready-tick {
+  width: 15px;
+  height: 15px;
+}
+
+.ready-problem {
+  padding-left: 36px;
+  color: var(--alert-text);
+  font-size: 13px;
+}

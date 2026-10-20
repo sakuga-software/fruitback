@@ -139,6 +139,45 @@ describe('the commands of the side panel (FRU-299)', () => {
     );
   });
 
+  it('take a verdict from the side panel, and only one of the two the worker knows (FRU-300)', () => {
+    assert.deepEqual(acceptedRequest(tabCommand('check', { note: 'seed-1', verdict: 'wrong' }), PANEL, ID, ORIGIN), {
+      command: 'check',
+      note: 'seed-1',
+      verdict: 'wrong',
+    });
+    assert.deepEqual(
+      acceptedRequest(
+        { type: 'fruitback-tab-command', command: 'check', note: 'seed-1', verdict: 'stage' },
+        PANEL,
+        ID,
+        ORIGIN,
+      ),
+      { command: 'check', note: 'seed-1' },
+    );
+    // A page that forges the command, through the bridge of its tab: refused.
+    assert.equal(
+      acceptedRequest(
+        tabCommand('check', { note: 'seed-1', verdict: 'fixed' }),
+        { id: ID, tab: { id: 4 }, url: 'https://acme.dev/' },
+        ID,
+        ORIGIN,
+      ),
+      undefined,
+    );
+    assert.deepEqual(
+      parseBridgeMessage({
+        channel: CHANNEL,
+        kind: 'command',
+        id: 'c1',
+        command: 'check',
+        note: 'seed-1',
+        verdict: 'fixed',
+      }),
+      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'check', note: 'seed-1', verdict: 'fixed' },
+    );
+    assert.equal(commandTimeout('check'), 20_000);
+  });
+
   it('give a reply the time of the worker, and the others the time of the page', () => {
     assert.equal(commandTimeout('reply'), 20_000);
     assert.equal(commandTimeout('notes'), 1_500);
@@ -188,6 +227,18 @@ describe('the commands of the side panel (FRU-299)', () => {
     assert.deepEqual(parsePanelNotes([{ ...NOTE, number: -1 }]), [withoutNumber]);
     // A reply that is not one goes, the note stays.
     assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ body: 3 }, ...NOTE.replies] }]), [NOTE]);
+    // A reply of a page says so; anything but `true` is dropped.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ ...NOTE.replies[0], fromPage: true }] }])?.[0]?.replies, [
+      { ...NOTE.replies[0], fromPage: true },
+    ]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ ...NOTE.replies[0], fromPage: 'yes' }] }])?.[0]?.replies, [
+      NOTE.replies[0],
+    ]);
+    // FRU-300: who confirmed it, both fields or nothing.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, checked: { by: 'Camille', at: '2026-10-20T10:00:00Z' } }]), [
+      { ...NOTE, checked: { by: 'Camille', at: '2026-10-20T10:00:00Z' } },
+    ]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, checked: { by: 'Camille' } }]), [NOTE]);
     // `mine` is `true` or nothing.
     const { mine: _mine, ...notMine } = NOTE;
     assert.deepEqual(parsePanelNotes([{ ...NOTE, mine: 'yes' }]), [notMine]);
