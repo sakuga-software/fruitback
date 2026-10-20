@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openPlayground } from './pin.ts';
+import { WORKER_ORIGIN, openPlayground } from './pin.ts';
 
 /**
  * The popover (FRU-4) in a browser: the two things that only exist there — a media query deciding
@@ -327,3 +327,52 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await expect(page.locator('[data-fruitback-composer]')).toContainText(/Did not go through/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 });
+
+/**
+ * « Send » ends the row of the foot, whatever the length of the words (FRU-317). In French, « Garder
+ * pour plus tard », « Annuler » and « Envoyer » do not fit on one line of the popover of 360 px:
+ * « Envoyer » fell alone on a second line, at the start. On the widget as `init` mounts it, which
+ * offers « Keep for later » once the worker offers a batch.
+ */
+for (const [locale, keep, cancel, send] of [
+  ['fr-FR', 'Garder pour plus tard', 'Annuler', 'Envoyer'],
+  ['en-US', 'Keep for later', 'Cancel', 'Send'],
+] as const) {
+  test(`in ${locale}, « ${send} » ends the row of the foot, and the ghosts never go under it (FRU-317)`, async ({
+    page,
+  }) => {
+    await page.goto(`/?widget=off&case=composer-foot-${locale}-${test.info().retry}`);
+    await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+    await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
+    // « Keep for later » is offered once the first read says the worker takes a batch.
+    const firstRead = page.waitForResponse(
+      (response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/feedback',
+    );
+    await page.evaluate(
+      ([endpoint, tag]) =>
+        (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+          endpoint: endpoint as string,
+          clientId: 'playground',
+          locale: tag as string,
+        }),
+      [WORKER_ORIGIN, locale],
+    );
+    await firstRead;
+    await page.locator('[data-fruitback-host-launch]').click();
+    await page.locator('[data-testid="card-latte"] .add').click();
+    const keepButton = page.getByRole('button', { name: keep, exact: true });
+    await expect(keepButton).toBeVisible();
+
+    const box = async (name: string) => (await page.getByRole('button', { name, exact: true }).boundingBox())!;
+    const [kept, cancelled, sent] = [await box(keep), await box(cancel), await box(send)];
+    const foot = (await page.locator('.fruitback-composer-foot').boundingBox())!;
+
+    // The end of the row: the right edge of the foot, less its padding of 12 px.
+    expect(Math.round(sent.x + sent.width)).toBe(Math.round(foot.x + foot.width - 12));
+    // No ghost under « Send », nor to its right.
+    for (const ghost of [kept, cancelled]) {
+      expect(ghost.y).toBeLessThanOrEqual(sent.y + 1);
+      if (Math.abs(ghost.y - sent.y) < 1) expect(ghost.x + ghost.width).toBeLessThanOrEqual(sent.x);
+    }
+  });
+}
