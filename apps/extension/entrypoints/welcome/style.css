@@ -1,0 +1,74 @@
+/*
+  The page that opens at install (FRU-318): one column on the raised surface, in the tokens of
+  popup/style.css and the kit, which this page loads first.
+*/
+body {
+  min-width: 0;
+  margin: 0;
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.welcome {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+.welcome h1 {
+  display: block;
+  margin: 8px 0 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* The drop of the popup's title is beside the name in the head already. */
+.welcome h1::before {
+  content: none;
+}
+
+.welcome .lead {
+  margin: 0;
+  color: var(--subtle);
+}
+
+.welcome-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.welcome-steps li {
+  display: list-item;
+  list-style: decimal;
+}
+
+.welcome-steps li > * {
+  display: block;
+}
+
+.welcome-steps li > span {
+  margin-top: 2px;
+}
+
+.welcome-steps span,
+.welcome-invited {
+  margin: 0;
+  color: var(--subtle);
+}
+
+.welcome-hint {
+  margin: 0;
+  color: var(--text);
+}
+
+.welcome-hint:empty {
+  display: none;
+}

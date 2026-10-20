@@ -28,6 +28,7 @@ import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import { type PanelApis, keepPopupOnActionClick } from '../src/side-panel.ts';
+import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -318,7 +319,14 @@ export default defineBackground(() => {
     return true;
   });
 
-  browser.runtime.onInstalled.addListener(() => {
+  browser.runtime.onInstalled.addListener((details) => {
+    // A first install opens the page that says what comes next (FRU-318). An extension page needs
+    // no permission to open, and an update opens nothing.
+    if (opensWelcome(details)) {
+      void browser.tabs
+        .create({ url: browser.runtime.getURL(WELCOME_PATH) })
+        .catch((error: unknown) => console.error('[fruitback] could not open the welcome page', error));
+    }
     void sync();
     // FRU-296: the click on the icon opens the popup; the panel opens from it. The browser keeps the
     // behaviour, so it is set at install and at each update.

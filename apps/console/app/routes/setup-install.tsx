@@ -34,7 +34,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
           </p>
           <div className="mt-auto flex flex-col gap-2">
             <Button tone="outline" size="page" wide href={EXTENSION_GUIDE} newTab>
-              {t('Add to Chrome')}
+              {t('Install the extension (beta)')}
               <Away />
             </Button>
             <div>

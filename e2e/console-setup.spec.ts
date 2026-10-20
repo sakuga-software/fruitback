@@ -626,7 +626,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       'first card',
     );
     expect.soft((await boxOf(cards.nth(1))).x).toBe(160);
-    await expect(page.getByRole('link', { name: 'Add to Chrome' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Install the extension (beta)' })).toHaveAttribute(
       'href',
       'https://fruitback.com/reviewing.html#1-install-it',
     );

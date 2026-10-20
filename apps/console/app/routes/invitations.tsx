@@ -366,7 +366,7 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
       </p>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <Button href={EXTENSION_GUIDE} newTab>
-          {t('Add to Chrome')}
+          {t('Install the extension (beta)')}
           <Away />
         </Button>
         {site === undefined || host === undefined ? (
@@ -380,7 +380,7 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
       <p className="mt-7 border-t border-line pt-4.5 text-small text-muted">
         {t('Using Firefox?')}{' '}
         <LinkButton space="inline" href={EXTENSION_GUIDE} newTab>
-          {t('Get the Firefox add-on')}
+          {t('Install it in Firefox (beta)')}
         </LinkButton>
       </p>
       {/* With a site to open beside the button, the way to the console has its own line. */}

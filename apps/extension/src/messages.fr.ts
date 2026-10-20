@@ -5,6 +5,22 @@
  * shows, and on a translation that lost a placeholder.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
+  // The page that opens at install (FRU-318).
+  'Welcome to Fruitback': 'Bienvenue dans Fruitback',
+  'Fruitback is installed': 'Fruitback est installé',
+  'Pin Fruitback, then sign in. It then works on every site your team reviews.':
+    'Épinglez Fruitback, puis connectez-vous. Il marche ensuite sur chaque site que votre équipe relit.',
+  'Pin Fruitback': 'Épinglez Fruitback',
+  'Open the puzzle piece at the right of the address bar, then press the pin beside Fruitback.':
+    'Ouvrez la pièce de puzzle à droite de la barre d’adresse, puis appuyez sur l’épingle à côté de Fruitback.',
+  'Sign in': 'Connectez-vous',
+  'Click the Fruitback icon, then Sign in with email.':
+    'Cliquez sur l’icône de Fruitback, puis sur Se connecter par e-mail.',
+  'Invited by a client or a team? Use the email the invitation was sent to.':
+    'Invité par un client ou une équipe ? Utilisez l’adresse à laquelle l’invitation a été envoyée.',
+  'Open Fruitback': 'Ouvrir Fruitback',
+  'Your browser did not open it from this page: click the Fruitback icon in the toolbar.':
+    'Votre navigateur ne l’a pas ouvert depuis cette page : cliquez sur l’icône de Fruitback dans la barre d’outils.',
   // The popup.
   // The shell and the sign-in (FRU-251).
   // Screens 1 and 4 of the mock-up of 2026-10-20 (FRU-297).

@@ -9,18 +9,33 @@ with the worker. If it does not, that is private mode and the extension mounts t
 
 ## 1. Install it
 
-The extension is **not published to a store yet**. Build it from this repository and load it
-unpacked:
+The extension is **in beta, and not in a store yet**. You install the archive of its last release
+by hand, once; it takes two minutes and no developer tools.
+
+**In Chrome, Edge, Brave or Arc:**
+
+1. Download `fruitback-<version>-chrome.zip` from the
+   [last release](https://github.com/sakuga-software/fruitback/releases/latest), and unzip it. Keep
+   the folder: the browser loads the extension from it.
+2. Open `chrome://extensions` in a new tab, and turn on **Developer mode**, at the top right.
+3. Choose **Load unpacked**, and pick the folder you unzipped.
+4. A Fruitback tab opens by itself: **pin Fruitback**. Open the puzzle piece at the right of the
+   address bar, then press the pin beside Fruitback. Its icon stays in the toolbar.
+5. Click the Fruitback icon, then **Sign in with email**: section 2 goes on from there.
+
+**In Firefox:** download `fruitback-<version>-firefox.zip` from the same release, open
+`about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…** and pick the archive.
+Firefox keeps such an add-on until it restarts.
+
+**From the sources**, if you work on the extension:
 
 ```bash
 pnpm install
 pnpm --filter @fruitback/extension build           # or build:firefox
 ```
 
-That writes `apps/extension/.output/chrome-mv3/`. In Chromium, open `chrome://extensions`, turn on
-**Developer mode**, choose **Load unpacked** and pick that directory. `pnpm --filter
-@fruitback/extension dev` does the same with a reload on every change, which is what you want if you
-are working on the extension rather than using it.
+That writes `apps/extension/.output/chrome-mv3/`, which you load as in step 3. `pnpm --filter
+@fruitback/extension dev` does the same with a reload on every change.
 
 **It asks for no host permission at install**, and that is deliberate: it can read nothing anywhere
 until you switch a site on, and it asks then, for that origin. Chromium will say the extension can
