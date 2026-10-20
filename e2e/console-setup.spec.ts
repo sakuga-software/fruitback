@@ -630,6 +630,9 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     );
     await expect(page.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
     await expect(page.getByText('Before the closing body tag. Members see their pins on every visit.')).toBeVisible();
+    // Only Fruitback Cloud says where it is hosted: this console calls a worker of its own (FRU-321).
+    await expect(page.getByText('Three steps to your first note on a live page.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Hosted in Europe/)).toHaveCount(0);
 
     // The example page: the address of the site in the bar, the scene of the mockup, its caption.
     const preview = page.getByRole('region', { name: 'Preview of your site' });
@@ -970,6 +973,10 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       // The long host reads in full: it takes the lines it needs.
       const host = page.getByText(`https://${LONG_HOST}`, { exact: true }).first();
       expect.soft(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      // The script breaks inside its attributes: nothing of it is past the edge of its card (FRU-321).
+      const script = page.locator('.kit-snippet').first();
+      expect.soft(await script.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await expect(script).toContainText('fruitback.iife.js');
       expect(await violations(page)).toEqual([]);
       await context.close();
     });

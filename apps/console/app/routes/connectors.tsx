@@ -225,7 +225,8 @@ export default function Connectors() {
                           opening.current = !chosen;
                           setSelected(chosen ? undefined : connector.id);
                         }}
-                        className={`flex w-full cursor-pointer items-center gap-[14px] px-[18px] py-[14px] text-left -outline-offset-2 ${
+                        // Under 640 px the state goes under the address, in line with it (FRU-321).
+                        className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
                           chosen ? 'bg-chip' : 'hover:bg-subtle'
                         }`}
                       >
@@ -234,12 +235,20 @@ export default function Connectors() {
                           <span className="block text-body leading-auto font-semibold">
                             {t(KINDS[connector.kind].name)}
                           </span>
-                          <span className="block text-hint leading-auto text-muted [overflow-wrap:anywhere]">
-                            {sourceLine(connector)}
-                            {countOf(connector)}
+                          {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
+                          <span
+                            className="flex min-w-0 text-hint leading-auto text-muted"
+                            title={sourceLine(connector)}
+                          >
+                            <span className="min-w-0 truncate" data-source-line>
+                              {sourceLine(connector)}
+                            </span>
+                            <span className="flex-none whitespace-pre">{countOf(connector)}</span>
                           </span>
                         </span>
-                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                        <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
+                          <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                        </span>
                       </button>
                       {/* Under 1280 px there is no column beside the list: the panel opens under its row. */}
                       {!wide && chosen ? panel : null}

@@ -571,6 +571,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Current step:': 'Étape en cours :',
   'Running your own server?': 'Vous hébergez votre propre serveur ?',
   'Self-hosting guide': 'Guide d’auto-hébergement',
+  'Three steps to your first note on a live page.': 'Trois étapes jusqu’à votre première note sur une page en ligne.',
   'Three steps to your first note on a live page. Hosted in Europe.':
     'Trois étapes jusqu’à votre première note sur une page en ligne. Hébergé en Europe.',
   'Your account': 'Votre compte',

@@ -580,6 +580,30 @@ test('a status that is chosen is sent, and the drop beside it follows', async ({
   expect(before).not.toEqual(rgb(DONE));
 });
 
+test('at 390 px a long address keeps one line on its row, and its state goes under it (FRU-321)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const long = 'REST · hooks.a-very-long-subdomain-of-the-receiver.staging.acme-corporation.dev/feedback/notes';
+  const worker = await workerWith(page);
+  worker.connectors = [LINEAR, { ...ADDRESS, label: long }];
+  await open(page);
+  const address = rows(page).nth(1);
+  const line = address.locator('[data-source-line]');
+  // One line, cut at its end: the whole address is in the title of the line, and in the panel.
+  const box = await line.boundingBox();
+  const lineHeight = await line.evaluate((element) => parseFloat(getComputedStyle(element).lineHeight));
+  expect(box?.height ?? 0).toBeLessThanOrEqual(lineHeight + 1);
+  expect(await line.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect(address.locator('[title]')).toHaveAttribute('title', long.replace(/^REST · /, ''));
+  // The state is under the address, not in the middle of it.
+  const state = address.getByText('2 notes did not arrive', { exact: true });
+  expect((await state.boundingBox())?.y ?? 0).toBeGreaterThan((box?.y ?? 0) + (box?.height ?? 0) - 1);
+  expect(await sideScroll(page)).toBe(0);
+  // From 640 px the state is back at the end of the row.
+  await page.setViewportSize({ width: 1024, height: 844 });
+  const wide = await line.boundingBox();
+  expect(Math.abs(((await state.boundingBox())?.y ?? 0) - (wide?.y ?? 0))).toBeLessThan(24);
+});
+
 for (const locale of ['en', 'fr'] as const) {
   test(`at 390 px nothing scrolls sideways, with a panel open, in ${locale}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
