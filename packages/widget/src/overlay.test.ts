@@ -1201,3 +1201,20 @@ describe('the thread and the keyboard (FRU-51)', () => {
     assert.ok(page.document.activeElement === cta, 'the close took focus from the page');
   });
 });
+
+describe('the name of a pin, cut at the end of a word (FRU-320)', () => {
+  it('keeps a short note whole, and cuts a long one at a space near 60 characters', async () => {
+    const { shortened } = await import('./overlay.ts');
+
+    assert.equal(shortened('Le bouton est trop bas', 60), 'Le bouton est trop bas');
+    const cut = shortened('Le prix du Latte devrait être 18 €, pas 19 €, comme sur la carte du comptoir.', 60);
+    assert.equal(cut, 'Le prix du Latte devrait être 18 €, pas 19 €, comme sur la…');
+    assert.ok(cut.length <= 60);
+    // The number that mattered survives the cut, which it did not at 32 characters.
+    assert.match(cut, /18 €/);
+    // A word longer than half of the room is cut inside, rather than leaving a name of three letters.
+    assert.equal(shortened(`Ok ${'x'.repeat(80)}`, 60), `Ok ${'x'.repeat(56)}…`);
+    // No dangling comma before the ellipsis.
+    assert.equal(shortened('aaaa bbbb, cccc dddd', 12), 'aaaa bbbb…');
+  });
+});
