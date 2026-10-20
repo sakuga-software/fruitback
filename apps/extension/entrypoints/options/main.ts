@@ -73,6 +73,8 @@ const notice = element('p', '', 'problem');
 /** The rule whose panel is open, `add` for the form of a new one, or nothing. */
 let chosen: string | undefined;
 let filter = '';
+/** The rule whose panel is on the page now: `chosen` can name one the list has not read yet. */
+let shown: string | undefined;
 /** Whether the first list is drawn: until then `current` is empty. */
 let listed = false;
 /** Whether the page has opened a panel by itself once. */
@@ -152,7 +154,9 @@ async function renderList(): Promise<void> {
   for (const control of needsList) control.disabled = false;
   drawTable();
   // The rule of the open panel is gone: its panel goes too. A panel that is open stays as it is.
-  if (chosen !== undefined && chosen !== 'add' && sites[chosen] === undefined) choose(undefined);
+  if (chosen !== undefined && chosen !== 'add' && sites[chosen] === undefined && shown === chosen) choose(undefined);
+  // A rule chosen before the list could read it (the one just added): its panel opens now.
+  if (chosen !== undefined && chosen !== 'add' && sites[chosen] !== undefined && shown !== chosen) choose(chosen);
   // The first time, the first rule is open, as the mock-up shows it.
   if (chosen === undefined && panel.childElementCount === 0 && rows[0] !== undefined && !opened) {
     opened = true;
@@ -186,17 +190,20 @@ function choose(pattern: string | undefined): void {
   chosen = pattern;
   drawTable();
   if (pattern === undefined) {
+    shown = undefined;
     panel.replaceChildren();
 
     return;
   }
   if (pattern === 'add') {
+    shown = undefined;
     panel.replaceChildren(addForm());
     panel.querySelector('input')?.focus();
 
     return;
   }
   const row = rows.find((candidate) => candidate.pattern === pattern);
+  // Not read yet (a rule just added): the next list opens it, and what is shown stays until then.
   if (row === undefined) return;
   void pairedAs(row.site).then((name) => {
     if (chosen !== pattern) return;
@@ -214,6 +221,7 @@ function choose(pattern: string | undefined): void {
         void editor.save(row.pattern, fields).then((text) => showProblem(said, text, { list: reloadList })),
     });
     aside.querySelector('.panel-body')?.append(said);
+    shown = pattern;
     panel.replaceChildren(aside);
   });
 }

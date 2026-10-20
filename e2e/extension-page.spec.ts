@@ -100,11 +100,22 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   await rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch').click();
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(true);
 
+  // « Add a site »: once stored, the panel of the new rule takes the place of the form (raised in review).
+  await page.getByRole('button', { name: 'Add a site' }).click();
+  await page.getByLabel('Sites', { exact: true }).fill(WORKER_ORIGIN);
+  await page.getByLabel('Worker endpoint', { exact: true }).fill(WORKER_ORIGIN);
+  await page.getByLabel('Client id', { exact: true }).fill('worker-page');
+  await page.getByRole('button', { name: 'Add rule' }).click();
+  await expect(details).toContainText(WORKER_ORIGIN);
+  await expect(details.getByLabel('Client id')).toHaveValue('worker-page');
+  await expect(rowOf(page, WORKER_ORIGIN)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: 'Add rule' })).toHaveCount(0);
+
   // « Remove rule » removes it, and its panel goes.
   await rowOf(page, FAR).getByRole('button').first().click();
   await details.getByRole('button', { name: 'Remove rule' }).click();
   await expect(rowOf(page, FAR)).toHaveCount(0);
-  expect(Object.keys(await storedSites(extension))).toEqual([PLAYGROUND_ORIGIN]);
+  expect(Object.keys(await storedSites(extension)).sort()).toEqual([PLAYGROUND_ORIGIN, WORKER_ORIGIN]);
 });
 
 /** The boxes of the mock-up at 1440 px (`05_*`, measured in a browser), ± 2 px. */
