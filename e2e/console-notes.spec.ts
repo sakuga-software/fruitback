@@ -499,6 +499,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
 
 test('each filter writes the address and reads again, and a reload keeps the view', async ({ page }) => {
   const worker = await workerWith(page);
+  await page.clock.install();
   await open(page);
   await expect(rows(page)).toHaveCount(8);
 
@@ -518,11 +519,15 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(page).toHaveURL(/[?&]stage=ripe(&|$)/);
   await expect(rows(page)).toHaveCount(3);
 
-  // The search waits 300 ms after the last key, and reads once.
+  // The search waits 300 ms after the last key, and reads once. The clock of the page is held while
+  // the keys go in: 299 ms later nothing is read, whatever the load of the machine (FRU-327).
   const before = worker.asked.length;
-  await search(page).pressSequentially('mug', { delay: 50 });
-  await page.waitForTimeout(150);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+  await search(page).pressSequentially('mug');
+  await page.clock.runFor(299);
   expect(worker.asked.length).toBe(before);
+  await expect(page).not.toHaveURL(/q=/);
+  await page.clock.resume();
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await expect(rows(page)).toHaveCount(1);
   expect(worker.asked.length).toBe(before + 1);
@@ -531,10 +536,13 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   // A key typed while the search is written in the address stays in the field (FRU-279).
   await search(page).fill('');
   await expect(page).not.toHaveURL(/q=/);
+  const typed = worker.asked.length;
   await typeDuringTheWrite(search(page), 'mu', 'g');
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await expect(search(page)).toHaveValue('mug');
-  expect(worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+  // The address is written before the read leaves: the read comes from an effect of the next render.
+  // So wait for the read itself, and only one made after the keys (FRU-327).
+  await expect.poll(() => worker.asked.slice(typed).at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
 
   // « Only my notes ».
   const mine = page.getByRole('checkbox', { name: 'Only my notes' });
