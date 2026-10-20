@@ -211,6 +211,46 @@ describe('« Workers and sessions » drawn again (raised in review)', () => {
   });
 });
 
+describe('« Workers and sessions » while a pairing is in progress (raised in review)', () => {
+  it('is not drawn again while a button of a card is off, and says a draw waits', () => {
+    const document = page();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const unpaired: WorkerCard = {
+      endpoint: 'https://feedback.acme.dev',
+      host: 'feedback.acme.dev',
+      sites: 2,
+      pairing: 'https',
+    };
+    const other: WorkerCard = {
+      endpoint: 'https://notes.beta.dev',
+      host: 'notes.beta.dev',
+      sites: 1,
+      pairing: 'https',
+    };
+    const handlers = { onPair: nothing, onLogout: nothing };
+    redrawWorkers(document, container, { cards: [unpaired, other], ...handlers });
+    const submit = container.querySelector<HTMLButtonElement>(
+      `[data-endpoint="${unpaired.endpoint}"] .worker-pair-button`,
+    );
+    if (submit === null) throw new Error('no button');
+    // « Pair » was pressed: its button is off while the code is spent.
+    submit.disabled = true;
+
+    // Another worker was paired in the popup meanwhile: the cards changed, and still no draw.
+    const changed = [unpaired, { ...other, session: { name: 'Camille Durand' } }];
+    assert.equal(redrawWorkers(document, container, { cards: changed, ...handlers }), false);
+    assert.equal(container.querySelector('.worker-pair-button'), submit);
+    assert.equal(submit.disabled, true);
+    assert.equal(container.dataset.pending, 'true');
+
+    // The pairing ended: its button is on again, and the draw that waited happens.
+    submit.disabled = false;
+    assert.equal(redrawWorkers(document, container, { cards: changed, ...handlers }), true);
+    assert.equal(container.dataset.pending, undefined);
+  });
+});
+
 describe('« Preferences » (FRU-302)', () => {
   const options = (extra: Partial<Parameters<typeof preferencesSection>[1]> = {}) => ({
     panelOnClick: false,

@@ -413,6 +413,60 @@ test('« Workers and sessions » pairs with a code, says who, logs out, and take
   }
 });
 
+test('a card is not drawn again while its pairing is in progress: « Pair » stays off, and the code is spent once (review)', async ({
+  extension,
+}) => {
+  await teamRuleOnTheSessionWorker(extension);
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const card = page.locator(`.worker-card[data-endpoint="${AUTHENTICATED_WORKER_ORIGIN}"]`);
+  await expect(card.getByLabel('Pairing code')).toBeVisible();
+
+  // The pairing is held at the worker until the spec lets it go.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let pairs = 0;
+  await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/pair`, async (route) => {
+    pairs += 1;
+    await held;
+    await route.continue();
+  });
+  const { code } = await mintPairing('Camille Durand');
+  await card.getByLabel('Pairing code').fill(code);
+  const pair = card.getByRole('button', { name: 'Pair' });
+  await pair.click();
+  await expect.poll(() => pairs).toBe(1);
+  await expect(pair).toBeDisabled();
+
+  // Meanwhile the cards change: a rule names another worker. The card in progress is not drawn
+  // again, so its « Pair » is not turned back on for a second click.
+  await extension.worker.evaluate(async () => {
+    const { sites } = await chrome.storage.local.get('sites');
+    await chrome.storage.local.set({
+      sites: {
+        ...(sites as Record<string, unknown>),
+        'https://staging.other.example': {
+          mode: 'private',
+          clientId: 'other',
+          endpoint: 'https://notes.other.example',
+          enabled: false,
+        },
+      },
+    });
+  });
+  await page.waitForTimeout(500);
+  await expect(pair).toBeDisabled();
+  await expect(page.locator('.worker-card[data-endpoint="https://notes.other.example"]')).toHaveCount(0);
+
+  // The pairing ends: the card says who, and the draw that waited shows the other worker.
+  release();
+  await expect(card.locator('.worker-who')).toContainText('Camille Durand');
+  await expect(page.locator('.worker-card[data-endpoint="https://notes.other.example"]')).toHaveCount(1);
+  expect(pairs).toBe(1);
+});
+
 test('« Preferences »: the name fills the composer in private mode, and the icon opens the panel on a site that is on (FRU-302)', async ({
   extension,
 }) => {

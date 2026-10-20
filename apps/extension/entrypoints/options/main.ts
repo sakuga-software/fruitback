@@ -633,13 +633,16 @@ function pair(endpoint: string, code: string, said: HTMLElement, submit: HTMLBut
   void (async () => {
     const granted = await browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
     const result = granted ? await sessions.pair(endpoint, value) : undefined;
+    // The button is turned back on first: a card with a button off is not drawn again (`redrawWorkers`).
+    submit.disabled = false;
     if (result?.ok === true) {
       // The card says who now (FRU-289): it is drawn again from the session just stored.
       await renderWorkers();
 
       return;
     }
-    submit.disabled = false;
+    // A draw that waited for this pairing, now that it failed: its line below stays if the cards did not change.
+    if (workers.dataset.pending === 'true') await renderWorkers();
     showProblem(said, PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason], {
       retry: again,
       grant: again,
@@ -655,7 +658,11 @@ function logout(endpoint: string, out: HTMLButtonElement): void {
     .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
     .then(() => returnAccess([workerOrigin(endpoint)]))
     .catch((error: unknown) => console.error('[fruitback] could not give back the access to the worker', error))
-    .then(() => renderWorkers());
+    .then(() => {
+      out.disabled = false;
+
+      return renderWorkers();
+    });
 }
 
 /** « Preferences » (FRU-302): the panel on the icon, the name, the shortcut, the copy of the rules. */

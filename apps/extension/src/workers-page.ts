@@ -96,11 +96,21 @@ export function workersSection(document: Document, options: WorkersOptions): HTM
  * review). The tokens of a session turn at each refresh, and each turn is a change of the storage:
  * drawn again for it, a card would lose the code somebody is typing and what its line says. When the
  * cards did change (a session made or ended elsewhere), a code typed in a card that is still unpaired
- * is put back, with the focus. Answers whether it drew.
+ * is put back, with the focus. A card whose pairing or log out is in progress is not drawn again
+ * (`data-pending` says a draw waits): its caller turns its button back on, then draws. Answers whether
+ * it drew.
  */
 export function redrawWorkers(document: Document, container: HTMLElement, options: WorkersOptions): boolean {
   const key = JSON.stringify(options.cards);
   if (container.dataset.cards === key) return false;
+  // A pairing or a log out in progress has its button off: drawn again, the card would turn it back
+  // on, and a second click would spend the same code twice (raised in review). Drawn when it ends.
+  if (container.querySelector('button:disabled') !== null) {
+    container.dataset.pending = 'true';
+
+    return false;
+  }
+  delete container.dataset.pending;
   const typed = new Map<string, string>();
   for (const input of container.querySelectorAll<HTMLInputElement>('input.worker-code')) {
     const endpoint = input.closest<HTMLElement>('.worker-card')?.dataset.endpoint;
