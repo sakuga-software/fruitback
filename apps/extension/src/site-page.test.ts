@@ -105,7 +105,7 @@ describe('the page of the extension (FRU-301)', () => {
       [
         ['Private', 'feedback.acme.dev', 'Granted'],
         ['Team', 'api.fruitback.com', 'No access'],
-        ['Private', 'feedback.acme.dev', 'No access while it is off'],
+        ['Private', 'feedback.acme.dev', 'Runs nowhere'],
       ],
     );
     assert.equal(lines[1]?.getAttribute('aria-selected'), 'true');
@@ -171,6 +171,15 @@ describe('the page of the extension (FRU-301)', () => {
     assert.equal(state.querySelector('.panel-state-title')?.textContent, 'No access in this browser');
     (state.querySelector('button') as HTMLButtonElement).click();
     assert.equal(granted, 1);
+  });
+
+  it('says that a rule that runs nowhere does so, on or off, with its reason (raised in review)', () => {
+    const refused: RuleRow = { ...TEAM, refused: 'A wildcard cannot serve team mode.' };
+    const aside = rulePanel(page(), { row: refused, onGrant: nothing, onSave: nothing, onRemove: nothing });
+    assert.equal(aside.querySelector('.panel-state-title')?.textContent, 'Runs nowhere');
+    assert.equal(aside.querySelector('.panel-state-text')?.textContent, 'A wildcard cannot serve team mode.');
+    // No grant to offer: removing it is the fix.
+    assert.equal(aside.querySelector('.panel-state button'), null);
   });
 
   it('says who a team rule is paired as, and when it is not', () => {

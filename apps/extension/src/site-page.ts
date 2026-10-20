@@ -146,6 +146,8 @@ function modeWord(mode: SiteMode): string {
  * off gave its access back (FRU-115).
  */
 function accessCell(document: Document, row: RuleRow): HTMLElement {
+  // A rule that runs nowhere says so, on or off: its access is not what is wrong (raised in review).
+  if (row.refused !== undefined) return make(document, 'span', 'access-none', t('Runs nowhere'));
   if (row.granted) return make(document, 'span', 'access-granted', t('Granted'));
 
   return row.site.enabled && row.refused === undefined
@@ -269,7 +271,6 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
 
   const body = make(document, 'div', 'panel-body');
   body.append(modes, endpoint, client, stateBox(document, options));
-  if (row.refused !== undefined) body.append(make(document, 'p', 'problem', t(row.refused)));
   if (row.tooLarge !== undefined) body.append(make(document, 'p', 'problem', t(row.tooLarge)));
 
   const foot = make(document, 'div', 'panel-foot');
@@ -307,7 +308,10 @@ function stateBox(document: Document, options: PanelOptions): HTMLElement {
     box.append(make(document, 'span', 'panel-state-title', title), make(document, 'span', 'panel-state-text', text));
   };
 
-  if (!row.granted && row.site.enabled && row.refused === undefined) {
+  if (row.refused !== undefined) {
+    // Why it runs nowhere, and the one thing to do: « Remove rule », at the foot.
+    say('no-access', t('Runs nowhere'), t(row.refused));
+  } else if (!row.granted && row.site.enabled) {
     say(
       'no-access',
       t('No access in this browser'),

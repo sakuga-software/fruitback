@@ -39,6 +39,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Team: 'Équipe',
   Private: 'Privé',
   Granted: 'Accordé',
+  'Runs nowhere': 'Ne tourne nulle part',
   'No access': 'Pas d’accès',
   Site: 'Site',
   Worker: 'Worker',
