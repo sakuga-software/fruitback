@@ -16,7 +16,7 @@ import {
   readFirstAdmin,
 } from './first-admin.ts';
 import type { Kv } from './kv.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 
 /**
  * The sign-in link of the first administrator (FRU-221): `first-admin.ts`, through the routes of the
@@ -218,8 +218,11 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
       /a sign-in link made for an administrator was refused: this Fruitback has an owner now/,
     );
     assert.ok(!said.join('\n').includes(token));
-    // And it is gone for good: an instance with no owner again does not bring it back. Its owner
-    // deletes the workspace: the last owner cannot leave it (FRU-324).
+    // And it is gone for good: the owner leaving does not bring it back. The last owner cannot leave
+    // by a route since FRU-324: the departure is planted with the trigger off.
+    await withoutOwnerRule(world.database, 'DELETE FROM member');
+    assert.equal((await open(world, token)).status, 401);
+    // Nor the workspace deleted, which is how an instance has no owner again since FRU-324.
     await rowsOf(world.database, 'DELETE FROM organization');
     assert.equal((await open(world, token)).status, 401);
   });
