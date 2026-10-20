@@ -356,7 +356,10 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
   const [first] = addable;
   // A site of no workspace, and no workspace where the account may add it: who can, and nothing to press.
   if (options.workspace === undefined && first === undefined) {
-    return frame(site, element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'));
+    return frame(
+      hostAsTitle(site),
+      element(document, 'p', t('Ask an admin of your workspace to add this site.'), 'lead'),
+    );
   }
 
   const change = (): HTMLButtonElement | undefined =>
@@ -392,12 +395,9 @@ export function turnOnScreen(document: Document, options: TurnOnOptions): HTMLEl
       chosen = select.value;
     });
     const entry = element(document, 'div', '', 'kit-dl-entry');
-    const words = element(document, 'div', '', 'kit-dl-words');
-    const label = element(document, 'dt', t('Workspace'));
     const value = element(document, 'dd', '');
     value.append(select);
-    words.append(label, value);
-    entry.append(words);
+    entry.append(element(document, 'dt', t('Workspace')), value);
     facts.prepend(entry);
   }
 
@@ -435,6 +435,21 @@ export type SiteOnOptions = {
   onSettings: () => void;
 };
 
+/**
+ * The host of a screen with no other title, as its `h1` (axe `page-has-heading-one`): screen 3, and
+ * screen 2 with nothing to turn on. It keeps the size of the host of the kit.
+ */
+function hostAsTitle(site: HTMLElement): HTMLElement {
+  const host = site.querySelector('.kit-site-host');
+  if (host === null) return site;
+  const title = site.ownerDocument.createElement('h1');
+  title.className = host.className;
+  title.textContent = host.textContent;
+  host.replaceWith(title);
+
+  return site;
+}
+
 /** The state line of a site that is on: where its notes go, or its workspace. */
 function onState(workspace: string, on: boolean, destination: string | undefined): string {
   if (!on) return t('Off · {workspace}', { workspace });
@@ -451,11 +466,13 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   const host = hostOf(options.origin);
   const row = element(document, 'div', '', 'site-row');
   row.append(
-    siteLine(document, {
-      host,
-      state: onState(options.workspace, options.on, options.facts?.destination),
-      on: options.on,
-    }),
+    hostAsTitle(
+      siteLine(document, {
+        host,
+        state: onState(options.workspace, options.on, options.facts?.destination),
+        on: options.on,
+      }),
+    ),
     toggle(document, {
       checked: options.on,
       label: t('Fruitback on {host}', { host }),

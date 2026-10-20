@@ -241,12 +241,16 @@ export type Definition = { term: string; value: string; action?: HTMLElement };
 /** Terms and their values: « Notes go to » / « Linear · Northwind », with « Change » beside it. */
 export function definitions(document: Document, entries: Definition[]): HTMLDListElement {
   const list = make(document, 'dl', 'kit-dl');
+  // A `div` of a `dl` holds `dt` and `dd` only (axe `dlitem`, `definition-list`): the action is in a
+  // `dd` of its own, which the grid of the entry puts on the right of the term and its value.
   for (const { term, value, action } of entries) {
     const group = make(document, 'div', 'kit-dl-entry');
-    const words = make(document, 'div', 'kit-dl-words');
-    words.append(make(document, 'dt', '', term), make(document, 'dd', '', value));
-    group.append(words);
-    if (action !== undefined) group.append(action);
+    group.append(make(document, 'dt', '', term), make(document, 'dd', '', value));
+    if (action !== undefined) {
+      const holder = make(document, 'dd', 'kit-dl-action');
+      holder.append(action);
+      group.append(holder);
+    }
     list.append(group);
   }
 

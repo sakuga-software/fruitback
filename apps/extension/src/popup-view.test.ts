@@ -414,6 +414,8 @@ describe('3 · a site on (FRU-298)', () => {
     const screen = on({}, calls);
 
     assert.ok(screen.classList.contains('popup-screen-3'));
+    // The host is the title of the screen (axe `page-has-heading-one`).
+    assert.equal(screen.querySelector('h1')?.textContent, 'staging.acme.dev');
     assert.equal(screen.querySelector('.kit-site-state')?.textContent, 'On · Acme');
     assert.equal(screen.querySelector('[role="switch"]')?.getAttribute('aria-label'), 'Fruitback on staging.acme.dev');
     assert.equal(screen.querySelector('.kit-switch-word')?.textContent, 'On');

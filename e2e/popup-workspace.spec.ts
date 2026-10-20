@@ -83,9 +83,9 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   await expect(popup.getByRole('heading', { level: 1, name: 'Turn Fruitback on for this site?' })).toBeVisible();
   await expect(popup.locator('.kit-site-host')).toHaveText('localhost:5177');
   await expect(popup.getByText('In Playground · not on in this browser')).toBeVisible();
-  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd')).toHaveText(
-    /^(Your team and invited guests|Everyone who visits the site)$/,
-  );
+  await expect(
+    popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd:not(.kit-dl-action)'),
+  ).toHaveText(/^(Your team and invited guests|Everyone who visits the site)$/);
   await expect(popup.getByText('Your browser will ask to allow this site once.')).toBeVisible();
   await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
   // The boxes of the mock-up (`popup-2-site-not-added.png`): 24 px around, the title at 22 px.

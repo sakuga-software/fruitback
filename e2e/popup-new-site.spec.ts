@@ -162,9 +162,9 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   // Only where the account may add a site: not Lumen, where it is a guest.
   const list = popup.getByRole('combobox', { name: 'Workspace' });
   await expect(list.locator('option')).toHaveText(['Sakuga', 'Northwind']);
-  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd')).toHaveText(
-    'Your team and invited guests',
-  );
+  await expect(
+    popup.locator('.kit-dl-entry').filter({ hasText: 'Who sees the notes' }).locator('dd:not(.kit-dl-action)'),
+  ).toHaveText('Your team and invited guests');
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
   expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 24, width: 332 }, 'title');
   expectNear(await boxOf(popup.getByRole('button', { name: 'Turn on' })), { x: 24, width: 332, height: 46 }, 'turn on');
@@ -237,9 +237,9 @@ test('a site added, whose rule is not stored, is drawn as it is: a site of the w
   await expect(popup.getByRole('button', { name: 'Turn on' })).toBeVisible();
   await expect(popup.getByText('In Sakuga · not on in this browser')).toBeVisible();
   // FRU-298: where the notes of that site go, as the worker lists it now.
-  await expect(popup.locator('.kit-dl-entry').filter({ hasText: 'Notes go to' }).locator('dd')).toHaveText(
-    'Linear · Northwind',
-  );
+  await expect(
+    popup.locator('.kit-dl-entry').filter({ hasText: 'Notes go to' }).locator('dd:not(.kit-dl-action)'),
+  ).toHaveText('Linear · Northwind');
 });
 
 test('an add refused for its session keeps the buttons off until the popup is drawn again', async ({ extension }) => {

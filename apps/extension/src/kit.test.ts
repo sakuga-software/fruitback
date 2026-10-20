@@ -179,7 +179,7 @@ describe('the kit of the extension (FRU-293)', () => {
       ['Notes go to', 'Who sees the notes'],
     );
     assert.deepEqual(
-      [...list.querySelectorAll('dd')].map((value) => value.textContent),
+      [...list.querySelectorAll('dd:not(.kit-dl-action)')].map((value) => value.textContent),
       ['Linear · Northwind', 'Your team and invited guests'],
     );
     assert.equal(list.querySelectorAll('button').length, 1);

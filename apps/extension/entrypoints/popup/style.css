@@ -544,6 +544,14 @@ body.popup-page {
   gap: 8px;
 }
 
+/* The host as the title of screen 3: the size of the host of the kit, not of a title. */
+.popup h1.kit-site-host {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
 /* 12 px under the button, as the mock-up has it: 20 of the column less 12. */
 .popup .shortcut-line {
   margin: 0;
