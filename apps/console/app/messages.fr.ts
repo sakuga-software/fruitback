@@ -970,4 +970,12 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{workspace} works again at once: its sites answer, its members change it again, and the notes that waited are delivered. Its owners see that you did it.':
     '{workspace} fonctionne de nouveau aussitôt : ses sites répondent, ses membres le modifient de nouveau, et les notes qui attendaient sont livrées. Ses propriétaires voient que vous l’avez fait.',
   'A reason is one line of 200 characters at most.': 'Une raison tient sur une ligne de 200 caractères au plus.',
+
+  // A suspended workspace, as its members read it (FRU-328), and the filter of the administrator.
+  'This workspace is suspended.': 'Ce workspace est suspendu.',
+  'This workspace has been suspended since {day}.': 'Ce workspace est suspendu depuis le {day}.',
+  'An administrator of this instance suspended it. You can still read it, but nothing in it can change, and its sites take no notes. To restore it, contact the administrator of this instance.':
+    'Un administrateur de cette instance l’a suspendu. Vous pouvez toujours le lire, mais rien ne peut y changer, et ses sites ne prennent aucune note. Pour le rétablir, contactez l’administrateur de cette instance.',
+  'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.':
+    'Ce workspace est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
 };

@@ -419,6 +419,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                     OR EXISTS (SELECT 1 FROM deliveries d JOIN connectors c ON c.id = d.connector_id
                                 WHERE c.workspace_id = o.id))`,
         empty: sql`NOT EXISTS (SELECT 1 FROM sites s WHERE s.workspace_id = o.id)`,
+        suspended: sql`w.workspace_id IS NOT NULL`,
       }[show];
       const rows = await query(
         sql`SELECT o.id, o.name, ${EPOCH_MS(sql`o."createdAt"`)} AS created_at,

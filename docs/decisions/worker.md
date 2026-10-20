@@ -2762,7 +2762,7 @@ its owners see it (D2). No OAuth key in any answer (D4).
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
 - **Six reads, and ten writes** (FRU-280 to FRU-285): `instance`, `workspaces` (`q`, `show` of `all`,
-  `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
+  `attention`, `empty`, `suspended`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
   `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator, the
   suspension of an account, the suspension of a workspace, its deletion and the five writes in a
   workspace, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a

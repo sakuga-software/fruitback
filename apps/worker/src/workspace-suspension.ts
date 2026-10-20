@@ -8,7 +8,8 @@ import type { AccountStore, WorkspaceSuspension } from './accounts.ts';
  *   extension find each of them as a site that does not exist: the same status, and the same body.
  *   The notes stay in the database.
  * - **Its members read.** They sign in, and the console reads everything as before. `/console/me`
- *   says `suspended`, `suspendedAt` and `reason` for each workspace, for the banner.
+ *   says `suspended`, `suspendedAt` and `reason` for each workspace. The banner of the console
+ *   shows the day, and not the reason, which is a note of the administrator (FRU-328).
  * - **Every write of the workspace is refused** by `refusedWhileSuspended`, with `409` and
  *   `workspace-suspended`. Each dispatcher that writes a workspace asks it before its routes: the
  *   console API, the routes of the organization plugin, and the way back from Linear.

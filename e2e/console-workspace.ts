@@ -9,7 +9,15 @@ import { WORKER_ORIGIN } from './pin.ts';
  * The sample data is of nobody: `acme.dev`, `client.fr`, invented names.
  */
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
-export type StubbedWorkspace = { id: string; name: string; role: Role };
+/** A suspended one says so as the worker does (FRU-282): `suspendedAt`, and `reason` when one was given. */
+export type StubbedWorkspace = {
+  id: string;
+  name: string;
+  role: Role;
+  suspended?: boolean;
+  suspendedAt?: string;
+  reason?: string;
+};
 
 export const ACME: StubbedWorkspace = { id: 'w1', name: 'Acme', role: 'owner' };
 export const LUMEN: StubbedWorkspace = { id: 'w2', name: 'Lumen Studio', role: 'member' };

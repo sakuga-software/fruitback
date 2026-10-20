@@ -11,6 +11,22 @@ import { msg } from './i18n.ts';
 /** The worker did not answer, or it failed. Trying again can work. */
 export const DID_NOT_ANSWER = msg('Fruitback did not answer. Try again.');
 
+/** What the worker answers to a write of a suspended workspace (FRU-282), with `409`. */
+export const WORKSPACE_SUSPENDED_ERROR = 'workspace-suspended';
+
+/**
+ * A write of a suspended workspace (FRU-328): the worker refuses it with `409 workspace-suspended`.
+ * Trying again does not help, so the sentence says who can change it.
+ */
+export const WORKSPACE_SUSPENDED = msg(
+  'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.',
+);
+
+/** `otherwise`, unless the call was refused because the workspace is suspended. */
+export function writeProblemOf(failed: { error: string }, otherwise: string): string {
+  return failed.error === WORKSPACE_SUSPENDED_ERROR ? WORKSPACE_SUSPENDED : otherwise;
+}
+
 /**
  * The sentence for a refused call.
  *
@@ -27,7 +43,7 @@ export function problemOf(
   if (Object.hasOwn(named, failed.error)) return named[failed.error] as string;
   if (failed.status === 0 || failed.status >= 500) return DID_NOT_ANSWER;
 
-  return otherwise;
+  return writeProblemOf(failed, otherwise);
 }
 
 /** What the worker refuses when a site is added, on the screen of the sites and in the setup. */

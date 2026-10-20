@@ -315,12 +315,13 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
       return route.fulfill({ json: body });
     };
     if (pathname === '/console/admin/workspaces') {
+      // `suspended` (FRU-328): the workspaces that the worker keeps suspended, as it reads them now.
       const found = [
         ...workspacesOf(q ?? '', show ?? 'all').filter(
           (each) => (options.workspaces ?? WORKSPACES).includes(each) && !gone.has(each.id),
         ),
         ...made,
-      ];
+      ].filter((each) => show !== 'suspended' || suspended.has(each.id));
       return reply({ workspaces: found.map(withSuspension), total: found.length });
     }
     if (pathname === '/console/admin/workspaces/w9') return reply(withSuspension(DETAIL));
@@ -709,7 +710,7 @@ test('Workspaces: the search reads once, 300 ms after the last key, and lives in
   await search(page, 'Search workspaces').fill('');
   await expect(page).not.toHaveURL(/q=/);
   await filter(page, /All workspaces/).click();
-  await expect(page.getByRole('option')).toHaveText(['All workspaces', 'Needs a look', 'No site yet']);
+  await expect(page.getByRole('option')).toHaveText(['All workspaces', 'Needs a look', 'No site yet', 'Suspended']);
   await page.getByRole('option', { name: 'Needs a look', exact: true }).click();
   await expect(page).toHaveURL(/[?&]show=attention(&|$)/);
   await expect(rows(page)).toHaveCount(2);
@@ -2300,4 +2301,48 @@ test('Workspaces: the suspension and its confirmations in French, and at 390 px 
   );
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the confirmation of a restoration of a workspace at 390 px');
+});
+
+test('Workspaces: the filter « Suspended » asks the worker for the suspended workspaces, in the address too (FRU-328)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const lists = await stub(page, { suspensions: LUMEN_SUSPENDED });
+  await visit(page, '/admin/workspaces', 'Workspaces');
+  await expect(rows(page)).toHaveCount(4);
+
+  await filter(page, /All workspaces/).click();
+  await page.getByRole('option', { name: 'Suspended', exact: true }).click();
+  await expect(page).toHaveURL(/[?&]show=suspended(&|$)/);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(nameCell(page, 'Lumen')).toContainText(`Suspended since ${SUSPENDED_DAY}`);
+  expect(lists.at(-1)).toEqual({ path: '/console/admin/workspaces', q: null, show: 'suspended' });
+  await axe(page, 'the filter « Suspended »');
+
+  // A search keeps the filter; one that keeps nothing says so, and gives the whole list back.
+  await search(page, 'Search workspaces').fill('acme');
+  await expect(page).toHaveURL(/[?&]show=suspended(&|$)/);
+  await expect(main(page)).toContainText('No workspace matches this search.');
+  expect(lists.at(-1)).toEqual({ path: '/console/admin/workspaces', q: 'acme', show: 'suspended' });
+  await main(page).getByRole('button', { name: 'Clear the filters' }).click();
+  await expect(rows(page)).toHaveCount(4);
+
+  // A reload of the address keeps the filter.
+  await page.goto(`${CONSOLE}/admin/workspaces?show=suspended`);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(filter(page, /Suspended/)).toBeVisible();
+});
+
+test('Workspaces: the filter « Suspended » in French, and at 390 px (FRU-328)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr', suspensions: LUMEN_SUSPENDED });
+  await visit(page, '/admin/workspaces', 'Workspaces');
+
+  await filter(page, /Tous les workspaces/).click();
+  await page.getByRole('option', { name: 'Suspendu', exact: true }).click();
+  await expect(page).toHaveURL(/[?&]show=suspended(&|$)/);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(nameCell(page, 'Lumen')).toContainText(`Suspendu depuis le ${SUSPENDED_DAY_FR}`);
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the filter « Suspended » at 390 px, in French');
 });

@@ -18,6 +18,7 @@ import {
 import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
+import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
@@ -419,12 +420,12 @@ function NoteRow({
   /** The host of the site of the note, when the sites were read. */
   site: string | undefined;
   manages: boolean;
-  retry: () => Promise<{ ok: boolean }>;
+  retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
   onSent: () => void;
 }) {
   useLocale();
   const [sending, setSending] = useState(false);
-  const [refused, setRefused] = useState(false);
+  const [refused, setRefused] = useState<string | undefined>();
   const { author, place } = note;
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
   const opened = note.seed ?? note.ref;
@@ -438,10 +439,10 @@ function NoteRow({
 
   async function send() {
     setSending(true);
-    setRefused(false);
+    setRefused(undefined);
     const sent = await retry();
     setSending(false);
-    if (!sent.ok) return setRefused(true);
+    if (!sent.ok) return setRefused(writeProblemOf(sent, DID_NOT_ANSWER));
     onSent();
   }
 
@@ -485,7 +486,7 @@ function NoteRow({
               ) : null}
             </span>
           )}
-          {refused ? <Problem>{t('Fruitback did not answer. Try again.')}</Problem> : null}
+          {refused === undefined ? null : <Problem>{t(refused)}</Problem>}
         </td>
       )}
       <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">

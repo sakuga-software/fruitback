@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router';
-import { type Me, type Role, type Workspace, callUntilAnswered, saveLanguage } from '../api';
+import { type Me, type Role, type Workspace, callUntilAnswered, onWorkspaceSuspended, saveLanguage } from '../api';
+import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { useLocale } from '../use-locale';
@@ -58,6 +59,27 @@ export default function WorkspaceFrame() {
     });
   }, [id, navigate]);
 
+  // A write refused because the workspace is suspended shows the banner, also when the suspension
+  // came after `/console/me` was read. Every write of a screen of the frame is of its workspace.
+  useEffect(
+    () =>
+      onWorkspaceSuspended((suspendedAt) =>
+        setContext((current) =>
+          current === undefined || current.workspace.suspended === true
+            ? current
+            : {
+                ...current,
+                workspace: {
+                  ...current.workspace,
+                  suspended: true,
+                  ...(suspendedAt === undefined ? {} : { suspendedAt }),
+                },
+              },
+        ),
+      ),
+    [],
+  );
+
   // WARNING: the context of another workspace is not shown. After a change of workspace the address
   // names the new one at once, and the answer of the worker comes later: a screen drawn in between
   // would read, and write, in the workspace of before.
@@ -81,10 +103,41 @@ export default function WorkspaceFrame() {
         admin={context.me.instanceAdmin === true}
       />
       <div className="min-w-0 flex-[999_1_640px]">
+        <SuspendedBanner workspace={context.workspace} />
         <main className={`box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.width ?? ''}`}>
           <Outlet context={context} />
         </main>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Says to a member that an administrator of the instance suspended the workspace (FRU-328): since
+ * when, what still works, and who to ask. Every write of the workspace is refused while it shows.
+ *
+ * WARNING: no reason. `/console/me` answers the reason of the administrator, and it stays a note of
+ * the administrator: their screen shows it, no screen of a member does.
+ */
+export function SuspendedBanner({ workspace }: { workspace: Workspace }) {
+  useLocale();
+  if (workspace.suspended !== true) return null;
+
+  return (
+    <div
+      role="status"
+      className="border-b border-line bg-subtle px-[clamp(16px,4vw,48px)] py-[14px] text-small leading-auto text-ink"
+    >
+      <p className="font-semibold text-accent-strong">
+        {workspace.suspendedAt === undefined
+          ? t('This workspace is suspended.')
+          : t('This workspace has been suspended since {day}.', { day: dayOf(workspace.suspendedAt) })}
+      </p>
+      <p className="mt-[2px]">
+        {t(
+          'An administrator of this instance suspended it. You can still read it, but nothing in it can change, and its sites take no notes. To restore it, contact the administrator of this instance.',
+        )}
+      </p>
     </div>
   );
 }

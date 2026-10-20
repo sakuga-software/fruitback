@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { type Delivery, MAX_DESTINATIONS, type Site, call, hasRoomFor, placesOf, setPlaces } from '../api';
 import { msg, t } from '../i18n';
+import { writeProblemOf } from '../problems';
 import { known } from '../listed';
 import { Button, Choice, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
@@ -60,7 +61,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
     // The other places of the site stay, in their order: this address is added last, or taken out.
     const others = placesOf(site).filter((each) => each.connector !== connector.id);
     const set = await setPlaces(base, site, value === THERE ? [...others, { connector: connector.id }] : others);
-    if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
+    if (!set.ok) setProblem(writeProblemOf(set, msg('The destination of this site did not change. Try again.')));
     await onChanged();
     setWriting(false);
   }
@@ -68,7 +69,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
   async function retry(delivery: Delivery) {
     setProblem(undefined);
     const asked = await call('POST', `${base}/connectors/${connector.id}/deliveries/${delivery.id}/retry`);
-    if (!asked.ok) setProblem(msg('The new attempt was not started. Try again.'));
+    if (!asked.ok) setProblem(writeProblemOf(asked, msg('The new attempt was not started. Try again.')));
     await read();
     // The row of the address counts the notes that did not arrive: it is read again too.
     await onChanged();
@@ -77,7 +78,7 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
     if (removed.ok) return onRemoved();
-    setProblem(msg('This source is still connected. Try again.'));
+    setProblem(writeProblemOf(removed, msg('This source is still connected. Try again.')));
   }
 
   return (

@@ -325,7 +325,7 @@ export const ADMIN_PAGE = 100;
 export const ADMIN_QUERY_LENGTH = 200;
 
 /** What each list can show. `all` is the default. */
-export const WORKSPACE_FILTERS = ['all', 'attention', 'empty'] as const;
+export const WORKSPACE_FILTERS = ['all', 'attention', 'empty', 'suspended'] as const;
 export const USER_FILTERS = ['all', 'admins', 'alone'] as const;
 
 export type AdminQuery<Show extends string> = { q?: string; show: Show };

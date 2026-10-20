@@ -7,8 +7,10 @@ import {
   SITE_NOT_ADDED,
   SITE_PROBLEMS,
   WORKSPACE_NOT_CREATED,
+  WORKSPACE_SUSPENDED,
   copyText,
   problemOf,
+  writeProblemOf,
 } from './problems.ts';
 
 describe('what a refused call says (FRU-164)', () => {
@@ -34,6 +36,18 @@ describe('what a refused call says (FRU-164)', () => {
       problemOf({ status: 400, error: 'invalid-name' }, NAME_PROBLEMS, WORKSPACE_NOT_CREATED),
       'A workspace needs a name of one line, up to 80 characters.',
     );
+  });
+
+  it('says that the workspace is suspended, and who can change it, for a write it refuses (FRU-328)', () => {
+    const refused = { status: 409, error: 'workspace-suspended' };
+
+    assert.equal(problemOf(refused, SITE_PROBLEMS, SITE_NOT_ADDED), WORKSPACE_SUSPENDED);
+    assert.equal(writeProblemOf(refused, SITE_NOT_ADDED), WORKSPACE_SUSPENDED);
+    assert.match(WORKSPACE_SUSPENDED, /administrator of this instance/);
+    // The control: another 409 keeps the sentence of the screen.
+    const other = { status: 409, error: 'already-member' };
+    assert.equal(writeProblemOf(other, SITE_NOT_ADDED), SITE_NOT_ADDED);
+    assert.equal(problemOf(other, SITE_PROBLEMS, SITE_NOT_ADDED), SITE_NOT_ADDED);
   });
 
   it('says who can do it when the role is refused', () => {

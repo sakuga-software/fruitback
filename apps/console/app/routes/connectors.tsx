@@ -5,6 +5,7 @@ import { type Listed, known, listedOf } from '../listed';
 import { Button, LinkButton, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
+import { writeProblemOf } from '../problems';
 import { useLocale } from '../use-locale';
 import { AddLinear, AddRest } from './connector-add';
 import { LinearPanel } from './connector-linear';
@@ -118,7 +119,10 @@ export default function Connectors() {
     const asked = await call<{ url: string }>('POST', `${base}/connectors/linear/oauth`);
     if (asked.ok) return window.location.assign(asked.data.url);
     setLeaving(false);
-    setProblem(KEY_PROBLEMS[asked.error] ?? msg('Fruitback could not start the connection to Linear. Try again.'));
+    setProblem(
+      KEY_PROBLEMS[asked.error] ??
+        writeProblemOf(asked, msg('Fruitback could not start the connection to Linear. Try again.')),
+    );
   }
 
   const open = connectors?.find((connector) => connector.id === selected);
