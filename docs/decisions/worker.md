@@ -3234,6 +3234,12 @@ replies, and on a public site mounted by the extension with no session, only the
   nothing that the page or the seed claims.
 - **The stage is read for the request, never from the cache**, and must be `ripe`. The cache of the
   page is emptied after the verdict, and the index gets the stage that the store answered.
+- **One verdict at a time on a note** (heavy review): the guards read the store, then the store
+  writes, and two requests can pass the guards together. A key of the `kv` (`incr`, `CHECK_LOCK_MS`)
+  holds the note for the time of the write and is freed when the store answers, whatever it said.
+  The `kv` is the database, so the replicas share it.
+- **An index that does not answer is a store that does not answer** (`indexedAuthorOf`): `502`,
+  never « no author », which would refuse the author.
 - **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
   the replies hidden says none; `mine` is the reader's.
 

@@ -3,7 +3,8 @@ import { afterEach, describe, it } from 'node:test';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { REPLY_LENGTH } from './app.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
-import { resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
+import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
+import { type SeedStore, StoreError } from './store.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { checkedOf, verdictOf } from './reply-text.ts';
@@ -85,7 +86,7 @@ function check(
   site: string,
   issue: string,
   body: Record<string, unknown>,
-  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex } = {},
+  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex; store?: SeedStore } = {},
 ): Promise<Answer> {
   const token = options.cookie ?? options.token;
 
@@ -97,6 +98,7 @@ function check(
     {
       ...(options.ip === undefined ? {} : { clientIp: options.ip }),
       ...(options.noteIndex === undefined ? {} : { noteIndex: options.noteIndex }),
+      ...(options.store === undefined ? {} : { store: options.store }),
     },
   ).then(answerOf);
 }
@@ -306,5 +308,67 @@ describe('what a read says of the verdicts (FRU-294)', () => {
       ]),
       undefined,
     );
+  });
+});
+
+describe('a verdict, when two come at once or a store fails (FRU-294, heavy review)', () => {
+  it('writes one verdict for two sent together, and answers 409 to the other', async () => {
+    const { world, site, member, owner, note } = await aDoneNote();
+    // A tracker that takes its time: the second request reads the note while the first writes.
+    const memory = createMemoryStore();
+    const slow: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return memory.check?.(...args);
+      },
+    };
+
+    const answers = await Promise.all([
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow }),
+      check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: slow }),
+    ]);
+
+    assert.deepEqual(answers.map((answer) => answer.status).sort(), [201, 409]);
+    const [issue] = await read(world, site.id, owner);
+    assert.equal(issue?.comments?.length, 1);
+  });
+
+  it('frees the note when the store fails, so the retry writes it', async () => {
+    const { world, site, member, note } = await aDoneNote();
+    const memory = createMemoryStore();
+    let fails = 1;
+    const flaky: SeedStore = {
+      ...memory,
+      check: async (...args) => {
+        if (fails-- > 0) throw new StoreError('Linear could not be reached');
+        return memory.check?.(...args);
+      },
+    };
+
+    assert.equal(
+      (await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: flaky })).status,
+      502,
+    );
+    assert.equal(
+      (await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, store: flaky })).status,
+      201,
+    );
+  });
+
+  it('answers 502 when the index of the notes does not answer, never a refusal of the author', async () => {
+    const { world, site, member, note } = await aDoneNote();
+    const real = world.context.noteIndex as NoteIndex;
+    const down: NoteIndex = {
+      ...real,
+      authors: async () => {
+        throw new Error('the database did not answer');
+      },
+    };
+
+    const answer = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member, noteIndex: down });
+
+    assert.equal(answer.status, 502);
+    assert.equal(answer.body.error, 'store-unavailable');
   });
 });
