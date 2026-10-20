@@ -3469,6 +3469,25 @@ the command`). A read that starts after the deletion does not find the note. A r
 - **An index that does not answer is `503`**, said in the log; a worker with no database has no
   list (`404`).
 
+## The notes of a whole site, for the extension (FRU-306)
+
+### The rules, in short
+
+- **`GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` is the list of FRU-244 for one site,
+  with the session of the extension** (`session-notes.ts`). It calls the same `queryOf` and the
+  same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{seed,
+excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,
+searched, next?}`. `seed` is the id the widget gave the note: the panel opens `page.url` and the
+  widget finds the note there.
+- **The session is read again in the store** (`sessionWrites`), not only verified: the side panel
+  reads several pages of notes, and a session that ended must stop at the next call, as for a write.
+- **The site is found among the workspaces of the session** (every membership of an account that is
+  not suspended, or the workspace of a pairing) and read with `readsSite`: a site of no such
+  workspace is `404`, the answer of a site that does not exist.
+- **Less than the console, never more**: no `place`, `mine`, channel, delivery or counts. The
+  reference and its link need `see-tracker`, and `searchesReference` follows it.
+- **No cache of its own** (`no-store`): the index is the one source, as for the console.
+
 ### What it does not do, and the measurements
 
 - The name an author typed cannot be searched: it is not kept (FRU-237). The text of a note of the

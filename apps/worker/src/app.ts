@@ -19,6 +19,7 @@ import {
   resolveClient,
 } from './clients.ts';
 import { type AccountStore, type Reach, type Role, can, readsSite } from './accounts.ts';
+import { SESSION_NOTES_PATH, handleSessionNotes } from './session-notes.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
 import {
@@ -754,6 +755,16 @@ async function routed(
 
   if (session) {
     try {
+      // FRU-306: the notes of a whole site, for the side panel. The session is read again in the store.
+      if (pathname === SESSION_NOTES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
+        return await handleSessionNotes(request, {
+          accounts,
+          noteIndex,
+          session: () => sessionWrites(request, served, context),
+          headers: cors.headers,
+        });
+      }
+
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
         // FRU-255: the write reads the session again in the store, through `sessionWrites`, the
