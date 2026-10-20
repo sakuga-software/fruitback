@@ -620,7 +620,7 @@ describe('the thread of a note in place of the rows (FRU-312)', () => {
         new (keyboardEventCtor(page))('keydown', { key: 'Escape', bubbles: true, composed: true }),
       );
 
-    return { page, host, overlay, sidebar: list, root, rows, detail, panel, escape };
+    return { page, host, overlay, sidebar: list, root, rows, detail, panel, escape, issues };
   }
 
   it('shows the thread in the column of the list, under its head, and not on the page', () => {
@@ -666,6 +666,50 @@ describe('the thread of a note in place of the rows (FRU-312)', () => {
     (detail.querySelector('.fruitback-thread-close') as HTMLElement).click();
     assert.equal(detail.hidden, true);
     assert.equal(focusedRow(), 'sd_one');
+  });
+
+  it('keeps the thread in the list across a read that draws the pins again, and goes back when its note goes', () => {
+    const { page, overlay, sidebar, rows, detail, panel, issues } = wired();
+    sidebar.open();
+    rows()[1]?.click();
+
+    // A read answers while the thread is read: the pins are drawn again, the thread stays in the list.
+    overlay.render([...issues]);
+    assert.equal(detail.hidden, false);
+    assert.equal(panel.hidden, true);
+    assert.equal(overlay.threadOpen(), true);
+    assert.equal(
+      (detail.querySelector('[data-fruitback-thread]') as HTMLElement | null)?.dataset.fruitbackThread,
+      'sd_two',
+    );
+    assert.ok(deepActiveElement(page.document)?.classList.contains('fruitback-thread-close'));
+
+    // A read where the note is gone: the thread closes, and the list shows its rows again.
+    overlay.render([issues[0]!]);
+    assert.equal(overlay.threadOpen(), false);
+    assert.equal(detail.hidden, true);
+    assert.equal(panel.hidden, false);
+  });
+
+  it('leaves focus on the page when a click there closes the thread, and gives it to the row from the thread', () => {
+    const { page, sidebar, rows, detail } = wired();
+    const view = page.view as unknown as typeof globalThis;
+    sidebar.open();
+
+    rows()[0]?.click();
+    // A press on the page, outside the list: focus goes to the page, and the click closes the thread.
+    const main = page.query('main');
+    main.dispatchEvent(new view.Event('pointerdown', { bubbles: true, composed: true }));
+    (deepActiveElement(page.document) as HTMLElement | null)?.blur();
+    main.click();
+    assert.equal(detail.hidden, true);
+    assert.equal(deepActiveElement(page.document), page.document.body);
+
+    // From the thread, its cross gives focus to the row of its note.
+    rows()[1]?.click();
+    (detail.querySelector('.fruitback-thread-close') as HTMLElement).click();
+    assert.equal(detail.hidden, true);
+    assert.equal((deepActiveElement(page.document) as HTMLElement | null)?.dataset.fruitbackNote, 'sd_two');
   });
 
   it('closes the thread with the list, and shows the rows when the list opens again', () => {

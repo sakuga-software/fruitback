@@ -329,6 +329,21 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   let opener: HTMLElement | null = null;
   /** The note whose thread is shown in place of the rows, if one is (FRU-312). */
   let shown: string | undefined;
+  /**
+   * Whether the person was in the thread shown in place of the rows: focus went into it, and
+   * nothing outside the list took it or was pressed since. When the thread closes, focus goes back
+   * to its row only then: its node takes focus with it, and a page that got the click or the key
+   * must keep it.
+   */
+  let inThread = false;
+  detail.addEventListener('focusin', () => {
+    inThread = true;
+  });
+  const outside = (event: Event): void => {
+    if (!event.composedPath().includes(root)) inThread = false;
+  };
+  document.addEventListener('pointerdown', outside, true);
+  document.addEventListener('focusin', outside, true);
 
   /** The thread of this note in place of the rows. The rows come back when it closes. */
   function showNote(id: string): void {
@@ -351,6 +366,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     if (shown === undefined) return;
     const id = shown;
     shown = undefined;
+    inThread = false;
     home.replaceChildren();
     detail.hidden = true;
     actions.hidden = false;
@@ -362,11 +378,12 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     (row ?? close).focus();
   }
 
-  /** Whether focus was in the thread that goes, or fell to the page when its node went. */
+  /** Whether focus is in the list, or was in the thread that goes and fell to the page with its node. */
   function focusWasHere(): boolean {
     const active = deepActiveElement(document);
+    if (active !== null && root.contains(active)) return true;
 
-    return active === null || active === document.body || root.contains(active);
+    return inThread && (active === null || active === document.body);
   }
 
   back.addEventListener('click', () => {
@@ -656,6 +673,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     },
     destroy() {
       stopFollowing();
+      document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('focusin', outside, true);
       shell?.removeAttribute('data-fruitback-listing');
       style.remove();
       root.remove();

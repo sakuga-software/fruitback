@@ -1169,6 +1169,36 @@ describe('the thread and the keyboard (FRU-51)', () => {
     );
   });
 
+  it('places the thread of a detached note from the position its hidden pin keeps (FRU-304)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          id: 'sd_gone',
+          note: 'Disparu',
+          anchor: {
+            selector: '#gone',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+    // The drop of a detached note is not drawn on the page: the chip of the dock lists it.
+    const pin = page.document.querySelector('.fruitback-pin-orphan') as HTMLElement;
+    assert.ok(pin !== null, 'the detached note has no pin');
+    // Its place is written on it all the same, and the thread is measured from that, not from a box.
+    assert.ok(Number.parseFloat(pin.style.left) > 0 && Number.parseFloat(pin.style.top) > 0, 'the pin has no place');
+
+    (page.document.querySelector('.fruitback-orphans-note') as HTMLButtonElement).click();
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    assert.ok(thread !== null, 'the entry opened no thread');
+    assert.ok(Number.parseFloat(thread.style.left) > 0, 'the thread is at the left edge');
+    assert.ok(Number.parseFloat(thread.style.top) > 0, 'the thread is at the top edge');
+  });
+
   it('keeps focus on the detached-note entry across a render, for its thread and for the entry itself', () => {
     const page = mountWithCta();
     const detached = (id: string, note: string) =>

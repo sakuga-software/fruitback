@@ -416,7 +416,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function draw(): void {
     const refocus = focusedTarget();
-    closeThread(false);
+    // A thread drawn in the list (FRU-312) is not on the page and outlives a draw: a read that
+    // answers while somebody reads it must not send the list back to its rows. It is built again
+    // below on the new pin of its note, or closed if the note is no longer drawn.
+    const homed = threadHome === null ? undefined : thread?.dataset.fruitbackThread;
+    if (homed === undefined) closeThread(false);
     container.replaceChildren();
     // A note has the number of its place among the notes of the page, before any is hidden: hiding a
     // stage must not give « note 3 » to another note. A note kept for later is not counted.
@@ -457,8 +461,19 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     fan();
     observeAnchors();
     listOrphans();
+    if (homed !== undefined) {
+      const entry = placed.find((candidate) => candidate.issue.seed.id === homed);
+      if (entry === undefined) closeThread(false);
+      else {
+        entry.pin.dataset.fruitbackOpen = '';
+        entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
+        // Built again in its place, with focus, the caret and the text of a reply kept.
+        reopenThread(entry);
+      }
+    }
     // The pins, and the entries of a list that changed, are new nodes: focus on an old one would fall to the page.
-    if (refocus !== undefined) {
+    // Focus in a thread kept in the list stays there: `reopenThread` gave it back.
+    if (refocus !== undefined && !(homed !== undefined && thread !== null && refocus.id === homed)) {
       const badge = placed
         .find((entry) => entry.issue.seed.id === refocus.id)
         ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
@@ -580,6 +595,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     replySaid.clear();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     const wasOpen = thread !== null;
+    // A thread in the list gives focus back through the list, to the row of its note (FRU-312): the
+    // pin on the page is not where the person was.
+    const homed = threadHome !== null;
     thread?.remove();
     thread = null;
     threadHome = null;
@@ -588,7 +606,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
     }
     const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
-    if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
+    if (focused && !homed) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
     threadOpener = null;
     if (wasOpen) options.onThread?.();
   }
