@@ -9,6 +9,9 @@ import {
   type SeedStage,
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
+import { captureAnchor } from './anchor.ts';
+import { resolveAnchor } from './resolve.ts';
+import { type TypingPlace, createTypingStore } from './typing.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
@@ -248,6 +251,13 @@ export function init(options: FruitbackOptions): Fruitback {
 
   let target: CaptureTarget | null = null;
   let place: CapturedPlace | undefined;
+  /** The element the composer is open on, on its page: where its text is saved (FRU-311). */
+  let typingPlace: TypingPlace | undefined;
+  // The note being written, per tab, beside the drafts and under the same key (FRU-311).
+  const typing = createTypingStore({
+    storage: sessionStorageOf(view),
+    key: `${options.configKey ?? 'fruitback:config'}:typing`,
+  });
   let composer: Composer;
   let panel: ConfigPanel;
   let sidebar: Sidebar;
@@ -268,6 +278,16 @@ export function init(options: FruitbackOptions): Fruitback {
         if (target !== null) host.hold(target.element);
 
         return;
+      }
+      // An open composer keeps what is written when it is pointed at another element: the saved text
+      // moves with it, or a reload would bring it back on the element of before.
+      const keepsText = !composer.element.hidden && (composer.state() === 'idle' || composer.state() === 'failed');
+      const before = typingPlace;
+      typingPlace = typingPlaceOf(selected.element);
+      if (keepsText && before !== undefined && typingPlace !== undefined) {
+        const text = typing.get(before)?.text;
+        typing.remove(before);
+        if (text !== undefined) typing.write(typingPlace, text);
       }
       target = selected;
       place = placeOf(selected);
@@ -351,6 +371,8 @@ export function init(options: FruitbackOptions): Fruitback {
       sidebar.refresh();
       // A link to a note waits for the notes: this is when they are in hand.
       openLinked();
+      // A page whose elements came with the read gets its note back now, if the mount was too early.
+      restoreTyping();
     });
   };
 
@@ -370,6 +392,32 @@ export function init(options: FruitbackOptions): Fruitback {
     if (readState === 'failed') void read();
   };
   view.addEventListener('online', onOnline);
+
+  /**
+   * Open the composer again on the note left on this page (FRU-311): a reload, a navigation back, a
+   * tab that came back. The latest text of the page, on its element, found as a pin is found and
+   * only by its identity: a text must not come back on the element that took the place of its own.
+   *
+   * Once for each visit of a page, and never over somebody who writes, chooses, or reads a thread.
+   * A link to a note goes first: the address asked for it.
+   */
+  let restoredOn: string | undefined;
+  function restoreTyping(): void {
+    const here = canonicalizePageUrl(view.location.href);
+    if (restoredOn === here) return;
+    if (!composer.element.hidden || host.capturing() || overlay.threadOpen()) return;
+    if (linkedNote(view.location.hash) !== undefined) return;
+    const latest = typing.latest(here);
+    if (latest === undefined) {
+      restoredOn = here;
+
+      return;
+    }
+    const found = resolveAnchor(latest.anchor, { document });
+    if (found.element === null || !found.confident) return;
+    restoredOn = here;
+    host.choose(found.element);
+  }
 
   /**
    * Open the note the address asks for (FRU-253): `#fruitback-note=<id>`.
@@ -436,21 +484,33 @@ export function init(options: FruitbackOptions): Fruitback {
       subscribe: (listener) => config.subscribe(() => listener()),
     },
     onClose: () => host.release(),
+    autosave: {
+      read: () => (typingPlace === undefined ? undefined : typing.get(typingPlace)?.text),
+      write: (text) => {
+        if (typingPlace !== undefined) typing.write(typingPlace, text);
+      },
+    },
     // Offered only while the worker takes several notes in one request (FRU-124).
     keep: {
       offered: () => readerIdentity.batch !== undefined,
       onKeep: async (note, reporter, chosen) => {
         const destination = destinationToSend(destinations.get(), chosen);
+        const about = typingPlace;
         const made = await seedFor({ note, target, place, reporter, config: config.get(), options });
         if (made === undefined) return 'retry';
         drafts.add({ seed: made.seed, ...(destination === undefined ? {} : { destination }) });
+        // A draft now: it is in the list, and its text is no longer only being written.
+        if (about !== undefined) typing.remove(about);
 
         return made.missedPicture ? { picture: 'missed' as const } : true;
       },
     },
     onSubmit: async (note, reporter, chosen) => {
       const destination = destinationToSend(destinations.get(), chosen);
+      // The element this note is about, as it was sent: the composer may stand on another by the answer.
+      const about = typingPlace;
       const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
+      if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
       if (typeof planted === 'string') {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
@@ -560,6 +620,7 @@ export function init(options: FruitbackOptions): Fruitback {
     }
     page = now;
     readState = 'pending';
+    restoredOn = undefined;
     void read();
   });
   // A fragment typed in the address bar, or a link of the page to itself. `popstate` says it too in
@@ -586,6 +647,7 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   void read();
+  restoreTyping();
 
   return {
     refresh: () => read(),
@@ -633,6 +695,18 @@ export function init(options: FruitbackOptions): Fruitback {
       host.destroy();
     },
   };
+}
+
+/** The element of a note on the page of now, as a seed would anchor it (FRU-311). */
+function typingPlaceOf(element: Element): TypingPlace | undefined {
+  const view = element.ownerDocument.defaultView;
+  if (view === null) return undefined;
+  try {
+    return { page: canonicalizePageUrl(view.location.href), anchor: captureAnchor(element) };
+  } catch {
+    // Nothing to save the text under: it is still in the field, as before FRU-311.
+    return undefined;
+  }
 }
 
 /**

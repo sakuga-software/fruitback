@@ -1,0 +1,103 @@
+import { type Page, expect, test } from '@playwright/test';
+import { WORKER_ORIGIN } from './pin.ts';
+
+/**
+ * The note being written survives a reload, Esc, « Cancel » and the cross (FRU-311), on the widget
+ * as `init` assembles it: the extension mounts that one. The playground assembles the parts itself.
+ *
+ * The reload mounts the widget again, as a page or the extension does at each load: it has to find
+ * the element again and open the composer on it, with the text, by itself.
+ */
+const IIFE = 'packages/widget/dist/fruitback.iife.js';
+
+async function mount(page: Page): Promise<void> {
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: IIFE });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+      }),
+    WORKER_ORIGIN,
+  );
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+}
+
+async function openPlayground(page: Page, testCase: string): Promise<void> {
+  await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
+  await mount(page);
+}
+
+async function reload(page: Page): Promise<void> {
+  await page.reload();
+  await mount(page);
+}
+
+const NOTE = 'Le prix du Latte devrait être 18 €, pas 19 €.';
+const field = (page: Page) => page.getByPlaceholder('What should change?');
+const status = (page: Page) => page.locator('[data-fruitback-status]');
+
+async function writeOnTheLatte(page: Page, note: string): Promise<void> {
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await field(page).fill(note);
+}
+
+test('a reload opens the composer again on its element, with the text and « Draft restored »', async ({ page }) => {
+  await openPlayground(page, 'autosave-reload');
+  await writeOnTheLatte(page, NOTE);
+
+  await reload(page);
+
+  await expect(field(page)).toHaveValue(NOTE);
+  await expect(field(page)).toBeFocused();
+  await expect(status(page)).toHaveText('Draft restored');
+  // On the element it was written about: the frame of the capture holds the Latte's button.
+  await expect(page.getByRole('dialog', { name: 'New note' })).toContainText('on Ajouter');
+
+  // Sent, it is gone: the next reload opens nothing.
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  await reload(page);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await expect(field(page)).toBeHidden();
+});
+
+for (const [way, leave] of [
+  ['Esc', (page: Page) => page.keyboard.press('Escape')],
+  ['Cancel', (page: Page) => page.getByRole('button', { name: 'Cancel', exact: true }).click()],
+  ['the cross', (page: Page) => page.getByRole('button', { name: 'Close without sending' }).click()],
+] as const) {
+  test(`after ${way}, the same element gives the text back`, async ({ page }) => {
+    await openPlayground(page, `autosave-${way.replace(' ', '-')}`);
+    await writeOnTheLatte(page, NOTE);
+    await leave(page);
+    await expect(field(page)).toBeHidden();
+
+    await page.getByRole('button', { name: /Leave feedback/ }).click();
+    await page.locator('[data-testid="card-latte"] .add').click();
+
+    await expect(field(page)).toHaveValue(NOTE);
+    await expect(status(page)).toHaveText('Draft restored');
+  });
+}
+
+test('another element opens empty, and a composer left with nothing typed saves nothing', async ({ page }) => {
+  await openPlayground(page, 'autosave-witness');
+  await writeOnTheLatte(page, NOTE);
+  await page.keyboard.press('Escape');
+
+  // Another element: its own, empty field.
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('#checkout-cta').click();
+  await expect(field(page)).toHaveValue('');
+  await expect(status(page)).toHaveText('');
+  await page.keyboard.press('Escape');
+
+  // The witness: nothing typed on the checkout, so the tab holds the Latte's text alone.
+  const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('fruitback:config:typing') ?? '[]'));
+  expect(saved).toHaveLength(1);
+  expect(saved[0].text).toBe(NOTE);
+});
