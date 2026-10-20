@@ -600,15 +600,15 @@ request and the answer.
 That makes the extension something that will make a call for a page, so the background refuses more
 than it accepts. It sends nothing unless all of the following are true:
 
-|              |                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------ |
-| The origin   | comes from the sender the browser reports, never from the message                                |
-| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode                |
-| The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected**    |
-| The path     | is `/feedback`, or `/feedback/<id>/replies` under one note (FRU-257): the paths the widget calls |
-| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                   |
-| The session  | is open for that endpoint — with no session there is no call at all                              |
-| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection              |
+|              |                                                                                                                                                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The origin   | comes from the sender the browser reports, never from the message                                                                                                                                                                                                      |
+| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode                                                                                                                                                                                      |
+| The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected**                                                                                                                                                                          |
+| The path     | is `/feedback`, `/feedback/<id>/replies` (FRU-257) or `/feedback/<id>/check` (FRU-300) under one note: the paths the widget calls; any other path of writing, `/feedback/<id>/stage` included, is refused (test:`refuses a path that is not the one the widget calls`) |
+| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                                                                                                                                                                                         |
+| The session  | is open for that endpoint — with no session there is no call at all                                                                                                                                                                                                    |
+| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection                                                                                                                                                                                    |
 
 The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
 to name its own endpoint could ask for a call to a _different_ worker that reviewer has paired with,
@@ -1764,7 +1764,10 @@ same transaction).
   `mine: true` to the notes that the reader left, **for a session of the workspace and nobody
   else**, after the shared cache, like `canReply`.
   test:`says mine to the person who left the note, and to nobody else`.
-- **The relay of the extension does not carry this path yet**: FRU-300 adds it to the list below.
+- **From the extension (FRU-300).** « Looks fixed » and « Still wrong » of the side panel go through
+  the widget of the tab, by its transport: the relay of the extension carries
+  `POST /feedback/<id>/check` under the same rules as a reply (the list below). The panel moves
+  nothing itself: it reads the page again, and the store says where the note is.
 
 ### The side panel of the browser (FRU-296)
 
@@ -1781,12 +1784,13 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
 - **What it reads.** The address of the active tab of its window, as the popup does: the browser
   gives it only for a site the extension has access to, or after the click on its icon. With it, the
   rule of that site from the extension's storage. It reads no worker and keeps nothing.
-- **What it asks the widget of the tab (FRU-299).** Four commands, under the guard of the popup's:
+- **What it asks the widget of the tab (FRU-299, FRU-300).** Five commands, under the guard of the popup's:
   the bridge takes them from a page of the extension only, never from a content script or another
   extension (`acceptedRequest`; test:`are refused when a page sends them`). `notes` answers the notes
   the widget already read for its pins: no request. `focus-note` and `mark-note` move and mark a pin.
   `reply` sends a reply by the path of the thread of the widget (FRU-257): the same route, the same
-  transport, so the relay in team mode, and the same rule of who may reply. The widget answers only
+  transport, so the relay in team mode, and the same rule of who may reply. `check` (FRU-300) sends
+  a verdict the same way, to `POST /feedback/<id>/check`: the worker decides who may, and when. The widget answers only
   for the widget the extension mounted; a site's own widget is the site's.
 - **What the page can do with it.** The answer of `notes` crosses the main world, which the page
   writes in: a page can hand the panel notes of its own making, as it can already draw anything in

@@ -210,6 +210,23 @@ export default defineContentScript({
             },
             '*',
           );
+        // FRU-300: « Looks fixed » / « Still wrong », by the widget's transport (the relay in team mode).
+        if (
+          widget !== undefined &&
+          message.command === 'check' &&
+          message.note !== undefined &&
+          message.verdict !== undefined
+        ) {
+          void widget.checkNote(message.note, message.verdict).then(
+            (outcome) => {
+              done = outcome === 'sent';
+              answer(outcome);
+            },
+            () => answer('retry'),
+          );
+
+          return;
+        }
         if (widget !== undefined && message.command === 'reply' && message.note !== undefined) {
           // Answered whatever happens, a throw included: the panel holds « Sending… » until it is.
           let sending: Promise<string>;

@@ -249,6 +249,23 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{host} runs its own Fruitback.': '{host} a son propre Fruitback.',
   'Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.':
     'Ses notes sont sur la page, dans sa propre liste. Ce panneau liste les notes d’un site où Fruitback se monte.',
+  // FRU-300: « Ready to check ».
+  'just now': 'à l’instant',
+  'Checked by you · {age}': 'Vérifiée par vous · {age}',
+  'Checked by {name} · {age}': 'Vérifiée par {name} · {age}',
+  'Reopened by you · {age}': 'Rouverte par vous · {age}',
+  'Fixed by {name} · {age}': 'Corrigé par {name} · {age}',
+  'Marked done · {age}': 'Marquée terminée · {age}',
+  'Ready to check · {count}': 'À vérifier · {count}',
+  'The team says these are fixed. Do they look right to you?': 'L’équipe dit que c’est corrigé. Est-ce bon pour vous ?',
+  'Looks fixed': 'C’est corrigé',
+  'Still wrong': 'Toujours pas',
+  'Did not go through. Try again.': 'Ça n’est pas parti. Réessayez.',
+  'Too many requests just now. Try again in a minute.': 'Trop de demandes à l’instant. Réessayez dans une minute.',
+  'Your session ended. Sign in again from the Fruitback button, then try again.':
+    'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback, puis réessayez.',
+  'This note can no longer be checked. The list is read again.':
+    'Cette note ne peut plus être vérifiée. La liste est relue.',
 
   // The problems, and what to do about each (`remedy.ts`).
   'That code has been used or has expired. Ask for a new one.':

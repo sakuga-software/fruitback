@@ -235,6 +235,11 @@ export type Fruitback = {
    */
   replyTo(id: string, body: string): Promise<'sent' | ReplyFailure | 'refused'>;
   /**
+   * A verdict on a note the team marked done (FRU-294, FRU-300): « Looks fixed » (`fixed`) or « Still
+   * wrong » (`wrong`), then a read. The worker decides who may, and when: `refused` is its no.
+   */
+  checkNote(id: string, verdict: 'fixed' | 'wrong'): Promise<'sent' | ReplyFailure | 'refused'>;
+  /**
    * Tells a list outside the page when to read `pageNotes` again (a read, a hidden stage, a note
    * kept) and which note was opened on the page. Answers the way to stop.
    */
@@ -261,6 +266,8 @@ export type PageNote = {
   updatedAt: string;
   /** Oldest first. */
   replies: { author?: string; body: string; createdAt: string }[];
+  /** Who said it looks fixed, and when (FRU-294): a done note confirmed. */
+  checked?: { by: string; at: string };
   /** Whether this reader may reply, as the thread offers it. */
   canReply: boolean;
   placement: FeedbackPlacement;
@@ -806,6 +813,7 @@ export function init(options: FruitbackOptions): Fruitback {
               createdAt: comment.createdAt,
             };
           }),
+          ...(issue.checked === undefined ? {} : { checked: { by: issue.checked.by, at: issue.checked.at } }),
           canReply: replies,
           placement,
         }));
@@ -827,6 +835,16 @@ export function init(options: FruitbackOptions): Fruitback {
       ).catch((): ReplyFailure => 'retry');
       if (typeof sent === 'string') return sent;
       // The reply as the store wrote it is in the next read: the pins, the thread and the lists.
+      await read();
+
+      return 'sent';
+    },
+    async checkNote(id, verdict) {
+      const issue = readIssues.find((each) => each.seed.id === id);
+      if (issue === undefined) return 'refused';
+      const sent = await sendCheck(options, view, issue, verdict).catch((): ReplyFailure => 'retry');
+      if (sent !== 'sent') return sent;
+      // The store moved the note, or wrote the verdict: the next read says it, never a guess here.
       await read();
 
       return 'sent';
@@ -1087,6 +1105,30 @@ async function sendReply(
   const comment = (JSON.parse(response.body) as { comment?: SeedComment }).comment;
 
   return comment === undefined ? 'retry' : comment;
+}
+
+/**
+ * A verdict on a note (FRU-294), through the transport of the host. `refused`: the worker said no for
+ * this reader or this note (`403`, `404`, `409`); nothing moved, and trying again does not change it.
+ */
+async function sendCheck(
+  options: FruitbackOptions,
+  view: Window & typeof globalThis,
+  issue: SeedIssue,
+  verdict: 'fixed' | 'wrong',
+): Promise<'sent' | ReplyFailure | 'refused'> {
+  const token = await options.identityToken?.();
+  const response = await transportFor(options)({
+    url: `${options.endpoint}/feedback/${encodeURIComponent(issue.id)}/check?client=${encodeURIComponent(options.clientId)}`,
+    method: 'POST',
+    headers: writeHeaders(token),
+    body: JSON.stringify({ url: canonicalizePageUrl(view.location.href), verdict }),
+  });
+  if (response.status === 429) return 'wait';
+  if (response.status === 401) return 'signed-out';
+  if (response.status === 403 || response.status === 404 || response.status === 409) return 'refused';
+
+  return response.ok ? 'sent' : 'retry';
 }
 
 /** Never the token in the body: the seed is stored verbatim in a Linear description (FRU-9). */

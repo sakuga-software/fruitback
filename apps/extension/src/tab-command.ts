@@ -1,4 +1,6 @@
 import {
+  CHECK_VERDICTS,
+  type CheckVerdict,
   type CommandResponseMessage,
   MAX_ID_LENGTH,
   PANEL_LIMITS,
@@ -43,14 +45,14 @@ export function panelEvent(message: unknown): { open?: string } | undefined {
 
 /**
  * How long a command waits for the widget. The main world answers at once, or is not there; a
- * reply waits for the worker, then for a read of the page.
+ * reply and a verdict wait for the worker, then for a read of the page.
  */
 export function commandTimeout(command: TabCommand): number {
-  return command === 'reply' ? 20_000 : 1_500;
+  return command === 'reply' || command === 'check' ? 20_000 : 1_500;
 }
 
 /** `note` and `body`: the note of `focus-note` and `reply`, and the text of `reply` (FRU-299). */
-export type TabCommandArguments = { note?: string; body?: string };
+export type TabCommandArguments = { note?: string; body?: string; verdict?: CheckVerdict };
 export type TabCommandRequest = { type: typeof TAB_COMMAND_TYPE; command: TabCommand } & TabCommandArguments;
 /**
  * `busy`: the widget is there and said no. Not done and not busy: no widget answered. `notes`: the
@@ -72,6 +74,7 @@ export function tabCommand(command: TabCommand, args: TabCommandArguments = {}):
     command,
     ...(args.note === undefined ? {} : { note: args.note }),
     ...(args.body === undefined ? {} : { body: args.body }),
+    ...(args.verdict === undefined ? {} : { verdict: args.verdict }),
   };
 }
 
@@ -104,7 +107,7 @@ export function acceptedRequest(
   if (sender.id !== extensionId || sender.tab !== undefined) return undefined;
   if (sender.url !== undefined && !sender.url.startsWith(extensionOrigin)) return undefined;
   if (typeof message !== 'object' || message === null) return undefined;
-  const { type, command, note, body } = message as Record<string, unknown>;
+  const { type, command, note, body, verdict } = message as Record<string, unknown>;
   if (type !== TAB_COMMAND_TYPE) return undefined;
   const known = TAB_COMMANDS.find((each) => each === command);
   if (known === undefined) return undefined;
@@ -113,6 +116,7 @@ export function acceptedRequest(
     command: known,
     ...(typeof note === 'string' && note !== '' && note.length <= MAX_ID_LENGTH ? { note } : {}),
     ...(typeof body === 'string' && body.length <= PANEL_LIMITS.text ? { body } : {}),
+    ...(CHECK_VERDICTS.includes(verdict as CheckVerdict) ? { verdict: verdict as CheckVerdict } : {}),
   };
 }
 

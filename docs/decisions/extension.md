@@ -473,7 +473,25 @@ did not change: the fields of 760 px and the file input of the browser are as th
   background holds it.
 - **No shell head in the panel.** The mock-up (`ExtSidebar`) opens on « Notes on this page »; the
   head of FRU-296 is gone.
-- **Not yet**: « Search and options » (FRU-307) is not drawn; « Ready to check » is FRU-300.
+- **Not yet**: « Search and options » (FRU-307) is not drawn.
+
+## « Ready to check », in the side panel (FRU-300)
+
+### The rules, in short
+
+- **A note is to check when the worker says so**: `ripe`, `mine: true`, and no `checked` (FRU-294).
+  It sits in « Ready to check · {n} », between « Leave feedback » and the tabs, and not in « Done ».
+- **« Fixed by {name} · {age}»** names the author of the newest reply of the note, as the store
+  keeps it; with none, « Marked done · {age} », from `updatedAt`.
+- **« Looks fixed » and « Still wrong » go through the widget of the tab** (`check`, then
+  `checkNote` of the widget), by its transport: the relay in team mode carries
+  `POST /feedback/<id>/check`, and nothing else new. While a verdict is written both buttons wait and
+  say « Sending… »; a verdict that did not go says why in its note, and nothing moves.
+- **No optimistic state.** After a verdict the panel reads the page again; the store moved the note,
+  or wrote the verdict, and the list says where it is. « Looks fixed » opens « Done », where the row
+  says « Checked by you »; « Still wrong » opens « Open », where the row says « Reopened by you ».
+  That last word is kept by the panel while it is open: the store keeps the verdict, not who
+  reopened from where.
 
 ## The rules in the reviewer's other browsers (FRU-72)
 
