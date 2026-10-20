@@ -77,6 +77,16 @@ it changes who is shown the feedback and never who may fetch it.
   **The archives are under `.output`, and `upload-artifact` leaves out a hidden directory** unless
   `include-hidden-files` says otherwise. The first tag, `v0.1.0`, built both archives and uploaded
   none. `workflows.test.ts` fails on an upload through a dot directory that does not ask for it.
+- **The Firefox manifest declares its data, and asks for Firefox 140** (FRU-333). AMO refuses a new
+  extension without `browser_specific_settings.gecko.data_collection_permissions`: the first upload
+  of `fruitback-0.2.0-firefox.zip` failed on it, and the add-on was never on AMO. The five
+  categories are in `src/data-collection.ts`, each with what it covers, all `required`: the
+  extension works with none of them missing, and asks for no optional permission later. Firefox
+  shows the list itself from Firefox 140, so `strict_min_version` went from 128 to 140; below it, the
+  extension would need a consent screen of its own (decision of Mathieu, 2026-10-20).
+  `data-collection.test.ts` holds the list, written out. `web-ext lint` on the build reports no
+  error, and two warnings from the bundle of the widget: the test of zod for `eval`
+  (`Function("")`), and the template of the composer written with `innerHTML`, a constant.
 - **The job `submit` hands the archives of `package` to the Chrome Web Store and to AMO** (FRU-329),
   with `wxt submit`, which is `publish-browser-extension` at the version of the lockfile. It builds
   nothing: the stores get the files that the release holds. **It runs in the environment `stores`,
