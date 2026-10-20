@@ -7,6 +7,7 @@ import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { SYNC_SETTING, fits } from '../../src/site-sync.ts';
 import { exportSites, importSites } from '../../src/site-transfer.ts';
+import { RULES_FILE, shareRules } from '../../src/share-rules.ts';
 import {
   type SiteConfig,
   type SiteMode,
@@ -90,6 +91,13 @@ let listed = false;
 /** Whether the page has opened a panel by itself once. */
 let opened = false;
 let rows: RuleRow[] = [];
+/**
+ * The rules this page imported, said « imported » on their row and in their panel. Kept in the page
+ * only: the stored rule is the same as one typed in, and the browser grants it the same way.
+ */
+const imported = new Set<string>();
+/** Writes the number of rules on the export card, once the page holds the card. */
+let setShareCount: (count: number | undefined) => void = () => undefined;
 const sessions = createBrowserSessions();
 
 if (app !== null) {
@@ -164,6 +172,7 @@ async function renderList(): Promise<void> {
   rows = read;
   listed = true;
   for (const control of needsList) control.disabled = false;
+  setShareCount(rows.length);
   drawTable();
   // The rule of the open panel is gone: its panel goes too. A panel that is open stays as it is.
   if (chosen !== undefined && chosen !== 'add' && sites[chosen] === undefined && shown === chosen) choose(undefined);
@@ -266,6 +275,7 @@ function panelOptions(row: RuleRow, name: string | undefined): PanelOptions {
     onRemove: () =>
       attempt(async () => {
         await removeSite(row.pattern);
+        imported.delete(row.pattern);
         choose(undefined);
       }),
     onSave: () => undefined,
@@ -310,6 +320,7 @@ async function ruleRow(pattern: string, site: SiteConfig, proven: FreshPreviews,
     ...(refused ? { refused: previews ? PREVIEWS_NOT_PROVEN : STALE_TEAM_WILDCARD } : {}),
     // FRU-264: the background does not send this rule to the account, and the reviewer must know why.
     ...(copied && !fits(pattern, site) ? { tooLarge: TOO_LARGE_FOR_ACCOUNT } : {}),
+    ...(imported.has(pattern) ? { imported: true } : {}),
   };
 }
 
@@ -367,8 +378,10 @@ function addForm(): HTMLElement {
       })
       .then((text) => {
         showProblem(problem, text, { grant: submit, list: reloadList });
-        // Stored: the new rule's panel takes the place of the form.
-        if (text === '') choose(parseSitePattern(sites.input.value));
+        // Stored: the new rule's panel takes the place of the form. Typed in, it is not « imported ».
+        const added = parseSitePattern(sites.input.value);
+        if (text === '' && added !== undefined) imported.delete(added);
+        if (text === '') choose(added);
       });
   };
   const add = button(t('Add rule'), submit);
@@ -393,79 +406,76 @@ function addForm(): HTMLElement {
   return wrapper;
 }
 
+/**
+ * « Share rules » (FRU-290): « Download » writes the rules the table lists, and a file chosen or
+ * dropped on « Import a rules file » is read, stored, and reported in the card.
+ */
 function transfer(): HTMLElement {
-  const exporter = button(t('Export rules'), () => {
-    const url = URL.createObjectURL(new Blob([exportSites(current)], { type: 'application/json' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'fruitback-sites.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  const share = shareRules(document, {
+    onDownload: () => {
+      const url = URL.createObjectURL(new Blob([exportSites(current)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = RULES_FILE;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    },
+    onFile: (file) => void importFile(file, share.result),
   });
-  exporter.disabled = true;
-  needsList.push(exporter);
+  needsList.push(share.download);
+  setShareCount = share.setCount;
 
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/json,.json';
-  const label = document.createElement('label');
-  label.append(t('Import a rules file'), input);
-  const result = element('p', '', 'state');
+  return share.section;
+}
 
-  input.addEventListener('change', () => {
-    const file = input.files?.[0];
-    if (file === undefined) return;
+/** Reads a rules file, stores its rules, and says in the card what happened. */
+async function importFile(file: File, result: HTMLElement): Promise<void> {
+  showProblem(result, '');
+  // A refusal reads as a problem; « Imported … » takes the plain colour back below.
+  result.classList.add('problem');
+  let text: string;
+  try {
+    text = await file.text();
+  } catch (error) {
+    console.error('[fruitback] the rules file could not be read', error);
+    showProblem(result, IMPORT_PROBLEM['not-json']);
 
-    void (async () => {
-      const parsed = importSites(await file.text());
-      input.value = '';
-      if (!parsed.ok) {
-        showProblem(result, IMPORT_PROBLEM[parsed.reason]);
+    return;
+  }
+  const parsed = importSites(text);
+  if (!parsed.ok) {
+    showProblem(result, IMPORT_PROBLEM[parsed.reason]);
 
-        return;
-      }
+    return;
+  }
 
-      try {
-        await writeSites(parsed.sites);
-      } catch (error) {
-        console.error('[fruitback] the import was not confirmed', error);
-        showProblem(result, STORE_PROBLEM, { list: reloadList });
-        // The entries can be stored anyway, and the tabs open on them would hold no widget until
-        // their next load (FRU-73).
-        await activateStored(Object.keys(parsed.sites), readAll, (pattern) => injectIntoOpenTabs(scripting, pattern));
+  try {
+    await writeSites(parsed.sites);
+  } catch (error) {
+    console.error('[fruitback] the import was not confirmed', error);
+    showProblem(result, STORE_PROBLEM, { list: reloadList });
+    // The entries can be stored anyway, and the tabs open on them would hold no widget until
+    // their next load (FRU-73).
+    await activateStored(Object.keys(parsed.sites), readAll, (pattern) => injectIntoOpenTabs(scripting, pattern));
 
-        return;
-      }
-      // An imported rule can already hold its grant, from before it was removed. Its open tabs get the
-      // scripts now; a tab without a grant is not returned by the query, so it costs nothing.
-      for (const [pattern, site] of Object.entries(parsed.sites)) {
-        if (site.enabled) await injectIntoOpenTabs(scripting, pattern);
-      }
-      const count = Object.keys(parsed.sites).length;
-      const imported = count === 1 ? t('Imported 1 rule.') : t('Imported {count} rules.', { count });
-      const skipped =
-        parsed.skipped.length > 0
-          ? ` ${t('Skipped, because they are not valid: {patterns}.', { patterns: parsed.skipped.join(', ') })}`
-          : '';
-      result.textContent = `${imported}${skipped}`;
-    })();
-  });
-
-  const wrapper = element('section', '', 'page-section');
-  wrapper.append(
-    element('h2', t('Share rules')),
-    element(
-      'p',
-      t(
-        'A rules file holds patterns, modes, endpoints and client ids. It holds no session and no access. An imported rule replaces the rule with the same pattern, and the other rules stay.',
-      ),
-    ),
-    exporter,
-    label,
-    result,
-  );
-
-  return wrapper;
+    return;
+  }
+  // The rows say « imported » until the page is closed: the file is why they have no access yet.
+  for (const pattern of Object.keys(parsed.sites)) imported.add(pattern);
+  void renderList();
+  // An imported rule can already hold its grant, from before it was removed. Its open tabs get the
+  // scripts now; a tab without a grant is not returned by the query, so it costs nothing.
+  for (const [pattern, site] of Object.entries(parsed.sites)) {
+    if (site.enabled) await injectIntoOpenTabs(scripting, pattern);
+  }
+  const count = Object.keys(parsed.sites).length;
+  const said = count === 1 ? t('Imported 1 rule.') : t('Imported {count} rules.', { count });
+  const skipped =
+    parsed.skipped.length > 0
+      ? ` ${t('Skipped, because they are not valid: {patterns}.', { patterns: parsed.skipped.join(', ') })}`
+      : '';
+  result.classList.remove('problem');
+  result.textContent = `${said}${skipped}`;
 }
 
 /**

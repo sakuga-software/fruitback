@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import fs from 'node:fs/promises';
 import { type Page, expect } from '@playwright/test';
 import { PLAYGROUND_ORIGIN, addRule, test } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -215,3 +216,129 @@ for (const language of ['en', 'fr'] as const) {
     expect((panel?.y ?? 0) >= (table?.y ?? 0) + (table?.height ?? 0)).toBe(true);
   });
 }
+
+/** A rules file, as « Download » writes it: one private rule nobody in this browser granted. */
+function rulesFile(pattern: string): string {
+  return JSON.stringify({
+    format: 'fruitback-sites',
+    version: 1,
+    sites: {
+      [pattern]: { mode: 'private', endpoint: 'https://feedback.sakuga.dev', clientId: 'legacy', enabled: true },
+    },
+  });
+}
+
+test('« Share rules » downloads the rules, imports a file chosen or dropped, and says why it refuses one (FRU-290)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const share = page.locator('section#share');
+  const result = share.getByRole('status');
+
+  // Export: the count of the table, and the file of the mock-up.
+  await expect(share.getByRole('heading', { level: 2, name: 'Share rules' })).toBeVisible();
+  await expect(share.locator('.share-export')).toContainText('1 rule · fruitback-rules.json');
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    share.getByRole('button', { name: 'Download' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('fruitback-rules.json');
+  const written = JSON.parse(await fs.readFile(await download.path(), 'utf8')) as { sites: Record<string, unknown> };
+  expect(Object.keys(written.sites)).toEqual([PLAYGROUND_ORIGIN]);
+
+  // No native « Choose file » on the page: the input is out of sight, and still named and focusable.
+  const input = share.getByLabel('Import a rules file');
+  await expect(input).toHaveAttribute('type', 'file');
+  const drawn = await input.evaluate((node) => node.getBoundingClientRect().width);
+  expect(drawn).toBeLessThanOrEqual(1);
+  // From the keyboard: Tab after « Download » reaches it, and the card shows the ring.
+  await share.getByRole('button', { name: 'Download' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(input).toBeFocused();
+  const ring = await share.locator('.share-import').evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(ring).toBe('solid');
+
+  // Chosen: the rule lands in the table, said « imported », with no access until it is granted.
+  await input.setInputFiles({
+    name: 'fruitback-rules.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(rulesFile(FAR)),
+  });
+  await expect(result).toHaveText('Imported 1 rule.');
+  await expect(rowOf(page, FAR)).toContainText('This origin · imported');
+  await expect(rowOf(page, FAR)).toContainText('No access');
+  await expect(share.locator('.share-export')).toContainText('2 rules · fruitback-rules.json');
+  await rowOf(page, FAR).getByRole('button').first().click();
+  const details = page.getByRole('complementary', { name: 'Site details' });
+  await expect(details).toContainText('This rule came from a rules file, and access does not travel with it.');
+  await expect(details.getByRole('button', { name: 'Grant access' })).toBeVisible();
+
+  // Dropped: the same, from a file put on the card. An older name is read the same way.
+  const other = 'https://beta.legacy-shop.example';
+  const transfer = await page.evaluateHandle(
+    ({ text }) => {
+      const data = new DataTransfer();
+      data.items.add(new File([text], 'fruitback-sites.json', { type: 'application/json' }));
+
+      return data;
+    },
+    { text: rulesFile(other) },
+  );
+  const card = share.locator('.share-import');
+  await card.dispatchEvent('dragenter', { dataTransfer: transfer });
+  await card.dispatchEvent('dragover', { dataTransfer: transfer });
+  await expect(card).toHaveClass(/dragging/);
+  await card.dispatchEvent('drop', { dataTransfer: transfer });
+  await expect(result).toHaveText('Imported 1 rule.');
+  await expect(rowOf(page, other)).toContainText('imported');
+  await expect(card).not.toHaveClass(/dragging/);
+  const stored = await storedSites(extension);
+  expect(Object.keys(stored).sort()).toEqual([other, PLAYGROUND_ORIGIN, FAR].sort());
+
+  // Refused: a file that is not JSON, and one that is JSON of something else. Nothing is stored.
+  await input.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not json') });
+  await expect(result).toHaveText('That file is not JSON.');
+  await input.setInputFiles({
+    name: 'package.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('{"name":"x"}'),
+  });
+  await expect(result).toHaveText('That file is not a Fruitback rules file.');
+  expect(Object.keys(await storedSites(extension)).length).toBe(3);
+
+  // The two cards, as the mock-up draws them, in both schemes, with no violation.
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    const look = await page.evaluate(() => {
+      const style = (selector: string) => getComputedStyle(document.querySelector(selector) as Element);
+      const box = (selector: string) => (document.querySelector(selector) as Element).getBoundingClientRect();
+
+      return {
+        // The 1.5 px of the mock-up: Chrome draws 1 px at a density of 1, so only the dash is read.
+        importBorder: style('.share-import').borderTopStyle,
+        radius: style('.share-export').borderTopLeftRadius,
+        padding: style('.share-export').paddingTop,
+        button: box('.share-export button').height,
+        choose: box('.share-choose').height,
+        gap: box('.share-import').left - box('.share-export').right,
+      };
+    });
+    expect.soft(look, colorScheme).toEqual({
+      importBorder: 'dashed',
+      radius: '12px',
+      padding: '16px',
+      button: 34,
+      choose: 34,
+      gap: 12,
+    });
+    const { violations } = await new AxeBuilder({ page }).include('section#share').analyze();
+    expect
+      .soft(
+        violations.map((violation) => violation.id),
+        colorScheme,
+      )
+      .toEqual([]);
+  }
+});
