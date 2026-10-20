@@ -498,8 +498,14 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   });
   const badges = page.locator('[data-fruitback-pin] .fruitback-pin-badge');
   await expect(badges.first()).toBeVisible();
+  // A thread open on the page keeps its pin when the others go (raised in review).
+  await page.locator(`[data-fruitback-pin="${id}"] .fruitback-pin-badge`).click();
+  await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
   await pins.click();
   await expect(pins).not.toBeChecked();
+  await expect(page.locator(`[data-fruitback-pin="${id}"] .fruitback-pin-badge`)).toBeVisible();
+  await expect(page.locator(`[data-fruitback-pin="${other}"] .fruitback-pin-badge`)).toBeHidden();
+  await page.keyboard.press('Escape');
   await expect(badges.first()).toBeHidden();
   await expect(badges.last()).toBeHidden();
   // « Back to floating pins »: the list goes, the pins come back, and the switch is on again.

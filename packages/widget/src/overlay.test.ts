@@ -827,9 +827,13 @@ describe('a note chosen in the list of the page (FRU-308)', () => {
 
     overlay.showPins(false);
     assert.equal(container(page).hasAttribute('data-fruitback-pins-hidden'), true);
-    // The rule that hides them spares the frame of the open note.
+    // The rule that hides them spares the open pin, its drop too: a thread open on the page keeps its pin.
     const style = [...page.document.querySelectorAll('style')].map((node) => node.textContent).join('');
-    assert.match(style, /\[data-fruitback-pins-hidden\] \.fruitback-pin:not\(\[data-fruitback-open\]\)/);
+    assert.match(
+      style,
+      /\[data-fruitback-pins-hidden\] \.fruitback-pin:not\(\[data-fruitback-open\]\) \{ display: none; \}/,
+    );
+    assert.doesNotMatch(style, /\[data-fruitback-pins-hidden\] \.fruitback-pin-badge/);
     overlay.showPins(true);
     assert.equal(container(page).hasAttribute('data-fruitback-pins-hidden'), false);
   });

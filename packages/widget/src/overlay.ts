@@ -1333,11 +1333,11 @@ const STYLES = `
   box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.6);
 }
 .fruitback-overlay[data-fruitback-choosing] .fruitback-pin:not([data-fruitback-open]) { opacity: 0.55; }
-/* « Show pins on the page » off (FRU-308): no pin, and the ring of the chosen note stays. */
-.fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin:not([data-fruitback-open]),
-.fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin-badge {
-  display: none;
-}
+/*
+  « Show pins on the page » off (FRU-308): no pin but the open one, so a thread open on the page keeps
+  its pin, and the note chosen in the list keeps its ring and its drop.
+*/
+.fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin:not([data-fruitback-open]) { display: none; }
 .fruitback-pin[data-fruitback-marked] { z-index: 2147483001; }
 .fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
 .fruitback-pin-orphan { border-style: dotted; }
