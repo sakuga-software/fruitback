@@ -211,6 +211,11 @@ describe('copying the feedback as text (FRU-109)', () => {
       assert.equal(manual()?.readOnly, true);
       assert.equal(manual()?.getAttribute('aria-label'), 'Copy the text from here');
       assert.ok(page.document.activeElement === manual(), 'the field with the text has no focus');
+      // FRU-288: all the text selected, with the moving end at the start, so the field shows the title.
+      assert.equal(manual()?.selectionStart, 0);
+      assert.equal(manual()?.selectionEnd, '# Feedback, asked 1'.length);
+      assert.equal(manual()?.selectionDirection, 'backward');
+      assert.equal(manual()?.scrollTop, 0);
     });
   }
 

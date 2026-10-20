@@ -196,8 +196,13 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
         manual.setAttribute('aria-label', t.text('settings.copyManually'));
         status.textContent = t.text('settings.copyManually');
         section.append(manual);
-        manual.focus();
-        manual.select();
+        // FRU-288: `select()` puts the end of the selection at the end of the text, and the field
+        // scrolls to it: the person saw the last note, not the title. A backward selection keeps
+        // all the text selected and puts its moving end at the start. `scrollTop` is set too,
+        // because a browser can scroll on focus before the selection is made.
+        manual.focus({ preventScroll: true });
+        manual.setSelectionRange(0, text.length, 'backward');
+        manual.scrollTop = 0;
       });
     });
 
