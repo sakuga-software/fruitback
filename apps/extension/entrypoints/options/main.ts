@@ -175,7 +175,16 @@ async function renderList(): Promise<void> {
 }
 
 function drawTable(): void {
-  const shown = rows.filter((row) => matches(row, filter));
+  const visible = rows.filter((row) => matches(row, filter));
+  // The control that has the focus in the table, found again in the table drawn below: a switch
+  // pressed from the keyboard keeps the focus on its row (raised in review).
+  const focused =
+    document.activeElement instanceof HTMLElement && table.contains(document.activeElement)
+      ? {
+          pattern: document.activeElement.closest('tr')?.dataset.pattern,
+          control: document.activeElement.getAttribute('role') === 'switch' ? '[role="switch"]' : 'button.rule-open',
+        }
+      : undefined;
   if (rows.length === 0) {
     table.replaceChildren(element('p', t('No rules yet. Add one, or turn a site on from the toolbar.'), 'state'));
 
@@ -183,7 +192,7 @@ function drawTable(): void {
   }
   table.replaceChildren(
     sitesTable(document, {
-      rows: shown,
+      rows: visible,
       ...(chosen === undefined ? {} : { selected: chosen }),
       onSelect: (pattern) => choose(pattern),
       onToggle: (row, on) =>
@@ -192,7 +201,13 @@ function drawTable(): void {
         ),
     }),
   );
-  if (shown.length === 0) table.append(element('p', t('No rule matches this filter.'), 'state'));
+  if (visible.length === 0) table.append(element('p', t('No rule matches this filter.'), 'state'));
+  if (focused?.pattern !== undefined) {
+    const line = [...table.querySelectorAll<HTMLElement>('tr.rule-row')].find(
+      (candidate) => candidate.dataset.pattern === focused.pattern,
+    );
+    line?.querySelector<HTMLElement>(focused.control)?.focus();
+  }
 }
 
 /** Opens the panel of a rule, the form of a new one, or nothing. */

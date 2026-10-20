@@ -99,6 +99,16 @@ test('the table lists the rules, filters them, opens one in its panel, switches,
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(false);
   await rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch').click();
   await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(true);
+  // From the keyboard: Space presses it, and the focus stays on it when the table is drawn again
+  // (raised in review).
+  await rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch').focus();
+  await page.keyboard.press('Space');
+  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(false);
+  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await storedSites(extension))[PLAYGROUND_ORIGIN]?.enabled).toBe(true);
+  await expect(rowOf(page, PLAYGROUND_ORIGIN).getByRole('switch')).toBeFocused();
 
   // « Add a site »: once stored, the panel of the new rule takes the place of the form (raised in review).
   await page.getByRole('button', { name: 'Add a site' }).click();
