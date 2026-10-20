@@ -123,6 +123,9 @@ const DETAIL = {
   pendingInvitations: 0,
 };
 
+/** The instant of a suspension that the stub writes (FRU-323): the 30th of September of this year. */
+const SUSPENDED_AT = new Date(Date.UTC(new Date().getUTCFullYear(), 8, 30, 9)).toISOString();
+
 /** A day `n` days ago, as the worker keeps `lastSeen`. */
 const daysAgo = (days: number) => new Date(Date.now() - days * DAY).toISOString().slice(0, 10);
 
@@ -248,6 +251,12 @@ type Options = {
   mailed?: boolean;
   /** A refusal that a deletion of an account answers instead of a `200` (FRU-285). */
   refusingAccountDeletion?: { status: number; error: string } | undefined;
+  /** The workspaces that are suspended when the page opens, with the fields of the worker (FRU-323). */
+  suspensions?: Record<string, { suspendedAt: string; reason?: string }>;
+  /** A refusal that a suspension of a workspace answers instead of a `200` (FRU-323). */
+  refusingWorkspaceSuspension?: { status: number; error: string } | undefined;
+  /** Holds every answer of a suspension of a workspace until it resolves (FRU-323). */
+  holdWorkspaceSuspension?: Promise<void>;
 };
 
 type Posted = { path: string; body: unknown };
@@ -292,6 +301,9 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     }
     const deletion = /^\/console\/admin\/workspaces\/([^/]+)\/deletion$/.exec(pathname);
     if (deletion !== null && route.request().method() === 'POST') return answerDeletion(deletion[1] as string, route);
+    const workspaceSuspension = /^\/console\/admin\/workspaces\/([^/]+)\/suspension$/.exec(pathname);
+    if (workspaceSuspension !== null && route.request().method() === 'POST')
+      return answerWorkspaceSuspension(workspaceSuspension[1] as string, route);
     const url = new URL(route.request().url());
     const q = url.searchParams.get('q');
     const show = url.searchParams.get('show');
@@ -309,11 +321,13 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
         ),
         ...made,
       ];
-      return reply({ workspaces: found, total: found.length });
+      return reply({ workspaces: found.map(withSuspension), total: found.length });
     }
-    if (pathname === '/console/admin/workspaces/w9') return reply(DETAIL);
+    if (pathname === '/console/admin/workspaces/w9') return reply(withSuspension(DETAIL));
     if (pathname.startsWith('/console/admin/workspaces/'))
-      return reply({ ...DETAIL, id: pathname.split('/').pop(), members: [], sites: [], destinations: [] });
+      return reply(
+        withSuspension({ ...DETAIL, id: pathname.split('/').pop() ?? '', members: [], sites: [], destinations: [] }),
+      );
     if (pathname === '/console/admin/users') {
       const found = usersOf(options.users ?? USERS, q ?? '', show ?? 'all').filter((user) => !goneUsers.has(user.id));
       return reply({ users: found, total: found.length + cut });
@@ -394,6 +408,30 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
         gone: { sites: workspace.sites, members: workspace.members, invitations: 0, connectors: 1, keptNotes: 3 },
       },
     });
+  };
+  // The suspensions of the workspaces, as the worker keeps them (FRU-282): each read says them.
+  const suspended = new Map(Object.entries(options.suspensions ?? {}));
+  const withSuspension = <T extends { id: string }>(workspace: T) => {
+    const held = suspended.get(workspace.id);
+
+    return { ...workspace, suspended: held !== undefined, ...held };
+  };
+  const answerWorkspaceSuspension = async (id: string, route: Route): Promise<void> => {
+    const body = route.request().postDataJSON() as { suspended: boolean; reason?: string };
+    options.posted?.push({ path: new URL(route.request().url()).pathname, body });
+    await (options.holdWorkspaceSuspension ?? Promise.resolve());
+    const refused = options.refusingWorkspaceSuspension;
+    if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+    const changed = body.suspended !== suspended.has(id);
+    // A second suspension keeps the first one, its day and its reason, as the worker does.
+    if (body.suspended && changed)
+      suspended.set(id, {
+        suspendedAt: SUSPENDED_AT,
+        ...(body.reason === undefined ? {} : { reason: body.reason }),
+      });
+    if (!body.suspended) suspended.delete(id);
+
+    return route.fulfill({ json: { workspace: withSuspension({ id }), changed } });
   };
   const answerSuspension = async (id: string, route: Route): Promise<void> => {
     const body = route.request().postDataJSON() as { suspended: boolean };
@@ -608,8 +646,11 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   );
   await expect(panel(page)).toContainText('Tom Marchal, tom@acme.dev');
   await expectPanel(page);
-  await expectNoAction(page, 0, ['Delete the workspace', 'New workspace', 'Invite someone']);
-  await expect(panel(page).locator('.kit-panel__foot').getByRole('button')).toHaveText(['Delete the workspace']);
+  await expectNoAction(page, 0, ['Delete the workspace', 'New workspace', 'Invite someone', 'Suspend']);
+  await expect(panel(page).locator('.kit-panel__foot').getByRole('button')).toHaveText([
+    'Suspend',
+    'Delete the workspace',
+  ]);
   await axe(page, 'the panel of a workspace at 1440 px');
 
   // Escape closes it, and gives focus back to its row.
@@ -2052,4 +2093,211 @@ test('Users: the deletion of an account in French, and at 390 px (FRU-285)', asy
   await expect(panel(page).getByRole('link', { name: 'Changer le propriétaire de Acme support' })).toBeVisible();
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'an account held by its workspaces at 390 px');
+});
+
+/** The day of `SUSPENDED_AT`, as the console writes it in English and in French (`dayOf`). */
+const SUSPENDED_DAY = new Date(SUSPENDED_AT).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const SUSPENDED_DAY_FR = new Date(SUSPENDED_AT).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+const LUMEN_SUSPENDED = { w5: { suspendedAt: SUSPENDED_AT, reason: 'Unpaid invoice of September' } };
+/** « Suspend » in the foot of a workspace, and « Restore » at the top of a suspended one (FRU-323). */
+const suspendWorkspace = (page: Page) =>
+  panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspend', exact: true });
+const restoreWorkspace = (page: Page) => panel(page).getByRole('button', { name: 'Restore', exact: true });
+const nameCell = (page: Page, name: string) => rows(page).filter({ hasText: name }).getByRole('cell').first();
+
+test('Workspaces: a suspended workspace says so in its row, in its panel and on « Instance », with the day and the reason (FRU-323)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const sent = watched(page);
+  await stub(page, { suspensions: LUMEN_SUSPENDED });
+  await visit(page, '/admin/workspaces', 'Workspaces');
+
+  const marker = nameCell(page, 'Lumen').locator('span').last();
+  await expect(marker).toHaveText(`Suspended since ${SUSPENDED_DAY}`);
+  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT));
+  expect(contrast(await painted(marker, 'color'), rgb('#ffffff'))).toBeGreaterThanOrEqual(4.5);
+  // An active workspace says nothing of a suspension.
+  await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');
+
+  await main(page).getByRole('link', { name: 'Lumen' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Lumen');
+  // On the chosen row, the red is the strong one of the kit, as for a person (FRU-281).
+  expect.soft(await painted(marker, 'color')).toEqual(rgb(ACCENT_STRONG));
+  expect(contrast(await painted(marker, 'color'), rgb(CHIP))).toBeGreaterThanOrEqual(4.5);
+  const notice = panel(page).getByRole('status').first();
+  await expect(notice).toHaveText(
+    `SuspendedSince ${SUSPENDED_DAY}. Its sites answer as unknown, and nothing in it changes. Its members still read it.Reason: Unpaid invoice of September`,
+  );
+  expect(contrast(await painted(notice.locator('span').first(), 'color'), rgb(SUBTLE))).toBeGreaterThanOrEqual(4.5);
+  await expect(restoreWorkspace(page)).toBeEnabled();
+  await expect(suspendWorkspace(page)).toHaveCount(0);
+  await axe(page, 'the panel of a suspended workspace');
+
+  await page.route(`${WORKER_ORIGIN}/console/admin/instance`, (route) => route.fulfill({ status: 503, json: {} }));
+  await visit(page, '/admin', 'Instance');
+  await main(page).getByRole('button', { name: 'Show the workspaces' }).click();
+  const instanceRow = main(page).getByRole('row').filter({ hasText: 'Lumen' });
+  await expect(instanceRow).toContainText(`Suspended since ${SUSPENDED_DAY}`);
+  await expect(main(page).getByRole('row').filter({ hasText: 'Acme support' })).not.toContainText('Suspended');
+  expect(sent.filter((request) => !request.startsWith('GET ') && !request.startsWith('OPTIONS '))).toEqual([]);
+});
+
+test('Workspaces: an admin suspends a workspace with a reason after a confirmation, then restores it (FRU-323)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  const asked = await stub(page, { posted });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
+
+  await suspendWorkspace(page).click();
+  const asking = group(page, 'Suspend Acme support');
+  await expect(asking).toContainText(
+    'Acme support is suspended at once. Its sites answer as unknown to the widget and the extension, every change in it is refused, and its notes wait to be delivered. Its members still sign in and read it. Nothing is deleted. Its owners see that you did it.',
+  );
+  const reason = asking.getByRole('textbox', { name: 'Reason (optional)' });
+  await expect(reason).toBeFocused();
+  await expect(reason).toHaveAttribute('maxlength', '200');
+  // The press asks: the row still shows the state of the list, and nothing left.
+  await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');
+  expect(posted).toEqual([]);
+  await axe(page, 'the confirmation of a suspension of a workspace');
+
+  await reason.fill('  Unpaid   invoice  ');
+  await asking.getByRole('button', { name: 'Suspend Acme support' }).click();
+  await expect(asking).toHaveCount(0);
+  await expect(nameCell(page, 'Acme support')).toContainText(`Suspended since ${SUSPENDED_DAY}`);
+  await expect(panel(page).getByRole('status').first()).toContainText('Reason: Unpaid invoice');
+  await expect(suspendWorkspace(page)).toHaveCount(0);
+  await expect(restoreWorkspace(page)).toBeFocused();
+  expect(posted).toEqual([
+    { path: '/console/admin/workspaces/w9/suspension', body: { suspended: true, reason: 'Unpaid invoice' } },
+  ]);
+
+  await restoreWorkspace(page).click();
+  const restoring = group(page, 'Restore Acme support');
+  await expect(restoring).toContainText(
+    'Acme support works again at once: its sites answer, its members change it again, and the notes that waited are delivered. Its owners see that you did it.',
+  );
+  await expect(restoring.getByRole('textbox')).toHaveCount(0);
+  // Nothing to fill in: « Keep it » has focus, as in every confirmation.
+  await expect(restoring.getByRole('button', { name: 'Keep it' })).toBeFocused();
+  expect(posted).toHaveLength(1);
+  await axe(page, 'the confirmation of a restoration of a workspace');
+  await restoring.getByRole('button', { name: 'Restore Acme support' }).click();
+  await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');
+  await expect(restoreWorkspace(page)).toHaveCount(0);
+  await expect(suspendWorkspace(page)).toBeFocused();
+  expect(posted.at(-1)).toEqual({ path: '/console/admin/workspaces/w9/suspension', body: { suspended: false } });
+
+  // A suspension with no reason sends none, and the panel says that none was given.
+  await suspendWorkspace(page).click();
+  await group(page, 'Suspend Acme support').getByRole('button', { name: 'Suspend Acme support' }).click();
+  await expect(panel(page).getByRole('status').first()).toContainText('No reason was given.');
+  expect(posted.at(-1)).toEqual({ path: '/console/admin/workspaces/w9/suspension', body: { suspended: true } });
+  await expect(main(page).getByRole('alert')).toHaveCount(0);
+  // The row and the panel changed in place: each read leaves a trace, and each was read once.
+  expect(asked.filter((each) => each.path === '/console/admin/workspaces')).toHaveLength(1);
+  expect(asked.filter((each) => each.path === '/console/admin/workspaces/w9')).toHaveLength(1);
+});
+
+test('Workspaces: « Keep it » and Escape send nothing, and give focus back to « Suspend » and « Restore » (FRU-323)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  await stub(page, { posted, suspensions: LUMEN_SUSPENDED });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+
+  await suspendWorkspace(page).click();
+  await group(page, 'Suspend Acme support').getByRole('textbox').fill('Typed, then kept');
+  await group(page, 'Suspend Acme support').getByRole('button', { name: 'Keep it' }).click();
+  await expect(group(page, 'Suspend Acme support')).toHaveCount(0);
+  await expect(suspendWorkspace(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  // What was typed went with « Keep it »: a reason is for one suspension.
+  await expect(group(page, 'Suspend Acme support').getByRole('textbox')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(group(page, 'Suspend Acme support')).toHaveCount(0);
+  await expect(panel(page)).toBeVisible();
+  await expect(suspendWorkspace(page)).toBeFocused();
+
+  await main(page).getByRole('link', { name: 'Lumen' }).click();
+  await expect(panel(page)).toHaveAccessibleName('Lumen');
+  await restoreWorkspace(page).click();
+  await group(page, 'Restore Lumen').getByRole('button', { name: 'Keep it' }).click();
+  await expect(restoreWorkspace(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(group(page, 'Restore Lumen').getByRole('button', { name: 'Keep it' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(group(page, 'Restore Lumen')).toHaveCount(0);
+  await expect(restoreWorkspace(page)).toBeFocused();
+  await expect(nameCell(page, 'Lumen')).toContainText('Suspended since');
+  await page.waitForTimeout(200);
+  expect(posted).toEqual([]);
+});
+
+test('Workspaces: each refusal of a suspension is said, the reason stays, and the row keeps its true state (FRU-323)', async ({
+  page,
+}) => {
+  const posted: Posted[] = [];
+  const options: Options = { posted };
+  await stub(page, options);
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await suspendWorkspace(page).click();
+  const asking = group(page, 'Suspend Acme support');
+  await asking.getByRole('textbox').fill('Unpaid');
+
+  for (const [refusal, sentence] of [
+    [{ status: 404, error: 'not-found' }, 'This workspace no longer exists, or you are no longer an instance admin.'],
+    [{ status: 400, error: 'invalid-reason' }, 'A reason is one line of 200 characters at most.'],
+    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 409, error: 'something-else' }, 'Nothing changed. Try again.'],
+  ] as const) {
+    options.refusingWorkspaceSuspension = refusal;
+    await asking.getByRole('button', { name: 'Suspend Acme support' }).click();
+    await expect(panel(page).getByRole('alert')).toHaveText(sentence);
+    await expect(asking.getByRole('textbox')).toHaveValue('Unpaid');
+    await expect(nameCell(page, 'Acme support')).not.toContainText('Suspended');
+  }
+  expect(posted).toHaveLength(4);
+
+  // A press while the worker answers sends nothing more.
+  let answer = (): void => {};
+  options.refusingWorkspaceSuspension = undefined;
+  options.holdWorkspaceSuspension = new Promise<void>((resolve) => (answer = resolve));
+  await asking.getByRole('button', { name: 'Suspend Acme support' }).click();
+  await expect(asking.getByRole('button', { name: 'Suspend Acme support' })).toBeDisabled();
+  await asking.getByRole('button', { name: 'Suspend Acme support' }).click({ force: true });
+  answer();
+  await expect(restoreWorkspace(page)).toBeFocused();
+  expect(posted).toHaveLength(5);
+});
+
+test('Workspaces: the suspension and its confirmations in French, and at 390 px (FRU-323)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr', suspensions: LUMEN_SUSPENDED });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await expect(nameCell(page, 'Lumen')).toContainText(`Suspendu depuis le ${SUSPENDED_DAY_FR}`);
+
+  await panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspendre', exact: true }).click();
+  const asking = group(page, 'Suspendre Acme support');
+  await expect(asking).toContainText(
+    'Acme support est suspendu aussitôt. Ses sites répondent comme inconnus au widget et à l’extension, chaque changement y est refusé, et ses notes attendent d’être livrées. Ses membres se connectent toujours et le lisent. Rien n’est supprimé. Ses propriétaires voient que vous l’avez fait.',
+  );
+  await expect(asking.getByRole('textbox', { name: 'Raison (facultative)' })).toBeFocused();
+  await expect(asking.getByRole('button', { name: 'Suspendre Acme support' })).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the confirmation of a suspension of a workspace at 390 px');
+  await asking.getByRole('button', { name: 'Suspendre Acme support' }).click();
+  await expect(panel(page).getByRole('status').first()).toContainText('Aucune raison n’a été donnée.');
+  await expect(panel(page).getByRole('button', { name: 'Rétablir', exact: true })).toBeFocused();
+
+  await panel(page).getByRole('button', { name: 'Rétablir', exact: true }).click();
+  await expect(group(page, 'Rétablir Acme support')).toContainText(
+    'Acme support fonctionne de nouveau aussitôt : ses sites répondent, ses membres le modifient de nouveau, et les notes qui attendaient sont livrées. Ses propriétaires voient que vous l’avez fait.',
+  );
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the confirmation of a restoration of a workspace at 390 px');
 });

@@ -448,6 +448,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   none), and « on 30 Sep by Nadia Benali » (the list says neither). `e2e/console-admin-lists.spec.ts`
   holds the status and its contrast, the request, both confirmations, « Keep it » and Escape, the
   holds, each refusal, the busy button, French, 390 px and axe.
+- **« Suspend » and « Restore » of a workspace suspend and restore it, after a confirmation**
+  (FRU-323, routes of FRU-282). They are writes of an administrator (`AdminWrite`): a press asks,
+  only the button of the confirmation sends, « Keep it » and Escape send nothing and empty the reason,
+  a refusal is said and keeps the reason. A suspension takes an **optional reason**, one line of 200
+  characters at most (`SUSPENSION_REASON_LENGTH` of the worker; the field holds no more, and the
+  console sends it trimmed, with its spaces made one). The confirmation says what a suspended
+  workspace does: its sites answer as unknown, every change is refused, its notes wait, its members
+  still read it, nothing is deleted, and its owners see it. **A suspended workspace reads « Suspended
+  since {day} »** under its name, in its row of Workspaces and of Instance, in the red of the person
+  of FRU-281 (`accent`, `accent-strong` on the chosen row), and at the top of its panel with the day,
+  what it does, the reason or « No reason was given. », and « Restore »; an active one has « Suspend »
+  in the foot, above « Delete the workspace », as screen 18 draws it. **The row and the panel change
+  in place** after a `200`, from its answer: each read leaves a trace with the owners. After the
+  answer, focus goes to the button that says the state now. **Not done**: the filter « Suspended »
+  (the worker has none), and a banner for the members of a suspended workspace, which `/console/me`
+  answers and no screen shows yet. `e2e/console-admin-lists.spec.ts` holds the row, the panel and
+  Instance, both confirmations, the request with and without a reason, « Keep it » and Escape, each
+  refusal, the busy button, French, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read
