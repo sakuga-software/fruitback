@@ -657,6 +657,10 @@ test('« Search and options »: the search, « Whole site » over three pages, t
     .toEqual([`Search ${tag} mocha`]);
   // The pins hidden from the panel come back when the panel closes (review of #419): the background
   // shows them again once the port of the panel goes, whatever closed it.
+  // The thread of the note is closed first: the pin of an open thread stays, as in the list of the
+  // page (FRU-308).
+  await tab.keyboard.press('Escape');
+  await expect(tab.getByRole('dialog', { name: /^(Note|Feedback) / })).toBeHidden();
   expect(await clickPanel(tab, 'button.panel-search')).toBe(true);
   await expect.poll(() => clickPanel(tab, '.search-pins [role="switch"]')).toBe(true);
   await expect(tab.locator('[data-fruitback-pin]').first()).toBeHidden();
