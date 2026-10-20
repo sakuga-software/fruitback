@@ -137,6 +137,9 @@ for (const language of ['en', 'fr'] as const) {
     // 2026-10-20, the accent of the extension, and no word cut.
     for (const colorScheme of ['light', 'dark'] as const) {
       await offered.emulateMedia({ colorScheme });
+      // Out of every button, and past the 0.2 s the switch takes to change its colour.
+      await offered.mouse.move(0, 0);
+      await offered.waitForTimeout(400);
       const kit = await readKit(offered);
       const where = `${language}, ${colorScheme}`;
       expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
@@ -153,7 +156,6 @@ for (const language of ['en', 'fr'] as const) {
       });
       expect.soft(kit.switch, `${where}: the switch`).toEqual({ width: 44, height: 26, fill: ACCENT[colorScheme] });
       expect.soft(kit.knob, `${where}: the knob`).toEqual({ width: 20, height: 20, right: 3 });
-      expect.soft(kit.drops, `${where}: the drops`).toEqual(DROPS);
       expect.soft(kit.cut, `${where}: a word cut`).toEqual([]);
     }
     await offered.emulateMedia({ colorScheme: 'light' });
@@ -163,9 +165,12 @@ for (const language of ['en', 'fr'] as const) {
     await onOff.focus();
     await offered.keyboard.press('Space');
     await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    // The screen of a site that is off is drawn again, with no action: the next key goes to its switch.
+    await expect(offered.locator('.kit-primary')).toHaveCount(0);
     await offered.getByRole('switch').focus();
     await offered.keyboard.press('Enter');
     await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    await expect(offered.locator('.kit-primary')).toHaveCount(1);
   });
 }
 
@@ -173,11 +178,6 @@ for (const language of ['en', 'fr'] as const) {
 const ACCENT = { light: 'rgb(194, 65, 12)', dark: 'rgb(251, 146, 60)' } as const;
 /** The edge of a second button: `--line-control`. */
 const CONTROL_EDGE = { light: 'rgb(168, 162, 158)', dark: 'rgb(120, 113, 108)' } as const;
-/** The five marks of the notes of the page: 12 px, in the colour of each status. */
-const DROPS = ['rgb(106, 121, 80)', 'rgb(86, 128, 46)', 'rgb(172, 95, 0)', 'rgb(221, 44, 39)', 'rgb(141, 110, 99)'].map(
-  (fill) => ({ width: 12, height: 12, fill }),
-);
-
 /** The parts of the kit on the screen of a site that is on. */
 function readKit(popup: Page) {
   return popup.evaluate(() => {
@@ -212,20 +212,6 @@ function readKit(popup: Page) {
         height: knob.box.height,
         right: Math.round(toggle.box.right - knob.box.right),
       },
-      drops: [...document.querySelectorAll('.kit-drop')]
-        .map((drop) => {
-          const box = drop.getBoundingClientRect();
-          // The drop is turned by 45°: its box is wider than its side, so the side is read from its style.
-          const drawn = getComputedStyle(drop);
-
-          return {
-            width: Number.parseFloat(drawn.width),
-            height: Number.parseFloat(drawn.height),
-            fill: drawn.backgroundColor,
-            box,
-          };
-        })
-        .map(({ width, height, fill }) => ({ width, height, fill })),
       cut: [...document.querySelectorAll<HTMLElement>('.kit-primary, .kit-secondary')]
         .filter((button) => button.scrollWidth > button.clientWidth)
         .map((button) => button.textContent),

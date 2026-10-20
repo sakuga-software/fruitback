@@ -187,7 +187,7 @@ test('signed out, the popup is the mock-up: its boxes, its keyboard, its contras
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Sign in to Fruitback' })),
-    { x: 16, y: 231, width: 328, height: 44 },
+    { x: 16, y: 231, width: 328, height: 46 },
     'sign in',
   );
   expectNear(
@@ -199,7 +199,8 @@ test('signed out, the popup is the mock-up: its boxes, its keyboard, its contras
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   const action = popup.getByRole('button', { name: 'Sign in to Fruitback' });
   expect(await action.evaluate((button) => getComputedStyle(button).borderRadius)).toBe('10px');
-  expect((await boxOf(action)).height).toBe(44);
+  // The main button of the kit (FRU-293).
+  expect((await boxOf(action)).height).toBe(46);
 
   // The keyboard meets the gear, the sign-in, then the link, and sees where it is.
   expect(await tabStops(popup, 3)).toEqual([

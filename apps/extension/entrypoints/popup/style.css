@@ -403,6 +403,11 @@ body.popup-page {
   color: var(--muted);
 }
 
+/* The one thing a screen is for: the main button of the kit, 6 px under what the screen says. */
+.popup .popup-body > .action {
+  margin-top: 6px;
+}
+
 /* A link that does something here rather than going somewhere: a button that reads as a link. */
 .popup button.link-button {
   padding: 0;
