@@ -611,7 +611,7 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   // A new site is « Members only », and the detail says what private mode needs.
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
   await expect(writers).toContainText('Private mode carries no session');
-  await expect(writers).toContainText('« Anyone on the page »');
+  await expect(writers).toContainText(/«\sAnyone on the page\s»/);
   await expectNoViolation(page, 'the form with « Who can leave a note? »');
 
   // A site that everyone reads takes a note from anybody: the question is not asked, nor sent.
