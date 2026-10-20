@@ -4,6 +4,7 @@ import { locale, t } from '../i18n';
 import { EXTENSION_GUIDE, snippetFor, useConnect, useCopy } from '../install-options';
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet } from '../ui';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 
 /** Step 3 of the setup, « Put it on the site » (FRU-242). */
 
@@ -20,7 +21,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
   const snippet = snippetFor(site);
   const { copied, copy } = useCopy(snippet);
   const { link, problem, connect } = useConnect(workspace);
-  const host = new URL(site.origin).host;
+  const host = siteLabel(site.origin);
 
   return (
     <>

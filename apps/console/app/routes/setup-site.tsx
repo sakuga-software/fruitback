@@ -3,7 +3,7 @@ import { type Site, type Visibility, type Workspace, call } from '../api';
 import { t } from '../i18n';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Added, manages } from '../setup-stage';
-import { siteAddress } from '../site-address';
+import { siteAddress, siteLabel } from '../site-address';
 import { Button, Field, LinkButton, Pick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -27,7 +27,7 @@ type SiteFormProps = {
 export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   useLocale();
   const before = replaces?.site;
-  const [url, setUrl] = useState(before === undefined ? '' : new URL(before.origin).host);
+  const [url, setUrl] = useState(before === undefined ? '' : siteLabel(before.origin));
   const [visibility, setVisibility] = useState<Visibility>(before?.visibility ?? 'members');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
@@ -35,7 +35,7 @@ export function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setProblem(undefined);
-    // The same reading as the Sites screen: a host with no scheme is https (FRU-167).
+    // The same reading as the Sites screen: a host with no scheme is https, or http when local (FRU-314).
     const address = siteAddress(url);
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
     // Nothing changed: the site stays as it is, and nothing is asked of the worker.
@@ -119,7 +119,7 @@ export function SiteSummary({
   return (
     <div className="mt-1.5 flex flex-col gap-1 text-body">
       {/* A long host takes the lines it needs: the page does not scroll sideways (FRU-159). */}
-      <p className="font-semibold wrap-anywhere">{new URL(site.origin).host}</p>
+      <p className="font-semibold wrap-anywhere">{siteLabel(site.origin)}</p>
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted">
         {site.visibility === 'members'
           ? t('Members of {workspace} see the notes', { workspace: workspace.name })
@@ -133,7 +133,7 @@ export function SiteSummary({
       {left === undefined ? null : (
         <p role="status" className="text-hint text-muted">
           {t('{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.', {
-            site: new URL(left.origin).host,
+            site: siteLabel(left.origin),
           })}
         </p>
       )}

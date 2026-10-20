@@ -11,7 +11,7 @@ import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
-import { siteAddress } from '../site-address';
+import { siteAddress, siteLabel } from '../site-address';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
@@ -364,7 +364,7 @@ function SiteRows({
 }: SiteRowsProps) {
   useLocale();
   const more = useRef<HTMLSpanElement>(null);
-  const host = new URL(site.origin).host;
+  const host = siteLabel(site.origin);
   // Every role puts Fruitback on a site with its own browser. The rest is of who manages the sites.
   const items: MenuItem[] = [
     { id: 'install', label: t('Install') },

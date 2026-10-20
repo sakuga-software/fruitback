@@ -34,6 +34,7 @@ import {
 } from './admin-list';
 import { AdminWrite, GIVEN_ROLES, INVITED_ROLES } from './admin-writes';
 import { KINDS } from './connector-parts';
+import { siteLabel } from '../site-address';
 
 /**
  * The workspaces of the instance, as screen 18 of the mockup of 2026-10-13 draws them (FRU-263):
@@ -454,7 +455,7 @@ function Detail({ workspace, onChanged }: { workspace: AdminWorkspaceDetail; onC
         <PanelRows
           rows={workspace.sites.map((site) => ({
             key: site.id,
-            name: <span className="font-semibold">{site.origin.replace(/^https?:\/\//, '')}</span>,
+            name: <span className="font-semibold">{siteLabel(site.origin)}</span>,
             value:
               site.visibility === 'everyone'
                 ? t('Everyone who visits')

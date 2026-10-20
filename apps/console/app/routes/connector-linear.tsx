@@ -19,6 +19,7 @@ import { msg, t } from '../i18n';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Chip, Choice, LinkButton, Problem, SidePanel, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 import {
   BlockTitle,
   Disconnect,
@@ -285,7 +286,7 @@ export function LinearPanel({ id, base, connector, sites, manages, onChanged, on
 
     return (
       <li key={site.id} className="border-b border-line py-[8px] text-small" data-site={host}>
-        <p className="font-semibold [overflow-wrap:anywhere]">{host}</p>
+        <p className="font-semibold [overflow-wrap:anywhere]">{siteLabel(site.origin)}</p>
         {places.length === 0 ? (
           <p className="text-hint text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
         ) : null}

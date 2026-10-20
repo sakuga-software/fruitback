@@ -18,6 +18,7 @@ import { Button, Choice, DataTable, Field, Initial, LinkButton, PageHead, Proble
 import { useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { siteLabel } from '../site-address';
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
   owner: msg('Owner'),
@@ -29,21 +30,12 @@ const ROLE_WORDS: Readonly<Record<Role, string>> = {
 /** The roles an invitation gives: the worker refuses the others (FRU-104), and a guest names a site (FRU-250). */
 type InvitedRole = 'guest' | 'member' | 'admin';
 
-/** The host of a site, as the mockup writes it: « staging.acme.dev ». */
-function hostOf(origin: string): string {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return origin;
-  }
-}
-
 /** What the column « Sites » says of a row: every site, or the sites shared with a guest. */
 function sitesOf(role: Role, sites: readonly SharedSite[] | undefined): string {
   if (role !== 'guest') return t('Every site');
   if (sites === undefined) return t('Shared ones');
 
-  return sites.length === 0 ? t('No site') : sites.map((site) => hostOf(site.origin)).join(', ');
+  return sites.length === 0 ? t('No site') : sites.map((site) => siteLabel(site.origin)).join(', ');
 }
 
 const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
@@ -329,7 +321,7 @@ export default function Members() {
                 label={t('Site')}
                 value={shared}
                 onChange={setSite}
-                options={(sites ?? []).map((each) => ({ value: each.id, label: hostOf(each.origin) }))}
+                options={(sites ?? []).map((each) => ({ value: each.id, label: siteLabel(each.origin) }))}
               />
             </div>
           ) : null}
