@@ -21,6 +21,7 @@ export default [
   route('setup', 'routes/setup.tsx'),
   route('sign-in', 'routes/sign-in.tsx'),
   route('invitations', 'routes/invitations.tsx'),
+  route('connect', 'routes/connect-start.tsx'),
   route('connect/:request', 'routes/connect.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),

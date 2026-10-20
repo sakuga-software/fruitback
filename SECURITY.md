@@ -480,6 +480,21 @@ that grant stays refused (`REFUSED_PLUGINS` of `auth.ts`): it ends in a session 
 the extension keeps its own session, which rotates. The pairing by code stays, for the operator of an
 instance.
 
+**On Fruitback Cloud the console mints no pairing code any more** (FRU-313). « Connect this browser »
+opens `/connect`, a page of the console that says to sign in from the popup: the request above, the
+word, and a session of the account, the same as « Sign in to Fruitback » gives. Its condition is the
+host of the worker the console calls (`connectsBySignIn`, `api.fruitback.com`). What does not change:
+
+- **A self-hosted console still opens `<worker>/pair#<code>`**, minted by
+  `POST /console/workspaces/<id>/connect`. The extension of the store signs in to the Cloud alone, so
+  a pairing is the one way it gets a session of another worker. That route and `GET /pair` stay on
+  every worker, the Cloud's included: a Cloud console no longer calls the route, but nothing on the
+  worker refuses it there yet.
+- **A session that was paired before stays valid**: `POST /session/pair` and the refresh of a paired
+  session are unchanged, and nothing is revoked. Such a session ends as before, when its refresh
+  token is revoked, when the person leaves the workspace (`stillOfTheWorkspace`), or when it is
+  not refreshed for 30 days. The popup still shows it as « Paired as ».
+
 |             |                                                                                   |
 | ----------- | --------------------------------------------------------------------------------- |
 | Request id  | 128 bits, public: it is in the address the extension opens in the console         |

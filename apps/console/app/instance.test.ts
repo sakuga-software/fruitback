@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { DEVELOPMENT_API, apiFrom, instanceOf } from './instance.ts';
+import { DEVELOPMENT_API, apiFrom, connectsBySignIn, instanceOf } from './instance.ts';
 
 describe('the address of the worker of this instance (FRU-222)', () => {
   it('is what the container wrote when it started, before what the build holds', () => {
@@ -42,5 +42,17 @@ describe('the instance the console names in the frame of an administrator (FRU-2
       cloud: false,
     });
     assert.deepEqual(instanceOf(DEVELOPMENT_API), { host: 'localhost:8788', cloud: false });
+  });
+});
+
+describe('the way « Connect this browser » connects (FRU-313)', () => {
+  it('leads to the sign-in of the popup on Fruitback Cloud', () => {
+    assert.equal(connectsBySignIn('https://api.fruitback.com'), true);
+  });
+
+  it('keeps the pairing link of the worker on a self-hosted instance, which the extension cannot sign in to', () => {
+    assert.equal(connectsBySignIn('https://feedback.acme.dev'), false);
+    assert.equal(connectsBySignIn(DEVELOPMENT_API), false);
+    assert.equal(connectsBySignIn('https://api.fruitback.com.evil.dev'), false);
   });
 });

@@ -24,6 +24,17 @@ export function apiFrom(written: unknown, built: string | undefined): string {
   return chosen.replace(/\/+$/, '');
 }
 
+/**
+ * Whether « Connect this browser » leads to the sign-in of the popup (FRU-313), rather than to a
+ * pairing code. The extension of the store signs in to Fruitback Cloud alone (`WXT_FRUITBACK_CLOUD`):
+ * on a console of the Cloud the popup gives the session of the account, as « Sign in to Fruitback »
+ * does anywhere. A self-hosted console keeps the pairing link of its worker, which that extension
+ * cannot sign in to.
+ */
+export function connectsBySignIn(api: string): boolean {
+  return instanceOf(api).cloud;
+}
+
 /** The host of the worker of Fruitback Cloud. */
 export const CLOUD_API_HOST = 'api.fruitback.com';
 
