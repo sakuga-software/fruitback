@@ -829,3 +829,27 @@ describe('a failure of the read that comes during a capture (FRU-316)', () => {
     assert.equal(announcer.textContent, '');
   });
 });
+
+describe('the launch button while the session of the host has ended (FRU-315)', () => {
+  it('opens the sign-in instead of a capture, and gives the capture back', () => {
+    mount(() => null);
+    const asked: number[] = [];
+    host?.start();
+    assert.equal(host?.capturing(), true);
+
+    host?.offerSignIn({ label: 'Sign in to leave notes', onSignIn: () => asked.push(1) });
+    // A capture that ran stops: no note can start that the worker will refuse.
+    assert.equal(host?.capturing(), false);
+    assert.equal(launchButton().textContent, 'Sign in to leave notes');
+    assert.equal(launchButton().hasAttribute('aria-pressed'), false);
+    launchButton().click();
+    assert.deepEqual(asked, [1]);
+    assert.equal(host?.capturing(), false);
+
+    host?.offerSignIn(undefined);
+    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
+    launchButton().click();
+    assert.equal(host?.capturing(), true);
+  });
+});

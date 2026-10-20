@@ -317,6 +317,12 @@ mode, and **an identity token is not sent at all**. `apps/extension/src/worlds.t
 the main-world scripts. `e2e/extension.spec.ts` holds it in a real browser: after a pairing and a
 relayed write, no stored token appears in anything the page's JavaScript can read.
 
+**The page learns whether the reviewer's session for its site has ended** (FRU-315): a boolean,
+`{ kind: 'session', signedOut }`, so the widget offers the sign-in. It could already tell from the
+`401` the relay answers. The page can forge that message and the widget's ask for the sign-in: the
+first changes what our widget says on that page, the second opens our popup over that tab, and only
+when its site wants a session. Neither reaches a token, the relay or another tab.
+
 ### What a session protects, and what it does not
 
 The worker can hold sessions for the browser extension. An operator mints a pairing code for a named

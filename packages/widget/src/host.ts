@@ -91,6 +91,11 @@ export type CaptureHost = {
    * `onSelect` (FRU-311): the note left on it comes back when its page comes back.
    */
   choose(element: Element): void;
+  /**
+   * The launch button opens a sign-in instead of a capture (FRU-315), with these words; `undefined`
+   * gives it back. A capture that runs stops: no note can start that the worker will refuse.
+   */
+  offerSignIn(offer: { label: string; onSignIn: () => void } | undefined): void;
   destroy(): void;
 };
 
@@ -476,7 +481,35 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     unsaid = '';
   }
 
-  button.addEventListener('click', () => (capturing ? stop() : start()));
+  let signIn: { label: string; onSignIn: () => void } | undefined;
+  button.addEventListener('click', () => {
+    if (signIn !== undefined) {
+      signIn.onSignIn();
+
+      return;
+    }
+    if (capturing) stop();
+    else start();
+  });
+
+  /**
+   * The same pill, other words and another action (FRU-315). Not a switch while it signs in: it has
+   * nothing to be pressed for, so it loses `aria-pressed` rather than saying « not pressed ».
+   */
+  function offerSignIn(offer: { label: string; onSignIn: () => void } | undefined): void {
+    signIn = offer;
+    if (offer !== undefined) {
+      if (capturing) stop();
+      launchLabel.textContent = offer.label;
+      button.removeAttribute('aria-pressed');
+      container.dataset.fruitbackSignedOut = '';
+
+      return;
+    }
+    launchLabel.textContent = restingLabel;
+    button.setAttribute('aria-pressed', 'false');
+    delete container.dataset.fruitbackSignedOut;
+  }
   halt.addEventListener('click', (event) => {
     // Inside the Shadow root, so the capture does not take this click for a choice; and the page
     // must not hear it either.
@@ -508,6 +541,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       else announcer.textContent = sentence;
     },
     choose: select,
+    offerSignIn,
     destroy() {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);

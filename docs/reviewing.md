@@ -50,6 +50,9 @@ If a site is on and its access was removed in the settings of the browser, the p
 **Allow access again** asks the browser for that site once more, and the widget comes back.
 **Turn off for this site** keeps the rule, off.
 
+If your session ends, the widget says so on the page: its button reads « Sign in to leave notes » and
+opens the popup, where you sign in again. What you were writing stays.
+
 On a worker you run yourself, or on a site of no workspace, open the page you want to review and
 click the extension. While this browser holds no session at all, the foot of the popup offers
 **Use your own Fruitback server**, and the options page asks for the three things below. Once it holds one, the popup names

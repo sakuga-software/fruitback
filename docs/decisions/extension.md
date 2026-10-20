@@ -649,7 +649,37 @@ which replaced the fields of before for a person signed in on a site of no rule.
   screen of a sign-in** (`ruleWantsSession` in `popup-state.ts`): the switch of a site that reads and
   writes nothing would hide the one thing to do.
 - `e2e/popup-sign-in.spec.ts` holds the way: signed in, the site on, the session refused by the worker,
-  a note sent, its text kept, the session forgotten, and the popup offering to sign in.
+  the session forgotten, the widget saying so, and the popup offering to sign in.
+
+## The widget says the session ended, and opens the sign-in (FRU-315)
+
+### The rules, in short
+
+- **The page says it at once.** For a widget we mount through the relay, the isolated world posts
+  `{ kind: 'session', signedOut }` after the mount, and again each time a session starts or ends
+  (`touchesARefreshToken`). `signedOut` is `wantsSession` of `popup-state.ts`, the rule the popup
+  already draws its sign-in from: a site of a workspace of this build's Fruitback, with no session.
+  The widget is told yes or no, never anything of the session.
+- **Apart from the mount**, so a session that ends does not build the widget again over a note being
+  written: the widget changes what it offers (`signedOut()` of `init`) and keeps what is written.
+- **The bridge reads `storage.local` only, and writes nothing** (`createSessionArea(...).read()`,
+  with the epoch rule of every reader). `storage.session` is closed to content scripts, and the
+  upgrade of the areas is the background's: the first version used `createBrowserSessions`, whose
+  upgrade touches `storage.session`, and the bridge read « signed in » for ever. Found by the E2E.
+- **Signed out, the widget offers the sign-in instead of a note**: the launch button says « Sign in
+  to leave notes », the list « Sign in to see the notes of this page. » with « Sign in », a send
+  refused with `401` offers « Sign in again », the composer asks for no name, and « Keep for later »
+  stays offered. Alt+Shift+F and « Leave feedback » of the popup lead to the sign-in too.
+- **Each of those asks the background, which opens the popup** over that tab (`action.openPopup`):
+  the popup is where a sign-in starts and where its word is compared, so nothing opens the console
+  in its place. The ask is taken from a content script of this extension only
+  (`acceptedSignIn`), and opens anything only for a tab whose site wants a session. A page can
+  forge the ask and the session message: at worst it opens our popup over itself, or makes our
+  widget say « Sign in » on its own page. Measured in Chromium: no popup context before the click,
+  one after (`runtime.getContexts`). Firefox opens a popup from a gesture only; a message is not
+  one, so there the click does nothing more than the words, which already say to sign in.
+- `e2e/popup-sign-in.spec.ts` (the session that ended), `bridge.test.ts`, `sign-in-request.test.ts`,
+  and in the widget `host.test.ts`, `sidebar.test.ts`, `composer.test.ts`, `embed.test.ts`.
 
 ## A pairing code that arrives as a link (FRU-92)
 

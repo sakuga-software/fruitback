@@ -42,9 +42,10 @@ export type Sidebar = {
  *
  * `pending`: no read has answered yet. `read`: a read answered, and the list is what it said.
  * `failed`: no read answered for this page, and the last one failed. An empty list then says
- * nothing about the notes, so the list must not say that there are none.
+ * nothing about the notes, so the list must not say that there are none. `signed-out`: the session
+ * the host reads with has ended (FRU-315). The list says to sign in, and its one button does it.
  */
-export type ReadState = 'pending' | 'read' | 'failed';
+export type ReadState = 'pending' | 'read' | 'failed' | 'signed-out';
 
 export type SidebarOptions = {
   /** Where to render. The Shadow root, in practice. */
@@ -57,6 +58,8 @@ export type SidebarOptions = {
   readState?: () => ReadState;
   /** The reviewer asked to read the notes again, after a failed read. */
   onRetry?: () => void;
+  /** The reviewer asked to sign in again, while the read state is `signed-out` (FRU-315). */
+  onSignIn?: () => void;
   /**
    * The notes kept for later in this tab, on every page (FRU-124). Read on each draw. They are listed
    * in a group of their own above the notes, with one button that sends them all.
@@ -212,6 +215,12 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   // finds it where it was. It is busy, not disabled: a disabled button loses focus.
   let retrying = false;
   retry.addEventListener('click', () => {
+    // Signed out, the same place holds « Sign in »: a read again would be refused like the last.
+    if ((options.readState?.() ?? 'read') === 'signed-out') {
+      options.onSignIn?.();
+
+      return;
+    }
     if (retrying) return;
     retrying = true;
     options.onRetry?.();
@@ -303,7 +312,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       active !== null && panel.contains(active) ? (active as HTMLElement).dataset.fruitbackNote : undefined;
     const state = options.readState?.() ?? 'read';
     if (state !== 'pending') retrying = false;
-    const failing = state === 'failed';
+    const signedOut = state === 'signed-out';
+    const failing = state === 'failed' || signedOut;
     const asking = failing || retrying;
     const known = state === 'read' || entries.length > 0;
 
@@ -331,10 +341,15 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     empty.hidden = asking || shown.length > 0;
     // Set only when it changes, so a draw does not announce the same words again.
     let message = '';
-    if (failing) message = t.text('sidebar.failed');
+    if (signedOut) message = t.text('sidebar.signedOut');
+    else if (failing) message = t.text('sidebar.failed');
     else if (retrying) message = t.text('sidebar.loading');
     if (failedText.textContent !== message) failedText.textContent = message;
+    const retryWords = t.text(signedOut ? 'sidebar.signIn' : 'sidebar.retry');
+    if (retry.textContent !== retryWords) retry.textContent = retryWords;
     retry.setAttribute('aria-disabled', String(retrying));
+    // A new note would be refused: the list's way to one goes while the session is over.
+    leave.hidden = signedOut;
     const leaving = !asking && failed.contains(active);
     failed.hidden = !asking;
     list.hidden = asking || shown.length === 0;
@@ -644,6 +659,7 @@ const STYLES = `
   cursor: pointer;
 }
 /* The drop of the mark, taller than wide, as on the launch button. */
+.fruitback-sidebar-leave[hidden] { display: none; }
 .fruitback-sidebar-leave .fruitback-icon { width: 12px; height: 15px; }
 .fruitback-sidebar-leave:hover { background: var(--fruitback-color-accent-strong); }
 .fruitback-sidebar-tabs {

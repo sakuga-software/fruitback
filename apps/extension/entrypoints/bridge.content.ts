@@ -7,6 +7,9 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createApply } from '../src/bridge.ts';
+import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
+import { createSessionArea, touchesARefreshToken } from '../src/session-storage.ts';
+import { SIGN_IN_REQUEST } from '../src/sign-in-request.ts';
 import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
@@ -49,9 +52,20 @@ export default defineContentScript({
       window.postMessage(message, window.location.origin);
     };
 
+    // FRU-315: whether the site wants a session this browser does not hold. Read, never written, and
+    // in `storage.local` alone, with the epoch rule of every reader: `storage.session` is closed to
+    // content scripts, and the upgrade of the areas is the background's. Only the endpoints that hold
+    // a session are kept here: the widget is told yes or no, never anything of the session.
+    const cloud = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
+    const sessions = createSessionArea(() => browser.storage.local, Promise.resolve());
     const apply = createApply({
       readSite: () => readSite(origin),
       readLanguage: () => storedLanguage(browser.storage.local),
+      readSignedOut: async (site) => {
+        const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
+
+        return wantsSession(site, cloud, held);
+      },
       post,
     });
 
@@ -85,6 +99,13 @@ export default defineContentScript({
       const message = parseBridgeMessage(event.data);
       if (message?.kind === 'ready') {
         void apply(true);
+
+        return;
+      }
+
+      // FRU-315: the widget asks for the sign-in. The background decides whether to open anything.
+      if (message?.kind === 'sign-in') {
+        void browser.runtime.sendMessage(SIGN_IN_REQUEST).catch(() => undefined);
 
         return;
       }
@@ -148,7 +169,14 @@ export default defineContentScript({
     // The popup writes to storage rather than messaging tabs, so the switch reaches every open tab
     // of that origin, including the ones the popup was never opened on.
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes.sites !== undefined || changes[LANGUAGE_KEY] !== undefined)) void apply();
+      // A session that starts or ends is a change of what the widget offers (FRU-315).
+      const keys = Object.keys(changes);
+      if (
+        area === 'local' &&
+        (changes.sites !== undefined || changes[LANGUAGE_KEY] !== undefined || touchesARefreshToken(keys))
+      ) {
+        void apply();
+      }
     });
 
     await apply();

@@ -152,6 +152,13 @@ export type FruitbackOptions = {
    * reader from a visitor of the site, and the rule of the product says no.
    */
   replies?: boolean;
+  /**
+   * Open the sign-in of the host (FRU-315). Given, `signedOut(true)` turns the launch button into
+   * « Sign in to leave notes », the list says to sign in, and a send refused for a session that ended
+   * offers « Sign in again ». The extension passes it for a site of a workspace: it knows when the
+   * session of the reviewer ended, before the worker refuses anything.
+   */
+  onSignIn?: () => void;
   document?: Document;
 };
 
@@ -196,6 +203,13 @@ export type Fruitback = {
    * this page answered: a count of zero would then say there are no notes.
    */
   pageCounts(): PageCounts | undefined;
+  /**
+   * The session the host reads and writes with has ended, or is back (FRU-315). Ended, no note can
+   * start: the launch button and the list offer `onSignIn` instead, and the composer asks for no
+   * name. What is written stays: an open composer stays open, and its text is kept. Back, the widget
+   * reads the page again. Without `onSignIn` this does nothing.
+   */
+  signedOut(ended: boolean): void;
   destroy(): void;
 };
 
@@ -258,6 +272,9 @@ export function init(options: FruitbackOptions): Fruitback {
     storage: sessionStorageOf(view),
     key: `${options.configKey ?? 'fruitback:config'}:typing`,
   });
+  /** The session of the host ended (FRU-315): see `signedOut`. Only with an `onSignIn` to offer. */
+  let ended = false;
+  const signIn = (): void => options.onSignIn?.();
   let composer: Composer;
   let panel: ConfigPanel;
   let sidebar: Sidebar;
@@ -474,7 +491,9 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     // A host that mints identity tokens names the reporter itself. In team mode the session of the
     // extension does, and only the worker can say so: the widget holds a transport and no token.
-    identified: () => options.identityToken !== undefined || readerIdentity.identified,
+    // Signed out (FRU-315), the note is a member's all the same: the name of a visitor would say it
+    // can go without a session.
+    identified: () => options.identityToken !== undefined || readerIdentity.identified || ended,
     // The places are the worker's word at the last read, and the choice is a preference of this
     // browser on this site, kept with the others (FRU-123).
     destinations: {
@@ -498,9 +517,11 @@ export function init(options: FruitbackOptions): Fruitback {
         if (typingPlace !== undefined) typing.write(typingPlace, text);
       },
     },
+    ...(options.onSignIn === undefined ? {} : { onSignIn: signIn }),
     // Offered only while the worker takes several notes in one request (FRU-124).
     keep: {
-      offered: () => readerIdentity.batch !== undefined,
+      // Signed out too (FRU-315): a text kept for later is sent once the reviewer is back.
+      offered: () => readerIdentity.batch !== undefined || ended,
       onKeep: async (note, reporter, chosen) => {
         const destination = destinationToSend(destinations.get(), chosen);
         const about = typingPlace;
@@ -584,7 +605,8 @@ export function init(options: FruitbackOptions): Fruitback {
     below: (id) => overlay.below(id),
     // The dock stands aside while the list is open, so the list holds the way to a new note.
     leave: { label: options.label ?? translator.text('launch.label'), onLeave: () => host.start() },
-    readState: () => readState,
+    readState: () => (ended ? 'signed-out' : readState),
+    onSignIn: signIn,
     onRetry: () => {
       readState = 'pending';
       sidebar.refresh();
@@ -662,6 +684,12 @@ export function init(options: FruitbackOptions): Fruitback {
     feedbackAsText: asText,
     settings: panel,
     leaveFeedback() {
+      // A note would be refused (FRU-315): what was asked leads to the sign-in.
+      if (ended) {
+        signIn();
+
+        return true;
+      }
       // Already choosing: what was asked is on the page.
       if (host.capturing()) return true;
       // A composer that shows « sent » or « kept » is not being written in: it closes. Any other
@@ -685,6 +713,18 @@ export function init(options: FruitbackOptions): Fruitback {
       }
 
       return counts;
+    },
+    signedOut(endedNow) {
+      if (options.onSignIn === undefined || endedNow === ended) return;
+      ended = endedNow;
+      host.offerSignIn(ended ? { label: translator.text('launch.signIn'), onSignIn: signIn } : undefined);
+      composer.identityChanged();
+      sidebar.refresh();
+      // Signed in again, the notes this session can read come from a read, not from what was held.
+      if (!ended) {
+        readState = 'pending';
+        void read();
+      }
     },
     destroy() {
       destroyed = true;

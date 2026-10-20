@@ -160,3 +160,62 @@ describe('createApply', () => {
     assert.deepEqual(posts, [UNMOUNT, MOUNT]);
   });
 });
+
+describe('the session the widget is told of (FRU-315)', () => {
+  const TEAM: SiteConfig = {
+    mode: 'team',
+    endpoint: 'https://api.fruitback.test',
+    enabled: true,
+    mount: { clientId: 'site_1', workspace: 'Acme' },
+  };
+  const PRIVATE: SiteConfig = { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true };
+
+  function applying(site: SiteConfig, held: { signedOut: boolean }) {
+    const posts: BridgeMessage[] = [];
+    const apply = createApply({
+      readSite: async () => site,
+      readSignedOut: async () => held.signedOut,
+      post: (message) => void posts.push(message),
+    });
+
+    return { posts, apply };
+  }
+
+  it('follows the mount of a widget we relay, and says a change of session alone, without a mount', async () => {
+    const held = { signedOut: false };
+    const { posts, apply } = applying(TEAM, held);
+
+    await apply();
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount', 'session'],
+    );
+    assert.deepEqual(posts[1], { channel: CHANNEL, kind: 'session', signedOut: false });
+
+    // The session ends: the widget is told, and not built again over what is being written.
+    held.signedOut = true;
+    await apply();
+    assert.deepEqual(posts.slice(2), [{ channel: CHANNEL, kind: 'session', signedOut: true }]);
+
+    // A change of storage that is not one of the session says nothing.
+    await apply();
+    assert.equal(posts.length, 3);
+
+    // The handshake: the page world may have missed both.
+    await apply(true);
+    assert.deepEqual(
+      posts.slice(3).map((message) => message.kind),
+      ['mount', 'session'],
+    );
+  });
+
+  it('says nothing of a session to a widget of the private mode', async () => {
+    const { posts, apply } = applying(PRIVATE, { signedOut: true });
+    await apply();
+
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount'],
+    );
+  });
+});
