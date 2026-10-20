@@ -1,5 +1,6 @@
 import { t } from './i18n.ts';
 import { keys, toggle } from './kit.ts';
+import { keysOfShortcut } from './popup-view.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
 
 /**
@@ -261,15 +262,8 @@ function row(document: Document, title: string, help: string, control: HTMLEleme
   return root;
 }
 
-/**
- * The keys of a shortcut, as the kit draws them: `Alt+Shift+F` → Alt Shift F. Chrome on macOS writes
- * them with no `+`, a sign each (`⌥⇧F`, measured in the e2e): each sign is then a key of its own.
- */
-export function shortcutKeys(shortcut: string): string[] {
-  const keys = shortcut.includes('+') ? shortcut.split('+') : [...shortcut.replace(/\s+/gu, '')];
-
-  return keys.map((key) => key.trim()).filter((key) => key !== '');
-}
+/** The keys of a shortcut, as the kit draws them: the same as « Leave feedback » of the popup (FRU-298). */
+export const shortcutKeys = keysOfShortcut;
 
 /** The section « Preferences ». */
 export function preferencesSection(document: Document, options: PreferencesOptions): HTMLElement {

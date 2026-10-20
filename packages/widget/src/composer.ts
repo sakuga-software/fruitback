@@ -514,8 +514,6 @@ export function createComposer(options: ComposerOptions): Composer {
       const suggested = asksForName ? options.suggestName?.() : undefined;
       if (suggested === undefined || name.value.trim() !== '') return;
       name.value = suggested;
-      who.hidden = false;
-      identify.setAttribute('aria-expanded', 'true');
 
       return;
     }
