@@ -655,4 +655,90 @@ test('« Search and options »: the search, « Whole site » over three pages, t
       },
     )
     .toEqual([`Search ${tag} mocha`]);
+  // The pins hidden from the panel come back when the panel closes (review of #419): the background
+  // shows them again once the port of the panel goes, whatever closed it.
+  expect(await clickPanel(tab, 'button.panel-search')).toBe(true);
+  await expect.poll(() => clickPanel(tab, '.search-pins [role="switch"]')).toBe(true);
+  await expect(tab.locator('[data-fruitback-pin]').first()).toBeHidden();
+  expect(await clickPanel(tab, 'button.panel-close')).toBe(true);
+  await expect(tab.locator('[data-fruitback-pin]').first()).toBeVisible({ timeout: 10_000 });
+});
+
+test('a new search during « Show more » draws no page of the words of before (FRU-307, review of #419)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-search-stale');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
+  await expect
+    .poll(() => inPanel<boolean>(page, `document.querySelector('button.panel-search') !== null`).catch(() => false))
+    .toBe(true);
+
+  // The answers of the worker, held by the panel's `fetch`: a first page with a next one, the next
+  // page at once, and the read of the new words late, so that the moment between the two is seen.
+  await inPanel(
+    page,
+    `(() => {
+      const real = window.fetch.bind(window);
+      window.__asked = [];
+      const note = (seed, excerpt) => ({
+        seed,
+        excerpt,
+        page: { url: 'http://localhost:5177/?case=elsewhere', path: '/?case=elsewhere' },
+        stage: 'seeded',
+        author: { kind: 'anonymous' },
+        createdAt: new Date().toISOString(),
+      });
+      const answer = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      window.fetch = async (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input.url);
+        if (!url.pathname.endsWith('/session/notes')) return real(input, init);
+        const q = url.searchParams.get('q') ?? '';
+        const cursor = url.searchParams.get('cursor');
+        window.__asked.push({ q, cursor });
+        if (cursor !== null) return answer({ notes: [note('more-1', 'A next page of the words of before')], total: 4 });
+        if (q === '') return answer({ notes: [note('old-1', 'Old one'), note('old-2', 'Old two'), note('old-3', 'Old three')], total: 4, next: 'c1' });
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        return answer({ notes: [note('new-1', 'The note of the new words')], total: 1 });
+      };
+    })()`,
+  );
+  expect(await clickPanel(page, 'button.panel-search')).toBe(true);
+  expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);
+  await expect.poll(async () => (await searchRows(page)).length).toBe(3);
+  expect(await inPanel<boolean>(page, `document.querySelector('.site-more button.panel-link') !== null`)).toBe(true);
+
+  // New words, and « Show more » in the same moment, before the read of the new words leaves.
+  const pressed = await inPanel<boolean>(
+    page,
+    `(() => {
+      const field = document.querySelector('.search-input');
+      field.value = 'mocha';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      const more = document.querySelector('.site-more button.panel-link');
+      more?.click();
+      return more !== null;
+    })()`,
+  );
+  await page.waitForTimeout(1200);
+  const asked = await inPanel<{ q: string; cursor: string | null }[]>(page, 'window.__asked');
+  expect(
+    asked.filter((each) => each.cursor !== null),
+    'no next page asked with other words',
+  ).toEqual([]);
+  expect(pressed, '« Show more » is not offered for the list of the words of before').toBe(false);
+  expect((await searchRows(page)).map((row) => row.note)).not.toContain('A next page of the words of before');
+
+  // Then the list of the new words, alone.
+  await expect
+    .poll(async () => (await searchRows(page)).map((row) => row.note), { timeout: 10_000 })
+    .toEqual(['The note of the new words']);
 });

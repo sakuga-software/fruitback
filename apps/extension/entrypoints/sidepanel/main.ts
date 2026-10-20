@@ -9,6 +9,7 @@ import {
   type PanelState,
   CHECK_PROBLEM,
   NO_WIDGET_WAIT_MS,
+  PANEL_PORT,
   REPLY_PROBLEM,
   notesOf,
   openOnRead,
@@ -89,6 +90,8 @@ let awaiting: { tabId: number; note: string } | undefined;
 /** The row the panel opens on a page it opened: its thread opens on the page too. */
 let focusOnOpen: string | undefined;
 const sessions = createBrowserSessions();
+/** The background shows again the pins this panel hid, once the panel is gone (review of #419). */
+const pinsPort = browser.runtime.connect({ name: PANEL_PORT });
 
 async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
@@ -146,6 +149,11 @@ async function look(): Promise<void> {
     replying = undefined;
     tab = 'open';
     search = undefined;
+    // A read or a search of the tab of before draws nothing here (review of #419).
+    clearTimeout(siteTimer);
+    siteReads += 1;
+    // The tab of before gets its pins back: the switch was about the tab the panel followed.
+    if (!pinsShown && before !== undefined) showPinsOf(before);
     pinsShown = true;
   } else if (search !== undefined && followed !== undefined) {
     search = { ...search, path: followed.path };
@@ -356,12 +364,15 @@ async function readWholeSite(more = false): Promise<void> {
   siteReads += 1;
   const mine = siteReads;
   const shown = search.site;
-  const cursor = more && typeof shown === 'object' ? shown.next : undefined;
-  search = { ...search, site: more && typeof shown === 'object' ? { ...shown, more: 'reading' } : 'reading' };
+  const words = wordsOf(search.q);
+  // The next page only of the list of these words: a cursor read with other words names another walk.
+  const next = more && typeof shown === 'object' && shown.q === words ? shown : undefined;
+  const cursor = next?.next;
+  search = { ...search, site: next === undefined ? 'reading' : { ...next, more: 'reading' } };
   draw();
   const read = await readSiteNotes(
     source.endpoint,
-    { site: source.site, q: search.q, ...(cursor === undefined ? {} : { cursor }) },
+    { site: source.site, q: words, ...(cursor === undefined ? {} : { cursor }) },
     {
       ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
       renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
@@ -370,16 +381,17 @@ async function readWholeSite(more = false): Promise<void> {
   if (mine !== siteReads || search === undefined || followed?.source !== source) return;
   const now = search.site;
   if (read.ok) {
-    const before = more && typeof now === 'object' ? now.notes : [];
+    const before = next !== undefined && typeof now === 'object' ? now.notes : [];
     search = {
       ...search,
       site: {
+        q: words,
         notes: [...before, ...read.page.notes],
         total: read.page.total,
         ...(read.page.next === undefined ? {} : { next: read.page.next }),
       },
     };
-  } else if (more && typeof now === 'object') {
+  } else if (next !== undefined && typeof now === 'object') {
     search = { ...search, site: { ...now, more: 'failed' } };
   } else {
     search = { ...search, site: read.reason };
@@ -418,6 +430,17 @@ const searchHandlers: SearchHandlers = {
   },
   onQuery: (q: string) => {
     if (search === undefined) return;
+    // New words: a read still on its way, a « Show more » included, is of the words of before and
+    // draws nothing (review of #419). The list of before stays shown, with no « Show more », until
+    // the read of the new words answers.
+    if (wordsOf(q) !== wordsOf(search.q)) {
+      siteReads += 1;
+      const shown = search.site;
+      if (typeof shown === 'object' && shown.more === 'reading') {
+        const { more: _more, ...kept } = shown;
+        search = { ...search, site: kept };
+      }
+    }
     search = { ...search, q };
     draw();
     // The whole site is asked again once the typing stops.
@@ -433,11 +456,24 @@ const searchHandlers: SearchHandlers = {
   onSiteRetry: () => void readWholeSite(),
   onMore: () => void readWholeSite(true),
   onPins: (shown: boolean) => {
+    if (followed === undefined) return;
     pinsShown = shown;
     if (search !== undefined) search = { ...search, pinsShown: shown };
+    pinsPort.postMessage(shown ? { shown: followed.tabId } : { hidden: followed.tabId });
     void ask(shown ? 'show-pins' : 'hide-pins');
   },
 };
+
+/** `show-pins` to a tab the panel no longer follows. Nothing to do when that tab is gone. */
+function showPinsOf(tabId: number): void {
+  pinsPort.postMessage({ shown: tabId });
+  void browser.tabs.sendMessage(tabId, tabCommand('show-pins')).catch(() => undefined);
+}
+
+/** The words a read sends: `readSiteNotes` trims them the same way. */
+function wordsOf(q: string): string {
+  return q.trim();
+}
 
 /** How long the typing pauses before the whole site is asked: one read per search, not per key. */
 const SEARCH_PAUSE_MS = 300;
@@ -492,10 +528,6 @@ async function sendReply(): Promise<void> {
 }
 
 void look();
-// The pins hidden from this panel come back when it closes: the switch is the panel's, not the page's.
-window.addEventListener('pagehide', () => {
-  if (!pinsShown && followed !== undefined) void ask('show-pins');
-});
 // The panel follows the tab: another tab of the window, a new address in this one, or a rule
 // switched from the popup.
 browser.tabs.onActivated.addListener(() => void look());

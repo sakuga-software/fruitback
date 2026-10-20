@@ -30,7 +30,8 @@ export type SiteList =
   /** No session may read the whole site here, or a worker of before FRU-306. */
   | 'unavailable'
   | 'failed'
-  | { notes: SiteNote[]; total: number; next?: string; more?: 'reading' | 'failed' };
+  /** `q`: the words this list was read with. « Show more » walks on with these words only. */
+  | { q: string; notes: SiteNote[]; total: number; next?: string; more?: 'reading' | 'failed' };
 
 export type SearchState = {
   scope: Scope;
@@ -308,7 +309,9 @@ export function siteList(
     for (const note of shown) list.append(siteRow(document, note, state.path, handlers, now, age));
     parts.push(list);
   }
-  if (site.next !== undefined || site.more !== undefined) {
+  // The list of other words than the field's: its next page is not offered, the new read is coming.
+  const current = site.q === state.q.trim();
+  if (current && (site.next !== undefined || site.more !== undefined)) {
     const more = make(document, 'div', 'site-more');
     more.append(
       make(

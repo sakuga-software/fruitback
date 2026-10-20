@@ -773,6 +773,49 @@ export const REPLY_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
   refused: msg('You cannot reply to this note any more.'),
 };
 
+/**
+ * The port the side panel holds open to the background (FRU-307, review of #419): the tabs whose pins
+ * it hid. A page that closes cannot be trusted to send a last message, so the background shows them
+ * again when the port goes, whatever closed the panel.
+ */
+export const PANEL_PORT = 'fruitback-side-panel';
+
+/** What the panel says on its port: the pins of a tab hidden, or shown again. */
+export type PinsMessage = { hidden: number } | { shown: number };
+
+export function parsePinsMessage(value: unknown): PinsMessage | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { hidden, shown } = value as Record<string, unknown>;
+  if (Number.isSafeInteger(hidden)) return { hidden: hidden as number };
+  if (Number.isSafeInteger(shown)) return { shown: shown as number };
+
+  return undefined;
+}
+
+/**
+ * The tabs a panel hid the pins of, kept by the background for one port; `closed` shows them again.
+ * `show` sends `show-pins` to a tab, and may fail: a tab closed since has nothing to show.
+ */
+export function pinsKeeper(show: (tabId: number) => void): {
+  heard: (message: unknown) => void;
+  closed: () => void;
+} {
+  const hidden = new Set<number>();
+
+  return {
+    heard(message) {
+      const pins = parsePinsMessage(message);
+      if (pins === undefined) return;
+      if ('hidden' in pins) hidden.add(pins.hidden);
+      else hidden.delete(pins.shown);
+    },
+    closed() {
+      for (const tabId of hidden) show(tabId);
+      hidden.clear();
+    },
+  };
+}
+
 /** The host of an address the panel may show: `http` and `https` only. */
 export function webHost(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;

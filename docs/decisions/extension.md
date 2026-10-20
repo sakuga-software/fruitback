@@ -511,7 +511,9 @@ did not change: the fields of 760 px and the file input of the browser are as th
   mode with a session held for its worker has it; a private site, or a site that embeds its own
   widget, has no scope. **The worker is the one source**: one page of 50, its `total`, « Show more »
   for the next; a new search (after 300 ms without typing) or a new opening asks again, and nothing is
-  stored. The answer holds excerpts of 64 characters: the hint says « Searches the first words of each
+  stored. **A list belongs to the words it was read with** (`q`): new words drop any read still on
+  its way, « Show more » included, and the list of the words of before offers no « Show more »
+  until the read of the new words answers (review of #419: its cursor walks another list). The answer holds excerpts of 64 characters: the hint says « Searches the first words of each
   note », and an excerpt of 64 ends with « … ». The chips count the notes read; « Showing {n} of
   {total} » says when there are more.
 - **A row of another page opens that page in a new tab**, never in the tab of the reader, where a
@@ -521,7 +523,10 @@ did not change: the fields of 760 px and the file input of the browser are as th
   (« Open {reference} → », `noreferrer`).
 - **« Show pins on the page »** sends `hide-pins` or `show-pins` to the widget of the tab
   (`showPins`): the overlay is hidden, a thread on the page closes, the notes are still read and
-  listed. A new tab shows its pins; the pins come back when the panel closes.
+  listed. The tab the panel leaves gets its pins back. **The pins come back when the panel closes,
+  from the background**: the panel holds a port (`PANEL_PORT`) and says on it which tabs it hid;
+  when the port goes, the background sends `show-pins` to them (`pinsKeeper`). A page that closes
+  cannot be trusted to send a last message (review of #419).
 - **What somebody types in the search stays**: the field, its caret and its focus are put back after
   each draw, as for a reply.
 

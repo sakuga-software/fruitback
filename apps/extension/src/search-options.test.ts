@@ -188,7 +188,7 @@ describe('« Whole site » (FRU-307)', () => {
   ];
 
   it('names the two scopes with their counts', () => {
-    const { root, calls } = draw({ site: { notes: SITE, total: 7 } });
+    const { root, calls } = draw({ site: { q: '', notes: SITE, total: 7 } });
     const tabs = [...root.querySelectorAll<HTMLButtonElement>('.search-scope [role="tab"]')];
     assert.equal(root.querySelector('.search-scope')?.getAttribute('aria-label'), 'Scope');
     assert.deepEqual(
@@ -200,7 +200,7 @@ describe('« Whole site » (FRU-307)', () => {
   });
 
   it('lists the notes of every page, hollow for another page, with the link to the tracker', () => {
-    const { root } = draw({ scope: 'site', path: '/', site: { notes: SITE, total: 3 } });
+    const { root } = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } });
 
     assert.deepEqual(rows(root), ['s1', 's2', 's3']);
     const [first, second, third] = [...root.querySelectorAll<HTMLElement>('.site-row')];
@@ -220,7 +220,7 @@ describe('« Whole site » (FRU-307)', () => {
   });
 
   it('opens a note from its row, filters it by a chip, and counts what was read', () => {
-    const { root, calls } = draw({ scope: 'site', stage: 'ripe', site: { notes: SITE, total: 3 } });
+    const { root, calls } = draw({ scope: 'site', stage: 'ripe', site: { q: '', notes: SITE, total: 3 } });
     assert.deepEqual(rows(root), ['s3']);
     const counts = [...root.querySelectorAll('.search-chip-count')].map((count) => count.textContent);
     assert.deepEqual(counts, ['3', '0', '1', '1', '1']);
@@ -229,16 +229,24 @@ describe('« Whole site » (FRU-307)', () => {
   });
 
   it('says how many it shows of the total, and reads the next ones', () => {
-    const { root, calls } = draw({ scope: 'site', site: { notes: SITE, total: 60, next: 'abc' } });
+    const { root, calls } = draw({ scope: 'site', site: { q: '', notes: SITE, total: 60, next: 'abc' } });
     assert.match(root.querySelector('.site-more')?.textContent ?? '', /Showing 3 of 60/);
     [...root.querySelectorAll<HTMLButtonElement>('.site-more button')]
       .find((b) => b.textContent === 'Show more')
       ?.click();
     assert.deepEqual(calls, ['more']);
     assert.match(
-      draw({ scope: 'site', site: { notes: SITE, total: 60, more: 'failed', next: 'abc' } }).root.textContent ?? '',
+      draw({ scope: 'site', site: { q: '', notes: SITE, total: 60, more: 'failed', next: 'abc' } }).root.textContent ??
+        '',
       /The next notes could not be read\./,
     );
+  });
+
+  it('offers no « Show more » for a list of other words than the field (review of #419)', () => {
+    const { root } = draw({ scope: 'site', q: 'mocha', site: { q: '', notes: SITE, total: 60, next: 'abc' } });
+    assert.equal(root.querySelector('.site-more'), null, 'its cursor is of a walk of other words');
+    const current = draw({ scope: 'site', q: ' mocha ', site: { q: 'mocha', notes: SITE, total: 60, next: 'abc' } });
+    assert.ok(current.root.querySelector('.site-more'), 'the control: the same words walk on');
   });
 
   it('says where the read is: reading, failed, session ended, not readable here', () => {
@@ -258,7 +266,7 @@ describe('« Whole site » (FRU-307)', () => {
 
   it('speaks French', () => {
     setLanguage('fr');
-    const { root } = draw({ scope: 'site', site: { notes: SITE, total: 3 } });
+    const { root } = draw({ scope: 'site', site: { q: '', notes: SITE, total: 3 } });
     assert.deepEqual(
       [...root.querySelectorAll('.search-scope [role="tab"]')].map((tab) => tab.textContent),
       ['Cette page · 4', 'Tout le site · 3'],

@@ -29,11 +29,14 @@ import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import {
   PANEL_ON_CLICK_KEY,
+  PANEL_PORT,
   type PanelApis,
   iconOpensPanel,
   keepPopupOnActionClick,
+  pinsKeeper,
   setPanelOnClick,
 } from '../src/side-panel.ts';
+import { tabCommand } from '../src/tab-command.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -259,6 +262,21 @@ export default defineBackground(() => {
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
   const signInGate = createSignInGate();
   const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
+
+  // FRU-307: the pins a side panel hid come back when the panel goes, whatever closed it.
+  browser.runtime.onConnect.addListener((port) => {
+    if (
+      port.name !== PANEL_PORT ||
+      !isExtensionPage(port.sender ?? {}, browser.runtime.id, browser.runtime.getURL('/'))
+    ) {
+      return;
+    }
+    const keeper = pinsKeeper((tabId) => {
+      void browser.tabs.sendMessage(tabId, tabCommand('show-pins')).catch(() => undefined);
+    });
+    port.onMessage.addListener(keeper.heard);
+    port.onDisconnect.addListener(() => keeper.closed());
+  });
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // FRU-315: the widget of a tab asks for the sign-in. The popup opens over that tab, and only

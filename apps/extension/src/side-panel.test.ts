@@ -21,6 +21,8 @@ import {
   openPanel,
   openPanelOrPage,
   panelPage,
+  parsePinsMessage,
+  pinsKeeper,
   tabOf,
   toCheck,
   webHost,
@@ -673,5 +675,31 @@ describe('what the click on the icon opens (FRU-302)', () => {
     await setPanelOnClick(apis, false, true);
     assert.deepEqual(set, [true, false, false]);
     await setPanelOnClick({ sidebarAction: { open: async () => {} } }, true, true);
+  });
+});
+
+describe('the pins a panel hid come back when it goes (FRU-307, review of #419)', () => {
+  it('shows again, once the port closes, the tabs still hidden, and only them', () => {
+    const shown: number[] = [];
+    const keeper = pinsKeeper((tabId) => shown.push(tabId));
+    keeper.heard({ hidden: 4 });
+    keeper.heard({ hidden: 7 });
+    keeper.heard({ shown: 4 });
+    keeper.heard({ hidden: 'nine' });
+    keeper.heard(null);
+    assert.deepEqual(shown, [], 'nothing before the panel goes');
+
+    keeper.closed();
+
+    assert.deepEqual(shown, [7]);
+    keeper.closed();
+    assert.deepEqual(shown, [7], 'once');
+  });
+
+  it('reads a tab id and nothing else', () => {
+    assert.deepEqual(parsePinsMessage({ hidden: 3 }), { hidden: 3 });
+    assert.deepEqual(parsePinsMessage({ shown: 3 }), { shown: 3 });
+    assert.equal(parsePinsMessage({ hidden: 1.5 }), undefined);
+    assert.equal(parsePinsMessage('hidden'), undefined);
   });
 });
