@@ -90,6 +90,7 @@ export const FRENCH: Catalog = {
   'orphans.entry': '{stage} · {note}',
 
   'sidebar.open': 'Afficher toutes les notes de cette page',
+  'sidebar.openFailed': 'Afficher toutes les notes de cette page. Elles n’ont pas pu être lues.',
   'sidebar.dialog': 'Notes de cette page',
   'sidebar.close': 'Fermer les notes',
   'sidebar.tabs': 'Quelles notes',

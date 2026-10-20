@@ -777,3 +777,31 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     assert.equal(container?.getAttribute('aria-label'), 'Fruitback feedback');
   });
 });
+
+describe('the button of the list when the notes could not be read (FRU-316)', () => {
+  it('wears a dot, says it in its name, and the sentence is announced once', () => {
+    mount(
+      () => null,
+      () => {},
+      { onList: () => {} },
+    );
+    const listing = host?.root.querySelector('[data-fruitback-host-list]') as HTMLElement;
+    const dot = listing.querySelector('.fruitback-listing-alert') as HTMLElement;
+    const announcer = host?.root.querySelector('[data-fruitback-announcer]') as HTMLElement;
+    assert.equal(dot.hidden, true);
+
+    host?.readFailed(true, 'The notes of this page could not be read. They are not lost.');
+    assert.equal(dot.hidden, false);
+    assert.equal(listing.getAttribute('aria-label'), 'Show every note of this page. They could not be read.');
+    assert.equal(announcer.textContent, 'The notes of this page could not be read. They are not lost.');
+
+    // Said once: the same failure again announces nothing new.
+    announcer.textContent = '';
+    host?.readFailed(true, 'The notes of this page could not be read. They are not lost.');
+    assert.equal(announcer.textContent, '');
+
+    host?.readFailed(false, '');
+    assert.equal(dot.hidden, true);
+    assert.equal(listing.getAttribute('aria-label'), 'Show every note of this page');
+  });
+});

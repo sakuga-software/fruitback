@@ -1122,6 +1122,14 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   of zero. `failed` says the notes could not be read, in a live region, and offers « Try again »,
   which takes focus. The button stays, busy (`aria-disabled`), while the read it asked for runs, so
   focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
+- **`failed` is seen on the page, with no list opened** (FRU-316). The button of the list wears a dot
+  of the accent, ringed by the button's own colour (`Mark` in forced colours), and its name says it:
+  « Show every note of this page. They could not be read. ». The sentence of the list is announced
+  once by the widget's own status region, when the failure starts and no capture holds that region.
+  While `failed`, the widget reads again every 30 s and at once on `online`; one timer at most, none
+  after `destroy` (a read in flight answers after it: without that guard a destroyed widget read on
+  for ever, and `embed.test.ts` never exited). `e2e/read-failure.spec.ts` takes the browser offline,
+  then online.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
 - **It is the list of the mock-up of 2026-10-13** (FRU-259, screen 16). Read in its CSS, held by
