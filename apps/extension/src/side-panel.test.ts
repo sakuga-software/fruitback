@@ -149,11 +149,21 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       onVerdict: (id, verdict) => calls.push(`verdict:${id}:${verdict}`),
     };
   };
-  const on = (notes: PanelNote[] | 'reading' | 'failed'): PanelState => ({
+  const on = (notes: PanelNote[] | 'reading' | 'failed' | 'not-started'): PanelState => ({
     kind: 'on',
     host: 'staging.acme.dev',
     where: 'Acme',
     notes,
+  });
+
+  it('says to reload a page that still has no widget, with the button that does it (raised in review)', () => {
+    const options = handlers();
+    const root = panelPage(page(), { ...options, state: on('not-started'), tab: 'open' });
+    assert.match(root.textContent ?? '', /did not start on this page/);
+    const reload = root.querySelector<HTMLButtonElement>('.panel-failed button');
+    assert.equal(reload?.textContent, 'Reload the page');
+    reload?.click();
+    assert.deepEqual(options.calls, ['reload']);
   });
 
   it('has « Notes on this page » and « Close the sidebar »', () => {
@@ -583,6 +593,12 @@ describe('what the panel does with an answer of the widget (raised in review)', 
     assert.equal(notesOf({ reading: 'failed' }), 'failed');
     assert.equal(notesOf({ reading: 'signed-out' }), 'signed-out');
     assert.equal(notesOf(undefined), 'reload');
+  });
+
+  it('says to reload a page that still has no widget once the wait is over, and only then', () => {
+    assert.equal(notesOf({ reading: 'no-widget' }, true), 'not-started');
+    assert.equal(notesOf({ reading: 'pending' }, true), 'reading');
+    assert.deepEqual(notesOf({ notes: [NOTE] }, true), [NOTE]);
   });
 
   it('opens the row of a pin once a list that holds it is read, and keeps it waiting until then', () => {
