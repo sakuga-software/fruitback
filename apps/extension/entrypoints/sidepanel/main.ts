@@ -34,7 +34,7 @@ document.documentElement.lang = language();
 const app = document.querySelector('#app');
 
 /** The tab the panel follows: its id and what the panel knows of it. */
-let followed: { tabId: number; host: string; where?: string } | undefined;
+let followed: { tabId: number; host: string; where?: string; siteWidget?: true } | undefined;
 let notes: PanelNote[] | 'reading' | 'failed' = 'reading';
 let tab: NotesTab = 'open';
 let open: string | undefined;
@@ -68,7 +68,13 @@ async function look(): Promise<void> {
     followed = undefined;
   } else {
     const workspace = site.mode === 'team' ? site.mount?.workspace : undefined;
-    followed = { tabId: active.id, host, ...(workspace === undefined || workspace === '' ? {} : { where: workspace }) };
+    followed = {
+      tabId: active.id,
+      host,
+      ...(workspace === undefined || workspace === '' ? {} : { where: workspace }),
+      // Team mode with no mount: the widget is the site's own, and answers the panel nothing.
+      ...(site.mode === 'team' && site.mount === undefined ? { siteWidget: true as const } : {}),
+    };
   }
   // Another tab: its own notes, from the start.
   if (followed?.tabId !== before) {
@@ -79,7 +85,7 @@ async function look(): Promise<void> {
     waits = 0;
   }
   draw();
-  if (followed !== undefined) await readNotes();
+  if (followed !== undefined && followed.siteWidget !== true) await readNotes();
 }
 
 /** The notes of the widget of the tab. « Not yet » is asked again a few times, then said. */
@@ -106,6 +112,7 @@ async function readNotes(): Promise<void> {
 
 function state(): PanelState {
   if (followed === undefined) return { kind: 'not-on' };
+  if (followed.siteWidget === true) return { kind: 'site-widget', host: followed.host };
 
   return { kind: 'on', host: followed.host, ...(followed.where === undefined ? {} : { where: followed.where }), notes };
 }

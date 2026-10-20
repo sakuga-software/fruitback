@@ -92,6 +92,11 @@ export async function keepPopupOnActionClick(apis: PanelApis): Promise<void> {
 export type PanelState =
   /** A page of the browser, a site with no rule, a rule that is off, a site with no access. */
   | { kind: 'not-on' }
+  /**
+   * A site in team mode that embeds its own widget (FRU-57): the widget is the site's, and answers
+   * the extension nothing. Its notes are in its own list, on the page (raised in review).
+   */
+  | { kind: 'site-widget'; host: string }
   | {
       kind: 'on';
       host: string;
@@ -229,12 +234,24 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   root.append(top);
 
   const { state } = options;
-  if (state.kind === 'not-on') {
+  if (state.kind === 'not-on' || state.kind === 'site-widget') {
     const body = make(document, 'section', 'panel-state');
     body.setAttribute('aria-labelledby', title.id);
     body.append(
-      make(document, 'p', 'panel-state-title', t('Fruitback is not on for this page.')),
-      make(document, 'p', 'panel-state-text', t('Turn it on from the Fruitback button in the toolbar.')),
+      ...(state.kind === 'not-on'
+        ? [
+            make(document, 'p', 'panel-state-title', t('Fruitback is not on for this page.')),
+            make(document, 'p', 'panel-state-text', t('Turn it on from the Fruitback button in the toolbar.')),
+          ]
+        : [
+            make(document, 'p', 'panel-state-title', t('{host} runs its own Fruitback.', { host: state.host })),
+            make(
+              document,
+              'p',
+              'panel-state-text',
+              t('Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.'),
+            ),
+          ]),
     );
     root.append(body);
 
@@ -395,6 +412,8 @@ function replyForm(
 ): HTMLFormElement {
   const form = make(document, 'form', 'panel-reply-form');
   const field = make(document, 'textarea', 'panel-reply-field');
+  // The length the worker takes for a reply: nothing longer can be typed, so nothing is cut or refused.
+  field.maxLength = REPLY_MAX_LENGTH;
   field.setAttribute('aria-label', t('Your reply'));
   field.rows = 3;
   field.value = replying.text;
@@ -421,6 +440,9 @@ function replyForm(
 
   return form;
 }
+
+/** The longest reply the worker takes (`REPLY_LENGTH` of `apps/worker/src/app.ts`, FRU-257). */
+export const REPLY_MAX_LENGTH = 2000;
 
 /** What a reply that did not go says. The text stays in the field. */
 export const REPLY_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {

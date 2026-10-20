@@ -168,6 +168,36 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(root.querySelectorAll('button').length, 1, 'only « Close the sidebar »');
   });
 
+  // Raised in review: on a site that embeds its own widget, the panel waited for notes nobody sends.
+  it('says that a site in team mode with its own widget keeps its notes in its own list', () => {
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: { kind: 'site-widget', host: 'app.acme.dev' },
+      tab: 'open',
+    });
+
+    assert.deepEqual(
+      [...root.querySelectorAll('p')].map((line) => line.textContent),
+      [
+        'app.acme.dev runs its own Fruitback.',
+        'Its notes are on the page, in its own list. This panel lists the notes of a site Fruitback mounts.',
+      ],
+    );
+    assert.equal(root.querySelector('[role="alert"]'), null, 'said as a failure');
+  });
+
+  it('takes no reply longer than the worker does', () => {
+    const root = panelPage(page(), {
+      ...handlers(),
+      state: on(NOTES),
+      tab: 'open',
+      open: 'b',
+      replying: { id: 'b', text: '' },
+    });
+
+    assert.equal(root.querySelector<HTMLTextAreaElement>('textarea')?.maxLength, 2000);
+  });
+
   it('offers « Leave feedback », and names the site and its workspace at the foot with « Settings »', () => {
     const options = handlers();
     const root = panelPage(page(), { ...options, state: on([]), tab: 'open' });

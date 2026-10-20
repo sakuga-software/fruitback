@@ -456,6 +456,10 @@ did not change: the fields of 760 px and the file input of the browser are as th
   the notes to check). A row is the drop of the kit with the number of its pin, the note, and
   « {stage} · {who} · {age} »: « You » for a note of the reader (`mine`), the name given, or
   « Anonymous ».
+- **A site that embeds its own widget (team mode with no mount) has no list in the panel.** That
+  widget is the site's, and answers the extension nothing: the panel says that its notes are in its
+  own list on the page, rather than wait for them and report a failed read.
+- **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
 - **What somebody types in a reply stays.** The panel draws again at each change; the text, the
   caret and the focus are put back. A reply that did not go keeps its text and says why.
 - **The foot names the host and the workspace of the rule**, which the extension stores. The
