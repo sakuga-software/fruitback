@@ -198,6 +198,22 @@ token to one repository and one hour, but the key itself does not expire. So:
 - If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
   the App, and restart the worker with the new key.
 
+### The keys of the extension stores
+
+`release-extension.yml` submits the extension to the Chrome Web Store and to AMO (FRU-329). The keys
+are the private key of a Google service account and the JWT secret of AMO. Whoever holds either key
+can upload a version of the extension, which every reviewer's browser installs after the review of
+the store. So:
+
+- The keys are secrets of the GitHub environment `stores`, and not of the repository. The job
+  `submit` reads them only after a person of the environment approves the run, and only after the
+  job that calls `ci.yml` passed on that commit.
+- A run that does not come from a `v*` tag only checks the keys (`--dry-run`): it uploads nothing.
+- The Chrome Web Store publishes nothing by itself. `STAGED_PUBLISH` keeps the reviewed version
+  until somebody presses « Publish » in the dashboard.
+- Give the service account access to this one publisher only. If a key leaks, delete it in Google
+  Cloud or on AMO, then put a new one in the environment.
+
 ### The rate limit is counted in the database
 
 `RATE_LIMIT_PER_MINUTE` (20 by default) was held in memory, per container, on a worker with no

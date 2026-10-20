@@ -77,6 +77,19 @@ it changes who is shown the feedback and never who may fetch it.
   **The archives are under `.output`, and `upload-artifact` leaves out a hidden directory** unless
   `include-hidden-files` says otherwise. The first tag, `v0.1.0`, built both archives and uploaded
   none. `workflows.test.ts` fails on an upload through a dot directory that does not ask for it.
+- **The job `submit` hands the archives of `package` to the Chrome Web Store and to AMO** (FRU-329),
+  with `wxt submit`, which is `publish-browser-extension` at the version of the lockfile. It builds
+  nothing: the stores get the files that the release holds. **It runs in the environment `stores`,
+  and a person approves each run**: the keys of the stores are secrets of that environment, and a
+  tag alone submits nothing. **It needs `ci`**, as `publish` does, and `workflows.test.ts` counts a
+  job of an environment as a job that publishes. **Chrome uses the API v2 with a service account,
+  and `STAGED_PUBLISH`**: the reviewed version waits for « Publish » in the dashboard. The variable
+  `CHROME_PUBLISH_TYPE` = `DEFAULT_PUBLISH` publishes after the review. **Firefox goes to the
+  `listed` channel**, with the archive of the sources. **A run from `workflow_dispatch` is a
+  `--dry-run`**: it asks each store for a token with its keys, and uploads nothing. On a check, a
+  store with no keys is left out with a warning. **On a tag, a store with no keys fails the job**,
+  because a release that reached one store and not the other would pass in silence. The steps of a
+  release, and the keys to make once, are in « Releasing the extension » at the end of this page.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
   a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
@@ -1835,3 +1848,43 @@ same endpoint. So the rule is in `session.ts` rather than only in the popup: a w
 not a rule, and a session already stored would otherwise have gone on leaking.
 
 Both were found by asking what else the accepted fix should have touched, before pushing it.
+
+## Releasing the extension (FRU-329)
+
+### The keys, made once
+
+The job `submit` reads these from the GitHub environment `stores` (**Settings → Environments**).
+
+1. **The environment.** Create `stores`. In **Required reviewers**, add the person who approves a
+   release. In **Deployment branches and tags**, allow the branch `main`, for
+   the check below, and the tags `v*`.
+2. **The Chrome Web Store, with a service account** (API v2).
+   - In Google Cloud, enable the **Chrome Web Store API**, then create a service account and a JSON
+     key for it.
+   - In the developer dashboard of the Chrome Web Store, under **Account**, add the e-mail address of
+     the service account.
+   - Variables of the environment: `CHROME_EXTENSION_ID` (the id of the item), `CHROME_PUBLISHER_ID`
+     (the id of the publisher, in the address of the dashboard), and
+     `CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL`.
+   - Secret of the environment: `CHROME_SERVICE_ACCOUNT_PRIVATE_KEY`, the `private_key` of the JSON
+     key, with real line breaks and not `\n`.
+3. **AMO.** On addons.mozilla.org, under **Developer Hub → Manage API Keys**, make a key.
+   - Variable of the environment: `FIREFOX_JWT_ISSUER`.
+   - Secret of the environment: `FIREFOX_JWT_SECRET`.
+4. **The check.** Start **Release extension** by hand (`workflow_dispatch`) on `main`, and approve
+   the run. Each store must answer with a token. The run uploads nothing.
+
+### A release
+
+1. Raise `version` in `apps/extension/package.json`. A store refuses a version that is not higher
+   than its last one.
+2. Merge, then push the tag `v<version>` on that commit.
+3. `ci`, `package` and `attach to the release` run. Then `submit` waits for the approval: check the
+   archives on the release, then approve.
+4. Google and Mozilla review the version. Google keeps a reviewed version until somebody presses
+   « Publish » in the dashboard (`STAGED_PUBLISH`).
+5. A new permission in the manifest needs a reason in the dashboard of each store, and a change of
+   the journey can need new texts or screenshots. The job sends neither.
+
+WARNING: a new archive during a review starts the review again. Wait for the end of one review
+before you push the next tag.
