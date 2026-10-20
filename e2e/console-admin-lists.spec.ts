@@ -8,7 +8,8 @@ import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWr
  * browser against screens 18 and 19 of the mockup of 2026-10-13 (`18-admin-workspaces.html`,
  * `19-admin-users.html`), the switch « Instance admin » of a person (FRU-280), the suspension of
  * an account (FRU-281), the deletion of a workspace (FRU-284), and the writes of an administrator in
- * a workspace (FRU-283). The worker is answered by stubs with the shapes of
+ * a workspace (FRU-283), and the deletion of an account (FRU-285). The worker is answered by stubs
+ * with the shapes of
  * `instance-admin.ts`, and the stubs filter by `q` and `show` as the worker does: a search that the
  * stub did not filter would prove nothing.
  *
@@ -29,7 +30,8 @@ const ACCENT_STRONG = '#b91c1c';
 /**
  * The gestures of the mockup that come with FRU-274: none of them is on these screens, except
  * « Suspend » and « Restore access » of a person (FRU-281), « Delete the workspace » (FRU-284), and
- * « New workspace », « Invite someone » and « Add to a workspace » (FRU-283).
+ * « New workspace », « Invite someone » and « Add to a workspace » (FRU-283), and the deletion of an
+ * account (FRU-285).
  */
 const ACTIONS = [
   'New workspace',
@@ -133,7 +135,7 @@ const USERS = [
     instanceAdmin: true,
     suspended: false,
     workspaces: [
-      { id: 'w1', name: 'Acme web', role: 'owner' },
+      { id: 'w1', name: 'Acme web', role: 'owner', soleOwner: true as const },
       { id: 'w9', name: 'Acme support', role: 'member' },
     ],
     providers: ['email', 'github'],
@@ -148,7 +150,7 @@ const USERS = [
     instanceAdmin: false,
     suspended: false,
     workspaces: [
-      { id: 'w9', name: 'Acme support', role: 'owner' },
+      { id: 'w9', name: 'Acme support', role: 'owner', soleOwner: true as const },
       { id: 'w1', name: 'Acme web', role: 'member' },
     ],
     providers: ['email'],
@@ -244,6 +246,8 @@ type Options = {
   refusingWrite?: { status: number; error: string } | undefined;
   /** Whether the message of an invitation left (FRU-283). */
   mailed?: boolean;
+  /** A refusal that a deletion of an account answers instead of a `200` (FRU-285). */
+  refusingAccountDeletion?: { status: number; error: string } | undefined;
 };
 
 type Posted = { path: string; body: unknown };
@@ -276,6 +280,16 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
       )
     )
       return answerWrite(pathname, route);
+    const accountDeletion = /^\/console\/admin\/users\/([^/]+)\/deletion$/.exec(pathname);
+    if (accountDeletion !== null && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as { email: string };
+      options.posted?.push({ path: pathname, body });
+      const refused = options.refusingAccountDeletion;
+      if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+      goneUsers.add(accountDeletion[1] as string);
+
+      return route.fulfill({ json: { user: { id: accountDeletion[1], email: body.email }, workspaces: [] } });
+    }
     const deletion = /^\/console\/admin\/workspaces\/([^/]+)\/deletion$/.exec(pathname);
     if (deletion !== null && route.request().method() === 'POST') return answerDeletion(deletion[1] as string, route);
     const url = new URL(route.request().url());
@@ -301,7 +315,7 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (pathname.startsWith('/console/admin/workspaces/'))
       return reply({ ...DETAIL, id: pathname.split('/').pop(), members: [], sites: [], destinations: [] });
     if (pathname === '/console/admin/users') {
-      const found = usersOf(options.users ?? USERS, q ?? '', show ?? 'all');
+      const found = usersOf(options.users ?? USERS, q ?? '', show ?? 'all').filter((user) => !goneUsers.has(user.id));
       return reply({ users: found, total: found.length + cut });
     }
 
@@ -318,6 +332,8 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
   };
   // The workspaces that a deletion took away: the lists leave them out after it, as the worker does.
   const gone = new Set<string>();
+  // The accounts that a deletion took away (FRU-285).
+  const goneUsers = new Set<string>();
   // The workspaces that « New workspace » made: the list answers them after it, as the worker does.
   const made: (typeof WORKSPACES)[number][] = [];
   /** The writes of an administrator in a workspace (FRU-283), with the shapes of `instance-admin.ts`. */
@@ -479,8 +495,12 @@ async function expectPanel(page: Page): Promise<void> {
  * No gesture of FRU-274 is drawn, not even disabled, but those of `drawn`. Nothing switches but
  * « Instance admin » in the panel of a person (FRU-280), when `switches` is 1.
  */
-async function expectNoAction(page: Page, switches: 0 | 1 = 0, drawn: readonly string[] = []): Promise<void> {
-  for (const name of ACTIONS.filter((action) => typeof action !== 'string' || !drawn.includes(action))) {
+async function expectNoAction(
+  page: Page,
+  switches: 0 | 1 = 0,
+  drawn: readonly (string | RegExp)[] = [],
+): Promise<void> {
+  for (const name of ACTIONS.filter((action) => !drawn.some((each) => String(each) === String(action)))) {
     await expect(page.getByRole('button', { name })).toHaveCount(0);
     await expect(page.getByRole('link', { name })).toHaveCount(0);
   }
@@ -761,6 +781,8 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
     'Acme supportOwner',
     'Acme webMember',
     'Email linktom@acme.dev',
+    // Tom owns Acme support alone: the foot leads to its owner before his account can go (FRU-285).
+    'Change the owner of Acme support',
   ]);
   await expect(adminSwitch(page)).not.toBeChecked();
   await expect(adminSwitch(page)).toBeEnabled();
@@ -776,7 +798,7 @@ test('Users: the table, the panel of a person, and the values of the mockup', as
   await expect(
     panel(page).locator('.kit-panel__foot').getByRole('button', { name: 'Suspend', exact: true }),
   ).toBeEnabled();
-  await expectNoAction(page, 1, ['Suspend', 'Add to a workspace']);
+  await expectNoAction(page, 1, ['Suspend', 'Add to a workspace', /^Delete .*account$/]);
   await axe(page, 'the panel of a person at 1440 px');
 
   await page.keyboard.press('Escape');
@@ -1916,4 +1938,117 @@ test('the writes of FRU-283 in French, and at 390 px', async ({ page }) => {
   );
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'an addition to a workspace at 390 px');
+});
+
+/** The button of the panel that deletes the account of a person (FRU-285). */
+const deleteAccount = (page: Page, name: string) =>
+  panel(page).getByRole('button', { name: `Delete ${name}'s account` });
+
+test('Users: an account that owns a workspace alone cannot be deleted, and the panel leads to its owner (FRU-285)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await stub(page);
+  await visit(page, '/admin/users?open=a3', 'Users');
+  await expect(panel(page)).toContainText(
+    'Tom Marchal owns these workspaces alone. Change the owner of each, or delete it, before the account.',
+  );
+  const lead = panel(page).getByRole('link', { name: 'Change the owner of Acme support' });
+  await expect(lead).toHaveAttribute('href', '/admin/workspaces?open=w9');
+  await expect(deleteAccount(page, 'Tom Marchal')).toBeDisabled();
+  await axe(page, 'an account held by its workspaces at 1440 px');
+  await lead.click();
+  await expect(page).toHaveURL(/\/admin\/workspaces\?open=w9/);
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
+});
+
+test('Users: an admin deletes an account after typing its address, and the row goes (FRU-285)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/users?open=a5', 'Users');
+  await deleteAccount(page, 'Inès Roux').click();
+  const asking = page.getByRole('group', { name: "Delete Inès Roux's account" });
+  await expect(asking).toContainText(
+    "Inès Roux's account is deleted at once, and nothing brings it back. Their sessions in the console and in the extension end, and they leave every workspace. Their notes stay, signed as a former member. The owners of each of their workspaces see that you did it.",
+  );
+  const field = asking.getByRole('textbox', { name: 'Type ines@acme.dev to confirm' });
+  await expect(field).toBeFocused();
+  const send = asking.getByRole('button', { name: "Delete Inès Roux's account" });
+  for (const typed of ['ines@acme', 'nadia@acme.dev']) {
+    await field.fill(typed);
+    await expect(send).toBeDisabled();
+  }
+  // Escape steps back, sends nothing, and keeps the panel.
+  await page.keyboard.press('Escape');
+  await expect(deleteAccount(page, 'Inès Roux')).toBeFocused();
+  await expect(panel(page)).toHaveAccessibleName('Inès Roux');
+  expect(posted).toEqual([]);
+
+  await deleteAccount(page, 'Inès Roux').click();
+  await field.fill(' INES@acme.dev ');
+  await expect(send).toBeEnabled();
+  await send.click();
+  const said = main(page).getByRole('status').filter({ hasText: 'was deleted' });
+  await expect(said).toHaveText("Inès Roux's account was deleted. Their notes stay.");
+  await expect(said).toBeFocused();
+  await expect(panel(page)).toHaveCount(0);
+  await expect(main(page).getByRole('link', { name: /Inès Roux/ })).toHaveCount(0);
+  expect(posted).toEqual([{ path: '/console/admin/users/a5/deletion', body: { email: 'INES@acme.dev' } }]);
+});
+
+test('Users: each refusal of a deletion is said and keeps the address; yourself and the last admin are held (FRU-285)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const options: Options = { posted: [] };
+  await stub(page, options);
+  await visit(page, '/admin/users?open=a5', 'Users');
+  await deleteAccount(page, 'Inès Roux').click();
+  const asking = page.getByRole('group', { name: "Delete Inès Roux's account" });
+  await asking.getByRole('textbox').fill('ines@acme.dev');
+  for (const [refusal, sentence] of [
+    [
+      { status: 409, error: 'sole-owner' },
+      'This person owns a workspace alone now. Read Users again, and change its owner first.',
+    ],
+    [{ status: 409, error: 'email-mismatch' }, 'This is not the address of the account. Type it as it is written.'],
+    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+  ] as const) {
+    options.refusingAccountDeletion = refusal;
+    await asking.getByRole('button', { name: "Delete Inès Roux's account" }).click();
+    await expect(panel(page)).toContainText(sentence);
+    await expect(asking.getByRole('textbox')).toHaveValue('ines@acme.dev');
+  }
+  expect(options.posted).toHaveLength(3);
+
+  // Inès is the person signed in: her own account is held.
+  await stub(page, { self: 'a5' });
+  await visit(page, '/admin/users?open=a5', 'Users');
+  await expect(deleteAccount(page, 'Inès Roux')).toBeDisabled();
+  await expect(panel(page)).toContainText('You cannot delete your own account. Another instance admin can.');
+  // Nadia is the one admin of a list that holds them all.
+  await visit(page, '/admin/users?open=a2', 'Users');
+  await expect(deleteAccount(page, 'Nadia Benali')).toBeDisabled();
+  await expect(panel(page)).toContainText('The last instance admin cannot be deleted. Name another admin first.');
+});
+
+test('Users: the deletion of an account in French, and at 390 px (FRU-285)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr' });
+  await page.goto(`${CONSOLE}/admin/users?open=a5`);
+  await panel(page).getByRole('button', { name: 'Supprimer le compte de Inès Roux' }).click();
+  const asking = page.getByRole('group', { name: 'Supprimer le compte de Inès Roux' });
+  await expect(asking).toContainText('Ses notes restent, signées comme ancien membre.');
+  await expect(asking.getByRole('textbox', { name: 'Tapez ines@acme.dev pour confirmer' })).toBeFocused();
+  await expect(asking.getByRole('button')).toHaveText(['Le garder', 'Supprimer le compte de Inès Roux']);
+  await expect(asking.getByRole('button', { name: 'Supprimer le compte de Inès Roux' })).toBeInViewport();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the deletion of an account at 390 px');
+
+  await page.goto(`${CONSOLE}/admin/users?open=a3`);
+  await expect(panel(page)).toContainText('Tom Marchal possède seul ces workspaces.');
+  await expect(panel(page).getByRole('link', { name: 'Changer le propriétaire de Acme support' })).toBeVisible();
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'an account held by its workspaces at 390 px');
 });

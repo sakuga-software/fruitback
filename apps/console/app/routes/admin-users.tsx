@@ -20,6 +20,7 @@ import {
   useRead,
 } from './admin-list';
 import { useAdmin } from './admin';
+import { AccountDeletion, DELETION_HOLDS } from './admin-account-deletion';
 import { AddToWorkspace, ChangeRole } from './admin-user-workspaces';
 import { seenOn } from './members';
 
@@ -28,7 +29,8 @@ import { seenOn } from './members';
  * workspaces, how they sign in, and whether they administer the instance. The switch « Instance
  * admin » of the panel names and removes an administrator (FRU-280). « Suspend » and « Restore
  * access » suspend and restore the account (FRU-281). « Change a role » and « Add to a workspace »
- * write in a workspace at once, and its owners read it (FRU-283).
+ * write in a workspace at once, and its owners read it (FRU-283). « Delete {name}'s account » deletes
+ * it after its address is typed, and not while it owns a workspace alone (FRU-285).
  *
  * The panel is the row: the worker has no route for one person. It lists accounts only, so somebody
  * invited who never signed in is not a row.
@@ -164,6 +166,13 @@ export default function AdminUsers() {
     return { ...answer.data, asked: { q, show }, suspendedWhenRead, restoredSinceRead: [] };
   }, [q, show]);
   const { shown, again, patch } = useRead(ask);
+  // The sentence of an account that was just deleted, kept in English with its name (FRU-285).
+  const [deleted, setDeleted] = useState<string | undefined>();
+  const said = useRef<HTMLParagraphElement>(null);
+  // Focus goes to the sentence: the panel and the button that had it are gone.
+  useEffect(() => {
+    if (deleted !== undefined) said.current?.focus();
+  }, [deleted]);
   const { me } = useAdmin();
 
   const rows = typeof shown === 'object' ? shown.users : [];
@@ -209,6 +218,16 @@ export default function AdminUsers() {
         onRole={(instanceAdmin) => changed(chosen.id, { instanceAdmin })}
         onSuspended={(suspended) => changed(chosen.id, { suspended })}
         onWorkspaces={(workspaces) => changed(chosen.id, { workspaces })}
+        deletionHeld={heldBy(chosen, me.account.id, admins, DELETION_HOLDS)}
+        onDeleted={(name) => {
+          patch((listed) => ({
+            ...listed,
+            total: listed.total - 1,
+            users: listed.users.filter((user) => user.id !== chosen.id),
+          }));
+          change({ open: '' }, true);
+          setDeleted(name);
+        }}
       />
     );
 
@@ -222,6 +241,11 @@ export default function AdminUsers() {
       <p className="mb-[24px] max-w-[64ch] text-small text-muted">
         {t('The owners of each workspace see that you read its people, with your address and the day.')}
       </p>
+      {deleted === undefined ? null : (
+        <p role="status" tabIndex={-1} ref={said} className="mb-[16px] text-small font-semibold">
+          {t("{name}'s account was deleted. Their notes stay.", { name: deleted })}
+        </p>
+      )}
       <ListBar
         label={t('Search people')}
         placeholder={t('Search by name or address')}
@@ -369,6 +393,8 @@ function Panel({
   onRole,
   onSuspended,
   onWorkspaces,
+  deletionHeld,
+  onDeleted,
 }: {
   user: AdminUser;
   held: string | undefined;
@@ -379,6 +405,8 @@ function Panel({
   onRole: (instanceAdmin: boolean) => void;
   onSuspended: (suspended: boolean) => void;
   onWorkspaces: (workspaces: AdminUser['workspaces']) => void;
+  deletionHeld: string | undefined;
+  onDeleted: (name: string) => void;
 }) {
   useLocale();
   const rows = [
@@ -405,7 +433,12 @@ function Panel({
       onClose={onClose}
       title={user.name ?? user.email}
       {...(user.name === undefined ? {} : { detail: user.email })}
-      {...(user.suspended ? {} : { foot: control })}
+      foot={
+        <div className="flex w-full flex-col gap-[16px]">
+          {user.suspended ? null : control}
+          <AccountDeletion user={user} held={deletionHeld} onDeleted={onDeleted} />
+        </div>
+      }
     >
       {user.suspended ? control : null}
 

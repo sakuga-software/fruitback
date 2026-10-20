@@ -129,6 +129,23 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{workspace} is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.':
     '{workspace} est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
   'Type {workspace} to confirm': 'Tapez {workspace} pour confirmer',
+  'This person owns a workspace alone now. Read Users again, and change its owner first.':
+    'Cette personne possède maintenant seule un workspace. Rouvrez Utilisateurs, et changez d’abord son propriétaire.',
+  'This is not the address of the account. Type it as it is written.':
+    'Ce n’est pas l’adresse du compte. Tapez-la telle qu’elle est écrite.',
+  'You cannot delete your own account. Another instance admin can.':
+    'Vous ne pouvez pas supprimer votre propre compte. Un autre administrateur de l’instance le peut.',
+  'The last instance admin cannot be deleted. Name another admin first.':
+    'Le dernier administrateur de l’instance ne peut pas être supprimé. Nommez d’abord un autre administrateur.',
+  'This account no longer exists.': 'Ce compte n’existe plus.',
+  'The account was not deleted. Try again.': 'Le compte n’a pas été supprimé. Réessayez.',
+  '{name} owns these workspaces alone. Change the owner of each, or delete it, before the account.':
+    '{name} possède seul ces workspaces. Changez le propriétaire de chacun, ou supprimez-le, avant le compte.',
+  'Type {email} to confirm': 'Tapez {email} pour confirmer',
+  "Delete {name}'s account": 'Supprimer le compte de {name}',
+  "{name}'s account is deleted at once, and nothing brings it back. Their sessions in the console and in the extension end, and they leave every workspace. Their notes stay, signed as a former member. The owners of each of their workspaces see that you did it.":
+    'Le compte de {name} est supprimé tout de suite, et rien ne le fait revenir. Ses sessions dans la console et dans l’extension prennent fin, et cette personne quitte chaque workspace. Ses notes restent, signées comme ancien membre. Les propriétaires de chacun de ses workspaces voient que vous l’avez fait.',
+  "{name}'s account was deleted. Their notes stay.": 'Le compte de {name} a été supprimé. Ses notes restent.',
   'Change a role': 'Changer un rôle',
   'Change the role of {name}': 'Changer le rôle de {name}',
   'New role': 'Nouveau rôle',

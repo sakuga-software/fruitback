@@ -768,7 +768,8 @@ export type AdminUser = {
   instanceAdmin: boolean;
   /** An administrator of the instance suspended the account (FRU-281). */
   suspended: boolean;
-  workspaces: { id: string; name: string; role: string }[];
+  /** `soleOwner`: the account owns this workspace alone (FRU-285), and cannot be deleted before another owner. */
+  workspaces: { id: string; name: string; role: string; soleOwner?: true }[];
   /** `email`, `github`, `google`. */
   providers: string[];
   lastSeen?: string;
@@ -944,4 +945,16 @@ export function createWorkspaceAsAdmin(
   owner: string,
 ): Promise<Answer<{ workspace: { id: string; name: string }; owner: { id: string; email: string } }>> {
   return call('POST', '/console/admin/new-workspace', { name, owner });
+}
+
+/**
+ * Deletes an account (FRU-285), at once and for good. `email` is its address, as the administrator
+ * typed it. The worker refuses with `409 sole-owner` and the workspaces that the account owns alone,
+ * `409 self-deletion`, `409 last-admin` and `409 email-mismatch`. Its notes stay, as of a former member.
+ */
+export function deleteAccountAsAdmin(
+  id: string,
+  email: string,
+): Promise<Answer<{ user: { id: string; email: string }; workspaces: { id: string; name: string }[] }>> {
+  return call('POST', `/console/admin/users/${encodeURIComponent(id)}/deletion`, { email });
 }
