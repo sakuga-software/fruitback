@@ -228,6 +228,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     invite: true,
     noteMailed: true,
     createWorkspace: true,
+    deleteAccount: true,
   });
 }
 

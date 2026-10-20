@@ -818,3 +818,60 @@ describe(
     });
   },
 );
+
+describe(
+  'two administrators who delete each other at the same moment, on a real server (FRU-285)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    it('deletes one of them: the other gets « last-admin », and one administrator stays', async () => {
+      const own = await ownDatabase();
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+
+        // Each deletion writes its action before the row goes: while the table is held, the first waits there.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const calls = [
+          createPostgresInstanceAdmin(first).deleteAccount(ana, bob.id, 'bob@acme.dev', 1),
+          createPostgresInstanceAdmin(second).deleteAccount(bob, ana.id, 'ana@acme.dev', 2),
+        ].map((call) => call.finally(() => settled.push('settled')));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither call ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+        const outcomes = await Promise.all(calls);
+
+        assert.deepEqual(outcomes.map((outcome) => (outcome.ok ? 'deleted' : outcome.refused)).toSorted(), [
+          'deleted',
+          'last-admin',
+        ]);
+        assert.equal(Number((await rowsOf(first, 'SELECT count(*)::int AS n FROM "user"'))[0]?.n), 1);
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);
