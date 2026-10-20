@@ -7,6 +7,16 @@ import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
 
 /**
+ * What a part of the banner draws: its text, or each of its children with its tag when it has
+ * some, so the key and the word of the way out are read apart rather than as one run of text.
+ */
+function drawn(part: Element): string {
+  if (part.children.length === 0) return part.textContent ?? '';
+
+  return [...part.children].map((child) => `${child.tagName.toLowerCase()} ${child.textContent}`).join(' + ');
+}
+
+/**
  * The engine is faked here on purpose. happy-dom has no layout and no `elementsFromPoint`, so asking
  * it to hit-test would test happy-dom; what these check is the host's own behaviour — what it puts in
  * the Shadow root, what it refuses to point at, and what it hands back.
@@ -114,7 +124,7 @@ describe('the chrome the reporter sees (FRU-36)', () => {
   it('says what a capture asks for in the capsule, with the key and the button that stop it (FRU-258, FRU-303)', () => {
     mount(() => null);
     const banner = host?.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
-    const parts = () => [...banner.children].map((part) => `${part.tagName.toLowerCase()}: ${part.textContent}`);
+    const parts = () => [...banner.children].map((part) => `${part.tagName.toLowerCase()}: ${drawn(part)}`);
 
     // In the tree and empty at rest: a live region that was hidden announces nothing when it comes back.
     assert.equal(banner.getAttribute('role'), 'status');
@@ -125,7 +135,8 @@ describe('the chrome the reporter sees (FRU-36)', () => {
       'span: Point at an element, or use the arrow keys',
       // Read and not drawn: how a keyboard moves.
       'span: Or move with the arrow keys and press Enter.',
-      'button: EscCancel',
+      // The key and the word, each in its own part: the key is drawn, the word names the button.
+      'button: kbd Esc + span Cancel',
     ]);
     // The key is a drawing: the button is named by its word.
     const key = banner.querySelector('kbd');
@@ -166,11 +177,11 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     const announcer = host.root.querySelector('[data-fruitback-announcer]');
 
     const banner = host.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
-    const said = () => [...banner.children].map((part) => part.textContent);
+    const said = () => [...banner.children].map((part) => drawn(part));
 
     host.start();
     // No key to name, and no arrows: the sentence and the button, which is the only way out.
-    assert.deepEqual(said(), ['Tap the part of the page your note is about', 'Cancel']);
+    assert.deepEqual(said(), ['Tap the part of the page your note is about', 'span Cancel']);
     assert.equal(launchButton().textContent, 'Leave feedback');
     assert.equal(announcer?.textContent, '');
     host.stop();
@@ -180,7 +191,7 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     host.start();
     assert.equal(said()[0], 'Point at an element, or use the arrow keys');
     assert.match(said()[1] ?? '', /arrow keys/);
-    assert.equal(said()[2], 'EscCancel');
+    assert.equal(said()[2], 'kbd Esc + span Cancel');
   });
 
   it('keeps the host label over a translated one, before and after a capture (FRU-37)', () => {

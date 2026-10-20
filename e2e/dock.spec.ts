@@ -140,6 +140,68 @@ test('the capsule has the measures of the mock-up, and every control in it is 44
     .toBe('rgb(245, 245, 244)');
 });
 
+test('a capture plays end to end inside the capsule, with the mouse and then with the keyboard (FRU-303)', async ({
+  page,
+}) => {
+  await mount(page, 'dock-capture-path');
+  const host = page.locator('[data-fruitback-host]');
+  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const dock = dockOf(page);
+  const banner = page.locator('[data-fruitback-host-banner]');
+  const frame = page.locator('[data-fruitback-host-highlight]');
+  const dialog = page.getByRole('dialog', { name: 'New note' });
+  const target = page.locator('[data-testid="card-latte"] .add');
+  // The way out is named by its word alone: the key drawn beside it is not part of its name.
+  const cancel = page.getByRole('button', { name: 'Cancel', exact: true });
+
+  // With the mouse: the capsule turns dark and holds the banner, the frame names the element under
+  // the pointer, and a click chooses it.
+  await launch.click();
+  await expect(host).toHaveAttribute('data-fruitback-capturing', '');
+  await expect(dock.locator('[data-fruitback-host-banner]')).toHaveCount(1);
+  await expect(cancel).toBeVisible();
+  await expect(cancel).toBeFocused();
+  await expect(page.locator('.fruitback-banner-key')).toHaveText('Esc');
+  await target.hover();
+  await expect(frame).toBeVisible();
+  await expect(page.locator('.fruitback-highlight-tag')).toHaveText(/^button\.add/);
+  await target.click();
+  await expect(dialog).toBeVisible();
+  // The choice ends the capture: the capsule is light again, its banner empty, its button back.
+  await expect(host).not.toHaveAttribute('data-fruitback-capturing', '');
+  await expect(banner).toBeEmpty();
+  await expect(launch).toBeVisible();
+  await page.getByRole('button', { name: 'Close without sending' }).click();
+  await expect(dialog).toBeHidden();
+
+  // With the keyboard: Enter on the launch button, the arrows to an element, Enter to choose it.
+  await launch.focus();
+  await page.keyboard.press('Enter');
+  await expect(host).toHaveAttribute('data-fruitback-capturing', '');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(frame).toBeVisible();
+  await expect(page.locator('[data-fruitback-announcer]')).not.toBeEmpty();
+  await page.keyboard.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toBeFocused();
+  await expect(host).not.toHaveAttribute('data-fruitback-capturing', '');
+  // Closed with no note, focus goes back to the launch button, which is drawn again.
+  await page.getByRole('button', { name: 'Close without sending' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(launch).toBeVisible();
+  await expect(launch).toBeFocused();
+
+  // And « Cancel » with the keyboard, from a third capture: no dialog, focus on the launch button.
+  await page.keyboard.press('Enter');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(host).not.toHaveAttribute('data-fruitback-capturing', '');
+  await expect(dialog).toBeHidden();
+  await expect(launch).toBeVisible();
+  await expect(launch).toBeFocused();
+});
+
 test('a capture turns the capsule dark, and Escape gives it back with focus on the launch button', async ({ page }) => {
   await mount(page, 'dock-capturing');
   const launch = page.getByRole('button', { name: 'Leave feedback' });
