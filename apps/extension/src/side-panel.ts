@@ -111,20 +111,33 @@ export type NotesTab = 'open' | 'done';
 /**
  * The notes, or where their read is. `reading`: the widget has not read yet, or is not mounted yet;
  * it says when it has. `failed`: its read failed. `signed-out`: the session of the site ended (FRU-315). `reload`: nothing on the page answers, a page open
- * before the site was turned on.
+ * before the site was turned on. `not-started`: the page answers, but still has no widget after
+ * `NO_WIDGET_WAIT_MS` (a mount that threw, a widget taken down): reloading the page mounts it again.
  */
-export type PanelNotes = PanelNote[] | 'reading' | 'failed' | 'reload' | 'signed-out';
+export type PanelNotes = PanelNote[] | 'reading' | 'failed' | 'reload' | 'signed-out' | 'not-started';
+
+/**
+ * How long the panel waits for a widget the page does not have yet (raised in review). A widget
+ * that mounts says so (`notes-changed`) well before; one that does not would leave the panel on
+ * « Reading… » for ever. After it, the panel asks once more, and says to reload the page.
+ */
+export const NO_WIDGET_WAIT_MS = 4000;
 
 /**
  * What an answer to `notes` says (raised in review): the notes, or why there are none. No answer at
  * all is a page with no bridge. The panel does not ask again on a timer: the widget says when it has
  * read (`notes-changed`).
  */
-export function notesOf(answer: { notes?: PanelNote[]; reading?: NotesReading } | undefined): PanelNotes {
+export function notesOf(
+  answer: { notes?: PanelNote[]; reading?: NotesReading } | undefined,
+  waited = false,
+): PanelNotes {
   if (answer === undefined) return 'reload';
   if (answer.notes !== undefined) return answer.notes;
 
   if (answer.reading === 'failed' || answer.reading === 'signed-out') return answer.reading;
+  // Still no widget once `NO_WIDGET_WAIT_MS` has passed: it will not come by itself.
+  if (answer.reading === 'no-widget' && waited) return 'not-started';
 
   return 'reading';
 }
@@ -370,6 +383,15 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
 
     return [box];
   }
+  if (notes === 'not-started') {
+    const box = make(document, 'div', 'panel-failed');
+    box.append(
+      make(document, 'p', '', t('Fruitback did not start on this page. Reload it to see its notes.')),
+      linkButton(document, t('Reload the page'), options.onReload),
+    );
+
+    return [box];
+  }
   if (notes === 'failed') {
     const box = make(document, 'div', 'panel-failed');
     box.setAttribute('role', 'alert');
@@ -481,7 +503,10 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
   links.append(linkButton(document, t('Show on the page'), () => options.onShow(note.id)));
   const replying = options.replying?.id === note.id ? options.replying : undefined;
   if (note.canReply && replying === undefined) {
-    links.append(linkButton(document, t('Reply'), () => options.onReplyOpen(note.id)));
+    const reply = linkButton(document, t('Reply'), () => options.onReplyOpen(note.id));
+    // The panel gives the focus back here once a reply is sent.
+    reply.dataset.action = 'reply';
+    links.append(reply);
   }
   more.append(links);
   if (note.canReply && replying !== undefined) more.append(replyForm(document, options, replying));

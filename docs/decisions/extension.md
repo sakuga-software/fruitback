@@ -460,10 +460,13 @@ did not change: the fields of 760 px and the file input of the browser are as th
   widget is the site's, and answers the extension nothing: the panel says that its notes are in its
   own list on the page, rather than wait for them and report a failed read.
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
-- **The panel never asks again on a timer.** `notes` answers the notes, or why there are none: no
-  widget of ours yet, a read not answered (the panel waits for `notes-changed`), a read that failed
-  (« Try again » asks the widget to read again, `reread`), a session that ended (FRU-315), or nothing
-  on the page at all, a page open before the site was on (« Reload the page »).
+- **The panel does not poll.** `notes` answers the notes, or why there are none: a read not answered
+  (the panel waits for `notes-changed`), a read that failed (« Try again » asks the widget to read
+  again, `reread`), a session that ended (FRU-315), or nothing on the page at all, a page open before
+  the site was on (« Reload the page »). One bounded exception: no widget of ours yet is asked once
+  more after `NO_WIDGET_WAIT_MS` (4 s), and a page that still has none (a mount that threw, a widget
+  taken down) says « Fruitback did not start on this page » with « Reload the page », rather than
+  « Reading… » for ever. After a reply is sent, the focus goes back to « Reply » of its row.
 - **A click on a pin opens its row once a list that holds its note is read**: the id waits until
   then (`openOnRead`).
 - **What somebody types in a reply stays.** The panel draws again at each change; the text, the

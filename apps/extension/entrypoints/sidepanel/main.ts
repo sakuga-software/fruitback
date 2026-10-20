@@ -8,6 +8,7 @@ import {
   type PanelOptions,
   type PanelState,
   CHECK_PROBLEM,
+  NO_WIDGET_WAIT_MS,
   REPLY_PROBLEM,
   notesOf,
   openOnRead,
@@ -57,6 +58,8 @@ const reopened: Record<string, string> = {};
 let looks = 0;
 /** The note a click on a pin asked to open, until a list that holds it is read. */
 let pendingOpen: string | undefined;
+/** The one more ask of a page that had no widget yet (`NO_WIDGET_WAIT_MS`). */
+let noWidgetWait: ReturnType<typeof setTimeout> | undefined;
 
 async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
@@ -99,6 +102,7 @@ async function look(): Promise<void> {
   }
   // Another tab: its own notes, from the start.
   if (followed?.tabId !== before) {
+    clearTimeout(noWidgetWait);
     notes = 'reading';
     open = undefined;
     pendingOpen = undefined;
@@ -110,10 +114,13 @@ async function look(): Promise<void> {
 }
 
 /**
- * The notes of the widget of the tab, or why there are none (`notesOf`). Never asked again on a
- * timer: the widget says when it has read, and a page with nothing to answer says so.
+ * The notes of the widget of the tab, or why there are none (`notesOf`). Not asked again on a timer:
+ * the widget says when it has read, and a page with nothing to answer says so. One exception: a page
+ * with no widget yet is asked once more after `NO_WIDGET_WAIT_MS`, then told to reload (review).
  */
-async function readNotes(): Promise<void> {
+async function readNotes(waited = false): Promise<void> {
+  clearTimeout(noWidgetWait);
+  noWidgetWait = undefined;
   const reading = followed?.tabId;
   const answer = await askOrNothing('notes');
   if (followed?.tabId !== reading) {
@@ -122,7 +129,12 @@ async function readNotes(): Promise<void> {
 
     return;
   }
-  notes = notesOf(answer);
+  notes = notesOf(answer, waited);
+  if (answer?.reading === 'no-widget' && !waited && noWidgetWait === undefined) {
+    noWidgetWait = setTimeout(() => {
+      if (followed?.tabId === reading) void readNotes(true);
+    }, NO_WIDGET_WAIT_MS);
+  }
   // The open row of a note that is gone closes.
   if (Array.isArray(notes) && open !== undefined && !notes.some((note) => note.id === open)) open = undefined;
   // A row a pin asked for, once a list that holds its note is read.
@@ -271,6 +283,12 @@ async function sendReply(): Promise<void> {
   if (outcome === 'sent') {
     replying = undefined;
     await readNotes();
+    // The field and « Send » are gone: the focus goes back to « Reply » of the same row, not to the
+    // body of the page (raised in review).
+    const row = app?.querySelector(`li[data-note="${CSS.escape(sending.id)}"]`);
+    (
+      row?.querySelector<HTMLElement>('[data-action="reply"]') ?? row?.querySelector<HTMLElement>('.panel-row-head')
+    )?.focus();
 
     return;
   }

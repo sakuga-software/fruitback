@@ -258,7 +258,11 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
     '[data-testid="card-espresso"] h3',
     '[data-testid="card-latte"] h3',
   ];
-  for (const [index, place] of places.entries()) await plantOn(page, place, `Panel note ${index + 1}`);
+  // One note long enough to wrap in the panel.
+  const long = ': the Add button is almost invisible until you hover it, on every card of the page';
+  for (const [index, place] of places.entries()) {
+    await plantOn(page, place, `Panel note ${index + 1}${index === 0 ? long : ''}`);
+  }
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(5);
 
   // The panel, from the popup.
@@ -315,6 +319,17 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
       timeout: 20_000,
     })
     .toContain('Answered from the side panel');
+  // A long note wraps inside its row: nothing runs past the edge of the panel (review of #404).
+  expect(
+    await inPanel<number>(
+      page,
+      `[...document.querySelectorAll('.panel-row-head')].filter((head) => head.scrollWidth > head.clientWidth).length`,
+    ),
+  ).toBe(0);
+  // The focus is back on « Reply » of the row, not on the body of the panel (review).
+  await expect
+    .poll(() => inPanel<string | null>(page, `document.activeElement?.getAttribute('data-action') ?? null`))
+    .toBe('reply');
   await clickInRow(page, target?.note ?? '', said.show);
   await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText('Answered from the side panel');
 
@@ -435,4 +450,30 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
 
   // The pins of the page say the same: the store moved the note, and the widget read it.
   await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="seeded"]')).not.toHaveCount(0);
+});
+
+test('a tab whose widget is gone does not leave the panel reading for ever (FRU-299, review)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-no-widget');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: 'Turn on here' }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+
+  // The bridge stays, the widget goes: the page answers `no-widget`, and no `notes-changed` follows.
+  await page.evaluate(() => window.postMessage({ channel: 'fruitback-extension', kind: 'unmount' }, '*'));
+  await expect(page.locator('[data-fruitback-host-launch]')).toHaveCount(0);
+
+  const again = await openPopup(extension, page);
+  await again.getByRole('button', { name: 'Show every note of the page' }).click();
+  await expect.poll(() => inPanel<string>(page, 'document.title').catch(() => ''), { timeout: 10_000 }).not.toBe('');
+
+  // Not « Reading… » for ever: once the page still has no widget, the panel says to reload it.
+  await expect
+    .poll(() => inPanel<boolean>(page, `document.querySelector('.panel-reading') !== null`), { timeout: 15_000 })
+    .toBe(false);
+  expect(await inPanel<boolean>(page, `document.querySelector('.panel-failed button') !== null`)).toBe(true);
 });

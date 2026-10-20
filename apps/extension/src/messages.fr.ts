@@ -244,6 +244,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This page was open before Fruitback was on. Reload it to see its notes.':
     'Cette page était ouverte avant que Fruitback soit activé. Rechargez-la pour voir ses notes.',
   'Reload the page': 'Recharger la page',
+  'Fruitback did not start on this page. Reload it to see its notes.':
+    'Fruitback n’a pas démarré sur cette page. Rechargez-la pour voir ses notes.',
   'Your session ended. Sign in again from the Fruitback button.':
     'Votre session a pris fin. Reconnectez-vous depuis le bouton Fruitback.',
   '{host} runs its own Fruitback.': '{host} a son propre Fruitback.',

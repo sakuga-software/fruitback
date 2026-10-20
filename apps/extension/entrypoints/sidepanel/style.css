@@ -141,10 +141,13 @@ button.panel-row-head {
   color: inherit;
   font: inherit;
   text-align: start;
+  /* The note wraps: the buttons of popup/style.css stay on one line, and a long note was cut. */
+  white-space: normal;
 }
 
 .panel-row-words {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
