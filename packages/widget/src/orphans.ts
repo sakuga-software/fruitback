@@ -283,6 +283,11 @@ const STYLES = `
   inset-inline-end: 0;
   width: max-content;
   max-width: min(300px, calc(100vw - 48px));
+  /*
+    No higher than the room above the capsule: 24 px under it, 52 px of capsule, 12 px of gap, and
+    16 px left at the top of the window. A low window scrolls the list, and never pushes it out.
+  */
+  max-height: min(220px, calc(100vh - 104px));
   margin: 0;
 }
 @media (forced-colors: active) {

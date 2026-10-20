@@ -166,6 +166,11 @@ test('a capture turns the capsule dark, and Escape gives it back with focus on t
 
   const ask = page.locator('.fruitback-banner-ask');
   await expect(ask).toHaveText('Point at an element, or use the arrow keys');
+  // A click in the dark capsule, beside its button, is a click on the widget: it chooses nothing,
+  // and the capture goes on.
+  await ask.click();
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden();
+  await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
   expect(await painted(ask, ['color', 'font-size'])).toMatchObject({
     color: 'rgb(214, 211, 209)',
     'font-size': '12px',
@@ -354,6 +359,12 @@ test('the detached notes are the first control of the capsule, and overlap nothi
   await chip.click();
   const list = (await drawer.locator('.fruitback-orphans-list').boundingBox())!;
   expect(list.y + list.height).toBeLessThanOrEqual(capsule.y);
+  // In a low window it stays inside it: its height is the room above the capsule.
+  const tall = page.viewportSize()!;
+  await page.setViewportSize({ width: tall.width, height: 110 });
+  const low = (await drawer.locator('.fruitback-orphans-list').boundingBox())!;
+  expect(low.y).toBeGreaterThanOrEqual(0);
+  await page.setViewportSize(tall);
   await chip.click();
 
   // The control: the chip floated as it did before the capsule, 60 px from the bottom, overlaps
