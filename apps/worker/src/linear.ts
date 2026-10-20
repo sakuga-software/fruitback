@@ -220,8 +220,10 @@ export function reopenStateOf(states: readonly WorkflowStateNode[]): WorkflowSta
 }
 
 /**
- * A verdict under an issue (FRU-294). « Still wrong » moves the issue to `reopenStateOf` first, then
- * writes the reply: a reply that says « reopened » is never left on an issue that Linear did not move.
+ * A verdict under an issue (FRU-294). The reply is written first, then « Still wrong » moves the issue
+ * to `reopenStateOf`. A move that fails leaves a « wrong » reply on an issue still done: the note reads
+ * as not confirmed, and a second try writes the reply again and moves it. The other order left an
+ * issue moved with no reply, which a second try refused as `409 not-done` (raised in review).
  * The scope `write` of OAuth and a personal key both allow the two calls.
  */
 export async function createCheck(
@@ -231,26 +233,24 @@ export async function createCheck(
   locale: string | undefined,
   stages: StageExceptions = {},
 ): Promise<CheckAnswer | undefined> {
-  let stage: SeedStage = 'ripe';
-  if (check.verdict === 'wrong') {
-    const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
-    if (found.issue === null) return undefined;
-    const state = reopenStateOf(found.issue.team.states.nodes);
-    if (state === undefined) throw new StoreError('The team of this issue has no state to reopen it in');
-    const moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
-      id: issueId,
-      input: { stateId: state.id },
-    });
-    if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
-    stage = stageOf(moved.issueUpdate.issue?.state ?? state, stages);
-  }
   const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
     input: { issueId, body: checkText(check, locale) },
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
+  if (check.verdict === 'fixed') return { comment: seedCommentOf(comment), stage: 'ripe' };
 
-  return { comment: seedCommentOf(comment), stage };
+  const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
+  if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
+  const state = reopenStateOf(found.issue.team.states.nodes);
+  if (state === undefined) throw new StoreError('The team of this issue has no state to reopen it in');
+  const moved = await graphql<ReopenIssueResult>(config, REOPEN_ISSUE_MUTATION, {
+    id: issueId,
+    input: { stateId: state.id },
+  });
+  if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
+
+  return { comment: seedCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
 
 type TeamLabelsResult = { team: { labels: { nodes: { id: string; name: string }[] } } | null };

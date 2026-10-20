@@ -89,7 +89,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
     assert.equal(reopenStateOf([state('Done', 'completed', 0)]), undefined);
   });
 
-  it('moves the issue of a team with no triage to its backlog, then writes the marked reply', async () => {
+  it('writes the marked reply, then moves the issue of a team with no triage to its backlog', async () => {
     const stub = installLinearStub({
       teamStates: [
         state('st_done', 'completed', 3),
@@ -108,9 +108,9 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
 
     assert.deepEqual(
       stub.calls.map((call) => call.operation),
-      ['FruitbackIssueStates', 'FruitbackReopenIssue', 'FruitbackCreateComment'],
+      ['FruitbackCreateComment', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
     );
-    assert.deepEqual(stub.calls[1]?.variables, { id: 'issue_1', input: { stateId: 'st_backlog' } });
+    assert.deepEqual(stub.calls[2]?.variables, { id: 'issue_1', input: { stateId: 'st_backlog' } });
     assert.equal(answer?.stage, 'seeded');
     assert.equal(answer?.comment.body, '**Bob** via Fruitback · member of Acme\nReopened: still wrong');
   });
@@ -134,7 +134,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
     assert.equal(answer?.comment.body, '**Bob** via Fruitback · membre de Acme\nVérifié : semble corrigé');
   });
 
-  it('writes no reply when the team has no state to reopen the issue in', async () => {
+  it('fails after the reply when the team has no state to reopen the issue in, and moves nothing', async () => {
     const stub = installLinearStub({ teamStates: [state('st_done', 'completed', 0)] });
     const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined });
 
@@ -147,7 +147,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       }) ?? Promise.resolve(),
     );
     assert.equal(
-      stub.calls.some((call) => call.operation === 'FruitbackCreateComment'),
+      stub.calls.some((call) => call.operation === 'FruitbackReopenIssue'),
       false,
     );
   });

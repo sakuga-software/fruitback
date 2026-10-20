@@ -120,7 +120,7 @@ export type SeedStore = {
   repliesFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
    * The verdict of a person on a note that the team marked done (FRU-294), as a marked reply under
-   * the note (`checkText`). `wrong` also reopens the note in this store first. The answer is the reply
+   * the note (`checkText`). `wrong` then reopens the note in this store. The answer is the reply
    * and the stage the note has now. `undefined`: this store holds no such note for this client.
    * Absent: this store takes no verdict. A store with `check` has `reply` too.
    */

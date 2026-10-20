@@ -3187,10 +3187,11 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`SeedStore.check` writes the verdict; `takesChecks` says where.** Linear, the database and the
   store of the dev loop take one. GitHub does not, as for a reply. A store with `check` has `reply`:
   a site that takes no reply (`withSettings`, `receivingStore`) takes no verdict.
-- **« wrong » moves the note first, then writes the reply** (Linear: `reopenStateOf`, the first
-  state of type `triage`, else `backlog`, else `unstarted`, first of the board). A reply that says
-  « reopened » is never left on an issue that did not move. The database does both in one
-  transaction.
+- **« wrong » writes the reply first, then moves the note** (Linear: `reopenStateOf`, the first
+  state of type `triage`, else `backlog`, else `unstarted`, first of the board). A move that fails
+  leaves a « wrong » reply on a note still done: it reads as not confirmed, and a second try writes
+  the reply again and moves it. The other order left a note moved with no reply, which a second try
+  refused as `409 not-done` (raised in review). The database does both in one transaction.
 - **The verdict lives in the replies of the note, never in a second model.** `checkText` writes the
   line of who wrote it, then the line of the verdict; `verdictOf` reads it back, in either language
   of a team; `checkedOf` takes the newest verdict, and a « wrong » after a « fixed » undoes it. So a

@@ -979,7 +979,7 @@ const VERDICTS: readonly CheckVerdict[] = ['fixed', 'wrong'];
  * `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` (FRU-294).
  *
  * « Looks fixed » writes a marked reply under the note, and the note stays done. « Still wrong »
- * reopens it in its store, then writes the marked reply. **The store stays the one source of the
+ * writes the marked reply, then reopens the note in its store. **The store stays the one source of the
  * stage and of the verdict**: nothing is kept here.
  *
  * - **Who.** A session of the extension, read again in the store as for every write (2026-10-14),
