@@ -1103,7 +1103,7 @@ describe('the language a mount speaks (FRU-37)', () => {
     const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
 
     try {
-      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Laisser un feedback');
+      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Laisser une note');
       assert.equal((page.document.querySelector('[data-fruitback-host]') as HTMLElement).lang, 'fr');
     } finally {
       widget.destroy();

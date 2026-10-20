@@ -59,7 +59,7 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   await refuseWrites(page, 503, 'store-unavailable');
   await mount(page, 'send-failure-503', 'en-US');
   const unavailable = await sendFailing(page, 'Kept through a 503');
-  expect(unavailable).toBe('did not go through — your text is kept, try again');
+  expect(unavailable).toBe('Did not go through — your text is kept, try again');
 
   await page.unrouteAll();
   await refuseWrites(page, 403, 'origin-not-allowed');

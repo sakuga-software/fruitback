@@ -21,7 +21,7 @@ test('a note goes from sending to sent, and the pin lands', async ({ page }) => 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // The product's own word for it, in the status the composer announces.
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/\bsent\b/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/\bSent\b/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   // And it closes itself once the confirmation has been read.
   await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
@@ -41,7 +41,7 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
   await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/did not go through/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Did not go through/);
   await expect(page.locator('[data-fruitback-composer]')).toBeVisible();
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   // Retrying is one click, not one more typing session.
@@ -324,6 +324,6 @@ test('a second capture while a note is on its way loses nothing, and the failure
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 
   release();
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/did not go through/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/Did not go through/);
   await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
 });

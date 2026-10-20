@@ -403,7 +403,7 @@ describe('a site of a workspace, on here (07, FRU-254)', () => {
 
     assert.equal(root.querySelector('.subtitle')?.textContent, 'Activé · Sakuga');
     assert.equal(root.querySelector('.page-notes h2')?.textContent, 'Sur cette page1 note');
-    assert.equal(root.querySelector('.action')?.textContent, 'Laisser un feedback');
+    assert.equal(root.querySelector('.action')?.textContent, 'Laisser une note');
   });
 });
 

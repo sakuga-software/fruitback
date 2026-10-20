@@ -286,3 +286,14 @@ describe('the language of a person', () => {
     assert.equal(translate('fr', 'A sentence nobody translated'), 'A sentence nobody translated');
   });
 });
+
+// FRU-287: the widget's button is « Laisser une note », and a sentence of the console that names it
+// says the same. French says « note », never « feedback ».
+describe('the French of the console says « note »', () => {
+  it('holds no « feedback » in a French sentence', () => {
+    assert.deepEqual(
+      Object.values(FRENCH).filter((sentence) => /feedback/i.test(sentence)),
+      [],
+    );
+  });
+});

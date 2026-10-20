@@ -337,8 +337,8 @@ amber, where white cannot be read (FRU-233)`.
     not the name nor the workspace. Saying them is a new field of a public response of the worker.
     A signed reader sees no line; a visitor keeps « Add my name (optional) ».
   - **Kept, though the mock-up does not draw it**: « Keep for later », a ghost like « Cancel »; the
-    line of the destination, under the note; the sentences of a failed send, « sending… » and
-    « sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
+    line of the destination, under the note; the sentences of a failed send, « Sending… » and
+    « Sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
     at 16 px; the dark scheme.
 - **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
   `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
@@ -669,6 +669,9 @@ with no context and no instruction added.
   them. A host catalog is parsed field by field: a bad entry costs that entry, and a locale tag `Intl`
   refuses costs the translation, never the mount: `Intl` throws on it, and `validLocale` catches that
   and drops the catalog.
+- **French says « note », never « feedback »**, as the console and the list do (FRU-287). A status of
+  a send (« Sent », « Envoyée ») stands alone, so it starts with a capital. `messages.test.ts` holds
+  both.
 - **Plural rules and number formats follow the catalog that supplied the message.** Bylines are
   relative dates in the language of the words, with the absolute date in `title`.
 - **Layout follows the reading direction; geometry never does.** `dir` and `lang` go on the host

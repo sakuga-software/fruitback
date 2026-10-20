@@ -46,7 +46,7 @@ async function keep(page: Page, card: string, note: string): Promise<void> {
   await page.locator(`[data-testid="${card}"] .add`).click();
   await page.locator('[data-fruitback-note]').fill(note);
   await page.getByRole('button', { name: 'Keep for later' }).click();
-  await expect(page.locator('[data-fruitback-status]')).toHaveText('kept for later');
+  await expect(page.locator('[data-fruitback-status]')).toHaveText('Kept for later');
   await expect(page.locator('[data-fruitback-state]')).toBeHidden({ timeout: 5_000 });
 }
 

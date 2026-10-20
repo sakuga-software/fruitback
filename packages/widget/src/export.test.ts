@@ -236,7 +236,7 @@ describe('the words of the copied text', () => {
     );
     const output = text([{ issue, placement: 'approximate' }], french);
 
-    assert.match(output, /^# Feedback sur https:\/\/staging\.acme\.dev\/pricing$/m);
+    assert.match(output, /^# Notes sur https:\/\/staging\.acme\.dev\/pricing$/m);
     assert.match(output, /^## 1\. FB-12 — À faire$/m);
     assert.match(output, /^- Par : Camille · 2026-10-06$/m);
     assert.match(output, /^- Position : approximative/m);

@@ -545,7 +545,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   await learner.close();
 
   // The open tab gets the widget again, in French, with no reload.
-  await expect(page.getByRole('button', { name: 'Laisser un feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Laisser une note' })).toBeVisible();
 
   const popup = await openPopup(extension, page);
   await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
