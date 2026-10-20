@@ -182,11 +182,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No access while it is off': 'Aucun accès tant qu’il est désactivé',
   Sites: 'Sites',
   'Add rule': 'Ajouter la règle',
-  // FRU-291: the key that starts a note.
-  'Leave feedback shortcut: {shortcut}.': 'Raccourci pour laisser une note : {shortcut}.',
-  'Leave feedback shortcut: none set.': 'Raccourci pour laisser une note : aucun.',
-  'Change the shortcut': 'Changer le raccourci',
-  'Keyboard shortcut': 'Raccourci clavier',
   'Change it in Add-ons, Manage Extension Shortcuts.':
     'Changez-le dans Modules complémentaires, Gérer les raccourcis d’extensions.',
   'Add a rule': 'Ajouter une règle',
@@ -194,11 +189,37 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Imported 1 rule.': '1 règle importée.',
   'Imported {count} rules.': '{count} règles importées.',
   'Skipped, because they are not valid: {patterns}.': 'Ignorées, parce qu’elles ne sont pas valides : {patterns}.',
-  'Synchronise rules': 'Synchroniser les règles',
   'Keep my rules in the account of this browser': 'Garder mes règles dans le compte de ce navigateur',
   'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.':
     'Quand c’est activé, vos règles (motifs, modes, adresses de worker, identifiants de client, et les libellés et noms de workspace qu’elles portent) sont gardées par le compte de ce navigateur, et arrivent dans vos autres navigateurs où c’est activé aussi. Aucune session et aucun accès ne voyagent : sur un autre navigateur, donnez l’accès à chaque site. Désactiver arrête la copie, et ne retire rien du compte.',
   'Share rules': 'Partager les règles',
+  // FRU-302: « Workers and sessions » and « Preferences ».
+  'Workers and sessions': 'Workers et sessions',
+  'Pair in the page of the extension': 'Appairer dans la page de l’extension',
+  '1 site': '1 site',
+  '{count} sites': '{count} sites',
+  'You pair with a worker, not with a site: one session covers every site that reports to it. Only team mode needs one.':
+    'On s’appaire avec un worker, pas avec un site : une session couvre tous les sites qui lui rendent compte. Seul le mode équipe en a besoin.',
+  'No worker yet. A rule names one.': 'Aucun worker pour l’instant. Une règle en nomme un.',
+  'Not paired. Private-mode sites read without a session; a team site would stay asleep.':
+    'Pas appairé. Les sites en mode privé lisent sans session ; un site d’équipe resterait endormi.',
+  Pair: 'Appairer',
+  'Plain http on localhost. Pairing works here; anywhere else a session must not cross http.':
+    'http simple sur localhost. L’appairage marche ici ; ailleurs, une session ne doit pas passer par http.',
+  'Signed in as {name}': 'Connecté en tant que {name}',
+  'Signed in': 'Connecté',
+  Paired: 'Appairé',
+  'One account for the console and this extension': 'Un seul compte pour la console et cette extension',
+  'Verified by the worker · renews on its own': 'Vérifié par le worker · se renouvelle seul',
+  'Open notes in the sidebar': 'Ouvrir les notes dans le panneau',
+  'Instead of floating pins only, on every site you review.':
+    'Plutôt que les seules épingles, sur chaque site que vous relisez.',
+  'Name on my notes': 'Nom sur mes notes',
+  'Prefilled in private mode. Team mode signs with your session.':
+    'Prérempli en mode privé. Le mode équipe signe avec votre session.',
+  'Not set': 'Aucun',
+  'Leave feedback shortcut': 'Raccourci pour laisser une note',
+  "Set in your browser's extension shortcuts.": 'Se règle dans les raccourcis d’extensions du navigateur.',
   // FRU-290: the two cards of « Share rules ».
   'Hand a reviewer a rules file instead of five fields to copy. Browser access never travels with it: they grant it on first use.':
     'Donnez un fichier de règles plutôt que cinq champs à recopier. L’accès du navigateur ne voyage jamais avec lui : il se donne à la première utilisation.',

@@ -79,6 +79,18 @@ export async function openPanelOrPage(
   return (await inPage()) ? 'page' : 'nothing';
 }
 
+/** The storage key of the preference « Open notes in the sidebar » (FRU-302). */
+export const PANEL_ON_CLICK_KEY = 'openNotesInSidebar';
+
+/**
+ * What the click on the icon opens (FRU-302): the panel when the person asked for it and the tab is
+ * a site that is on; the popup everywhere else, which is where a site is turned on. Chrome keeps
+ * one behaviour for the whole browser, so the background sets it again when the tab changes.
+ */
+export async function setPanelOnClick(apis: PanelApis, wanted: boolean, siteOn: boolean): Promise<void> {
+  await apis.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: wanted && siteOn });
+}
+
 /**
  * The click on the toolbar icon keeps the popup. The panel opens from the popup, and later from the
  * preference « Open notes in the sidebar » (FRU-302). Chrome's default is the same; it is written

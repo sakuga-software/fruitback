@@ -1,6 +1,7 @@
 import {
   CHANNEL,
   type BridgeMessage,
+  NOTES_NAME_KEY,
   type RelayRequestMessage,
   parseBridgeMessage,
   parseRelayResponse,
@@ -64,6 +65,12 @@ export default defineContentScript({
     const apply = createApply({
       readSite: () => readSite(origin),
       readLanguage: () => storedLanguage(browser.storage.local),
+      // One key, read by name: never the whole area, which holds the refresh tokens (FRU-60).
+      readName: async () => {
+        const stored = (await browser.storage.local.get(NOTES_NAME_KEY))[NOTES_NAME_KEY];
+
+        return typeof stored === 'string' ? stored : undefined;
+      },
       readSignedOut: async (site) => {
         const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
 

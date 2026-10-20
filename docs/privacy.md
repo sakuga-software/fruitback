@@ -363,6 +363,10 @@ Since FRU-119 an account also holds the language its person reads, taken from th
 - **The side panel of the browser** (FRU-296), when the reviewer opens it from the popup, reads the
   address of the active tab of its window, the way the popup does: only for a site the extension
   has access to, or after the click on its icon. It keeps nothing, and sends nothing to a worker.
+- **« Name on my notes »** (FRU-302), when the reviewer types one in the page of the extension, is
+  kept in the extension's own storage and given to the widget the extension mounts on a site in
+  private mode, to fill the name of a note. That page can read it while the widget is mounted. It is
+  sent only with a note the reviewer sends, as a name typed in the note is.
 - The widget sets no cookie.
 
 ## How long a note is kept

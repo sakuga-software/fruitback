@@ -86,6 +86,12 @@ export type MountMessage = {
    * background relays only for a site its own storage says is in team mode.
    */
   relay?: true;
+  /**
+   * The « Name on my notes » of the preferences (FRU-302), for a widget the extension mounts in
+   * private mode: the composer starts with it. The page can read it, like the rest of this message;
+   * it is the name the reviewer chose to sign their notes with on these sites.
+   */
+  name?: string;
 };
 
 /**
@@ -428,7 +434,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   }
   if (data.kind !== 'mount') return undefined;
 
-  const { endpoint, clientId, label, relay, locale } = data;
+  const { endpoint, clientId, label, relay, locale, name } = data;
   if (!isWorkerEndpoint(endpoint) || !isNonEmptyString(clientId)) return undefined;
 
   return {
@@ -439,8 +445,15 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     ...(isNonEmptyString(label) ? { label } : {}),
     ...(isNonEmptyString(locale) && locale.length <= 35 ? { locale } : {}),
     ...(relay === true ? { relay: true } : {}),
+    ...(isNonEmptyString(name) && name.length <= NAME_MAX ? { name } : {}),
   };
 }
+
+/** The longest name the widget keeps for a reporter (`REPORTER_NAME_MAX` of its config). */
+export const NAME_MAX = 120;
+
+/** The storage key of « Name on my notes » (FRU-302), in the local area of the extension. */
+export const NOTES_NAME_KEY = 'notesName';
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;

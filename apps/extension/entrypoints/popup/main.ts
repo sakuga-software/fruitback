@@ -781,6 +781,14 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
 
   const attempt = pairing(link.endpoint, () => link.code, submit, problem, {});
   submit.addEventListener('click', attempt);
+  // FRU-302: the same pairing, on the card of the worker in the page of the extension, code filled.
+  const page = element('button', t('Pair in the page of the extension'), 'secondary');
+  page.addEventListener('click', () => {
+    const query = new URLSearchParams({ worker: link.endpoint, code: link.code });
+    void browser.tabs.create({ url: `${browser.runtime.getURL('/options.html')}#workers?${query.toString()}` });
+    window.close();
+  });
+  wrapper.append(page);
 
   return [wrapper];
 }

@@ -54,6 +54,46 @@ describe('createApply', () => {
     ]);
   });
 
+  // FRU-302: « Name on my notes », for a widget we mount in private mode only.
+  it('sends the name of the preferences with a private mount, and none in team mode', async () => {
+    const posts: BridgeMessage[] = [];
+    const post = (m: BridgeMessage): void => void posts.push(m);
+    await createApply({ readSite: async () => SITE, readName: async () => '  Camille  ', post })();
+    await createApply({ readSite: async () => SITE, readName: async () => '   ', post })();
+    await createApply({ readSite: async () => SITE, readName: async () => 'x'.repeat(121), post })();
+    await createApply({
+      readSite: async () => ({
+        mode: 'team',
+        endpoint: 'https://worker.test',
+        enabled: true,
+        mount: { clientId: 'acme' },
+      }),
+      readName: async () => 'Camille',
+      post,
+    })();
+
+    assert.deepEqual(
+      posts.map((message) => (message.kind === 'mount' ? (message.name ?? null) : message.kind)),
+      ['Camille', null, null, null],
+    );
+  });
+
+  // A change of the name must not build the widget again over a note being written.
+  it('does not post the mount again when only the name changed', async () => {
+    const posts: BridgeMessage[] = [];
+    let name = 'Camille';
+    const apply = createApply({
+      readSite: async () => SITE,
+      readName: async () => name,
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    name = 'Camille Durand';
+    await apply();
+
+    assert.equal(posts.length, 1);
+  });
+
   it('sends no language to a site that embeds its own widget', async () => {
     const posts: BridgeMessage[] = [];
     await createApply({

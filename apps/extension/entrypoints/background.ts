@@ -27,7 +27,7 @@ import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browse
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
-import { type PanelApis, keepPopupOnActionClick } from '../src/side-panel.ts';
+import { PANEL_ON_CLICK_KEY, type PanelApis, keepPopupOnActionClick, setPanelOnClick } from '../src/side-panel.ts';
 import { WELCOME_PATH, opensWelcome } from '../src/welcome-install.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -319,6 +319,37 @@ export default defineBackground(() => {
     return true;
   });
 
+  // FRU-302: « Open notes in the sidebar ». The icon opens the panel on a site that is on, and the
+  // popup elsewhere: set again for the active tab when it changes, and when the preference does.
+  const panelOnClick = async (): Promise<void> => {
+    const wanted = (await browser.storage.local.get(PANEL_ON_CLICK_KEY))[PANEL_ON_CLICK_KEY] === true;
+    const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
+    let siteOn = false;
+    if (wanted && active?.url !== undefined) {
+      try {
+        const origin = new URL(active.url).origin;
+        siteOn = (await readSite(origin))?.enabled === true;
+      } catch {
+        siteOn = false;
+      }
+    }
+    await setPanelOnClick(browser as unknown as PanelApis, wanted, siteOn);
+  };
+  const followPanelOnClick = (): void =>
+    void panelOnClick().catch((error: unknown) =>
+      console.error('[fruitback] could not set what the icon opens', error),
+    );
+  browser.tabs.onActivated.addListener(followPanelOnClick);
+  browser.tabs.onUpdated.addListener((_id, change, tab) => {
+    if (tab.active && change.url !== undefined) followPanelOnClick();
+  });
+  browser.windows.onFocusChanged.addListener(followPanelOnClick);
+  // The local area only, by its own event: the listener of every area below stays the one that reads
+  // the sessions (`session-previews.test.ts`).
+  browser.storage.local.onChanged.addListener((changes) => {
+    if (changes[PANEL_ON_CLICK_KEY] !== undefined || changes.sites !== undefined) followPanelOnClick();
+  });
+
   browser.runtime.onInstalled.addListener((details) => {
     // A first install opens the page that says what comes next (FRU-318). An extension page needs
     // no permission to open, and an update opens nothing.
@@ -330,9 +361,9 @@ export default defineBackground(() => {
     void sync();
     // FRU-296: the click on the icon opens the popup; the panel opens from it. The browser keeps the
     // behaviour, so it is set at install and at each update.
-    void keepPopupOnActionClick(browser as unknown as PanelApis).catch((error: unknown) =>
-      console.error('[fruitback] could not keep the popup on the click of the icon', error),
-    );
+    void keepPopupOnActionClick(browser as unknown as PanelApis)
+      .then(() => panelOnClick())
+      .catch((error: unknown) => console.error('[fruitback] could not keep the popup on the click of the icon', error));
     // A rule switched off before FRU-115 kept its access. An update gives it back, once.
     void readAll()
       .then((sites) => returnAccess(accessOf(sites, Object.keys(sites))))

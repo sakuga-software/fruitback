@@ -37,7 +37,7 @@ function mount(
     note: string,
     reporter?: SeedReporter,
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>,
-  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave'> = {},
+  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose' | 'autosave' | 'suggestName'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
@@ -828,6 +828,24 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
   }
+
+  // FRU-302: the « Name on my notes » of the extension, for a reporter who kept none here.
+  it('fills the name the host suggests, leaves the box as it is, and keeps a remembered name first', async () => {
+    const { memory, writes } = memoryHolding();
+    const { page } = mount(async () => true, { memory, suggestName: () => 'Camille Durand' });
+    composer?.open(ANCHOR);
+
+    assert.equal(input(page, '[data-fruitback-name]').value, 'Camille Durand');
+    assert.equal(input(page, '[data-fruitback-remember]').checked, false, 'a suggestion ticked « remember me »');
+    await send(page);
+    assert.deepEqual(writes, [], 'the site kept a name it was not asked to');
+
+    composer?.close();
+    const kept = memoryHolding('Ana');
+    const second = mount(async () => true, { memory: kept.memory, suggestName: () => 'Camille Durand' });
+    composer?.open(ANCHOR);
+    assert.equal(input(second.page, '[data-fruitback-name]').value, 'Ana');
+  });
 
   it('writes nothing when the box is not ticked, name typed or not', async () => {
     const { memory, writes } = memoryHolding();

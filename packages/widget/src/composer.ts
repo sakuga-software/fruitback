@@ -90,6 +90,11 @@ export type ComposerOptions = {
    */
   memory?: NameMemory;
   /**
+   * A name the host suggests for a reporter who kept none (FRU-302). It fills the name field, and the
+   * box « remember me » stays as the reporter left it: the site keeps nothing it was not asked to.
+   */
+  suggestName?: () => string | undefined;
+  /**
    * The worker names the reporter from a signed identity, so the composer asks for no name.
    * A typed name would be replaced by the identity, and the reporter would not know.
    *
@@ -505,7 +510,15 @@ export function createComposer(options: ComposerOptions): Composer {
   /** A reporter who asked to be remembered sees the name the next note is signed with. */
   function showRememberedName(): void {
     const remembered = asksForName ? memory?.get() : undefined;
-    if (remembered === undefined) return;
+    if (remembered === undefined) {
+      const suggested = asksForName ? options.suggestName?.() : undefined;
+      if (suggested === undefined || name.value.trim() !== '') return;
+      name.value = suggested;
+      who.hidden = false;
+      identify.setAttribute('aria-expanded', 'true');
+
+      return;
+    }
 
     name.value = remembered;
     remember.checked = true;

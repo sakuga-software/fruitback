@@ -1,4 +1,4 @@
-import { CHANNEL, type BridgeMessage } from './protocol.ts';
+import { CHANNEL, type BridgeMessage, NAME_MAX } from './protocol.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -17,6 +17,8 @@ export type BridgeSeams = {
    * build's Fruitback, with no session for it. Asked for a widget we mount through the relay only.
    */
   readSignedOut?: (site: SiteConfig) => Promise<boolean>;
+  /** « Name on my notes » (FRU-302): given to a widget we mount in private mode. */
+  readName?: () => Promise<string | undefined>;
   post: (message: BridgeMessage) => void;
 };
 
@@ -24,6 +26,7 @@ export function createApply({
   readSite,
   readLanguage,
   readSignedOut,
+  readName,
   post,
 }: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
@@ -48,10 +51,14 @@ export function createApply({
 
   return async (force = false): Promise<void> => {
     const mine = ++generation;
-    const [site, locale] = await Promise.all([readSite(), readLanguage?.().catch(() => undefined)]);
+    const [site, locale, name] = await Promise.all([
+      readSite(),
+      readLanguage?.().catch(() => undefined),
+      readName?.().catch(() => undefined),
+    ]);
     // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
     // widget offers without building it again over a note being written.
-    const message = decide(site, locale);
+    const message = decide(site, locale, name);
     const relayed =
       message.kind === 'mount' && message.relay === true && site !== undefined && readSignedOut !== undefined;
     // A read of storage that fails keeps what was said last, and says why in the console: forcing
@@ -67,7 +74,9 @@ export function createApply({
 
     // The language is part of the signature below. A change of language is a change of config: the
     // widget is built again, which closes an open composer, like a change of worker.
-    const signature = JSON.stringify(message);
+    // FRU-302: the name is not part of it. It only fills the next composer, and a change of it must
+    // not build the widget again over a note being written; the next mount takes it.
+    const signature = JSON.stringify({ ...message, name: undefined });
     // `force` is for the handshake: the page world says it is listening, and it may have missed the
     // message that carries this same decision.
     const mounting = force || signature !== posted;
@@ -93,7 +102,7 @@ export function createApply({
  * Both go through the generation and unchanged-decision guards above, so team mode costs neither of
  * them a second implementation.
  */
-function decide(site: SiteConfig | undefined, locale?: string): BridgeMessage {
+function decide(site: SiteConfig | undefined, locale?: string, name?: string): BridgeMessage {
   if (site === undefined || !site.enabled) return { channel: CHANNEL, kind: 'unmount' };
   if (site.mode === 'team') {
     if (site.mount === undefined) return { channel: CHANNEL, kind: 'announce' };
@@ -116,5 +125,7 @@ function decide(site: SiteConfig | undefined, locale?: string): BridgeMessage {
     clientId: site.clientId,
     ...(site.label !== undefined ? { label: site.label } : {}),
     ...(locale !== undefined ? { locale } : {}),
+    // Private mode only: in team mode the session of the reviewer signs the note.
+    ...(name !== undefined && name.trim() !== '' && name.length <= NAME_MAX ? { name: name.trim() } : {}),
   };
 }
