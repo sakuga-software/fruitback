@@ -146,16 +146,16 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await signedIn(extension, page, 'req_add_1');
 
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 360, height: 500 });
+  await popup.setViewportSize({ width: 380, height: 500 });
   await expect(popup.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
   await expect(popup.getByText('Not in a workspace yet')).toBeVisible();
   // Only where the account may add a site: not Lumen, where it is a guest.
   const list = popup.getByRole('combobox', { name: 'Workspace' });
   await expect(list.locator('option')).toHaveText(['Sakuga', 'Northwind']);
   await expect(popup.getByText(/preview build/i)).toHaveCount(0);
-  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 77, width: 328 }, 'title');
-  expectNear(await boxOf(list), { x: 16, y: 242, width: 328, height: 40 }, 'list');
-  expectNear(await boxOf(popup.getByRole('button', { name: /^Add to/ })), { x: 16, width: 328, height: 46 }, 'add');
+  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 73, width: 348 }, 'title');
+  expectNear(await boxOf(list), { x: 16, y: 219, width: 348, height: 40 }, 'list');
+  expectNear(await boxOf(popup.getByRole('button', { name: /^Add to/ })), { x: 16, width: 348, height: 46 }, 'add');
   await clean(popup, 'the popup on a site of no workspace');
 
   await list.selectOption('ws_2');
@@ -165,17 +165,17 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
   await expect(popup.getByText('On · Northwind')).toBeVisible();
   // Screen 07 of an account, against the mock-up: the switch and the two actions where it has them.
-  await popup.setViewportSize({ width: 360, height: 540 });
-  // The parts of the kit (FRU-293): the switch of 44 × 26, the main button of 46 px, the second of 44.
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 300, y: 84, width: 44, height: 26 }, 'switch');
+  await popup.setViewportSize({ width: 380, height: 540 });
+  // The parts of the kit (FRU-293) in the shell of 380 × 580 (FRU-297); the screen itself is FRU-298.
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 320, y: 81, width: 44, height: 26 }, 'switch');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, y: 382, width: 328, height: 46 },
+    { x: 16, y: 420, width: 348, height: 46 },
     'leave',
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, y: 436, width: 328, height: 44 },
+    { x: 16, y: 474, width: 348, height: 44 },
     'every note',
   );
   expect(posted).toEqual([
@@ -280,7 +280,8 @@ test('a Fruitback that does not answer is said, not read as « ask an admin »',
   down = true;
 
   const popup = await openPopup(extension, page);
-  await expect(popup.getByRole('heading', { level: 1, name: 'Fruitback did not answer.' })).toBeVisible();
+  // Screen 4 (FRU-297): said in an alert, with « Try again ».
+  await expect(popup.locator('.kit-alert-title')).toHaveText(/^Fruitback can't reach /);
   await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toHaveCount(0);
   down = false;
   await popup.getByRole('button', { name: 'Try again' }).click();
@@ -297,11 +298,11 @@ test('a site of no workspace speaks French, with one workspace and its name in t
   await signedIn(extension, page, 'req_add_3');
 
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 360, height: 500 });
+  await popup.setViewportSize({ width: 380, height: 500 });
   await expect(popup.getByText('Dans aucun workspace pour l’instant')).toBeVisible();
   await expect(popup.getByRole('combobox')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Ajouter à Sakuga et activer' })).toBeVisible();
-  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site of no workspace, in French');
 });
 

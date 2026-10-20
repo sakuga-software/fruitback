@@ -76,16 +76,16 @@ test('a site of the workspace: one click, then the switch, the notes of the page
 
   // 06: the workspace, who reads the notes, and one click.
   let popup = await reopen(extension, page);
-  await popup.setViewportSize({ width: 360, height: 420 });
+  await popup.setViewportSize({ width: 380, height: 420 });
   await expect(popup.getByRole('heading', { level: 1, name: 'localhost:5177' })).toBeVisible();
   await expect(popup.getByText(/^In Playground · (members see|everyone sees) the notes$/)).toBeVisible();
   await expect(popup.getByText('Chrome asks for access to this site only.')).toBeVisible();
   await expect(popup.locator('.kit-avatar-dot', { hasText: /\S/ })).toHaveCount(0);
-  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 77, width: 328 }, 'title');
+  expectNear(await boxOf(popup.getByRole('heading', { level: 1 })), { x: 16, y: 73, width: 348 }, 'title');
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Turn on here' })),
     // Without the counts of FRU-237 the block stays at the foot: the mock-up has a foot of the account.
-    { x: 16, width: 328, height: 46 },
+    { x: 16, width: 348, height: 46 },
     'turn on',
   );
   await clean(popup, 'the popup on a site of the workspace');
@@ -104,7 +104,7 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   popup = await reopen(extension, page, popup);
-  await popup.setViewportSize({ width: 360, height: 540 });
+  await popup.setViewportSize({ width: 380, height: 540 });
   const section = popup.getByRole('region', { name: /^On this page/ });
   await expect(section).toContainText('1 note');
   const rows = section.getByRole('listitem');
@@ -126,18 +126,18 @@ test('a site of the workspace: one click, then the switch, the notes of the page
     ),
   );
   // The switch of the kit (FRU-293): 44 × 26.
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 300, y: 84, width: 44, height: 26 }, 'switch');
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 320, y: 81, width: 44, height: 26 }, 'switch');
   // A session of a pairing keeps its row under the actions, so their size is measured here, and
   // their place on the screen of an account (`popup-new-site.spec.ts`).
   await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, width: 328, height: 46 },
+    { x: 16, width: 348, height: 46 },
     'leave',
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, width: 328, height: 44 },
+    { x: 16, width: 348, height: 44 },
     'every note',
   );
   // The keyboard: the gear, the switch, then the two actions.
@@ -247,12 +247,12 @@ test('the popup on a site of the workspace speaks French', async ({ extension })
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-workspace-fr');
   const popup = await openPopup(extension, page);
-  await popup.setViewportSize({ width: 360, height: 540 });
+  await popup.setViewportSize({ width: 380, height: 540 });
 
   await expect(popup.getByText(/^Dans Playground · /)).toBeVisible();
   await expect(popup.getByText('Chrome demande l’accès à ce site seulement.')).toBeVisible();
   await popup.getByRole('button', { name: 'Activer ici' }).click();
   await expect(popup.getByRole('switch', { name: 'Fruitback sur localhost:5177' })).toBeChecked();
-  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on, in French');
 });

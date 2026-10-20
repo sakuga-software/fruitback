@@ -292,10 +292,9 @@ test('a sign-in refused in the console says so once, then the popup asks again',
   await expect(popup.getByText(WORD, { exact: true })).toBeVisible();
 
   claim.answer = 'refused';
-  await expect(popup.getByRole('heading', { level: 1, name: 'The sign-in did not finish.' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(popup.getByRole('alert')).toHaveText('It was refused in the console.');
+  // Screen 1, with what stopped the sign-in in an alert above the ways in (FRU-297).
+  await expect(popup.locator('.kit-alert-title')).toHaveText('The sign-in did not finish.', { timeout: 15_000 });
+  await expect(popup.locator('.kit-alert-body')).toHaveText('It was refused in the console.');
   await clean(popup, 'the popup after a refusal');
   expect(await stored(extension, 'session')).not.toContain(CLAIM);
   // One popup at a time: `openPopup` finds the popup by its address.
@@ -327,7 +326,7 @@ test('a sign-in nobody approved in time, and « Start again »', async ({ extens
   expect(bodies.filter((body) => (body as { browser?: string }).browser !== undefined)).toHaveLength(2);
 
   claim.answer = 'expired';
-  await expect(popup.getByRole('alert')).toHaveText('The tab was not approved in time.', { timeout: 15_000 });
+  await expect(popup.locator('.kit-alert-body')).toHaveText('The tab was not approved in time.', { timeout: 15_000 });
   await expect(popup.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
 });
 
@@ -340,7 +339,7 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   const popup = await openPopup(extension, page);
   const pages = extension.context.pages().length;
   await popup.getByRole('button', { name: 'Sign in with email' }).click();
-  await expect(popup.getByRole('alert')).toHaveText('Fruitback named a console that is not its own.');
+  await expect(popup.locator('.kit-alert-body')).toHaveText('Fruitback named a console that is not its own.');
   expect(extension.context.pages()).toHaveLength(pages);
   expect(await stored(extension, 'session')).not.toContain(CLAIM);
   await popup.close();
@@ -350,9 +349,10 @@ test('a console of another site is not opened, and a Fruitback that does not ans
   await signInRoutes(extension.context, requestOf('down'), { start: (route) => route.abort('connectionrefused') });
   const down = await openPopup(extension, page);
   await down.getByRole('button', { name: 'Sign in with email' }).click();
-  await expect(down.getByRole('heading', { level: 1, name: 'Fruitback did not answer.' })).toBeVisible();
-  await expect(down.getByRole('alert')).toHaveText('Check the connection, then try again.');
-  await expect(down.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(down.locator('.kit-alert-title')).toHaveText('Fruitback did not answer.');
+  await expect(down.locator('.kit-alert-body')).toHaveText('Check the connection, then try again.');
+  // Screen 1: the ways in are what tries again.
+  await expect(down.getByRole('button', { name: 'Sign in with email' })).toBeVisible();
   await clean(down, 'the popup when Fruitback does not answer');
 });
 
@@ -379,7 +379,9 @@ test('a session of the account that ended asks to sign in again; one Fruitback c
   await dropGrant();
   await extension.context.route(`${CLOUD}/session/refresh`, (route) => route.abort('connectionrefused'));
   const unreachable = await openPopup(extension, page);
-  await expect(unreachable.getByRole('heading', { level: 1, name: 'Fruitback did not answer.' })).toBeVisible();
+  // Screen 4 (FRU-297): the account is kept, and its Fruitback did not answer.
+  await expect(unreachable.locator('.kit-alert-title')).toHaveText(`Fruitback can't reach ${new URL(CLOUD).host}`);
+  await expect(unreachable.getByRole('button', { name: 'Try again' })).toBeVisible();
   // The session is kept: an outage is not a sign-out.
   expect(await stored(extension, 'local')).toContain('e2e-refresh-1');
   await unreachable.close();

@@ -43,13 +43,16 @@ function measure(popup: Page): Promise<Measure> {
 
     return {
       buttons: visible.map((button) => {
-        const range = document.createRange();
-        range.selectNodeContents(button);
+        // The lines of its words only: the dot of the button of the account is a box, not a line.
+        const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+        const tops = new Set<number>();
+        for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+          const range = document.createRange();
+          range.selectNodeContents(text);
+          for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+        }
 
-        return {
-          name: button.textContent ?? '',
-          lines: new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size,
-        };
+        return { name: button.getAttribute('aria-label') ?? button.textContent ?? '', lines: tops.size };
       }),
       closest,
       // The body is at least 280 px wide plus its padding, so a tab of 280 px always scrolls. What
@@ -68,7 +71,7 @@ async function expectLaidOut(popup: Page, state: string, buttons: number): Promi
     expect.soft(measured.buttons.length, `${where}: buttons`).toBe(buttons);
     expect
       .soft(
-        measured.buttons.filter((button) => button.lines !== 1),
+        measured.buttons.filter((button) => button.lines > 1),
         `${where}: buttons on two lines`,
       )
       .toEqual([]);
@@ -209,70 +212,74 @@ const PROBLEM_BOXES = {
  * `127.0.0.1` is a site whose access is gone. « Allow access again » asks the browser, and automation
  * cannot answer that prompt: the spec turns the site off instead, which keeps the rule.
  */
-for (const language of ['en', 'fr'] as const) {
-  test(`screen 4: a site whose access was removed, at 380 px, in both schemes, in ${language}`, async ({
-    extension,
-  }) => {
-    if (language === 'fr') {
-      await extension.context.addInitScript(() => {
-        Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
-      });
-    }
-    const origin = WORKER_ORIGIN.replace('localhost', '127.0.0.1');
-    await extension.worker.evaluate(
-      async ({ pattern, endpoint }) => {
-        await chrome.storage.local.set({
-          sites: { [pattern]: { endpoint, enabled: true, mode: 'private', clientId: 'playground' } },
+test.describe('screen 4 (FRU-297)', () => {
+  // The click on the toolbar gives the popup the address of the tab (`activeTab`): `tabs` stands for it.
+  test.use({ extraPermissions: ['tabs'] });
+  for (const language of ['en', 'fr'] as const) {
+    test(`screen 4: a site whose access was removed, at 380 px, in both schemes, in ${language}`, async ({
+      extension,
+    }) => {
+      if (language === 'fr') {
+        await extension.context.addInitScript(() => {
+          Object.defineProperty(navigator, 'language', { get: () => 'fr-FR' });
         });
-      },
-      { pattern: origin, endpoint: WORKER_ORIGIN },
-    );
-    const site = await extension.context.newPage();
-    await site.goto(`${origin}/health`);
-    const popup = await openPopup(extension, site);
-    await popup.setViewportSize({ width: 380, height: 580 });
+      }
+      const origin = WORKER_ORIGIN.replace('localhost', '127.0.0.1');
+      await extension.worker.evaluate(
+        async ({ pattern, endpoint }) => {
+          await chrome.storage.local.set({
+            sites: { [pattern]: { endpoint, enabled: true, mode: 'private', clientId: 'playground' } },
+          });
+        },
+        { pattern: origin, endpoint: WORKER_ORIGIN },
+      );
+      const site = await extension.context.newPage();
+      await site.goto(`${origin}/health`);
+      const popup = await openPopup(extension, site);
+      await popup.setViewportSize({ width: 380, height: 580 });
 
-    const allow = popup.getByRole('button', { name: /^(Allow access again|Autoriser à nouveau)$/ });
-    const off = popup.getByRole('button', { name: /^(Turn off for this site|Désactiver pour ce site)$/ });
-    await expect(allow).toBeVisible();
-    await expect(popup.getByRole('alert')).toContainText(
-      language === 'en' ? "Fruitback can't open this page" : 'Fruitback ne peut pas ouvrir cette page',
-    );
-    await expect(popup.locator('.kit-site-state')).toHaveText(language === 'en' ? 'Paused' : 'En pause');
-    await expect(popup.locator('.kit-site-host')).toHaveText('127.0.0.1:8788');
-    await expectLaidOut(popup, 'a problem', 3);
-    await expectNothingCut(popup, 'a problem', language);
-    // Where the font is the mock-up's: the CI draws Linux's, a pixel or two off (see popup-sign-in).
-    if (language === 'en' && process.platform === 'darwin') {
-      for (const [name, locator] of [
-        ['tile', popup.locator('.kit-tile')],
-        ['alert', popup.getByRole('alert')],
-        ['allow', allow],
-        ['off', off],
-      ] as const) {
-        const box = await locator.boundingBox();
-        for (const [side, value] of Object.entries(PROBLEM_BOXES[name])) {
-          expect
-            .soft(Math.abs((box?.[side as 'x'] ?? Number.NaN) - value), `${name}: ${side} is ${box?.[side as 'x']}`)
-            .toBeLessThanOrEqual(2);
+      const allow = popup.getByRole('button', { name: /^(Allow access again|Autoriser à nouveau)$/ });
+      const off = popup.getByRole('button', { name: /^(Turn off for this site|Désactiver pour ce site)$/ });
+      await expect(allow).toBeVisible();
+      await expect(popup.getByRole('alert')).toContainText(
+        language === 'en' ? "Fruitback can't open this page" : 'Fruitback ne peut pas ouvrir cette page',
+      );
+      await expect(popup.locator('.kit-site-state')).toHaveText(language === 'en' ? 'Paused' : 'En pause');
+      await expect(popup.locator('.kit-site-host')).toHaveText('127.0.0.1:8788');
+      await expectLaidOut(popup, 'a problem', 3);
+      await expectNothingCut(popup, 'a problem', language);
+      // Where the font is the mock-up's: the CI draws Linux's, a pixel or two off (see popup-sign-in).
+      if (language === 'en' && process.platform === 'darwin') {
+        for (const [name, locator] of [
+          ['tile', popup.locator('.kit-tile')],
+          ['alert', popup.getByRole('alert')],
+          ['allow', allow],
+          ['off', off],
+        ] as const) {
+          const box = await locator.boundingBox();
+          for (const [side, value] of Object.entries(PROBLEM_BOXES[name])) {
+            expect
+              .soft(Math.abs((box?.[side as 'x'] ?? Number.NaN) - value), `${name}: ${side} is ${box?.[side as 'x']}`)
+              .toBeLessThanOrEqual(2);
+          }
         }
       }
-    }
 
-    // « Turn off for this site » keeps the rule, off, and the popup draws the rule again.
-    await off.click();
-    await expect(allow).toHaveCount(0);
-    expect(
-      await extension.worker.evaluate(async (pattern) => {
-        const { sites } = (await chrome.storage.local.get('sites')) as {
-          sites: Record<string, { enabled: boolean }>;
-        };
+      // « Turn off for this site » keeps the rule, off, and the popup draws the rule again.
+      await off.click();
+      await expect(allow).toHaveCount(0);
+      expect(
+        await extension.worker.evaluate(async (pattern) => {
+          const { sites } = (await chrome.storage.local.get('sites')) as {
+            sites: Record<string, { enabled: boolean }>;
+          };
 
-        return sites[pattern]?.enabled;
-      }, origin),
-    ).toBe(false);
-  });
-}
+          return sites[pattern]?.enabled;
+        }, origin),
+      ).toBe(false);
+    });
+  }
+});
 
 /** The accent of the extension in each scheme (FRU-292). */
 const ACCENT = { light: 'rgb(194, 65, 12)', dark: 'rgb(251, 146, 60)' } as const;
