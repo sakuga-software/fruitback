@@ -673,7 +673,8 @@ which replaced the fields of before for a person signed in on a site of no rule.
 - **Each of those asks the background, which opens the popup** over that tab (`action.openPopup`):
   the popup is where a sign-in starts and where its word is compared, so nothing opens the console
   in its place. The ask is taken from a content script of this extension only
-  (`acceptedSignIn`), and opens anything only for a tab whose site wants a session. A page can
+  (`acceptedSignIn`), and opens anything only for a tab whose site wants a session, once in 5 s per
+  tab (`createSignInGate`), and never over a popup already open (`runtime.getContexts`). A page can
   forge the ask and the session message: at worst it opens our popup over itself, or makes our
   widget say « Sign in » on its own page. Measured in Chromium: no popup context before the click,
   one after (`runtime.getContexts`). Firefox opens a popup from a gesture only; a message is not

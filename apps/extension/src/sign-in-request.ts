@@ -20,3 +20,23 @@ export function acceptedSignIn(message: unknown, sender: SignInSender, extension
 
   return (message as { type?: unknown }).type === SIGN_IN_TYPE ? sender.tab : undefined;
 }
+
+/** How soon a tab may open the popup again (review of #378): a page that forges the ask opens it once. */
+export const SIGN_IN_INTERVAL_MS = 5_000;
+
+/**
+ * Whether a tab may open the popup now: once per `SIGN_IN_INTERVAL_MS`, and the time is taken when
+ * it may. Kept in the service worker's memory: a worker that restarts forgets, which allows one more.
+ */
+export function createSignInGate(now: () => number = Date.now): (tabId: number) => boolean {
+  const last = new Map<number, number>();
+
+  return (tabId) => {
+    const at = now();
+    const before = last.get(tabId);
+    if (before !== undefined && at - before < SIGN_IN_INTERVAL_MS) return false;
+    last.set(tabId, at);
+
+    return true;
+  };
+}

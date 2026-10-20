@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SIGN_IN_REQUEST, acceptedSignIn } from './sign-in-request.ts';
+import { SIGN_IN_INTERVAL_MS, SIGN_IN_REQUEST, acceptedSignIn, createSignInGate } from './sign-in-request.ts';
 import { wantsSession } from './popup-state.ts';
 
 const ID = 'abcdefghijklmnop';
@@ -31,5 +31,20 @@ describe('a site that wants a session (FRU-315)', () => {
     assert.equal(wantsSession({ mode: 'team', endpoint: CLOUD, enabled: true }, CLOUD, {}), false);
     assert.equal(wantsSession({ mode: 'private', endpoint: CLOUD, clientId: 'a', enabled: true }, CLOUD, {}), false);
     assert.equal(wantsSession(TEAM, undefined, {}), false);
+  });
+});
+
+describe('how often a tab opens the popup (review of #378)', () => {
+  it('opens once, then not again in the same few seconds, and another tab is its own', () => {
+    let clock = 1_000;
+    const allowed = createSignInGate(() => clock);
+
+    assert.equal(allowed(3), true);
+    assert.equal(allowed(3), false);
+    assert.equal(allowed(4), true);
+    clock += SIGN_IN_INTERVAL_MS - 1;
+    assert.equal(allowed(3), false);
+    clock += 1;
+    assert.equal(allowed(3), true);
   });
 });

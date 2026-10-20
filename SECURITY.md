@@ -320,8 +320,8 @@ relayed write, no stored token appears in anything the page's JavaScript can rea
 **The page learns whether the reviewer's session for its site has ended** (FRU-315): a boolean,
 `{ kind: 'session', signedOut }`, so the widget offers the sign-in. It could already tell from the
 `401` the relay answers. The page can forge that message and the widget's ask for the sign-in: the
-first changes what our widget says on that page, the second opens our popup over that tab, and only
-when its site wants a session. Neither reaches a token, the relay or another tab.
+first changes what our widget says on that page, the second opens our popup over that tab, only
+when its site wants a session, at most once in 5 s for that tab, and never over a popup already open. Neither reaches a token, the relay or another tab.
 
 ### What a session protects, and what it does not
 

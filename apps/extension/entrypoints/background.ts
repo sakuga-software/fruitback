@@ -25,7 +25,7 @@ import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut } from '../src/shortcut.ts';
-import { acceptedSignIn } from '../src/sign-in-request.ts';
+import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -249,6 +249,7 @@ export default defineBackground(() => {
     await returnAccess(accessOf(before, patternsOf(mutation)));
   });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
+  const signInGate = createSignInGate();
   const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -256,7 +257,8 @@ export default defineBackground(() => {
     // when the site of the tab wants a session this browser does not hold.
     const asking = acceptedSignIn(message, sender, browser.runtime.id);
     if (asking !== undefined) {
-      void openSignIn(asking);
+      // Once in a while per tab: a page can forge the ask, and must not open the popup in a loop.
+      if (asking.id !== undefined && signInGate(asking.id)) void openSignIn(asking);
 
       return false;
     }
@@ -409,6 +411,13 @@ async function openSignIn(tab: { url?: string; windowId?: number }): Promise<voi
   const site = await readSite(origin);
   const held = await createBrowserSessions().list();
   if (site === undefined || !wantsSession(site, cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD), held)) return;
+
+  // A popup already open is where the person is: nothing opens over it.
+  const runtime = browser.runtime as typeof browser.runtime & {
+    getContexts?: (filter: { contextTypes: string[] }) => Promise<unknown[]>;
+  };
+  const open = await runtime.getContexts?.({ contextTypes: ['POPUP'] }).catch(() => []);
+  if (open !== undefined && open.length > 0) return;
 
   await browser.action
     .openPopup(tab.windowId === undefined ? undefined : { windowId: tab.windowId })
