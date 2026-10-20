@@ -219,6 +219,7 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
     setSuspended: true,
     actionsIn: true,
     setWorkspaceSuspended: true,
+    deleteWorkspace: true,
   });
 }
 

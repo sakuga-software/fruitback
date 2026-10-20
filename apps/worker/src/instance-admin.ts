@@ -47,6 +47,10 @@ import type { SignUp } from './sign-up.ts';
  * - **Suspension of a workspace** (FRU-282): `POST /console/admin/workspaces/<id>/suspension` writes a
  *   row of `workspace_suspensions`, and a restoration deletes it. `workspace-suspension.ts` says what
  *   a suspended workspace does.
+ * - **Deletion of a workspace** (FRU-284): `POST /console/admin/workspaces/<id>/deletion`, body
+ *   `{ name }`, deletes the workspace by the path of its owner, when `name` is its name. It is at once,
+ *   and nothing undoes it. Its action keeps the id and the name of the workspace in `detail`, so it
+ *   stays readable after the workspace goes.
  */
 
 /** Where the routes of the administrator of the instance are. */
@@ -73,8 +77,8 @@ export const ADMIN_ROUTES: readonly { read: AdminRead; pattern: RegExp; example:
   { read: 'actions', pattern: /^\/console\/admin\/actions$/, example: '/console/admin/actions' },
 ];
 
-/** The writes that an administrator does (FRU-280, FRU-281, FRU-282). */
-export const ADMIN_WRITES = ['instance-admin', 'suspension', 'workspace-suspension'] as const;
+/** The writes that an administrator does (FRU-280, FRU-281, FRU-282, FRU-284). */
+export const ADMIN_WRITES = ['instance-admin', 'suspension', 'workspace-suspension', 'workspace-deletion'] as const;
 export type AdminWrite = (typeof ADMIN_WRITES)[number];
 
 /**
@@ -97,6 +101,11 @@ export const ADMIN_WRITE_ROUTES: readonly { write: AdminWrite; pattern: RegExp; 
     pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/suspension$/,
     example: '/console/admin/workspaces/ws_00000000000000000000/suspension',
   },
+  {
+    write: 'workspace-deletion',
+    pattern: /^\/console\/admin\/workspaces\/([A-Za-z0-9_-]{1,80})\/deletion$/,
+    example: '/console/admin/workspaces/ws_00000000000000000000/deletion',
+  },
 ];
 
 /** The kinds of action that `admin_actions` keeps. */
@@ -107,6 +116,7 @@ export const ADMIN_ACTIONS = [
   'account-restored',
   'workspace-suspended',
   'workspace-restored',
+  'workspace-deleted',
 ] as const;
 export type AdminActionKind = (typeof ADMIN_ACTIONS)[number];
 
@@ -154,6 +164,28 @@ export type SuspensionChange =
 export type WorkspaceSuspensionChange =
   | { ok: true; changed: boolean; suspension?: WorkspaceSuspension }
   | { ok: false; refused: 'unknown-workspace' | 'not-admin' };
+
+/** What a deletion of a workspace took with it (FRU-284): the counts at the moment of the deletion. */
+export type WorkspaceGone = {
+  sites: number;
+  members: number;
+  invitations: number;
+  connectors: number;
+  keptNotes: number;
+};
+
+/**
+ * What a deletion of a workspace by an administrator gives (FRU-284):
+ * - `ok`: the workspace is deleted. `gone` counts what went with it. `revoke` holds the sealed keys of
+ *   its Linear connectors, read in the transaction, for the route to revoke after the commit: the
+ *   route never answers them;
+ * - `unknown-workspace`: no workspace has this id;
+ * - `not-admin`: the account that asked is no longer an administrator;
+ * - `name-mismatch`: the name in the body is not the name of the workspace, and nothing is deleted.
+ */
+export type WorkspaceDeletion =
+  | { ok: true; workspace: WorkspaceName; gone: WorkspaceGone; revoke: string[] }
+  | { ok: false; refused: 'unknown-workspace' | 'not-admin' | 'name-mismatch' };
 
 /** The longest reason of a suspension of a workspace, in characters. A longer one is refused, never cut. */
 export const SUSPENSION_REASON_LENGTH = 200;
@@ -260,8 +292,11 @@ export type AdminNote = {
 /** One read of an administrator in a workspace, as its owners read it. */
 export type TracedRead = { admin: { email: string; name?: string }; what: AdminRead; at: string };
 
-/** The kinds of action on a workspace itself (FRU-282). They have no member as their target. */
-export const WORKSPACE_ACTIONS = ['workspace-suspended', 'workspace-restored'] as const;
+/**
+ * The kinds of action on a workspace itself (FRU-282, FRU-284). They have no member as their target.
+ * No owner reads `workspace-deleted`: the workspace is gone, and its owners with it.
+ */
+export const WORKSPACE_ACTIONS = ['workspace-suspended', 'workspace-restored', 'workspace-deleted'] as const;
 export type WorkspaceActionKind = (typeof WORKSPACE_ACTIONS)[number];
 
 /** Whether an action is on a workspace itself, and not on one of its members. */
@@ -320,8 +355,8 @@ export type InstanceAdminReads = {
     admin: boolean,
     now: number,
   ): Promise<RoleChange>;
-  /** The actions of the administrators, the newest first. */
-  actions(): Promise<AdminAction[]>;
+  /** The actions of the administrators, the newest first: those of one kind, when `kind` is given (FRU-284). */
+  actions(kind?: AdminActionKind): Promise<AdminAction[]>;
   /** Whether the account is suspended (FRU-281). `false` for an id that no account has. */
   isSuspended(account: string): Promise<boolean>;
   /**
@@ -353,6 +388,18 @@ export type InstanceAdminReads = {
     reason: string | undefined,
     now: number,
   ): Promise<WorkspaceSuspensionChange>;
+  /**
+   * Deletes a workspace when `name` is its name (FRU-284), by `dropWorkspace` of
+   * `accounts-postgres.ts`, and writes the action in `admin_actions` with the id and the name of the
+   * workspace and what went, in `detail`. The checks, the action and the deletion are in one
+   * transaction, under the lock of `setInstanceAdmin`.
+   */
+  deleteWorkspace(
+    actor: Pick<Account, 'id' | 'email'>,
+    workspace: string,
+    name: string,
+    now: number,
+  ): Promise<WorkspaceDeletion>;
 };
 
 /** When this process started: the first load of this file, which `app.ts` loads at once. */
@@ -401,6 +448,15 @@ export type InstanceAdminContext = {
    * Absent: the route of the suspension answers `404`.
    */
   endSessionsOf?: (account: string, now: number) => Promise<void>;
+  /**
+   * What a deletion of a workspace does after its commit (FRU-284), as the deletion by its owner:
+   * revoke one sealed key of a Linear connector, and end the sessions of the extension of the
+   * workspace. Absent: the route of the deletion answers `404`.
+   */
+  afterDeletion?: {
+    revoke: (sealed: string) => Promise<void>;
+    endWorkspaceSessions: (workspace: string, now: number) => Promise<void>;
+  };
   facts?: InstanceFacts;
   now?: number;
 };
@@ -569,6 +625,50 @@ async function changeWorkspaceSuspension(
   );
 }
 
+/** What `refused` of a `WorkspaceDeletion` answers. A name that differs is the one refusal the console shows. */
+const DELETION_REFUSED: Record<
+  Extract<WorkspaceDeletion, { ok: false }>['refused'],
+  { status: number; error: string }
+> = {
+  'unknown-workspace': { status: 404, error: 'not-found' },
+  'not-admin': { status: 404, error: 'not-found' },
+  'name-mismatch': { status: 409, error: 'name-mismatch' },
+};
+
+/**
+ * `POST /console/admin/workspaces/<id>/deletion`, body `{ name }` (FRU-284). The name is the one of
+ * the workspace, as the administrator typed it: spaces at its ends are dropped, and nothing else.
+ *
+ * WARNING: the order is the rule. The tokens of Linear are revoked after the commit, never before: a
+ * refusal must leave the connectors of the workspace working. A token that Linear did not revoke is
+ * held by no row after the commit, as when its owner deletes the workspace and Linear does not answer.
+ */
+async function deleteWorkspace(
+  request: Request,
+  workspace: string,
+  admin: Account,
+  reads: InstanceAdminReads,
+  after: NonNullable<InstanceAdminContext['afterDeletion']>,
+  now: number,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const body: unknown = await request.json().catch(() => undefined);
+  const name = typeof body === 'object' && body !== null ? (body as { name?: unknown }).name : undefined;
+  if (typeof name !== 'string' || name.trim() === '') return json(400, { error: 'invalid-name' }, headers);
+
+  const deletion = await reads.deleteWorkspace(admin, workspace, name.trim(), now);
+  if (!deletion.ok) {
+    const { status, error } = DELETION_REFUSED[deletion.refused];
+
+    return json(status, { error }, headers);
+  }
+  for (const sealed of deletion.revoke) await after.revoke(sealed);
+  // Nobody is a member of it any more: the extensions that were paired for it stop.
+  await after.endWorkspaceSessions(workspace, now);
+
+  return json(200, { workspace: deletion.workspace, gone: deletion.gone }, headers);
+}
+
 /** `POST /console/admin/users/<id>/instance-admin`, body `{ admin: true | false }` (FRU-280). */
 async function changeRole(
   request: Request,
@@ -626,6 +726,10 @@ export async function handleInstanceAdmin(
         return changeSuspension(request, target, admin, reads, context.endSessionsOf, now, headers);
       case 'workspace-suspension':
         return changeWorkspaceSuspension(request, target, admin, reads, now, headers);
+      case 'workspace-deletion':
+        if (context.afterDeletion === undefined) return notFound();
+
+        return deleteWorkspace(request, target, admin, reads, context.afterDeletion, now, headers);
     }
   }
 
@@ -699,7 +803,11 @@ export async function handleInstanceAdmin(
       );
     }
     case 'actions': {
-      const actions = await reads.actions();
+      // `kind` (FRU-284): the page Instance lists the deleted workspaces alone, with no read of the others.
+      const kind = url.searchParams.get('kind') ?? undefined;
+      if (kind !== undefined && !(ADMIN_ACTIONS as readonly string[]).includes(kind))
+        return json(400, { error: 'invalid-kind' }, headers);
+      const actions = await reads.actions(kind as AdminActionKind | undefined);
       await traced(actions.flatMap((action) => (action.workspace === undefined ? [] : [action.workspace.id])));
 
       return json(200, { actions }, headers);

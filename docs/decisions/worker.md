@@ -2761,10 +2761,10 @@ its owners see it (D2). No OAuth key in any answer (D4).
 - **The guard is `instanceAdminOf` of `console-api.ts`**: the cookie of the console, then the role in
   the database, at each call. `handleInstanceAdmin` asks it before it reads `ADMIN_ROUTES`, for every
   path under `/console/admin`, known or not, and whatever the method. Every other caller gets `404`.
-- **Six reads, and three writes** (FRU-280, FRU-281, FRU-282): `instance`, `workspaces` (`q`, `show` of `all`,
+- **Six reads, and four writes** (FRU-280, FRU-281, FRU-282, FRU-284): `instance`, `workspaces` (`q`, `show` of `all`,
   `attention`, `empty`), `workspaces/<id>`, `users` (`q`, `show` of `all`, `admins`, `alone`),
   `notes` (FRU-272) and `actions` (FRU-280). The writes are the role of administrator, the
-  suspension of an account and the suspension of a workspace, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
+  suspension of an account, the suspension of a workspace and its deletion, below. A list answers 100 rows at most and its `total`; `notes` pages like the notes of a
   workspace. `/console/me` answers `instanceAdmin`.
 - **The trace is `admin_reads`**: one row for each workspace a read names, when the administrator is
   not a member of it, written in one statement before the answer leaves. A failed write fails the
@@ -2814,8 +2814,8 @@ its owners see it (D2). No OAuth key in any answer (D4).
 
 ### What it does not do
 
-- No write but the role (FRU-280), the suspension of an account (FRU-281) and the suspension of a
-  workspace (FRU-282): deleting is a later ticket. The suspension of an account writes `banned`, and
+- No write but the role (FRU-280), the suspension of an account (FRU-281), the suspension of a
+  workspace (FRU-282) and its deletion (FRU-284). The suspension of an account writes `banned`, and
   empties `banReason` and `banExpires`.
 - No note: the index, the excerpt and the text are FRU-272. No screen of the console.
 - `lastSentAt` of the mail is of this process: another replica has its own.
@@ -3047,8 +3047,8 @@ suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
   - **a member leaves** (`/organization/leave`): nobody is kept in a workspace they do not want;
   - **its owner deletes it** (`DELETE /console/workspaces/<id>`): see the reasons;
   - the refusal of an invitation names no workspace, so the guard does not see it;
-  - the writes of the administrator of the instance (FRU-283, FRU-284) are not built. They are under
-    `/console/admin`, which this guard does not cover.
+  - the writes of the administrator of the instance are under `/console/admin`, which this guard
+    does not cover. The deletion of FRU-284 deletes a suspended workspace too.
 - **The deliveries wait.** `dueDeliveries` leaves out a delivery whose connector is of a suspended
   workspace, so no attempt is made and no failure is counted. Its `next_at` stays, so the next pass of
   the timer after the restoration sends it, and `dropAbandonedDeliveries` keeps it, because it reads
@@ -3087,6 +3087,39 @@ suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
   is deleted, ends them as before.
 - **The reason is for the members.** A guest reads it too, in `/console/me`. `docs/privacy.md` says to
   write nothing in it that a member must not read.
+
+## An administrator deletes a workspace (FRU-284)
+
+### The rules, in short
+
+- **`POST /console/admin/workspaces/<id>/deletion`, body `{ name }`**, behind `instanceAdminOf`, in
+  `ADMIN_WRITE_ROUTES`. `200 { workspace: { id, name }, gone: { sites, members, invitations,
+connectors, keptNotes } }`. A `name` that is not text, or is blank, answers `400 invalid-name`. A
+  name that is not the one of the workspace answers `409 name-mismatch`: the comparison is exact,
+  case included, after the spaces at both ends are dropped. A workspace that does not exist, and a
+  caller who is no longer an administrator, answer `404 not-found`.
+- **At once, and for good.** No delay and no bin: the ticket says « immédiate et ne s'annule pas ».
+  The typed name is the confirmation.
+- **The path of the owner.** `dropWorkspace` of `accounts-postgres.ts` is the one deletion, which
+  `deleteWorkspace` of the account store calls too: the notes that the worker keeps go first, while
+  the sites still name them (FRU-194), then the foreign keys take the rest.
+- **One transaction** (`deleteWorkspace` of `instance-admin-postgres.ts`): the lock of the role,
+  the workspace `FOR UPDATE` (a write that names it waits, then finds nothing), the caller is still
+  an administrator, the name, the counts, the sealed keys of its Linear connectors, the action, the
+  deletion. test:`refuses the deletion: it waits for the removal, then reads that the account is no administrator`
+  fails without the lock.
+- **After the commit**, as the deletion by the owner: each OAuth token of Linear is revoked
+  (`revokeLinear`, best effort), and the sessions of the extension of the workspace end. The owner
+  revokes before the deletion, and that is safe there because nothing refuses it; here a name or a
+  role can refuse, so the revocation waits for the commit, and a refusal leaves the connectors working.
+- **The trace is `admin_actions`**: `workspace-deleted`, no target, and `workspace_id` empty, since
+  the cascade of the deletion would empty it. `detail` keeps `{ workspace: { id, name }, gone }`, and
+  `GET /console/admin/actions` answers that `workspace` for the row. No owner reads it: there is no
+  workspace left to read it in.
+- **`kind` of `GET /console/admin/actions`** takes one kind of `ADMIN_ACTIONS`, and `400 invalid-kind`
+  for another word. The page Instance asks `kind=workspace-deleted` at each visit: those rows name no
+  workspace that exists, so the visit leaves no trace with an owner, as Mathieu asked of that page on
+  2026-10-19.
 
 ## The notes of a site that goes (FRU-194)
 

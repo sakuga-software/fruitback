@@ -2,6 +2,7 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId } from './account-rows.ts';
+import { dropWorkspace } from './accounts-postgres.ts';
 import { CONNECTOR_TROUBLES } from './accounts.ts';
 import { organization, session, user } from './auth-schema.ts';
 import type {
@@ -20,6 +21,7 @@ import type {
   TracedAction,
   WorkspaceActionKind,
   TracedRead,
+  WorkspaceDeletion,
   WorkspaceSuspensionChange,
 } from './instance-admin.ts';
 import { ADMIN_ACTIONS, ADMIN_PAGE, ADMIN_READS, isWorkspaceAction } from './instance-admin.ts';
@@ -43,9 +45,10 @@ import { noteOf, rowOfIdentifier, seedIdOf } from './seed-rows.ts';
  * What the administrator of the instance reads, in the database of the worker (FRU-261). See
  * `instance-admin.ts`.
  *
- * WARNING: a statement here selects its columns by name. `connectors.sealed`, the digests of
- * `session` and `verification`, and the token columns of `account` are never selected: an answer of
- * the administrator holds none of them. Only `notes` selects `note_index.excerpt` and `seeds.seed`,
+ * WARNING: a statement here selects its columns by name. The digests of `session` and `verification`,
+ * and the token columns of `account` are never selected: an answer of the administrator holds none of
+ * them. `connectors.sealed` is selected once, by `deleteWorkspace`, for the Linear connectors of the
+ * workspace it deletes: the route revokes them after the commit, and answers none of them. Only `notes` selects `note_index.excerpt` and `seeds.seed`,
  * and it answers the text of a row of `seeds` only for the note that the row is (`keptTexts`).
  *
  * A `BIGINT` is read through the schema, as in every store (FRU-180): the raw statements here count,
@@ -104,6 +107,18 @@ const suspensionIn = (row: Row) =>
           ...(typeof row.reason === 'string' && row.reason !== '' ? { reason: row.reason } : {}),
         },
   );
+
+/**
+ * The workspace of an action whose workspace was deleted (FRU-284): `detail` keeps its id and its
+ * name, and `workspace_id` is empty since the deletion.
+ */
+const deletedIn = (detail: Record<string, unknown> | undefined): { workspace?: { id: string; name: string } } => {
+  const kept = detail?.workspace as { id?: unknown; name?: unknown } | undefined;
+
+  return typeof kept?.id === 'string' && typeof kept.name === 'string'
+    ? { workspace: { id: kept.id, name: kept.name } }
+    : {};
+};
 
 /** The reason that `detail` of an action holds, for its owners (FRU-282). */
 const reasonIn = (detail: string | null): { reason?: string } => {
@@ -799,6 +814,68 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       });
     },
 
+    async deleteWorkspace(actor, workspace, name, now) {
+      await migrated(database);
+
+      return database.transaction(async (db): Promise<WorkspaceDeletion> => {
+        const rowsIn = async (statement: SQL): Promise<Row[]> => rowsOf(await db.execute(statement));
+        // WARNING: the lock comes before every read, as in `setWorkspaceSuspended`: the check of the
+        // role below waits for a change of the role, so an administrator removed at this moment is refused.
+        await rowsIn(sql`SELECT pg_advisory_xact_lock(${ADMIN_ROLE_LOCK})`);
+        // `FOR UPDATE`: a write that names the workspace (a site, a member, a connector) waits for the
+        // deletion, and then finds no workspace. The counts below are then the ones that go.
+        const [found] = await db
+          .select({ id: organization.id, name: organization.name })
+          .from(organization)
+          .where(eq(organization.id, workspace))
+          .for('update');
+        if (found === undefined) return { ok: false, refused: 'unknown-workspace' };
+        const [asking] = await rowsIn(sql`SELECT 1 AS one FROM "user" WHERE id = ${actor.id} AND ${IS_ADMIN}`);
+        if (asking === undefined) return { ok: false, refused: 'not-admin' };
+        if (found.name !== name) return { ok: false, refused: 'name-mismatch' };
+
+        const [counted] = await rowsIn(
+          sql`SELECT (SELECT count(*)::int FROM sites WHERE workspace_id = ${workspace}) AS sites,
+                     (SELECT count(*)::int FROM member WHERE "organizationId" = ${workspace}) AS members,
+                     (SELECT count(*)::int FROM invitation WHERE "organizationId" = ${workspace} AND status = 'pending' AND "expiresAt" > now()) AS invitations,
+                     (SELECT count(*)::int FROM connectors WHERE workspace_id = ${workspace}) AS connectors,
+                     (SELECT count(*)::int FROM seeds
+                       WHERE client_id IN (SELECT id FROM sites WHERE workspace_id = ${workspace})) AS kept_notes`,
+        );
+        const gone = {
+          sites: number(counted?.sites),
+          members: number(counted?.members),
+          invitations: number(counted?.invitations),
+          connectors: number(counted?.connectors),
+          keptNotes: number(counted?.kept_notes),
+        };
+        const linear = await db
+          .select({ sealed: connectors.sealed })
+          .from(connectors)
+          .where(and(eq(connectors.workspace_id, workspace), eq(connectors.kind, 'linear')));
+
+        // The action names no workspace in `workspace_id`, which the deletion would empty: its
+        // `detail` keeps the id and the name, so the administrators still read which one went.
+        await db.insert(admin_actions).values({
+          id: newId('ada'),
+          at: now,
+          actor_account_id: actor.id,
+          actor_email: actor.email,
+          action: 'workspace-deleted',
+          workspace_id: null,
+          detail: JSON.stringify({ workspace: { id: found.id, name: found.name }, gone }),
+        });
+        await dropWorkspace(db, workspace);
+
+        return {
+          ok: true,
+          workspace: { id: found.id, name: found.name },
+          gone,
+          revoke: linear.map((row) => row.sealed),
+        };
+      });
+    },
+
     async actionsIn(workspace) {
       const actor = alias(user, 'actor');
       const target = alias(user, 'target');
@@ -844,7 +921,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
       });
     },
 
-    async actions() {
+    async actions(kind) {
       const actor = alias(user, 'actor');
       const target = alias(user, 'target');
       const rows = await run((db) =>
@@ -868,6 +945,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           .leftJoin(actor, eq(actor.id, admin_actions.actor_account_id))
           .leftJoin(target, eq(target.id, admin_actions.target_account_id))
           .leftJoin(organization, eq(organization.id, admin_actions.workspace_id))
+          .where(kind === undefined ? undefined : eq(admin_actions.action, kind))
           .orderBy(desc(admin_actions.at), asc(admin_actions.id))
           .limit(ACTIONS_SHOWN),
       );
@@ -896,7 +974,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                   },
                 }),
             ...(row.workspace_id === null || row.workspace_name === null
-              ? {}
+              ? deletedIn(row.action === 'workspace-deleted' ? detail : undefined)
               : { workspace: { id: row.workspace_id, name: row.workspace_name } }),
             ...(detail === undefined ? {} : { detail }),
           },

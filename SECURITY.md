@@ -1746,7 +1746,7 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   and only `notes` holds a note:
   test:`answers no secret, no token, no digest and no key on any route, and a note on the route of the notes only`.
   No route of the administrator writes anything but the trace, except the role, the suspension of
-  an account and the suspension of a workspace below.
+  an account, the suspension of a workspace and the deletion of a workspace below.
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
@@ -1851,6 +1851,35 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   An acceptance of an invitation tells the suspension to the person of the invitation only, without
   its reason. Another account that holds the id of the invitation gets the refusal of better-auth:
   test:`tells the suspension to the person of an invitation only, not to another account that holds its id`.
+
+- **Who deletes a workspace that is not theirs, and what goes** (FRU-284). An administrator only,
+  with `POST /console/admin/workspaces/<id>/deletion` and `{ name }`, behind the same guard: any
+  other caller gets `404`, with the right name too:
+  test:`answers 404 to every caller who is not the administrator of the instance, with the right name, and deletes nothing`.
+  **The deletion is at once, and nothing undoes it.** `name` must be the name of the workspace, case
+  included; only spaces at its ends are dropped. Another name gets `409 name-mismatch`, and nothing is
+  deleted, revoked or written:
+  test:`refuses a name that is not the name of the workspace, and deletes, revokes and writes nothing`.
+  The deletion takes the path of the deletion by its owner (`dropWorkspace`): its members, its
+  invitations, its sites, its connectors and their deliveries go, and **the notes that Fruitback kept
+  for its sites go too** (FRU-194). The accounts of its people stay, and so do its other workspaces.
+  The issues stay in the tracker of the client: the worker revokes the OAuth token of each Linear
+  connector **after the commit**, so a refusal leaves the connectors working, and calls the tracker for
+  nothing else. The sessions of the extension of the workspace end:
+  test:`deletes the workspace with the notes Fruitback keeps, and leaves its people, the other workspaces and the tracker`,
+  test:`ends the sessions of the extension of the workspace, and no other`.
+  The check of the role, the check of the name, the action and the deletion are in one transaction,
+  under the lock of the role, and the row of the workspace is held `FOR UPDATE`, so an administrator
+  whose role is being removed is refused:
+  test:`refuses the deletion: it waits for the removal, then reads that the account is no administrator`.
+  **The trace outlives the workspace**: one row in `admin_actions` (`workspace-deleted`) with the
+  address of the administrator, the moment, and in `detail` the id and the name of the workspace and
+  the counts of what went. Its `workspace_id` is empty, as the deletion would empty it. The owners
+  have no workspace left to read it in, so the administrators read it on the page Instance:
+  test:`writes one action that outlives the workspace, with its name and what went, that the administrators read`.
+  That page asks `GET /console/admin/actions?kind=workspace-deleted`, which names no workspace that
+  exists, so its read leaves no trace with an owner:
+  test:`lists the deleted workspaces alone with kind, and that read leaves no trace with an owner`.
 
 ### Personal data
 

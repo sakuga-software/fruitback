@@ -841,3 +841,41 @@ export function setSuspended(
 ): Promise<Answer<{ user: { id: string; suspended: boolean }; changed: boolean }>> {
   return call('POST', `/console/admin/users/${encodeURIComponent(id)}/suspension`, { suspended });
 }
+
+/** What went with a workspace that an administrator deleted (FRU-284), counted at the deletion. */
+export type WorkspaceGone = {
+  sites: number;
+  members: number;
+  invitations: number;
+  connectors: number;
+  keptNotes: number;
+};
+
+/**
+ * Deletes a workspace of the instance (FRU-284), at once and for good. `name` is the name of the
+ * workspace as the administrator typed it: the worker refuses another one with `409 name-mismatch`
+ * and deletes nothing. The issues in the tracker of the workspace stay there.
+ */
+export function deleteWorkspaceAsAdmin(
+  id: string,
+  name: string,
+): Promise<Answer<{ workspace: { id: string; name: string }; gone: WorkspaceGone }>> {
+  return call('POST', `/console/admin/workspaces/${encodeURIComponent(id)}/deletion`, { name });
+}
+
+/** A workspace that an administrator deleted (FRU-284), as `admin_actions` keeps it. */
+export type DeletedWorkspace = {
+  action: 'workspace-deleted';
+  at: string;
+  actor: { id?: string; email: string; name?: string };
+  workspace?: { id: string; name: string };
+  detail?: { gone?: Partial<WorkspaceGone> };
+};
+
+/**
+ * The workspaces that the administrators deleted, the newest first, 200 at most. They exist no
+ * more, so this read leaves no trace with any owner.
+ */
+export function deletedWorkspaces(): Promise<Answer<{ actions: DeletedWorkspace[] }>> {
+  return call('GET', '/console/admin/actions?kind=workspace-deleted');
+}

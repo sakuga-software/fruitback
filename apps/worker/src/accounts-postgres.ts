@@ -175,6 +175,22 @@ async function dropKeptNotes(db: Db, workspace: string, ids: readonly string[]):
     );
 }
 
+/**
+ * Deletes a workspace, in the transaction of `db`: the one path of a deletion, for its owner and for
+ * an administrator of the instance (FRU-284). The foreign keys take its members, its invitations, its
+ * sites and their destinations, its connectors and their deliveries with it. The notes that the
+ * worker keeps go first, while the sites still name them.
+ */
+export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
+  const ids = await db.select({ id: sites.id }).from(sites).where(eq(sites.workspace_id, workspace));
+  await dropKeptNotes(
+    db,
+    workspace,
+    ids.map((row) => row.id),
+  );
+  await db.delete(organization).where(eq(organization.id, workspace));
+}
+
 export function createPostgresAccountStore(database: Database): AccountStore {
   /** `work` on the database, with its schema. The first call of a process applies the migrations. */
   const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
@@ -866,18 +882,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async deleteWorkspace(workspace) {
-      // The foreign keys take its members, its invitations, its sites and their destinations, its
-      // connectors and their deliveries with it. The notes that the worker keeps go first, while the
-      // sites still name them.
-      await transaction(async (db) => {
-        const ids = await db.select({ id: sites.id }).from(sites).where(eq(sites.workspace_id, workspace));
-        await dropKeptNotes(
-          db,
-          workspace,
-          ids.map((row) => row.id),
-        );
-        await db.delete(organization).where(eq(organization.id, workspace));
-      });
+      await transaction((db) => dropWorkspace(db, workspace));
     },
 
     async addDomain(workspace, domain, now) {

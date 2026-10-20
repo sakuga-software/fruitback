@@ -682,3 +682,68 @@ describe(
     });
   },
 );
+
+describe(
+  'an administrator removed while they delete a workspace, on a real server (FRU-284)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    it('refuses the deletion: it waits for the removal, then reads that the account is no administrator', async () => {
+      const own = await ownDatabase();
+      const [first, second, holder] = [0, 1, 2].map(() => createPgDatabase(own.url, 'public', { max: 1 })) as [
+        PgDatabase,
+        PgDatabase,
+        PgDatabase,
+      ];
+      // A failed assertion must not leave the table held: the cleanup below would then wait for ever.
+      let release = (): void => {};
+      try {
+        await migrated(first);
+        const accounts = createPostgresAccountStore(first);
+        const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const bob = await accounts.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
+        await rowsOf(first, `UPDATE "user" SET role = 'admin' WHERE id = '${bob.id}'`);
+        const acme = await accounts.createWorkspace('Acme', ana.id);
+
+        // The removal writes its action last: while the table is held, it waits there, with the lock of the role.
+        const released = new Promise<void>((resolve) => (release = resolve));
+        let locked = (): void => {};
+        const tableLocked = new Promise<void>((resolve) => (locked = resolve));
+        const holding = holder.transaction(async (db) => {
+          await db.execute('LOCK TABLE admin_actions IN EXCLUSIVE MODE');
+          locked();
+          await released;
+        });
+        await tableLocked;
+
+        const settled: string[] = [];
+        const removal = createPostgresInstanceAdmin(first)
+          .setInstanceAdmin(ana, bob.id, false, 1)
+          .finally(() => settled.push('removal'));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const deletion = createPostgresInstanceAdmin(second)
+          .deleteWorkspace(bob, acme.id, 'Acme', 2)
+          .finally(() => settled.push('deletion'));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        // The control of the race: neither call ended while the table was held.
+        assert.deepEqual(settled, []);
+        release();
+        await holding;
+
+        assert.deepEqual(await removal, { ok: true, changed: true, instanceAdmin: false });
+        assert.deepEqual(await deletion, { ok: false, refused: 'not-admin' });
+        assert.equal(
+          Number((await rowsOf(first, `SELECT count(*)::int AS n FROM organization WHERE id = '${acme.id}'`))[0]?.n),
+          1,
+        );
+        assert.deepEqual(
+          (await rowsOf(first, 'SELECT action FROM admin_actions')).map((row) => row.action),
+          ['admin-removed'],
+        );
+      } finally {
+        release();
+        await Promise.all([first, second, holder].map((database) => database.close()));
+        await own.drop();
+      }
+    });
+  },
+);

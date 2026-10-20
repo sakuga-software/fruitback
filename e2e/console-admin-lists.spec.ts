@@ -6,8 +6,8 @@ import { contrast, painted, rgb, sideScroll, stubWorker, styles, typeDuringTheWr
 /**
  * « Workspaces » and « Users » of the administration of the instance (FRU-263), measured in a
  * browser against screens 18 and 19 of the mockup of 2026-10-13 (`18-admin-workspaces.html`,
- * `19-admin-users.html`), the switch « Instance admin » of a person (FRU-280), and the suspension of
- * an account (FRU-281). The worker is answered by stubs with the shapes of
+ * `19-admin-users.html`), the switch « Instance admin » of a person (FRU-280), the suspension of
+ * an account (FRU-281), and the deletion of a workspace (FRU-284). The worker is answered by stubs with the shapes of
  * `instance-admin.ts`, and the stubs filter by `q` and `show` as the worker does: a search that the
  * stub did not filter would prove nothing.
  *
@@ -27,7 +27,7 @@ const ACCENT_STRONG = '#b91c1c';
 
 /**
  * The gestures of the mockup that come with FRU-274: none of them is on these screens, except
- * « Suspend » and « Restore access » of a person (FRU-281).
+ * « Suspend » and « Restore access » of a person (FRU-281), and « Delete the workspace » (FRU-284).
  */
 const ACTIONS = [
   'New workspace',
@@ -234,6 +234,10 @@ type Options = {
   refusingSuspension?: { status: number; error: string } | undefined;
   /** Holds every answer of a suspension until it resolves. */
   holdSuspension?: Promise<void>;
+  /** A refusal that a deletion of a workspace answers instead of a `200`, until it is set to `undefined`. */
+  refusingDeletion?: { status: number; error: string } | undefined;
+  /** Holds every answer of a deletion until it resolves. */
+  holdDeletion?: Promise<void>;
 };
 
 type Posted = { path: string; body: unknown };
@@ -259,6 +263,8 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     const suspension = /^\/console\/admin\/users\/([^/]+)\/suspension$/.exec(pathname);
     if (suspension !== null && route.request().method() === 'POST')
       return answerSuspension(suspension[1] as string, route);
+    const deletion = /^\/console\/admin\/workspaces\/([^/]+)\/deletion$/.exec(pathname);
+    if (deletion !== null && route.request().method() === 'POST') return answerDeletion(deletion[1] as string, route);
     const url = new URL(route.request().url());
     const q = url.searchParams.get('q');
     const show = url.searchParams.get('show');
@@ -270,8 +276,8 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
       return route.fulfill({ json: body });
     };
     if (pathname === '/console/admin/workspaces') {
-      const found = workspacesOf(q ?? '', show ?? 'all').filter((each) =>
-        (options.workspaces ?? WORKSPACES).includes(each),
+      const found = workspacesOf(q ?? '', show ?? 'all').filter(
+        (each) => (options.workspaces ?? WORKSPACES).includes(each) && !gone.has(each.id),
       );
       return reply({ workspaces: found, total: found.length });
     }
@@ -293,6 +299,26 @@ async function stub(page: Page, options: Options = {}): Promise<Asked[]> {
     if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
 
     return route.fulfill({ json: { user: { id, instanceAdmin: body.admin }, changed: true } });
+  };
+  // The workspaces that a deletion took away: the lists leave them out after it, as the worker does.
+  const gone = new Set<string>();
+  const answerDeletion = async (id: string, route: Route): Promise<void> => {
+    const body = route.request().postDataJSON() as { name: string };
+    options.posted?.push({ path: new URL(route.request().url()).pathname, body });
+    await (options.holdDeletion ?? Promise.resolve());
+    const refused = options.refusingDeletion;
+    if (refused !== undefined) return route.fulfill({ status: refused.status, json: { error: refused.error } });
+    const workspace = WORKSPACES.find((each) => each.id === id);
+    if (workspace === undefined || workspace.name !== body.name)
+      return route.fulfill({ status: 409, json: { error: 'name-mismatch' } });
+    gone.add(id);
+
+    return route.fulfill({
+      json: {
+        workspace: { id, name: workspace.name },
+        gone: { sites: workspace.sites, members: workspace.members, invitations: 0, connectors: 1, keptNotes: 3 },
+      },
+    });
   };
   const answerSuspension = async (id: string, route: Route): Promise<void> => {
     const body = route.request().postDataJSON() as { suspended: boolean };
@@ -503,7 +529,8 @@ test('Workspaces: the table, the panel of a row, and the values of the mockup', 
   );
   await expect(panel(page)).toContainText('Tom Marchal, tom@acme.dev');
   await expectPanel(page);
-  await expectNoAction(page);
+  await expectNoAction(page, 0, ['Delete the workspace']);
+  await expect(panel(page).locator('.kit-panel__foot').getByRole('button')).toHaveText(['Delete the workspace']);
   await axe(page, 'the panel of a workspace at 1440 px');
 
   // Escape closes it, and gives focus back to its row.
@@ -1497,4 +1524,151 @@ test('Users: the suspension and its confirmations in French, and at 390 px (FRU-
   await expect(panel(page)).toContainText(
     'Vous ne pouvez pas suspendre votre propre compte. Un autre administrateur de l’instance le peut.',
   );
+});
+
+/** The button that deletes the workspace of the open panel, once « Delete the workspace » was pressed. */
+const deleteButton = (page: Page, name: string) => panel(page).getByRole('button', { name: `Delete ${name}` });
+const nameField = (page: Page, name: string) => panel(page).getByRole('textbox', { name: `Type ${name} to confirm` });
+
+test('Workspaces: an admin deletes a workspace after typing its name, and the row goes (FRU-284)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  const sent = watched(page);
+  await stub(page, { posted });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
+
+  await panel(page).getByRole('button', { name: 'Delete the workspace' }).click();
+  const asking = panel(page).getByRole('group', { name: 'Delete Acme support' });
+  await expect(asking).toContainText(
+    'Acme support is deleted at once, and nothing brings it back. Its sites, its members, its invitations, its connectors and the notes that Fruitback keeps for it go. The issues already sent to its sources stay there, and its people keep their accounts. Every instance admin reads that you did it.',
+  );
+  // The field has focus, and the button that deletes is held until the name is typed as it is written.
+  await expect(nameField(page, 'Acme support')).toBeFocused();
+  await expect(deleteButton(page, 'Acme support')).toBeDisabled();
+  for (const typed of ['acme support', 'Acme', 'Acme supports']) {
+    await nameField(page, 'Acme support').fill(typed);
+    await expect(deleteButton(page, 'Acme support')).toBeDisabled();
+  }
+  await axe(page, 'the confirmation of a deletion at 1440 px');
+  await nameField(page, 'Acme support').fill('Acme support');
+  await expect(deleteButton(page, 'Acme support')).toBeEnabled();
+  expect(posted).toEqual([]);
+
+  await deleteButton(page, 'Acme support').click();
+  const said = main(page).getByRole('status').filter({ hasText: 'Acme support was deleted.' });
+  await expect(said).toHaveText('Acme support was deleted. Every instance admin reads it on the page Instance.');
+  await expect(said).toBeFocused();
+  await expect(panel(page)).toHaveCount(0);
+  await expect(page).not.toHaveURL(/open=/);
+  await expect(main(page).getByRole('link', { name: 'Acme support' })).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(3);
+  expect(posted).toEqual([{ path: '/console/admin/workspaces/w9/deletion', body: { name: 'Acme support' } }]);
+  expect(sent.filter((request) => request.startsWith('POST '))).toEqual(['POST /console/admin/workspaces/w9/deletion']);
+});
+
+test('Workspaces: « Keep it » and Escape send nothing, keep the panel, and give focus back to « Delete the workspace » (FRU-284)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const posted: Posted[] = [];
+  await stub(page, { posted });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  const first = panel(page).getByRole('button', { name: 'Delete the workspace' });
+
+  await first.click();
+  await nameField(page, 'Acme support').fill('Acme support');
+  await panel(page).getByRole('button', { name: 'Keep it' }).click();
+  await expect(first).toBeFocused();
+  await expect(nameField(page, 'Acme support')).toHaveCount(0);
+
+  await first.click();
+  // The name typed before is not kept: a second opening asks for it again.
+  await expect(nameField(page, 'Acme support')).toHaveValue('');
+  await nameField(page, 'Acme support').fill('Acme support');
+  await page.keyboard.press('Escape');
+  await expect(first).toBeFocused();
+  await expect(panel(page)).toHaveAccessibleName('Acme support');
+  expect(posted).toEqual([]);
+});
+
+test('Workspaces: each refusal of a deletion is said, the typed name stays, and the row stays (FRU-284)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const options: Options = { posted: [], refusingDeletion: { status: 409, error: 'name-mismatch' } };
+  await stub(page, options);
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await panel(page).getByRole('button', { name: 'Delete the workspace' }).click();
+  await nameField(page, 'Acme support').fill('Acme support');
+
+  for (const [refusal, sentence] of [
+    [
+      { status: 409, error: 'name-mismatch' },
+      'This is not the name of the workspace. Type it as it is written, capitals included.',
+    ],
+    [
+      { status: 404, error: 'not-found' },
+      'This workspace no longer exists. Another admin or its owner may have deleted it.',
+    ],
+    [{ status: 500, error: 'down' }, 'Fruitback did not answer. Try again.'],
+    [{ status: 403, error: 'forbidden' }, 'The workspace was not deleted. Try again.'],
+  ] as const) {
+    options.refusingDeletion = refusal;
+    await deleteButton(page, 'Acme support').click();
+    await expect(panel(page)).toContainText(sentence);
+    await expect(nameField(page, 'Acme support')).toHaveValue('Acme support');
+  }
+  // A key typed in the field takes the refusal away: it was about the name that was sent.
+  await nameField(page, 'Acme support').press('End');
+  await page.keyboard.type(' ');
+  await expect(panel(page)).not.toContainText('The workspace was not deleted.');
+  await expect(main(page).getByRole('link', { name: 'Acme support' })).toBeVisible();
+  expect(options.posted).toHaveLength(4);
+});
+
+test('Workspaces: the button that deletes is busy while the worker answers, and a second press sends nothing (FRU-284)', async ({
+  page,
+}) => {
+  let release = (): void => {};
+  const posted: Posted[] = [];
+  await stub(page, { posted, holdDeletion: new Promise<void>((resolve) => (release = resolve)) });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await panel(page).getByRole('button', { name: 'Delete the workspace' }).click();
+  await nameField(page, 'Acme support').fill('Acme support');
+
+  await deleteButton(page, 'Acme support').click();
+  await expect(deleteButton(page, 'Acme support')).toBeDisabled();
+  await deleteButton(page, 'Acme support').click({ force: true });
+  release();
+  await expect(main(page).getByRole('status').filter({ hasText: 'was deleted' })).toBeVisible();
+  expect(posted).toHaveLength(1);
+});
+
+test('Workspaces: the deletion in French, and at 390 px (FRU-284)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stub(page, { locale: 'fr' });
+  await visit(page, '/admin/workspaces?open=w9', 'Workspaces');
+  await panel(page).getByRole('button', { name: 'Supprimer le workspace' }).click();
+  const asking = panel(page).getByRole('group', { name: 'Supprimer Acme support' });
+  await expect(asking).toContainText(
+    'Acme support est supprimé tout de suite, et rien ne le fait revenir. Ses sites, ses membres, ses invitations, ses connecteurs et les notes que Fruitback garde pour lui disparaissent. Les tickets déjà envoyés à ses sources y restent, et ses membres gardent leur compte. Chaque administrateur de l’instance lit que vous l’avez fait.',
+  );
+  const field = panel(page).getByRole('textbox', { name: 'Tapez Acme support pour confirmer' });
+  await expect(field).toBeFocused();
+  await expect(asking.getByRole('button')).toHaveText(['Le garder', 'Supprimer Acme support']);
+  expect(await sideScroll(page)).toBe(0);
+  // The confirmation is in view on a phone, under the panel of its row.
+  await expect(asking.getByRole('button', { name: 'Supprimer Acme support' })).toBeInViewport();
+  await axe(page, 'the confirmation of a deletion at 390 px');
+
+  await field.fill('acme support');
+  await expect(asking.getByRole('button', { name: 'Supprimer Acme support' })).toBeDisabled();
+  await field.fill('Acme support');
+  await asking.getByRole('button', { name: 'Supprimer Acme support' }).click();
+  await expect(main(page).getByRole('status').filter({ hasText: 'Acme support a été supprimé.' })).toHaveText(
+    'Acme support a été supprimé. Chaque administrateur de l’instance le lit sur la page Instance.',
+  );
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the workspaces after a deletion at 390 px');
 });

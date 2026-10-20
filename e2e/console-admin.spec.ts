@@ -106,6 +106,8 @@ type Admin = {
   instance?: Facts | number;
   /** Holds the answer of `GET /console/admin/instance` until it resolves. */
   hold?: Promise<void>;
+  /** The workspaces that an administrator deleted (FRU-284), none by default; a number: that status. */
+  deleted?: readonly unknown[] | number;
 };
 
 /** Every request the page sends to the worker, as `METHOD /path`. */
@@ -140,6 +142,16 @@ async function stub(page: Page, options: Admin = {}): Promise<void> {
           : route.fulfill({ json: instance }),
       );
     if (pathname === '/console/admin/workspaces') return route.fulfill({ json: WORKSPACES });
+    if (pathname === '/console/admin/actions') {
+      const deleted = options.deleted ?? [];
+      // The page asks for the deleted workspaces alone: a read of every action would trace the others.
+      if (new URL(route.request().url()).searchParams.get('kind') !== 'workspace-deleted')
+        return route.fulfill({ status: 400, json: { error: 'invalid-kind' } });
+
+      return typeof deleted === 'number'
+        ? route.fulfill({ status: deleted, json: { error: 'unavailable' } })
+        : route.fulfill({ json: { actions: deleted } });
+    }
 
     return undefined;
   };
@@ -427,6 +439,8 @@ test('a worker that does not answer the read says so, keeps the frame, and reads
           ? route.fulfill({ json: facts() })
           : route.fulfill({ status, json: { error: 'unavailable' } });
       if (pathname === '/console/admin/workspaces') return route.fulfill({ json: WORKSPACES });
+      // No workspace was deleted (FRU-284): the one read that fails here is the one of the instance.
+      if (pathname === '/console/admin/actions') return route.fulfill({ json: { actions: [] } });
 
       return undefined;
     },
@@ -517,4 +531,96 @@ test('at 390 px the document does not scroll sideways, and axe finds nothing', a
 
   expect(await sideScroll(page)).toBe(0);
   await axe(page, 'the instance at 390 px');
+});
+
+/** Two workspaces that an administrator deleted, as `GET /console/admin/actions?kind=workspace-deleted` answers them. */
+const DELETED = [
+  {
+    action: 'workspace-deleted',
+    at: '2026-10-19T09:30:00.000Z',
+    actor: { id: 'a1', email: 'ana@acme.dev', name: 'Ana' },
+    workspace: { id: 'w3', name: 'Acme archive' },
+    detail: {
+      workspace: { id: 'w3', name: 'Acme archive' },
+      gone: { sites: 2, members: 1, invitations: 0, connectors: 1, keptNotes: 14 },
+    },
+  },
+  {
+    action: 'workspace-deleted',
+    at: '2026-10-02T09:30:00.000Z',
+    actor: { email: 'former-admin@acme.dev' },
+    workspace: { id: 'w4', name: 'Old tests' },
+    detail: { workspace: { id: 'w4', name: 'Old tests' }, gone: { sites: 1, members: 3, keptNotes: 1 } },
+  },
+];
+
+test('« Deleted workspaces » lists what an admin deleted, read at each visit with no trace (FRU-284)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().startsWith(WORKER_ORIGIN))
+      sent.push(`${request.method()} ${request.url().slice(WORKER_ORIGIN.length)}`);
+  });
+  await stub(page, { deleted: DELETED });
+  await open(page);
+
+  const section = page.getByRole('region', { name: 'Deleted workspaces', exact: true });
+  await expect(section).toContainText(
+    'Deleted by an instance admin. Their owners cannot read this: the workspace is gone.',
+  );
+  const table = page.getByRole('region', { name: 'Workspaces deleted by an instance admin' }).getByRole('table');
+  await expect(table.getByRole('columnheader')).toHaveText(['Name', 'Deleted by', 'What went', 'Deleted']);
+  await expect(table.getByRole('row').nth(1).getByRole('cell')).toHaveText([
+    'Acme archive',
+    'ana@acme.dev',
+    '2 sites · 1 person · 14 kept notes',
+    /^19 Oct/,
+  ]);
+  await expect(table.getByRole('row').nth(2).getByRole('cell')).toHaveText([
+    'Old tests',
+    'former-admin@acme.dev',
+    '1 site · 3 people · 1 kept note',
+    /^2 Oct/,
+  ]);
+  // Every read of the actions asks for the deletions alone (the dev server mounts twice), and the
+  // visit reads no workspace.
+  const actions = sent.filter((request) => request.includes('/console/admin/actions'));
+  expect(actions.length).toBeGreaterThan(0);
+  expect([...new Set(actions)]).toEqual(['GET /console/admin/actions?kind=workspace-deleted']);
+  expect(sent.some((request) => request.startsWith('GET /console/admin/workspaces'))).toBe(false);
+  await axe(page, 'the deleted workspaces at 1440 px');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await sideScroll(page)).toBe(0);
+  await axe(page, 'the deleted workspaces at 390 px');
+});
+
+test('« Deleted workspaces » says when there is none, and when the read failed, in English and in French (FRU-284)', async ({
+  page,
+}) => {
+  await stub(page);
+  await open(page);
+  const section = page.getByRole('region', { name: 'Deleted workspaces', exact: true });
+  await expect(section).toContainText('No workspace was deleted.');
+  await expect(section.getByRole('table')).toHaveCount(0);
+
+  await stub(page, { deleted: 503 });
+  await page.reload();
+  await expect(section).toContainText('The deleted workspaces could not be read. Fruitback did not answer.');
+  await stub(page, { deleted: DELETED });
+  await section.getByRole('button', { name: 'Try again' }).click();
+  await expect(section.getByRole('table')).toBeVisible();
+
+  await stub(page, { locale: 'fr', deleted: DELETED });
+  await page.reload();
+  const french = page.getByRole('region', { name: 'Workspaces supprimés', exact: true });
+  await expect(french).toContainText(
+    'Supprimés par un administrateur de l’instance. Leurs propriétaires ne peuvent pas le lire : le workspace n’existe plus.',
+  );
+  await expect(french.getByRole('columnheader')).toHaveText(['Nom', 'Supprimé par', 'Ce qui a disparu', 'Supprimé le']);
+  await expect(french.getByRole('row').nth(1).getByRole('cell').nth(2)).toHaveText(
+    '2 sites · 1 personne · 14 notes gardées',
+  );
 });
