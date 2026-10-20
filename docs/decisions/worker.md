@@ -3246,14 +3246,16 @@ replies, and on a public site mounted by the extension with no session, only the
   A first destination with no label gives no field: absent, never a guess.
 - **`toCheck` is read from the index** (`NoteIndex.toCheck`): rows of the account (`author_kind =
 'member'`), at `ripe`, whose `confirmed` is not true. For the session of an account only.
-- **`confirmed` is written by `refresh`** from the replies of the read (`checkedOf`), and only by a
-  read that has them: a read with the replies hidden keeps what the last one said. The route of a
-  verdict refreshes the row with the reply it just wrote. A note of before the column is empty, and
-  counts as a fix to check until a read of its page sees its replies.
+- **`confirmed` is written by `refresh`** from the replies of the read (`checkedOf`), **only where a
+  verdict can be given** (`verdicts`: the read shows the replies and `takesChecks` of the place).
+  Elsewhere it is emptied, and `toCheck` counts `confirmed = false` only: a count that nobody can
+  lower would never go down (heavy review). The route of a verdict refreshes the row with the reply
+  it just wrote. A note of before the column is empty, and counts once a read of its page has seen
+  its replies.
 - **No cache of the count anywhere**, in the worker or in the extension: a stale count says there
   is nothing to check. The index can be late, and `asOf` says by how much.
 - **Migration `0019_note_index_confirmed` only adds a column that may be empty**: no row moves.
-  test:`keeps every row of the index, and counts a done note of before as a fix to check`.
+  test:`keeps every row of the index, and counts no note of before until a read says a verdict can be given`.
 
 ## The first reviewer, named in the environment (FRU-108)
 

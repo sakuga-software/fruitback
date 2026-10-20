@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
@@ -7,15 +8,15 @@ import { migrate } from './postgres-migrate.ts';
 
 /**
  * `0019_note_index_confirmed` (FRU-295) on a database that holds notes already: it only adds a column
- * that may be empty, so every row stays, and a done note of a member counts as a fix to check until a
- * read sees its verdict.
+ * that may be empty, so every row stays. A done note of before is no fix to check until a read of its
+ * page says that a verdict can be given there.
  */
 
 const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of DATABASES) {
   describe(`the column of the verdict of a note, on ${label} (FRU-295)`, { skip }, () => {
-    it('keeps every row of the index, and counts a done note of before as a fix to check', async () => {
+    it('keeps every row of the index, and counts no note of before until a read says a verdict can be given', async () => {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0018_workspace_suspensions'));
       for (const statement of [
@@ -41,10 +42,31 @@ for (const { label, open, skip } of DATABASES) {
           ['sd_visitor', null],
         ],
       );
-      assert.deepEqual(
-        await createPostgresNoteIndex(database).toCheck('ws_acme', 'acc_bob'),
-        new Map([['site_acme', 1]]),
+      const index = createPostgresNoteIndex(database);
+      assert.deepEqual(await index.toCheck('ws_acme', 'acc_bob'), new Map());
+
+      // A read of the page, where a verdict can be given, sees no verdict in the replies of the note.
+      const done = seedFixture({ id: 'sd_done', page: { url: 'https://acme.dev/', path: '/', title: 'Home' } });
+      await index.refresh(
+        'ws_acme',
+        'site_acme',
+        { kind: 'fruitback' },
+        [
+          {
+            id: '1',
+            identifier: 'FB-1',
+            title: 'Done',
+            stage: 'ripe',
+            stateName: '',
+            updatedAt: '',
+            comments: [],
+            seed: done,
+          },
+        ],
+        Date.now(),
+        { verdicts: true },
       );
+      assert.deepEqual(await index.toCheck('ws_acme', 'acc_bob'), new Map([['site_acme', 1]]));
     });
   });
 }

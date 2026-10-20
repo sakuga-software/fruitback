@@ -64,7 +64,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
-    async refresh(workspace, site, place, issues, now) {
+    async refresh(workspace, site, place, issues, now, options = {}) {
+      const verdicts = options.verdicts === true;
       // Two issues of one page can carry one seed id (two places of one team, or a widget that sent
       // one note twice). One statement cannot write one row twice, and would write nothing of the
       // page: the first is kept.
@@ -93,8 +94,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               reference_url: issue.url ?? null,
               created_at: instantOf(issue.seed.createdAt, now),
               checked_at: now,
-              // FRU-295: what the replies say of a verdict, when the read has them.
-              confirmed: issue.comments === undefined ? null : checkedOf(issue.comments) !== undefined,
+              // FRU-295: what the replies say of a verdict, where one can be given and the read has them.
+              confirmed: !verdicts || issue.comments === undefined ? null : checkedOf(issue.comments) !== undefined,
             })),
           )
           // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
@@ -104,7 +105,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             set: {
               stage: sql`excluded.stage`,
               checked_at: sql`excluded.checked_at`,
-              confirmed: sql`coalesce(excluded.confirmed, ${note_index.confirmed})`,
+              // Where no verdict can be given, none is kept: the note is no fix to check.
+              confirmed: verdicts ? sql`coalesce(excluded.confirmed, ${note_index.confirmed})` : sql`NULL`,
             },
             // A note of another workspace under the same ids is not this one.
             setWhere: eq(note_index.workspace_id, workspace),
@@ -142,7 +144,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               eq(note_index.author_kind, 'member'),
               eq(note_index.author_account_id, account),
               eq(note_index.stage, 'ripe'),
-              sql`${note_index.confirmed} IS NOT TRUE`,
+              // `false`: a read saw the replies of a place that takes a verdict, and none was « fixed ».
+              eq(note_index.confirmed, false),
             ),
           )
           .groupBy(note_index.site_id),

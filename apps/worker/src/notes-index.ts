@@ -97,7 +97,19 @@ export type NoteIndex = {
    * it now. A note of the site that the index does not hold yet, planted before it, is written with
    * what the read says and nothing else: no way, and a visitor for anyone the site did not verify.
    */
-  refresh(workspace: string, site: string, place: Place, issues: readonly SeedIssue[], now: number): Promise<void>;
+  refresh(
+    workspace: string,
+    site: string,
+    place: Place,
+    issues: readonly SeedIssue[],
+    now: number,
+    /**
+     * Whether a person can give a verdict on these notes (FRU-295): the read shows the replies, and
+     * the store of the place takes one. Absent or `false`: the verdict of each note is « none », and
+     * no note of the place counts as a fix to check.
+     */
+    options?: { verdicts?: boolean },
+  ): Promise<void>;
   /** The notes of each site of a workspace that has some. A site with none is absent. */
   summary(workspace: string): Promise<Map<string, SiteNotes>>;
   /**
@@ -129,7 +141,8 @@ export type NoteIndex = {
   authors(workspace: string, site: string, seeds: readonly string[]): Promise<Map<string, string>>;
   /**
    * The notes of each site of a workspace that `account` left, that the team marked done, and that
-   * the person did not confirm yet (FRU-295): « fixes to check ». As the last read of each page said
+   * the person did not confirm yet (FRU-295): « fixes to check ». Only notes whose last read said that
+   * a verdict can be given there (`refresh` with `verdicts`): never a count that nobody can lower. As the last read of each page said
    * it, so the count can be late: `asOf` of `summary` says how late. A site with none is absent.
    */
   toCheck(workspace: string, account: string): Promise<Map<string, number>>;

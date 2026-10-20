@@ -19,7 +19,12 @@ const DONE = { name: 'Done', type: 'completed' };
 
 afterEach(() => resetMemoryLinear());
 
-type Listed = { id: string; destination?: { label: string }; toCheck?: number };
+type Listed = {
+  id: string;
+  destination?: { label: string };
+  toCheck?: number;
+  notes?: Record<string, number>;
+};
 
 /** The access token of a session of the extension: a pairing in `workspace`, or the account's (FRU-238). */
 async function sessionOf(world: World, who: { id: string; token: string }, workspace?: string): Promise<string> {
@@ -172,6 +177,27 @@ describe('the fixes to check, in GET /session/sites (FRU-295)', () => {
     setMemoryIssueState(note, DONE);
     await readPage(world, site.id, bobs);
     assert.equal((await sitesOf(world, bobs))[0]?.toCheck, 1);
+  });
+
+  it('counts no note of a site whose store takes no verdict, which nobody could lower', async () => {
+    const { world, workspace, site, bob } = await acme();
+    // An address that receives: the notes are kept by the worker and sent on, and no verdict is taken.
+    const hook = await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.test', sealed: 'x' });
+    assert.ok(await world.accounts.setDestinations(workspace, site.id, [{ connector: hook.id, label: 'Hook' }]));
+    const bobs = await sessionOf(world, bob);
+    const note = await noteOf(world, site.id, 'sd_bob', bobs);
+    setMemoryIssueState(note, DONE);
+    await readPage(world, site.id, bobs);
+    const refused = await callOn(world, 'POST', `/feedback/${note}/check?client=${site.id}`, {
+      origin: ORIGIN,
+      token: bobs,
+      body: { url: PAGE, verdict: 'fixed' },
+    });
+    assert.equal(refused.status, 403);
+
+    const [listed] = await sitesOf(world, bobs);
+    assert.equal(listed?.notes?.ripe, 1, 'the note is done in the index');
+    assert.equal(listed?.toCheck, 0);
   });
 
   it('gives no count to a pairing of a workspace, and no count when the index does not answer', async () => {

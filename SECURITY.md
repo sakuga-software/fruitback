@@ -941,8 +941,10 @@ counts of FRU-237, and two fields of FRU-295.
   the owner on the same site.
 - **`toCheck`, the notes of the person that the team marked done and that they did not confirm**
   (FRU-294), to the session of an account only: it counts the rows of the index whose author is that
-  account. A pairing of a workspace gets no field, and nor does a session whose index does not
-  answer: absent is « not known », never zero. The count is as the last read of each page left it:
+  account. **Only notes where a verdict can be given count**: a site whose store takes none (an
+  address that receives, a tracker that hides its replies, GitHub) counts zero, since nobody could
+  lower that count. A pairing of a workspace gets no field, and nor does a session whose index does
+  not answer: absent is « not known », never zero. The count is as the last read of each page left it:
   `asOf` says how late. test:`counts the done notes of the person, not those of another member, and drops by one after « Looks fixed »`.
 
 **`POST /session/sites` adds a site to a workspace, from the extension** (FRU-255): the first route
