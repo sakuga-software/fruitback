@@ -191,7 +191,7 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
     width: 380,
     height: 900,
     'border-left-width': '1px',
-    'border-left-color': 'rgb(228, 228, 231)',
+    'border-left-color': 'rgb(231, 229, 228)',
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '14px',
   });
@@ -216,7 +216,7 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   await expect(page.locator('.fruitback-sidebar-address')).toHaveText(/^localhost:\d+\/$/);
   expect(await read('.fruitback-sidebar-address', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(107, 107, 116)',
+    color: 'rgb(117, 110, 105)',
   });
   expect(await read('.fruitback-sidebar-close', ['border-radius'])).toMatchObject({
     x: 1394,
@@ -251,7 +251,7 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
     padding: '3px',
     gap: '4px',
     'border-radius': '10px',
-    'background-color': 'rgb(244, 244, 245)',
+    'background-color': 'rgb(245, 245, 244)',
   });
   const tabs = list.getByRole('tab');
   await expect(tabs).toHaveText(['Open 6', 'Done 2', 'All 8']);
@@ -269,15 +269,15 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
     height: 32,
     'border-radius': '8px',
     'background-color': 'rgb(255, 255, 255)',
-    color: 'rgb(24, 24, 27)',
+    color: 'rgb(28, 25, 23)',
     'font-size': '13px',
     'font-weight': '600',
-    'box-shadow': 'rgba(24, 24, 27, 0.12) 0px 1px 3px 0px',
+    'box-shadow': 'rgba(28, 25, 23, 0.15) 0px 1px 3px 0px',
   });
   expect(Number(chosen.width)).toBeCloseTo(109.7, 0);
   expect(await read('[role="tab"][aria-selected="false"]', ['background-color', 'color'])).toMatchObject({
     'background-color': 'rgba(0, 0, 0, 0)',
-    color: 'rgb(82, 82, 91)',
+    color: 'rgb(87, 83, 78)',
   });
   expect(await read('[role="tabpanel"]', ['padding', 'overflow-y'])).toMatchObject({
     y: 170,
@@ -303,7 +303,8 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   expect(await read('.fruitback-sidebar-pin', ['background-color', 'border-radius'])).toMatchObject({
     width: 24,
     height: 24,
-    'background-color': 'rgb(221, 44, 39)',
+    // The olive of « new » (FRU-292).
+    'background-color': 'rgb(106, 121, 80)',
     'border-radius': '50% 50% 50% 0px',
   });
   expect(await read('.fruitback-sidebar-pin > span', ['font-size', 'font-weight', 'color'])).toMatchObject({
@@ -318,16 +319,16 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   });
   expect(await read('.fruitback-sidebar-meta', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(107, 107, 116)',
+    color: 'rgb(117, 110, 105)',
   });
-  // The number of each pin, and dark ink on the amber of « in progress ».
+  // The number of each pin, and white on the amber of « in progress » too (FRU-292).
   await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['1', '2', '3', '6', '7', '8']);
   expect(
     await rows
       .nth(2)
       .locator('.fruitback-sidebar-pin > span')
       .evaluate((node) => getComputedStyle(node).color),
-  ).toBe('rgb(24, 24, 27)');
+  ).toBe('rgb(255, 255, 255)');
   await expect(rows.nth(0).locator('.fruitback-sidebar-meta')).toHaveText(/^New · Anonymous · .+$/);
 
   // « further down » for the two notes at the foot of the page, and for no other.
@@ -366,9 +367,9 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
   await expect(page.locator('[data-fruitback-thread]')).toBeVisible();
   await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
   await page.mouse.move(0, 0);
-  expect(await rows.nth(1).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(244, 244, 245)');
+  expect(await rows.nth(1).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(245, 245, 244)');
   await rows.nth(0).hover();
-  expect(await rows.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(250, 250, 250)');
+  expect(await rows.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(250, 250, 249)');
   await page.keyboard.press('Escape');
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true');
 
@@ -450,7 +451,7 @@ test('a note whose element is gone is in « Could not be placed », and not amon
         rule: style.borderTopWidth,
         icon: [icon.getBoundingClientRect().width, icon.getBoundingClientRect().height],
         dashes: getComputedStyle(icon.querySelector('path')!).strokeDasharray,
-        amber: getComputedStyle(icon).color,
+        brown: getComputedStyle(icon).color,
       };
     }),
   ).toEqual({
@@ -459,7 +460,7 @@ test('a note whose element is gone is in « Could not be placed », and not amon
     rule: '1px',
     icon: [12, 15],
     dashes: '18px, 12px',
-    amber: 'rgb(217, 119, 6)',
+    brown: 'rgb(141, 110, 99)',
   });
 
   // It still opens its thread.

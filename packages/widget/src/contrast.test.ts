@@ -20,17 +20,11 @@ type Pair = { foreground: string; background: string; minimum: number; where: st
 const ON_STAGE: Partial<Record<string, string>> = { ripening: 'color-on-stage-ripening' };
 
 /**
- * The one pair under its ratio, and it is the mock-up's own (FRU-233): the amber of « in progress »
- * is 2.15:1 on white, where a drawing needs 3:1. It is the colour Mathieu's mock-up gives that status.
- *
- * What makes it hold is that the colour never speaks alone: the list writes the stage in words beside
- * its mark, a thread writes the state beside its drop, and a pin carries its number in the ink.
- * `messages.test.ts` and the specs of the list hold those words. The test fails if this pair starts
- * to pass, so the line cannot outlive its reason, and if any other pair fails.
+ * The pairs under their ratio. None since FRU-292: the amber of 2026-10-13 was 2.15:1 on white, and
+ * the amber of 2026-10-20 is 4.78:1. The test fails if any pair fails, so a new failure has to be
+ * written here with its reason.
  */
-const KNOWN = [
-  'light: stage-ripening on color-surface, the stage mark of a detached note, and the drop in the head of a thread (2.15)',
-];
+const KNOWN: string[] = [];
 
 const PAIRS: Pair[] = [
   {
@@ -153,6 +147,15 @@ const PAIRS: Pair[] = [
   { foreground: 'color-on-ink-muted', background: 'color-ink', minimum: 4.5, where: 'the hint of that banner' },
   // A drawing: 1.4.11 asks for 3:1.
   { foreground: 'color-accent', background: 'color-ink', minimum: 3, where: 'the focus ring of its button' },
+  // The block that quotes the selector and the source of a note (FRU-292, held before FRU-304 paints it).
+  { foreground: 'color-text', background: 'color-surface-warm', minimum: 4.5, where: 'the selector of a note' },
+  {
+    foreground: 'color-text-subtle',
+    background: 'color-surface-warm',
+    minimum: 4.5,
+    where: 'the component and the file of a note',
+  },
+  { foreground: 'color-text-muted', background: 'color-surface-warm', minimum: 4.5, where: 'a hint in that block' },
   // The composer stands on the surface since FRU-258, as the mock-up paints it: its text, its muted
   // lines and its failed status are the pairs of the surface above. The sent status is this one.
   { foreground: 'color-success', background: 'color-surface', minimum: 4.5, where: 'the sent status' },
@@ -217,25 +220,26 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     }
   });
 
-  it('writes « in progress » dark on its amber, where white cannot be read (FRU-233)', () => {
-    // The mock-up draws the 2 of that pin in the ink. White on the amber is 2.15:1.
+  it('writes « in progress » white on its amber, like the four others (FRU-292)', () => {
+    // The amber of 2026-10-13 needed the ink. The amber of 2026-10-20 holds white, so its token is white.
     for (const tokens of [light, dark]) {
       const amber = tokens['stage-ripening'] ?? '';
-      assert.ok(ratio('#ffffff', amber) < 3, 'white reads on this stage now: the token of its own is not needed');
-      assert.ok(ratio(tokens['color-on-stage-ripening'] ?? '', amber) >= 4.5);
-      assert.ok(
-        luminance(tokens['color-on-stage-ripening'] ?? '#fff') < 0.05,
-        'the foreground of the amber is not dark',
-      );
+      assert.ok(ratio('#ffffff', amber) >= 4.5, 'white no longer reads on this stage');
+      assert.equal(tokens['color-on-stage-ripening'], '#fff');
     }
     assert.equal(onStageToken('ripening'), 'var(--fruitback-color-on-stage-ripening, var(--fruitback-color-on-stage))');
   });
 
-  it('holds the five statuses of the mock-up, in both schemes (FRU-233)', () => {
-    const drawn = { seeded: '#dd2c27', green: '#2563eb', ripening: '#f59e0b', ripe: '#15803d', composted: '#64748b' };
+  it('holds the five statuses of the mock-up of 2026-10-20, in both schemes (FRU-292)', () => {
+    const drawn = { seeded: '#6a7950', green: '#56802e', ripening: '#ac5f00', ripe: '#dd2c27', composted: '#8d6e63' };
     for (const tokens of [light, dark]) {
       assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), drawn);
     }
+  });
+
+  it('keeps the red of the widget as its accent, in the light scheme (FRU-292)', () => {
+    // The extension has an accent of its own (#c2410c). The widget lies on the page of a host and keeps its red.
+    assert.equal(light['color-accent'], '#dd2c27');
   });
 
   it('passes for every pair, in both schemes', () => {

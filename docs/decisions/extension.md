@@ -226,24 +226,37 @@ open composer and its note` fails without the check, 3 runs out of 3.
 
 ### The rules, in short
 
-- **The two pages wear the tokens of the design**, which are the tokens of the widget
-  (`design/README.md`, `packages/widget/src/theme.ts`): the accent `#dd2c27`, and in the dark scheme
-  the pair of the widget, a lighter red (`#ec6a65`) under dark text.
-- **The tokens are those of the mock-up of 2026-10-13** (FRU-233): the neutral greys, and the five
-  status colours for the counts a screen of the popup will draw. `--radius-field` is 8 px, where it
-  was 10, and `--radius-action` (10 px) waits for the screens of the popup (FRU-251): this change
-  moves no layout, and an action is still a pill. The dark scheme is kept and derived, like the
-  widget's.
+- **The tokens are those of the mock-up of 2026-10-20** (FRU-292): the warm stone greys, the five
+  status colours, the shadows and the radii of the widget (`packages/widget/src/theme.ts`), and
+  **an accent of the extension's own**: `#c2410c`, `#9a3412` under the pointer, white on it at
+  5.18:1. The widget keeps its red `#dd2c27` on the page of a host. One accent per surface was
+  decided by the orchestrator on 2026-10-20, from the mock-up; Mathieu may go back to one accent,
+  which is a change of one line in `style.css` and of `ACCENTS` in the test.
+- **The tokens of the screens to come are declared now**, so that a screen takes a value and never
+  writes one: `--surface-warm`, `--line-row`, `--line-control`, `--line-soft`, `--ink`,
+  `--on-ink-muted`, `--success-line`, the three of an alert, the three of « Ready to check »,
+  `--selection`, `--tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
+  `--radius-panel` (14 px), `--font-sans` and `--font-mono`.
+- **The edge of a field is `--line-strong` (`#8f8883`, 3.49:1), not the `#a8a29e` of the
+  mock-up.** That grey is 2.52:1 on white, under the 3:1 a field needs. It stays as
+  `--line-control`, the edge of a secondary button and of a key, whose label says what it is.
+- **The muted text is `#756e69`**, one step darker than the `#78716c` of the mock-up, which is
+  4.40:1 on the sunken surface. It is the widget's value too.
+- **The dark scheme is derived**: the stone scale of the widget, and an orange lighter than the
+  accent under dark text (`#fb923c`, 7.73:1 with `#1c1917` on it, 6.09:1 on the sunken surface).
+  Mathieu validates it on the captures of the PR.
 - **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
   stylesheet of an extension page cannot import the widget, so the values are copied.
-  `src/design-tokens.test.ts` compares each one with the widget in both schemes, and measures each
-  pair that the pages paint: 4.5:1 for text, 3:1 for the edge of a field.
-- **No rule of either stylesheet writes a colour**: it names a token. The one exception is the red
-  of the mark. test:`writes no colour outside the tokens, but the red of the mark`.
+  `src/design-tokens.test.ts` compares each shared one with the widget in both schemes, checks each
+  accent against its own value, and measures each pair that the pages paint: 4.5:1 for text, 3:1
+  for the edge of a field and a drawing. A grey that differs between the two surfaces fails it.
+- **No rule of either stylesheet writes a colour**: it names a token. The one exception is the drop
+  of the mark, in the accent of the light scheme. test:`writes no colour outside the tokens, but
+the drop of the mark`.
 - **An action is a pill**, as on the boards (test:`draws an action as a pill`). A label that may take several lines (`button.long`)
   takes the corner of a field: a pill of two lines is a lozenge.
-- **The pin of the widget is beside the name**, in the red of the mark in both schemes, as the
-  console draws it (`Mark` of `apps/console/app/ui.tsx`). It is a drawing of the stylesheet, not an
+- **The drop of the mark is beside the name**, in the accent of the extension in both schemes, as
+  the mock-up of 2026-10-20 draws it. It is a drawing of the stylesheet, not an
   element: a screen reader reads the name alone.
 
 ### The reasons, and who decided

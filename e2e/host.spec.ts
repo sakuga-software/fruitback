@@ -347,7 +347,7 @@ test('the dock has the measures of the mock-up: three controls of 44 px, 24 px f
   });
   for (const round of [gear, list]) {
     expect(await painted(round)).toMatchObject({
-      fill: 'rgb(63, 63, 70)',
+      fill: 'rgb(68, 64, 60)',
       text: 'rgb(255, 255, 255)',
       radius: '999px',
       shadow,

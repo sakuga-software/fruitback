@@ -138,7 +138,7 @@ test('the banner, the frame and the name of the component have the measures of t
     padding: '6px 6px 6px 18px',
     gap: '14px',
     'border-radius': '999px',
-    'background-color': 'rgb(24, 24, 27)',
+    'background-color': 'rgb(28, 25, 23)',
     color: 'rgb(255, 255, 255)',
     'font-size': '13px',
     'white-space': 'nowrap',
@@ -148,7 +148,7 @@ test('the banner, the frame and the name of the component have the measures of t
   expect(await page.locator('[data-fruitback-host-banner]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
     'rgba(0, 0, 0, 0.18) 0px 10px 30px 0px',
   );
-  expect(await read('.fruitback-banner-key', ['color'])).toMatchObject({ color: 'rgb(161, 161, 170)' });
+  expect(await read('.fruitback-banner-key', ['color'])).toMatchObject({ color: 'rgb(214, 211, 209)' });
   // How a keyboard moves is read, and not drawn.
   expect(await read('.fruitback-banner-keys', [])).toMatchObject({ width: 1, height: 1 });
   expect(
@@ -164,7 +164,7 @@ test('the banner, the frame and the name of the component have the measures of t
     height: 32,
     padding: '0px 14px',
     'border-radius': '999px',
-    'background-color': 'rgb(63, 63, 70)',
+    'background-color': 'rgb(68, 64, 60)',
     color: 'rgb(255, 255, 255)',
     'font-size': '13px',
     'font-weight': '600',
