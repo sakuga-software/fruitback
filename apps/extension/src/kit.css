@@ -17,8 +17,10 @@
   outline-offset: 2px;
 }
 
-/* The head of a shell: 52 px, the drop and the name, the account at the end. */
-/* 52 px, then its rule: 53 px from the top to the body, as the mock-up draws it. */
+/*
+  The head of a shell: the drop and the name, the account at the end. 52 px of content, then its
+  rule: 53 px from the top to the body, as the mock-up draws it (its title is measured at 85 px).
+*/
 .kit-head {
   display: flex;
   align-items: center;

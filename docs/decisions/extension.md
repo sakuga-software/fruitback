@@ -278,7 +278,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **One source for the parts the popup, the side panel and the page share.** `src/kit.ts` builds
   them, with no `browser`, so `kit.test.ts` reads each on happy-dom; `src/kit.css` gives their
   measures on the tokens. The popup and the options page link `kit.css` after `popup/style.css`.
-- **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px, the drop and
+- **The parts, as the mock-up of 2026-10-20 draws them:** the head of a shell (52 px and its rule of 1 px, 53 in all, as the mock-up draws it; the drop and
   « Fruitback », the button of the account of 44 px), the main button (46 px; 56 px with the drop
   for the action of a site; 48 px in the panel), the second button (44 px), the text button
   (« Change », a target of 44 px), the switch (44 × 26, 36 × 22 in a table, 40 × 24 in the
