@@ -51,6 +51,20 @@ export function runShortcut(
   return true;
 }
 
+/**
+ * The tab the key was pressed on: the one `onCommand` gives, or the active tab of the window when it
+ * gives none (review of #368). Chrome passes it since 86 and Firefox since 126; a browser that does
+ * not would otherwise make the key do nothing, with no error.
+ */
+export async function tabOfCommand(
+  tab: { id?: number } | undefined,
+  activeTabs: () => Promise<{ id?: number }[]>,
+): Promise<{ id?: number } | undefined> {
+  if (tab?.id !== undefined) return tab;
+
+  return (await activeTabs().catch(() => []))[0];
+}
+
 /** A command as `commands.getAll()` gives it. */
 export type BrowserCommand = { name?: string; shortcut?: string };
 
