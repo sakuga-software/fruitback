@@ -469,11 +469,18 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
 
   const again = await openPopup(extension, page);
   await again.getByRole('button', { name: 'Show every note of the page' }).click();
-  await expect.poll(() => inPanel<string>(page, 'document.title').catch(() => ''), { timeout: 10_000 }).not.toBe('');
+  // The panel first follows the tab and reads: « Reading… » (`no-widget`). Polled on what it shows,
+  // never on what it does not: a panel not drawn yet has no « Reading… » either (it made this flaky).
+  const shows = () =>
+    inPanel<string>(
+      page,
+      `document.querySelector('.panel-reading') ? 'reading' : document.querySelector('.panel-failed button') ? 'reload' : 'other'`,
+    ).catch(() => 'other');
+  await expect.poll(shows, { timeout: 10_000 }).toBe('reading');
 
   // Not « Reading… » for ever: once the page still has no widget, the panel says to reload it.
-  await expect
-    .poll(() => inPanel<boolean>(page, `document.querySelector('.panel-reading') !== null`), { timeout: 15_000 })
-    .toBe(false);
-  expect(await inPanel<boolean>(page, `document.querySelector('.panel-failed button') !== null`)).toBe(true);
+  await expect.poll(shows, { timeout: 15_000 }).toBe('reload');
+  expect(await inPanel<string>(page, `document.querySelector('.panel-failed p')?.textContent ?? ''`)).toMatch(
+    /did not start on this page|n’a pas démarré sur cette page/,
+  );
 });
