@@ -422,6 +422,7 @@ describe('« Ready to check » (FRU-300)', () => {
     onReplySend: () => {},
     onReplyCancel: () => {},
     onRetry: () => {},
+    onReload: () => {},
     onSettings: () => {},
     onVerdict: (id, verdict) => calls.push(`${id}:${verdict}`),
     ...extra,
@@ -609,6 +610,7 @@ describe('what the panel does with an answer of the widget (raised in review)', 
       onRetry: () => {},
       onReload: () => calls.push('reload'),
       onSettings: () => {},
+      onVerdict: () => {},
     });
     assert.match(root.textContent ?? '', /Reload it to see its notes\./);
     [...root.querySelectorAll<HTMLButtonElement>('button')]
