@@ -511,6 +511,9 @@ did not change: the fields of 760 px and the file input of the browser are as th
   guide use; the popup adds **Pair in the page of the extension**, which opens the card of that
   worker with the code filled in (`#workers?worker=…&code=…`). Taking pairing out of the popup is a
   choice for later, once the page is the habit.
+- **FRU-289, in the popup too.** A pairing link that just paired says « Paired. This browser reads and
+  writes the notes of this worker. »; « already paired » is only for a browser paired before the
+  link. With no name, the popup says « Paired » and the e-mail under it, as the card does.
 - **« Open notes in the sidebar »** sets what the icon opens: the side panel on a site that is on,
   the popup everywhere else (where a site is turned on). Chrome keeps one behaviour for the browser,
   so the background sets it again when the tab, the rules or the preference change

@@ -249,6 +249,12 @@ button.long {
   color: var(--muted);
 }
 
+/* FRU-289: the e-mail of a session with no name, under « Paired », in the secondary text. */
+.identity-email {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .problem {
   margin: 8px 0 0;
   color: var(--accent);

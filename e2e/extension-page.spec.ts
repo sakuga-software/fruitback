@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import fs from 'node:fs/promises';
 import { type Page, expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, test } from './extension.ts';
+import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
@@ -452,4 +452,22 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
   await prefs.getByRole('switch', { name: 'Open notes in the sidebar' }).click();
   await site.bringToFront();
   await expect.poll(behaviour).toBe(false);
+});
+
+test('a pairing link says « Paired » once it paired, and « already paired » only to a browser paired before (FRU-289)', async ({
+  extension,
+}) => {
+  const { link } = await mintPairing('Camille Durand');
+  const worker = await extension.context.newPage();
+  await worker.goto(link);
+  const popup = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
+  await popup.getByRole('button', { name: /^(Pair with this worker|Appairer avec ce worker)$/ }).click();
+  await expect(popup.getByText(/^(Paired as|Appairé en tant que) Camille Durand$/)).toBeVisible();
+  await expect(popup.getByText(/^(Paired\. This browser|Appairé\. Ce navigateur)/)).toBeVisible();
+  await expect(popup.getByText(/already paired|déjà appairé/)).toHaveCount(0);
+  await popup.close();
+
+  // The same link, later: this browser was paired before it.
+  const again = await openPopup(extension, worker, AUTHENTICATED_WORKER_ORIGIN);
+  await expect(again.getByText(/already paired|déjà appairé/)).toBeVisible();
 });

@@ -148,6 +148,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Pair with this worker': 'Appairer avec ce worker',
   'This page is a pairing link for {worker}.': 'Cette page est un lien d’appairage pour {worker}.',
   'This is a site to review': 'C’est un site à relire',
+  'Paired. This browser reads and writes the notes of this worker.':
+    'Appairé. Ce navigateur lit et écrit les notes de ce worker.',
   'This browser is already paired with that worker, so the link is not needed.':
     'Ce navigateur est déjà appairé avec ce worker, donc le lien n’est pas nécessaire.',
   'Log out': 'Se déconnecter',
