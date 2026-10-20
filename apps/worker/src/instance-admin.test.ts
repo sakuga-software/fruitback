@@ -16,7 +16,7 @@ import {
 import { createLinearStore } from './linear.ts';
 import type { Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -498,7 +498,7 @@ describe('the trace of the reads of the administrator (FRU-261)', () => {
   it('keeps who read after the account of the administrator goes', async () => {
     const { on, ana, bob, beta } = await anInstance();
     await get(on, `${ADMIN_PATH}/workspaces/${beta}`, ana.token);
-    await rowsOf(on.database, `DELETE FROM "user" WHERE id = '${ana.id}'`);
+    await withoutOwnerRule(on.database, `DELETE FROM "user" WHERE id = '${ana.id}'`);
 
     const { reads } = JSON.parse((await get(on, `/console/workspaces/${beta}/admin-reads`, bob.token)).text) as {
       reads: { admin: { email: string } }[];
@@ -883,7 +883,7 @@ describe('the trace of the actions of the administrators (FRU-280)', () => {
     const { on, ana, bob, carl } = await anInstance();
     await setAdmin(on, ana.token, bob.id, { admin: true });
     await setAdmin(on, bob.token, carl.id, { admin: true });
-    await rowsOf(on.database, `DELETE FROM "user" WHERE id IN ('${bob.id}', '${carl.id}')`);
+    await withoutOwnerRule(on.database, `DELETE FROM "user" WHERE id IN ('${bob.id}', '${carl.id}')`);
 
     const { actions } = JSON.parse((await get(on, `${ADMIN_PATH}/actions`, ana.token)).text) as {
       actions: { actor: unknown; target: unknown }[];

@@ -56,6 +56,20 @@ export async function rowsOf(database: Database, statement: SQL | string): Promi
   return (answer as { rows?: Row[] }).rows ?? [];
 }
 
+/**
+ * `rowsOf` with the trigger of the last owner off (FRU-324), and on again after. For a case that
+ * removes a member or an account by hand, to plant a person who is no longer of a workspace, and
+ * leaves that workspace with no owner. No route of the worker and no route of better-auth does it.
+ */
+export async function withoutOwnerRule(database: Database, statement: SQL | string): Promise<Row[]> {
+  await rowsOf(database, 'ALTER TABLE member DISABLE TRIGGER member_keeps_owner');
+  try {
+    return await rowsOf(database, statement);
+  } finally {
+    await rowsOf(database, 'ALTER TABLE member ENABLE TRIGGER member_keeps_owner');
+  }
+}
+
 /** The dates of the migrations that `database` applied, in order. Drizzle names a migration by its date. */
 export async function appliedDates(database: Database): Promise<number[]> {
   const rows = await rowsOf(database, 'SELECT created_at FROM __drizzle_migrations ORDER BY created_at');

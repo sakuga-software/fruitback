@@ -3107,7 +3107,7 @@ connectors, keptNotes } }`. A `name` that is not text, or is blank, answers `400
   `deleteWorkspace` of the account store calls too: the notes that the worker keeps go first, while
   the sites still name them (FRU-194), then the foreign keys take the rest.
 - **One transaction** (`deleteWorkspace` of `instance-admin-postgres.ts`): the lock of the role,
-  the workspace `FOR UPDATE` (a write that names it waits, then finds nothing), the caller is still
+  its members (`holdMembers`, FRU-324), the workspace `FOR UPDATE` (a write that names it waits, then finds nothing), the caller is still
   an administrator, the name, the counts, the sealed keys of its Linear connectors, the action, the
   deletion. test:`refuses the deletion: it waits for the removal, then reads that the account is no administrator`
   fails without the lock.
@@ -3141,7 +3141,7 @@ Decision 2 of 2026-10-19: « Directes, tracées ».
   keeps an owner, the invitations of a person whose role no longer invites cancelled, the sites of a
   guest gone with the role of a guest.
 - **One transaction for each write** (`inWorkspace` of `instance-admin-postgres.ts`): the lock of the
-  role, the workspace `FOR UPDATE`, the caller still an administrator, the workspace not suspended,
+  role, its members (`holdMembers`, FRU-324), the workspace `FOR UPDATE`, the caller still an administrator, the workspace not suspended,
   then the rule, the write and the action. The route runs it in `oneAtATime` of
   `auth-organization.ts`, so a call of the plugin on the same workspace in this process waits.
 - **The owner.** The account becomes the owner; every other owner becomes an admin. The ticket says
@@ -3168,8 +3168,38 @@ workspaces }`; `409 sole-owner` with `workspaces`, `409 self-deletion`, `409 las
   `409 email-mismatch`; `400 invalid-email`; `404` for an account that does not exist.
 - **One transaction** (`deleteAccount` of `instance-admin-postgres.ts`): the lock of the role, the
   account `FOR UPDATE`, the rule of the last administrator before the check of the caller (as in
-  `setInstanceAdmin`), the address, the workspaces of the account `FOR UPDATE`, the owners counted,
-  one action for each workspace, then `DELETE FROM "user"`. The foreign keys do the rest.
+  `setInstanceAdmin`), the address, the memberships of the account then its workspaces `FOR UPDATE`,
+  the owners counted, one action for each workspace, then `DELETE FROM "user"`. The foreign keys do
+  the rest.
+- **A route of better-auth in the same moment** (FRU-324, « A workspace keeps an owner » below): the
+  count above is not enough alone, because better-auth counts, then writes, in no transaction.
+
+## A workspace keeps an owner (FRU-324)
+
+A heavy review of #373 (FRU-285) found it: the deletion of an account counted the other owner of a
+workspace, and a route of the organization plugin took that owner away before the deletion
+committed. The workspace had no owner, which nobody repairs from the console.
+
+### The rules, in short
+
+- **The trigger `member_keeps_owner`** (`0020_workspace_keeps_owner`) runs after each `UPDATE` of
+  `role` and each `DELETE` on `member` that takes an owner away. It holds the workspace
+  `FOR NO KEY UPDATE`, then counts the owners in a new statement, and raises `check_violation` when
+  none is left. The write of better-auth and the lock are one transaction: the statement of the
+  plugin. A workspace whose row is gone (a deletion in progress, or done) is not counted.
+- **Not a lock in the route of the worker.** better-auth writes through its own pool, in no
+  transaction: a route that held the workspace on a connection of its own while better-auth wrote on
+  another one would hold two of the ten connections of the pool for each call, and ten calls on ten
+  workspaces at once would wait for ever. The trigger holds nothing outside the statement.
+- **Members, then the workspace.** The trigger runs after PostgreSQL holds the row of the member. A
+  writer that holds a workspace and then writes its members (`dropWorkspace`, `deleteWorkspace` and
+  `inWorkspace` of the administrator) calls `holdMembers` first; `deleteAccount` holds the
+  memberships of the account first. With the workspace first, the route and the deletion waited for
+  each other, and PostgreSQL ended one of them on a deadlock after a second (measured: the two cases
+  « neither ends on a deadlock » of `workspace-keeps-owner.test.ts` fail without `holdMembers`).
+- **The refusal is a failure of better-auth.** The plugin answers `500`, and the worker `502
+auth-unavailable`. An owner who asks to leave again gets the refusal of better-auth of the last
+  owner, `400`, since better-auth reads the owners first. It is the answer of a race with an administrator, not of a click alone.
 - **The sessions of the extension** are in another store: `endSessionsOf({ subject })` runs before the
   transaction (after a first pass of the checks alone, so a refusal ends nothing) and after it.
 - **`soleOwner`** on each workspace of `GET /console/admin/users` says that the account owns it alone:

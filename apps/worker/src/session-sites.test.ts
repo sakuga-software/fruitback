@@ -6,7 +6,7 @@ import { type World, callOn, signInTo, worlds } from './console-world.fixture.ts
 import type { WorkerEnv } from './env.ts';
 import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { withoutOwnerRule } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -88,7 +88,7 @@ describe('the sites a session may turn on (FRU-101)', () => {
   it('answers nothing to a person who is no longer a member', async () => {
     const env = await envWith();
     const { alice, acme, token } = await setUp(env);
-    const removed = await rowsOf(
+    const removed = await withoutOwnerRule(
       env.database,
       `DELETE FROM member WHERE "organizationId" = '${acme.id}' AND "userId" = '${alice.id}' RETURNING id`,
     );

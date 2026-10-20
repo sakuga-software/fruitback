@@ -1591,7 +1591,9 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   test:`keeps one owner when two owners go at the same moment (FRU-209)`,
   test:`writes one invitation for one address when two people invite it at the same moment`.
   **This holds for one process of the worker.** Two replicas do not share it: the rate limit is
-  shared through the database (FRU-67), this is not.
+  shared through the database (FRU-67), this is not. The last owner is kept on every replica by the
+  database since FRU-324 (« A workspace keeps an owner » below); two invitations of one address
+  from two replicas are not.
   **The rename and the deletion of a workspace are outside it**: `POST` and `DELETE` on
   `/console/workspaces/<id>`. Neither counts the owners or looks for an invitation before it
   writes. Two renames at the same moment leave the last one written. Not measured: a rename at the
@@ -1660,6 +1662,21 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   admin, and an admin cannot make an owner:
   test:`keeps the last owner: they cannot leave, be removed, or be demoted, by themselves or by an admin`.
   These are checks of better-auth 1.7.7, held by that test.
+- **A workspace keeps an owner, whoever writes its members** (FRU-324). better-auth counts the owners,
+  then writes, in no transaction: the deletion of an account by an administrator (FRU-285) counted
+  the other owner, and a route that removed, demoted or let go that owner in the same moment left the
+  workspace with no owner (measured on a real PostgreSQL:
+  test:`leaves the workspace with no owner without the trigger`). A trigger of the database
+  (`0020_workspace_keeps_owner`) now runs after every write that takes an owner away: it holds the
+  workspace, so it waits for a deletion that holds it, then counts the owners, and refuses the write
+  when none is left, in the transaction of that write:
+  test:`refuses to demote or remove the last owner, written straight in the database`. The route then
+  answers `502 auth-unavailable`, as for any failure of better-auth; an owner who asks to leave again
+  gets the refusal of better-auth of the last owner, `400`. **This holds for every replica**, and for a write that is not a
+  route of better-auth. A workspace that is deleted takes its owners with it. A writer that holds a
+  workspace and then writes its members holds the members first, so that a route and a deletion do
+  not wait for each other:
+  test:`deletes Ana while Bob removes her: the route waits for the row, and neither ends on a deadlock`.
 - **Somebody who is removed, or who leaves, keeps no extension for the workspace.** Every chain of
   refresh tokens of the person for that workspace is ended at once, and so is a pairing code that
   was minted for them and not redeemed. The refresh and the pairing also read the membership: a
@@ -2045,7 +2062,9 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   same guard. The route refuses with `409`:
   - `sole-owner`, with the workspaces that the account owns alone: **an account that owns a workspace
     alone is not deleted**, until another account owns it or the workspace is deleted:
-    test:`refuses an account that owns a workspace alone, and lists those workspaces, until it has another owner`;
+    test:`refuses an account that owns a workspace alone, and lists those workspaces, until it has another owner`.
+    A route of better-auth that takes the other owner away while the deletion runs waits for it, and
+    is then refused by the trigger of the last owner (FRU-324, « A workspace keeps an owner » above);
   - `self-deletion`, `email-mismatch`, and `last-admin` for the last administrator. The checks and the
     deletion are one transaction under the lock of the role, with the workspaces of the account held
     `FOR UPDATE`, so two administrators who delete each other leave one:

@@ -11,7 +11,7 @@ import { handleConsoleApi } from './console-api.ts';
 import { adminLinkFor } from './first-admin.ts';
 import { ADMIN_PATH } from './instance-admin.ts';
 import type { PgDatabase } from './postgres.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { digest } from './session.ts';
 
 /**
@@ -649,12 +649,12 @@ for (const { label, open, skip } of DATABASES) {
           target: { email: 'carl@beta.dev' },
         };
 
-        await rowsOf(
+        await withoutOwnerRule(
           worker.database,
           `DELETE FROM member WHERE "userId" = '${carl.id}' AND "organizationId" = '${beta}'`,
         );
         assert.deepEqual(await ofBeta(), [suspended]);
-        await rowsOf(worker.database, `DELETE FROM "user" WHERE id = '${carl.id}'`);
+        await withoutOwnerRule(worker.database, `DELETE FROM "user" WHERE id = '${carl.id}'`);
         assert.deepEqual(await ofBeta(), [suspended]);
         // The account went: the rows keep its address, and no longer its id.
         assert.deepEqual(await rowsOf(worker.database, 'SELECT DISTINCT target_account_id FROM admin_actions'), [
