@@ -227,6 +227,13 @@ describe('the commands of the side panel (FRU-299)', () => {
     assert.deepEqual(parsePanelNotes([{ ...NOTE, number: -1 }]), [withoutNumber]);
     // A reply that is not one goes, the note stays.
     assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ body: 3 }, ...NOTE.replies] }]), [NOTE]);
+    // A reply of a page says so; anything but `true` is dropped.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ ...NOTE.replies[0], fromPage: true }] }])?.[0]?.replies, [
+      { ...NOTE.replies[0], fromPage: true },
+    ]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, replies: [{ ...NOTE.replies[0], fromPage: 'yes' }] }])?.[0]?.replies, [
+      NOTE.replies[0],
+    ]);
     // FRU-300: who confirmed it, both fields or nothing.
     assert.deepEqual(parsePanelNotes([{ ...NOTE, checked: { by: 'Camille', at: '2026-10-20T10:00:00Z' } }]), [
       { ...NOTE, checked: { by: 'Camille', at: '2026-10-20T10:00:00Z' } },

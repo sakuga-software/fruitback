@@ -279,7 +279,8 @@ export type PanelNote = {
   mine?: true;
   createdAt: string;
   updatedAt: string;
-  replies: { author?: string; body: string; createdAt: string }[];
+  /** `fromPage`: written from a page, under a name the page typed (FRU-257); else the tracker's. */
+  replies: { author?: string; body: string; createdAt: string; fromPage?: true }[];
   /** Who said it looks fixed, and when (FRU-294). */
   checked?: { by: string; at: string };
   canReply: boolean;
@@ -322,7 +323,12 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
       const at = boundedString(reply.createdAt, PANEL_LIMITS.date);
       const by = reply.author === undefined ? undefined : boundedString(reply.author, PANEL_LIMITS.name);
       if (body === undefined || at === undefined || (reply.author !== undefined && by === undefined)) continue;
-      replies.push({ ...(by === undefined ? {} : { author: by }), body, createdAt: at });
+      replies.push({
+        ...(by === undefined ? {} : { author: by }),
+        body,
+        createdAt: at,
+        ...(reply.fromPage === true ? { fromPage: true as const } : {}),
+      });
     }
     if (
       id === undefined ||

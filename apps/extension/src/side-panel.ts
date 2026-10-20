@@ -510,9 +510,15 @@ function tick(document: Document): SVGSVGElement {
   return drawing;
 }
 
-/** Who marked a note done, as its replies say: the author of the newest reply, or nobody known. */
+/**
+ * Who marked a note done, as its replies say: the author of the newest reply of the tracker, never one
+ * written from a page, or nobody known.
+ */
 function fixedLine(note: PanelNote, now: number): string {
-  const last = [...note.replies].reverse().find((reply) => (reply.author ?? '').trim() !== '');
+  // A reply written from a page carries a name the page typed: it says nobody fixed anything (review).
+  const last = [...note.replies]
+    .reverse()
+    .find((reply) => reply.fromPage !== true && (reply.author ?? '').trim() !== '');
   if (last?.author !== undefined) {
     return t('Fixed by {name} · {age}', { name: last.author.trim(), age: ageOf(last.createdAt, now) });
   }

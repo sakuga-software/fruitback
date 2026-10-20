@@ -265,7 +265,8 @@ export type PageNote = {
   createdAt: string;
   updatedAt: string;
   /** Oldest first. */
-  replies: { author?: string; body: string; createdAt: string }[];
+  /** `fromPage`: written from a page, under a name the page typed (FRU-257); else the tracker's. */
+  replies: { author?: string; body: string; createdAt: string; fromPage?: true }[];
   /** Who said it looks fixed, and when (FRU-294): a done note confirmed. */
   checked?: { by: string; at: string };
   /** Whether this reader may reply, as the thread offers it. */
@@ -811,6 +812,7 @@ export function init(options: FruitbackOptions): Fruitback {
               ...(author === undefined ? {} : { author }),
               body: fromPage?.text ?? comment.body,
               createdAt: comment.createdAt,
+              ...(fromPage === undefined ? {} : { fromPage: true as const }),
             };
           }),
           ...(issue.checked === undefined ? {} : { checked: { by: issue.checked.by, at: issue.checked.at } }),

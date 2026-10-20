@@ -128,7 +128,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     await widget.refresh();
 
     assert.deepEqual(widget.pageNotes()?.[0]?.replies, [
-      { author: 'Dev', body: 'Seen, thanks.\nTwo lines.', createdAt: '2026-10-20T09:00:00.000Z' },
+      { author: 'Dev', body: 'Seen, thanks.\nTwo lines.', createdAt: '2026-10-20T09:00:00.000Z', fromPage: true },
     ]);
   });
 

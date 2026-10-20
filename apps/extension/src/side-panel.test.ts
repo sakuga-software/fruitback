@@ -387,7 +387,16 @@ describe('« Ready to check » (FRU-300)', () => {
     mine: true,
     replies: [{ author: 'Sakuga team', body: 'Fixed in the last deploy.', createdAt: '2026-10-20T10:00:00Z' }],
   };
-  const NOBODY: PanelNote = { ...base, id: 'r2', number: 2, stage: 'ripe', mine: true, note: 'The Add button.' };
+  // Raised in review: a reply from a page, under a typed name, does not say who fixed the note.
+  const NOBODY: PanelNote = {
+    ...base,
+    id: 'r2',
+    number: 2,
+    stage: 'ripe',
+    mine: true,
+    note: 'The Add button.',
+    replies: [{ author: 'Sakuga team', body: 'Typed on a page.', createdAt: '2026-10-20T11:00:00Z', fromPage: true }],
+  };
   const OTHERS: PanelNote = { ...base, id: 'o1', number: 3, stage: 'ripe', note: 'Somebody else’s.' };
   const CHECKED: PanelNote = {
     ...base,
