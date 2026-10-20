@@ -20,10 +20,16 @@ body {
 }
 
 .welcome h1 {
+  display: block;
   margin: 8px 0 0;
   font-size: 22px;
   font-weight: 700;
   line-height: 1.3;
+}
+
+/* The drop of the popup's title is beside the name in the head already. */
+.welcome h1::before {
+  content: none;
 }
 
 .welcome .lead {
@@ -40,9 +46,16 @@ body {
 }
 
 .welcome-steps li {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: list-item;
+  list-style: decimal;
+}
+
+.welcome-steps li > * {
+  display: block;
+}
+
+.welcome-steps li > span {
+  margin-top: 2px;
 }
 
 .welcome-steps span,
