@@ -359,11 +359,17 @@ test('the detached notes are the first control of the capsule, and overlap nothi
   await chip.click();
   const list = (await drawer.locator('.fruitback-orphans-list').boundingBox())!;
   expect(list.y + list.height).toBeLessThanOrEqual(capsule.y);
-  // In a low window it stays inside it: its height is the room above the capsule.
+  // In a low window it stays inside it: its height is the room above the capsule (160 − 104), and
+  // never less than one row of 44 px.
   const tall = page.viewportSize()!;
-  await page.setViewportSize({ width: tall.width, height: 110 });
+  const listHeight = () =>
+    drawer.locator('.fruitback-orphans-list').evaluate((node) => getComputedStyle(node).maxHeight);
+  await page.setViewportSize({ width: tall.width, height: 160 });
+  expect(await listHeight()).toBe('56px');
   const low = (await drawer.locator('.fruitback-orphans-list').boundingBox())!;
   expect(low.y).toBeGreaterThanOrEqual(0);
+  await page.setViewportSize({ width: tall.width, height: 100 });
+  expect(await listHeight()).toBe('44px');
   await page.setViewportSize(tall);
   await chip.click();
 

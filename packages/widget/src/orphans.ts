@@ -286,8 +286,9 @@ const STYLES = `
   /*
     No higher than the room above the capsule: 24 px under it, 52 px of capsule, 12 px of gap, and
     16 px left at the top of the window. A low window scrolls the list, and never pushes it out.
+    Never under one row of 44 px either: a window lower than that has no room for any list.
   */
-  max-height: min(220px, calc(100vh - 104px));
+  max-height: max(44px, min(220px, calc(100vh - 104px)));
   margin: 0;
 }
 @media (forced-colors: active) {
