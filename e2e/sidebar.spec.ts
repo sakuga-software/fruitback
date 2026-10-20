@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { WORKER_ORIGIN, caseOf } from './pin.ts';
 
 /**
  * The list of every note of the page (FRU-129), on the widget as `init` assembles it.
@@ -11,7 +11,9 @@ import { WORKER_ORIGIN } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 async function mount(page: Page, testCase: string): Promise<void> {
-  await page.goto(`/?widget=off&case=${testCase}`);
+  // A page of its own for each retry and each repetition: the worker keeps the notes of the run, and
+  // a second run on the same page found the notes of the first instead of « No note on this page yet. ».
+  await page.goto(`/?widget=off&case=${caseOf(testCase)}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
