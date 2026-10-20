@@ -27,8 +27,12 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
  * also the difference between a widget people leave on and one they turn off.
  */
 
-/** How long a note stays readable on the badge before it turns into a tooltip. */
-const BADGE_MAX_LENGTH = 32;
+/**
+ * How much of a note the name of a pin holds (FRU-320). A screen reader reads the name once, so it
+ * is cut at the end of a word, near 60 characters: at 32, cut inside a word, « devrait être 18 € »
+ * lost the very number that mattered.
+ */
+const NAME_MAX_LENGTH = 60;
 
 /**
  * Kept next to the stylesheet's `width`, because `positionThread` has to know it to flip sides. The
@@ -727,7 +731,20 @@ function summarise(issue: SeedIssue): string {
     ?.trim();
   if (firstLine === undefined) return issue.identifier;
 
-  return firstLine.length > BADGE_MAX_LENGTH ? `${firstLine.slice(0, BADGE_MAX_LENGTH - 1)}…` : firstLine;
+  return shortened(firstLine, NAME_MAX_LENGTH);
+}
+
+/**
+ * The text whole when it fits, or cut at the last space before `max`, with « … ». A word longer than
+ * half of `max` is cut inside, rather than leaving a name of three letters.
+ */
+export function shortened(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const room = text.slice(0, max - 1);
+  const space = room.lastIndexOf(' ');
+  const cut = space >= max / 2 ? room.slice(0, space) : room;
+
+  return `${cut.replace(/[\s,;:.\-–—]+$/u, '')}…`;
 }
 
 /**

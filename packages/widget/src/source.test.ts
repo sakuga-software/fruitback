@@ -80,6 +80,19 @@ describe('readReactSource', () => {
     assert.deepEqual(readReactSource(button), { component: 'AddToCartButton' });
   });
 
+  // FRU-320: the same internal in a dev build keeps its name in clear, and the frame said « DOMElement ».
+  it('walks past a component of a library kept in clear, to the one the app wrote', () => {
+    const button = mountButton();
+    function DOMElement() {}
+    function AddToCartButton() {}
+    attachFiber(button, {
+      type: 'button',
+      _debugOwner: { type: DOMElement, _debugOwner: { type: AddToCartButton } },
+    });
+
+    assert.deepEqual(readReactSource(button), { component: 'AddToCartButton' });
+  });
+
   it('walks past a minified name rather than reporting a single letter', () => {
     const button = mountButton();
     const minified = Object.assign(function t() {}, { displayName: '' });
@@ -187,5 +200,31 @@ describe('what a bundler minted, in what the engine says (FRU-113)', () => {
         component: 'PricingCard',
       },
     );
+  });
+});
+
+describe('the components of a library, which no note is about (FRU-320)', () => {
+  it('are left out by name, and a name of the app that looks like one is kept', () => {
+    for (const name of [
+      'DOMElement',
+      'Slot',
+      'SlotClone',
+      'Slottable',
+      'Presence',
+      'Primitive.button',
+      'bound DOMElement',
+    ]) {
+      assert.equal(isMangledComponentName(name), true, name);
+    }
+    for (const name of ['DOMElementCard', 'SlotMachine', 'PresenceBadge', 'Primitive', 'Primitives.Row']) {
+      assert.equal(isMangledComponentName(name), false, name);
+    }
+  });
+
+  it('cost the name of the engine, and keep its file and its line', () => {
+    assert.deepEqual(sourceFromContext({ componentName: 'DOMElement', filePath: 'src/site.tsx', lineNumber: 48 }), {
+      file: 'src/site.tsx',
+      line: 48,
+    });
   });
 });

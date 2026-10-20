@@ -84,10 +84,29 @@ export const MANGLED_COMPONENT_PATTERNS = [
  */
 const BOUND_PREFIX = /^(?:bound )+/;
 
+/**
+ * Names a person did write, but in a library, not in the app (FRU-320): the component a note is about
+ * is the first one the app wrote. A dev build, which a staging site often runs, keeps react-aria's
+ * `DOMElement` in clear, and the frame and the thread said « DOMElement · site.tsx:48 ». Seen by the
+ * audit of 2026-10-20 on the playground (HeroUI, on react-aria). The others are the wrappers of Radix,
+ * by their display names: written from its sources, not measured on a page.
+ */
+export const LIBRARY_COMPONENT_PATTERNS = [
+  /^DOMElement$/,
+  /^Slot(?:Clone)?$/,
+  /^Slottable$/,
+  /^Presence$/,
+  /^Primitive\.\w+$/,
+];
+
 export function isMangledComponentName(name: string): boolean {
   const own = name.replace(BOUND_PREFIX, '');
 
-  return own === '' || MANGLED_COMPONENT_PATTERNS.some((pattern) => pattern.test(own));
+  return (
+    own === '' ||
+    MANGLED_COMPONENT_PATTERNS.some((pattern) => pattern.test(own)) ||
+    LIBRARY_COMPONENT_PATTERNS.some((pattern) => pattern.test(own))
+  );
 }
 
 /**
