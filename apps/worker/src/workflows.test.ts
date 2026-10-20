@@ -213,7 +213,9 @@ const CALLS_CI = /^[.$]\/\.github\/workflows\/ci\.yml$/;
 const RUNS_AFTER_A_FAILURE = /\b(?:always|failure|cancelled)\s*\(/;
 
 /**
- * The jobs that hold a write permission and can run on a commit that did not pass `ci.yml`.
+ * The jobs that hold a write permission, or the secrets of an environment, and can run on a commit
+ * that did not pass `ci.yml`. A job of an environment publishes outside GitHub, to a store for
+ * example (FRU-329), and holds no permission that says so.
  *
  * **A job that writes names, in its own `needs`, a job that calls `ci.yml`** (FRU-172). On
  * 2026-10-11 `release-image.yml` published `46a5fa7` while `typecheck` and `test` failed on it: it
@@ -243,7 +245,7 @@ export function writersWithoutCi(source: string): string[] {
     const levels = isMap(granted)
       ? granted.items.map((entry) => (isScalar(entry.value) ? String(entry.value.value) : ''))
       : [isScalar(granted) ? String(granted.value) : ''];
-    if (!levels.some((level) => level.includes('write'))) return [];
+    if (!levels.some((level) => level.includes('write')) && !pair.value.has('environment')) return [];
 
     const needs = pair.value.get('needs', true);
     const needed = isSeq(needs) ? needs.items.map((item) => (isScalar(item) ? String(item.value) : '')) : [];
@@ -501,5 +503,11 @@ describe('the GitHub workflows', () => {
     // `write-all` on a job is a write. A job that only reads is free to run when it likes.
     assert.deepEqual(writersWithoutCi('jobs:\n  publish:\n    permissions: write-all\n'), ['publish']);
     assert.deepEqual(writersWithoutCi('jobs:\n  scan:\n    permissions:\n      contents: read\n'), []);
+    // A job of an environment publishes with its secrets, and holds no write permission (FRU-329).
+    assert.deepEqual(writersWithoutCi('jobs:\n  submit:\n    environment: stores\n    needs: package\n'), ['submit']);
+    assert.deepEqual(
+      writersWithoutCi(workflow('    needs: ci\n').replace('publish:\n', 'submit:\n    environment: stores\n')),
+      [],
+    );
   });
 });
