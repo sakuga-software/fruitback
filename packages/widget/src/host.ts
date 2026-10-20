@@ -499,9 +499,17 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     dock.dispatchEvent(new (view?.Event ?? Event)(CAPTURE_START));
   }
 
+  /**
+   * Where focus goes when a capture stops (FRU-303), on every path:
+   * - « Cancel » and Escape: `leave()` gives it to the launch button.
+   * - Enter on the way out, with an element reached by the keyboard: the way out had focus and leaves
+   *   the tree with the banner, so focus goes to the launch button, shown again; the composer opened
+   *   by the choice then takes it, and gives it back there.
+   * - A click on the page: the browser gave focus to the page at the press, before this runs, so it
+   *   stays where the person put it, and the composer opened by the choice takes it.
+   * - The gear or the list, which stop the capture to open their dialog: that dialog takes it.
+   */
   function stop(): void {
-    // The way out leaves the tree with the banner: focus on it goes back to the launch button, which
-    // is shown again. A dialog opened by the choice then gives focus back there (FRU-303).
     const outHadFocus = deepActiveElement(document) === halt;
     capturing = false;
     hovered = null;
