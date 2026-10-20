@@ -38,7 +38,9 @@ works too. Then, on a site of one of your workspaces, the popup names the worksp
 wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
 only, and the widget appears, reading and writing as you. Once it is on, the popup has a switch to
 turn it off and on, the notes of the page by stage, **Leave feedback** and **Show every note of the
-page**. On a site of none of your workspaces, an owner or an admin gets **Add to {workspace} and
+page**. **Alt+Shift+F** (Option+Shift+F on a Mac) starts a note too, on a site that is on: the
+page of the extension shows the key under Preferences, and opens the settings of your browser to change it. On a site of none of
+your workspaces, an owner or an admin gets **Add to {workspace} and
 turn on**: the browser asks for access to the site, the site is added to that workspace, for its
 members only, and the widget appears. To set a site up by hand, the button at the top right of the
 popup, **Account and settings**, opens the options page.

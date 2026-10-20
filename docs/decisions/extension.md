@@ -347,6 +347,43 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **No date « added »**: the mock-up writes one, and storage keeps none. It is left out rather than
   made up.
 
+## The key that starts a note (FRU-291)
+
+### The rules, in short
+
+- **One command of the manifest, `leave-feedback`, with `Alt+Shift+F` suggested** (Option+Shift+F
+  on macOS). It sends the widget of the tab the command of the popup button: the capture starts,
+  Esc stops it. `src/shortcut.ts` holds the name, the key and the listener (`runShortcut`).
+- **The browser owns the key.** A person changes it in the shortcut settings of the browser
+  (`chrome://extensions/shortcuts`; in Firefox, Add-ons, Manage Extension Shortcuts). A browser does
+  not assign a suggested key that another extension holds: the command is then installed with no
+  key, and the options page says « none set ».
+- **The page never sees the key, and the widget listens to none.** A key on the page would take one
+  from the site under review, so the widget has no shortcut of its own, mounted by the extension or
+  by a script tag.
+- **A command asks for no permission** and adds no warning at install. `shortcut.test.ts` writes the
+  list of permissions out, so a permission added with a key fails there.
+- **The page of the extension shows the key now, under « Preferences », « Keyboard shortcut » (where
+  the mock-up of 2026-10-20 puts it), read from `commands.getAll()`, with a button that opens the
+  settings**: `commands.openShortcutSettings()` where the browser has it (Firefox 137), the page of
+  Chromium otherwise. A Firefox older than 137 has neither, so the line says where to look. One line,
+  on its own, so the screen of preferences of FRU-302 can take it whole.
+- **A tab with no widget does nothing.** No bridge answers there; the refusal is caught.
+
+### The reasons, and what was measured
+
+- **The mock-up of 2026-10-20 (FRU-58) shows `Alt Shift F`**, and the orchestrator chose it on the
+  same day. Chromium installed it on macOS with no conflict (`commands.getAll()` answered `⌥⇧F`).
+  A command takes the key before the page: on a site that binds it, the extension wins while the
+  command holds the key, and the person can change it. Firefox was not measured.
+- **A key pressed by Playwright never reaches a command.** Its keys go to the renderer of the page,
+  and the browser catches a command before that: measured, `page.keyboard.press('Alt+Shift+F')` left
+  the widget as it was. So `e2e/extension-shortcut.spec.ts` reads the key the browser installed,
+  sends from the service worker the message `runShortcut` sends, and drives the options page.
+- **The service worker is not a page of the extension**, and the bridge takes commands from the
+  pages only (`acceptedCommand`). Measured in Chromium: the bridge takes a message of the service
+  worker, and the widget starts the capture. The spec fails if that stops.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

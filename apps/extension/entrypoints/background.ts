@@ -24,6 +24,7 @@ import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts
 import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
+import { runShortcut } from '../src/shortcut.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -361,6 +362,10 @@ export default defineBackground(() => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
     if (alarm.name === PREVIEWS_ALARM) void refreshProven();
     if (alarm.name === CONNECT_ALARM) void claimSignIn();
+  });
+  // FRU-291: the key of the manifest starts a note on the tab it was pressed on. See `runShortcut`.
+  browser.commands.onCommand.addListener((command, tab) => {
+    runShortcut(command, tab, (tabId, message) => browser.tabs.sendMessage(tabId, message));
   });
   // Created at each start of the service worker: `create` replaces the alarm of the same name.
   void browser.alarms

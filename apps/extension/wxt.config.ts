@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
 import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
+import { MANIFEST_COMMANDS } from './src/shortcut.ts';
 
 /** Where the licence lives in the output, and where it is copied from (FRU-82). */
 export const LICENSE_IN_OUTPUT = 'LICENSE';
@@ -68,6 +69,9 @@ export default defineConfig({
     // of extensions, and a store listing is refused for want of a 128px one (FRU-78).
     icons: Object.fromEntries(ICON_SIZES.map((size) => [size, iconPath(size)])),
     action: { default_title: 'Fruitback' },
+    // FRU-291: the key that starts a note. A command asks for no permission and adds no warning at
+    // install. The browser owns the key, so the page never sees it: see `src/shortcut.ts`.
+    commands: MANIFEST_COMMANDS,
     browser_specific_settings: {
       gecko: { id: 'fruitback@sakuga-software.com', strict_min_version: '128.0' },
     },
