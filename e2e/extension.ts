@@ -138,13 +138,15 @@ export async function addRule(
 ): Promise<void> {
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
+  // The page of the extension (FRU-301): « Add a site » opens the form in the panel.
+  await options.getByRole('button', { name: 'Add a site' }).click();
   await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
   // The name of a select in a label includes the chosen option, so it only starts with the label.
   await options.getByLabel(/^Mode/).selectOption(rule.mode);
   await options.getByLabel('Worker endpoint', { exact: true }).fill(rule.endpoint);
   if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
   await options.getByRole('button', { name: 'Add rule' }).click();
-  await expect(options.locator('.rules li').filter({ hasText: PLAYGROUND_ORIGIN })).toContainText('Access granted');
+  await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toContainText('Granted');
   await options.close();
 
   // The background registers the two scripts of the origin after the storage change (FRU-74: a

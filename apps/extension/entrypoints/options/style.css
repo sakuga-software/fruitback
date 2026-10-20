@@ -1,39 +1,463 @@
+/*
+  The page of the extension (FRU-301), as the mock-up of 2026-10-20 draws it: a menu and a column of
+  sections on the raised surface. The two go one under the other when the window is narrow. Every
+  colour is a token of popup/style.css, which this page loads first, with the kit.
+*/
 body {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-h2 {
-  margin: 28px 0 8px;
-  font-size: 15px;
-}
-
-.rules {
-  list-style: none;
-  margin: 12px 0;
+  min-width: 0;
   padding: 0;
+  background: var(--surface-raised);
 }
 
-.rules li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 12px;
-  padding: 10px 0;
+.page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+/* The menu: the drop, the name and the version, the sections, a rule, the two guides. */
+.page-menu {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 260px;
+  padding: 24px 16px;
+}
+
+.page-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 20px;
+}
+
+.page-brand .kit-mark {
+  width: 18px;
+  height: 18px;
+}
+
+.page-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-version {
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.page-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-field);
+  color: var(--subtle);
+  text-decoration: none;
+}
+
+.page-entry[aria-current='true'] {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.page-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.page-rule {
+  height: 1px;
+  margin: 14px 10px;
+  background: var(--line);
+}
+
+.page-guide {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.page-guide:hover {
+  color: var(--accent);
+}
+
+/* The column of the sections. */
+.page-content {
+  box-sizing: border-box;
+  display: flex;
+  flex: 999 1 560px;
+  flex-direction: column;
+  gap: 40px;
+  min-width: 0;
+  max-width: 1180px;
+  padding: 28px 32px 64px;
+}
+
+.page-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-section h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.page-section h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.page-section p {
+  margin: 0;
+}
+
+/* The sections of before (Share rules, Preferences), until FRU-290 and FRU-302: a button at its width. */
+.page-section > button {
+  align-self: flex-start;
+}
+
+/* « Sites »: the title and what a rule is, then the filter and « Add a site ». */
+.sites-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sites-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sites-words h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* The title of the page has no drop before it: the menu carries the mark. */
+.sites-words h1::before {
+  content: none;
+}
+
+.sites-intro {
+  max-width: 560px;
+  color: var(--muted);
+}
+
+.sites-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sites-filter {
+  margin: 0;
+}
+
+.sites-filter input {
+  box-sizing: border-box;
+  width: 220px;
+  height: 36px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+button.page-primary {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+button.page-primary:hover {
+  background: var(--accent-strong);
+}
+
+/* The table and the panel side by side, the panel under the table when the window is narrow. */
+.sites-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.sites-table-slot {
+  flex: 999 1 560px;
+  min-width: 0;
+}
+
+.sites-panel-slot {
+  flex: 1 1 300px;
+  min-width: 0;
+  max-width: 380px;
+}
+
+.sites-panel-slot:empty {
+  display: none;
+}
+
+.sites-table {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.sites-table table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.sites-table th {
+  padding: 10px 12px;
   border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
 }
 
-.rules .pattern {
+.sites-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line-row);
+}
+
+.sites-table th:first-child,
+.sites-table td:first-child {
+  padding-left: 16px;
+}
+
+.sites-table th:last-child,
+.sites-table td:last-child {
+  padding-right: 16px;
+  text-align: right;
+}
+
+.sites-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.rule-row[aria-selected='true'] td {
+  background: var(--alert-surface);
+}
+
+.rule-row[aria-selected='true'] td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The site of a row is the button that opens it. */
+button.rule-open {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+}
+
+button.rule-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rule-pattern {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.rules .buttons {
-  grid-column: 2;
-  grid-row: 1 / span 3;
+.rule-scope {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mode-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rule-worker {
+  color: var(--subtle);
+}
+
+.access-granted {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.access-none {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.access-off {
+  color: var(--muted);
+}
+
+/* The panel of a rule. */
+.rule-panel {
   display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+
+.panel-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-pattern {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  word-break: break-all;
+}
+
+.panel-label,
+.panel-scope,
+.panel-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.panel-body h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+/* A field the mode does not use is hidden, whatever its display. */
+.panel-field[hidden] {
+  display: none;
+}
+
+.panel-field input,
+.add-panel input[type='text'],
+.add-panel select {
+  box-sizing: border-box;
+  height: 36px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-field);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.panel-state {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  align-items: start;
+  padding: 10px 12px;
+  border-radius: var(--radius-field);
+  background: var(--surface-sunken);
+}
+
+.panel-state[data-state='no-access'] {
+  background: var(--alert-surface);
+}
+
+.panel-state-title {
+  font-weight: 600;
+}
+
+.panel-state[data-state='no-access'] .panel-state-title {
+  color: var(--accent);
+}
+
+.panel-state-text {
+  color: var(--alert-body);
+  font-size: 12px;
+}
+
+.panel-state button.page-primary {
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+}
+
+.panel-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+}
+
+button.panel-remove {
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+button.panel-remove:hover {
+  color: var(--accent);
+}
+
+button.panel-save {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-field);
+  /* The ink of the mock-up: the text, with the surface on it, in both schemes. */
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 600;
 }
 
 /* The one thing to do about a problem, beside the words that state it (FRU-90). */

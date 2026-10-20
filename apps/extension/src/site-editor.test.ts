@@ -129,6 +129,81 @@ describe('createEditor', () => {
   });
 });
 
+describe('createEditor.save (FRU-301)', () => {
+  const base = { mode: 'private' as const, endpoint: 'https://feedback.acme.dev', clientId: 'acme', enabled: true };
+  const activated: string[] = [];
+  const editorWith = (stored: Record<string, SiteConfig>, written: [string, SiteConfig][], fail = false) =>
+    createEditor({
+      request: () => Promise.resolve(true),
+      write: (pattern, site) => {
+        written.push([pattern, site]);
+
+        return fail ? Promise.reject(new Error('lost')) : Promise.resolve();
+      },
+      current: () => stored,
+      activate: (pattern) => {
+        activated.push(pattern);
+
+        return Promise.resolve();
+      },
+      stored: () => Promise.resolve(stored),
+    });
+
+  it('stores the new worker and client id, keeps the rule on, and keeps its label', async () => {
+    const written: [string, SiteConfig][] = [];
+    const editor = editorWith({ 'https://acme.dev': { ...base, label: 'Acme' } }, written);
+    assert.equal(
+      await editor.save('https://acme.dev', { mode: 'private', endpoint: 'https://other.acme.dev/', clientId: ' b ' }),
+      '',
+    );
+    assert.deepEqual(written, [
+      [
+        'https://acme.dev',
+        { mode: 'private', endpoint: 'https://other.acme.dev', clientId: 'b', enabled: true, label: 'Acme' },
+      ],
+    ]);
+    // On: its open tabs get the scripts, as after « Add » (raised in review).
+    assert.deepEqual(activated.splice(0), ['https://acme.dev']);
+  });
+
+  it('keeps the mount of a site of a workspace while its worker stays, and drops it when the worker changes', async () => {
+    const team: SiteConfig = {
+      mode: 'team',
+      endpoint: 'https://api.fruitback.com',
+      enabled: false,
+      mount: { clientId: 'c', workspace: 'w' },
+    };
+    const written: [string, SiteConfig][] = [];
+    const editor = editorWith({ 'https://acme.dev': team }, written);
+    await editor.save('https://acme.dev', { mode: 'team', endpoint: 'https://api.fruitback.com', clientId: '' });
+    await editor.save('https://acme.dev', { mode: 'team', endpoint: 'https://feedback.acme.dev', clientId: '' });
+    assert.deepEqual(
+      written.map(([, site]) => site),
+      [
+        {
+          mode: 'team',
+          endpoint: 'https://api.fruitback.com',
+          enabled: false,
+          mount: { clientId: 'c', workspace: 'w' },
+        },
+        { mode: 'team', endpoint: 'https://feedback.acme.dev', enabled: false },
+      ],
+    );
+    // Off: nothing to activate.
+    assert.deepEqual(activated.splice(0), []);
+  });
+
+  it('refuses a bad field without writing, and says a write that was not confirmed', async () => {
+    const written: [string, SiteConfig][] = [];
+    const editor = editorWith({ 'https://acme.dev': base }, written);
+    assert.notEqual(await editor.save('https://acme.dev', { mode: 'private', endpoint: 'nope', clientId: 'a' }), '');
+    assert.equal(await editor.save('https://gone.dev', { ...base }), STORE_PROBLEM);
+    assert.deepEqual(written, []);
+    const failing = editorWith({ 'https://acme.dev': base }, [], true);
+    assert.equal(await failing.save('https://acme.dev', { ...base }), STORE_PROBLEM);
+  });
+});
+
 describe('createEditor.switchOn', () => {
   it('answers false, and stores nothing, when the browser rejects the request', async () => {
     const page = createEditor({

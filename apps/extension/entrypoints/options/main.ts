@@ -20,6 +20,18 @@ import { type FreshPreviews, touchesPreviews } from '../../src/proven-previews.t
 import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
+import { createBrowserSessions } from '../../src/session-browser.ts';
+import { type StoredSession, describeIdentity } from '../../src/session.ts';
+import {
+  type PanelOptions,
+  type RuleRow,
+  matches,
+  menu,
+  rulePanel,
+  ruleState,
+  sitesHead,
+  sitesTable,
+} from '../../src/site-page.ts';
 import { storedLanguage } from '../../src/language.ts';
 
 /**
@@ -56,27 +68,70 @@ setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language)
 document.documentElement.lang = language();
 
 const app = document.querySelector('#app');
-const list = document.createElement('div');
+/** The table of the rules, drawn again at each change of storage or of a grant. */
+const table = document.createElement('div');
+table.className = 'sites-table-slot';
+/**
+ * The panel of a rule, or the form of a new one. Drawn when somebody chooses, and never again by a
+ * change of storage: a list drawn again must not clear what somebody is typing.
+ */
+const panel = document.createElement('div');
+panel.className = 'sites-panel-slot';
 /** Where a change made from a row reports that it was not confirmed. */
 const notice = element('p', '', 'problem');
+/** The rule whose panel is open, `add` for the form of a new one, or nothing. */
+let chosen: string | undefined;
+let filter = '';
+/** The rule whose panel is on the page now: `chosen` can name one the list has not read yet. */
+let shown: string | undefined;
+/** Whether the first list is drawn: until then `current` is empty. */
+let listed = false;
+/** Whether the page has opened a panel by itself once. */
+let opened = false;
+let rows: RuleRow[] = [];
+const sessions = createBrowserSessions();
 
 if (app !== null) {
-  app.append(
-    element('h1', t('Fruitback sites')),
-    element(
-      'p',
-      t('A rule says which worker, and which client, a site belongs to. A site that no rule covers mounts nothing.'),
-    ),
-    list,
+  const sites = element('section', '', 'page-section');
+  sites.id = 'sites';
+  const body = element('div', '', 'sites-body');
+  body.append(table, panel);
+  sites.append(
+    sitesHead(document, {
+      filter,
+      onFilter: (text) => {
+        filter = text;
+        drawTable();
+      },
+      onAdd: () => choose('add'),
+    }),
+    body,
     notice,
-    addForm(),
-    transfer(),
-    await synchronise(),
   );
+  const share = transfer();
+  share.id = 'share';
+  const prefs = await synchronise();
+  prefs.id = 'prefs';
+  const content = element('main', '', 'page-content');
+  content.append(sites, share, prefs);
+  const frame = element('div', '', 'page');
+  frame.append(
+    menu(document, {
+      version: browser.runtime.getManifest().version,
+      current: 'sites',
+      entries: [
+        { id: 'sites', label: t('Sites') },
+        { id: 'share', label: t('Share rules') },
+        { id: 'prefs', label: t('Preferences') },
+      ],
+    }),
+    content,
+  );
+  app.append(frame);
 }
 
 void renderList();
-// Only the list is drawn again, so a change from the popup does not clear what somebody is typing.
+// Only the table is drawn again, so a change from the popup does not clear what somebody is typing.
 browser.storage.onChanged.addListener((changes, area) => {
   const drawn = changes.sites !== undefined || changes[SYNC_SETTING] !== undefined;
   if (area === 'local' && (drawn || touchesPreviews(Object.keys(changes)))) void renderList();
@@ -95,72 +150,164 @@ async function renderList(): Promise<void> {
     .filter((pattern) => parseSitePattern(pattern) === pattern)
     .sort();
 
-  const rows = document.createElement('ul');
-  rows.className = 'rules';
+  const read: RuleRow[] = [];
   for (const pattern of patterns) {
     const site = sites[pattern];
-    if (site !== undefined) rows.append(await row(pattern, site, proven, copied));
+    if (site !== undefined) read.push(await ruleRow(pattern, site, proven, copied));
   }
 
   if (!isLatest()) return;
   current = sites;
+  rows = read;
+  listed = true;
   for (const control of needsList) control.disabled = false;
-  list.replaceChildren(
-    patterns.length === 0
-      ? element('p', t('No rules yet. Add one below, or turn a site on from the toolbar.'), 'state')
-      : rows,
-  );
+  drawTable();
+  // The rule of the open panel is gone: its panel goes too. A panel that is open stays as it is.
+  if (chosen !== undefined && chosen !== 'add' && sites[chosen] === undefined && shown === chosen) choose(undefined);
+  // A rule chosen before the list could read it (the one just added): its panel opens now.
+  if (chosen !== undefined && chosen !== 'add' && sites[chosen] !== undefined && shown !== chosen) choose(chosen);
+  else refreshState();
+  // The first time, the first rule is open, as the mock-up shows it.
+  if (chosen === undefined && panel.childElementCount === 0 && rows[0] !== undefined && !opened) {
+    opened = true;
+    choose(rows[0].pattern);
+  }
 }
 
-async function row(pattern: string, site: SiteConfig, proven: FreshPreviews, copied: boolean): Promise<HTMLElement> {
+function drawTable(): void {
+  const visible = rows.filter((row) => matches(row, filter));
+  // The control that has the focus in the table, found again in the table drawn below: a switch
+  // pressed from the keyboard keeps the focus on its row (raised in review).
+  const focused =
+    document.activeElement instanceof HTMLElement && table.contains(document.activeElement)
+      ? {
+          pattern: document.activeElement.closest('tr')?.dataset.pattern,
+          control: document.activeElement.getAttribute('role') === 'switch' ? '[role="switch"]' : 'button.rule-open',
+        }
+      : undefined;
+  if (rows.length === 0) {
+    table.replaceChildren(element('p', t('No rules yet. Add one, or turn a site on from the toolbar.'), 'state'));
+
+    return;
+  }
+  table.replaceChildren(
+    sitesTable(document, {
+      rows: visible,
+      ...(chosen === undefined ? {} : { selected: chosen }),
+      onSelect: (pattern) => choose(pattern),
+      onToggle: (row, on) =>
+        attempt(() =>
+          on ? editor.switchOn(row.pattern, row.site) : writeSite(row.pattern, { ...row.site, enabled: false }),
+        ),
+    }),
+  );
+  if (visible.length === 0) table.append(element('p', t('No rule matches this filter.'), 'state'));
+  if (focused?.pattern !== undefined) {
+    const line = [...table.querySelectorAll<HTMLElement>('tr.rule-row')].find(
+      (candidate) => candidate.dataset.pattern === focused.pattern,
+    );
+    line?.querySelector<HTMLElement>(focused.control)?.focus();
+  }
+}
+
+/**
+ * Each choice counts one: the panel of a choice is drawn only if no later choice was made while it
+ * read the session (raised in review: A, B, then A again drew A twice).
+ */
+let choice = 0;
+
+/** Opens the panel of a rule, the form of a new one, or nothing. */
+function choose(pattern: string | undefined): void {
+  chosen = pattern;
+  choice += 1;
+  const mine = choice;
+  drawTable();
+  if (pattern === undefined) {
+    shown = undefined;
+    panel.replaceChildren();
+
+    return;
+  }
+  if (pattern === 'add') {
+    shown = undefined;
+    panel.replaceChildren(addForm());
+    panel.querySelector('input')?.focus();
+
+    return;
+  }
+  const row = rows.find((candidate) => candidate.pattern === pattern);
+  // Not read yet (a rule just added): the next list opens it, and what is shown stays until then.
+  if (row === undefined) return;
+  void pairedAs(row.site).then((name) => {
+    if (mine !== choice) return;
+    const said = element('p', '', 'problem');
+    const aside = rulePanel(document, {
+      ...panelOptions(row, name),
+      onSave: (fields) =>
+        void editor.save(row.pattern, fields).then((text) => showProblem(said, text, { list: reloadList })),
+    });
+    aside.querySelector('.panel-body')?.append(said);
+    shown = pattern;
+    panel.replaceChildren(aside);
+  });
+}
+
+/** What the panel of a rule says and does, read from the rule as the list holds it now. */
+function panelOptions(row: RuleRow, name: string | undefined): PanelOptions {
+  const now = (): RuleRow => rows.find((candidate) => candidate.pattern === row.pattern) ?? row;
+
+  return {
+    row,
+    ...(name === undefined ? {} : { pairedAs: name }),
+    onGrant: () => attempt(() => grant(row.pattern, now().site)),
+    onRemove: () =>
+      attempt(async () => {
+        await removeSite(row.pattern);
+        choose(undefined);
+      }),
+    onSave: () => undefined,
+  };
+}
+
+/**
+ * The open panel says what the browser holds now: its rule was switched in the table, or granted.
+ * Only its box of state is put in place: the fields stay as somebody may be typing them (raised in
+ * review).
+ */
+function refreshState(): void {
+  const row = rows.find((candidate) => candidate.pattern === shown);
+  if (row === undefined || shown !== chosen) return;
+  void pairedAs(row.site).then((name) => {
+    if (shown !== row.pattern) return;
+    panel.querySelector('.panel-state')?.replaceWith(ruleState(document, panelOptions(row, name)));
+  });
+}
+
+/** The person of the session this browser holds with the worker of a team rule. */
+async function pairedAs(site: SiteConfig): Promise<string | undefined> {
+  if (site.mode !== 'team') return undefined;
+  const session = (await sessions.list().catch(() => ({}) as Record<string, StoredSession>))[site.endpoint];
+
+  return session === undefined ? undefined : describeIdentity(session.identity);
+}
+
+async function ruleRow(pattern: string, site: SiteConfig, proven: FreshPreviews, copied: boolean): Promise<RuleRow> {
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
   const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
-  const client = site.mode === 'team' ? t("team mode · the site's own widget") : site.clientId;
-
   // A rule stored before FRU-75, or the previews of a site whose worker does not list them now
   // (FRU-103). It runs nowhere, so the row offers only to remove it, and says which of the two it is.
   const refused = lendsSession(pattern, site, proven);
   const previews = site.mode === 'team' && site.mount !== undefined;
 
-  const buttons = document.createElement('span');
-  buttons.className = 'buttons';
-  if (!refused) {
-    // A rule that is off holds no access on purpose (FRU-115), and « Turn on » asks for it.
-    if (!granted && site.enabled) buttons.append(button(t('Grant access'), () => attempt(() => grant(pattern, site))));
-    buttons.append(
-      site.enabled
-        ? button(t('Turn off'), () => attempt(() => writeSite(pattern, { ...site, enabled: false })))
-        : button(t('Turn on'), () => attempt(() => editor.switchOn(pattern, site))),
-    );
-  }
-  buttons.append(button(t('Remove'), () => attempt(() => removeSite(pattern)), 'secondary'));
-
-  const item = document.createElement('li');
-  item.append(
-    element('span', pattern, 'pattern'),
-    buttons,
-    element('span', `${site.enabled && !refused ? t('On') : t('Off')} · ${client} · ${site.endpoint}`, 'state'),
-    refused
-      ? element('span', t(previews ? PREVIEWS_NOT_PROVEN : STALE_TEAM_WILDCARD), 'problem')
-      : access(granted, site.enabled),
-  );
-  // FRU-264: the background does not send this rule to the account, and the reviewer must know why.
-  if (copied && !fits(pattern, site)) item.append(element('span', t(TOO_LARGE_FOR_ACCOUNT), 'problem'));
-
-  return item;
-}
-
-/**
- * What the browser holds for a rule. No access is a problem only for a rule that is on: a rule that
- * is off gave its access back (FRU-115).
- */
-function access(granted: boolean, enabled: boolean): HTMLElement {
-  if (granted) return element('span', t('Access granted'), 'state');
-
-  return enabled
-    ? element('span', t('No access in this browser'), 'problem')
-    : element('span', t('No access while it is off'), 'state');
+  return {
+    pattern,
+    site,
+    granted,
+    ...(refused ? { refused: previews ? PREVIEWS_NOT_PROVEN : STALE_TEAM_WILDCARD } : {}),
+    // FRU-264: the background does not send this rule to the account, and the reviewer must know why.
+    ...(copied && !fits(pattern, site) ? { tooLarge: TOO_LARGE_FOR_ACCOUNT } : {}),
+  };
 }
 
 /**
@@ -217,12 +364,14 @@ function addForm(): HTMLElement {
       })
       .then((text) => {
         showProblem(problem, text, { grant: submit, list: reloadList });
-        if (text === '') for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
+        // Stored: the new rule's panel takes the place of the form.
+        if (text === '') choose(parseSitePattern(sites.input.value));
       });
   };
   const add = button(t('Add rule'), submit);
-  add.disabled = true;
-  needsList.push(add);
+  // The form opens at a click, often after the first list: it is ready if that list is drawn.
+  add.disabled = !listed;
+  if (!listed) needsList.push(add);
   const problem = element('p', '', 'problem');
 
   const showFields = (): void => {
@@ -231,8 +380,12 @@ function addForm(): HTMLElement {
   mode.select.addEventListener('change', showFields);
   showFields();
 
-  const wrapper = document.createElement('section');
-  wrapper.append(element('h2', t('Add a rule')), sites.label, mode.label, endpoint.label, clientId.label, add, problem);
+  const wrapper = element('aside', '', 'rule-panel');
+  wrapper.classList.add('add-panel');
+  wrapper.setAttribute('aria-label', t('Add a rule'));
+  const body = element('div', '', 'panel-body');
+  body.append(element('h2', t('Add a rule')), sites.label, mode.label, endpoint.label, clientId.label, add, problem);
+  wrapper.append(body);
 
   return wrapper;
 }
@@ -295,7 +448,7 @@ function transfer(): HTMLElement {
     })();
   });
 
-  const wrapper = document.createElement('section');
+  const wrapper = element('section', '', 'page-section');
   wrapper.append(
     element('h2', t('Share rules')),
     element(
@@ -325,9 +478,10 @@ async function synchronise(): Promise<HTMLElement> {
   label.className = 'choice';
   label.append(box, t('Keep my rules in the account of this browser'));
 
-  const wrapper = document.createElement('section');
+  const wrapper = element('section', '', 'page-section');
   wrapper.append(
-    element('h2', t('Synchronise rules')),
+    element('h2', t('Preferences')),
+    element('h3', t('Synchronise rules')),
     element(
       'p',
       t(

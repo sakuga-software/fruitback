@@ -22,6 +22,47 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Allow access again': 'Autoriser à nouveau',
   'Turn off for this site': 'Désactiver pour ce site',
   "Fruitback can't reach {worker}": 'Fruitback ne joint pas {worker}',
+  // The page of the extension (FRU-301).
+  Preferences: 'Préférences',
+  'No rules yet. Add one, or turn a site on from the toolbar.':
+    'Aucune règle pour l’instant. Ajoutez-en une, ou activez un site depuis la barre d’outils.',
+  'No rule matches this filter.': 'Aucune règle ne correspond à ce filtre.',
+  Console: 'Console',
+  'Reviewer guide': 'Guide de relecture',
+  'Which mode?': 'Quel mode ?',
+  'A rule says which worker, and which client, a site belongs to. A site no rule covers mounts nothing.':
+    'Une règle dit à quel worker, et à quel client, appartient un site. Un site qu’aucune règle ne couvre ne monte rien.',
+  'Filter sites': 'Filtrer les sites',
+  'Add a site': 'Ajouter un site',
+  'Every site this pattern covers': 'Chaque site que couvre ce motif',
+  'This origin': 'Cette origine',
+  Team: 'Équipe',
+  Private: 'Privé',
+  Granted: 'Accordé',
+  'Runs nowhere': 'Ne tourne nulle part',
+  'No access': 'Pas d’accès',
+  Site: 'Site',
+  Worker: 'Worker',
+  Access: 'Accès',
+  'Fruitback on {pattern}': 'Fruitback sur {pattern}',
+  'Site details': 'Détails du site',
+  Rule: 'Règle',
+  'Remove rule': 'Retirer la règle',
+  'The site ships nothing; the extension mounts the widget for you only.':
+    'Le site n’embarque rien ; l’extension monte le widget pour vous seul.',
+  'The site embeds a dormant widget; the extension wakes it and carries your session.':
+    'Le site embarque un widget endormi ; l’extension le réveille et porte votre session.',
+  'Access does not travel with a rule, and it can be removed in the settings of the browser. Nothing is mounted until you grant it.':
+    'L’accès ne voyage pas avec une règle, et il peut être retiré dans les réglages du navigateur. Rien n’est monté tant que vous ne l’accordez pas.',
+  'Turning the rule on asks the browser for its sites.': 'Activer la règle demande ses sites au navigateur.',
+  'Paired as {name}': 'Appairé en tant que {name}',
+  'Your session with {worker} is attached in the background, never in the page.':
+    'Votre session avec {worker} est jointe en arrière-plan, jamais dans la page.',
+  'Not paired': 'Pas appairé',
+  'A team site stays asleep until this browser holds a session of its worker.':
+    'Un site d’équipe reste endormi tant que ce navigateur n’a pas de session de son worker.',
+  'Notes on this site are readable by anyone who can build the URL.':
+    'Les notes de ce site sont lisibles par quiconque sait construire l’adresse.',
   // The kit (FRU-293).
   'Account and settings': 'Compte et réglages',
   'Open the console': 'Ouvrir la console',
@@ -113,15 +154,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Mode: 'Mode',
 
   // The options page.
-  'Fruitback sites': 'Sites Fruitback',
-  'A rule says which worker, and which client, a site belongs to. A site that no rule covers mounts nothing.':
-    'Une règle dit à quel worker, et à quel client, un site appartient. Un site qu’aucune règle ne couvre ne monte rien.',
-  'No rules yet. Add one below, or turn a site on from the toolbar.':
-    'Aucune règle pour le moment. Ajoutez-en une ci-dessous, ou activez un site depuis la barre d’outils.',
   'Grant access': 'Donner l’accès',
-  'Turn off': 'Désactiver',
-  'Turn on': 'Activer',
-  Remove: 'Supprimer',
   'Access granted': 'Accès donné',
   'No access in this browser': 'Pas d’accès dans ce navigateur',
   'No access while it is off': 'Aucun accès tant qu’il est désactivé',

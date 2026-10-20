@@ -145,9 +145,15 @@ for (const language of ['en', 'fr'] as const) {
     // 2026-10-20, the accent of the extension, and no word cut.
     for (const colorScheme of ['light', 'dark'] as const) {
       await offered.emulateMedia({ colorScheme });
-      // Out of every button, and past the 0.2 s the switch takes to change its colour.
+      // Out of every button, and once the switch has its colour: its transition takes 0.2 s, and a
+      // fixed wait of 0.4 s read it half-way on CI once.
       await offered.mouse.move(0, 0);
-      await offered.waitForTimeout(400);
+      await expect
+        .poll(() => offered.locator('.kit-switch').evaluate((node) => getComputedStyle(node).backgroundColor))
+        .toBe(ACCENT[colorScheme]);
+      await expect
+        .poll(() => offered.locator('.kit-primary').evaluate((node) => getComputedStyle(node).backgroundColor))
+        .toBe(ACCENT[colorScheme]);
       const kit = await readKit(offered);
       const where = `${language}, ${colorScheme}`;
       expect.soft(kit.primary, `${where}: the main button`).toMatchObject({
@@ -364,6 +370,6 @@ test('axe finds nothing on the popup and on the options page, in both schemes', 
 
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
-  await expect(options.getByRole('button', { name: 'Add rule' })).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Add a site' })).toBeVisible();
   await clean(options, 'the options page');
 });

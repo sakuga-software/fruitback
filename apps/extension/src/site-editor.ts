@@ -56,6 +56,7 @@ export type RuleFields = SiteFields & { sites: string };
 
 export function createEditor({ request, write, current, activate, stored }: EditorSeams): {
   add: (fields: RuleFields) => Promise<string>;
+  save: (pattern: string, fields: SiteFields) => Promise<string>;
   switchOn: (pattern: string, site: SiteConfig) => Promise<boolean>;
 } {
   return {
@@ -86,6 +87,41 @@ export function createEditor({ request, write, current, activate, stored }: Edit
         // A request the browser rejects rather than refuses. Nothing was stored either way.
         () => NO_ACCESS_PROBLEM,
       );
+    },
+
+    /**
+     * The panel of a rule (FRU-301): its mode, its worker, its client id, under the same checks as a
+     * new rule. Answers the problem to show, or `''` once it is stored. It keeps the rule on or off
+     * as it was, and asks for nothing: the sites of the pattern do not change. A rule that is on is
+     * activated in its open tabs, as after « Add ». What the mode carries
+     * besides (the label of a private rule, the mount of a site of a workspace) stays while the mode
+     * stays.
+     */
+    async save(pattern, fields) {
+      const before = current()[pattern];
+      if (before === undefined) return STORE_PROBLEM;
+      const problem = complaint(fields, pattern);
+      if (problem !== '') return problem;
+
+      let kept = siteFrom(fields, before.enabled);
+      if (kept.mode === 'private' && before.mode === 'private' && before.label !== undefined) {
+        kept = { ...kept, label: before.label };
+      }
+      const sameWorker = kept.endpoint === before.endpoint;
+      if (kept.mode === 'team' && before.mode === 'team' && before.mount !== undefined && sameWorker) {
+        kept = { ...kept, mount: before.mount };
+      }
+      try {
+        await write(pattern, kept);
+      } catch {
+        await activateStored([pattern], stored, activate);
+
+        return STORE_PROBLEM;
+      }
+      // A rule that is on runs in the tabs open on it, as after « Add » and a switch (raised in review).
+      if (kept.enabled) await activate(pattern);
+
+      return '';
     },
 
     switchOn(pattern, site) {

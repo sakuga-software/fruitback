@@ -200,9 +200,13 @@ test('the rules go to the account of the browser only when the reviewer asks, an
       },
     });
   });
-  const arrived = options.locator('.rules li').filter({ hasText: 'https://staging.elsewhere.example' });
-  await expect(arrived).toContainText('No access in this browser');
-  await expect(arrived.getByRole('button', { name: 'Grant access' })).toBeVisible();
+  // The page of the extension (FRU-301): the row says it, and its panel offers the grant.
+  const arrived = options.locator('tr.rule-row[data-pattern="https://staging.elsewhere.example"]');
+  await expect(arrived).toContainText('No access');
+  await arrived.getByRole('button', { name: /staging\.elsewhere/ }).click();
+  const details = options.getByRole('complementary', { name: 'Site details' });
+  await expect(details).toContainText('No access in this browser');
+  await expect(details.getByRole('button', { name: 'Grant access' })).toBeVisible();
   expect(
     await extension.worker.evaluate(async () =>
       (await chrome.scripting.getRegisteredContentScripts()).flatMap((script) => script.matches ?? []),
@@ -210,17 +214,17 @@ test('the rules go to the account of the browser only when the reviewer asks, an
   ).not.toContain('https://staging.elsewhere.example/*');
 
   // Removed here: removed from the account too.
-  await arrived.getByRole('button', { name: 'Remove' }).click();
+  await details.getByRole('button', { name: 'Remove rule' }).click();
   await expect.poll(inAccount).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
 
   // Turned off: the next change stays here.
   await box.uncheck();
+  await options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`).getByRole('button').first().click();
   await options
-    .locator('.rules li')
-    .filter({ hasText: PLAYGROUND_ORIGIN })
-    .getByRole('button', { name: 'Remove' })
+    .getByRole('complementary', { name: 'Site details' })
+    .getByRole('button', { name: 'Remove rule' })
     .click();
-  await expect(options.locator('.rules li')).toHaveCount(0);
+  await expect(options.locator('tr.rule-row')).toHaveCount(0);
   expect(await inAccount()).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
 });
 
@@ -555,8 +559,8 @@ test('the popup, the options page and the mounted widget speak the language of t
 
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
-  await expect(options.getByRole('heading', { name: 'Sites Fruitback' })).toBeVisible();
-  await expect(options.getByRole('button', { name: 'Ajouter la règle' })).toBeVisible();
+  await expect(options.getByRole('heading', { level: 1, name: 'Sites' })).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Ajouter un site' })).toBeVisible();
   await options.close();
 
   // Logged out, no account is left to speak for: the language goes at once, and the open tab is

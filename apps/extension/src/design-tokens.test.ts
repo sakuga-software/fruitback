@@ -151,6 +151,11 @@ const PAIRS = [
   { foreground: 'subtle', background: 'ready-surface', minimum: 4.5, where: 'the words of « Ready to check »' },
   { foreground: 'text', background: 'selection', minimum: 4.5, where: 'a selected text' },
   { foreground: 'on-tile', background: 'tile-on', minimum: 4.5, where: 'the initial of a site that is on' },
+  // The page of the extension (FRU-301).
+  { foreground: 'accent', background: 'alert-surface', minimum: 4.5, where: 'no access, and the chosen row' },
+  { foreground: 'text', background: 'alert-surface', minimum: 4.5, where: 'the chosen row of the table' },
+  { foreground: 'alert-body', background: 'surface-sunken', minimum: 4.5, where: 'the words of the state of a rule' },
+  { foreground: 'surface', background: 'text', minimum: 4.5, where: 'the label of « Save »' },
   // The kit (FRU-293).
   { foreground: 'on-avatar', background: 'avatar-surface', minimum: 4.5, where: 'the initial of the account' },
   { foreground: 'alert-body', background: 'alert-surface', minimum: 4.5, where: 'the words of a problem' },

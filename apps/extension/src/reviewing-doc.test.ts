@@ -25,7 +25,7 @@ describe('the guide quotes the popup this extension renders', () => {
   const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
   // The screens of the sign-in and the head of every screen are drawn in `popup-view.ts` (FRU-251).
   const popup = `${read('../entrypoints/popup/main.ts')}\n${read('./popup-view.ts')}\n${read('./kit.ts')}`;
-  const optionsPage = read('../entrypoints/options/main.ts');
+  const optionsPage = `${read('../entrypoints/options/main.ts')}\n${read('./site-page.ts')}`;
   const guide = read('../../../docs/reviewing.md');
 
   /** Every way a pairing fails. The popup draws them from this record, and the check below says so. */
