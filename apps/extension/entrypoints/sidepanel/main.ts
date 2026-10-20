@@ -78,6 +78,9 @@ async function look(): Promise<void> {
   }
   // Another tab: its own notes, from the start.
   if (followed?.tabId !== before) {
+    // A read of the tab of before that waits to try again would read this one a second time.
+    if (waitTimer !== undefined) clearTimeout(waitTimer);
+    waitTimer = undefined;
     notes = 'reading';
     open = undefined;
     replying = undefined;
@@ -232,22 +235,17 @@ browser.storage.onChanged.addListener((changes, area) => {
 browser.runtime.onMessage.addListener((message: unknown, sender) => {
   const event = panelEvent(message);
   if (event === undefined || followed === undefined || sender.tab?.id !== followed.tabId) return undefined;
-  if (event.open !== undefined) {
-    open = event.open;
-    const note = Array.isArray(notes) ? notes.find((each) => each.id === event.open) : undefined;
-    if (note !== undefined) tab = tabOf(note);
-  }
   void readNotes().then(() => {
     if (event.open === undefined) return;
-    // The note may be one the list did not hold yet: its tab is known now.
+    // Opened once the list that holds the note is read: a note it does not hold opens nothing.
     const note = Array.isArray(notes) ? notes.find((each) => each.id === event.open) : undefined;
-    if (note !== undefined && tabOf(note) !== tab) {
-      tab = tabOf(note);
-      draw();
-    }
-    void ask('mark-note', { note: event.open });
+    if (note === undefined) return;
+    open = note.id;
+    tab = tabOf(note);
+    draw();
+    void ask('mark-note', { note: note.id });
     // The row of the pin that was clicked comes into sight.
-    app?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(event.open)}"]`)?.scrollIntoView({ block: 'nearest' });
+    app?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(note.id)}"]`)?.scrollIntoView({ block: 'nearest' });
   });
 
   return undefined;

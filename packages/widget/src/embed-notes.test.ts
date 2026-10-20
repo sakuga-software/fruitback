@@ -108,6 +108,30 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.deepEqual(structuredClone(notes), notes);
   });
 
+  it('gives a reply written from a page as its thread shows it: the name, and the text unquoted', async () => {
+    const answered = {
+      ...MINE,
+      comments: [
+        {
+          id: 'c9',
+          body: '**Dev** via Fruitback · member of Playground\n\n> Seen, thanks.\n> Two lines.',
+          createdAt: '2026-10-20T09:00:00.000Z',
+        },
+      ],
+    };
+    const transport = async (request: TransportRequest): Promise<TransportResponse> => ({
+      ok: true,
+      status: 200,
+      body: request.method === 'GET' ? JSON.stringify({ issues: [answered] }) : '{}',
+    });
+    const widget = widgetOn(mounted(), { transport });
+    await widget.refresh();
+
+    assert.deepEqual(widget.pageNotes()?.[0]?.replies, [
+      { author: 'Dev', body: 'Seen, thanks.\nTwo lines.', createdAt: '2026-10-20T09:00:00.000Z' },
+    ]);
+  });
+
   it('leaves out a stage the reporter hid, and says the list changed', async () => {
     const page = mounted();
     const widget = widgetOn(page, { transport: worker({}).transport });

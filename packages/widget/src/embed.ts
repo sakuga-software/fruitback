@@ -36,7 +36,7 @@ import {
   offeredDestinations,
 } from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
-import { type Overlay, type ReplyFailure, createOverlay } from './overlay.ts';
+import { type Overlay, type ReplyFailure, createOverlay, replyFromPage } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
 import { linkedNote, withoutLinkedNote } from './page.ts';
 
@@ -787,11 +787,17 @@ export function init(options: FruitbackOptions): Fruitback {
           ...(issue.mine === true ? { mine: true as const } : {}),
           createdAt: issue.seed.createdAt,
           updatedAt: issue.updatedAt,
-          replies: (issue.comments ?? []).map((comment) => ({
-            ...(comment.author === undefined ? {} : { author: comment.author }),
-            body: comment.body,
-            createdAt: comment.createdAt,
-          })),
+          // A reply written from a page reads as the thread shows it: its name, and its text unquoted.
+          replies: (issue.comments ?? []).map((comment) => {
+            const fromPage = replyFromPage(comment.body);
+            const author = fromPage?.name ?? comment.author;
+
+            return {
+              ...(author === undefined ? {} : { author }),
+              body: fromPage?.text ?? comment.body,
+              createdAt: comment.createdAt,
+            };
+          }),
           canReply: replies,
           placement,
         }));

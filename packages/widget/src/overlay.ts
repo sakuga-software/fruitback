@@ -934,7 +934,7 @@ type ReplyFooter = {
  */
 const FROM_PAGE = /^\*\*([^*\n]+)\*\* via Fruitback · ([^\n]+)\n\n((?:>(?: [^\n]*)?(?:\n|$))+)$/u;
 
-function replyFromPage(body: string): { name: string; who: string; text: string } | undefined {
+export function replyFromPage(body: string): { name: string; who: string; text: string } | undefined {
   const match = FROM_PAGE.exec(body);
   if (match === null) return undefined;
   const text = (match[3] ?? '')
