@@ -9,6 +9,7 @@ import {
   type PanelState,
   CHECK_PROBLEM,
   NO_WIDGET_WAIT_MS,
+  PANEL_PORT,
   REPLY_PROBLEM,
   notesOf,
   openOnRead,
@@ -16,6 +17,9 @@ import {
   tabOf,
   webHost,
 } from '../../src/side-panel.ts';
+import type { Scope, SearchHandlers, SearchState, StageFilter } from '../../src/search-options.ts';
+import { createBrowserSessions } from '../../src/session-browser.ts';
+import { type SiteNote, readSiteNotes } from '../../src/site-notes.ts';
 import { readSite } from '../../src/sites.ts';
 import {
   type TabCommandAnswer,
@@ -27,9 +31,10 @@ import {
 import type { TabCommand } from '../../src/protocol.ts';
 
 /**
- * The side panel (FRU-296, FRU-299). It follows the active tab of its window, and reads nothing from
- * a worker: it asks the widget of the tab for the notes it read (`notes`), and the widget tells it
- * when they change, through the bridge.
+ * The side panel (FRU-296, FRU-299). It follows the active tab of its window, and asks the widget of
+ * the tab for the notes it read (`notes`); the widget tells it when they change, through the bridge.
+ * « Whole site » of « Search and options » (FRU-307) is the one read of a worker, with the session of
+ * this browser (`site-notes.ts`).
  *
  * The address of a tab is given to the extension only for a site it has access to, or after the
  * click on the toolbar icon (`activeTab`). A site that is on has that access: any other tab reads as
@@ -44,8 +49,21 @@ document.documentElement.lang = language();
 
 const app = document.querySelector('#app');
 
-/** The tab the panel follows: its id and what the panel knows of it. */
-let followed: { tabId: number; host: string; where?: string; siteWidget?: true } | undefined;
+/**
+ * The tab the panel follows: its id and what the panel knows of it. `path`: the address of its page,
+ * path and query. `source`: the worker and the site of a rule that a session of this browser reads,
+ * for « Whole site » (FRU-307).
+ */
+let followed:
+  | {
+      tabId: number;
+      host: string;
+      path: string;
+      where?: string;
+      siteWidget?: true;
+      source?: { endpoint: string; site: string };
+    }
+  | undefined;
 let notes: PanelNotes = 'reading';
 let tab: NotesTab = 'open';
 let open: string | undefined;
@@ -60,6 +78,20 @@ let looks = 0;
 let pendingOpen: string | undefined;
 /** The one more ask of a page that had no widget yet (`NO_WIDGET_WAIT_MS`). */
 let noWidgetWait: ReturnType<typeof setTimeout> | undefined;
+/** « Search and options » while it is open (FRU-307). Gone with the tab: another page, another search. */
+let search: SearchState | undefined;
+/** Whether the pins of the tab are shown: « Show pins on the page ». A new page shows them. */
+let pinsShown = true;
+/** Each read of the whole site counts one: a late answer does not draw over a newer search. */
+let siteReads = 0;
+let siteTimer: ReturnType<typeof setTimeout> | undefined;
+/** The tab opened on the page of a note of the site, and that note: its row opens once read there. */
+let awaiting: { tabId: number; note: string } | undefined;
+/** The row the panel opens on a page it opened: its thread opens on the page too. */
+let focusOnOpen: string | undefined;
+const sessions = createBrowserSessions();
+/** The background shows again the pins this panel hid, once the panel is gone (review of #419). */
+const pinsPort = browser.runtime.connect({ name: PANEL_PORT });
 
 async function ask(command: TabCommand, args: TabCommandArguments = {}): Promise<TabCommandAnswer> {
   return (await askOrNothing(command, args)) ?? { done: false };
@@ -87,17 +119,22 @@ async function look(): Promise<void> {
       ? undefined
       : await readSite(new URL(active.url).origin).catch(() => undefined);
   if (mine !== looks) return;
+  const source = await sourceOf(site);
+  if (mine !== looks) return;
   const before = followed?.tabId;
-  if (active?.id === undefined || host === undefined || site?.enabled !== true) {
+  if (active?.id === undefined || active.url === undefined || host === undefined || site?.enabled !== true) {
     followed = undefined;
   } else {
     const workspace = site.mode === 'team' ? site.mount?.workspace : undefined;
+    const address = new URL(active.url);
     followed = {
       tabId: active.id,
       host,
+      path: `${address.pathname}${address.search}`,
       ...(workspace === undefined || workspace === '' ? {} : { where: workspace }),
       // Team mode with no mount: the widget is the site's own, and answers the panel nothing.
       ...(site.mode === 'team' && site.mount === undefined ? { siteWidget: true as const } : {}),
+      ...(source === undefined ? {} : { source }),
     };
   }
   // Another tab: its own notes, from the start.
@@ -105,9 +142,21 @@ async function look(): Promise<void> {
     clearTimeout(noWidgetWait);
     notes = 'reading';
     open = undefined;
-    pendingOpen = undefined;
+    // The tab opened on the page of a note of the site keeps that note to open.
+    pendingOpen = awaiting !== undefined && awaiting.tabId === followed?.tabId ? awaiting.note : undefined;
+    focusOnOpen = pendingOpen;
+    if (pendingOpen !== undefined) awaiting = undefined;
     replying = undefined;
     tab = 'open';
+    search = undefined;
+    // A read or a search of the tab of before draws nothing here (review of #419).
+    clearTimeout(siteTimer);
+    siteReads += 1;
+    // The tab of before gets its pins back: the switch was about the tab the panel followed.
+    if (!pinsShown && before !== undefined) showPinsOf(before);
+    pinsShown = true;
+  } else if (search !== undefined && followed !== undefined) {
+    search = { ...search, path: followed.path };
   }
   draw();
   if (followed !== undefined && followed.siteWidget !== true) await readNotes();
@@ -147,6 +196,9 @@ async function readNotes(waited = false): Promise<void> {
   draw();
   if (asked.open !== undefined) {
     void ask('mark-note', { note: asked.open.id });
+    // A note opened from « Whole site »: its thread opens on its page too.
+    if (focusOnOpen === asked.open.id) void ask('focus-note', { note: asked.open.id });
+    focusOnOpen = undefined;
     // The row of the pin that was clicked comes into sight.
     app
       ?.querySelector<HTMLElement>(`li[data-note="${CSS.escape(asked.open.id)}"]`)
@@ -166,6 +218,11 @@ function focusKey(): string | undefined {
   const active = document.activeElement;
   if (!(active instanceof HTMLElement) || app === null || !app.contains(active)) return undefined;
   if (active.classList.contains('panel-reply-field')) return 'reply';
+  // FRU-307: the search, its chips, the magnifier and the switch of the pins.
+  if (active.classList.contains('search-input')) return 'search';
+  if (active.classList.contains('search-chip')) return `chip:${active.dataset.stage ?? ''}`;
+  if (active.classList.contains('panel-search')) return 'magnifier';
+  if (active.closest('.search-pins') !== null) return 'pins';
   const row = active.closest<HTMLElement>('li[data-note]')?.dataset.note;
   if (active.classList.contains('panel-row-head') && row !== undefined) return `row:${row}`;
   if (active.getAttribute('role') === 'tab') return `tab:${active.dataset.tab ?? ''}`;
@@ -178,6 +235,11 @@ function refocus(key: string | undefined, caret: [number, number] | undefined): 
   if (key === undefined || app === null) return;
   let target: HTMLElement | null = null;
   if (key === 'reply') target = app.querySelector('.panel-reply-field');
+  else if (key === 'search') target = app.querySelector('.search-input');
+  else if (key === 'magnifier') target = app.querySelector('.panel-search');
+  else if (key === 'pins') target = app.querySelector('.search-pins [role="switch"]');
+  else if (key.startsWith('chip:'))
+    target = app.querySelector(`.search-chip[data-stage="${CSS.escape(key.slice(5))}"]`);
   else if (key.startsWith('row:')) {
     target = app.querySelector(`li[data-note="${CSS.escape(key.slice(4))}"] .panel-row-head`);
   } else if (key.startsWith('tab:')) target = app.querySelector(`[role="tab"][data-tab="${CSS.escape(key.slice(4))}"]`);
@@ -189,15 +251,20 @@ function refocus(key: string | undefined, caret: [number, number] | undefined): 
       ) ?? null;
   }
   target?.focus();
-  if (caret !== undefined && target instanceof HTMLTextAreaElement) target.setSelectionRange(caret[0], caret[1]);
+  if (caret !== undefined && (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement)) {
+    target.setSelectionRange(caret[0], caret[1]);
+  }
 }
 
 function draw(): void {
   if (app === null) return;
   const key = focusKey();
-  const field = document.activeElement instanceof HTMLTextAreaElement ? document.activeElement : undefined;
+  const active = document.activeElement;
+  const field = active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement ? active : undefined;
   const caret: [number, number] | undefined =
-    field === undefined ? undefined : [field.selectionStart, field.selectionEnd];
+    field === undefined || field.selectionStart === null || field.selectionEnd === null
+      ? undefined
+      : [field.selectionStart, field.selectionEnd];
   app.replaceChildren(
     panelPage(document, {
       state: state(),
@@ -243,11 +310,173 @@ function draw(): void {
       },
       onSettings: () => void browser.runtime.openOptionsPage(),
       onVerdict: (id, verdict) => void sendVerdict(id, verdict),
+      onSearch: () => toggleSearch(),
+      ...(search === undefined ? {} : { search: { state: search, handlers: searchHandlers } }),
     }),
   );
   if (app.firstElementChild instanceof HTMLElement) app.firstElementChild.dataset.state = state().kind;
   refocus(key, caret);
 }
+
+/**
+ * The worker and the site whose whole list a session of this browser reads (FRU-307): a site of a
+ * workspace the extension mounts, with a session held for its worker. A private site has none.
+ */
+async function sourceOf(
+  site: Awaited<ReturnType<typeof readSite>>,
+): Promise<{ endpoint: string; site: string } | undefined> {
+  if (site?.enabled !== true || site.mode !== 'team' || site.mount === undefined) return undefined;
+  const held = await sessions.list().catch(() => ({}) as Record<string, unknown>);
+
+  return held[site.endpoint] === undefined ? undefined : { endpoint: site.endpoint, site: site.mount.clientId };
+}
+
+function toggleSearch(): void {
+  if (search !== undefined) {
+    search = undefined;
+    clearTimeout(siteTimer);
+    siteReads += 1;
+    draw();
+    app?.querySelector<HTMLElement>('.panel-search')?.focus();
+
+    return;
+  }
+  search = {
+    scope: 'page',
+    q: '',
+    stage: 'all',
+    pinsShown,
+    ...(followed === undefined ? {} : { path: followed.path }),
+    ...(followed?.source === undefined ? {} : { site: 'reading' as const }),
+  };
+  draw();
+  app?.querySelector<HTMLElement>('.search-input')?.focus();
+  void readWholeSite();
+}
+
+/**
+ * The notes of the whole site for the search of now (FRU-306), from the worker: one page, or the
+ * next one after the last read. Nothing is kept beyond what the panel shows.
+ */
+async function readWholeSite(more = false): Promise<void> {
+  const source = followed?.source;
+  if (search === undefined || source === undefined) return;
+  siteReads += 1;
+  const mine = siteReads;
+  const shown = search.site;
+  const words = wordsOf(search.q);
+  // The next page only of the list of these words: a cursor read with other words names another walk.
+  const next = more && typeof shown === 'object' && shown.q === words ? shown : undefined;
+  const cursor = next?.next;
+  search = { ...search, site: next === undefined ? 'reading' : { ...next, more: 'reading' } };
+  draw();
+  const read = await readSiteNotes(
+    source.endpoint,
+    { site: source.site, q: words, ...(cursor === undefined ? {} : { cursor }) },
+    {
+      ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+      renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
+    },
+  );
+  if (mine !== siteReads || search === undefined || followed?.source !== source) return;
+  const now = search.site;
+  if (read.ok) {
+    const before = next !== undefined && typeof now === 'object' ? now.notes : [];
+    search = {
+      ...search,
+      site: {
+        q: words,
+        notes: [...before, ...read.page.notes],
+        total: read.page.total,
+        ...(read.page.next === undefined ? {} : { next: read.page.next }),
+      },
+    };
+  } else if (next !== undefined && typeof now === 'object') {
+    search = { ...search, site: { ...now, more: 'failed' } };
+  } else {
+    search = { ...search, site: read.reason };
+  }
+  draw();
+}
+
+/** A note of the site: its thread on this page, or its page in a new tab, where its row opens. */
+async function openSiteNote(note: SiteNote): Promise<void> {
+  if (followed === undefined) return;
+  if (note.page.path === followed.path) {
+    search = undefined;
+    open = note.seed;
+    tab = 'open';
+    draw();
+    void ask('mark-note', { note: note.seed });
+    void ask('focus-note', { note: note.seed });
+
+    return;
+  }
+  // A new tab, never the one of the reader: what they type on this page stays where it is.
+  const created = await browser.tabs.create({ url: note.page.url }).catch(() => undefined);
+  if (created?.id === undefined) return;
+  if (followed?.tabId === created.id) {
+    // The panel already follows the new tab: the row waits for its list there.
+    pendingOpen = note.seed;
+    focusOnOpen = note.seed;
+  } else awaiting = { tabId: created.id, note: note.seed };
+}
+
+const searchHandlers: SearchHandlers = {
+  onScope: (scope: Scope) => {
+    if (search === undefined) return;
+    search = { ...search, scope };
+    draw();
+  },
+  onQuery: (q: string) => {
+    if (search === undefined) return;
+    // New words: a read still on its way, a « Show more » included, is of the words of before and
+    // draws nothing (review of #419). The list of before stays shown, with no « Show more », until
+    // the read of the new words answers.
+    if (wordsOf(q) !== wordsOf(search.q)) {
+      siteReads += 1;
+      const shown = search.site;
+      if (typeof shown === 'object' && shown.more === 'reading') {
+        const { more: _more, ...kept } = shown;
+        search = { ...search, site: kept };
+      }
+    }
+    search = { ...search, q };
+    draw();
+    // The whole site is asked again once the typing stops.
+    clearTimeout(siteTimer);
+    siteTimer = setTimeout(() => void readWholeSite(), SEARCH_PAUSE_MS);
+  },
+  onStage: (stage: StageFilter) => {
+    if (search === undefined) return;
+    search = { ...search, stage };
+    draw();
+  },
+  onSiteNote: (note) => void openSiteNote(note),
+  onSiteRetry: () => void readWholeSite(),
+  onMore: () => void readWholeSite(true),
+  onPins: (shown: boolean) => {
+    if (followed === undefined) return;
+    pinsShown = shown;
+    if (search !== undefined) search = { ...search, pinsShown: shown };
+    pinsPort.postMessage(shown ? { shown: followed.tabId } : { hidden: followed.tabId });
+    void ask(shown ? 'show-pins' : 'hide-pins');
+  },
+};
+
+/** `show-pins` to a tab the panel no longer follows. Nothing to do when that tab is gone. */
+function showPinsOf(tabId: number): void {
+  pinsPort.postMessage({ shown: tabId });
+  void browser.tabs.sendMessage(tabId, tabCommand('show-pins')).catch(() => undefined);
+}
+
+/** The words a read sends: `readSiteNotes` trims them the same way. */
+function wordsOf(q: string): string {
+  return q.trim();
+}
+
+/** How long the typing pauses before the whole site is asked: one read per search, not per key. */
+const SEARCH_PAUSE_MS = 300;
 
 /**
  * « Looks fixed » or « Still wrong » (FRU-300), by the widget of the tab, then a read: the store moved

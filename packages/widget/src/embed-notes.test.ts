@@ -213,6 +213,27 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.deepEqual(marked(), []);
   });
 
+  it('hides the pins for the side panel, keeps the pin of the open thread, and shows them again (FRU-307)', async () => {
+    const page = mounted();
+    const widget = widgetOn(page, { transport: worker({}).transport });
+    await widget.refresh();
+    const overlay = () => shadowOf(page).querySelector<HTMLElement>('.fruitback-overlay');
+    const hidden = () => overlay()?.hasAttribute('data-fruitback-pins-hidden');
+    assert.equal(hidden(), false, 'the control: shown');
+
+    widget.showPins(false);
+
+    assert.equal(hidden(), true);
+    await widget.refresh();
+    assert.equal(hidden(), true, 'a read shows no pin again');
+    assert.equal(widget.pageNotes()?.length, 2, 'the notes are still read');
+    // The switch of the list of the page (FRU-308): the pin of an open thread is not hidden.
+    widget.focusNote('seed-1');
+    assert.ok(shadowOf(page).querySelector('.fruitback-pin[data-fruitback-open]'));
+    widget.showPins(true);
+    assert.equal(hidden(), false);
+  });
+
   it('sends a reply by the path of the thread, then reads again', async () => {
     const { requests, transport } = worker({ canReply: true });
     const widget = widgetOn(mounted(), { transport });

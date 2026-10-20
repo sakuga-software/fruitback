@@ -261,6 +261,9 @@ export const TAB_COMMANDS = [
   'reread',
   // FRU-300: « Looks fixed » / « Still wrong ».
   'check',
+  // FRU-307: « Show pins on the page », off and on.
+  'hide-pins',
+  'show-pins',
 ] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 

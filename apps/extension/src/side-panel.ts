@@ -1,14 +1,26 @@
 import { language, msg, t } from './i18n.ts';
 import { dropMark, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
+import {
+  type SearchHandlers,
+  type SearchState,
+  detachedPart,
+  magnifier,
+  matchesPage,
+  passes,
+  pinsSwitch,
+  searchControls,
+  siteList,
+} from './search-options.ts';
 
 /**
  * The side panel of the browser (FRU-296, FRU-299): its place in the manifest, the gesture that
  * opens it, and « Notes on this page », as `ExtSidebar` of the mock-up of 2026-10-20 draws it.
  *
- * **The panel reads no worker.** The widget of the tab holds the notes it read for its pins; the
- * panel asks it for them (`notes`), and is told when they change. One read, the same numbers as the
- * pins, no second model and no cache.
+ * **The panel reads no worker for the notes of the page.** The widget of the tab holds the notes it
+ * read for its pins; the panel asks it for them (`notes`), and is told when they change. One read, the
+ * same numbers as the pins, no second model and no cache. Only « Whole site » of « Search and
+ * options » reads the worker (FRU-307, `site-notes.ts`).
  *
  * No `browser` here: the APIs come in as arguments, so `side-panel.test.ts` reads every part under
  * `node --test`. `entrypoints/sidepanel/main.ts` holds the state and binds them.
@@ -194,6 +206,12 @@ export type PanelOptions = {
   reopened?: Record<string, string>;
   /** Now, for the ages: a test sets it. */
   now?: number;
+  /**
+   * « Search and options » (FRU-307): its state while it is open. `onSearch` opens and closes it;
+   * without `onSearch` the head has no magnifier.
+   */
+  search?: { state: SearchState; handlers: SearchHandlers };
+  onSearch?: () => void;
   onClose: () => void;
   onLeave: () => void;
   onTab: (tab: NotesTab) => void;
@@ -331,10 +349,19 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   close.setAttribute('aria-label', t('Close the sidebar'));
   close.append(cross(document));
   close.addEventListener('click', options.onClose);
-  top.append(title, close);
+  const { state } = options;
+  if (state.kind === 'on' && options.onSearch !== undefined) {
+    const search = make(document, 'button', 'panel-search');
+    search.type = 'button';
+    search.setAttribute('aria-label', t('Search and options'));
+    search.setAttribute('aria-expanded', String(options.search !== undefined));
+    if (options.search !== undefined) search.setAttribute('aria-controls', 'search-options');
+    search.append(magnifier(document, 'panel-glass'));
+    search.addEventListener('click', options.onSearch);
+    top.append(title, search, close);
+  } else top.append(title, close);
   root.append(top);
 
-  const { state } = options;
   if (state.kind === 'not-on' || state.kind === 'site-widget') {
     const body = make(document, 'section', 'panel-state');
     body.setAttribute('aria-labelledby', title.id);
@@ -366,16 +393,30 @@ export function panelPage(document: Document, options: PanelOptions): HTMLElemen
   action.append(leave, make(document, 'p', 'panel-hint', t('Then click the part of the page you want to comment on')));
   root.append(action);
 
+  const search = options.search;
+  if (search !== undefined) {
+    root.append(
+      searchControls(document, search.state, search.handlers, Array.isArray(state.notes) ? state.notes : undefined),
+    );
+  }
+
   const main = make(document, 'section', 'panel-notes');
   main.setAttribute('aria-labelledby', title.id);
-  main.append(...notesPart(document, options, state.notes));
+  main.append(
+    ...(search === undefined
+      ? notesPart(document, options, state.notes)
+      : searchedPart(document, options, search, state.notes)),
+  );
   root.append(main);
 
   const foot = make(document, 'footer', 'panel-foot');
-  foot.append(
+  if (search !== undefined) foot.append(pinsSwitch(document, search.state, search.handlers));
+  const line = make(document, 'div', 'panel-foot-line');
+  line.append(
     make(document, 'span', 'panel-where', state.where === undefined ? state.host : `${state.host} · ${state.where}`),
     linkButton(document, t('Settings'), options.onSettings),
   );
+  foot.append(line);
   root.append(foot);
 
   return root;
@@ -474,6 +515,41 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
       make(document, 'p', 'panel-none', options.tab === 'done' ? t('No note is done yet.') : t('No note is open.')),
     );
   }
+
+  return parts;
+}
+
+/**
+ * The list while « Search and options » is open (FRU-307): one list, filtered by the search and the
+ * chip, in place of « Ready to check » and the tabs; then the notes that lost their element. The
+ * scope « Whole site » shows the site's.
+ */
+function searchedPart(
+  document: Document,
+  options: PanelOptions,
+  search: NonNullable<PanelOptions['search']>,
+  notes: PanelNotes,
+): Node[] {
+  const { state, handlers } = search;
+  if (state.scope === 'site') return siteList(document, state, handlers, options.now ?? Date.now(), ageOf);
+  if (!Array.isArray(notes) || notes.length === 0) return notesPart(document, options, notes);
+
+  const found = notes.filter((note) => matchesPage(note, state.q) && passes(note.stage, state.stage)).sort(byNumber);
+  const placed = found.filter((note) => note.placement !== 'detached');
+  const parts: Node[] = [];
+  if (placed.length === 0) {
+    parts.push(make(document, 'p', 'panel-none', t('No note matches.')));
+  } else {
+    const list = make(document, 'ul', 'panel-list');
+    list.setAttribute('aria-label', t('Notes on this page'));
+    for (const note of placed) list.append(noteRow(document, options, note));
+    parts.push(list);
+  }
+  const detached = detachedPart(
+    document,
+    found.filter((note) => note.placement === 'detached'),
+  );
+  if (detached !== undefined) parts.push(detached);
 
   return parts;
 }
@@ -696,6 +772,49 @@ export const REPLY_PROBLEM: Record<Exclude<ReplyOutcome, 'sent'>, string> = {
   'signed-out': msg('Your session ended. Sign in again from the Fruitback button, then send.'),
   refused: msg('You cannot reply to this note any more.'),
 };
+
+/**
+ * The port the side panel holds open to the background (FRU-307, review of #419): the tabs whose pins
+ * it hid. A page that closes cannot be trusted to send a last message, so the background shows them
+ * again when the port goes, whatever closed the panel.
+ */
+export const PANEL_PORT = 'fruitback-side-panel';
+
+/** What the panel says on its port: the pins of a tab hidden, or shown again. */
+export type PinsMessage = { hidden: number } | { shown: number };
+
+export function parsePinsMessage(value: unknown): PinsMessage | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { hidden, shown } = value as Record<string, unknown>;
+  if (Number.isSafeInteger(hidden)) return { hidden: hidden as number };
+  if (Number.isSafeInteger(shown)) return { shown: shown as number };
+
+  return undefined;
+}
+
+/**
+ * The tabs a panel hid the pins of, kept by the background for one port; `closed` shows them again.
+ * `show` sends `show-pins` to a tab, and may fail: a tab closed since has nothing to show.
+ */
+export function pinsKeeper(show: (tabId: number) => void): {
+  heard: (message: unknown) => void;
+  closed: () => void;
+} {
+  const hidden = new Set<number>();
+
+  return {
+    heard(message) {
+      const pins = parsePinsMessage(message);
+      if (pins === undefined) return;
+      if ('hidden' in pins) hidden.add(pins.hidden);
+      else hidden.delete(pins.shown);
+    },
+    closed() {
+      for (const tabId of hidden) show(tabId);
+      hidden.clear();
+    },
+  };
+}
 
 /** The host of an address the panel may show: `http` and `https` only. */
 export function webHost(url: string | undefined): string | undefined {

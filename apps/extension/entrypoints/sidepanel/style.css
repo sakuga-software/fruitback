@@ -315,19 +315,25 @@ button.panel-send:disabled {
   color: var(--subtle);
 }
 
-/* The foot: the site, its workspace, and « Settings ». */
+/* The foot: « Show pins on the page » while the search is open, then the site and « Settings ». */
 .panel-foot {
   position: sticky;
   bottom: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--line);
   background: var(--surface);
   color: var(--subtle);
   font-size: 13px;
+}
+
+.panel-foot-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .panel-foot button.panel-link {
@@ -436,4 +442,256 @@ button.ready-wrong {
   padding-left: 36px;
   color: var(--alert-text);
   font-size: 13px;
+}
+
+/*
+  « Search and options » (FRU-307): the magnifier of the head, then the controls of the board
+  « Sidebar mode » under it: the scope, the search, the chips of the statuses.
+*/
+button.panel-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-action);
+  background: transparent;
+  color: var(--subtle);
+}
+
+button.panel-search:hover,
+button.panel-search[aria-expanded='true'] {
+  background: var(--surface-sunken);
+}
+
+.panel-glass {
+  width: 18px;
+  height: 18px;
+}
+
+.search-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.search-scope.kit-tabs button.kit-tab {
+  height: 30px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.search-field {
+  position: relative;
+}
+
+.search-glass {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+input.search-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px 0 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+input.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+button.search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+button.search-chip[aria-pressed='true'] {
+  border-color: var(--text);
+  background: var(--surface-sunken);
+}
+
+button.search-chip .kit-drop[data-size='mark'] {
+  width: 9px;
+  height: 9px;
+}
+
+.search-chip-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* A note of the whole site: a hollow drop for a note of another page. */
+.kit-drop[data-size='site'] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.kit-drop[data-hollow='true'] {
+  border-color: currentColor;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.kit-drop[data-hollow='true'][data-stage='seeded'] {
+  color: var(--stage-seeded);
+}
+
+.kit-drop[data-hollow='true'][data-stage='green'] {
+  color: var(--stage-green);
+}
+
+.kit-drop[data-hollow='true'][data-stage='ripening'] {
+  color: var(--stage-ripening);
+}
+
+.kit-drop[data-hollow='true'][data-stage='ripe'] {
+  color: var(--stage-ripe);
+}
+
+.kit-drop[data-hollow='true'][data-stage='composted'] {
+  color: var(--stage-composted);
+}
+
+.site-row-links {
+  margin: 6px 0 0 30px;
+}
+
+a.site-row-ref {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.site-more {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0 20px 16px;
+}
+
+.site-more-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* The notes that lost their element, at the end of the list. */
+.search-detached {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.search-detached-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--stage-composted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.search-detached-drop {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1.5px dashed currentColor;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+}
+
+.search-detached-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-detached-card {
+  padding: 10px 12px;
+  border: 1px dashed var(--stage-composted);
+  border-radius: var(--radius-action);
+  background: var(--surface-warm);
+}
+
+.search-detached-note {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.search-detached-meta {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+/* « Show pins on the page »: a switch of 32 × 18. */
+.search-pins {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-pins button.kit-switch {
+  --kit-switch-width: 32px;
+  --kit-switch-height: 18px;
+  --kit-knob: 14px;
+}
+
+.search-pins button.kit-switch .kit-knob {
+  top: 2px;
+  left: 2px;
+}
+
+.search-pins button.kit-switch[aria-checked='true'] .kit-knob {
+  transform: translateX(calc(var(--kit-switch-width) - var(--kit-knob) - 4px));
 }
