@@ -24,14 +24,16 @@ export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
-export const test = base.extend<{ extension: LoadedExtension; extraPermissions: string[] }>({
+export const test = base.extend<{ extension: LoadedExtension; extraPermissions: string[]; keepWelcome: boolean }>({
   /**
    * Permissions the copy holds beyond the shipped manifest, for one spec (FRU-297). A popup opened in
    * a tab has no `activeTab`, which the click on the toolbar gives: with `tabs`, it reads the address
    * of a tab whose site the browser does not grant, as the real popup does after that click.
    */
   extraPermissions: [[], { option: true }],
-  extension: async ({ extraPermissions }, use, testInfo) => {
+  /** The welcome page that a first install opens (FRU-318) stays open, for the spec that reads it. */
+  keepWelcome: [false, { option: true }],
+  extension: async ({ extraPermissions, keepWelcome }, use, testInfo) => {
     const directory = copyWithLocalAccess(testInfo.outputPath('extension'), extraPermissions);
     // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile
     // holds a refresh token.
@@ -49,7 +51,16 @@ export const test = base.extend<{ extension: LoadedExtension; extraPermissions: 
 
     try {
       const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-      await use({ context, worker, id: new URL(worker.url()).host });
+      const id = new URL(worker.url()).host;
+      // A fresh profile is an install, so the background opens the welcome page (FRU-318). It opens
+      // active, whenever the install event comes: after a spec brought its site to the front, it
+      // would be the tab the popup reads. So it is waited for, and closed, before any spec runs.
+      const welcome = `chrome-extension://${id}/welcome.html`;
+      await expect.poll(() => context.pages().some((page) => page.url() === welcome), { timeout: 10_000 }).toBe(true);
+      if (!keepWelcome) {
+        for (const page of context.pages().filter((each) => each.url() === welcome)) await page.close();
+      }
+      await use({ context, worker, id });
     } finally {
       await context.close();
       fs.rmSync(profile, { recursive: true, force: true });

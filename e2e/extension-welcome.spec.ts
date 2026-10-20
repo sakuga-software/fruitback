@@ -1,6 +1,8 @@
 import { expect } from '@playwright/test';
 import { test } from './extension.ts';
 
+test.use({ keepWelcome: true });
+
 /**
  * A first install opens the welcome page of the extension (FRU-318): pin Fruitback, then sign in
  * from its popup. Loading an unpacked extension into a fresh profile is an install, with the reason
