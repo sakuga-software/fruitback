@@ -190,14 +190,16 @@ The console opens on « Set up Fruitback », at « Your site »:
 
 ```html
 <script
-  src="http://localhost:8081/fruitback.iife.js"
+  src="http://localhost:8081/v/0.2.0-a47786cf7e4c/fruitback.iife.js"
   data-fruitback-endpoint="http://localhost:8080"
   data-fruitback-client="site_29000420191b4eb2b0ea"
   defer
 ></script>
 ```
 
-`site_…` is the id of the site: yours is another one. The console serves the script of the widget,
+`site_…` is the id of the site: yours is another one. `/v/0.2.0-a47786cf7e4c/` is the version of the
+script your image holds: the version of the widget and the start of a hash of the file, so it changes
+with the image. The console serves the script of the widget,
 and the worker answers the page of each site you add, whatever `ALLOWED_ORIGINS` says (measured).
 
 ### 6. Put the script on the site
@@ -684,8 +686,18 @@ docker run -d --name fruitback-console -p 8081:80 \
 
 The image runs as a user that is not root (`101`), writes under `/tmp` only, and starts with a
 read-only root and no capability: the compose file runs it that way. It serves the script of the
-widget too, at `/fruitback.iife.js`, which is the address the snippet of the console gives (measured:
-`200`).
+widget too (FRU-106, measured):
+
+| Address                          | Answer                                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------------- |
+| `/v/<version>/fruitback.iife.js` | the script, `Cache-Control: public, max-age=31536000, immutable`. The snippet gives it. |
+| `/fruitback.iife.js`             | the same file, `Cache-Control: public, max-age=300`. Snippets copied before FRU-106.    |
+| `/v/<other version>/…`           | `302` to the version of this image, kept five minutes: a snippet from an older image.   |
+
+`<version>` is the version of the widget and the first 12 hex characters of the sha256 of the file, so
+the file at one address never changes, and a browser that has it never asks again. A page keeps the
+script of the snippet it was given until the snippet changes or the browser drops it from its cache:
+to move a site to a new image at once, paste the snippet the console gives now.
 
 ## Storing the seeds in GitHub Issues
 

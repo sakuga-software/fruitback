@@ -26,8 +26,13 @@ COPY apps/console apps/console
 
 ARG VITE_FRUITBACK_API
 ARG VITE_FRUITBACK_GITHUB
-RUN pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/console build
-RUN node apps/console/csp.mjs apps/console/nginx.conf.template apps/console/build/console.conf.template
+# The widget first: its version holds a hash of its script, and the snippet of the console gives
+# `/v/<version>/fruitback.iife.js` (FRU-106, widget-version.ts).
+RUN pnpm --filter @fruitback/widget build && \
+    VITE_FRUITBACK_WIDGET_VERSION="$(node apps/console/widget-version.ts version packages/widget/dist/fruitback.iife.js packages/widget/package.json)" \
+    pnpm --filter @fruitback/console build
+RUN node apps/console/csp.mjs apps/console/nginx.conf.template apps/console/build/console.conf.template && \
+    node apps/console/widget-version.ts place packages/widget/dist/fruitback.iife.js packages/widget/package.json apps/console/build
 
 # `alpine-slim`: nginx and nothing beside it. The full image carries the image filter, XSLT, GeoIP
 # and njs with their libraries, the console uses none, and the release gate scans every one of them.
@@ -51,7 +56,8 @@ COPY apps/console/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /repo/apps/console/build/console.conf.template /etc/fruitback/console.conf.template
 COPY apps/console/entrypoint.sh /usr/local/bin/fruitback-console
 COPY --from=build /repo/apps/console/build/client /usr/share/nginx/html
-# The script a site embeds, from the console's own address until the script has a CDN (FRU-106).
+# The script a site embeds, at the address of before (`/fruitback.iife.js`, cached five minutes).
+# Its versioned copy, cached one year, came with `build/client` above, under `v/<version>/` (FRU-106).
 COPY --from=build /repo/packages/widget/dist/fruitback.iife.js /usr/share/nginx/html/fruitback.iife.js
 
 # Not root (FRU-222): the user `nginx` of the base image, by its number so that a runtime can check

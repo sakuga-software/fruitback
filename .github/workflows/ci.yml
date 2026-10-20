@@ -606,6 +606,20 @@ jobs:
           curl -s -D - -o /dev/null http://127.0.0.1:8082/config.js | tr -d '\r' | grep -qi '^cache-control: no-store$'
           curl -s http://127.0.0.1:8082/ | grep -q '<script src="/config.js"></script>'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
+          # FRU-106. The address of before keeps five minutes; the versioned one, which the snippet
+          # gives, is kept one year; the version of another image is sent to this one.
+          header() { curl -s -D - -o /dev/null "http://127.0.0.1:8082$1" | tr -d '\r' | grep -i "^$2: " | cut -d' ' -f2-; }
+          test "$(header /fruitback.iife.js cache-control)" = 'public, max-age=300'
+          version=$(docker exec console-acme ls /usr/share/nginx/html/v)
+          echo "$version" | grep -Eq '^[0-9A-Za-z.-]+-[0-9a-f]{12}$'
+          test "$(header "/v/$version/fruitback.iife.js" cache-control)" = 'public, max-age=31536000, immutable'
+          test "$(header "/v/$version/fruitback.iife.js" access-control-allow-origin)" = '*'
+          cmp <(curl -s "http://127.0.0.1:8082/v/$version/fruitback.iife.js") <(curl -s http://127.0.0.1:8082/fruitback.iife.js)
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/v/0.0.0-000000000000/fruitback.iife.js)" = 302
+          test "$(header /v/0.0.0-000000000000/fruitback.iife.js location)" = "/v/$version/fruitback.iife.js"
+          test "$(header /v/0.0.0-000000000000/fruitback.iife.js cache-control)" = 'public, max-age=300'
+          # The bundle gives that address: the version is in it (the snippet writes the path around it).
+          docker exec console-acme grep -rqF "$version" /usr/share/nginx/html/assets
           # Not root, and nothing of the repository beside the built files.
           test "$(docker exec console-acme id -u)" = 101
           test -z "$(docker exec console-acme find / -xdev \( -name '*.ts' -o -name '*.tsx' -o -name '*.map' -o -name 'package.json' -o -name 'pnpm-lock.yaml' -o -name '.env*' -o -name node_modules \) 2>/dev/null)"
