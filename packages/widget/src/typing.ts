@@ -1,4 +1,4 @@
-import type { SeedAnchor } from '@fruitback/shared';
+import { type SeedAnchor, seedAnchorSchema } from '@fruitback/shared';
 
 /**
  * The note somebody is writing, saved as they type (FRU-311).
@@ -99,12 +99,13 @@ function readStored(storage: Storage | null, key: string): Typing[] {
       if (typeof each !== 'object' || each === null) return [];
       const { page, anchor, text, at } = each as Record<string, unknown>;
       if (typeof page !== 'string' || typeof text !== 'string' || typeof at !== 'number') return [];
-      if (typeof anchor !== 'object' || anchor === null) return [];
-      // The anchor goes to `resolveAnchor`, which needs its selector and its tag; the rest is optional.
-      const { selector, tag } = anchor as Record<string, unknown>;
-      if (typeof selector !== 'string' || typeof tag !== 'string') return [];
+      // The anchor goes to `resolveAnchor`, which reads its bounds and its path: it is read with the
+      // schema of the seed, so an entry a person edited, or one an older build wrote, costs itself
+      // and not the mount.
+      const read = seedAnchorSchema.safeParse(anchor);
+      if (!read.success) return [];
 
-      return [{ page, anchor: anchor as SeedAnchor, text, at }];
+      return [{ page, anchor: read.data, text, at }];
     });
   } catch {
     return [];

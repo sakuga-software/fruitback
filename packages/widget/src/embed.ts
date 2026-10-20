@@ -413,7 +413,15 @@ export function init(options: FruitbackOptions): Fruitback {
 
       return;
     }
-    const found = resolveAnchor(latest.anchor, { document });
+    // A text whose element cannot be looked for costs the reopening, never the mount.
+    let found: ReturnType<typeof resolveAnchor>;
+    try {
+      found = resolveAnchor(latest.anchor, { document });
+    } catch {
+      restoredOn = here;
+
+      return;
+    }
     if (found.element === null || !found.confident) return;
     restoredOn = here;
     host.choose(found.element);

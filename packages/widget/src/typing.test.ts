@@ -83,12 +83,16 @@ describe('the note being written (FRU-311)', () => {
       KEY,
       JSON.stringify([
         { page: PAGE, anchor: { selector: 1 }, text: 'x', at: 1 },
+        // A selector and a tag, and no bounds: resolveAnchor reads them, so the entry goes (review).
+        { page: PAGE, anchor: { selector: '#mocha', tag: 'button' }, text: 'sans bornes', at: 1 },
         'nope',
         { ...LATTE, text: 'gardé', at: 2 },
       ]),
     );
 
-    assert.equal(createTypingStore({ storage, key: KEY }).get(LATTE)?.text, 'gardé');
+    const read = createTypingStore({ storage, key: KEY });
+    assert.equal(read.get(LATTE)?.text, 'gardé');
+    assert.equal(read.get({ page: PAGE, anchor: anchor('#mocha') }), undefined);
     storage.setItem(KEY, '{not json');
     assert.equal(createTypingStore({ storage, key: KEY }).latest(PAGE), undefined);
   });
