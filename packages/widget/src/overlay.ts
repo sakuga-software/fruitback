@@ -182,6 +182,11 @@ export type Overlay = {
    * the page has open. `undefined` lets it go. Kept across a draw. `false`: no pin of that note.
    */
   mark(id: string | undefined): boolean;
+  /**
+   * Shows or hides the pins of the page (FRU-308): « Show pins on the page » of the list. The frame
+   * of the note chosen in the list stays, so the element it is about stays marked.
+   */
+  showPins(on: boolean): void;
   destroy(): void;
 };
 
@@ -578,6 +583,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     closeThread();
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     threadHome = home;
+    // Chosen in the list (FRU-308): a ring around its element, and the other pins step back.
+    container.toggleAttribute('data-fruitback-choosing', home !== null);
     entry.pin.dataset.fruitbackOpen = '';
     entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
     thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
@@ -601,6 +608,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread?.remove();
     thread = null;
     threadHome = null;
+    container.removeAttribute('data-fruitback-choosing');
     for (const entry of placed) {
       delete entry.pin.dataset.fruitbackOpen;
       entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
@@ -678,6 +686,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       }
 
       return id === undefined || found;
+    },
+    showPins(on) {
+      container.toggleAttribute('data-fruitback-pins-hidden', !on);
     },
     select(id, home) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);
@@ -1313,6 +1324,20 @@ const STYLES = `
   The pin of the row a list outside the page has open (FRU-299): above the others, a fifth bigger.
   Its z-index counts against the one of every pin, 2147483000, not against 0 (FRU-326).
 */
+/*
+  A note chosen in the list of the page (FRU-308): its frame is the ring of the board, 12 px round with
+  a halo, and the other pins step back. Not the forced palette: there the frame alone says it.
+*/
+.fruitback-overlay[data-fruitback-choosing] .fruitback-pin[data-fruitback-open] {
+  border-radius: 12px;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.6);
+}
+.fruitback-overlay[data-fruitback-choosing] .fruitback-pin:not([data-fruitback-open]) { opacity: 0.55; }
+/* « Show pins on the page » off (FRU-308): no pin, and the ring of the chosen note stays. */
+.fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin:not([data-fruitback-open]),
+.fruitback-overlay[data-fruitback-pins-hidden] .fruitback-pin-badge {
+  display: none;
+}
 .fruitback-pin[data-fruitback-marked] { z-index: 2147483001; }
 .fruitback-pin[data-fruitback-marked] .fruitback-pin-badge { scale: 1.2; }
 .fruitback-pin-orphan { border-style: dotted; }

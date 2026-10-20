@@ -162,8 +162,8 @@ test.describe('on a touch screen at 390 px', () => {
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).tap();
     await expect(page.getByRole('dialog', { name: 'Notes on this page' })).toBeVisible();
     await measure();
-    await expectAtLeast(page, 'Close the notes', COMFORTABLE);
-    await page.getByRole('button', { name: 'Close the notes' }).tap();
+    await expectAtLeast(page, 'Close the sidebar', COMFORTABLE);
+    await page.getByRole('button', { name: 'Close the sidebar' }).tap();
 
     // The settings.
     await page.getByRole('button', { name: 'Open Fruitback settings' }).tap();

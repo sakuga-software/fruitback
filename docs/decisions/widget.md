@@ -1212,38 +1212,57 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   then online.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
-- **It is the list of the mock-up of 2026-10-13** (FRU-259, screen 16). Read in its CSS, held by
-  `e2e/sidebar.spec.ts` on computed styles.
-  - **It lies over the page and does not push it.** The mock-up narrows its example site by
-    428 px. A margin on the page of somebody else breaks a layout nobody here read, so the panel is
-    `position: fixed`, 380 px on the end edge, as before at 340 px. The spec measures the page
-    before and after, and its control is the margin of the mock-up.
-  - **Three tabs: « Open », « Done », « All »**, each with its number. Open is what is left to do:
-    new, to do, in progress. Done is the rest: done and closed. A note is in one or the other, so
-    « All » is their sum. `role="tablist"`, one stop for the three, the arrows, Home and End; the
-    arrows swap in a right-to-left language. The tab chosen is kept while the widget lives.
-  - **The tabs count what the overlay draws**: a stage the reporter hid in the settings is in no
-    tab and in no number, like the copied text. A tab shows no number until a read answered.
-  - **A row**: the drop of the pin with its number (`overlay.resolutions()`), the note cut at two
-    lines, and one line: the word of the store for the state (the stage when it has none), who,
-    when, how many replies, « Approximate position » when it is the case.
+- **It is the board « Sidebar mode » of the mock-up of 2026-10-20** (FRU-308), after the list of
+  2026-10-13 (FRU-259). Read in its CSS, held by `e2e/sidebar.spec.ts` on computed styles and boxes
+  at 1440 × 900.
+  - **It lies over the page and does not push it** (A19). The board narrows its example site to
+    1048 px. A margin on the page of somebody else breaks a layout nobody here read, so the panel is
+    `position: fixed`, 392 px on the end edge (380 before, 340 before that), with the border, the
+    shadow and the type of the board. The spec measures the page before and after, and its control
+    is the margin of the mock-up.
+  - **The head**: the drop of the accent, « Notes » and « · {host} », then « Back to floating
+    pins » and the cross « Close the sidebar ». Both close the list. The board draws two buttons,
+    and the widget has one state besides the list: the floating pins. The dialog keeps the name
+    « Notes on this page »: « Notes » alone starts like « Note 3 », the name of a thread.
+  - **« This page · 8 » alone, and no « Whole site »**: the script reads the notes of this page
+    only (`GET /feedback` by page), and has no route for the site. Drawn as the chosen part of the
+    rail of the board, as words: a list of one tab chooses nothing. No number until a read answered.
+  - **« Search notes »** reads the whole text of each note and the identifier of its store, in any
+    case, in the notes the widget holds: no request. Its keys stay in the field: a site and the
+    capture mode listen on the document. Escape still closes the list.
+  - **The chips of the statuses replace the tabs of FRU-259**: « All », « New », « To do », « In
+    progress », « Done », each with its number, `aria-pressed`, one at a time. « Closed » is not on
+    the board: its chip shows while a note of the page is closed. The numbers count what the search
+    found, and what the overlay draws: a stage the reporter hid in the settings is in no chip, like
+    the copied text. The detached notes are in no number: they have their own, at the bottom.
+  - **A row of the board**: the drop of the pin (24 px, its number in white), « {Status} · {ID} … {when} »,
+    the note cut at two lines, and « {who} · {n} replies » or « no reply », then « Approximate
+    position » when it is the case.
   - **« further down »** when the top of the frame of the note is under the bottom of the window
     (`overlay.below`). The list follows the page while it scrolls, a frame behind at most, and
     listens to nothing while it is closed.
-  - **The row of the note whose thread is open** says `aria-current` (`overlay.openId`, and
-    `onThread` to draw again).
-  - **« Could not be placed · 1 »** holds the notes whose element is gone, under the tabs, which do
-    not count them: the mock-up counts 6 and 2 beside one such note. Each is a button, not a
-    paragraph as drawn: it still opens its thread, which holds the replies and the way to the
-    store. Its second line is « Its element is no longer on this page. The note stays here. » The
-    mock-up adds « and in Linear »: the widget does not know the name of the store (FRU-31).
-    The chip of `orphans.ts` on the page is unchanged.
+  - **The row of the note whose thread is open** says `aria-current`, and is the open card of the
+    board: the warm surface and a line of the border inside it (`overlay.openId`, and `onThread`).
+  - **The open row of the board is the thread in the column (FRU-312)**, not a card that grows in
+    the list: the thread holds the block of the selector, the replies, « Reply » and the way to the
+    store, which the card of the board shows in part. Its element has the ring of the board while
+    its thread is in the list: the frame of its pin, 12 px round, with a halo of 6 px
+    (`data-fruitback-choosing` on the overlay), and the other pins at 0.55.
+  - **« 1 detached note »** holds the notes whose element is gone, at the bottom, in the dashed
+    cards of the board: the note, then « {Status} · {ID} · the element it pointed at is gone ». Each
+    one is a button: it still opens its thread. The title is in the muted text, not the brown of the
+    board, which is 3.8:1 on the dark surface. The chips filter them too. The chip of `orphans.ts`
+    on the page is unchanged.
+  - **The foot**: « Leave feedback », 44 px, with the label of the host, which closes the list and
+    starts a capture; and « Show pins on the page », a switch (`overlay.showPins`). Off, the pins go
+    while the list is open, and the ring of the chosen note stays; the list shows them again when it
+    closes, so no state of the widget is left with no pin and no list.
   - **The dock stands aside while the list is open** (`data-fruitback-listing` on the host of the
-    widget), as drawn: the panel covers its corner. So the list holds « Leave feedback », with the
-    label of the host, which closes the list and starts a capture; the gear is back at the close.
-  - **Kept, though the mock-up does not draw it**: the three states of a read; the notes kept for
-    later, at the head of « Open » and nowhere else; « No note here. » for a tab that holds
-    nothing; the sheet at the bottom of a phone, 70 % of its height at most; the dark scheme.
+    widget), as drawn: the panel covers its corner. The gear is back at the close.
+  - **Kept, though the board does not draw it**: the three states of a read; the notes kept for
+    later, at the head of « All »; « No note matches. » for a search or a chip that keeps nothing;
+    the sheet at the bottom of a phone, 70 % of its height at most; the dark scheme; 44 px for a
+    thumb.
 
 ## Notes kept for later, and sent together (FRU-124)
 
@@ -1349,8 +1368,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Nothing takes focus from somebody who writes** (rule 3 of `CLAUDE.md`). While the composer is
   open or a capture runs, the link waits in the address. The note opens when the composer closes
   (`embed.ts` watches its `hidden`), or at the next read.
-- **A note whose element is gone opens the list too**, on its group « Could not be placed »
-  (FRU-259), and its thread at the place it was planted.
+- **A note whose element is gone opens the list too**, on its group of detached notes
+  (FRU-259, FRU-308), and its thread at the place it was planted.
 - **A note this page does not draw opens nothing**: a note of another page, or of a stage the
   reporter hid in the settings. No error is shown and none is written to the console.
 - `e2e/deep-link.spec.ts` opens a note by its link on the built widget, with its control (`#formules`

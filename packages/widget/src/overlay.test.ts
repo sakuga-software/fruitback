@@ -791,6 +791,50 @@ describe('showing only some pins', () => {
   });
 });
 
+describe('a note chosen in the list of the page (FRU-308)', () => {
+  function two(page: MountedPage): Overlay {
+    const made = createOverlay({ document: page.document });
+    made.render([
+      issueOnCta({ seed: { ...issueOnCta().seed, id: 'sd_one' } }),
+      issueOnCta({ seed: { ...issueOnCta().seed, id: 'sd_two' } }),
+    ]);
+
+    return made;
+  }
+  const container = (page: MountedPage) => page.document.querySelector('[data-fruitback-overlay]') as HTMLElement;
+
+  it('rings its element and sets the other pins back while its thread is in the list, and only then', () => {
+    const page = mountWithCta();
+    overlay = two(page);
+
+    // A thread opened from its pin, on the page: no ring.
+    overlay.select('sd_one');
+    assert.equal(container(page).hasAttribute('data-fruitback-choosing'), false);
+
+    const home = page.document.createElement('div');
+    page.document.body.append(home);
+    overlay.select('sd_two', home);
+    assert.equal(container(page).hasAttribute('data-fruitback-choosing'), true);
+    assert.equal(overlay.openId(), 'sd_two');
+
+    overlay.closeThread();
+    assert.equal(container(page).hasAttribute('data-fruitback-choosing'), false);
+  });
+
+  it('hides the pins and shows them again, the ring of the chosen note kept', () => {
+    const page = mountWithCta();
+    overlay = two(page);
+
+    overlay.showPins(false);
+    assert.equal(container(page).hasAttribute('data-fruitback-pins-hidden'), true);
+    // The rule that hides them spares the frame of the open note.
+    const style = [...page.document.querySelectorAll('style')].map((node) => node.textContent).join('');
+    assert.match(style, /\[data-fruitback-pins-hidden\] \.fruitback-pin:not\(\[data-fruitback-open\]\)/);
+    overlay.showPins(true);
+    assert.equal(container(page).hasAttribute('data-fruitback-pins-hidden'), false);
+  });
+});
+
 describe('the issues it was handed', () => {
   it('keeps a copy, so a caller mutating their array does not change the screen', () => {
     const page = mountWithCta();

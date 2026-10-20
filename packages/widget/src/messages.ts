@@ -150,23 +150,29 @@ export const ENGLISH = {
   'sidebar.open': 'Show every note in a sidebar',
   // The same button while the notes of the page could not be read (FRU-316): its dot says why.
   'sidebar.openFailed': 'Show every note in a sidebar. They could not be read.',
-  // The name of the dialog, and the title its head shows (FRU-259).
+  // The name of the dialog (FRU-259). Its head shows `sidebar.title`, then the host of the page.
   'sidebar.dialog': 'Notes on this page',
+  'sidebar.title': 'Notes',
   // The way back from the thread of a note to the rows of the list, where the thread took their place (FRU-312).
   'sidebar.back': 'All notes',
-  'sidebar.close': 'Close the notes',
-  // The three tabs. `sidebar.tabs` names their group; a number follows each word.
-  'sidebar.tabs': 'Which notes',
-  'sidebar.tabOpen': 'Open',
-  'sidebar.tabDone': 'Done',
-  'sidebar.tabAll': 'All',
-  // A tab that shows nothing, on a page that has notes.
-  'sidebar.emptyTab': 'No note here.',
+  // The two buttons of the head of the board « Sidebar mode » (FRU-308). Each one closes the list.
+  'sidebar.floating': 'Back to floating pins',
+  'sidebar.close': 'Close the sidebar',
+  // The scope of the board, with its one part: no number until a read answered.
+  'sidebar.scope': 'This page',
+  'sidebar.scopeCount': 'This page · {count}',
+  'sidebar.search': 'Search notes',
+  // The group of the chips of the statuses, and the chip of every status. A number follows each word.
+  'sidebar.stages': 'Status',
+  'sidebar.all': 'All',
+  // A search or a chip that keeps nothing, on a page that has notes.
+  'sidebar.noMatch': 'No note matches.',
   'sidebar.replies': { one: '{count} reply', other: '{count} replies' },
+  'sidebar.noReply': 'no reply',
   // After the date of a note whose element is under the part of the page in sight.
   'sidebar.below': 'further down',
-  'sidebar.unplaced': 'Could not be placed · {count}',
-  'sidebar.unplacedWhy': 'Its element is no longer on this page. The note stays here.',
+  'sidebar.unplaced': { one: '{count} detached note', other: '{count} detached notes' },
+  'sidebar.unplacedWhy': 'the element it pointed at is gone',
   'sidebar.empty': 'No note on this page yet.',
   'sidebar.loading': 'Reading the notes of this page…',
   'sidebar.failed': 'The notes of this page could not be read. They are not lost.',
@@ -179,6 +185,8 @@ export const ENGLISH = {
   'sidebar.drafts': 'Kept for later, not sent yet',
   'sidebar.sendDrafts': { one: 'Send {count} note', other: 'Send the {count} notes' },
   'sidebar.draftsSent': { one: '{count} note sent', other: '{count} notes sent' },
+  // The switch at the foot of the list: off, the pins go while the list is open (FRU-308).
+  'sidebar.showPins': 'Show pins on the page',
 
   // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
   'export.title': 'Feedback on {url}',

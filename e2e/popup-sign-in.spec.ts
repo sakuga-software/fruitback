@@ -466,7 +466,7 @@ test('a session that ended: the widget says so at once, opens the popup, and the
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
   await expect(page.getByText('Sign in to see the notes of this page.')).toBeVisible();
-  await page.getByRole('button', { name: 'Close the notes' }).click();
+  await page.getByRole('button', { name: 'Close the sidebar' }).click();
 
   // The button opens the popup over the tab, where the sign-in starts and its word is compared.
   // `action.openPopup` opens no page Playwright can drive: the popup is counted from the service

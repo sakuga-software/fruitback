@@ -35,6 +35,7 @@ const SET = 'ph';
 const WANTED: Record<string, string> = {
   gear: 'gear-fill',
   close: 'x-bold',
+  search: 'magnifying-glass-bold',
 };
 
 type IconifyInfo = {

@@ -54,8 +54,8 @@ test('the list shows every note, and a note chosen there opens its thread', asyn
 
   await open.click();
   const entries = list.locator('[data-fruitback-note]');
-  // « All »: the store in memory gives each new issue its next state, so which of the two is open is not this test's.
-  await list.getByRole('tab', { name: 'All 2' }).click();
+  // « All », the chip that is pressed when the list opens: every note, whatever its state.
+  await expect(list.getByRole('button', { name: 'All 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(entries).toHaveCount(2);
 
   // Choosing a note opens its thread in the column of the list, in place of the rows (FRU-312): the
@@ -67,7 +67,7 @@ test('the list shows every note, and a note chosen there opens its thread', asyn
   await expect(list.locator('[data-fruitback-thread]')).toHaveCount(1);
   await expect(entries.first()).toBeHidden();
   await expect(list.getByRole('button', { name: 'All notes' })).toBeVisible();
-  await expect(list.getByRole('button', { name: 'Close the notes' })).toBeVisible();
+  await expect(list.getByRole('button', { name: 'Close the sidebar' })).toBeVisible();
 
   // Escape closes the thread and gives focus back to the entry. A second Escape closes the list.
   await page.keyboard.press('Escape');
@@ -90,7 +90,6 @@ test('a note far down the page is brought into view when it is chosen', async ({
   await expect(target).not.toBeInViewport();
 
   await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
-  await page.getByRole('dialog', { name: 'Notes on this page' }).getByRole('tab', { name: 'All 1' }).click();
   await page.getByRole('dialog', { name: 'Notes on this page' }).locator('[data-fruitback-note]').click();
 
   await expect(target).toBeInViewport();
@@ -157,7 +156,7 @@ async function eightNotes(page: Page): Promise<void> {
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 
-test('the list has the measures of the mock-up, and its three tabs count and filter eight notes (FRU-259)', async ({
+test('the list is the board « Sidebar mode »: its measures, its chips, its search, the ring and the switch of the pins (FRU-308)', async ({
   page,
 }) => {
   test.slow();
@@ -178,147 +177,214 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
         const style = getComputedStyle(element);
         const box = element.getBoundingClientRect();
 
-        // To the pixel, as the measures of the mock-up are: the head is 39.15 px of text, so what is
-        // under it sits 0.15 px lower than a whole number.
         return {
           x: Math.round(box.x),
           y: Math.round(box.y),
-          width: box.width,
-          height: box.height,
+          width: Math.round(box.width * 10) / 10,
+          height: Math.round(box.height * 10) / 10,
           ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
         } as Record<string, string | number>;
       }, properties);
 
-  // The panel: 380 px on the end edge of the window, its whole height.
+  // The panel of the board: 392 px on the end edge of the window, its whole height, over the page.
   expect(
-    await read('[data-fruitback-sidebar]', ['border-left-width', 'border-left-color', 'background-color', 'font-size']),
+    await read('[data-fruitback-sidebar]', [
+      'border-left-width',
+      'border-left-color',
+      'background-color',
+      'font-size',
+      'line-height',
+      'box-shadow',
+    ]),
   ).toMatchObject({
-    x: 1060,
+    x: 1048,
     y: 0,
-    width: 380,
+    width: 392,
     height: 900,
     'border-left-width': '1px',
     'border-left-color': 'rgb(231, 229, 228)',
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '14px',
+    'line-height': '20.3px',
+    'box-shadow': 'rgba(0, 0, 0, 0.06) -10px 0px 30px 0px',
   });
-  expect(await page.locator('[data-fruitback-sidebar]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
-    'rgba(0, 0, 0, 0.18) 0px 10px 30px 0px',
-  );
   // The dock stands aside: the list covers its corner, and holds its own button to leave a note.
   await expect(dock).toBeHidden();
 
+  // The head: the drop, « Notes », the host, « Back to floating pins » and the cross.
   expect(await read('.fruitback-sidebar-head', ['padding', 'gap', 'border-bottom-width'])).toMatchObject({
-    padding: '12px 10px 12px 18px',
+    padding: '16px 12px 12px 18px',
     gap: '8px',
-    'border-bottom-width': '1px',
+    'border-bottom-width': '0px',
   });
-  await expect(page.locator('.fruitback-sidebar-title')).toHaveText('Notes on this page');
+  expect(await read('.fruitback-sidebar-heading svg', ['color'])).toMatchObject({
+    x: 1067,
+    width: 16,
+    height: 16,
+    color: 'rgb(221, 44, 39)',
+  });
+  await expect(page.locator('.fruitback-sidebar-title')).toHaveText('Notes');
   expect(await read('.fruitback-sidebar-title', ['font-size', 'font-weight'])).toMatchObject({
-    x: 1079,
-    y: 12,
+    x: 1091,
     'font-size': '15px',
-    'font-weight': '600',
+    'font-weight': '650',
   });
-  await expect(page.locator('.fruitback-sidebar-address')).toHaveText(/^localhost:\d+\/$/);
+  await expect(page.locator('.fruitback-sidebar-address')).toHaveText(/^· localhost:\d+$/);
   expect(await read('.fruitback-sidebar-address', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
     color: 'rgb(117, 110, 105)',
   });
+  expect(await read('[data-fruitback-floating]', ['border-radius', 'color'])).toMatchObject({
+    x: 1356,
+    y: 16,
+    width: 32,
+    height: 32,
+    'border-radius': '10px',
+    color: 'rgb(117, 110, 105)',
+  });
+  await expect(list.getByRole('button', { name: 'Back to floating pins' })).toBeVisible();
   expect(await read('.fruitback-sidebar-close', ['border-radius'])).toMatchObject({
-    x: 1394,
-    y: 14,
-    width: 36,
+    x: 1396,
+    y: 16,
+    width: 32,
+    height: 32,
+    'border-radius': '10px',
+  });
+
+  // « This page », the search and the chips, over a rule.
+  expect(await read('.fruitback-sidebar-actions', ['padding', 'gap', 'border-bottom-width'])).toMatchObject({
+    y: 60,
+    padding: '0px 18px 12px',
+    gap: '10px',
+    'border-bottom-width': '1px',
+  });
+  await expect(list.locator('.fruitback-sidebar-scope')).toHaveText('This page · 8');
+  expect(await read('.fruitback-sidebar-scope', ['padding', 'border-radius', 'background-color'])).toMatchObject({
+    x: 1067,
+    y: 60,
+    width: 355,
     height: 36,
-    'border-radius': '8px',
-  });
-  expect(await read('.fruitback-sidebar-actions', ['padding', 'gap'])).toMatchObject({
-    padding: '14px 18px 0px',
-    gap: '14px',
-  });
-  expect(
-    await read('[data-fruitback-leave]', ['border-radius', 'background-color', 'color', 'font-size', 'font-weight']),
-  ).toMatchObject({
-    x: 1079,
-    y: 78,
-    width: 343,
-    height: 40,
-    'border-radius': '999px',
-    'background-color': 'rgb(221, 44, 39)',
-    color: 'rgb(255, 255, 255)',
-    'font-size': '13px',
-    'font-weight': '600',
-  });
-  expect(await read('[data-fruitback-leave] svg', [])).toMatchObject({ width: 12, height: 15 });
-  expect(await read('[role="tablist"]', ['padding', 'gap', 'border-radius', 'background-color'])).toMatchObject({
-    x: 1079,
-    y: 132,
-    width: 343,
-    height: 38,
     padding: '3px',
-    gap: '4px',
     'border-radius': '10px',
     'background-color': 'rgb(245, 245, 244)',
   });
-  const tabs = list.getByRole('tab');
-  await expect(tabs).toHaveText(['Open 6', 'Done 2', 'All 8']);
-  const chosen = await read('[role="tab"][aria-selected="true"]', [
-    'border-radius',
-    'background-color',
-    'color',
-    'font-size',
-    'font-weight',
-    'box-shadow',
-  ]);
-  expect(chosen).toMatchObject({
-    x: 1082,
-    y: 135,
-    height: 32,
+  expect(
+    await read('.fruitback-sidebar-scope > span', [
+      'border-radius',
+      'background-color',
+      'font-size',
+      'font-weight',
+      'box-shadow',
+    ]),
+  ).toMatchObject({
+    height: 30,
     'border-radius': '8px',
     'background-color': 'rgb(255, 255, 255)',
-    color: 'rgb(28, 25, 23)',
-    'font-size': '13px',
+    'font-size': '12px',
     'font-weight': '600',
     'box-shadow': 'rgba(28, 25, 23, 0.15) 0px 1px 3px 0px',
   });
-  expect(Number(chosen.width)).toBeCloseTo(109.7, 0);
-  expect(await read('[role="tab"][aria-selected="false"]', ['background-color', 'color'])).toMatchObject({
-    'background-color': 'rgba(0, 0, 0, 0)',
-    color: 'rgb(87, 83, 78)',
+  const search = list.getByRole('searchbox', { name: 'Search notes' });
+  await expect(search).toHaveAttribute('placeholder', 'Search notes');
+  expect(
+    await read('.fruitback-sidebar-search-field', [
+      'border-top-width',
+      'border-top-color',
+      'border-radius',
+      'font-size',
+      'padding-left',
+    ]),
+  ).toMatchObject({
+    x: 1067,
+    y: 106,
+    width: 355,
+    height: 34,
+    'border-top-width': '1px',
+    'border-top-color': 'rgb(143, 136, 131)',
+    'border-radius': '6px',
+    'font-size': '13px',
+    'padding-left': '32px',
   });
-  expect(await read('[role="tabpanel"]', ['padding', 'overflow-y'])).toMatchObject({
-    y: 170,
-    padding: '10px 8px 16px',
+  expect(await read('.fruitback-sidebar-search svg', [])).toMatchObject({ x: 1077, y: 115, width: 15, height: 15 });
+  const chips = list.getByRole('group', { name: 'Status' }).getByRole('button');
+  // « Closed » is not on the board: it shows because the fifth note is closed.
+  await expect(chips).toHaveText(['All8', 'New2', 'To do2', 'In progress2', 'Done1', 'Closed1']);
+  await expect(list.getByRole('button', { name: 'All 8', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect(
+    await read('[data-fruitback-chip="all"]', [
+      'border-top-color',
+      'background-color',
+      'border-radius',
+      'font-size',
+      'font-weight',
+      'padding-left',
+    ]),
+  ).toMatchObject({
+    x: 1067,
+    y: 150,
+    height: 28,
+    'border-top-color': 'rgb(28, 25, 23)',
+    'background-color': 'rgb(245, 245, 244)',
+    'border-radius': '999px',
+    'font-size': '12px',
+    'font-weight': '600',
+    'padding-left': '10px',
+  });
+  expect(await read('[data-fruitback-chip="seeded"]', ['border-top-color', 'background-color'])).toMatchObject({
+    'border-top-color': 'rgb(231, 229, 228)',
+    'background-color': 'rgb(255, 255, 255)',
+  });
+  // Its own box, not the one it is turned in: a drop of 9 px, at 45°.
+  expect(await read('[data-fruitback-chip="ripening"] .fruitback-sidebar-dot', ['background-color'])).toMatchObject({
+    width: 12.7,
+    height: 12.7,
+    'background-color': 'rgb(172, 95, 0)',
+  });
+  expect(
+    await page
+      .locator('[data-fruitback-chip="ripening"] .fruitback-sidebar-dot')
+      .evaluate((node) => [getComputedStyle(node).width, getComputedStyle(node).height]),
+  ).toEqual(['9px', '9px']);
+  expect(await read('[data-fruitback-chip="all"] .fruitback-sidebar-count', ['color', 'font-weight'])).toMatchObject({
+    color: 'rgb(117, 110, 105)',
+    'font-weight': '500',
+  });
+  expect(await read('.fruitback-sidebar-panel', ['padding', 'overflow-y'])).toMatchObject({
+    padding: '8px 10px 12px',
     'overflow-y': 'auto',
   });
 
-  // A row: the drop with the number of its pin, the note, and a line of what is known of it.
+  // A row of the board: the drop with the number of its pin, « New · ID … when », the note, who and the replies.
   const rows = list.locator('.fruitback-sidebar-list [data-fruitback-note]');
-  await expect(rows).toHaveCount(6);
-  expect(
-    await read('.fruitback-sidebar-item', ['display', 'grid-template-columns', 'gap', 'padding', 'border-radius']),
-  ).toMatchObject({
-    x: 1069,
-    y: 180,
-    width: 363,
-    display: 'grid',
-    'grid-template-columns': '30px 303px',
-    gap: '2px 10px',
-    padding: '12px 10px',
+  await expect(rows).toHaveCount(8);
+  expect(await read('.fruitback-sidebar-item', ['display', 'gap', 'padding', 'border-radius'])).toMatchObject({
+    x: 1059,
+    width: 371,
+    display: 'flex',
+    gap: '12px',
+    padding: '12px',
     'border-radius': '10px',
   });
-  expect(await read('.fruitback-sidebar-pin', ['background-color', 'border-radius'])).toMatchObject({
-    width: 24,
-    height: 24,
+  expect(
+    await read('.fruitback-sidebar-pin', ['background-color', 'border-radius', 'border-top-width', 'border-top-color']),
+  ).toMatchObject({
+    // A drop of 24 px, turned 45° so that its point is down: its box on the screen is the diagonal.
+    width: 33.9,
+    height: 33.9,
     // The olive of « new » (FRU-292).
     'background-color': 'rgb(106, 121, 80)',
     'border-radius': '50% 50% 50% 0px',
+    'border-top-width': '2px',
+    'border-top-color': 'rgb(255, 255, 255)',
   });
   expect(await read('.fruitback-sidebar-pin > span', ['font-size', 'font-weight', 'color'])).toMatchObject({
-    'font-size': '12px',
-    'font-weight': '600',
+    'font-size': '11px',
+    'font-weight': '700',
     color: 'rgb(255, 255, 255)',
   });
+  expect(await read('.fruitback-sidebar-top', ['font-size'])).toMatchObject({ 'font-size': '12px' });
+  expect(await read('.fruitback-sidebar-status', ['font-weight'])).toMatchObject({ 'font-weight': '600' });
+  expect(await read('.fruitback-sidebar-age', ['color'])).toMatchObject({ color: 'rgb(117, 110, 105)' });
   expect(await read('.fruitback-sidebar-note', ['font-size', 'line-height', '-webkit-line-clamp'])).toMatchObject({
     'font-size': '14px',
     'line-height': '20.3px',
@@ -328,66 +394,121 @@ test('the list has the measures of the mock-up, and its three tabs count and fil
     'font-size': '12px',
     color: 'rgb(117, 110, 105)',
   });
-  // The number of each pin, and white on the amber of « in progress » too (FRU-292).
-  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['1', '2', '3', '6', '7', '8']);
-  expect(
-    await rows
-      .nth(2)
-      .locator('.fruitback-sidebar-pin > span')
-      .evaluate((node) => getComputedStyle(node).color),
-  ).toBe('rgb(255, 255, 255)');
-  await expect(rows.nth(0).locator('.fruitback-sidebar-meta')).toHaveText(/^New · Anonymous · .+$/);
+  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['1', '2', '3', '4', '5', '6', '7', '8']);
+  await expect(rows.nth(0).locator('.fruitback-sidebar-status')).toHaveText('New');
+  await expect(rows.nth(0).locator('.fruitback-sidebar-meta')).toHaveText(/^Anonymous · no reply/);
 
   // « further down » for the two notes at the foot of the page, and for no other.
   const below = rows.locator('[data-fruitback-below]');
-  await expect(below.nth(4)).toBeVisible();
-  await expect(below.nth(5)).toBeVisible();
-  await expect(below.nth(5)).toHaveText(' · further down');
+  await expect(below.nth(6)).toBeVisible();
+  await expect(below.nth(7)).toHaveText(' · further down');
   await expect(below.nth(0)).toBeHidden();
-  // The page scrolls under the list: they are in sight, and the words go.
   await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
-  await expect(below.nth(4)).toBeHidden();
-  await expect(below.nth(5)).toBeHidden();
+  await expect(below.nth(6)).toBeHidden();
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(below.nth(5)).toBeVisible();
+  await expect(below.nth(6)).toBeVisible();
 
-  // The tabs filter, by the pointer and by the arrows; one stop for the three.
-  await tabs.nth(1).click();
-  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['4', '5']);
-  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
-  await expect(tabs.nth(0)).toHaveAttribute('tabindex', '-1');
-  await tabs.nth(1).focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(tabs.nth(2)).toBeFocused();
-  await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+  // A chip shows its status, and « All » everything again.
+  await list.getByRole('button', { name: 'In progress 2', exact: true }).click();
+  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['3', '8']);
+  await expect(list.getByRole('button', { name: 'In progress 2', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await list.getByRole('button', { name: 'Done 1', exact: true }).click();
+  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['4']);
+  await list.getByRole('button', { name: 'All 8', exact: true }).click();
   await expect(rows).toHaveCount(8);
-  await page.keyboard.press('ArrowRight');
-  await expect(tabs.nth(0)).toBeFocused();
-  await expect(rows).toHaveCount(6);
-  await page.keyboard.press('ArrowLeft');
-  await expect(tabs.nth(2)).toBeFocused();
-  await page.keyboard.press('Home');
-  await expect(tabs.nth(0)).toBeFocused();
 
-  // A row opens its thread in place of the rows (FRU-312), and Escape brings the rows back.
+  // The search reads the whole text of the notes; the chips count what it found.
+  await search.fill('note 5');
+  await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['5']);
+  await expect(chips).toHaveText(['All1', 'New0', 'To do0', 'In progress0', 'Done0', 'Closed1']);
+  await search.fill('nothing like this');
+  await expect(list.getByText('No note matches.')).toBeVisible();
+  await search.fill('');
+  await expect(rows).toHaveCount(8);
+
+  // A row opens its thread in place of the rows (FRU-312): its element has the ring of the board, and
+  // the other pins step back. Escape brings the rows back, and the ring goes.
+  const id = await rows.nth(1).getAttribute('data-fruitback-note');
+  const other = await rows.nth(0).getAttribute('data-fruitback-note');
   await rows.nth(1).click();
   await expect(list.locator('[data-fruitback-thread]')).toBeVisible();
   await expect(rows.nth(1)).toBeHidden();
+  const ring = page.locator(`[data-fruitback-pin="${id}"]`);
+  await expect
+    .poll(() =>
+      ring.evaluate((node) => {
+        const style = getComputedStyle(node);
+
+        return [style.borderTopWidth, style.borderTopColor, style.borderTopLeftRadius, style.boxShadow];
+      }),
+    )
+    // The green of « to do », 12 px round, and the halo of the board.
+    .toEqual(['2px', 'rgb(86, 128, 46)', '12px', 'rgba(255, 255, 255, 0.6) 0px 0px 0px 6px']);
+  expect(await page.locator(`[data-fruitback-pin="${other}"]`).evaluate((node) => getComputedStyle(node).opacity)).toBe(
+    '0.55',
+  );
   await page.keyboard.press('Escape');
   await expect(rows.nth(1)).toBeVisible();
   await expect(rows.nth(1)).toBeFocused();
+  expect(await page.locator(`[data-fruitback-pin="${other}"]`).evaluate((node) => getComputedStyle(node).opacity)).toBe(
+    '1',
+  );
+  expect(await ring.evaluate((node) => getComputedStyle(node).boxShadow)).toBe('none');
 
-  // The row of a note whose thread is open on the page says so, on the sunken surface. Under the
-  // pointer, the raised one.
-  const id = await rows.nth(1).getAttribute('data-fruitback-note');
+  // The row of a note whose thread is open on the page is the card of the board. Under the pointer,
+  // a row takes the raised surface.
   await page.locator(`[data-fruitback-pin="${id}"] .fruitback-pin-badge`).click();
   await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
   await page.mouse.move(0, 0);
-  expect(await rows.nth(1).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(245, 245, 244)');
+  expect(
+    await rows.nth(1).evaluate((node) => [getComputedStyle(node).backgroundColor, getComputedStyle(node).boxShadow]),
+  ).toEqual(['rgb(255, 253, 249)', 'rgb(231, 229, 228) 0px 0px 0px 1px inset']);
   await rows.nth(0).hover();
   expect(await rows.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(250, 250, 249)');
   await page.keyboard.press('Escape');
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true');
+
+  // The foot: « Leave feedback » and « Show pins on the page ».
+  expect(await read('.fruitback-sidebar-foot', ['padding', 'gap', 'border-top-width'])).toMatchObject({
+    padding: '12px 18px 18px',
+    gap: '10px',
+    'border-top-width': '1px',
+  });
+  expect(
+    await read('[data-fruitback-leave]', ['border-radius', 'background-color', 'color', 'font-size', 'font-weight']),
+  ).toMatchObject({
+    x: 1067,
+    width: 355,
+    height: 44,
+    'border-radius': '999px',
+    'background-color': 'rgb(221, 44, 39)',
+    color: 'rgb(255, 255, 255)',
+    'font-size': '13px',
+    'font-weight': '600',
+  });
+  const pins = list.getByRole('switch', { name: 'Show pins on the page' });
+  await expect(pins).toBeChecked();
+  expect(await read('[data-fruitback-show-pins]', ['background-color'])).toMatchObject({
+    width: 32,
+    height: 18,
+    'background-color': 'rgb(28, 25, 23)',
+  });
+  const badges = page.locator('[data-fruitback-pin] .fruitback-pin-badge');
+  await expect(badges.first()).toBeVisible();
+  await pins.click();
+  await expect(pins).not.toBeChecked();
+  await expect(badges.first()).toBeHidden();
+  await expect(badges.last()).toBeHidden();
+  // « Back to floating pins »: the list goes, the pins come back, and the switch is on again.
+  await list.getByRole('button', { name: 'Back to floating pins' }).click();
+  await expect(list).toBeHidden();
+  await expect(badges.first()).toBeVisible();
+  await expect(dock).toBeVisible();
+  await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
+  await expect(pins).toBeChecked();
 
   // « Leave feedback » closes the list and starts a capture.
   await list.locator('[data-fruitback-leave]').click();
@@ -428,7 +549,7 @@ test('the list lies over the page: the page keeps its width when the list opens 
   expect(await pageBox()).not.toBe(before);
 });
 
-test('a note whose element is gone is in « Could not be placed », and not among the notes (FRU-259)', async ({
+test('a note whose element is gone is a detached note at the bottom, and not among the notes (FRU-259, FRU-308)', async ({
   page,
 }) => {
   await mount(page, 'sidebar-unplaced');
@@ -438,11 +559,10 @@ test('a note whose element is gone is in « Could not be placed », and not amon
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
   const open = page.getByRole('button', { name: 'Show every note in a sidebar' });
   const list = page.getByRole('dialog', { name: 'Notes on this page' });
-  const unplaced = list.getByRole('group', { name: 'Could not be placed · 1' });
+  const unplaced = list.getByRole('group', { name: '1 detached note' });
 
   // The control: with its element on the page, it is a note like the other.
   await open.click();
-  await list.getByRole('tab', { name: 'All 2' }).click();
   await expect(list.locator('.fruitback-sidebar-list [data-fruitback-note]')).toHaveCount(2);
   await expect(list.locator('[data-fruitback-unplaced]')).toBeHidden();
 
@@ -451,32 +571,45 @@ test('a note whose element is gone is in « Could not be placed », and not amon
   await expect(unplaced).toBeVisible();
   await expect(list.locator('.fruitback-sidebar-list [data-fruitback-note]')).toHaveCount(1);
   await expect(list.locator('.fruitback-sidebar-list')).not.toContainText('On a field that goes');
-  // The tabs count the notes a pin shows on its element.
-  await expect(list.getByRole('tab', { name: 'All 1' })).toBeVisible();
+  // The chips count the notes a pin shows on its element.
+  await expect(list.getByRole('button', { name: 'All 1', exact: true })).toBeVisible();
+  // The board: the note, then its status, its identifier and what became of it.
   await expect(unplaced.locator('[data-fruitback-note]')).toHaveText(
-    'On a field that goes' + 'Its element is no longer on this page. The note stays here.',
+    /^On a field that goes.+ · the element it pointed at is gone$/,
   );
   expect(
     await list.locator('.fruitback-sidebar-unplaced').evaluate((node) => {
       const style = getComputedStyle(node);
+      const title = getComputedStyle(node.querySelector('.fruitback-sidebar-unplaced-title')!);
       const icon = node.querySelector('svg')!;
+      const card = getComputedStyle(node.querySelector('.fruitback-sidebar-lost')!);
 
       return {
-        margin: style.margin,
-        paddingTop: style.paddingTop,
+        margin: style.marginTop,
+        padding: style.padding,
         rule: style.borderTopWidth,
+        title: [title.fontSize, title.fontWeight, title.textTransform, title.letterSpacing],
         icon: [icon.getBoundingClientRect().width, icon.getBoundingClientRect().height],
         dashes: getComputedStyle(icon.querySelector('path')!).strokeDasharray,
         brown: getComputedStyle(icon).color,
+        card: [
+          card.borderTopStyle,
+          card.borderTopWidth,
+          card.borderTopColor,
+          card.borderTopLeftRadius,
+          card.backgroundColor,
+        ],
       };
     }),
   ).toEqual({
-    margin: '18px 10px 0px',
-    paddingTop: '14px',
+    margin: '10px',
+    padding: '10px 8px 4px',
     rule: '1px',
+    title: ['11px', '600', 'uppercase', '0.44px'],
     icon: [12, 15],
     dashes: '18px, 12px',
     brown: 'rgb(141, 110, 99)',
+    card: ['dashed', '1px', 'rgb(141, 110, 99)', '10px', 'rgb(255, 253, 249)'],
   });
 
   // It still opens its thread.

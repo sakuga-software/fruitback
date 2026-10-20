@@ -79,7 +79,7 @@ for (const [width, height] of [
 
     await page.getByRole('button', { name: 'Show every note in a sidebar' }).click();
     const list = page.getByRole('dialog', { name: 'Notes on this page' });
-    await list.getByRole('tab', { name: 'All 1' }).click();
+    await list.getByRole('button', { name: 'All 1', exact: true }).click();
     const row = list.locator('[data-fruitback-note]');
     await row.click();
 
@@ -94,7 +94,7 @@ for (const [width, height] of [
     expect(bubble!.y).toBeGreaterThanOrEqual(head!.y + head!.height);
     expect(bubble!.x).toBeGreaterThanOrEqual(panel!.x);
     expect(bubble!.x + bubble!.width).toBeLessThanOrEqual(panel!.x + panel!.width + 0.5);
-    await expect(list.getByRole('button', { name: 'Close the notes' })).toBeInViewport();
+    await expect(list.getByRole('button', { name: 'Close the sidebar' })).toBeInViewport();
     // No thread on the page besides it.
     await expect(page.locator('[data-fruitback-thread]')).toHaveCount(1);
 
@@ -120,7 +120,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: 'Voir toutes les notes dans un panneau' }).click();
     const list = page.getByRole('dialog', { name: 'Notes de cette page' });
-    await list.getByRole('tab', { name: /^Toutes 1$/ }).click();
+    await list.getByRole('button', { name: /^Toutes 1$/ }).click();
     await list.locator('[data-fruitback-note]').click();
     await expect(list.getByRole('button', { name: 'Toutes les notes' })).toBeVisible();
     await expect(list.locator('.fruitback-thread-answers-title')).toHaveText('Réponses');

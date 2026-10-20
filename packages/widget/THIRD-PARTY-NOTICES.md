@@ -83,8 +83,8 @@ SOFTWARE.
 
 <https://github.com/phosphor-icons/core>
 
-Two icons — `gear-fill` and `x-bold` — read from `@iconify-json/ph` by `build-icons.ts` and written
-into `src/icon-data.ts`. Nothing of Iconify's own is distributed: it is the packaging, not the work.
+Three icons — `gear-fill`, `x-bold` and `magnifying-glass-bold` — read from `@iconify-json/ph` by
+`build-icons.ts` and written into `src/icon-data.ts`. Nothing of Iconify's own is distributed: it is the packaging, not the work.
 
 ```
 MIT License

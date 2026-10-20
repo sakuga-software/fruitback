@@ -13,7 +13,7 @@ export const ICON_SOURCE = {
   name: 'Phosphor',
   version: '1.2.2',
   license: 'MIT',
-  names: { gear: 'gear-fill', close: 'x-bold' },
+  names: { gear: 'gear-fill', close: 'x-bold', search: 'magnifying-glass-bold' },
 } as const;
 
 export type IconShape = { viewBox: string; paths: Record<string, string>[] };
@@ -37,6 +37,15 @@ export const ICON_DATA = {
       {
         fill: 'currentColor',
         d: 'M208.49 191.51a12 12 0 0 1-17 17L128 145l-63.51 63.49a12 12 0 0 1-17-17L111 128L47.51 64.49a12 12 0 0 1 17-17L128 111l63.51-63.52a12 12 0 0 1 17 17L145 128Z',
+      },
+    ],
+  },
+  search: {
+    viewBox: '0 0 256 256',
+    paths: [
+      {
+        fill: 'currentColor',
+        d: 'M232.49 215.51L185 168a92.12 92.12 0 1 0-17 17l47.53 47.54a12 12 0 0 0 17-17ZM44 112a68 68 0 1 1 68 68a68.07 68.07 0 0 1-68-68',
       },
     ],
   },

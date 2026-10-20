@@ -42,34 +42,54 @@ function mount(entries: SidebarEntry[] = [], more: Partial<Parameters<typeof cre
   const root = page.query('[data-fruitback-sidebar]') as HTMLElement;
   const items = (): HTMLElement[] => [...root.querySelectorAll<HTMLElement>('[data-fruitback-note]')];
   const opener = page.query('#opener') as HTMLElement;
-  const tabs = (): HTMLElement[] => [...root.querySelectorAll<HTMLElement>('[role="tab"]')];
-  const tabNames = (): (string | null)[] => tabs().map((tab) => tab.textContent);
+  const chips = (): HTMLElement[] =>
+    [...root.querySelectorAll<HTMLElement>('[data-fruitback-chip]')].filter((chip) => !chip.hidden);
+  const chipNames = (): (string | null)[] => chipNamesIn(root);
+  const chip = (stage: string): HTMLElement => root.querySelector(`[data-fruitback-chip="${stage}"]`) as HTMLElement;
+  const search = root.querySelector('input[type="search"]') as HTMLInputElement;
+  const type = (words: string) => {
+    search.value = words;
+    search.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('input', { bubbles: true }));
+  };
 
-  return { page, state, chosen, sidebar, root, items, opener, tabs, tabNames };
+  return { page, state, chosen, sidebar, root, items, opener, chips, chipNames, chip, search, type };
 }
 
-/** The words of the three tabs, with their numbers. */
-const tabNamesIn = (root: ParentNode): (string | null)[] =>
-  [...root.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+/** The names of the chips that show, with their numbers: « All 8 », « New 2 »… */
+const chipNamesIn = (root: ParentNode): (string | null)[] =>
+  [...root.querySelectorAll<HTMLElement>('[data-fruitback-chip]')]
+    .filter((chip) => !chip.hidden)
+    .map((chip) => chip.getAttribute('aria-label'));
 
-describe('the list of every note of the page (FRU-129)', () => {
-  it('lists each note with its state, its first line, who wrote it and when', () => {
-    const { sidebar, root, items, tabNames } = mount([
+/** A row as it reads: the number of its pin, its top line in parts, its note, and its last line. */
+const rowOf = (item: HTMLElement) => [
+  item.querySelector('.fruitback-sidebar-pin')?.textContent,
+  [...(item.querySelector('.fruitback-sidebar-top')?.children ?? [])].map((part) => part.textContent),
+  item.querySelector('.fruitback-sidebar-note')?.textContent,
+  item.querySelector('.fruitback-sidebar-meta')?.textContent,
+];
+
+describe('the list of every note of the page (FRU-129, FRU-308)', () => {
+  it('lists each note with its status, its identifier, when, its note, who wrote it and its replies', () => {
+    const { sidebar, root, items, chipNames } = mount([
       { issue: note('a', 'The price should say per month.\nSecond line', 'ripening'), placement: 'found', number: 1 },
       { issue: note('b', 'Wrong colour'), placement: 'found', number: 2 },
     ]);
     sidebar.open();
 
     assert.equal(root.hidden, false);
-    assert.deepEqual(tabNames(), ['Open 2', 'Done 0', 'All 2']);
-    // The number of its pin, the note on one run of words, then the state, who and when (FRU-259).
-    assert.deepEqual(
-      items().map((item) => [...item.children].map((child) => child.textContent)),
+    assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 2');
+    assert.deepEqual(chipNames(), ['All 2', 'New 1', 'To do 0', 'In progress 1', 'Done 0']);
+    // The board: « In progress · A … 2 hours ago », the note on one run of words, then who and the replies.
+    assert.deepEqual(items().map(rowOf), [
       [
-        ['1', 'The price should say per month. Second line', 'In Progress · Alice · 2 hours ago · further down'],
-        ['2', 'Wrong colour', 'In Progress · Alice · 2 hours ago · further down'],
+        '1',
+        ['In Progress', 'A', '2 hours ago'],
+        'The price should say per month. Second line',
+        'Alice · no reply · further down',
       ],
-    );
+      ['2', ['In Progress', 'B', '2 hours ago'], 'Wrong colour', 'Alice · no reply · further down'],
+    ]);
     // « further down » is in the row for when the page scrolls, and hidden: nothing here says it is below.
     assert.deepEqual(
       items().map((item) => (item.querySelector('[data-fruitback-below]') as HTMLElement).hidden),
@@ -79,11 +99,11 @@ describe('the list of every note of the page (FRU-129)', () => {
     assert.equal(items()[0]?.querySelector('.fruitback-sidebar-pin')?.getAttribute('aria-hidden'), 'true');
   });
 
-  it('says so when a note was found by its position, or not found', () => {
-    const { sidebar, root, tabNames, chosen } = mount([
+  it('says so when a note was found by its position, and puts a note not found at the bottom', () => {
+    const { sidebar, root, chipNames, chosen } = mount([
       { issue: note('a', 'Found'), placement: 'found', number: 1 },
       { issue: note('b', 'By position'), placement: 'approximate', number: 2 },
-      { issue: note('c', 'Gone'), placement: 'detached', number: 3 },
+      { issue: note('c', 'Gone', 'ripening'), placement: 'detached', number: 3 },
     ]);
     sidebar.open();
 
@@ -92,26 +112,24 @@ describe('the list of every note of the page (FRU-129)', () => {
       rows.map((row) => /Approximate position/.test(row.querySelector('.fruitback-sidebar-meta')?.textContent ?? '')),
       [false, true],
     );
-    // The note whose element is gone is apart, in a group with a name, and the tabs do not count it (FRU-259).
-    assert.deepEqual(tabNames(), ['Open 2', 'Done 0', 'All 2']);
+    // The note whose element is gone is apart, in a group with a name, and the counts leave it out (FRU-259).
+    assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 2');
+    assert.deepEqual(chipNames(), ['All 2', 'New 2', 'To do 0', 'In progress 0', 'Done 0']);
     const unplaced = root.querySelector('[data-fruitback-unplaced]') as HTMLElement;
     assert.equal(unplaced.hidden, false);
     assert.equal(unplaced.getAttribute('role'), 'group');
-    assert.equal(
-      root.querySelector(`#${unplaced.getAttribute('aria-labelledby')}`)?.textContent,
-      'Could not be placed · 1',
-    );
+    assert.equal(root.querySelector(`#${unplaced.getAttribute('aria-labelledby')}`)?.textContent, '1 detached note');
     const lost = unplaced.querySelector('[data-fruitback-note]') as HTMLElement;
     assert.deepEqual(
       [...lost.children].map((child) => child.textContent),
-      ['Gone', 'Its element is no longer on this page. The note stays here.'],
+      ['Gone', 'In Progress · C · the element it pointed at is gone'],
     );
     // It still opens its thread, which holds the replies and the way to the store.
     lost.click();
     assert.deepEqual(chosen, ['c']);
   });
 
-  it('has no group of unplaced notes when every note has its element', () => {
+  it('has no group of detached notes when every note has its element', () => {
     const { sidebar, root } = mount([{ issue: note('a', 'Found'), placement: 'found', number: 1 }]);
     sidebar.open();
 
@@ -147,14 +165,14 @@ describe('the list of every note of the page (FRU-129)', () => {
     assert.equal(sidebar.isOpen, true);
   });
 
-  it('says the page has no feedback, with no empty list', () => {
+  it('says the page has no note, with no empty list', () => {
     const { sidebar, root } = mount([]);
     sidebar.open();
 
     assert.equal((root.querySelector('.fruitback-sidebar-empty') as HTMLElement).hidden, false);
     assert.equal((root.querySelector('.fruitback-sidebar-list') as HTMLElement).hidden, true);
     assert.equal(root.querySelector('.fruitback-sidebar-empty')?.textContent, 'No note on this page yet.');
-    assert.deepEqual(tabNamesIn(root), ['Open 0', 'Done 0', 'All 0']);
+    assert.deepEqual(chipNamesIn(root), ['All 0', 'New 0', 'To do 0', 'In progress 0', 'Done 0']);
   });
 
   it('draws the notes again when they change, and only while it is open', () => {
@@ -172,118 +190,128 @@ describe('the list of every note of the page (FRU-129)', () => {
   });
 });
 
-describe('the tabs of the list (FRU-259)', () => {
+describe('the search and the chips of the list (FRU-308)', () => {
   const eight = (): SidebarEntry[] =>
     (
       [
-        ['a', 'seeded'],
-        ['b', 'green'],
-        ['c', 'ripening'],
-        ['d', 'ripe'],
-        ['e', 'seeded'],
-        ['f', 'composted'],
-        ['g', 'ripening'],
-        ['h', 'green'],
+        ['a', 'seeded', 'The mug is too small'],
+        ['b', 'green', 'Wrong colour on the button'],
+        ['c', 'ripening', 'The price should say per month'],
+        ['d', 'ripe', 'Typo in the footer'],
+        ['e', 'seeded', 'The MUG photo is blurred'],
+        ['f', 'composted', 'Not a bug'],
+        ['g', 'ripening', 'Logo too big'],
+        ['h', 'green', 'Add a mug size'],
       ] as const
-    ).map(([id, stage], index) => ({ issue: note(id, `Note ${id}`, stage), placement: 'found', number: index + 1 }));
+    ).map(([id, stage, text], index) => ({ issue: note(id, text, stage), placement: 'found', number: index + 1 }));
   const ids = (items: HTMLElement[]) => items.map((item) => item.dataset.fruitbackNote).join('');
 
-  it('counts and shows what is left to do, what is done, and all of it', () => {
-    const { page, sidebar, root, items, tabs, tabNames } = mount(eight());
+  it('counts each status, and a chip shows its notes only', () => {
+    const { sidebar, root, items, chips, chipNames, chip } = mount(eight());
     sidebar.open();
 
-    // New, to do and in progress are open; done and closed are done. Six and two make eight.
-    assert.deepEqual(tabNames(), ['Open 6', 'Done 2', 'All 8']);
-    assert.equal(ids(items()), 'abcegh');
-    const list = root.querySelector('[role="tablist"]');
-    assert.equal(list?.getAttribute('aria-label'), 'Which notes');
+    assert.equal(root.querySelector('[role="tablist"]'), null, 'the tabs of FRU-259 are gone');
+    const group = root.querySelector('.fruitback-sidebar-chips');
+    assert.equal(group?.getAttribute('role'), 'group');
+    assert.equal(group?.getAttribute('aria-label'), 'Status');
+    // « Closed » is not on the board: it shows because a note of the page is closed.
+    assert.deepEqual(chipNames(), ['All 8', 'New 2', 'To do 2', 'In progress 2', 'Done 1', 'Closed 1']);
     assert.deepEqual(
-      tabs().map((tab) => [tab.getAttribute('aria-selected'), tab.tabIndex]),
-      [
-        ['true', 0],
-        ['false', -1],
-        ['false', -1],
-      ],
+      chips().map((one) => one.getAttribute('aria-pressed')),
+      ['true', 'false', 'false', 'false', 'false', 'false'],
     );
-    const panel = root.querySelector('[role="tabpanel"]') as HTMLElement;
-    assert.equal(panel.getAttribute('aria-labelledby'), tabs()[0]?.id);
-    assert.equal(tabs()[0]?.getAttribute('aria-controls'), panel.id);
-
-    // From a row the next tab does not show: focus goes to the tab that was chosen, not to the cross.
-    items()[0]?.focus();
-    tabs()[1]?.click();
-    assert.equal(ids(items()), 'df');
-    assert.ok(deepActiveElement(page.document) === tabs()[1], 'focus did not go to the chosen tab');
-    assert.equal(panel.getAttribute('aria-labelledby'), tabs()[1]?.id);
-    assert.deepEqual(
-      tabs().map((tab) => tab.getAttribute('aria-selected')),
-      ['false', 'true', 'false'],
-    );
-
-    tabs()[2]?.click();
     assert.equal(ids(items()), 'abcdefgh');
-    // The rows keep the number of their pin, whatever the tab.
+
+    chip('ripening').click();
+    assert.equal(ids(items()), 'cg');
+    assert.equal(chip('ripening').getAttribute('aria-pressed'), 'true');
+    assert.equal(chip('all').getAttribute('aria-pressed'), 'false');
+    // The rows keep the number of their pin, whatever the chip.
     assert.deepEqual(
       items().map((item) => item.querySelector('.fruitback-sidebar-pin')?.textContent),
-      ['1', '2', '3', '4', '5', '6', '7', '8'],
+      ['3', '7'],
     );
+
+    chip('all').click();
+    assert.equal(ids(items()), 'abcdefgh');
   });
 
-  it('goes from one tab to the next with the arrows, Home and End, and focus follows', () => {
-    const { page, sidebar, tabs, items } = mount(eight());
+  it('has no chip « Closed » while no note of the page is closed', () => {
+    const { sidebar, chipNames, chip } = mount(eight().filter((entry) => entry.issue.stage !== 'composted'));
     sidebar.open();
-    const press = (key: string) => {
-      const event = new (keyboardEventCtor(page))('keydown', { key, bubbles: true, cancelable: true });
-      (deepActiveElement(page.document) as HTMLElement).dispatchEvent(event);
 
-      return event;
-    };
-    const selected = () => tabs().findIndex((tab) => tab.getAttribute('aria-selected') === 'true');
-    tabs()[0]?.focus();
-
-    // The page must not scroll on the same key, and the capture mode must not hear it.
-    assert.equal(press('ArrowRight').defaultPrevented, true);
-    assert.equal(selected(), 1);
-    assert.ok(deepActiveElement(page.document) === tabs()[1], 'focus did not follow the choice');
-    assert.equal(ids(items()), 'df');
-    press('ArrowRight');
-    assert.equal(selected(), 2);
-    // It wraps, in both directions.
-    press('ArrowRight');
-    assert.equal(selected(), 0);
-    press('ArrowLeft');
-    assert.equal(selected(), 2);
-    press('Home');
-    assert.equal(selected(), 0);
-    press('End');
-    assert.equal(selected(), 2);
-    // Another key is the browser's.
-    assert.equal(press('ArrowDown').defaultPrevented, false);
-    assert.equal(selected(), 2);
+    assert.deepEqual(chipNames(), ['All 7', 'New 2', 'To do 2', 'In progress 2', 'Done 1']);
+    assert.equal(chip('composted').hidden, true);
   });
 
-  it('swaps the arrows in a right-to-left language', () => {
-    const { page, sidebar, tabs } = mount(eight(), {
-      translator: createTranslator({ locale: 'he', messages: { he: { 'sidebar.tabOpen': 'פתוחות' } } }),
-    });
+  it('searches the whole text of the notes and their identifier, whatever the case, and the chips count what it found', () => {
+    const notes = eight();
+    (notes[3] as SidebarEntry).issue.identifier = 'FRU-128';
+    const { sidebar, root, items, chipNames, chip, search, type } = mount(notes);
     sidebar.open();
-    tabs()[0]?.focus();
+    assert.equal(search.getAttribute('aria-label'), 'Search notes');
+    assert.equal(search.placeholder, 'Search notes');
 
-    tabs()[0]?.dispatchEvent(new (keyboardEventCtor(page))('keydown', { key: 'ArrowLeft', bubbles: true }));
+    type('mug');
+    assert.equal(ids(items()), 'aeh');
+    assert.deepEqual(chipNames(), ['All 3', 'New 2', 'To do 1', 'In progress 0', 'Done 0']);
+    // The scope counts the page, not the search.
+    assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 8');
 
-    assert.equal(tabs()[1]?.getAttribute('aria-selected'), 'true');
+    // A search and a chip together.
+    chip('green').click();
+    assert.equal(ids(items()), 'h');
+    // The identifier of the store.
+    chip('all').click();
+    type('  fru-128 ');
+    assert.equal(ids(items()), 'd');
+
+    type('');
+    assert.equal(ids(items()), 'abcdefgh');
   });
 
-  it('says that a tab holds nothing, which is not that the page has no note', () => {
-    const { sidebar, root, tabs } = mount([{ issue: note('a', 'Open one'), placement: 'found', number: 1 }]);
+  it('says that nothing matches, which is not that the page has no note', () => {
+    const { sidebar, root, type } = mount(eight());
     sidebar.open();
     const empty = root.querySelector('.fruitback-sidebar-empty') as HTMLElement;
     assert.equal(empty.hidden, true);
 
-    tabs()[1]?.click();
+    type('nothing like this');
 
     assert.equal(empty.hidden, false);
-    assert.equal(empty.textContent, 'No note here.');
+    assert.equal(empty.textContent, 'No note matches.');
+    assert.equal((root.querySelector('.fruitback-sidebar-list') as HTMLElement).hidden, true);
+  });
+
+  it('keeps the keys typed in the search from the page, and lets Escape close the list', () => {
+    const { page, sidebar, search } = mount(eight());
+    let reached = 0;
+    page.document.addEventListener('keydown', () => (reached += 1));
+    sidebar.open();
+    search.focus();
+
+    search.dispatchEvent(new (keyboardEventCtor(page))('keydown', { key: 'm', bubbles: true, composed: true }));
+    assert.equal(reached, 0, 'a site that listens to the keys heard the search');
+
+    search.dispatchEvent(new (keyboardEventCtor(page))('keydown', { key: 'Escape', bubbles: true, composed: true }));
+    assert.equal(sidebar.isOpen, false);
+  });
+
+  it('filters the detached notes too', () => {
+    const { sidebar, root, chip, type } = mount([
+      { issue: note('a', 'Found'), placement: 'found', number: 1 },
+      { issue: note('c', 'Gone banner', 'ripening'), placement: 'detached' },
+    ]);
+    sidebar.open();
+    const unplaced = root.querySelector('[data-fruitback-unplaced]') as HTMLElement;
+    assert.equal(unplaced.hidden, false);
+
+    chip('seeded').click();
+    assert.equal(unplaced.hidden, true);
+    chip('ripening').click();
+    assert.equal(unplaced.hidden, false);
+    type('found');
+    assert.equal(unplaced.hidden, true);
   });
 
   it('marks the note whose thread is open, and says how many replies a note has', () => {
@@ -312,8 +340,12 @@ describe('the tabs of the list (FRU-259)', () => {
     );
     // The stage, when the store has no word of its own for the state.
     assert.deepEqual(
+      items().map((item) => item.querySelector('.fruitback-sidebar-status')?.textContent),
+      ['New', 'New', 'New'],
+    );
+    assert.deepEqual(
       items().map((item) => item.querySelector('.fruitback-sidebar-meta')?.firstChild?.textContent),
-      ['New · Alice · 2 hours ago', 'New · Alice · 2 hours ago · 1 reply', 'New · Alice · 2 hours ago · 2 replies'],
+      ['Alice · no reply', 'Alice · 1 reply', 'Alice · 2 replies'],
     );
 
     // A thread opens or closes: the rows are marked again, and none is built again, or the thread
@@ -368,7 +400,9 @@ describe('the tabs of the list (FRU-259)', () => {
     sidebar.open();
     assert.deepEqual(said(), [true, false]);
   });
+});
 
+describe('the head and the foot of the list (FRU-308)', () => {
   it('holds a button to leave a note, with the label of the host, that closes the list first', () => {
     const order: string[] = [];
     const { sidebar, root } = mount([], {
@@ -378,6 +412,7 @@ describe('the tabs of the list (FRU-259)', () => {
     const leave = root.querySelector('[data-fruitback-leave]') as HTMLElement;
     assert.equal(leave.textContent, 'Feedback, please');
     assert.ok(leave.querySelector('svg.fruitback-icon'), 'the button lost its mark');
+    assert.ok(leave.closest('.fruitback-sidebar-foot'), 'the button is not in the foot');
 
     leave.click();
 
@@ -391,14 +426,62 @@ describe('the tabs of the list (FRU-259)', () => {
     assert.equal(root.querySelector('[data-fruitback-leave]'), null);
   });
 
-  it('says the address of the page under its title', () => {
+  it('says « Notes » and the host of the page in its head', () => {
     const { sidebar, root, page } = mount();
     sidebar.open();
 
-    assert.equal(
-      root.querySelector('.fruitback-sidebar-address')?.textContent,
-      `${page.view.location.host}${page.view.location.pathname}`,
-    );
+    assert.equal(root.querySelector('.fruitback-sidebar-title')?.textContent, 'Notes');
+    assert.equal(root.querySelector('.fruitback-sidebar-address')?.textContent, `· ${page.view.location.host}`);
+  });
+
+  it('closes on « Back to floating pins » and on its cross', () => {
+    const { sidebar, root, opener } = mount([{ issue: note('a', 'One'), placement: 'found' }]);
+    const floating = root.querySelector('[data-fruitback-floating]') as HTMLElement;
+    assert.equal(floating.getAttribute('aria-label'), 'Back to floating pins');
+    const close = root.querySelector('.fruitback-sidebar-close') as HTMLElement;
+    assert.equal(close.getAttribute('aria-label'), 'Close the sidebar');
+
+    opener.focus();
+    sidebar.open();
+    floating.click();
+    assert.equal(sidebar.isOpen, false);
+
+    sidebar.open();
+    close.click();
+    assert.equal(sidebar.isOpen, false);
+  });
+
+  it('hides the pins while the list is open, and shows them again when it closes', () => {
+    const asked: boolean[] = [];
+    const { sidebar, root } = mount([{ issue: note('a', 'One'), placement: 'found' }], {
+      pins: { show: (on) => asked.push(on) },
+    });
+    sidebar.open();
+    const toggle = root.querySelector('[data-fruitback-show-pins]') as HTMLInputElement;
+    assert.equal(toggle.getAttribute('role'), 'switch');
+    assert.equal(toggle.checked, true);
+    assert.equal(toggle.closest('label')?.textContent, 'Show pins on the page');
+
+    toggle.click();
+    assert.deepEqual(asked, [false]);
+    toggle.click();
+    toggle.click();
+    assert.deepEqual(asked, [false, true, false]);
+
+    // Back to floating pins: they come back, and the switch is on when the list opens again.
+    sidebar.close();
+    assert.deepEqual(asked, [false, true, false, true]);
+    sidebar.open();
+    assert.equal(toggle.checked, true);
+    // Closed with the pins shown: nothing to ask.
+    sidebar.close();
+    assert.deepEqual(asked, [false, true, false, true]);
+  });
+
+  it('has no switch of the pins for a host that gave no pins', () => {
+    const { root } = mount();
+
+    assert.equal(root.querySelector('[data-fruitback-show-pins]'), null);
   });
 });
 
@@ -439,8 +522,8 @@ describe('the list as a dialog (FRU-129)', () => {
     const { root } = mount();
 
     assert.equal(root.getAttribute('role'), 'dialog');
-    // Named by its title, which the head shows (FRU-259).
-    assert.equal(root.querySelector(`#${root.getAttribute('aria-labelledby')}`)?.textContent, 'Notes on this page');
+    // Its name is not the « Notes » of its head: it must not start like « Note 3 », the thread (FRU-308).
+    assert.equal(root.getAttribute('aria-label'), 'Notes on this page');
     assert.equal(root.hasAttribute('aria-modal'), false, 'the page stays usable beside it, so it must not say modal');
   });
 
@@ -765,7 +848,8 @@ describe('the list before a read answered (FRU-153)', () => {
     sidebar.open();
 
     // No number while no read answered: zero notes would be a guess.
-    assert.deepEqual(tabNamesIn(root), ['Ouvertes', 'Terminées', 'Toutes']);
+    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé']);
+    assert.equal(text('.fruitback-sidebar-scope'), 'Cette page');
     assert.equal(text('.fruitback-sidebar-empty'), 'Lecture des notes de cette page…');
     assert.equal(shown('.fruitback-sidebar-failed'), false);
   });
@@ -776,7 +860,7 @@ describe('the list before a read answered (FRU-153)', () => {
     sidebar.open();
 
     assert.equal(shown('.fruitback-sidebar-empty'), false);
-    assert.deepEqual(tabNamesIn(root), ['Ouvertes', 'Terminées', 'Toutes']);
+    assert.deepEqual(chipNamesIn(root), ['Toutes', 'Nouveau', 'À faire', 'En cours', 'Terminé']);
     assert.match(text('[role="status"]'), /n’ont pas pu être lues/);
     const retry = root.querySelector('.fruitback-sidebar-retry') as HTMLElement;
     assert.equal(retry.textContent, 'Réessayer');
@@ -827,7 +911,7 @@ describe('the list before a read answered (FRU-153)', () => {
     sidebar.open();
 
     assert.equal(shown('.fruitback-sidebar-list'), true);
-    assert.equal(text('[role="tab"]'), 'Ouvertes 1');
+    assert.equal(text('.fruitback-sidebar-scope'), 'Cette page · 1');
   });
 });
 
