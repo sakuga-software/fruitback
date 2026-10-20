@@ -73,6 +73,8 @@ const ANCHOR_INSET = 16;
  * note is pointed at, focused or open.
  */
 const FRAME_OUTSET = 5;
+/** The line of the frame. The drop is placed from inside it, and `place` counts from outside it. */
+const FRAME_BORDER = 2;
 
 /** A framework commit arrives as several mutation bursts. Resolving on each one repeats the cascade. */
 const RESOLVE_DEBOUNCE_MS = 100;
@@ -1297,10 +1299,11 @@ const STYLES = `
   position: absolute;
   /*
     The point of the drop is on the anchor of the note (FRU-304), which place() writes in the box of
-    the pin. One step to the right for each note before this one on the same spot (FRU-155).
+    the pin. A child is placed from inside the border of the frame, so the border comes off. One step
+    to the right for each note before this one on the same spot (FRU-155).
   */
-  left: calc(var(--fruitback-pin-tip-x, 0px) - ${BADGE_HALF}px + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
-  top: calc(var(--fruitback-pin-tip-y, 0px) - ${BADGE_RISE}px);
+  left: calc(var(--fruitback-pin-tip-x, 0px) - ${BADGE_HALF + FRAME_BORDER}px + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
+  top: calc(var(--fruitback-pin-tip-y, 0px) - ${BADGE_RISE + FRAME_BORDER}px);
   /* …except this, which is the one thing you can click. */
   pointer-events: auto;
   display: grid;

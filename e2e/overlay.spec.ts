@@ -107,7 +107,7 @@ test('each of the five statuses has the colour of the mock-up of 2026-10-20, and
           {
             fill: style.backgroundColor,
             text: style.color,
-            frame: getComputedStyle(pin).getPropertyValue('--fruitback-pin-color'),
+            frame: (pin as HTMLElement).style.getPropertyValue('--fruitback-pin-color'),
           },
         ];
       }),

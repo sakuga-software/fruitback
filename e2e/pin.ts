@@ -113,8 +113,8 @@ export function status(page: Page): Locator {
   return page.locator('[data-fruitback-dev="status"]');
 }
 
-/** How far the frame of a pin stands off its element: the 4 px of the mock-up, as `overlay.ts` has it. */
-const FRAME_OUTSET = 4;
+/** How far the frame of a pin stands off its element: a line of 2 px, 3 px off (FRU-304), as `overlay.ts` has it. */
+const FRAME_OUTSET = 5;
 
 /**
  * The assertion that matters: the pin is drawn over the element, not merely present.

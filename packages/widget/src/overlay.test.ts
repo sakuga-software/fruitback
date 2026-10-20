@@ -320,7 +320,7 @@ describe('createOverlay', () => {
     // The stylesheet is what turns the slot into a distance.
     assert.match(
       page.document.querySelector('style')?.textContent ?? '',
-      /left: calc\(var\(--fruitback-pin-tip-x, 0px\) - 14px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
+      /left: calc\(var\(--fruitback-pin-tip-x, 0px\) - 16px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
     );
 
     // Each badge still opens its own note.

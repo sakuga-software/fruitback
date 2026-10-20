@@ -27,7 +27,9 @@ test('a drop covers nothing of its own element, and stays on the page', async ({
       // The element is 5 px inside the frame. The drop ends on its top edge, or inside it at the top of the page.
       const element = { top: frame.top + 5 };
       const onTop = badge.bottom <= element.top + 1;
-      const onPage = badge.top + window.scrollY >= -1 && badge.left >= -1;
+      // The box of a turned drop holds its corners: the drawn drop is a round of 14 px around the middle.
+      const middle = { x: badge.left + badge.width / 2, y: badge.top + badge.height / 2 };
+      const onPage = middle.y - 14 + window.scrollY >= -1 && middle.x - 14 >= -1;
 
       const problems: string[] = [];
       if (!onTop && element.top + window.scrollY >= 34) problems.push(`on its element: ${pin.textContent}`);
