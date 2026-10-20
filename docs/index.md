@@ -2,18 +2,11 @@
 layout: landing
 ---
 
-# Fruitback
-
-**Feedback on the page, issues in your tracker.**
-
-A client opens their staging site, clicks the element that bothers them, and types a note. It lands
-as an issue carrying the CSS selector, the React component and the source file behind that element.
-Coming back to the page, they see their pins again, coloured by that issue's status.
-
-Two ways to run it. **Fruitback Cloud** runs the server for you, in Europe, and keeps the notes in
-your workspace. **Self-hosted**, you run one compose file — the server, its PostgreSQL and the
-console — and the notes stay in your database, or land in the tracker your team already uses (Linear,
-GitHub Issues).
+<!--
+  The page around these guides is docs/_layouts/landing.html (FRU-309): the hero, how it works, the
+  modes, self-hosting, the extension and where it stands. This file keeps the guides, so that every
+  one of them is linked from the home page (docs-site.test.ts).
+-->
 
 ## The guides
 

@@ -89,10 +89,14 @@ How this repository is formatted, tested and documented, and which test holds ea
   repository. `docs-site.test.ts` fails on a guide the home page links from nowhere and on a link
   that names no file. The markdown stays the source: every other guard reads the files.
   **Its home page is the landing of `fruitback.com`** (`docs/CNAME`): `docs/index.md` takes
-  `layout: landing`, and `docs/_layouts/landing.html` draws the hero and the two offers of
-  `design/boards/3-offers.png` around it. A layout is HTML, so its links name the `.html` page
-  through `relative_url`. Say only what exists: a price the beta has not set is « Free during the
-  beta ».
+  `layout: landing`, and `docs/_layouts/landing.html` draws the board « Landing » of the mock-up
+  of 2026-10-20 around it (FRU-309): the hero and the issue a note becomes, the five statuses, the
+  three modes, self-hosting, the extension, the two offers and « Where it stands ». `index.md`
+  keeps the guides. A layout is HTML, so its links name the `.html` page through `relative_url`.
+  Say only what exists, and what `docs/` already says: a price the beta has not set is « Free during
+  the beta », and the state of the images, the widget and the extension is the one of
+  `self-hosting.md`, `install.md` and `reviewing.md`. The board said « no account anywhere » and « notes in
+  SQLite »: neither is true now.
 - **[SECURITY.md](../../SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
