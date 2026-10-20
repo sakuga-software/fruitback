@@ -127,6 +127,8 @@ export const ENGLISH = {
   // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
   // or a test that looks for « Note … » must find one.
   'sidebar.open': 'Show every note of this page',
+  // The same button while the notes of the page could not be read (FRU-316): its dot says why.
+  'sidebar.openFailed': 'Show every note of this page. They could not be read.',
   // The name of the dialog, and the title its head shows (FRU-259).
   'sidebar.dialog': 'Notes on this page',
   'sidebar.close': 'Close the notes',

@@ -79,6 +79,12 @@ export type CaptureHost = {
    */
   hold(element: Element): void;
   release(): void;
+  /**
+   * The notes of the page could not be read, or they could again (FRU-316). The button of the list
+   * wears a dot and says it in its name, and the sentence of the list is announced once, so the
+   * page says it without the list being opened.
+   */
+  readFailed(failed: boolean, sentence: string): void;
   destroy(): void;
 };
 
@@ -145,6 +151,12 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   listing.dataset.fruitbackHostList = '';
   listing.setAttribute('aria-label', t.text('sidebar.open'));
   listing.append(createIcon(document, 'list'));
+  // The dot of a read that failed (FRU-316): a drawing, the name of the button says the same.
+  const alert = document.createElement('span');
+  alert.className = 'fruitback-listing-alert';
+  alert.setAttribute('aria-hidden', 'true');
+  alert.hidden = true;
+  listing.append(alert);
 
   const highlight = document.createElement('div');
   highlight.className = 'fruitback-highlight';
@@ -206,6 +218,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   });
 
   let capturing = false;
+  /** The failure of a read that came during a capture, said when the capture ends (FRU-316). */
+  let unsaid = '';
   let hovered: Element | null = null;
   /** The element the frame is held on after a choice, from `hold` to `release`. */
   let chosen: Element | null = null;
@@ -451,7 +465,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // The frame goes back to the element that is held, if one is: the capture borrowed it.
     if (chosen === null) highlight.style.display = 'none';
     else hold(chosen);
-    announcer.textContent = '';
+    // A failure of the read that came during the capture is said now that the region is free.
+    announcer.textContent = unsaid;
+    unsaid = '';
   }
 
   button.addEventListener('click', () => (capturing ? stop() : start()));
@@ -475,6 +491,16 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     capturing: () => capturing,
     hold,
     release,
+    readFailed(failed, sentence) {
+      if (alert.hidden === !failed) return;
+      alert.hidden = !failed;
+      listing.setAttribute('aria-label', t.text(failed ? 'sidebar.openFailed' : 'sidebar.open'));
+      // Said once, when it starts: a screen reader hears it at the load, with no list to open. A
+      // capture holds the same region for its own words: the sentence waits for its end (review).
+      if (!failed) unsaid = '';
+      else if (capturing) unsaid = sentence;
+      else announcer.textContent = sentence;
+    },
     destroy() {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);
@@ -629,6 +655,23 @@ li { display: list-item; }
   font: 600 18px/1 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
+}
+.fruitback-listing { position: relative; }
+/* The dot of a read that failed (FRU-316), on the corner of the button, ringed by the button's own
+   colour so it reads on any page. */
+.fruitback-listing-alert {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-accent);
+  box-shadow: 0 0 0 2px var(--fruitback-color-chip);
+}
+.fruitback-listing-alert[hidden] { display: none; }
+@media (forced-colors: active) {
+  .fruitback-listing-alert { background: Mark; box-shadow: none; outline: 1px solid CanvasText; }
 }
 .fruitback-highlight {
   position: absolute;

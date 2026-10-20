@@ -218,6 +218,9 @@ function transportFor(options: FruitbackOptions): FruitbackTransport {
  */
 const REREAD_AFTER_MS = 15_000;
 
+/** How often a page whose notes could not be read is read again, while it fails (FRU-316). */
+const READ_RETRY_MS = 30_000;
+
 export function init(options: FruitbackOptions): Fruitback {
   const document = options.document ?? globalThis.document;
   // Named rather than left to fail. This is the published entry point, so the first thing anyone
@@ -342,11 +345,31 @@ export function init(options: FruitbackOptions): Fruitback {
         readState = 'read';
         composer.identityChanged();
       } else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
+      // FRU-316: said on the page, without the list being opened, and read again by itself.
+      host.readFailed(readState === 'failed', translator.text('sidebar.failed'));
+      retryWhileFailing();
       sidebar.refresh();
       // A link to a note waits for the notes: this is when they are in hand.
       openLinked();
     });
   };
+
+  /**
+   * While no read answered for this page and the last one failed (FRU-316), read again every 30 s,
+   * and at once when the browser says the network is back. Nothing is shown then, so a read closes
+   * no thread and moves no pin. One timer at most; it stops when a read answers.
+   */
+  let retrying = 0;
+  /** A read in flight answers after `destroy` too: a widget that is gone must not read on. */
+  let destroyed = false;
+  function retryWhileFailing(): void {
+    if (retrying !== 0) view.clearTimeout(retrying);
+    retrying = readState === 'failed' && !destroyed ? view.setTimeout(() => void read(), READ_RETRY_MS) : 0;
+  }
+  const onOnline = (): void => {
+    if (readState === 'failed') void read();
+  };
+  view.addEventListener('online', onOnline);
 
   /**
    * Open the note the address asks for (FRU-253): `#fruitback-note=<id>`.
@@ -594,6 +617,9 @@ export function init(options: FruitbackOptions): Fruitback {
       return counts;
     },
     destroy() {
+      destroyed = true;
+      if (retrying !== 0) view.clearTimeout(retrying);
+      view.removeEventListener('online', onOnline);
       stopWatchingUrl();
       view.removeEventListener('hashchange', onHashChange);
       composerClosed?.disconnect();

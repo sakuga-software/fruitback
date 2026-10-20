@@ -97,3 +97,39 @@ test('a read that fails after a good one leaves the pins and the list as they we
   await expect(list.locator('[data-fruitback-note]')).toHaveCount(1);
   await expect(list.getByText(/could not be read/)).toBeHidden();
 });
+
+/**
+ * The page says it, with no list opened (FRU-316): a dot on the button of the list, in its name, and
+ * the sentence announced. The browser going back online reads again by itself, and the dot goes.
+ */
+test('a read that fails puts a dot on the button of the list, and the network back takes it off', async ({
+  page,
+  context,
+}) => {
+  await page.goto(`/?widget=off&case=read-failure-dot-${test.info().retry}`);
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: IIFE });
+  await context.setOffline(true);
+  await page.evaluate((endpoint) => {
+    (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+      endpoint,
+      clientId: 'playground',
+      locale: 'en-US',
+    });
+  }, WORKER_ORIGIN);
+
+  const opener = page.getByRole('button', { name: 'Show every note of this page. They could not be read.' });
+  await expect(opener).toBeVisible();
+  await expect(opener.locator('.fruitback-listing-alert')).toBeVisible();
+  await expect(page.locator('[data-fruitback-announcer]')).toHaveText(
+    'The notes of this page could not be read. They are not lost.',
+  );
+
+  const read = page.waitForResponse(
+    (response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/feedback',
+  );
+  await context.setOffline(false);
+  await read;
+  await expect(page.getByRole('button', { name: 'Show every note of this page', exact: true })).toBeVisible();
+  await expect(page.locator('.fruitback-listing-alert')).toBeHidden();
+});

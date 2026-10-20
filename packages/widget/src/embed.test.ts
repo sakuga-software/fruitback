@@ -1707,3 +1707,44 @@ describe('a link that opens a note on its page (FRU-253)', () => {
     widget.destroy();
   });
 });
+
+describe('a read that fails, seen on the page (FRU-316)', () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it('puts the dot on the button of the list, reads again when the network is back, and takes the dot off', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    let online = false;
+    let reads = 0;
+    mock.method(globalThis, 'fetch', async () => {
+      reads += 1;
+      if (!online) throw new TypeError('Failed to fetch');
+
+      return new Response(JSON.stringify({ issues: [] }), { status: 200 });
+    });
+    const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
+    const root = (page.document.querySelector('[data-fruitback-host]') as HTMLElement).shadowRoot as ShadowRoot;
+    const dot = () => root.querySelector('.fruitback-listing-alert') as HTMLElement;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    try {
+      await settle();
+      await settle();
+      assert.equal(dot().hidden, false, 'a failed first read left no sign on the page');
+      assert.equal(
+        root.querySelector('[data-fruitback-announcer]')?.textContent,
+        'The notes of this page could not be read. They are not lost.',
+      );
+
+      online = true;
+      const before = reads;
+      page.view.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('online'));
+      await settle();
+      await settle();
+      assert.equal(reads, before + 1, 'the network came back and nothing read again');
+      assert.equal(dot().hidden, true);
+    } finally {
+      widget.destroy();
+    }
+  });
+});
