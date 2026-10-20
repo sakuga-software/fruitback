@@ -1,4 +1,4 @@
-import { type AccountStore, can, readableSites } from './accounts.ts';
+import { type AccountStore, type Role, type Site, can, readableSites } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { addSessionSite } from './session-site-add.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
@@ -107,6 +107,7 @@ export async function handleSessionSites(
           origin: site.origin,
           visibility: site.visibility,
           ...(previews.length === 0 ? {} : { previews }),
+          ...destinationFor(site, reach.role),
           ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         };
       }),
@@ -146,6 +147,7 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
     if (reach === undefined) continue;
     const previewsOf = await previewsIn(accounts, workspace.id, now);
     const notes = await notesIn(noteIndex, workspace.id);
+    const toCheck = await toCheckIn(noteIndex, workspace.id, account);
     for (const site of readableSites(await accounts.sites(workspace.id), reach)) {
       const previews = previewsOf(site.id);
       sites.push({
@@ -154,7 +156,10 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
         visibility: site.visibility,
         workspace: workspace.id,
         ...(previews.length === 0 ? {} : { previews }),
+        ...destinationFor(site, reach.role),
         ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
+        // FRU-295: the notes of this person that the team marked done and that they did not confirm.
+        ...(toCheck === undefined ? {} : { toCheck: toCheck.get(site.id) ?? 0 }),
       });
     }
   }
@@ -171,6 +176,34 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
     })),
     sites,
   };
+}
+
+/**
+ * Where the notes of a site go, for a role that sees the tracker (FRU-295), as the console names it:
+ * the label of its first destination (« Linear · Northwind »), or « Fruitback » for a site that keeps
+ * its notes in the worker. A guest, and any role without `see-tracker`, gets nothing, as for the
+ * places of `GET /feedback` (FRU-123). A destination with no label is not named: absent, not a guess.
+ */
+function destinationFor(site: Site, role: Role): { destination?: { label: string } } {
+  if (!can(role, 'see-tracker')) return {};
+  const [first] = site.destinations;
+  if (first === undefined) return { destination: { label: 'Fruitback' } };
+
+  return first.label === undefined || first.label === '' ? {} : { destination: { label: first.label } };
+}
+
+/**
+ * The fixes to check of one account in a workspace (FRU-295), or `undefined` when the index does not
+ * answer: the extension then reads « unknown », never « nothing to check ».
+ */
+async function toCheckIn(noteIndex: NoteIndex | undefined, workspace: string, account: string) {
+  return noteIndex?.toCheck(workspace, account).catch((error: unknown) => {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return undefined;
+  });
 }
 
 /**

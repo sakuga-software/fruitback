@@ -17,6 +17,7 @@ import {
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { connectors, deliveries, note_index, sites } from './postgres-schema.ts';
+import { checkedOf } from './reply-text.ts';
 
 /** The index of the notes in the database of the worker (FRU-237). See `notes-index.ts`. */
 export function createPostgresNoteIndex(database: Database): NoteIndex {
@@ -63,7 +64,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
-    async refresh(workspace, site, place, issues, now) {
+    async refresh(workspace, site, place, issues, now, options = {}) {
+      const verdicts = options.verdicts === true;
       // Two issues of one page can carry one seed id (two places of one team, or a widget that sent
       // one note twice). One statement cannot write one row twice, and would write nothing of the
       // page: the first is kept.
@@ -92,12 +94,20 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               reference_url: issue.url ?? null,
               created_at: instantOf(issue.seed.createdAt, now),
               checked_at: now,
+              // FRU-295: what the replies say of a verdict, where one can be given and the read has them.
+              confirmed: !verdicts || issue.comments === undefined ? null : checkedOf(issue.comments) !== undefined,
             })),
           )
-          // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves.
+          // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
+          // and a read with no replies leaves the verdict as the last read with replies said it.
           .onConflictDoUpdate({
             target: [note_index.site_id, note_index.seed_id],
-            set: { stage: sql`excluded.stage`, checked_at: sql`excluded.checked_at` },
+            set: {
+              stage: sql`excluded.stage`,
+              checked_at: sql`excluded.checked_at`,
+              // Where no verdict can be given, none is kept: the note is no fix to check.
+              confirmed: verdicts ? sql`coalesce(excluded.confirmed, ${note_index.confirmed})` : sql`NULL`,
+            },
             // A note of another workspace under the same ids is not this one.
             setWhere: eq(note_index.workspace_id, workspace),
           }),
@@ -121,6 +131,27 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
 
       return new Map(rows.flatMap((row) => (row.account === null ? [] : [[row.seed, row.account] as const])));
+    },
+
+    async toCheck(workspace, account) {
+      const rows = await run((db) =>
+        db
+          .select({ site: note_index.site_id, notes: count() })
+          .from(note_index)
+          .where(
+            and(
+              eq(note_index.workspace_id, workspace),
+              eq(note_index.author_kind, 'member'),
+              eq(note_index.author_account_id, account),
+              eq(note_index.stage, 'ripe'),
+              // `false`: a read saw the replies of a place that takes a verdict, and none was « fixed ».
+              eq(note_index.confirmed, false),
+            ),
+          )
+          .groupBy(note_index.site_id),
+      );
+
+      return new Map(rows.map((row) => [row.site, Number(row.notes)]));
     },
 
     async summary(workspace) {

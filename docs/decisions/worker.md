@@ -3237,6 +3237,26 @@ replies, and on a public site mounted by the extension with no session, only the
 - **`checked` and `mine` are added after the cache.** `checked` comes from the replies, so a read with
   the replies hidden says none; `mine` is the reader's.
 
+## Where the notes go, and the fixes to check, in `GET /session/sites` (FRU-295)
+
+**The rules, in short:**
+
+- **`destination: { label }` is the label of the first destination of the site**, the one the
+  console shows, or « Fruitback » with none; for a role with `see-tracker` only (`destinationFor`).
+  A first destination with no label gives no field: absent, never a guess.
+- **`toCheck` is read from the index** (`NoteIndex.toCheck`): rows of the account (`author_kind =
+'member'`), at `ripe`, whose `confirmed` is not true. For the session of an account only.
+- **`confirmed` is written by `refresh`** from the replies of the read (`checkedOf`), **only where a
+  verdict can be given** (`verdicts`: the read shows the replies and `takesChecks` of the place).
+  Elsewhere it is emptied, and `toCheck` counts `confirmed = false` only: a count that nobody can
+  lower would never go down (heavy review). The route of a verdict refreshes the row with the reply
+  it just wrote. A note of before the column is empty, and counts once a read of its page has seen
+  its replies.
+- **No cache of the count anywhere**, in the worker or in the extension: a stale count says there
+  is nothing to check. The index can be late, and `asOf` says by how much.
+- **Migration `0019_note_index_confirmed` only adds a column that may be empty**: no row moves.
+  test:`keeps every row of the index, and counts no note of before until a read says a verdict can be given`.
+
 ## The first reviewer, named in the environment (FRU-108)
 
 Gone with FRU-226: `first-reviewer.ts` and `announceFirstReviewer` are removed, and the variable is

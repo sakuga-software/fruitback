@@ -126,6 +126,30 @@ const ACCOUNT = {
   ],
 };
 
+describe('where the notes of a site go, and the fixes to check (FRU-295)', () => {
+  it('keeps a label and a whole count, and reads anything else as unknown, never as nothing', () => {
+    const site = { ...ACCOUNT.sites[0], destination: { label: '  Linear ·  Northwind ' }, toCheck: 2 };
+    const [read] = parseWorkspaceSites({ ...ACCOUNT, sites: [site] })?.sites ?? [];
+    assert.deepEqual(read?.destination, { label: 'Linear · Northwind' });
+    assert.equal(read?.toCheck, 2);
+
+    const zero = parseWorkspaceSites({ ...ACCOUNT, sites: [{ ...site, toCheck: 0 }] })?.sites[0];
+    assert.equal(zero?.toCheck, 0);
+    for (const [destination, toCheck] of [
+      [{ label: '' }, -1],
+      [{ label: 3 }, 1.5],
+      ['Linear', '2'],
+      [null, null],
+    ] as const) {
+      const [odd] = parseWorkspaceSites({ ...ACCOUNT, sites: [{ ...site, destination, toCheck }] })?.sites ?? [];
+      assert.equal(odd?.destination, undefined);
+      assert.equal(odd?.toCheck, undefined);
+    }
+    // Absent on the wire: absent here, not zero.
+    assert.equal('toCheck' in (parseWorkspaceSites(ACCOUNT)?.sites[0] ?? {}), false);
+  });
+});
+
 describe('the sites of every workspace of an account (FRU-254)', () => {
   it('says which workspace each site is of, and the role held there', () => {
     const listed = parseWorkspaceSites(ACCOUNT);

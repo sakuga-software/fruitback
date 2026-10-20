@@ -216,6 +216,7 @@ the first read of its page, with what that read says.
 | `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                       |
 | `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                           |
 | `created_at`                 | When the worker took the note.                                                                                                                                      |
+| `confirmed`                  | Whether the newest verdict in the replies of the note is « looks fixed » (FRU-295), as the last read that saw them said it. Empty until one did. No name, no text.  |
 
 **A note of 64 characters or fewer is in the index whole**, as its excerpt: that is what « the first
 64 characters » means for a short note.
