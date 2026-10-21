@@ -134,7 +134,7 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
         return `${drawn.width} ${drawn.height} ${drawn.backgroundColor}`;
       }),
     ),
-  ).toEqual(['12px 12px rgb(172, 95, 0)']);
+  ).toEqual(['12px 12px rgb(243, 187, 61)']);
   // The boxes of the mock-up (`popup-3-site-on.png`).
   expectNear(await boxOf(popup.getByRole('switch')), { x: 312, width: 44, height: 26 }, 'switch');
   expectNear(

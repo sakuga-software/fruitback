@@ -568,7 +568,7 @@ button.search-chip .kit-drop[data-size='mark'] {
 .kit-drop[data-hollow='true'] {
   border-color: currentColor;
   background: var(--surface);
-  box-shadow: none;
+  box-shadow: 0 0 0 1px var(--stage-edge);
 }
 
 .kit-drop[data-hollow='true'][data-stage='seeded'] {
@@ -629,7 +629,8 @@ a.site-row-ref {
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--stage-composted);
+  /* The words in the muted text: the grey of a note with no place is 3.67:1 on the dark surface. */
+  color: var(--muted);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -640,7 +641,7 @@ a.site-row-ref {
   box-sizing: border-box;
   width: 14px;
   height: 14px;
-  border: 1.5px dashed currentColor;
+  border: 1.5px dashed var(--unplaced);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
@@ -656,7 +657,7 @@ a.site-row-ref {
 
 .search-detached-card {
   padding: 10px 12px;
-  border: 1px dashed var(--stage-composted);
+  border: 1px dashed var(--unplaced);
   border-radius: var(--radius-action);
   background: var(--surface-warm);
 }

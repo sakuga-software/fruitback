@@ -26,11 +26,19 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * gave the dark scheme its own accent and warning. `contrast.test.ts` measures every pair a module
  * paints, and no pair fails.
  *
- * **FRU-233 changed most of them, and FRU-292 changes them again.** The mock-up of 2026-10-13 had
- * left the warm stone greys for a neutral zinc scale. The mock-up of 2026-10-20 brings the stone
- * greys back, and gives the five stages new colours: olive for new, green for to do, amber for in
- * progress, red for done, brown for closed. The tables of old and new values are in
- * docs/decisions/widget.md. The names of the stages do not change: they are the contract.
+ * **FRU-233 changed most of them, FRU-292 changed them again, and FRU-334 a third time.** The
+ * mock-up of 2026-10-13 had left the warm stone greys for a neutral zinc scale; the mock-up of
+ * 2026-10-20 brought the stone greys back. FRU-334 (Mathieu, 2026-10-21) asks for a palette less
+ * brown and closer to the console of the Cloud: the greys are the zinc of apps/console/app/app.css
+ * again, and the five stages take the colours Mathieu chose: grey for new, a lighter grey for to do,
+ * mango for in progress, blueberry for done, cherry for closed. The first three are written black,
+ * the last two white. The tables of old and new values are in docs/decisions/widget.md. The names
+ * of the stages do not change: they are the contract.
+ *
+ * **This file is the one source of the statuses.** The extension copies them in
+ * apps/extension/entrypoints/popup/style.css and the console in apps/console/app/app.css, because a
+ * stylesheet cannot import this module. apps/extension/src/design-tokens.test.ts and
+ * apps/console/app/tokens.test.ts read this file and fail when a copy differs.
  *
  * **One accent per surface** (FRU-292). The widget keeps the red #dd2c27; the extension paints its
  * own pages in #c2410c. The greys, the statuses, the shadows and the radii are shared, and
@@ -56,7 +64,10 @@ export const THEME_TOKENS = [
   'color-on-accent',
   'color-on-chip',
   'color-on-stage',
+  'color-on-stage-seeded',
+  'color-on-stage-green',
   'color-on-stage-ripening',
+  'color-stage-edge',
   'color-on-warning',
   'color-surface',
   'color-surface-raised',
@@ -116,10 +127,9 @@ export function stageToken(stage: SeedStage): string {
 /**
  * What is written on a pin of this stage (FRU-233): its number, or the mark of an approximate place.
  *
- * One stage has a token of its own for its foreground. The amber of 2026-10-13 needed dark text;
- * the amber of 2026-10-20 holds white (4.78:1), so the token now holds white too. It stays because a
- * host may have set it. The others fall back to the shared `color-on-stage`, so a host that set that
- * one token keeps what it set.
+ * Three stages have a token of their own for their foreground (FRU-334): new, to do and in progress
+ * are light fills, written black. Done and closed have no token of their own and fall back to the
+ * shared `color-on-stage`, white, so a host that set that one token keeps what it set.
  */
 export function onStageToken(stage: SeedStage): string {
   return `var(--fruitback-color-on-stage-${stage}, var(--fruitback-color-on-stage))`;
@@ -175,60 +185,79 @@ export const THEME_STYLES = `
   */
   --fruitback-color-on-accent: #fff;
   --fruitback-color-on-chip: #fff;
+  /* What done and closed write on their fill: white, 5.45:1 on the blueberry, 7.02:1 on the cherry. */
   --fruitback-color-on-stage: #fff;
   /*
-    White holds on the amber of the mock-up of 2026-10-20 (4.78:1), so « in progress » is written
-    white like the four others. The token stays: a host may have set it.
+    New, to do and in progress are light fills, and Mathieu writes them black (FRU-334). The ink of
+    the palette: 9.90:1 on the grey of new, 12.78:1 on the grey of to do, 10.11:1 on the mango.
   */
-  --fruitback-color-on-stage-ripening: #fff;
+  --fruitback-color-on-stage-seeded: #18181b;
+  --fruitback-color-on-stage-green: #18181b;
+  --fruitback-color-on-stage-ripening: #18181b;
+  /*
+    The edge of a drop (FRU-334): one pixel around every pin and every mark of a status. The grey of
+    new is 1.79:1 on white, the grey of to do 1.39:1 and the mango 1.75:1: a light pin on a white
+    page had only its soft shadow to stand out. This grey is 3.42:1 on white, 3.28:1 on the raised
+    surface, and 5.18:1 on the dark surface, where blueberry and cherry are under 3:1. Around a pin
+    it lies outside the white ring, so a pin holds on a white page (the edge) and on a dark one (the
+    ring). It is the edge of a field of the console. One value in both schemes: a pin lies on the
+    page of the host, whose colour nothing here knows.
+  */
+  --fruitback-color-stage-edge: #8a8a93;
   --fruitback-color-on-warning: #fff;
   --fruitback-color-surface: #fff;
-  --fruitback-color-surface-raised: #fafaf9;
+  --fruitback-color-surface-raised: #fafafa;
   /* Under a thing that is chosen: the rail of the tabs, the note of the list that is open. */
-  --fruitback-color-surface-sunken: #f5f5f4;
-  /* The block that quotes the selector and the source of a note, and the head of the composer. */
-  --fruitback-color-surface-warm: #fffdf9;
-  --fruitback-color-border: #e7e5e4;
-  /* The border of a field. 3.49:1 on the surface. */
-  --fruitback-color-border-strong: #8f8883;
-  --fruitback-color-text: #1c1917;
+  --fruitback-color-surface-sunken: #f4f4f5;
   /*
-    The mock-up draws #78716c. That is 4.40:1 on the sunken surface, under what text needs, so the
-    muted text is one step darker: 4.59:1 there, 4.98:1 on the surface.
+    The block that quotes the selector and the source of a note, and the head of the composer. It
+    was a cream (#fffdf9) and is the raised grey of the console now (FRU-334): the name stays, a
+    host may have set it.
   */
-  --fruitback-color-text-muted: #756e69;
-  --fruitback-color-text-subtle: #57534e;
-  --fruitback-color-chip: #44403c;
+  --fruitback-color-surface-warm: #fafafa;
+  --fruitback-color-border: #e4e4e7;
+  /* The border of a field: the field border of the console, 3.42:1 on the surface. */
+  --fruitback-color-border-strong: #8a8a93;
+  --fruitback-color-text: #18181b;
+  /* The muted text of the console: 5.28:1 on the surface, 4.80:1 on the sunken surface. */
+  --fruitback-color-text-muted: #6b6b74;
+  --fruitback-color-text-subtle: #52525b;
+  --fruitback-color-chip: #3f3f46;
   /*
     The capsule that says what a click does while a note is being placed. It lies on the page of the
     host, like the dock, so it is the same ink in both schemes.
   */
-  --fruitback-color-ink: #1c1917;
+  --fruitback-color-ink: #18181b;
   --fruitback-color-on-ink: #fff;
-  --fruitback-color-on-ink-muted: #d6d3d1;
-  --fruitback-color-success: #3f6421;
+  --fruitback-color-on-ink-muted: #d4d4d8;
+  /* The green of the console: 5.02:1 on the surface. */
+  --fruitback-color-success: #15803d;
   /* No warning text in the mock-up. An amber that holds as text (5.02:1) and under white text (5.02:1). */
   --fruitback-color-warning: #b45309;
-  /* The dashed outline of a note whose element is gone: the brown of « closed », 4.62:1 on the surface. */
-  --fruitback-color-unplaced: #8d6e63;
+  /*
+    The dashed outline of a note whose element is gone, and the chip of the dock that lists them. It
+    was the brown of « closed » (#8d6e63); closed is a cherry now, and a note with no place is not
+    closed. A neutral zinc (FRU-334): 4.83:1 on the surface, and white on it is 4.83:1.
+  */
+  --fruitback-color-unplaced: #71717a;
 
   /*
-    The five statuses of the mock-up of 2026-10-20 (FRU-292): new, to do, in progress, done, closed.
-    The names are the stages of the contract, which do not change. Each one holds white at 4.62:1 or
-    more, and is 4.62:1 or more on the surface.
+    The five statuses of FRU-334, chosen by Mathieu on 2026-10-21: new, to do, in progress, done,
+    closed. The names are the stages of the contract, which do not change. A status is never said by
+    its colour alone: the list names it, a thread names it, a pin carries a number.
   */
-  --fruitback-stage-seeded: #6a7950;
-  --fruitback-stage-green: #56802e;
-  --fruitback-stage-ripening: #ac5f00;
-  --fruitback-stage-ripe: #dd2c27;
-  --fruitback-stage-composted: #8d6e63;
+  --fruitback-stage-seeded: #bec2c8;
+  --fruitback-stage-green: #d9dbdf;
+  --fruitback-stage-ripening: #f3bb3d;
+  --fruitback-stage-ripe: #5560c4;
+  --fruitback-stage-composted: #a52a3a;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
-  --fruitback-shadow-xs: 0 1px 3px rgba(28, 25, 23, 0.15);
-  --fruitback-shadow-sm: 0 3px 10px rgba(28, 25, 23, 0.28);
+  --fruitback-shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);
+  --fruitback-shadow-sm: 0 3px 10px rgba(24, 24, 27, 0.28);
   --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
   --fruitback-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.18);
-  --fruitback-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
+  --fruitback-shadow-xl: 0 14px 40px rgba(24, 24, 27, 0.22);
 
   /* Five steps, and each one is a decision: a chip, a field, a control, a surface, a pill. */
   --fruitback-radius-sm: 6px;
@@ -251,37 +280,37 @@ export const THEME_STYLES = `
   turn off. Colours and shadows move — a shadow tuned for a white surface is invisible on a dark one —
   and the durations do not.
 
-  The mock-up of 2026-10-20 draws no dark scheme. This one is derived from its tokens: the same stone
-  scale read from its other end (900, 800, 700), and every pair measured by contrast.test.ts.
+  No mock-up draws a dark scheme. This one is derived from the zinc of the console (FRU-334): the
+  same scale read from its other end (900, 800, 700), and every pair measured by contrast.test.ts.
 */
 @media (prefers-color-scheme: dark) {
   :host {
     /*
       The accent and the warning are a fill under text and also text on the surface. No red holds
       white text at 4.5:1 and is also readable on a dark surface, so the dark scheme uses a lighter
-      fill with dark text on it (FRU-93): 5.68:1 on the surface, 4.92:1 on the raised surface.
+      fill with dark text on it (FRU-93): 5.75:1 on the surface, 4.83:1 on the raised surface.
     */
     --fruitback-color-accent: #ec6a65;
     --fruitback-color-accent-strong: #f08a85;
-    --fruitback-color-on-accent: #1c1917;
+    --fruitback-color-on-accent: #18181b;
     --fruitback-color-warning: #fbbf24;
-    --fruitback-color-on-warning: #1c1917;
+    --fruitback-color-on-warning: #18181b;
     /*
-      The five stages keep their values. A pin lies on the page of the host, and each one is also
-      3:1 or more on the dark surface, where it is the mark of a note in the list: from 3.66:1 for
-      the amber to 3.78:1 for the brown.
+      The five stages, their foregrounds and their edge keep their values. A pin lies on the page of
+      the host. On the dark surface, where a stage is the mark of a note in the list, blueberry is
+      3.25:1 and cherry 2.52:1: the edge, 5.18:1 there, is what draws the mark.
     */
-    --fruitback-color-surface: #1c1917;
-    --fruitback-color-surface-raised: #292524;
-    --fruitback-color-surface-sunken: #312c29;
-    --fruitback-color-surface-warm: #221e1b;
-    --fruitback-color-border: #44403c;
-    --fruitback-color-border-strong: #8f8883;
-    --fruitback-color-text: #f5f5f4;
-    --fruitback-color-text-muted: #a8a29e;
-    --fruitback-color-text-subtle: #d6d3d1;
-    --fruitback-color-chip: #57534e;
-    --fruitback-color-success: #9bc46a;
+    --fruitback-color-surface: #18181b;
+    --fruitback-color-surface-raised: #27272a;
+    --fruitback-color-surface-sunken: #2e2e33;
+    --fruitback-color-surface-warm: #1f1f23;
+    --fruitback-color-border: #3f3f46;
+    --fruitback-color-border-strong: #8a8a93;
+    --fruitback-color-text: #f4f4f5;
+    --fruitback-color-text-muted: #a1a1aa;
+    --fruitback-color-text-subtle: #d4d4d8;
+    --fruitback-color-chip: #52525b;
+    --fruitback-color-success: #4ade80;
     --fruitback-shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.5);
     --fruitback-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
     --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);

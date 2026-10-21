@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 /**
- * The popup and the options page wear the tokens of the mock-up of 2026-10-20 (FRU-292).
+ * The popup, the side panel and the options page wear the tokens of the widget (FRU-292, FRU-334).
  *
  * **Shared tokens, one accent per surface.** The greys, the statuses, the shadows and the radii are
- * those of the widget, and a stylesheet of an extension page cannot import
- * `packages/widget/src/theme.ts`, so `entrypoints/popup/style.css` copies them. This file reads both
+ * those of the widget, the zinc of the console since FRU-334, and a stylesheet of an extension page
+ * cannot import `packages/widget/src/theme.ts`, so `entrypoints/popup/style.css` copies them. The
+ * widget is the one source of the statuses: the console copies them too, and
+ * `apps/console/app/tokens.test.ts` compares its copy. This file reads both
  * texts and compares each shared token, in the light scheme and in the dark scheme. The accent is
  * not shared: the extension paints its pages in #c2410c, the widget keeps its red #dd2c27 on the
  * page of a host. Each accent is checked against its own value, and the two must differ, so that
@@ -19,6 +21,9 @@ const sheet = readFileSync(new URL('../entrypoints/popup/style.css', import.meta
 const optionsSheet = readFileSync(new URL('../entrypoints/options/style.css', import.meta.url), 'utf8');
 const kitSheet = readFileSync(new URL('./kit.css', import.meta.url), 'utf8');
 const widget = readFileSync(new URL('../../../packages/widget/src/theme.ts', import.meta.url), 'utf8');
+const panelSheet = readFileSync(new URL('../entrypoints/sidepanel/style.css', import.meta.url), 'utf8');
+const welcomeSheet = readFileSync(new URL('../entrypoints/welcome/style.css', import.meta.url), 'utf8');
+const WIDGET_SOURCES = new URL('../../../packages/widget/src/', import.meta.url);
 
 /** The token of the widget that each shared property of the stylesheet copies. */
 const COPIES = {
@@ -36,6 +41,12 @@ const COPIES = {
   ink: 'color-ink',
   'on-ink-muted': 'color-on-ink-muted',
   success: 'color-success',
+  unplaced: 'color-unplaced',
+  'on-stage': 'color-on-stage',
+  'on-stage-seeded': 'color-on-stage-seeded',
+  'on-stage-green': 'color-on-stage-green',
+  'on-stage-ripening': 'color-on-stage-ripening',
+  'stage-edge': 'color-stage-edge',
   'stage-seeded': 'stage-seeded',
   'stage-green': 'stage-green',
   'stage-ripening': 'stage-ripening',
@@ -152,8 +163,10 @@ const PAIRS = [
   { foreground: 'text', background: 'selection', minimum: 4.5, where: 'a selected text' },
   { foreground: 'on-tile', background: 'tile-on', minimum: 4.5, where: 'the initial of a site that is on' },
   // The page of the extension (FRU-301).
-  { foreground: 'accent', background: 'alert-surface', minimum: 4.5, where: 'no access, and the chosen row' },
-  { foreground: 'text', background: 'alert-surface', minimum: 4.5, where: 'the chosen row of the table' },
+  { foreground: 'accent', background: 'alert-surface', minimum: 4.5, where: 'no access' },
+  // The chosen row of the table is on the sunken surface since FRU-334, under its bar of the accent.
+  { foreground: 'text', background: 'surface-sunken', minimum: 4.5, where: 'the chosen row of the table' },
+  { foreground: 'accent', background: 'surface-sunken', minimum: 3, where: 'the bar of the chosen row' },
   { foreground: 'alert-body', background: 'surface-sunken', minimum: 4.5, where: 'the words of the state of a rule' },
   { foreground: 'surface', background: 'text', minimum: 4.5, where: 'the label of « Save »' },
   // The kit (FRU-293).
@@ -161,22 +174,33 @@ const PAIRS = [
   { foreground: 'alert-body', background: 'alert-surface', minimum: 4.5, where: 'the words of a problem' },
   { foreground: 'line-strong', background: 'surface', minimum: 3, where: 'the track of a switch that is off' },
   { foreground: 'line-strong', background: 'surface-raised', minimum: 3, where: 'a switch of the page that is off' },
-  ...(['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map((stage) => ({
+  // The number of a drop: black on the three light fills, white on done and closed (FRU-334).
+  ...(['seeded', 'green', 'ripening'] as const).map((stage) => ({
+    foreground: `on-stage-${stage}`,
+    background: `stage-${stage}`,
+    minimum: 4.5,
+    where: `the number of a drop (${stage})`,
+  })),
+  ...(['ripe', 'composted'] as const).map((stage) => ({
     foreground: 'on-stage',
     background: `stage-${stage}`,
     minimum: 4.5,
     where: `the number of a drop (${stage})`,
   })),
-  // A drawing, not text: 1.4.11 asks for 3:1. A status is also named in words.
-  ...(['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map((stage) => ({
-    foreground: `stage-${stage}`,
-    background: 'surface',
+  // A drawing, not text: 1.4.11 asks for 3:1. A status is also named in words. The light fills are
+  // under 3:1 on white, so every drop is drawn with an edge, and the edge is what holds (FRU-334).
+  ...(['surface', 'surface-raised', 'surface-sunken'] as const).map((background) => ({
+    foreground: 'stage-edge',
+    background,
     minimum: 3,
-    where: `the drop of a status (${stage})`,
+    where: 'the edge of the drop of a status',
   })),
+  // A note with no place: its dashed card and its drop.
+  { foreground: 'unplaced', background: 'surface', minimum: 3, where: 'the edge of a note with no place' },
+  { foreground: 'unplaced', background: 'surface-warm', minimum: 3, where: 'the dashed card of a note with no place' },
 ] as const;
 
-describe('the tokens of the popup and of the options page (FRU-170, FRU-292)', () => {
+describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU-334)', () => {
   it('reads both schemes of both texts', () => {
     for (const read of [ours, theirs]) {
       assert.ok(Object.keys(read.light).length >= Object.keys(COPIES).length, 'the light scheme was not read');
@@ -210,10 +234,10 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292)', (
   }
 
   it('fails when one shared grey differs between the two surfaces', () => {
-    // A planted violation: the widget's border, one step off on the extension side.
-    const planted = { ...ours.light, line: '#e4e4e7' };
+    // A planted violation: the stone border of FRU-292, left behind on the extension side.
+    const planted = { ...ours.light, line: '#e7e5e4' };
     assert.deepEqual(sharedDifferences(planted, theirs.light), [
-      '--line is #e4e4e7, color-border of the widget is #e7e5e4',
+      '--line is #e7e5e4, color-border of the widget is #e4e4e7',
     ]);
   });
 
@@ -234,6 +258,41 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292)', (
 
     // The drop beside the name: the accent of the light scheme, in both schemes.
     assert.deepEqual(written, [`%23${ACCENTS.extension.slice(1)}`]);
+  });
+
+  it('holds no stone grey and no brown of FRU-292, in the extension or in the widget (FRU-334)', () => {
+    // The values that FRU-334 replaced: the stone scale, the creams, the brown of closed, the brown
+    // fills of the dark scheme, and the stone tint of the shadows. A comment may name them.
+    const BEFORE = [
+      ...['#1c1917', '#292524', '#312c29', '#221e1b', '#44403c', '#57534e', '#756e69', '#78716c', '#8f8883'],
+      ...['#a8a29e', '#d6d3d1', '#e7e5e4', '#f0efed', '#f5f5f4', '#fafaf9', '#fffdf9', '#fffaf5', '#fde4c8'],
+      ...['#8d6e63', '#6a7950', '#56802e', '#ac5f00', '#3f6421', '#4e7d2a', '#9bc46a', '#431407', '#2a1d14'],
+      '28, 25, 23',
+    ];
+    const uncommented = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(?:\/\/|\*).*$/gm, '');
+    const found = (sources: Map<string, string>) =>
+      [...sources].flatMap(([name, text]) =>
+        BEFORE.filter((value) => uncommented(text).toLowerCase().includes(value)).map((value) => `${name}: ${value}`),
+      );
+    const widgetModules = readdirSync(WIDGET_SOURCES)
+      .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+      .map((name) => [`widget/${name}`, readFileSync(new URL(name, WIDGET_SOURCES), 'utf8')] as const);
+    const sources = new Map<string, string>([
+      ['popup/style.css', sheet],
+      ['options/style.css', optionsSheet],
+      ['sidepanel/style.css', panelSheet],
+      ['welcome/style.css', welcomeSheet],
+      ['kit.css', kitSheet],
+      ...widgetModules,
+    ]);
+
+    assert.deepEqual(found(sources), []);
+    assert.ok(widgetModules.length > 10, `only ${widgetModules.length} modules of the widget were read`);
+    // The control: a stone grey in a rule is found, the same grey in a comment is not.
+    assert.deepEqual(found(new Map([['planted.css', '/* was #e7e5e4 */\n.row { border: 1px solid #E7E5E4; }']])), [
+      'planted.css: #e7e5e4',
+    ]);
+    assert.deepEqual(found(new Map([['comment.css', '/* was #e7e5e4 */']])), []);
   });
 
   it('draws an action as a pill', () => {

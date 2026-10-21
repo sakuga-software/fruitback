@@ -74,7 +74,7 @@ test('the capsule has the measures of the mock-up, and every control in it is 44
     height: 52,
     'background-color': 'rgb(255, 255, 255)',
     'border-top-width': '1px',
-    'border-top-color': 'rgb(231, 229, 228)',
+    'border-top-color': 'rgb(228, 228, 231)',
     'border-top-left-radius': '999px',
     'box-shadow': 'rgba(0, 0, 0, 0.25) 0px 4px 18px 0px',
   });
@@ -128,7 +128,7 @@ test('the capsule has the measures of the mock-up, and every control in it is 44
   ] as const) {
     expect(await painted(round, ['background-color', 'color', 'border-top-width'])).toMatchObject({
       'background-color': 'rgba(0, 0, 0, 0)',
-      color: 'rgb(87, 83, 78)',
+      color: 'rgb(82, 82, 91)',
       'border-top-width': '4px',
     });
     const icon = await round.locator('svg').boundingBox();
@@ -137,7 +137,7 @@ test('the capsule has the measures of the mock-up, and every control in it is 44
   await gear.hover();
   await expect
     .poll(async () => (await painted(gear, ['background-color']))['background-color'])
-    .toBe('rgb(245, 245, 244)');
+    .toBe('rgb(244, 244, 245)');
 });
 
 test('a capture plays end to end inside the capsule, with the mouse and then with the keyboard (FRU-303)', async ({
@@ -219,8 +219,8 @@ test('a capture turns the capsule dark, and Escape gives it back with focus on t
   const capsule = await painted(dock, ['background-color', 'border-top-color']);
   expect(capsule).toMatchObject({
     height: 46,
-    'background-color': 'rgb(28, 25, 23)',
-    'border-top-color': 'rgb(28, 25, 23)',
+    'background-color': 'rgb(24, 24, 27)',
+    'border-top-color': 'rgb(24, 24, 27)',
   });
   // Still in its corner.
   expect(viewport.width - (Number(capsule.x) + Number(capsule.width))).toBe(24);
@@ -234,7 +234,7 @@ test('a capture turns the capsule dark, and Escape gives it back with focus on t
   await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden();
   await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
   expect(await painted(ask, ['color', 'font-size'])).toMatchObject({
-    color: 'rgb(214, 211, 209)',
+    color: 'rgb(212, 212, 216)',
     'font-size': '12px',
   });
   expect(
@@ -248,7 +248,7 @@ test('a capture turns the capsule dark, and Escape gives it back with focus on t
     ]),
   ).toMatchObject({
     height: 44,
-    'background-color': 'rgb(68, 64, 60)',
+    'background-color': 'rgb(63, 63, 70)',
     'background-clip': 'padding-box',
     // A pill of 36 px inside a target of 44 px.
     'border-top-width': '4px',
@@ -289,19 +289,19 @@ test('in the dark scheme the capsule is on the dark surface, and the capture kee
   await mount(page, 'dock-dark');
   const launch = page.getByRole('button', { name: 'Leave feedback' });
   expect(await painted(dockOf(page), ['background-color', 'border-top-color'])).toMatchObject({
-    'background-color': 'rgb(28, 25, 23)',
-    'border-top-color': 'rgb(68, 64, 60)',
+    'background-color': 'rgb(24, 24, 27)',
+    'border-top-color': 'rgb(63, 63, 70)',
   });
   expect(await painted(launch, ['background-color', 'color'])).toMatchObject({
     'background-color': 'rgb(236, 106, 101)',
-    color: 'rgb(28, 25, 23)',
+    color: 'rgb(24, 24, 27)',
   });
   expect(await painted(page.getByRole('button', { name: 'Open Fruitback settings' }), ['color'])).toMatchObject({
-    color: 'rgb(214, 211, 209)',
+    color: 'rgb(212, 212, 216)',
   });
   await launch.click();
-  expect(await painted(dockOf(page), ['background-color'])).toMatchObject({ 'background-color': 'rgb(28, 25, 23)' });
-  await expect(page.locator('.fruitback-banner-ask')).toHaveCSS('color', 'rgb(214, 211, 209)');
+  expect(await painted(dockOf(page), ['background-color'])).toMatchObject({ 'background-color': 'rgb(24, 24, 27)' });
+  await expect(page.locator('.fruitback-banner-ask')).toHaveCSS('color', 'rgb(212, 212, 216)');
 });
 
 test('in French it says « Laisser une note », and « Annuler » with the key « Échap »', async ({ page }) => {
@@ -372,8 +372,8 @@ test('the detached notes are the first control of the capsule, and overlap nothi
     ]),
   ).toMatchObject({
     height: 44,
-    // The brown of a note whose element is gone, in a pill of 36 px.
-    'background-color': 'rgb(141, 110, 99)',
+    // The grey of a note whose element is gone, in a pill of 36 px (FRU-334).
+    'background-color': 'rgb(113, 113, 122)',
     'background-clip': 'padding-box',
     'border-top-width': '4px',
     color: 'rgb(255, 255, 255)',

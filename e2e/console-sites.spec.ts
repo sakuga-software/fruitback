@@ -203,7 +203,8 @@ test('the list is the table of the mockup, with its six columns and the legend o
   expect.soft(await painted(legend, 'color')).toEqual(rgb(MUTED));
   const drops = legend.locator('[aria-hidden="true"]');
   await expect(drops).toHaveCount(5);
-  const colours = ['#dd2c27', '#2563eb', '#f59e0b', '#15803d', '#64748b'];
+  // The five statuses of the widget, chosen by Mathieu (FRU-334).
+  const colours = ['#bec2c8', '#d9dbdf', '#f3bb3d', '#5560c4', '#a52a3a'];
   for (const [index, colour] of colours.entries())
     expect.soft(await painted(drops.nth(index), 'backgroundColor'), `drop ${index}`).toEqual(rgb(colour));
   expect.soft(await styles(legend.getByRole('listitem').first(), ['column-gap'])).toEqual({ 'column-gap': '7px' });

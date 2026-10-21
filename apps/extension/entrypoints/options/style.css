@@ -265,7 +265,7 @@ button.page-primary:hover {
 }
 
 .rule-row[aria-selected='true'] td {
-  background: var(--alert-surface);
+  background: var(--surface-sunken);
 }
 
 .rule-row[aria-selected='true'] td:first-child {

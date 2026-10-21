@@ -819,6 +819,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fruitback-stage-seeded);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
 }
 /* What the note points at, in the mono of a selector, on one line. */
 .fruitback-composer-about {
@@ -959,9 +960,9 @@ const STYLES = `
   /* The colour of « new », through the variable every pin is painted with. */
   --fruitback-pin-color: var(--fruitback-stage-seeded);
   background: var(--fruitback-pin-color);
-  color: var(--fruitback-color-on-stage);
+  color: var(--fruitback-color-on-stage-seeded, var(--fruitback-color-on-stage));
   font: 700 12px/1 var(--fruitback-font-sans);
-  box-shadow: var(--fruitback-shadow-sm);
+  box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge), var(--fruitback-shadow-sm);
 }
 .fruitback-composer-sent-drop > span { transform: rotate(45deg); }
 .fruitback-composer-sent-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }

@@ -293,7 +293,7 @@ test.describe('screen 4 (FRU-297)', () => {
 /** The accent of the extension in each scheme (FRU-292). */
 const ACCENT = { light: 'rgb(194, 65, 12)', dark: 'rgb(251, 146, 60)' } as const;
 /** The edge of a second button: `--line-control`. */
-const CONTROL_EDGE = { light: 'rgb(168, 162, 158)', dark: 'rgb(120, 113, 108)' } as const;
+const CONTROL_EDGE = { light: 'rgb(161, 161, 170)', dark: 'rgb(113, 113, 122)' } as const;
 /** The parts of the kit on the screen of a site that is on. */
 function readKit(popup: Page) {
   return popup.evaluate(() => {

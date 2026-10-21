@@ -202,7 +202,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     width: 392,
     height: 900,
     'border-left-width': '1px',
-    'border-left-color': 'rgb(231, 229, 228)',
+    'border-left-color': 'rgb(228, 228, 231)',
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '14px',
     'line-height': '20.3px',
@@ -232,7 +232,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   await expect(page.locator('.fruitback-sidebar-address')).toHaveText(/^· localhost:\d+$/);
   expect(await read('.fruitback-sidebar-address', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   expect(await read('[data-fruitback-floating]', ['border-radius', 'color'])).toMatchObject({
     x: 1356,
@@ -240,7 +240,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     width: 32,
     height: 32,
     'border-radius': '10px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   await expect(list.getByRole('button', { name: 'Back to floating pins' })).toBeVisible();
   expect(await read('.fruitback-sidebar-close', ['border-radius'])).toMatchObject({
@@ -266,7 +266,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     height: 36,
     padding: '3px',
     'border-radius': '10px',
-    'background-color': 'rgb(245, 245, 244)',
+    'background-color': 'rgb(244, 244, 245)',
   });
   expect(
     await read('.fruitback-sidebar-scope > span', [
@@ -282,7 +282,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     'background-color': 'rgb(255, 255, 255)',
     'font-size': '12px',
     'font-weight': '600',
-    'box-shadow': 'rgba(28, 25, 23, 0.15) 0px 1px 3px 0px',
+    'box-shadow': 'rgba(24, 24, 27, 0.15) 0px 1px 3px 0px',
   });
   const search = list.getByRole('searchbox', { name: 'Search notes' });
   await expect(search).toHaveAttribute('placeholder', 'Search notes');
@@ -300,7 +300,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     width: 355,
     height: 34,
     'border-top-width': '1px',
-    'border-top-color': 'rgb(143, 136, 131)',
+    'border-top-color': 'rgb(138, 138, 147)',
     'border-radius': '6px',
     'font-size': '13px',
     'padding-left': '32px',
@@ -323,22 +323,22 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     x: 1067,
     y: 150,
     height: 28,
-    'border-top-color': 'rgb(28, 25, 23)',
-    'background-color': 'rgb(245, 245, 244)',
+    'border-top-color': 'rgb(24, 24, 27)',
+    'background-color': 'rgb(244, 244, 245)',
     'border-radius': '999px',
     'font-size': '12px',
     'font-weight': '600',
     'padding-left': '10px',
   });
   expect(await read('[data-fruitback-chip="seeded"]', ['border-top-color', 'background-color'])).toMatchObject({
-    'border-top-color': 'rgb(231, 229, 228)',
+    'border-top-color': 'rgb(228, 228, 231)',
     'background-color': 'rgb(255, 255, 255)',
   });
   // Its own box, not the one it is turned in: a drop of 9 px, at 45°.
   expect(await read('[data-fruitback-chip="ripening"] .fruitback-sidebar-dot', ['background-color'])).toMatchObject({
     width: 12.7,
     height: 12.7,
-    'background-color': 'rgb(172, 95, 0)',
+    'background-color': 'rgb(243, 187, 61)',
   });
   expect(
     await page
@@ -346,7 +346,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
       .evaluate((node) => [getComputedStyle(node).width, getComputedStyle(node).height]),
   ).toEqual(['9px', '9px']);
   expect(await read('[data-fruitback-chip="all"] .fruitback-sidebar-count', ['color', 'font-weight'])).toMatchObject({
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
     'font-weight': '500',
   });
   expect(await read('.fruitback-sidebar-panel', ['padding', 'overflow-y'])).toMatchObject({
@@ -371,8 +371,8 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     // A drop of 24 px, turned 45° so that its point is down: its box on the screen is the diagonal.
     width: 33.9,
     height: 33.9,
-    // The olive of « new » (FRU-292).
-    'background-color': 'rgb(106, 121, 80)',
+    // The grey of « new » (FRU-334).
+    'background-color': 'rgb(190, 194, 200)',
     'border-radius': '50% 50% 50% 0px',
     'border-top-width': '2px',
     'border-top-color': 'rgb(255, 255, 255)',
@@ -380,11 +380,11 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   expect(await read('.fruitback-sidebar-pin > span', ['font-size', 'font-weight', 'color'])).toMatchObject({
     'font-size': '11px',
     'font-weight': '700',
-    color: 'rgb(255, 255, 255)',
+    color: 'rgb(24, 24, 27)',
   });
   expect(await read('.fruitback-sidebar-top', ['font-size'])).toMatchObject({ 'font-size': '12px' });
   expect(await read('.fruitback-sidebar-status', ['font-weight'])).toMatchObject({ 'font-weight': '600' });
-  expect(await read('.fruitback-sidebar-age', ['color'])).toMatchObject({ color: 'rgb(117, 110, 105)' });
+  expect(await read('.fruitback-sidebar-age', ['color'])).toMatchObject({ color: 'rgb(107, 107, 116)' });
   expect(await read('.fruitback-sidebar-note', ['font-size', 'line-height', '-webkit-line-clamp'])).toMatchObject({
     'font-size': '14px',
     'line-height': '20.3px',
@@ -392,7 +392,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   });
   expect(await read('.fruitback-sidebar-meta', ['font-size', 'color'])).toMatchObject({
     'font-size': '12px',
-    color: 'rgb(117, 110, 105)',
+    color: 'rgb(107, 107, 116)',
   });
   await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['1', '2', '3', '4', '5', '6', '7', '8']);
   await expect(rows.nth(0).locator('.fruitback-sidebar-status')).toHaveText('New');
@@ -445,8 +445,8 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
         return [style.borderTopWidth, style.borderTopColor, style.borderTopLeftRadius, style.boxShadow];
       }),
     )
-    // The green of « to do », 12 px round, and the halo of the board.
-    .toEqual(['2px', 'rgb(86, 128, 46)', '12px', 'rgba(255, 255, 255, 0.6) 0px 0px 0px 6px']);
+    // The grey of « to do », 12 px round, and the halo of the board.
+    .toEqual(['2px', 'rgb(217, 219, 223)', '12px', 'rgba(255, 255, 255, 0.6) 0px 0px 0px 6px']);
   expect(await page.locator(`[data-fruitback-pin="${other}"]`).evaluate((node) => getComputedStyle(node).opacity)).toBe(
     '0.55',
   );
@@ -465,9 +465,9 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   await page.mouse.move(0, 0);
   expect(
     await rows.nth(1).evaluate((node) => [getComputedStyle(node).backgroundColor, getComputedStyle(node).boxShadow]),
-  ).toEqual(['rgb(255, 253, 249)', 'rgb(231, 229, 228) 0px 0px 0px 1px inset']);
+  ).toEqual(['rgb(250, 250, 250)', 'rgb(228, 228, 231) 0px 0px 0px 1px inset']);
   await rows.nth(0).hover();
-  expect(await rows.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(250, 250, 249)');
+  expect(await rows.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(250, 250, 250)');
   await page.keyboard.press('Escape');
   await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true');
 
@@ -494,7 +494,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   expect(await read('[data-fruitback-show-pins]', ['background-color'])).toMatchObject({
     width: 32,
     height: 18,
-    'background-color': 'rgb(28, 25, 23)',
+    'background-color': 'rgb(24, 24, 27)',
   });
   const badges = page.locator('[data-fruitback-pin] .fruitback-pin-badge');
   await expect(badges.first()).toBeVisible();
@@ -600,7 +600,7 @@ test('a note whose element is gone is a detached note at the bottom, and not amo
         title: [title.fontSize, title.fontWeight, title.textTransform, title.letterSpacing],
         icon: [icon.getBoundingClientRect().width, icon.getBoundingClientRect().height],
         dashes: getComputedStyle(icon.querySelector('path')!).strokeDasharray,
-        brown: getComputedStyle(icon).color,
+        unplaced: getComputedStyle(icon).color,
         card: [
           card.borderTopStyle,
           card.borderTopWidth,
@@ -617,8 +617,8 @@ test('a note whose element is gone is a detached note at the bottom, and not amo
     title: ['11px', '600', 'uppercase', '0.44px'],
     icon: [12, 15],
     dashes: '18px, 12px',
-    brown: 'rgb(141, 110, 99)',
-    card: ['dashed', '1px', 'rgb(141, 110, 99)', '10px', 'rgb(255, 253, 249)'],
+    unplaced: 'rgb(113, 113, 122)',
+    card: ['dashed', '1px', 'rgb(113, 113, 122)', '10px', 'rgb(250, 250, 250)'],
   });
 
   // It still opens its thread.

@@ -67,12 +67,17 @@
   --color-rail-muted: #a1a1aa;
   --color-rail-accent: #ec5b57;
 
-  /* A status is never told by its colour alone: the amber is 2.15:1 on white. */
-  --color-status-new: #dd2c27;
-  --color-status-todo: #2563eb;
-  --color-status-progress: #f59e0b;
-  --color-status-done: #15803d;
-  --color-status-closed: #64748b;
+  /*
+    The five statuses of FRU-334, chosen by Mathieu: the stages of the widget, copied from
+    packages/widget/src/theme.ts, which tokens.test.ts compares. A status is never told by its colour
+    alone: the grey of to do is 1.39:1 on white. Its edge is the edge of a field, 3.42:1.
+  */
+  --color-status-new: #bec2c8;
+  --color-status-todo: #d9dbdf;
+  --color-status-progress: #f3bb3d;
+  --color-status-done: #5560c4;
+  --color-status-closed: #a52a3a;
+  --color-status-edge: #8a8a93;
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -674,6 +679,11 @@ textarea {
   transform: rotate(-90deg);
 }
 
+/* The drop of a status has an edge, as in the widget and the extension: three statuses are light greys and a mango (FRU-334). */
+.kit-drop[data-status] {
+  box-shadow: 0 0 0 1px var(--color-status-edge);
+}
+
 .kit-drop[data-size='9'] {
   width: 9px;
   height: 9px;
@@ -712,6 +722,23 @@ textarea {
   width: 128px;
   height: 8px;
   overflow: hidden;
+  border-radius: 999px;
+}
+
+/* The edge of the bar, around its segments: the light statuses are under 3:1 on white (FRU-334). */
+.kit-status-bar > span {
+  box-shadow: inset 0 0 0 1px var(--color-status-edge);
+}
+
+.kit-status-bar > span:first-child {
+  border-radius: 999px 0 0 999px;
+}
+
+.kit-status-bar > span:last-child {
+  border-radius: 0 999px 999px 0;
+}
+
+.kit-status-bar > span:only-child {
   border-radius: 999px;
 }
 

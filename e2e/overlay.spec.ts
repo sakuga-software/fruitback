@@ -81,7 +81,7 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   assertDistinct(stages);
 });
 
-test('each of the five statuses has the colour of the mock-up of 2026-10-20, and every number is white (FRU-292)', async ({
+test('each of the five statuses has the colour Mathieu chose, written black on the three light ones (FRU-334)', async ({
   page,
 }) => {
   // The in-memory Linear gives five notes in a row the five states of its workflow.
@@ -115,18 +115,20 @@ test('each of the five statuses has the colour of the mock-up of 2026-10-20, and
   );
 
   const white = 'rgb(255, 255, 255)';
+  const black = 'rgb(24, 24, 27)';
   const status = (fill: string, stage: string, text = white) => ({
     fill,
     text,
     frame: `var(--fruitback-stage-${stage})`,
   });
   expect(drawn).toEqual({
-    seeded: status('rgb(106, 121, 80)', 'seeded'),
-    green: status('rgb(86, 128, 46)', 'green'),
-    // The amber of 2026-10-20 holds white, 4.78:1 (FRU-292).
-    ripening: status('rgb(172, 95, 0)', 'ripening'),
-    ripe: status('rgb(221, 44, 39)', 'ripe'),
-    composted: status('rgb(141, 110, 99)', 'composted'),
+    // The three light fills are written black: 9.90:1, 12.78:1 and 10.11:1 (FRU-334).
+    seeded: status('rgb(190, 194, 200)', 'seeded', black),
+    green: status('rgb(217, 219, 223)', 'green', black),
+    ripening: status('rgb(243, 187, 61)', 'ripening', black),
+    // Blueberry and cherry hold white: 5.45:1 and 7.02:1.
+    ripe: status('rgb(85, 96, 196)', 'ripe'),
+    composted: status('rgb(165, 42, 58)', 'composted'),
   });
 });
 
@@ -199,7 +201,8 @@ test('a pin and its frame have the measures of the mock-up, at each of the five 
       // rotate(-45deg) as a matrix.
       transform: 'matrix(0.707107, -0.707107, 0.707107, 0.707107, 0, 0)',
       shape: '50% 0px',
-      shadow: 'rgba(28, 25, 23, 0.28) 0px 3px 10px 0px',
+      // The edge outside the white ring (FRU-334), then the shadow.
+      shadow: 'rgb(138, 138, 147) 0px 0px 0px 1px, rgba(24, 24, 27, 0.28) 0px 3px 10px 0px',
       number: String(index + 1),
       font: '12px 700',
       expanded: 'false',

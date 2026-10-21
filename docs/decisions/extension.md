@@ -249,8 +249,8 @@ open composer and its note` fails without the check, 3 runs out of 3.
 
 ### The rules, in short
 
-- **The tokens are those of the mock-up of 2026-10-20** (FRU-292): the warm stone greys, the five
-  status colours, the shadows and the radii of the widget (`packages/widget/src/theme.ts`), and
+- **The tokens are those of the widget** (FRU-292, FRU-334): the zinc greys of the console, the five
+  statuses Mathieu chose on 2026-10-21, the shadows and the radii (`packages/widget/src/theme.ts`), and
   **an accent of the extension's own**: `#c2410c`, `#9a3412` under the pointer, white on it at
   5.18:1. The widget keeps its red `#dd2c27` on the page of a host. One accent per surface was
   decided by the orchestrator on 2026-10-20, from the mock-up; Mathieu may go back to one accent,
@@ -260,13 +260,24 @@ open composer and its note` fails without the check, 3 runs out of 3.
   `--on-ink-muted`, `--success-line`, the three of an alert, the three of « Ready to check »,
   `--selection`, `--tile-on`, `--shadow-popup`, `--shadow-panel`, `--radius-card` (12 px),
   `--radius-panel` (14 px), `--font-sans` and `--font-mono`.
-- **The edge of a field is `--line-strong` (`#8f8883`, 3.49:1), not the `#a8a29e` of the
-  mock-up.** That grey is 2.52:1 on white, under the 3:1 a field needs. It stays as
+- **The edge of a field is `--line-strong` (`#8a8a93`, 3.42:1), the field border of the console.**
+  The lighter `#a1a1aa` is 2.56:1 on white, under the 3:1 a field needs. It stays as
   `--line-control`, the edge of a secondary button and of a key, whose label says what it is.
-- **The muted text is `#756e69`**, one step darker than the `#78716c` of the mock-up, which is
-  4.40:1 on the sunken surface. It is the widget's value too.
-- **The dark scheme is derived**: the stone scale of the widget, and an orange lighter than the
-  accent under dark text (`#fb923c`, 7.73:1 with `#1c1917` on it, 6.09:1 on the sunken surface).
+- **The muted text is `#6b6b74`**, the console's: 5.28:1 on white, 4.80:1 on the sunken surface.
+- **A drop is written black on new, to do and in progress, white on done and closed, and has an
+  edge** (FRU-334): `--on-stage-seeded`, `--on-stage-green`, `--on-stage-ripening` and
+  `--stage-edge` are copies of the widget, and the edge, 3.42:1 on white, is what draws a light
+  drop. The detached notes of the panel take `--unplaced`, a grey, where they took the brown of
+  « closed ».
+- **Less brown** (FRU-334): the creams of the mono block and of « Ready to check » are the raised
+  grey, and the chosen row of the page is on the sunken surface under its bar of the accent. A
+  problem keeps `#fff7ed`, the tint of the accent: it says a problem in the colour of the
+  extension. If the extension takes the red of the console, it becomes a tint of that red. A stone
+  grey or a brown written back in a stylesheet of the extension or in a module of the widget fails
+  test:`holds no stone grey and no brown of FRU-292, in the extension or in the widget (FRU-334)`.
+- **The dark scheme is derived**: the zinc scale of the widget, and an orange lighter than the
+  accent under dark text (`#fb923c`, 7.83:1 with `#18181b` on it). The brown fills of a problem and
+  of « Ready to check » are greys of the scale now, under a line and a title in the orange.
   Mathieu validates it on the captures of the PR.
 - **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
   stylesheet of an extension page cannot import the widget, so the values are copied.

@@ -221,7 +221,8 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     `onStageToken` gives a stage its foreground, and `color-on-stage` stays the white of the four
     others, so a host that set that one token keeps it. FRU-292 replaced the test that held it,
     gone-test:`writes « in progress » dark on its amber, where white cannot be read (FRU-233)`, by
-    test:`writes « in progress » white on its amber, like the four others (FRU-292)`.
+    gone-test:`writes « in progress » white on its amber, like the four others (FRU-292)`, which
+    FRU-334 replaced in turn.
   - **The amber is 2.15:1 on white, under the 3:1 of a drawing, and it stays**: it is the colour
     the mock-up gives that status. A status is never said by its colour alone: the list names it,
     a thread names it, a pin carries a number. `contrast.test.ts` names that one pair, and fails
@@ -277,6 +278,60 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     4.92:1 on the raised one). The five stages keep their values: 3.66:1 or more on the dark surface.
   - `color-warning` keeps its amber: the mock-up draws none. The dock of FRU-303 paints the detached
     notes in the brown of « closed ».
+
+- **FRU-334 changes them a third time: less brown, closer to the console of the Cloud.** Mathieu
+  asked on 2026-10-21 for « une palette moins marron », closer to what the console draws, and chose
+  the five statuses himself. The greys go back to the zinc of `apps/console/app/app.css` (the values
+  of FRU-233), the creams and the browns of detail go with them, and **`theme.ts` is the one source
+  of the statuses**: the extension and the console copy them, and
+  `apps/extension/src/design-tokens.test.ts` and `apps/console/app/tokens.test.ts` fail when a copy
+  differs.
+
+  | Token                         | 2026-10-20 (FRU-292) | 2026-10-21 (FRU-334)               |
+  | ----------------------------- | -------------------- | ---------------------------------- |
+  | `stage-seeded`, new           | `#6a7950`, white     | `#bec2c8`, black (9.90:1)          |
+  | `stage-green`, to do          | `#56802e`, white     | `#d9dbdf`, black (12.78:1)         |
+  | `stage-ripening`, in progress | `#ac5f00`, white     | `#f3bb3d` (mango), black (10.11:1) |
+  | `stage-ripe`, done            | `#dd2c27`, white     | `#5560c4` (blueberry), white 5.45  |
+  | `stage-composted`, closed     | `#8d6e63`, white     | `#a52a3a` (cherry), white 7.02     |
+  | `color-stage-edge` (new)      | —                    | `#8a8a93`                          |
+  | `color-unplaced`              | `#8d6e63`            | `#71717a`                          |
+  | `color-text`, `color-ink`     | `#1c1917`            | `#18181b`                          |
+  | `color-text-muted`            | `#756e69`            | `#6b6b74`                          |
+  | `color-text-subtle`           | `#57534e`            | `#52525b`                          |
+  | `color-surface-raised`        | `#fafaf9`            | `#fafafa`                          |
+  | `color-surface-sunken`        | `#f5f5f4`            | `#f4f4f5`                          |
+  | `color-surface-warm`          | `#fffdf9`            | `#fafafa`                          |
+  | `color-border`                | `#e7e5e4`            | `#e4e4e7`                          |
+  | `color-border-strong`         | `#8f8883`            | `#8a8a93`                          |
+  | `color-chip`                  | `#44403c`            | `#3f3f46`                          |
+  | `color-on-ink-muted`          | `#d6d3d1`            | `#d4d4d8`                          |
+  | `color-success`               | `#3f6421`            | `#15803d`                          |
+  | `shadow-xs`, `-sm`, `-xl`     | tinted `28, 25, 23`  | tinted `24, 24, 27`                |
+  - **Black on new, to do and in progress, white on done and closed**, as Mathieu's table says.
+    `color-on-stage-seeded` and `color-on-stage-green` are new, beside `color-on-stage-ripening`;
+    `onStageToken` reads them, and `color-on-stage` stays the white of the two others and of the
+    ring, so a host that set it keeps it. test:`writes new, to do and in progress black, and done and
+closed white (FRU-334)`.
+  - **Every drop has an edge, measured.** New is 1.79:1 on white, to do 1.39:1, the mango 1.75:1:
+    a light pin on a white page stood out by its soft shadow only, and 1.4.11 asks 3:1 of a drawing.
+    One pixel of `color-stage-edge` (`#8a8a93`, the field border of the console) outside the white
+    ring of every pin: 3.42:1 on white, while the white ring carries the pin on a dark page. A
+    shadow alone was rejected: a blur has no edge to measure, and it fades on a grey page. A dark
+    ring instead of the white one was rejected too: it is lost on a dark page. The edge has one
+    value in both schemes, because a pin lies on the page of the host. The marks of the list, the
+    chips, the drop of a thread and the frame of a pointed note take the same edge; on the dark
+    surface it is 5.18:1, where blueberry (3.25:1) and cherry (2.52:1) need it. `contrast.test.ts`
+    measures the edge where it measured the fill. test:`draws the edge of a drop in one grey in both
+schemes, outside the ring of the pin (FRU-334)`.
+  - **A note with no place is grey, not the colour of « closed ».** It was the brown of closed; a
+    detached note is not closed, and closed is a cherry now. `#71717a`: 4.83:1 on the surface, and
+    white on its chip 4.83:1.
+  - **The dark scheme is derived again**, from the zinc of the console: `#18181b` surface, `#27272a`
+    raised, `#2e2e33` sunken, `#1f1f23` for the quoted block, `#3f3f46` border, `#f4f4f5` text,
+    `#a1a1aa` muted, `#4ade80` success. The red of the dark accent stays `#ec6a65`: 5.75:1 on the
+    surface, 4.83:1 on the raised one. Mathieu validates it on the captures of the PR.
+  - The accent stays the red `#dd2c27`, which is the console's too.
 
 - **The pins, their frame and the dock have the measures of the mock-up** (FRU-252, screens 14 to
   16). Read in its CSS, held by `e2e/overlay.spec.ts` and `e2e/host.spec.ts` on computed styles.
