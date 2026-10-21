@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type CallOptions, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
@@ -48,7 +48,7 @@ type Issue = Record<string, unknown> & { number: number; state: string; state_re
 type Override = (call: Seen) => { status: number; body: unknown; headers?: Record<string, string> } | undefined;
 
 const servers: { close(): void }[] = [];
-after(() => {
+afterAll(() => {
   for (const server of servers) server.close();
 });
 
