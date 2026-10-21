@@ -564,9 +564,11 @@ export function createComposer(options: ComposerOptions): Composer {
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'sent' || next === 'kept';
     keep.disabled = send.disabled;
+    // No way to join a file while the note is sent, or after (FRU-373): no note would name it.
+    const settled = next === 'sending' || next === 'sent' || next === 'kept';
     for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
-      way.disabled = next === 'sending';
-    if (next === 'sending') {
+      way.disabled = settled;
+    if (settled) {
       closeAttachMenu(false);
       dropZone.hidden = true;
     }

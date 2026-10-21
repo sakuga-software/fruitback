@@ -368,6 +368,13 @@ describe('the menu of « Attach » (FRU-351)', () => {
     for (let tries = 0; tries < 10; tries += 1) await settle();
     assert.deepEqual(files(root), []);
     assert.equal(uploads.length, 0);
+    for (const way of ['trigger', 'file', 'area', 'page', 'drop']) {
+      assert.equal(
+        q<HTMLButtonElement>(`[data-fruitback-attach-${way}]`).disabled,
+        true,
+        `${way} is offered while the note is sent`,
+      );
+    }
   });
 
   it('shows a zone where a dropped file joins the note, and Esc hides it and gives the focus back', async () => {
