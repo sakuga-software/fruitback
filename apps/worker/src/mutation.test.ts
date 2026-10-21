@@ -13,6 +13,7 @@ import {
   regressions,
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
+import { type Artifact, branchesOf, pick } from '../../../tools/mutation/reference.ts';
 import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
@@ -189,10 +190,21 @@ describe('what a mutation job mutates', () => {
       { pkg: 'apps/extension', mutate: [], full: true },
     ]);
 
+    // A package mutated in full starts from nothing: its run is the one the next ones start from (FRU-341).
     assert.deepEqual(jobs, [
-      { package: 'packages/shared', file: 'src/seed.ts', artifact: 'mutation--packages-shared--src-seed.ts' },
-      { package: 'apps/worker', file: 'src/kv.ts', artifact: 'mutation--apps-worker--src-kv.ts' },
-      { package: 'apps/worker', file: 'src/cors.ts', artifact: 'mutation--apps-worker--src-cors.ts' },
+      {
+        package: 'packages/shared',
+        file: 'src/seed.ts',
+        artifact: 'mutation--packages-shared--src-seed.ts',
+        incremental: true,
+      },
+      { package: 'apps/worker', file: 'src/kv.ts', artifact: 'mutation--apps-worker--src-kv.ts', incremental: false },
+      {
+        package: 'apps/worker',
+        file: 'src/cors.ts',
+        artifact: 'mutation--apps-worker--src-cors.ts',
+        incremental: false,
+      },
     ]);
     // A package with nothing to mutate has no line to hold.
     assert.deepEqual(full, ['apps/worker']);
@@ -355,5 +367,85 @@ describe('the configuration of the mutation job', () => {
     assert.ok(!String(jobs.line?.if).includes('always()'), 'the line job runs when a job of the matrix failed');
     assert.equal(take?.with?.pattern, 'mutation--${{ steps.slug.outputs.slug }}--*');
     assert.match(String(hold?.run), /ratchet\.ts check "\$PACKAGE" reports\/\*\/mutation\.json --full/);
+  });
+});
+
+/**
+ * The report an incremental job starts from (FRU-341). StrykerJS takes from it the result of each
+ * mutant whose code and tests did not change, so a report of another repository, or of a branch the
+ * pull request does not start from, would put results in the score that nobody measured here.
+ */
+describe('the report a mutation job of a pull request starts from', () => {
+  const REPOSITORY = 1323024055;
+  const artifact = (id: number, branch: string, created: string, more: Partial<Artifact> = {}): Artifact => ({
+    id,
+    name: 'mutation--apps-worker--src-cors.ts',
+    expired: false,
+    created_at: created,
+    workflow_run: { id: id * 10, head_branch: branch, head_repository_id: REPOSITORY },
+    ...more,
+  });
+
+  it('takes the newest report of the base branch, and of main when the base has none', () => {
+    const reports = [
+      artifact(1, 'main', '2026-10-19T03:40:00Z'),
+      artifact(2, 'main', '2026-10-26T03:40:00Z'),
+      artifact(3, 'fru-x/stacked-base', '2026-10-21T10:00:00Z'),
+      artifact(4, 'fru-y/other', '2026-10-27T10:00:00Z'),
+    ];
+
+    assert.equal(pick(reports, REPOSITORY, ['fru-x/stacked-base', 'main'])?.id, 3);
+    assert.equal(pick(reports, REPOSITORY, ['main', 'main'])?.id, 2);
+    assert.equal(pick(reports, REPOSITORY, ['fru-z/no-run', 'main'])?.id, 2);
+    assert.equal(pick(reports, REPOSITORY, ['fru-z/no-run']), undefined);
+    assert.equal(pick([], REPOSITORY, ['main']), undefined);
+  });
+
+  it('takes no report that expired, or that a fork made on a branch of the same name', () => {
+    const fork = artifact(5, 'main', '2026-10-27T03:40:00Z', {
+      workflow_run: { id: 50, head_branch: 'main', head_repository_id: 42 },
+    });
+    const expired = artifact(6, 'main', '2026-10-28T03:40:00Z', { expired: true });
+    const kept = artifact(7, 'main', '2026-10-01T03:40:00Z');
+
+    assert.equal(pick([fork, expired, kept], REPOSITORY, ['main'])?.id, 7);
+    assert.equal(pick([fork, expired], REPOSITORY, ['main']), undefined);
+    assert.equal(
+      pick([artifact(8, 'main', '2026-10-01T03:40:00Z', { workflow_run: null })], REPOSITORY, ['main']),
+      undefined,
+    );
+  });
+
+  it('reads the base branch, then main, once each', () => {
+    assert.deepEqual(branchesOf(['main', 'main']), ['main']);
+    assert.deepEqual(branchesOf(['', 'main']), ['main']);
+    assert.deepEqual(branchesOf(['fru-x/stacked-base', 'main']), ['fru-x/stacked-base', 'main']);
+  });
+
+  /**
+   * A full run measures every mutant: the step that takes a report runs only for a job that the plan
+   * made incremental, and StrykerJS reads the file that step writes. With no file it mutates all.
+   */
+  it('runs only for an incremental job, and gives StrykerJS the file it wrote', () => {
+    type Step = { name?: string; if?: string; env?: Record<string, string>; run?: string };
+    const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
+      jobs: { mutation: { permissions?: Record<string, string>; steps: Step[] } };
+    };
+    const take = jobs.mutation.steps.find((step) => step.name === 'Take the report to start from');
+    const mutate = jobs.mutation.steps.find((step) => step.name === 'Mutate');
+
+    assert.equal(take?.if, 'matrix.incremental');
+    assert.equal(
+      take?.run,
+      'node tools/mutation/reference.ts "$ARTIFACT" "$PACKAGE/reports/stryker-incremental.json" "$BASE" main',
+    );
+    assert.equal(take?.env?.BASE, '${{ github.base_ref }}');
+    assert.equal(take?.env?.ARTIFACT, '${{ matrix.artifact }}');
+    assert.match(String(mutate?.run), / --incremental --incrementalFile reports\/stryker-incremental\.json /);
+    assert.deepEqual(jobs.mutation.permissions, { contents: 'read', actions: 'read' });
+    assert.ok(
+      jobs.mutation.steps.indexOf(take as Step) < jobs.mutation.steps.indexOf(mutate as Step),
+      'the report is taken after StrykerJS ran',
+    );
   });
 });

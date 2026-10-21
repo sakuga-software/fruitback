@@ -11,6 +11,7 @@ import {
   dryRunOf,
   format,
   nearLimit,
+  reusedOf,
   STRYKER_DRY_RUN_MINUTES,
   strykerOf,
   summary,
@@ -32,6 +33,12 @@ const SCRIPT = fileURLToPath(new URL('tools/ci/durations.ts', ROOT));
 const DRY_RUN_LINE =
   '08:04:27 (2415) INFO DryRunExecutor Initial test run succeeded. Ran 105 tests in 5 minutes and 36 seconds ' +
   '(net 281555.0044400001 ms, overhead 54528.995559999894 ms).';
+
+/**
+ * The last line of the « Incremental report » of StrykerJS 10, as `incremental-differ.js` writes it
+ * (FRU-341). The counts are made up for the test.
+ */
+const REUSED_LINE = '\tResult:\t\t812 of 829 mutant result(s) are reused.';
 
 describe('durations.ts', () => {
   it('warns past 60 % of a limit, and not at 60 % or below', () => {
@@ -70,6 +77,15 @@ describe('durations.ts', () => {
     assert.deepEqual(dryRunOf(''), { seconds: undefined, started: false });
   });
 
+  it('reads how many results an incremental run reused, coloured or not', () => {
+    assert.deepEqual(reusedOf(REUSED_LINE), { reused: 812, mutants: 829 });
+    assert.deepEqual(reusedOf('\tResult:\t\t\u001b[93m3\u001b[39m of 60 mutant result(s) are reused.'), {
+      reused: 3,
+      mutants: 60,
+    });
+    assert.equal(reusedOf('No incremental result file found at reports/stryker-incremental.json'), undefined);
+  });
+
   it('reads the dry run, the mutants and the test files of a package, and its dryRunTimeoutMinutes', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fruitback-durations-'));
     try {
@@ -87,6 +103,10 @@ describe('durations.ts', () => {
       assert.equal(read.measure.limit, 30 * 60);
       assert.equal(Math.round(read.measure.took ?? 0), 336);
       assert.deepEqual(read.counts, ['3 mutants', '2 test files']);
+
+      // FRU-341. An incremental run says how many results it took from its report.
+      writeFileSync(join(dir, 'stryker.log'), `${DRY_RUN_LINE}\n${REUSED_LINE}\n`);
+      assert.deepEqual(strykerOf(dir).counts, ['3 mutants', '2 test files', '812 of 829 results reused']);
 
       // A package that sets no dryRunTimeoutMinutes has the 5 minutes of StrykerJS.
       writeFileSync(join(dir, 'stryker.config.json'), '{}');
