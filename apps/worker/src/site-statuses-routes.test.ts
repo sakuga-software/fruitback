@@ -202,7 +202,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
   });
 
   it('answers a site of another workspace as one that does not exist, and refuses a member who does not set sites', async () => {
-    const { team, token, site } = await acme();
+    const { team, token, workspace, site } = await acme();
     const other = await workspaceIn(team, token, 'Globex');
     for (const [method, more, body] of [
       ['GET', '', undefined],
@@ -214,11 +214,25 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
       assert.equal(answer.status, 404, `${method} ${more}`);
     }
 
-    const { workspace } = await acme().then(async (fresh) => ({ ...fresh }));
+    // Found in review: Bob is a member of the workspace of this site, in this world, so a 403 is the
+    // refusal of his role. The control: the owner of the same workspace reads the same path.
     const bob = await signInTo(team, 'bob@acme.dev');
     await memberOf(team, workspace, bob.id, 'member');
-    const refused = await callOn(team, 'GET', path(workspace, site), { token: bob.token });
-    assert.equal(refused.status, 403);
+    for (const [method, more, body] of [
+      ['GET', '', undefined],
+      ['POST', '', { source: 'own', key: 'x', stage: NEW }],
+      ['POST', '/order', { order: [] }],
+      ['DELETE', '/own/x', undefined],
+    ] as const) {
+      const refused = await callOn(team, method, path(workspace, site, more), { token: bob.token, body });
+      assert.deepEqual(
+        [refused.status, await refused.json()],
+        [403, { error: 'forbidden', role: 'member' }],
+        `${method} ${more}`,
+      );
+    }
+    assert.equal((await callOn(team, 'GET', path(workspace, site), { token })).status, 200);
+    assert.deepEqual(await rowsOf(team.database, 'SELECT * FROM statuses'), [], 'a refused member wrote nothing');
   });
 });
 
