@@ -319,8 +319,19 @@ const STYLES = `
 .fruitback-orphans-list[hidden] { display: none; }
 .fruitback-orphans-item { display: flex; align-items: baseline; gap: 6px; list-style: none; }
 .fruitback-orphans-stage { color: var(--fruitback-pin-color); font-size: 11px; }
-/* The edge of a drop (FRU-334): the grey of « to do » is 1.39:1 on the surface, its edge 3.42:1. */
-.fruitback-orphans-stage path { stroke: var(--fruitback-color-stage-edge); stroke-width: 2px; }
+/*
+  The edge of a drop (FRU-334): the grey of « to do » is 1.39:1 on the surface, its edge 3.42:1. Drawn
+  under the fill (paint-order), so it never covers the colour of the status: only its outer half
+  shows, 1.5 of the 16 units of the drop, about 1 px at 11 px. Round joins, so the point of the drop
+  stays inside the box of the icon; and the box does not clip what is left.
+*/
+.fruitback-orphans-stage { overflow: visible; }
+.fruitback-orphans-stage path {
+  stroke: var(--fruitback-color-stage-edge);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
 .fruitback-orphans-item + .fruitback-orphans-item { margin-top: 6px; }
 .fruitback-orphans-note {
   flex: 1;
