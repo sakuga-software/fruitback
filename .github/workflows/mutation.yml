@@ -7,6 +7,10 @@ name: Mutation
 # On a pull request, only the files that it changes, in the scope of `stryker.config.json`. Every
 # file of that scope on a schedule, by hand, and on a pull request that changes how mutation runs,
 # because the lines depend on it.
+#
+# Each file is mutated by a job of its own (FRU-336): the 8 files of the worker in one job ran out
+# of its 150 minutes from 2026-10-19. `plan` lists the jobs, and `line` holds the line of a package
+# on a full run, from the reports of all its jobs. See conventions.md.
 on:
   pull_request:
   schedule:
@@ -22,15 +26,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  mutation:
-    name: mutation ${{ matrix.package }}
+  # `scope.ts` needs Node and git, and no install: a pull request with nothing to mutate stops here.
+  plan:
+    name: mutation plan
     runs-on: ubuntu-latest
-    # A full run of the worker took more than 55 minutes on 2026-10-14. See conventions.md.
-    timeout-minutes: 150
-    strategy:
-      fail-fast: false
-      matrix:
-        package: [packages/shared, apps/worker]
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+      count: ${{ steps.scope.outputs.count }}
+      full: ${{ steps.scope.outputs.full }}
 
     steps:
       - name: Checkout code
@@ -38,6 +42,37 @@ jobs:
         with:
           # The diff of a pull request is taken from its base, which a shallow clone does not hold.
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Choose what to mutate
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: node tools/mutation/scope.ts "$EVENT" "$BASE" packages/shared apps/worker >> "$GITHUB_OUTPUT"
+
+  mutation:
+    name: mutation ${{ matrix.package }} ${{ matrix.file }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    # One file of the worker: 60 minutes for the 215 mutants of clients.ts on 2026-10-20, its dry
+    # run of 7 minutes included. See conventions.md.
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
           persist-credentials: false
 
       - name: Setup Node.js
@@ -56,38 +91,73 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm install --frozen-lockfile --ignore-workspace --dir tools/mutation
 
-      - name: Choose what to mutate
-        id: scope
-        env:
-          PACKAGE: ${{ matrix.package }}
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: node tools/mutation/scope.ts "$PACKAGE" "$EVENT" "$BASE" >> "$GITHUB_OUTPUT"
-
       # `inPlace`: the guard tests of the worker read files of the root, and a sandbox would move
       # them out of reach. This checkout is thrown away after the job.
       - name: Mutate
-        if: steps.scope.outputs.mutate != ''
         working-directory: ${{ matrix.package }}
         env:
-          MUTATE: ${{ steps.scope.outputs.mutate }}
+          MUTATE: ${{ matrix.file }}
         run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 4
 
+      # The line of the file. The line of the package needs every file: `line` holds it.
       - name: Hold the line
-        if: steps.scope.outputs.mutate != ''
         env:
           PACKAGE: ${{ matrix.package }}
-          FULL: ${{ steps.scope.outputs.full }}
         run: |
           set -o pipefail
-          node tools/mutation/ratchet.ts check "$PACKAGE" "$PACKAGE/reports/mutation/mutation.json" $FULL |
+          node tools/mutation/ratchet.ts check "$PACKAGE" "$PACKAGE/reports/mutation/mutation.json" |
             tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the report
-        if: always() && steps.scope.outputs.mutate != ''
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: mutation-${{ strategy.job-index }}
+          name: ${{ matrix.artifact }}
           path: ${{ matrix.package }}/reports/mutation/
           retention-days: 30
           if-no-files-found: error
+
+  # Runs only when every job of `mutation` passed: a job that failed or ran out of time has failed
+  # the run already.
+  line:
+    name: mutation line ${{ matrix.package }}
+    needs: [plan, mutation]
+    if: needs.plan.outputs.full != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.plan.outputs.full) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Set the name of the reports
+        id: slug
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: echo "slug=${PACKAGE//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: Take the reports of the package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mutation--${{ steps.slug.outputs.slug }}--*
+          path: reports
+
+      - name: Hold the line of the package
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -o pipefail
+          node tools/mutation/ratchet.ts check "$PACKAGE" reports/*/mutation.json --full |
+            tee -a "$GITHUB_STEP_SUMMARY"

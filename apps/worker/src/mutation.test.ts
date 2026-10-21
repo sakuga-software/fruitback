@@ -9,10 +9,11 @@ import {
   type Report,
   type Status,
   linesOf,
+  merged,
   regressions,
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
-import { changedSince, choose, scopeOf } from '../../../tools/mutation/scope.ts';
+import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
 /**
@@ -105,6 +106,22 @@ describe('the score of a mutation run', () => {
     ]);
   });
 
+  /**
+   * Each file is mutated by a job of its own (FRU-336): the line of a package is held on the reports
+   * of all its jobs, and a job whose report is missing must not pass the package.
+   */
+  it('reads the reports of the jobs of a package as one, and fails a full run that left a file out', () => {
+    const lines = linesOf(merged([report(['Killed', 'Killed']), report(['Killed', 'Survived'], 'src/new.ts')]));
+
+    assert.deepEqual(Object.keys(lines.files).sort(), ['src/new.ts', 'src/seed.ts']);
+    assert.equal(lines.score, 75);
+    assert.deepEqual(regressions(lines, merged([report(['Killed', 'Killed'])]), true), [
+      'src/new.ts has a line, and this full run did not measure it',
+    ]);
+    // A pull request mutates some files only: the others are not missing.
+    assert.deepEqual(regressions(lines, merged([report(['Killed', 'Killed'])]), false), []);
+  });
+
   it('fails a package with no line, rather than passing it in silence', () => {
     assert.deepEqual(regressions(undefined, report(['Killed']), true), [
       'this package has no line in tools/mutation/baseline.json',
@@ -143,11 +160,44 @@ describe('what a mutation job mutates', () => {
     }
     for (const file of [
       '.github/workflows/mutation.yml',
-      'apps/worker/stryker.config.json',
+      'packages/shared/stryker.config.json',
       'tools/mutation/ratchet.ts',
     ]) {
       assert.deepEqual(choose('packages/shared', scope, 'pull_request', [file]), { mutate: scope, full: true }, file);
     }
+  });
+
+  /**
+   * A file added to the seed contract changes `packages/shared/stryker.config.json`. That ran the
+   * whole worker too, and the worker ran out of time on #427 (FRU-336), with no mutant of its own changed.
+   */
+  it('mutates the whole scope of a package for its own configuration, and not for the one of another', () => {
+    assert.deepEqual(choose('apps/worker', scope, 'pull_request', ['packages/shared/stryker.config.json']), {
+      mutate: [],
+      full: false,
+    });
+    assert.deepEqual(choose('apps/worker', scope, 'pull_request', ['apps/worker/stryker.config.json']), {
+      mutate: scope,
+      full: true,
+    });
+  });
+
+  it('gives each file a job of its own, with an artifact that names its package and its file', () => {
+    const { jobs, full } = plan([
+      { pkg: 'packages/shared', mutate: ['src/seed.ts'], full: false },
+      { pkg: 'apps/worker', mutate: ['src/kv.ts', 'src/cors.ts'], full: true },
+      { pkg: 'apps/extension', mutate: [], full: true },
+    ]);
+
+    assert.deepEqual(jobs, [
+      { package: 'packages/shared', file: 'src/seed.ts', artifact: 'mutation--packages-shared--src-seed.ts' },
+      { package: 'apps/worker', file: 'src/kv.ts', artifact: 'mutation--apps-worker--src-kv.ts' },
+      { package: 'apps/worker', file: 'src/cors.ts', artifact: 'mutation--apps-worker--src-cors.ts' },
+    ]);
+    // A package with nothing to mutate has no line to hold.
+    assert.deepEqual(full, ['apps/worker']);
+    // The line job takes the reports of a package by this prefix: no other package may share it.
+    assert.ok(!artifactOf('apps/worker-x', 'src/a.ts').startsWith('mutation--apps-worker--'));
   });
 
   /**
@@ -232,11 +282,12 @@ describe('the configuration of the mutation job', () => {
   });
 
   // The dry run of the worker is its whole suite, one file at a time: over the 5 minutes of StrykerJS
-  // since 2026-10-14, and the run then stops with no mutant run. See conventions.md.
+  // since 2026-10-14, 9 minutes 29 on 2026-10-20, and the run then stops with no mutant run. Each job
+  // of the matrix makes its own. See conventions.md.
   it('gives the dry run of the worker the time its suite takes', () => {
     const minutes = (WORKER as { dryRunTimeoutMinutes?: number }).dryRunTimeoutMinutes;
 
-    assert.ok(minutes !== undefined && minutes >= 15, `dryRunTimeoutMinutes is ${minutes}`);
+    assert.ok(minutes !== undefined && minutes >= 30, `dryRunTimeoutMinutes is ${minutes}`);
   });
 
   it('runs on every pull request, on a schedule and by hand', () => {
@@ -263,17 +314,46 @@ describe('the configuration of the mutation job', () => {
       run?: string;
     };
     const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
-      jobs: { mutation: { steps: Step[] } };
+      jobs: { plan: { steps: Step[] } };
     };
-    const checkout = jobs.mutation.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
-    const choice = jobs.mutation.steps.find((step) => step.id === 'scope');
+    const checkout = jobs.plan.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+    const choice = jobs.plan.steps.find((step) => step.id === 'scope');
 
     assert.equal(checkout?.with?.['fetch-depth'], 0, 'the checkout of mutation.yml is shallow');
     assert.deepEqual(choice?.env, {
-      PACKAGE: '${{ matrix.package }}',
       EVENT: '${{ github.event_name }}',
       BASE: '${{ github.event.pull_request.base.sha }}',
     });
-    assert.equal(choice?.run, 'node tools/mutation/scope.ts "$PACKAGE" "$EVENT" "$BASE" >> "$GITHUB_OUTPUT"');
+    assert.equal(
+      choice?.run,
+      'node tools/mutation/scope.ts "$EVENT" "$BASE" packages/shared apps/worker >> "$GITHUB_OUTPUT"',
+    );
+  });
+
+  /**
+   * The jobs of the matrix are the ones `plan` lists, a file each, and the line of a package is held
+   * on a full run only after every one of them passed (FRU-336).
+   */
+  it('mutates one file a job, and holds the line of a package after all its jobs', () => {
+    type Job = {
+      needs?: string | string[];
+      if?: string;
+      strategy?: { matrix?: unknown };
+      steps: { name?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> }[];
+    };
+    const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
+      jobs: Record<string, Job>;
+    };
+    const mutate = jobs.mutation?.steps.find((step) => step.name === 'Mutate');
+    const hold = jobs.line?.steps.find((step) => step.name === 'Hold the line of the package');
+    const take = jobs.line?.steps.find((step) => step.name === 'Take the reports of the package');
+
+    assert.equal(jobs.mutation?.strategy?.matrix, '${{ fromJSON(needs.plan.outputs.matrix) }}');
+    assert.deepEqual(mutate?.env, { MUTATE: '${{ matrix.file }}' });
+    assert.deepEqual(jobs.line?.needs, ['plan', 'mutation']);
+    // `always()` would hold the line on the reports of the jobs that passed, and pass a run that failed.
+    assert.ok(!String(jobs.line?.if).includes('always()'), 'the line job runs when a job of the matrix failed');
+    assert.equal(take?.with?.pattern, 'mutation--${{ steps.slug.outputs.slug }}--*');
+    assert.match(String(hold?.run), /ratchet\.ts check "\$PACKAGE" reports\/\*\/mutation\.json --full/);
   });
 });

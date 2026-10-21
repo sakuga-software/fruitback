@@ -9,11 +9,16 @@ import { readFileSync, writeFileSync } from 'node:fs';
  * scores less than its own line. The lines move up only by a commit: `write` prints them from the
  * reports of a full run.
  *
+ * Each file is mutated by a job of its own (FRU-336), so a package has one report per file. `check`
+ * reads them together, and a full run fails when a file that has a line was not measured.
+ *
  * The score is the one Stryker reports: killed and timed out, over every mutant that was valid. A
  * mutant no test reaches counts against it, as one a test reaches and lets live.
  *
- *   node tools/mutation/ratchet.ts check <package> <mutation.json> [--full]
+ *   node tools/mutation/ratchet.ts check <package> <mutation.json>… [--full]
  *   node tools/mutation/ratchet.ts write <package> <mutation.json> [<package> <mutation.json> …]
+ *
+ * `write` takes a package once for each of its reports.
  */
 
 export type Status = 'Killed' | 'Timeout' | 'Survived' | 'NoCoverage' | 'CompileError' | 'RuntimeError' | 'Ignored';
@@ -64,6 +69,11 @@ export function linesOf(report: Report): { score: number; files: Record<string, 
   return { score: all?.score ?? 0, files };
 }
 
+/** The reports of the jobs of one package, as one: each holds files the others do not. */
+export function merged(reports: Report[]): Report {
+  return { files: Object.assign({}, ...reports.map((report) => report.files)) as Report['files'] };
+}
+
 /** What fails in a run, one sentence each, and nothing when the run holds every line. */
 export function regressions(
   lines: { score: number; files: Record<string, Line> } | undefined,
@@ -81,6 +91,11 @@ export function regressions(
     }
     if (before === undefined && line.score < lines.score) {
       found.push(`${file} has no line yet, and scores ${line.score}, under the ${lines.score} of its package`);
+    }
+  }
+  if (full) {
+    for (const file of Object.keys(lines.files)) {
+      if (!(file in report.files)) found.push(`${file} has a line, and this full run did not measure it`);
     }
   }
   if (full && measured.score < lines.score) {
@@ -110,18 +125,22 @@ function main(argv: string[]): number {
 
   if (command === 'write') {
     const baseline = JSON.parse(readFileSync(baselineFile, 'utf8')) as Baseline;
+    // A package has a report per file: the pairs of one package are read together.
+    const reports = new Map<string, Report[]>();
     for (let index = 0; index + 1 < rest.length; index += 2) {
-      baseline[rest[index] as string] = linesOf(read(rest[index + 1] as string));
+      const pkg = rest[index] as string;
+      reports.set(pkg, [...(reports.get(pkg) ?? []), read(rest[index + 1] as string)]);
     }
+    for (const [pkg, list] of reports) baseline[pkg] = linesOf(merged(list));
     writeFileSync(baselineFile, `${JSON.stringify(baseline, null, 2)}\n`);
 
     return 0;
   }
 
-  if (command === 'check' && rest.length >= 2) {
-    const [name = '', path = ''] = rest;
+  const [name = '', ...paths] = rest.filter((arg) => arg !== '--full');
+  if (command === 'check' && paths.length > 0) {
     const baseline = JSON.parse(readFileSync(baselineFile, 'utf8')) as Baseline;
-    const report = read(path);
+    const report = merged(paths.map(read));
     const measured = linesOf(report);
     const lines = baseline[name];
     const found = regressions(lines, report, rest.includes('--full'));
@@ -141,7 +160,7 @@ function main(argv: string[]): number {
     return found.length === 0 ? 0 : 1;
   }
 
-  console.error('usage: ratchet.ts check <package> <mutation.json> [--full] | write <package> <mutation.json> …');
+  console.error('usage: ratchet.ts check <package> <mutation.json>… [--full] | write <package> <mutation.json> …');
 
   return 2;
 }

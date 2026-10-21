@@ -18,7 +18,7 @@
   ],
   "inPlace": true,
   "coverageAnalysis": "perTest",
-  "dryRunTimeoutMinutes": 15,
+  "dryRunTimeoutMinutes": 30,
   "reporters": ["clear-text", "json", "html"],
   "thresholds": {
     "high": 80,
