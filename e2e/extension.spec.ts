@@ -19,7 +19,7 @@ import {
   type StoredToken,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
-import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN, noteWriters } from './worker-sessions.ts';
 
 /**
  * The part of the extension API that a spec calls inside the service worker. The types of the whole
@@ -302,29 +302,63 @@ async function expectNoCredentialReadable(page: Page, tokens: StoredToken[]): Pr
   expect(chromeStorage).toBe('undefined');
 }
 
+// The site of the worker on 8789 is « Members only », the default of a site (FRU-330). A spec that
+// sets « Anyone on the page » gives the default back, whatever it ended on.
+test.afterEach(async () => {
+  await noteWriters('members');
+});
+
 test('private mode on a worker that wants a session: the popup says why the page shows no note (FRU-66)', async ({
   extension,
 }) => {
+  // A site read by its members that takes a note from anybody: said here, not read from the default
+  // of the worker, which is « Members only » since FRU-330.
+  await noteWriters('anyone');
+  try {
+    await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+    const page = await extension.context.newPage();
+    await openBareSite(page, 'ext-private-authenticated');
+    // The widget mounts and looks ready. Its reads answer 401, and nothing on the page says so.
+    await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+
+    const popup = await openPopup(extension, page);
+
+    await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
+    await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
+    // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
+    // pairs through the same field, which is the control for this absence.
+    await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+    await expect(popup.getByText(/Not paired/)).toHaveCount(0);
+    const shot = test.info().outputPath('popup.png');
+    await popup.screenshot({ path: shot });
+    await test.info().attach('popup', { path: shot, contentType: 'image/png' });
+    await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveAttribute(
+      'href',
+      'https://sakuga-software.github.io/fruitback/modes.html',
+    );
+  } finally {
+    await noteWriters('members');
+  }
+});
+
+test('private mode on a site whose notes are « Members only »: the widget offers no note, and the popup says why (FRU-330)', async ({
+  extension,
+}) => {
+  // Said, not read from the default: the spec above is its control, on the same worker and site.
+  await noteWriters('members');
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();
-  await openBareSite(page, 'ext-private-authenticated');
-  // The widget mounts and looks ready. Its reads answer 401, and nothing on the page says so.
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+  await openBareSite(page, 'ext-private-members-only');
+  const closed = page.getByRole('button', { name: 'Notes from members only' });
+  await expect(closed).toBeVisible();
+  await expect(closed).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(0);
 
   const popup = await openPopup(extension, page);
 
-  await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
-  // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
-  // pairs through the same field, which is the control for this absence.
-  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
-  await expect(popup.getByText(/Not paired/)).toHaveCount(0);
-  const shot = test.info().outputPath('popup.png');
-  await popup.screenshot({ path: shot });
-  await test.info().attach('popup', { path: shot, contentType: 'image/png' });
-  await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveAttribute(
-    'href',
-    'https://sakuga-software.github.io/fruitback/modes.html',
-  );
+  await expect(popup.getByText(/takes notes from its members only, and private mode carries no session/)).toBeVisible();
+  await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
+  await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toBeVisible();
 });
 
 test('private mode on a worker that answers anyone: the popup says nothing about a session', async ({ extension }) => {
@@ -342,7 +376,10 @@ test('private mode on a worker that answers anyone: the popup says nothing about
   await popup.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
   await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
+  await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
+  // The control of the closed button above: a site that everyone reads offers a note.
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
 });
 
 test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
@@ -522,6 +559,8 @@ test('a pairing link pairs with one click, and the site then works through that 
 test('the popup, the options page and the mounted widget speak the language of the account (FRU-131)', async ({
   extension,
 }) => {
+  // Private mode on this site offers a note when anybody may leave one (FRU-330): said here.
+  await noteWriters('anyone');
   await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-language');

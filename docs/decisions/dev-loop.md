@@ -45,7 +45,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   command is another process, and cannot write in a database that lives in the worker. The route is
   in the fixture, not in the worker. **The fixture listens on `127.0.0.1`** unless `HOST` says
   otherwise: that route gives a session to whoever can reach it (raised in review). `FRUITBACK_DEV_VISIBILITY=members` makes the site one that
-  only a session of the workspace reads.
+  only a session of the workspace reads. Such a site is « Members only », the default of a site
+  since FRU-330; **`POST /__dev/writers` `{ writers }`** sets who may leave a note on it, and a spec
+  about « Anyone on the page » says so there rather than reading the default
+  (`noteWriters` of `e2e/worker-sessions.ts`, reset after each spec of `extension.spec.ts`).
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
   widget mounts in an effect, so it arrives _after_ hydration. A client-side navigation changes the
   page identity with no page load to notice it. And `source` finally has a fiber to read, which is

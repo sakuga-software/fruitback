@@ -1386,6 +1386,26 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   (a reload, Esc, « Cancel », the cross, and the witness that another element opens empty and that
   nothing typed saves nothing).
 
+## A site whose notes are « Members only » (FRU-330)
+
+### The rules, in short
+
+- **Only `canWrite: false` closes, and only from the worker's read.** The answer of a read, or its
+  `401`, says it; absent, a note is offered, as by every worker of before. A refusal that does not say
+  it, a body that is not JSON, and a read that fails for another reason change nothing.
+- **Closed, no note starts**: the launch button reads « Notes from members only », is
+  `aria-disabled`, and a press says « Only members of this site leave notes here. Ask its team to
+  invite you. » in the live region. `host.closeNotes` makes `start` a no-op, so no other way in (the
+  list, « Pick again », `leaveFeedback()`, which answers `false`) starts a capture. The list hides its
+  « Leave feedback ».
+- **A host that signs in keeps its own offer.** With `onSignIn` (the extension), the widget closes
+  nothing: a refused read there is a session that ended, and `signedOut` offers the sign-in.
+- **What is written stays**, as for FRU-315: a draft stays in its store, an open composer stays open.
+  **A text written before comes back in a composer only once a read said that a note can be sent**
+  (raised in review): `restoreTyping` waits for a read that is not stale, and does nothing while the
+  notes are closed. The text waits in its store, and comes back when the site opens again.
+  `embed-closed.test.ts` holds each rule; each was planted out and seen red.
+
 ## A session of the host that ended (FRU-315)
 
 ### The rules, in short

@@ -252,6 +252,25 @@ describe('the worker of development, as a process (FRU-223)', () => {
     assert.equal((await read(worker.origin, { Authorization: `Bearer ${accessToken}` })).status, 200);
   });
 
+  it('sets who may leave a note on its site for members, as a spec asks (FRU-330)', async () => {
+    const worker = await start({ FRUITBACK_DEV_VISIBILITY: 'members' });
+    await ready(worker.origin, worker.said);
+    const said = async () => ((await (await read(worker.origin)).json()) as { canWrite?: unknown }).canWrite;
+    const set = (writers: unknown) =>
+      fetch(`${worker.origin}/__dev/writers`, { method: 'POST', body: JSON.stringify({ writers }) });
+
+    // A new site is « Members only »: the refused read says that a note would be refused too.
+    assert.equal(await said(), false);
+    const opened = await set('anyone');
+    assert.equal(opened.status, 200);
+    assert.deepEqual(await opened.json(), { id: DEV_SITE, writers: 'anyone' });
+    assert.equal(await said(), undefined);
+    assert.equal((await set('everyone')).status, 400);
+    assert.equal(await said(), undefined);
+    assert.equal((await set('members')).status, 200);
+    assert.equal(await said(), false);
+  });
+
   it('does not start under NODE_ENV=production', async () => {
     const worker = await start({ NODE_ENV: 'production' });
     assert.equal(await worker.exit, 1);

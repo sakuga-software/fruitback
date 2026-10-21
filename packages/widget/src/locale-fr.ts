@@ -9,6 +9,8 @@ import type { Catalog } from './messages.ts';
 export const FRENCH: Catalog = {
   'launch.label': 'Laisser une note',
   'launch.signIn': 'Se connecter pour laisser une note',
+  'launch.closed': 'Notes des membres seulement',
+  'launch.closedSentence': 'Seuls les membres de ce site y laissent des notes. Demandez à son équipe de vous inviter.',
   'widget.label': 'Notes Fruitback',
   'capture.banner': 'Pointez un élément, ou utilisez les flèches',
   'capture.bannerTouch': 'Touchez la partie de la page dont parle votre note',

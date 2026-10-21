@@ -329,6 +329,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback a besoin de l’accès à ces sites pour y fonctionner. Rien n’a été enregistré.',
   'Fruitback could not confirm that change. Check the list, then try again.':
     'Fruitback n’a pas pu confirmer ce changement. Vérifiez la liste, puis réessayez.',
+  'This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.':
+    'Ce site prend les notes de ses membres seulement, et le mode privé ne porte aucune session : aucune note ne peut partir d’ici. Pour le relire en mode privé, un admin du site choisit « Toute personne sur la page » sous « Qui peut laisser une note ? » dans la console.',
   'This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.':
     'Ce worker ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
   'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.':

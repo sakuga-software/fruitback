@@ -397,6 +397,11 @@ describe('every word the widget shows', () => {
     host.offerSignIn({ label: translator.text('launch.signIn'), onSignIn: () => {} });
     snapshots.push(...shown(host.root));
     host.offerSignIn(undefined);
+    // The launch button on a site whose notes are « Members only », and what a press says (FRU-330).
+    host.closeNotes({ label: translator.text('launch.closed'), sentence: translator.text('launch.closedSentence') });
+    (host.root.querySelector('.fruitback-launch') as HTMLButtonElement).click();
+    snapshots.push(...shown(host.root));
+    host.closeNotes(undefined);
     const badges = [...host.root.querySelectorAll('.fruitback-pin-badge')] as HTMLElement[];
     for (const badge of badges) {
       badge.click();

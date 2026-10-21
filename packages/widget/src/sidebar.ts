@@ -66,6 +66,8 @@ export type SidebarOptions = {
   onRetry?: () => void;
   /** The reviewer asked to sign in again, while the read state is `signed-out` (FRU-315). */
   onSignIn?: () => void;
+  /** Read on each draw: the worker takes no note of this reader here, and « Leave feedback » goes (FRU-330). */
+  closed?: () => boolean;
   /**
    * The notes kept for later in this tab, on every page (FRU-124). Read on each draw. They are listed
    * in a group of their own above the notes, with one button that sends them all.
@@ -512,7 +514,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     if (retry.textContent !== retryWords) retry.textContent = retryWords;
     retry.setAttribute('aria-disabled', String(retrying));
     // A new note would be refused: the list's way to one goes while the session is over.
-    leave.hidden = signedOut;
+    leave.hidden = signedOut || options.closed?.() === true;
     const leaving = !asking && failed.contains(active);
     failed.hidden = !asking;
     list.hidden = asking || rows.length === 0;

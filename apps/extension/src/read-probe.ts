@@ -13,13 +13,25 @@
 export const READ_NEEDS_SESSION =
   'This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.';
 
+/**
+ * What the popup says when the site takes notes from its members only (FRU-330): the refusal of the
+ * read says `canWrite: false`, and the widget of private mode offers no note. How to open the site
+ * for private mode: « Anyone on the page », in the console.
+ */
+export const NOTES_NEED_SESSION =
+  'This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
+
 /** The guide that says which mode can read an authenticated worker. */
 export const MODES_GUIDE = 'https://sakuga-software.github.io/fruitback/modes.html';
 
-export type ReadProbe = 'answers' | 'wants-a-session' | 'unknown';
+/** `members-only`: a `401` that also says that a note would be refused (FRU-330). */
+export type ReadProbe = 'answers' | 'wants-a-session' | 'members-only' | 'unknown';
 
 export type ReadProbeSeams = {
-  fetch: (url: string, init: { signal: AbortSignal }) => Promise<{ status: number; ok: boolean }>;
+  fetch: (
+    url: string,
+    init: { signal: AbortSignal },
+  ) => Promise<{ status: number; ok: boolean; json?: () => Promise<unknown> }>;
 };
 
 /** A popup is open for a moment. An answer that comes later than this is shown to nobody. */
@@ -38,7 +50,13 @@ export async function probeRead(
 
   try {
     const response = await seams.fetch(url, { signal: AbortSignal.timeout(READ_PROBE_TIMEOUT_MS) });
-    if (response.status === 401) return 'wants-a-session';
+    if (response.status === 401) {
+      // A body that cannot be read says nothing more than the status: the read wants a session.
+      const body = await response.json?.().catch(() => undefined);
+      const closed = typeof body === 'object' && body !== null && (body as { canWrite?: unknown }).canWrite === false;
+
+      return closed ? 'members-only' : 'wants-a-session';
+    }
 
     return response.ok ? 'answers' : 'unknown';
   } catch {

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
-import type { Visibility } from './accounts.ts';
+import { type Visibility, WRITERS, type Writers } from './accounts.ts';
 import { createPairingCommand } from './app.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { pairingLink } from './pair-page.ts';
@@ -33,6 +33,9 @@ import { startServer } from './server.ts';
  *   tracker's. The specs of « Looks fixed » need a note the team marked done.
  * - **`POST /__dev/pair`**, which answers a pairing code and its link for the workspace. The `pair`
  *   command is another process: it cannot reach a database that lives in this one.
+ * - **`POST /__dev/writers`** `{ writers }` (FRU-330), who may leave a note on the site: `members`,
+ *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
+ *   reading the default. Through `addSite`, as the console writes it.
  */
 
 /** The site of the playground: the id that `apps/playground` and the specs name. */
@@ -91,6 +94,30 @@ export async function seedDevWorkspace(
   }
 
   return { workspace: workspace.id, owner: owner.id };
+}
+
+/** `POST /__dev/writers`: who may leave a note on the site of the playground (FRU-330). `400` for another value. */
+async function setWriters(
+  database: PgDatabase,
+  workspace: string,
+  visibility: Visibility,
+  incoming: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const asked = await bodyOf(incoming);
+  if (!(WRITERS as readonly unknown[]).includes(asked.writers)) {
+    response.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'invalid-writers' }));
+
+    return;
+  }
+  const site = await createPostgresAccountStore(database).addSite(workspace, {
+    origin: DEV_PLAYGROUND,
+    visibility,
+    writers: asked.writers as Writers,
+  });
+  response
+    .writeHead(200, { 'Content-Type': 'application/json' })
+    .end(JSON.stringify({ id: site.id, writers: site.writers }));
 }
 
 const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'];
@@ -162,6 +189,11 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   server.on('request', (incoming: IncomingMessage, response: ServerResponse) => {
     if (incoming.method === 'POST' && incoming.url === '/__dev/stage') {
       void moveStage(database, incoming, response);
+
+      return;
+    }
+    if (incoming.method === 'POST' && incoming.url === '/__dev/writers') {
+      void setWriters(database, seeded.workspace, visibility, incoming, response);
 
       return;
     }

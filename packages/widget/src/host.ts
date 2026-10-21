@@ -103,6 +103,12 @@ export type CaptureHost = {
    * gives it back. A capture that runs stops: no note can start that the worker will refuse.
    */
   offerSignIn(offer: { label: string; onSignIn: () => void } | undefined): void;
+  /**
+   * The worker takes no note of this reader here (FRU-330): the launch button wears `label`, is
+   * `aria-disabled`, and a press says `sentence` and starts nothing. No capture starts, by the button
+   * or by `start`; one that runs stops. `undefined` gives the button back.
+   */
+  closeNotes(closed: { label: string; sentence: string } | undefined): void;
   destroy(): void;
 };
 
@@ -465,6 +471,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   function start(): void {
+    // FRU-330: no note can start that the worker refuses, whoever asks for the capture.
+    if (closed !== undefined) return;
     capturing = true;
     // `chosen` is left as it is: a capture started over an open composer must give the frame back
     // to the element the composer is about when it stops.
@@ -525,7 +533,15 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   let signIn: { label: string; onSignIn: () => void } | undefined;
+  let closed: { label: string; sentence: string } | undefined;
   button.addEventListener('click', () => {
+    if (closed !== undefined) {
+      // Said again at each press: the same words twice are not announced twice by a live region.
+      announcer.textContent = '';
+      announcer.textContent = closed.sentence;
+
+      return;
+    }
     if (signIn !== undefined) {
       signIn.onSignIn();
 
@@ -552,6 +568,26 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     launchLabel.textContent = restingLabel;
     button.setAttribute('aria-pressed', 'false');
     delete container.dataset.fruitbackSignedOut;
+  }
+  /** The launch button of a site whose notes are « Members only », for a reader with no session (FRU-330). */
+  function closeNotes(offer: { label: string; sentence: string } | undefined): void {
+    closed = offer;
+    if (offer !== undefined) {
+      if (capturing) stop();
+      launchLabel.textContent = offer.label;
+      button.removeAttribute('aria-pressed');
+      button.setAttribute('aria-disabled', 'true');
+      // Seen too, under a pointer: the live region speaks to a screen reader only.
+      button.title = offer.sentence;
+      container.dataset.fruitbackClosed = '';
+
+      return;
+    }
+    button.removeAttribute('aria-disabled');
+    button.removeAttribute('title');
+    delete container.dataset.fruitbackClosed;
+    // The sign-in offer, when there is one, keeps its words.
+    offerSignIn(signIn);
   }
   halt.addEventListener('click', (event) => {
     // Inside the Shadow root, so the capture does not take this click for a choice; and the page
@@ -586,6 +622,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     },
     choose: select,
     offerSignIn,
+    closeNotes,
     destroy() {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);
@@ -805,6 +842,14 @@ li { display: list-item; }
 /* The drop of the mark, 14 px tall and narrower than tall, as the mock-up draws it. */
 .fruitback-launch .fruitback-icon { width: 11px; height: 14px; }
 .fruitback-launch:hover { background: var(--fruitback-color-accent-strong) padding-box; }
+/* A site whose notes are « Members only », for a reader with no session (FRU-330): the pill of a chip,
+   which offers nothing. */
+.fruitback-launch[aria-disabled='true'],
+.fruitback-launch[aria-disabled='true']:hover {
+  background: var(--fruitback-color-chip) padding-box;
+  color: var(--fruitback-color-on-chip);
+  cursor: default;
+}
 .fruitback-configure,
 .fruitback-listing {
   display: grid;

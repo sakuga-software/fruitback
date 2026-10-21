@@ -36,6 +36,29 @@ describe('probeRead (FRU-66)', () => {
     }
   });
 
+  it('says the site takes notes from its members only on a 401 that says a note would be refused (FRU-330)', async () => {
+    const refusing = (body: unknown, broken = false) => ({
+      fetch: async () => ({
+        status: 401,
+        ok: false,
+        json: async () => {
+          if (broken) throw new SyntaxError('Unexpected token');
+
+          return body;
+        },
+      }),
+    });
+
+    assert.equal(
+      await probeRead(SITE, PAGE, refusing({ error: 'identity-required', canWrite: false })),
+      'members-only',
+    );
+    // The control: the same refusal from a site that takes a note from anybody, or from a worker of before.
+    assert.equal(await probeRead(SITE, PAGE, refusing({ error: 'identity-required' })), 'wants-a-session');
+    assert.equal(await probeRead(SITE, PAGE, refusing({ canWrite: 'no' })), 'wants-a-session');
+    assert.equal(await probeRead(SITE, PAGE, refusing(undefined, true)), 'wants-a-session');
+  });
+
   it('says nothing about a worker that cannot be reached', async () => {
     const unreachable = {
       fetch: async () => {
