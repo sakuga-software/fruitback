@@ -29,6 +29,16 @@ immutable.
   `user` line, a pid and temporary paths under `/tmp`, and the entry scripts of the base image are
   removed: they write under `/etc`. It listens on `80` by default, which Docker lets any user open;
   `FRUITBACK_CONSOLE_LISTEN` is for a runtime that does not, and the compose file sets `8080`.
+- **The job `docker image` builds its four images with one `docker buildx bake`** (FRU-344):
+  `docker-bake.hcl` lists the worker, the demonstration, the console and the console of the Cloud,
+  and bake builds them side by side. Their cache is in the registry,
+  `ghcr.io/<owner>/fruitback-buildcache`, not in the cache of GitHub Actions: their layers held 9.5
+  GB of its 10.6 in October 2026, and it evicted the store of pnpm. Every run of ci.yml reads that
+  cache and none writes it: the job `layer-cache` of `release-image.yml` writes it, once `ci` passed
+  on `main`, so no pull request writes layers that a later build reads. The job runs
+  on a pull request only when it changes a file of those images or of their checks
+  (`tools/ci/changes.ts`, held to the `COPY` lines of each Dockerfile by `ci-images.test.ts`).
+  The builds of `release-image.yml` itself still cache in GitHub Actions.
 - **The build stage is pinned to `--platform=$BUILDPLATFORM`.** It produces one bundled JavaScript
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
   nothing. Only the runtime stage is emulated.
