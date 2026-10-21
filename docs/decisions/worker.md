@@ -650,6 +650,8 @@ any store` asks it of every spec rather than of Linear.
   from the store of that connector, and the store of the worker only for a site with no destination.
   A worker on GitHub (three stages) whose site sends to Linear (five) offered three until then. A
   site read in several places gets every stage one of them reports, in the order of `SEED_STAGES`.
+  The other direction has its test too (FRU-357): no connector of a workspace says three stages yet,
+  so a fake one stands for GitHub, and a worker with five offers its site the three of GitHub.
 - **A GitHub App, never a personal token.** A personal token does not expire and reaches every
   repository of its owner. The JWT is RS256 through `node:crypto`, `iat` sixty seconds back and `exp`
   nine minutes ahead. It buys an installation token narrowed with `repositories` to one repository,
