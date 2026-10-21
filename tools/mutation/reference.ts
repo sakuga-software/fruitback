@@ -74,6 +74,23 @@ export function coarsen(
   return { report: { ...report, testFiles: kept }, dropped: dropped.sort() };
 }
 
+/**
+ * The report to start from, or none. A list that cannot be read, a limit of the API or a network
+ * that fails, is no report: the job then mutates the whole file, and does not stop before
+ * StrykerJS (raised in review).
+ */
+export function find(
+  list: () => Artifact[],
+  repositoryId: number,
+  branches: string[],
+): { artifact?: Artifact; why?: string } {
+  try {
+    return { artifact: pick(list(), repositoryId, branches) };
+  } catch (error) {
+    return { why: error instanceof Error ? error.message.split('\n')[0] : String(error) };
+  }
+}
+
 /** The branches to read, in order, without an empty one or a repeat. */
 export function branchesOf(names: string[]): string[] {
   return [...new Set(names.filter((name) => name !== ''))];
@@ -90,27 +107,32 @@ function main([name = '', destination = '', ...names]: string[]): void {
     throw new Error('usage: GH_REPO=… GITHUB_REPOSITORY_ID=… reference.ts <artifact> <destination> <branch>…');
   }
   const branches = branchesOf(names);
-  const pages = JSON.parse(
-    gh([
-      'api',
-      '--paginate',
-      '--slurp',
-      `repos/${repository}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=100`,
-    ]).toString('utf8'),
-  ) as { artifacts: Artifact[] }[];
-  const chosen = pick(
-    pages.flatMap((page) => page.artifacts),
-    repositoryId,
-    branches,
-  );
   const say = (line: string) => {
     console.log(line);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${line}\n`);
   };
-  if (chosen === undefined) {
-    say(`No report of \`${name}\` on ${branches.join(', ')}: every mutant of the file runs.`);
+  const found = find(
+    () =>
+      (
+        JSON.parse(
+          gh([
+            'api',
+            '--paginate',
+            '--slurp',
+            `repos/${repository}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=100`,
+          ]).toString('utf8'),
+        ) as { artifacts: Artifact[] }[]
+      ).flatMap((page) => page.artifacts),
+    repositoryId,
+    branches,
+  );
+  if (found.artifact === undefined) {
+    say(
+      `${found.why === undefined ? `No report of \`${name}\` on ${branches.join(', ')}` : `The reports of \`${name}\` could not be listed (${found.why})`}: every mutant of the file runs.`,
+    );
     return;
   }
+  const chosen = found.artifact;
 
   const scratch = mkdtempSync(join(tmpdir(), 'mutation-reference-'));
   try {

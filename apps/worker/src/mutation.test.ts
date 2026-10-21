@@ -13,7 +13,7 @@ import {
   regressions,
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
-import { type Artifact, branchesOf, coarsen, pick } from '../../../tools/mutation/reference.ts';
+import { type Artifact, branchesOf, coarsen, find, pick } from '../../../tools/mutation/reference.ts';
 import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
@@ -524,6 +524,21 @@ describe('the report a mutation job of a pull request starts from', () => {
     // The mutants and their sources are left as they are: StrykerJS diffs those itself.
     assert.deepEqual(kept.files, report.files);
     assert.deepEqual(coarsen({ files: {} }, () => undefined).dropped, []);
+  });
+
+  it('starts from no report when the reports cannot be listed, so that the whole file runs', () => {
+    const listed = find(() => [artifact(9, 'main', '2026-10-26T03:40:00Z')], REPOSITORY, ['main']);
+    assert.equal(listed.artifact?.id, 9);
+    assert.equal(listed.why, undefined);
+
+    const failed = find(
+      () => {
+        throw new Error('HTTP 403: API rate limit exceeded\nmore');
+      },
+      REPOSITORY,
+      ['main'],
+    );
+    assert.deepEqual(failed, { why: 'HTTP 403: API rate limit exceeded' });
   });
 
   it('reads the base branch, then main, once each', () => {
