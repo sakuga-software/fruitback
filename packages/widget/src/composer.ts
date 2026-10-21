@@ -1336,18 +1336,18 @@ const STYLES = `
 .fruitback-composer-attach-way:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-composer-attach-way[disabled], .fruitback-composer-attach-way[aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .fruitback-composer-attach-none { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
-/* « Attach » and its menu (FRU-351): the menu opens under the button, over what follows. */
-.fruitback-composer-attach-ways { position: relative; }
+/*
+  « Attach » and its menu (FRU-351). The menu opens under the button in the flow of the composer, not
+  over it: on a phone the composer is a sheet, and a menu laid over it was cut by its foot.
+*/
+.fruitback-composer-attach-ways { flex-direction: column; align-items: flex-start; }
 .fruitback-composer-attach-trigger { display: inline-flex; align-items: center; gap: 4px; }
 .fruitback-composer-attach-trigger .fruitback-icon { width: 14px; height: 14px; }
 .fruitback-composer-attach-trigger[aria-expanded="true"] .fruitback-icon { transform: rotate(180deg); }
 .fruitback-composer-attach-menu {
-  position: absolute;
-  inset-block-start: calc(100% + 4px);
-  inset-inline-start: 0;
-  z-index: 1;
+  box-sizing: border-box;
   min-width: 220px;
-  max-width: calc(100vw - 32px);
+  max-width: 100%;
   margin: 0;
   padding: 4px;
   list-style: none;
@@ -1356,6 +1356,7 @@ const STYLES = `
   background: var(--fruitback-color-surface);
   box-shadow: var(--fruitback-shadow-xl);
 }
+.fruitback-composer-attach-menu li { display: block; list-style: none; margin: 0; padding: 0; }
 .fruitback-composer-attach-menu[hidden], .fruitback-composer-attach-menu li[hidden], .fruitback-composer-dropzone[hidden] { display: none; }
 .fruitback-composer-attach-item {
   display: block;
