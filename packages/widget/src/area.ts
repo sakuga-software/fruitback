@@ -1,3 +1,4 @@
+import { deepActiveElement } from './focus.ts';
 import type { Translator } from './messages.ts';
 
 /**
@@ -67,7 +68,9 @@ export function pickArea(options: {
   overlay.append(box, bar);
   host.append(style, overlay);
 
-  const previous = document.activeElement as HTMLElement | null;
+  // In the Shadow root of the widget, `document.activeElement` is the host: the button that opened the
+  // area is the active element of the root (FRU-353). Esc and Enter give the focus back to it.
+  const previous = deepActiveElement(document) as HTMLElement | null;
   draw();
   overlay.focus();
 
