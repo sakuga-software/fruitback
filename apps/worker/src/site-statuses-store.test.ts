@@ -44,14 +44,17 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const { store, workspace, site } = await acme();
 
       assert.deepEqual(await store.siteStatuses(workspace, site), []);
-      assert.equal(await store.putSiteStatus(workspace, site, status('waiting', { name: 'Waiting' })), 'saved');
-      assert.equal(
+      assert.deepEqual(await store.putSiteStatus(workspace, site, status('waiting', { name: 'Waiting' })), {
+        saved: true,
+        pages: [],
+      });
+      assert.deepEqual(
         await store.putSiteStatus(
           workspace,
           site,
           status('waiting', { name: 'Waiting for Acme', origin: 'tracker', hidden: true }),
         ),
-        'saved',
+        { saved: true, pages: [] },
       );
 
       assert.deepEqual(await store.siteStatuses(workspace, site), [
@@ -63,7 +66,10 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const { database, store, other, site } = await acme();
 
       assert.equal(await store.siteStatuses(other, site), undefined);
-      assert.equal(await store.putSiteStatus(other, site, status('waiting')), 'not-found');
+      assert.deepEqual(await store.putSiteStatus(other, site, status('waiting')), {
+        saved: false,
+        reason: 'not-found',
+      });
       assert.equal(await store.orderSiteStatuses(other, site, []), 'not-found');
       assert.deepEqual(await store.removeSiteStatus(other, site, { source: 'own', key: 'waiting' }, undefined), {
         removed: false,
@@ -77,8 +83,14 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const values = Array.from({ length: MAX_STATUSES }, (_, index) => `('${site}', 'own', 'k${index}', '${NEW}')`);
       await rowsOf(database, `INSERT INTO statuses (site_id, source, key, stage) VALUES ${values.join(', ')}`);
 
-      assert.equal(await store.putSiteStatus(workspace, site, status('one-more')), 'too-many');
-      assert.equal(await store.putSiteStatus(workspace, site, status('k0', { name: 'Renamed' })), 'saved');
+      assert.deepEqual(await store.putSiteStatus(workspace, site, status('one-more')), {
+        saved: false,
+        reason: 'too-many',
+      });
+      assert.deepEqual(await store.putSiteStatus(workspace, site, status('k0', { name: 'Renamed' })), {
+        saved: true,
+        pages: [],
+      });
     });
 
     it('orders the statuses it names, and changes nothing when one is unknown', async () => {
@@ -138,9 +150,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         removed: false,
         reason: 'invalid-target',
       });
+      // The page of the note it moved, whose cached reads are now wrong.
       assert.deepEqual(await store.removeSiteStatus(workspace, site, { source: 'own', key: 'waiting' }, 'parked'), {
         removed: true,
         moved: 1,
+        pages: ['https://acme.test/'],
       });
 
       assert.deepEqual(await rowsOf(database, 'SELECT client_id, stage, status_key FROM seeds ORDER BY id'), [
@@ -164,6 +178,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         {
           removed: true,
           moved: 0,
+          pages: [],
         },
       );
       // Where its notes go means nothing for a state of a tracker: the request is refused.
@@ -179,6 +194,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         {
           removed: true,
           moved: 0,
+          pages: [],
         },
       );
       assert.deepEqual(await store.siteStatuses(workspace, site), []);

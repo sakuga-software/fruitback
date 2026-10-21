@@ -285,8 +285,9 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   as a choice (the status of a note, FRU-367; the screen, FRU-371). The notes already in it keep its
   name and colour, which they would lose if the read left it out, and the filters of the widget are
   by stage. The contract has no field for it (FRU-364), and needs none.
-- **A change shows at the next read for the list, and within `CACHE_TTL_MS` (15 s) for a note** that a
-  removal or a change of stage moved: the notes of a page are in the read cache, the list is not.
+- **A change shows at the next read**: the list is asked at each request, and the pages of the notes
+  that a removal or a change of stage moved are invalidated in the read cache (`invalidatePages`,
+  found in the balanced review of #487), so their next read asks the store.
 
 ### The colours
 

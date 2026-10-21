@@ -55,6 +55,7 @@ import type { Kv } from './kv.ts';
 import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
 import { seal } from './secrets.ts';
 import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
+import { invalidatePages } from './note-helpers.ts';
 import { DEFAULT_SEED_STAGE, MAX_STATUSES } from '@fruitback/shared';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
@@ -775,8 +776,10 @@ export async function handleConsoleApi(
         return json(400, { error: 'invalid-status', refusal: 'unknown-source' }, headers);
       }
       const saved = await context.accounts.putSiteStatus(workspaceId as string, site, status);
-      if (saved === 'not-found') return notFound();
-      if (saved === 'too-many') return json(409, { error: 'too-many-statuses', max: MAX_STATUSES }, headers);
+      if (!saved.saved && saved.reason === 'not-found') return notFound();
+      if (!saved.saved) return json(409, { error: 'too-many-statuses', max: MAX_STATUSES }, headers);
+      // The notes it moved changed stage: their pages read again (balanced review of #487).
+      if (context.kv !== undefined) await invalidatePages(context.kv, saved.pages);
 
       return json(200, { status }, headers);
     }
@@ -803,7 +806,12 @@ export async function handleConsoleApi(
       { source: statusPath[3] as string, key: statusPath[4] as string },
       moveTo,
     );
-    if (removed.removed) return json(200, { moved: removed.moved }, headers);
+    if (removed.removed) {
+      // The notes it moved changed status and stage: their pages read again (balanced review of #487).
+      if (context.kv !== undefined) await invalidatePages(context.kv, removed.pages);
+
+      return json(200, { moved: removed.moved }, headers);
+    }
     if (removed.reason === 'in-use') return json(409, { error: 'status-in-use', notes: removed.notes }, headers);
     if (removed.reason === 'invalid-target') return json(400, { error: 'invalid-target' }, headers);
 

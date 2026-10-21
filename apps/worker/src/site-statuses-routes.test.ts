@@ -200,6 +200,22 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: DONE }]);
   });
 
+  it('reads the page of a note it moves again at once, not from the cache of the page', async () => {
+    // Found in the balanced review of #487: a cached read kept the old stage up to CACHE_TTL_MS.
+    const { team, token, workspace, site } = await acme();
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
+    await plant(team, site, NEW as string, 'waiting', 'seed-1');
+    const pins = async () => (await read(team, site)).issues.map((issue) => [issue.stage, issue.status]);
+    assert.deepEqual(await pins(), [[NEW, 'own:waiting']]);
+
+    await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo=parked'), { token });
+    assert.deepEqual(await pins(), [[CLOSED, 'own:parked']]);
+
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: DONE } });
+    assert.deepEqual(await pins(), [[DONE, 'own:parked']]);
+  });
+
   it('takes the notes of a status the team added to the stage it moves to', async () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });

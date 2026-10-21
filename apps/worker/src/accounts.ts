@@ -420,9 +420,14 @@ export type AccountStore = {
    * Adds a status to a site, or changes the one of that source and key: its name, stage, colours,
    * position and whether it is hidden. Its `origin` is written once, when it is added. A status the
    * team added to the worker's store that changes stage takes its notes to that stage, in the same
-   * transaction. `too-many`: the site holds `MAX_STATUSES` already, and nothing changes.
+   * transaction. `pages`: the pages of the notes it moved, whose cached reads are now wrong.
+   * `too-many`: the site holds `MAX_STATUSES` already, and nothing changes.
    */
-  putSiteStatus(workspace: string, site: string, status: SiteStatus): Promise<'saved' | 'not-found' | 'too-many'>;
+  putSiteStatus(
+    workspace: string,
+    site: string,
+    status: SiteStatus,
+  ): Promise<{ saved: true; pages: string[] } | { saved: false; reason: 'not-found' | 'too-many' }>;
   /**
    * The order of the statuses of a site: each one named takes its place in the list as its
    * `position`. `unknown-status`: one of them is no status of the site, and nothing changes.
@@ -434,7 +439,8 @@ export type AccountStore = {
   ): Promise<'saved' | 'not-found' | 'unknown-status'>;
   /**
    * Removes a status of a site. The notes that the worker keeps in it move first to `moveTo`, a key of
-   * the worker's store (a built-in status, or another the team added), and take its stage.
+   * the worker's store (a built-in status, or another the team added), and take its stage. `pages`:
+   * the pages of the notes it moved, whose cached reads are now wrong.
    *
    * - `in-use`: notes are in it and no `moveTo` says where they go. Nothing changes.
    * - `invalid-target`: `moveTo` is no status of the worker's store for this site, or the one removed,
@@ -449,7 +455,7 @@ export type AccountStore = {
     status: { source: string; key: string },
     moveTo: string | undefined,
   ): Promise<
-    | { removed: true; moved: number }
+    | { removed: true; moved: number; pages: string[] }
     | { removed: false; reason: 'not-found' | 'invalid-target' }
     | { removed: false; reason: 'in-use'; notes: number }
   >;

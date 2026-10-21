@@ -747,13 +747,13 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async putSiteStatus(workspace, site, status) {
       return transaction(async (db) => {
-        if (!(await siteHeld(db, workspace, site))) return 'not-found';
+        if (!(await siteHeld(db, workspace, site))) return { saved: false as const, reason: 'not-found' as const };
         const there = await db
           .select({ key: statuses.key, source: statuses.source })
           .from(statuses)
           .where(eq(statuses.site_id, site));
         const known = there.some((row) => row.source === status.source && row.key === status.key);
-        if (!known && there.length >= MAX_STATUSES) return 'too-many';
+        if (!known && there.length >= MAX_STATUSES) return { saved: false as const, reason: 'too-many' as const };
 
         const values = {
           name: status.name,
@@ -769,13 +769,15 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .onConflictDoUpdate({ target: [statuses.site_id, statuses.source, statuses.key], set: values });
         // The notes of a status the team added follow its stage: `statusOf` draws a note by its status
         // only when the two agree, and a note's stage is what every reader without the list draws.
+        let pages: string[] = [];
         if (status.source === OWN_SOURCE && !isBuiltIn(status.source, status.key)) {
           const now = Date.now();
           const moved = await db
             .update(seeds)
             .set({ stage: status.stage, updated_at: now })
             .where(and(eq(seeds.client_id, site), eq(seeds.status_key, status.key), ne(seeds.stage, status.stage)))
-            .returning({ id: seeds.id });
+            .returning({ id: seeds.id, page: seeds.page_url });
+          pages = moved.map((row) => row.page);
           await restageIndex(
             db,
             site,
@@ -785,7 +787,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           );
         }
 
-        return 'saved';
+        return { saved: true as const, pages };
       });
     },
 
@@ -819,6 +821,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (row === undefined) return missing;
 
         let moved = 0;
+        let pages: string[] = [];
         // Only a status the team added to the worker's store holds notes of its own.
         if (source === OWN_SOURCE && !isBuiltIn(source, key)) {
           let target: { key: string | null; stage: string } | undefined;
@@ -850,8 +853,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               .update(seeds)
               .set({ status_key: target.key, stage: target.stage, updated_at: now })
               .where(held)
-              .returning({ id: seeds.id });
+              .returning({ id: seeds.id, page: seeds.page_url });
             moved = changed.length;
+            pages = changed.map((row) => row.page);
             await restageIndex(
               db,
               site,
@@ -865,7 +869,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         }
         await db.delete(statuses).where(which);
 
-        return { removed: true as const, moved };
+        return { removed: true as const, moved, pages };
       });
     },
 
