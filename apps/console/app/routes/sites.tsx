@@ -400,8 +400,10 @@ function SiteRows({
       <tr data-site={site.id}>
         <td>
           {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
-              dot or a hyphen first, and inside a name only when one name is wider than the column. */}
-          <span className="block font-semibold [overflow-wrap:break-word]">
+              dot or a hyphen first, and inside a name only when one name is wider than the column (FRU-350):
+              it takes `overflow-wrap: anywhere` from the body. With `break-word`, the longest piece set the
+              narrowest width of the column, and at 390 px the column ran 7 px past the screen (FRU-379). */}
+          <span className="block font-semibold">
             {host.split('.').map((part, index) => (
               <Fragment key={index}>
                 {index === 0 ? null : (
