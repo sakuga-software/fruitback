@@ -139,8 +139,14 @@ How this repository is formatted, tested and documented, and which test holds ea
   it takes its language from `LC_ALL` and `LANG`: `fr-FR` in a French shell, `en-US` on a CI runner.
   A test that needs that navigator to disagree with the page gives it a language with
   `globalNavigatorSpeaks`, from `dom.fixture.ts` of the widget, and `mock.restoreAll()` takes it back.
-  **CI runs the `test` target twice, the second time under `fr_FR.UTF-8`**, with `--skip-nx-cache`:
-  the locale is no input of the target, so Nx would replay the first run. Until then four tests of
+  **CI runs again under `fr_FR.UTF-8` every test file that read the locale in the first run**
+  (FRU-344). `tools/ci/locale-probe.ts`, loaded before each test file, writes the file that uses an
+  API of the language with no locale given: a formatter of `Intl` used, `toLocale…`,
+  `localeCompare`, `navigator.language`. `tools/ci/locale-rerun.ts` runs those files again with the
+  runner of their package, and fails when the probe wrote none. PGlite reads `navigator.languages`
+  and answers the same under every locale (measured), so its reads are left out; `ci-locale.test.ts`
+  measures that again, plants each API, and fails on a source that reads `LANG` or `LC_…` itself.
+  Running the whole suite again took half of the `test` job. Until 2026-10-10 four tests of
   `packages/widget` failed in a French shell and passed in CI (measured on 2026-10-10). Their control
   — « the global navigator must disagree, or this proves nothing » — was right to fail: with a widget
   that reads the global navigator, the tests it guards pass in a French shell without it.
