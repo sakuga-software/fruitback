@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { WORKER as API, CONSOLE, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { readRsaPrivateKey } from './github.ts';
 import { createGithubApp, openInstallation, sealInstallation } from './github-connector.ts';
@@ -41,7 +41,7 @@ type Seen = { method: string; path: string; query: URLSearchParams; authorizatio
 type Override = (call: Seen) => { status: number; body: unknown } | undefined;
 
 const servers: { close(): void }[] = [];
-after(() => {
+afterAll(() => {
   for (const server of servers) server.close();
 });
 
