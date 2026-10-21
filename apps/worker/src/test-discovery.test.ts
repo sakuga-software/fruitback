@@ -290,6 +290,78 @@ describe('each test file is run (FRU-174)', () => {
   });
 });
 
+/**
+ * Rule 4. The test files of a package that vitest runs, and that still import `node:test`.
+ *
+ * vitest finds no suite in such a file, « No test suite found », and the `test` target of the
+ * package fails. #456 and #461 each merged one beside the move of the worker to vitest (#450), and
+ * `main` was red twice (FRU-345).
+ *
+ * Only a statement at the start of a line is an import that the file runs. A string that holds one,
+ * written to a file that a test then runs under `node --test` (`ci-locale.test.ts`), is not.
+ */
+const NODE_TEST_IMPORT =
+  /^\s*import\b[^;'"`]*\bfrom\s*['"]node:test['"]|^\s*(?:const|let|var)\b[^\n]*=\s*(?:await\s+)?(?:require|import)\(\s*['"]node:test['"]\s*\)/m;
+
+function nodeTestUnderVitest(tests: string[], packages: Runner[], read: (file: string) => string): string[] {
+  const vitest = packages.filter((candidate) => isVitest(candidate.script));
+
+  return tests
+    .filter((test) => vitest.some((candidate) => test.startsWith(`${candidate.root}/`)))
+    .filter((test) => NODE_TEST_IMPORT.test(read(test)));
+}
+
+describe('a test file is written for the runner of its package (FRU-345)', () => {
+  it('finds no test file of a package run by vitest that imports node:test', () => {
+    assert.ok(
+      RUNNERS.some((candidate) => isVitest(candidate.script)),
+      'no package runs vitest: the scan reads nothing',
+    );
+
+    assert.deepEqual(
+      nodeTestUnderVitest(
+        TESTS.filter((test) => test !== SELF),
+        RUNNERS,
+        (file) => readFileSync(`${REPOSITORY}${file}`, 'utf8'),
+      ),
+      [],
+      "vitest finds no suite in these files: import describe and it from 'vitest'",
+    );
+  });
+
+  it('fails on a test file of a package run by vitest that imports node:test, in any form', () => {
+    const packages: Runner[] = [
+      { root: 'apps/worker', script: 'vitest run', globs: ['src/**/*.test.ts'] },
+      { root: 'packages/shared', script: "node --test 'src/**/*.test.ts'", globs: ['src/**/*.test.ts'] },
+    ];
+    const sources: Record<string, string> = {
+      'apps/worker/src/a.test.ts': "import { after, describe, it } from 'node:test';",
+      'apps/worker/src/b.test.ts': 'import { describe } from "node:test";',
+      'apps/worker/src/c.test.ts': "const { it } = require('node:test');",
+      'apps/worker/src/d.test.ts': "const { it } = await import('node:test');",
+      'apps/worker/src/e.test.ts':
+        "import { describe, it } from 'vitest';\n// node:test took the reason in the options",
+      'packages/shared/src/f.test.ts': "import { describe, it } from 'node:test';",
+      'apps/worker/src/g.test.ts':
+        "import { it } from 'vitest';\n    writeFileSync(file, `import { it } from 'node:test';\\nit('x', () => {});`);",
+      'apps/worker/src/h.test.ts':
+        "import { it } from 'vitest';\n      writeFileSync(file, \"import { it } from 'node:test';\\n\");",
+      'apps/worker/src/i.test.ts': "import {\n  after,\n  describe,\n} from 'node:test';",
+    };
+
+    assert.deepEqual(
+      nodeTestUnderVitest(Object.keys(sources), packages, (file) => sources[file] ?? ''),
+      [
+        'apps/worker/src/a.test.ts',
+        'apps/worker/src/b.test.ts',
+        'apps/worker/src/c.test.ts',
+        'apps/worker/src/d.test.ts',
+        'apps/worker/src/i.test.ts',
+      ],
+    );
+  });
+});
+
 describe('a skip carries its reason (FRU-174)', () => {
   it('finds no skip without a reason in a test, a spec or a fixture', () => {
     const sources = files('**/*').filter(
