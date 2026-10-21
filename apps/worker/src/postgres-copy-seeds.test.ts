@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { after, afterEach, describe, it } from 'node:test';
+import { afterAll, afterEach, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { type Seed, SEED_STAGES, canonicalizePageUrl } from '@fruitback/shared';
@@ -47,7 +47,7 @@ const PAGES = ['/pricing', '/checkout'].map((path) => canonicalizePageUrl(`${SIT
 
 const folders: string[] = [];
 
-after(() => {
+afterAll(() => {
   closeFrozenFiles();
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
@@ -143,306 +143,315 @@ const SUBJECTS: { label: string; open: () => Promise<PgDatabase>; skip: string |
 ];
 
 for (const subject of SUBJECTS) {
-  describe(`the copy of the notes of a SQLite file, on ${subject.label} (FRU-220)`, { skip: subject.skip }, () => {
-    let database: PgDatabase | undefined;
+  describe(
+    `the copy of the notes of a SQLite file, on ${subject.label} (FRU-220)`,
+    { skip: subject.skip !== false },
+    () => {
+      let database: PgDatabase | undefined;
 
-    afterEach(async () => {
-      await database?.close();
-      database = undefined;
-    });
-
-    it('gives each reader the notes the file gave, byte for byte, with their numbers, stages and replies', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      assert.ok(existsSync(`${seedsPath}-wal`), 'the rows are not in a journal: this case would prove less');
-      database = await subject.open();
-      const clients = ['acme', 'globex', undefined];
-      const before = await everyRead(async (query) => issuesOfFile(seedsPath, query, POLICY), clients);
-
-      const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-
-      assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-      assert.match(outcome.lines.join('\n'), /seeds\s+6\s+6\s+same/);
-      assert.match(outcome.lines.join('\n'), /seed_comments\s+3\s+3\s+same/);
-      const store = createPostgresSeedStore(database);
-      const after = await everyRead((query) => store.findForPage(query, undefined, POLICY), clients);
-      // The SQLite store gives a reader that names no client every note of the page, and the store of
-      // the database gives it the notes that name none (FRU-218): that read is compared apart.
-      for (const key of Object.keys(before).filter((key) => !key.endsWith('(none)'))) {
-        assert.deepEqual(after[key], before[key], key);
-      }
-      assert.deepEqual(
-        (after[`${PAGES[0]} (none)`] as { identifier: string }[]).map((issue) => issue.identifier),
-        ['FB-5'],
-      );
-      // The five stages came through, and the text of a seed is the text of the file.
-      assert.deepEqual(
-        (await rowsOf(database, 'SELECT stage FROM seeds ORDER BY id')).map((row) => row.stage),
-        [...SEED_STAGES, 'seeded'],
-      );
-      const file = new DatabaseSync(seedsPath, { readOnly: true });
-      const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
-      file.close();
-      assert.deepEqual(
-        (await rowsOf(database, 'SELECT id, seed FROM seeds ORDER BY id')).map((row) => ({
-          id: Number(row.id),
-          seed: row.seed,
-        })),
-        texts.map((row) => ({ id: row.id, seed: row.seed })),
-      );
-    });
-
-    it('goes on after the largest number the file ever gave, a deleted note included', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-
-      const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-
-      assert.match(outcome.lines.at(-1) ?? '', /^copied: the counts are equal\. The next note is FB-8\./);
-      const store = createPostgresSeedStore(database);
-      const next = await store.create(seedOf('sd_new', PAGES[0] ?? '', 'acme', 'Une note d’après'), undefined, POLICY);
-      // FB-6 was a note that somebody had deleted: nobody gets its number.
-      assert.deepEqual(next, { id: '8', identifier: 'FB-8' });
-      // And a reply: 4 was given to the reply that went with FB-6.
-      await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (8, 'Vu.', 1)`);
-      assert.deepEqual(await rowsOf(database, 'SELECT max(id)::int AS last FROM seed_comments'), [{ last: 5 }]);
-    });
-
-    it('serves the copied notes through GET /feedback of a worker with a database, to the site that --client names', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      await migrate(database);
-      // The operator made the site in the console first: its id is the one of the database.
-      const accounts = createPostgresAccountStore(database);
-      const owner = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
-      const workspace = await accounts.createWorkspace('Acme', owner.id);
-      const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
-
-      const outcome = await copySeedsFile({
-        seedsPath,
-        clients: new Map<string | null, string>([
-          ['acme', site.id],
-          [null, site.id],
-        ]),
-        database,
-        dryRun: false,
+      afterEach(async () => {
+        await database?.close();
+        database = undefined;
       });
 
-      assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-      const said = outcome.lines.join('\n');
-      assert.match(said, new RegExp(`4 note\\(s\\) of « acme » go to « ${site.id} »$`, 'm'));
-      assert.match(said, new RegExp(`1 note\\(s\\) of no client go to « ${site.id} »$`, 'm'));
-      // The notes of the other client keep its name, which is no site here: said, and copied.
-      assert.match(said, /1 note\(s\) of « globex » go to « globex »: NOT A SITE of this database/);
-
-      const read = async (page: string) =>
-        (await (
-          await handleRequest(
-            new Request(`https://api.acme.test/feedback?url=${encodeURIComponent(page)}&client=${site.id}`, {
-              headers: { Origin: SITE },
-            }),
-            envWith({ ALLOWED_ORIGINS: SITE }),
-            {
-              clientIp: '198.51.100.9',
-              accounts,
-              sessionStore: createPostgresSessionStore(database as PgDatabase),
-              kv: createMemoryKv(),
-              store: createPostgresSeedStore(database as PgDatabase),
-            },
-          )
-        ).json()) as { issues: { identifier: string; stage: string; seed: { note: string } }[] };
-      assert.deepEqual((await read(PAGES[0] ?? '')).issues.map((issue) => [issue.identifier, issue.stage]).sort(), [
-        ['FB-1', 'seeded'],
-        ['FB-2', 'green'],
-        ['FB-5', 'composted'],
-      ]);
-      assert.deepEqual((await read(PAGES[1] ?? '')).issues.map((issue) => issue.identifier).sort(), ['FB-3', 'FB-7']);
-    });
-
-    it('writes nothing beside the file, and leaves it as it was', async () => {
-      const { folder, seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      const before = fingerprint(folder);
-
-      assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
-
-      assert.equal(fingerprint(folder), before);
-    });
-
-    it('keeps nothing on a dry run, not even a number, and says what the next one would be', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-
-      const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: true });
-
-      assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-      assert.match(
-        outcome.lines.at(-1) ?? '',
-        /^dry run: the counts are equal, and nothing was kept\. The next note would be FB-8\./,
-      );
-      assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
-      const first = await createPostgresSeedStore(database).create(
-        seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première note de cette base'),
-        undefined,
-        POLICY,
-      );
-      assert.equal(first.identifier, 'FB-1');
-    });
-
-    it('writes nothing again when it runs a second time, and refuses once a note was planted since', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
-
-      const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-      assert.equal(again.ok, true);
-      assert.match(again.lines[0] ?? '', /already holds exactly these notes: nothing is written/);
-      assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
-
-      await createPostgresSeedStore(database).create(
-        seedOf('sd_since', PAGES[0] ?? '', 'acme', 'Depuis'),
-        undefined,
-        POLICY,
-      );
-      const late = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-      assert.equal(late.ok, false);
-      assert.match(
-        late.lines.at(-1) ?? '',
-        /^refused: PostgreSQL already holds notes, and they are not the ones of the file/,
-      );
-      assert.deepEqual(await counts(database), { seeds: 7, comments: 3 });
-    });
-
-    it('holds the same rows under another name of site as other rows: a second run with another --client is refused', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
-
-      const renamed = await copySeedsFile({
-        seedsPath,
-        clients: new Map<string | null, string>([['acme', 'site_other']]),
-        database,
-        dryRun: false,
-      });
-
-      assert.equal(renamed.ok, false);
-      assert.deepEqual(await rowsOf(database, `SELECT count(*)::int AS n FROM seeds WHERE client_id = 'site_other'`), [
-        { n: 0 },
-      ]);
-    });
-
-    it('leaves nothing when it stops in the middle, and gives the same result when it runs again', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      await migrate(database);
-      await rowsOf(
-        database,
-        `CREATE FUNCTION stop_the_copy() RETURNS trigger LANGUAGE plpgsql
-           AS $$ BEGIN RAISE EXCEPTION 'the copy stops here'; END $$`,
-      );
-      await rowsOf(
-        database,
-        'CREATE TRIGGER stop_the_copy BEFORE INSERT ON seed_comments EXECUTE FUNCTION stop_the_copy()',
-      );
-
-      await assert.rejects(
-        copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false }),
-        /the copy stops here/,
-      );
-      assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
-
-      await rowsOf(database, 'DROP TRIGGER stop_the_copy ON seed_comments');
-      const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-      assert.equal(again.ok, true, again.lines.join('\n'));
-      assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
-    });
-
-    it('fails its final count when a note goes missing in the target, and keeps nothing', async () => {
-      const { seedsPath } = await fileOfAWorker();
-      database = await subject.open();
-      await migrate(database);
-      // The violation: one note disappears as soon as the notes are written.
-      await rowsOf(
-        database,
-        `CREATE FUNCTION lose_a_note() RETURNS trigger LANGUAGE plpgsql
-           AS $$ BEGIN DELETE FROM seeds WHERE id = (SELECT max(id) FROM seeds); RETURN NULL; END $$`,
-      );
-      await rowsOf(
-        database,
-        'CREATE TRIGGER lose_a_note AFTER INSERT ON seeds FOR EACH STATEMENT EXECUTE FUNCTION lose_a_note()',
-      );
-
-      const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
-
-      assert.equal(outcome.ok, false);
-      assert.match(outcome.lines.join('\n'), /seeds\s+6\s+5\s+DIFFERENT/);
-      assert.match(outcome.lines.at(-1) ?? '', /^refused: a table of PostgreSQL differs from the file/);
-      assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
-    });
-
-    it('refuses a file of another version, a column it does not know, a date it cannot keep, and a client the file does not name', async () => {
-      const cases: [string, (file: DatabaseSync) => void, Map<string | null, string>, RegExp][] = [
-        [
-          'another version',
-          (file) => file.exec(`PRAGMA user_version = ${SEEDS_FILE_VERSION + 1}`),
-          NO_RENAME,
-          /the seeds file is at version 2, and this worker reads version 1/,
-        ],
-        [
-          'a column',
-          (file) => file.exec('ALTER TABLE seeds ADD COLUMN assignee TEXT'),
-          NO_RENAME,
-          /the table seeds differs: assignee is not in PostgreSQL/,
-        ],
-        [
-          'a date',
-          (file) => file.exec(`UPDATE seeds SET updated_at = '2026-09-01 08:00:00' WHERE id = 2`),
-          NO_RENAME,
-          /the row 2 of seeds holds a date that the database would not give back as it is written/,
-        ],
-        [
-          'a client',
-          () => {},
-          new Map<string | null, string>([['acmee', 'site_1']]),
-          /no note of the file names « acmee »: the file names « acme », « globex », no client/,
-        ],
-      ];
-      for (const [label, change, clients, said] of cases) {
+      it('gives each reader the notes the file gave, byte for byte, with their numbers, stages and replies', async () => {
         const { seedsPath } = await fileOfAWorker();
-        closeFrozenFiles();
-        const file = new DatabaseSync(seedsPath);
-        change(file);
+        assert.ok(existsSync(`${seedsPath}-wal`), 'the rows are not in a journal: this case would prove less');
+        database = await subject.open();
+        const clients = ['acme', 'globex', undefined];
+        const before = await everyRead(async (query) => issuesOfFile(seedsPath, query, POLICY), clients);
+
+        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+
+        assert.equal(outcome.ok, true, outcome.lines.join('\n'));
+        assert.match(outcome.lines.join('\n'), /seeds\s+6\s+6\s+same/);
+        assert.match(outcome.lines.join('\n'), /seed_comments\s+3\s+3\s+same/);
+        const store = createPostgresSeedStore(database);
+        const after = await everyRead((query) => store.findForPage(query, undefined, POLICY), clients);
+        // The SQLite store gives a reader that names no client every note of the page, and the store of
+        // the database gives it the notes that name none (FRU-218): that read is compared apart.
+        for (const key of Object.keys(before).filter((key) => !key.endsWith('(none)'))) {
+          assert.deepEqual(after[key], before[key], key);
+        }
+        assert.deepEqual(
+          (after[`${PAGES[0]} (none)`] as { identifier: string }[]).map((issue) => issue.identifier),
+          ['FB-5'],
+        );
+        // The five stages came through, and the text of a seed is the text of the file.
+        assert.deepEqual(
+          (await rowsOf(database, 'SELECT stage FROM seeds ORDER BY id')).map((row) => row.stage),
+          [...SEED_STAGES, 'seeded'],
+        );
+        const file = new DatabaseSync(seedsPath, { readOnly: true });
+        const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
         file.close();
+        assert.deepEqual(
+          (await rowsOf(database, 'SELECT id, seed FROM seeds ORDER BY id')).map((row) => ({
+            id: Number(row.id),
+            seed: row.seed,
+          })),
+          texts.map((row) => ({ id: row.id, seed: row.seed })),
+        );
+      });
+
+      it('goes on after the largest number the file ever gave, a deleted note included', async () => {
+        const { seedsPath } = await fileOfAWorker();
         database = await subject.open();
 
-        const outcome = await copySeedsFile({ seedsPath, clients, database, dryRun: false });
+        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
 
-        assert.equal(outcome.ok, false, label);
-        assert.match(outcome.lines.at(-1) ?? '', said, label);
-        assert.match(outcome.lines.at(-1) ?? '', /Nothing was written\.$/, label);
-        await database.close();
-        database = undefined;
-      }
-    });
+        assert.match(outcome.lines.at(-1) ?? '', /^copied: the counts are equal\. The next note is FB-8\./);
+        const store = createPostgresSeedStore(database);
+        const next = await store.create(
+          seedOf('sd_new', PAGES[0] ?? '', 'acme', 'Une note d’après'),
+          undefined,
+          POLICY,
+        );
+        // FB-6 was a note that somebody had deleted: nobody gets its number.
+        assert.deepEqual(next, { id: '8', identifier: 'FB-8' });
+        // And a reply: 4 was given to the reply that went with FB-6.
+        await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (8, 'Vu.', 1)`);
+        assert.deepEqual(await rowsOf(database, 'SELECT max(id)::int AS last FROM seed_comments'), [{ last: 5 }]);
+      });
 
-    it('copies a file that holds no note, and the first note is FB-1', async () => {
-      const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
-      folders.push(folder);
-      const seedsPath = join(folder, 'fb.db');
-      frozenFile(seedsPath, 'seeds');
-      assert.deepEqual(issuesOfFile(seedsPath, { url: PAGES[0] ?? '', clientId: undefined }, POLICY), []);
-      database = await subject.open();
+      it('serves the copied notes through GET /feedback of a worker with a database, to the site that --client names', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        await migrate(database);
+        // The operator made the site in the console first: its id is the one of the database.
+        const accounts = createPostgresAccountStore(database);
+        const owner = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
+        const workspace = await accounts.createWorkspace('Acme', owner.id);
+        const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
 
-      const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const outcome = await copySeedsFile({
+          seedsPath,
+          clients: new Map<string | null, string>([
+            ['acme', site.id],
+            [null, site.id],
+          ]),
+          database,
+          dryRun: false,
+        });
 
-      assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-      const first = await createPostgresSeedStore(database).create(
-        seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première'),
-        undefined,
-        POLICY,
-      );
-      assert.equal(first.identifier, 'FB-1');
-    });
-  });
+        assert.equal(outcome.ok, true, outcome.lines.join('\n'));
+        const said = outcome.lines.join('\n');
+        assert.match(said, new RegExp(`4 note\\(s\\) of « acme » go to « ${site.id} »$`, 'm'));
+        assert.match(said, new RegExp(`1 note\\(s\\) of no client go to « ${site.id} »$`, 'm'));
+        // The notes of the other client keep its name, which is no site here: said, and copied.
+        assert.match(said, /1 note\(s\) of « globex » go to « globex »: NOT A SITE of this database/);
+
+        const read = async (page: string) =>
+          (await (
+            await handleRequest(
+              new Request(`https://api.acme.test/feedback?url=${encodeURIComponent(page)}&client=${site.id}`, {
+                headers: { Origin: SITE },
+              }),
+              envWith({ ALLOWED_ORIGINS: SITE }),
+              {
+                clientIp: '198.51.100.9',
+                accounts,
+                sessionStore: createPostgresSessionStore(database as PgDatabase),
+                kv: createMemoryKv(),
+                store: createPostgresSeedStore(database as PgDatabase),
+              },
+            )
+          ).json()) as { issues: { identifier: string; stage: string; seed: { note: string } }[] };
+        assert.deepEqual((await read(PAGES[0] ?? '')).issues.map((issue) => [issue.identifier, issue.stage]).sort(), [
+          ['FB-1', 'seeded'],
+          ['FB-2', 'green'],
+          ['FB-5', 'composted'],
+        ]);
+        assert.deepEqual((await read(PAGES[1] ?? '')).issues.map((issue) => issue.identifier).sort(), ['FB-3', 'FB-7']);
+      });
+
+      it('writes nothing beside the file, and leaves it as it was', async () => {
+        const { folder, seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        const before = fingerprint(folder);
+
+        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+
+        assert.equal(fingerprint(folder), before);
+      });
+
+      it('keeps nothing on a dry run, not even a number, and says what the next one would be', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+
+        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: true });
+
+        assert.equal(outcome.ok, true, outcome.lines.join('\n'));
+        assert.match(
+          outcome.lines.at(-1) ?? '',
+          /^dry run: the counts are equal, and nothing was kept\. The next note would be FB-8\./,
+        );
+        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+        const first = await createPostgresSeedStore(database).create(
+          seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première note de cette base'),
+          undefined,
+          POLICY,
+        );
+        assert.equal(first.identifier, 'FB-1');
+      });
+
+      it('writes nothing again when it runs a second time, and refuses once a note was planted since', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+
+        const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        assert.equal(again.ok, true);
+        assert.match(again.lines[0] ?? '', /already holds exactly these notes: nothing is written/);
+        assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
+
+        await createPostgresSeedStore(database).create(
+          seedOf('sd_since', PAGES[0] ?? '', 'acme', 'Depuis'),
+          undefined,
+          POLICY,
+        );
+        const late = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        assert.equal(late.ok, false);
+        assert.match(
+          late.lines.at(-1) ?? '',
+          /^refused: PostgreSQL already holds notes, and they are not the ones of the file/,
+        );
+        assert.deepEqual(await counts(database), { seeds: 7, comments: 3 });
+      });
+
+      it('holds the same rows under another name of site as other rows: a second run with another --client is refused', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+
+        const renamed = await copySeedsFile({
+          seedsPath,
+          clients: new Map<string | null, string>([['acme', 'site_other']]),
+          database,
+          dryRun: false,
+        });
+
+        assert.equal(renamed.ok, false);
+        assert.deepEqual(
+          await rowsOf(database, `SELECT count(*)::int AS n FROM seeds WHERE client_id = 'site_other'`),
+          [{ n: 0 }],
+        );
+      });
+
+      it('leaves nothing when it stops in the middle, and gives the same result when it runs again', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        await migrate(database);
+        await rowsOf(
+          database,
+          `CREATE FUNCTION stop_the_copy() RETURNS trigger LANGUAGE plpgsql
+           AS $$ BEGIN RAISE EXCEPTION 'the copy stops here'; END $$`,
+        );
+        await rowsOf(
+          database,
+          'CREATE TRIGGER stop_the_copy BEFORE INSERT ON seed_comments EXECUTE FUNCTION stop_the_copy()',
+        );
+
+        await assert.rejects(
+          copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false }),
+          /the copy stops here/,
+        );
+        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+
+        await rowsOf(database, 'DROP TRIGGER stop_the_copy ON seed_comments');
+        const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        assert.equal(again.ok, true, again.lines.join('\n'));
+        assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
+      });
+
+      it('fails its final count when a note goes missing in the target, and keeps nothing', async () => {
+        const { seedsPath } = await fileOfAWorker();
+        database = await subject.open();
+        await migrate(database);
+        // The violation: one note disappears as soon as the notes are written.
+        await rowsOf(
+          database,
+          `CREATE FUNCTION lose_a_note() RETURNS trigger LANGUAGE plpgsql
+           AS $$ BEGIN DELETE FROM seeds WHERE id = (SELECT max(id) FROM seeds); RETURN NULL; END $$`,
+        );
+        await rowsOf(
+          database,
+          'CREATE TRIGGER lose_a_note AFTER INSERT ON seeds FOR EACH STATEMENT EXECUTE FUNCTION lose_a_note()',
+        );
+
+        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+
+        assert.equal(outcome.ok, false);
+        assert.match(outcome.lines.join('\n'), /seeds\s+6\s+5\s+DIFFERENT/);
+        assert.match(outcome.lines.at(-1) ?? '', /^refused: a table of PostgreSQL differs from the file/);
+        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+      });
+
+      it('refuses a file of another version, a column it does not know, a date it cannot keep, and a client the file does not name', async () => {
+        const cases: [string, (file: DatabaseSync) => void, Map<string | null, string>, RegExp][] = [
+          [
+            'another version',
+            (file) => file.exec(`PRAGMA user_version = ${SEEDS_FILE_VERSION + 1}`),
+            NO_RENAME,
+            /the seeds file is at version 2, and this worker reads version 1/,
+          ],
+          [
+            'a column',
+            (file) => file.exec('ALTER TABLE seeds ADD COLUMN assignee TEXT'),
+            NO_RENAME,
+            /the table seeds differs: assignee is not in PostgreSQL/,
+          ],
+          [
+            'a date',
+            (file) => file.exec(`UPDATE seeds SET updated_at = '2026-09-01 08:00:00' WHERE id = 2`),
+            NO_RENAME,
+            /the row 2 of seeds holds a date that the database would not give back as it is written/,
+          ],
+          [
+            'a client',
+            () => {},
+            new Map<string | null, string>([['acmee', 'site_1']]),
+            /no note of the file names « acmee »: the file names « acme », « globex », no client/,
+          ],
+        ];
+        for (const [label, change, clients, said] of cases) {
+          const { seedsPath } = await fileOfAWorker();
+          closeFrozenFiles();
+          const file = new DatabaseSync(seedsPath);
+          change(file);
+          file.close();
+          database = await subject.open();
+
+          const outcome = await copySeedsFile({ seedsPath, clients, database, dryRun: false });
+
+          assert.equal(outcome.ok, false, label);
+          assert.match(outcome.lines.at(-1) ?? '', said, label);
+          assert.match(outcome.lines.at(-1) ?? '', /Nothing was written\.$/, label);
+          await database.close();
+          database = undefined;
+        }
+      });
+
+      it('copies a file that holds no note, and the first note is FB-1', async () => {
+        const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
+        folders.push(folder);
+        const seedsPath = join(folder, 'fb.db');
+        frozenFile(seedsPath, 'seeds');
+        assert.deepEqual(issuesOfFile(seedsPath, { url: PAGES[0] ?? '', clientId: undefined }, POLICY), []);
+        database = await subject.open();
+
+        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+
+        assert.equal(outcome.ok, true, outcome.lines.join('\n'));
+        const first = await createPostgresSeedStore(database).create(
+          seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première'),
+          undefined,
+          POLICY,
+        );
+        assert.equal(first.identifier, 'FB-1');
+      });
+    },
+  );
 }
 
 /**
@@ -570,7 +579,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
 describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () => {
   it(
     'tries, copies, ends with 0, never prints the address of the database, and ends with 1 on a refusal',
-    { skip: NO_REAL_POSTGRES, timeout: 60_000 },
+    { skip: NO_REAL_POSTGRES !== false, timeout: 60_000 },
     async () => {
       const { folder, seedsPath } = await fileOfAWorker();
       closeFrozenFiles();

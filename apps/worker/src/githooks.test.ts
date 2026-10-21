@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 
 /**
  * The git hooks of `.githooks/` are installed by `pnpm install`, and git runs them (FRU-172).
@@ -22,6 +22,21 @@ const HOOKS = [
   { name: 'pre-push', file: new URL('.githooks/pre-push', ROOT) },
 ];
 const INSTALLER = new URL('.githooks/install.mjs', ROOT);
+
+/** The `maxWorkers` that a `vitest.config.ts` gives, loaded by Node with the variable set or not. */
+function maxWorkersOf(config: URL, concurrency: string | undefined): number | undefined {
+  const env = { ...process.env };
+  delete env.FRUITBACK_TEST_CONCURRENCY;
+  if (concurrency !== undefined) env.FRUITBACK_TEST_CONCURRENCY = concurrency;
+  const read = `import(${JSON.stringify(config.href)}).then(({ default: c }) => console.log(JSON.stringify(c.test.maxWorkers ?? null)))`;
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', read], {
+    env,
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 0, run.stderr);
+
+  return (JSON.parse(run.stdout) as number | null) ?? undefined;
+}
 /** What the `test` script of a package passes to `node --test`: nothing, unless the variable is set. */
 const CONCURRENCY = '${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY}';
 
@@ -41,7 +56,8 @@ describe('the git hooks', () => {
    */
   it(
     'are executable, or git passes over them',
-    { skip: process.platform === 'win32' && 'Windows keeps no executable bit on a file' },
+    // Skipped on Windows, which keeps no executable bit on a file.
+    { skip: process.platform === 'win32' },
     () => {
       for (const { name, file } of HOOKS) {
         assert.notEqual(statSync(file).mode & 0o111, 0, `.githooks/${name} is not executable`);
@@ -101,11 +117,14 @@ describe('the git hooks', () => {
    * Without a bound, `node --test` runs the files of a package on every core but one, and
    * `NODE_OPTIONS` refuses `--test-concurrency`. So the `test` script of each package passes
    * `FRUITBACK_TEST_CONCURRENCY` to Node. The option goes before the files, because Node ignores
-   * it after them (measured). `pre-push` sets the variable. CI does not, so CI keeps every core.
+   * it after them (measured). The worker runs `vitest run`, and its `vitest.config.ts` gives the
+   * variable to `maxWorkers` (FRU-346). `pre-push` sets the variable. CI does not, so CI keeps
+   * every core.
    */
   it(
     'bound the test files that a push runs at a time, and leave CI on every core',
-    { skip: process.platform === 'win32' && 'the scripts of the packages are read by a POSIX shell' },
+    // Skipped on Windows: the scripts of the packages are read by a POSIX shell.
+    { skip: process.platform === 'win32' },
     () => {
       const scripts = ['apps', 'packages'].flatMap((directory) =>
         readdirSync(new URL(`${directory}/`, ROOT), { withFileTypes: true })
@@ -118,12 +137,19 @@ describe('the git hooks', () => {
               scripts?: Record<string, string>;
             };
             return { file, test: all.test ?? '' };
-          })
-          .filter(({ test }) => test.startsWith('node --test')),
+          }),
       );
-      assert.ok(scripts.length >= 7, `only ${scripts.length} packages run node --test`);
-      for (const { file, test } of scripts) {
+      const nodeTest = scripts.filter(({ test }) => test.startsWith('node --test'));
+      const vitest = scripts.filter(({ test }) => test === 'vitest run');
+      assert.ok(nodeTest.length >= 6, `only ${nodeTest.length} packages run node --test`);
+      for (const { file, test } of nodeTest) {
         assert.ok(test.startsWith(`node --test ${CONCURRENCY} '`), `${file} runs every test file at once: ${test}`);
+      }
+      assert.ok(vitest.length >= 1, 'no package runs vitest');
+      for (const { file } of vitest) {
+        const config = new URL(file.replace(/package\.json$/, 'vitest.config.ts'), ROOT);
+        assert.deepEqual(maxWorkersOf(config, '2'), 2, `${file}: vitest runs every test file at once`);
+        assert.deepEqual(maxWorkersOf(config, undefined), undefined, `${file}: vitest has a bound in CI`);
       }
 
       const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');
@@ -156,7 +182,8 @@ describe('the git hooks', () => {
    */
   it(
     'hide the repository that pushes from the tests they run',
-    { skip: process.platform === 'win32' && 'the hook is a POSIX shell script' },
+    // Skipped on Windows: the hook is a POSIX shell script.
+    { skip: process.platform === 'win32' },
     () => {
       const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');
       const nx = /^nx\(\) \{\n[\s\S]*?^\}\n/m.exec(hook)?.[0] ?? '';

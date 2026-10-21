@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import type { Seed } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -28,7 +29,7 @@ beforeEach(async () => {
   await resetSharedKv();
   resetCacheState();
 });
-afterEach(() => mock.restoreAll());
+afterEach(() => vi.restoreAllMocks());
 
 function seeds(count: number, from = 0): Seed[] {
   return Array.from({ length: count }, (_, index) =>
@@ -73,7 +74,7 @@ function installLinear(): Linear {
   const answer = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0] ?? 'unknown';
     if (operation === 'FruitbackLabels') return answer({ data: { team: { labels: { nodes: [] } } } });

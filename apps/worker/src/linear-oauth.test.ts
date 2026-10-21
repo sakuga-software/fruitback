@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -22,8 +23,8 @@ const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
 
 afterEach(() => {
-  mock.restoreAll();
-  mock.timers.reset();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 const worldWith = worlds();
@@ -72,7 +73,7 @@ function fakeLinear() {
     return { access_token: state.access, refresh_token: state.refresh, expires_in: 86_400, token_type: 'Bearer' };
   };
 
-  mock.method(globalThis, 'fetch', async (url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (url: unknown, init: { body: string; headers: Record<string, string> }) => {
     const address = String(url);
     if (address === 'https://api.linear.app/oauth/token') {
       const form = Object.fromEntries(new URLSearchParams(init.body));
@@ -326,7 +327,7 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
       get: (key) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.get(key)),
       set: (key, value, ttl) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.set(key, value, ttl)),
     };
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
 
     const asked = await callOn(
       env,
@@ -467,7 +468,7 @@ describe('a token of Linear that ends (FRU-134)', () => {
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, linear, world);
-    mock.timers.enable({ apis: ['Date'], now: Date.now() + 86_400_000 - REFRESH_MARGIN_MS + 1_000 });
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 86_400_000 - REFRESH_MARGIN_MS + 1_000 });
 
     return { env, linear, world, connector };
   }
@@ -552,8 +553,8 @@ describe('a token of Linear that ends (FRU-134)', () => {
         answer === 400 || answer === 401 ? 'connection-ended' : undefined,
         String(answer),
       );
-      mock.timers.reset();
-      mock.restoreAll();
+      vi.useRealTimers();
+      vi.restoreAllMocks();
     }
   });
 

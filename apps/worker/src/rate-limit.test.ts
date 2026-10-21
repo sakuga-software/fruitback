@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { DEFAULT_LIMIT, WINDOW_MS, checkRateLimit, resolveClientIp } from './rate-limit.ts';

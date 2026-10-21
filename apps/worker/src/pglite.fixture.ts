@@ -10,7 +10,7 @@ import { type PgDatabase, type PgPool, causeOfQueryError } from './postgres.ts';
 /**
  * A `PgDatabase` on a PGlite instance: a PostgreSQL in the process, with one connection (FRU-141).
  *
- * This file imports nothing of `node:test`, so a runner that is not `node --test` can use it: the
+ * This file imports nothing of vitest, so a runner that is not vitest can use it: the
  * Playwright spec of the console (FRU-148) serves a worker on it. `postgres.fixture.ts` keeps the
  * instance that the cases of a test file share.
  */

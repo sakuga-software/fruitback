@@ -46,13 +46,15 @@ for trying the widget, not the product: build features in `packages/widget`.
 
 ## Run the tests
 
-Tests use `node:test` and `node:assert/strict`, with no test runner and no transpiler.
+Tests use `node:test` and `node:assert/strict`, with no test runner and no transpiler. The worker is
+the exception: its tests run on vitest, still with `node:assert/strict` (FRU-346).
 
 ```bash
 pnpm test                                    # every package that has a test script
 pnpm --filter @fruitback/widget test         # one package
 pnpm --filter @fruitback/widget test:watch   # one package, again after each change
 cd packages/widget && node --test src/panel.test.ts   # one file
+cd apps/worker && pnpm exec vitest run src/cache.test.ts   # one file of the worker
 ```
 
 The end-to-end suite drives a real Chromium through Playwright, and starts both servers itself:
@@ -105,7 +107,8 @@ None of these can be guessed from the code, and most of them have broken somethi
 - **Relative imports carry the `.ts` extension**: `import { x } from './x.ts'`. Node needs it to run the
   sources with no build step, and `tsc` accepts it.
 - **Tests sit beside the code** as `*.test.ts`, and fixtures as `*.fixture.ts`. Doubles come from
-  `mock` in `node:test`, restored in an `afterEach`. Mock `fetch` for anything that calls a service: no
+  `mock` in `node:test`, restored in an `afterEach`; in the worker, from `mockMethod` of
+  `mock.fixture.ts`, restored by `vi.restoreAllMocks()`. Mock `fetch` for anything that calls a service: no
   test writes to a real Linear workspace or GitHub repository.
 - **`packages/shared` has `types: []` on purpose.** It is bundled into the widget, so code there that
   touches `process` or `Buffer` must fail to compile. Do not add `node` to its `tsconfig.json`; its

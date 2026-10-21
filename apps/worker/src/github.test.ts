@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createPrivateKey, generateKeyPairSync, verify } from 'node:crypto';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { DEFAULT_SEED_STAGE, SEED_STAGES, buildIssueDescription } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type ClientPolicy, readClientMap } from './clients.ts';
@@ -38,7 +39,7 @@ const POLICY: ClientPolicy = {
 const PAGE = seedFixture().page.url;
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 type Call = { method: string; path: string; query: URLSearchParams; authorization: string | null; body: unknown };
@@ -52,7 +53,7 @@ function json(status: number, body: unknown): Response {
 function fakeGithub(routes: Record<string, Route>): Call[] {
   const calls: Call[] = [];
 
-  mock.method(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
+  mockMethod(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
     const url = new URL(input);
     const call: Call = {
       method: init.method ?? 'GET',
@@ -372,12 +373,12 @@ describe('create', () => {
 
       await assert.rejects(store.create(seedFixture(), undefined, POLICY), StoreError);
       assert.equal(calls.filter((call) => call.path === '/repos/acme/site/issues').length, 0);
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 
   it('reports an unreachable GitHub as a store failure', async () => {
-    mock.method(globalThis, 'fetch', async () => {
+    mockMethod(globalThis, 'fetch', async () => {
       throw new TypeError('fetch failed');
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });

@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { noNotes } from './notes-index.ts';
 import assert from 'node:assert/strict';
 import { handleRequest } from './app.ts';

@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -1333,7 +1334,7 @@ describe('a delivery that arrived, with a store of files that does not answer (F
       },
     };
     await world.accounts.enqueueDelivery(connector.id, body, 0);
-    const errors = mock.method(console, 'error', () => undefined);
+    const errors = mockMethod(console, 'error', () => undefined);
     const { got, send } = receiver();
     const pass = (store: typeof files) =>
       deliverDue({
@@ -1348,7 +1349,7 @@ describe('a delivery that arrived, with a store of files that does not answer (F
     assert.deepEqual(await pass(failing), { delivered: 1, failed: 0 });
     await pass(failing);
     assert.equal(got.length, 1, 'sent once: the note is not sent again for its files');
-    assert.ok(errors.mock.calls.some((call) => String(call.arguments[0]).includes('keep their transit')));
-    errors.mock.restore();
+    assert.ok(errors.mock.calls.some((call) => String(call[0]).includes('keep their transit')));
+    errors.mockRestore();
   });
 });

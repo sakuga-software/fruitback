@@ -1,4 +1,4 @@
-import { beforeEach, describe, it } from 'node:test';
+import { beforeEach, describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { CACHE_TTL_MS, PAGE_VERSION_TTL_MS, cached, invalidate, resetCacheState } from './cache.ts';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import {
@@ -36,12 +37,12 @@ const open = worlds();
 let outside: { url: string; token: string | null }[] = [];
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
   outside = [];
 });
 
 function watchOutside(): void {
-  mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+  mockMethod(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     outside.push({ url, token: new URLSearchParams(String(init?.body ?? '')).get('token') });
 
@@ -365,7 +366,7 @@ describe('what follows the commit of a deletion (FRU-284)', () => {
       }),
     } as unknown as InstanceAdminReads;
     const revoked: string[] = [];
-    const logged = mock.method(console, 'error', () => undefined);
+    const logged = mockMethod(console, 'error', () => undefined);
     const answer = await handleInstanceAdmin(
       new Request(`http://worker.test${ADMIN_PATH}/workspaces/ws_1/deletion`, {
         method: 'POST',
@@ -390,6 +391,6 @@ describe('what follows the commit of a deletion (FRU-284)', () => {
     assert.equal(answer?.status, 200);
     assert.deepEqual(revoked, ['sealed-1', 'sealed-2'], 'the second key is revoked after the first one failed');
     assert.deepEqual(ended, ['ws_1']);
-    assert.equal(logged.mock.callCount(), 1);
+    assert.equal(logged.mock.calls.length, 1);
   });
 });

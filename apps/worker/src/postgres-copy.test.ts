@@ -5,7 +5,7 @@ import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, readdir
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { after, afterEach, describe, it } from 'node:test';
+import { afterAll, afterEach, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
@@ -61,7 +61,7 @@ const API_KEY = 'lin_api_not_a_real_key';
 
 const folders: string[] = [];
 
-after(() => {
+afterAll(() => {
   closeFrozenFiles();
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
@@ -234,7 +234,7 @@ const SUBJECTS: { label: string; open: () => Promise<Database>; skip: string | f
 ];
 
 for (const subject of SUBJECTS) {
-  describe(`the copy of the two SQLite files, on ${subject.label} (FRU-145)`, { skip: subject.skip }, () => {
+  describe(`the copy of the two SQLite files, on ${subject.label} (FRU-145)`, { skip: subject.skip !== false }, () => {
     let database: Database | undefined;
 
     afterEach(async () => {
@@ -540,7 +540,7 @@ describe('the arguments of migrate-to-postgres (FRU-145)', () => {
 describe('the command migrate-to-postgres, as a process (FRU-145)', () => {
   it(
     'copies, ends with 0, and never prints the address of the database',
-    { skip: NO_REAL_POSTGRES, timeout: 30_000 },
+    { skip: NO_REAL_POSTGRES !== false, timeout: 30_000 },
     async () => {
       const files = await filesOfAWorker();
       closeFrozenFiles();

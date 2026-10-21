@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach } from 'node:test';
+import { afterEach } from 'vitest';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { type AuthConfig, authOptions } from './auth.ts';
 import type { PgDatabase } from './postgres.ts';

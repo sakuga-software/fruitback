@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { REPLY_NAME_LENGTH, replyName, replyText } from './reply-text.ts';
 
 describe('the text of a reply in a tracker (FRU-257)', () => {

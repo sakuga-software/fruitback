@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createMemoryKv } from './kv.ts';
@@ -914,7 +914,7 @@ const { opening } = databasesOfACase();
 for (const [index, { label, open, skip }] of DATABASES.entries()) {
   // A case on the store takes a migrated database (FRU-339); the case on migration 0023 starts empty.
   const openMigrated = MIGRATED_DATABASES[index]?.open ?? open;
-  describe(`the files in transit in the database, on ${label} (FRU-331)`, { skip }, () => {
+  describe(`the files in transit in the database, on ${label} (FRU-331)`, { skip: skip !== false }, () => {
     const file = (id: string, more: Partial<Parameters<AttachmentStore['put']>[0]> = {}) => ({
       id,
       workspace: 'ws_acme',

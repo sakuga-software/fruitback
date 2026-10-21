@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
@@ -60,7 +60,7 @@ export function collect<Store>(cases: Cases<Store>): Map<string, (store: Store) 
 export function describeConformance<Store>(promises: string, cases: Cases<Store>, subject: Subject<Store>): void {
   describe(`${subject.label} keeps the ${promises} promises`, () => {
     cases((name, run) => {
-      it(name, { skip: subject.skip ?? false }, async () => {
+      it(name, { skip: Boolean(subject.skip) }, async () => {
         const store = await subject.open();
         try {
           await run(store);

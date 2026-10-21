@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after } from 'node:test';
+import { afterAll } from 'vitest';
 import type { PGlite } from '@electric-sql/pglite';
 import { type SQL, sql } from 'drizzle-orm';
 import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
@@ -13,7 +13,7 @@ import { migrated, migrationsFolder } from './postgres-migrate.ts';
 /**
  * A PostgreSQL for the tests (FRU-141), in two forms.
  *
- * **PGlite** is a PostgreSQL in the process: `node --test` needs no service. It has one connection,
+ * **PGlite** is a PostgreSQL in the process: the tests need no service. It has one connection,
  * so a transaction holds every other call back, and no race can show there.
  *
  * **A real server** is the address in `FRUITBACK_TEST_DATABASE_URL`. There the calls of a case run
@@ -96,7 +96,7 @@ export function journalTags(): string[] {
 }
 
 const folders: string[] = [];
-after(() => {
+afterAll(() => {
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
 });
 
@@ -132,7 +132,7 @@ function pglite(): Promise<PGlite> {
 }
 
 // An open instance keeps the process of a test file alive for ten seconds after its last test (measured).
-after(async () => {
+afterAll(async () => {
   const instance = shared;
   shared = undefined;
   await (await instance)?.close();

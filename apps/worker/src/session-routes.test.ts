@@ -1,4 +1,4 @@
-import { before, describe, it } from 'node:test';
+import { beforeAll, describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { type WorkerEnv, readConfig } from './env.ts';
@@ -31,7 +31,7 @@ let workspace: string;
 let member: string;
 const kv = createMemoryKv();
 
-before(async () => {
+beforeAll(async () => {
   const database = await createPgliteDatabase();
   accounts = createPostgresAccountStore(database);
   sessions = createPostgresSessionStore(database);

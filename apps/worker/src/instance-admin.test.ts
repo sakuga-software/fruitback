@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it, mock } from 'node:test';
+import { describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { AUTH_BASE_PATH } from './auth.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
@@ -642,11 +643,11 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
 
   it('calls no tracker to read the notes, and the control sees the call of a read of Linear', async () => {
     const { on, ana } = await notesOfTheInstance();
-    const fetched = mock.method(globalThis, 'fetch', async () => Response.json({ data: { issues: { nodes: [] } } }));
+    const fetched = mockMethod(globalThis, 'fetch', async () => Response.json({ data: { issues: { nodes: [] } } }));
     try {
       await adminNotes(on, ana.token);
       await adminNotes(on, ana.token, '?q=Linear&place=fruitback');
-      assert.equal(fetched.mock.callCount(), 0);
+      assert.equal(fetched.mock.calls.length, 0);
 
       const store = createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_gamma', projectId: undefined });
       // The answer of the stub is not one Linear gives: only the call counts here.
@@ -659,9 +660,9 @@ describe('the notes of the instance, for its administrator (FRU-272)', () => {
           locale: 'en',
         })
         .catch(() => []);
-      assert.ok(fetched.mock.callCount() > 0);
+      assert.ok(fetched.mock.calls.length > 0);
     } finally {
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 

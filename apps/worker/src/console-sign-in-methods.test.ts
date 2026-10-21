@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import { describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { handleRequest } from './app.ts';
 import { CONSOLE_URL, MIGRATED_DATABASES, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
 import { GOOGLE, cookieOf, workerOf } from './auth-worker.fixture.ts';
@@ -21,7 +22,7 @@ type Call = Parameters<Worker['call']>[1];
  * with the `fetch` of the process.
  */
 async function withProvider<T>(answers: Record<string, unknown>, work: () => Promise<T>): Promise<T> {
-  const fetched = mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+  const fetched = mockMethod(globalThis, 'fetch', async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const body = answers[`${url.origin}${url.pathname}`];
     if (body === undefined) throw new Error(`a test called ${url.origin}${url.pathname}`);
@@ -31,7 +32,7 @@ async function withProvider<T>(answers: Record<string, unknown>, work: () => Pro
   try {
     return await work();
   } finally {
-    fetched.mock.restore();
+    fetched.mockRestore();
   }
 }
 
@@ -116,7 +117,7 @@ async function providersOf(database: PgDatabase, user: string): Promise<string[]
 }
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the ways a person signs in, on ${label} (FRU-249)`, { skip }, () => {
+  describe(`the ways a person signs in, on ${label} (FRU-249)`, { skip: skip !== false }, () => {
     async function signedIn(email = 'alice@acme.dev') {
       const worker = await workerOf(await opening(open));
       const cookie = await worker.signIn(email);

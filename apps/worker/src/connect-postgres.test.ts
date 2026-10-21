@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import {
   type Cases,
   type Subject,
@@ -339,7 +339,7 @@ describe('two claims of one request at the same moment, on two connections (FRU-
 
   it(
     'fails on a real server with a claim that is read apart from the statement that spends it',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       const outcome = await outcomeOf(createRealDatabase);
       assert.ok(
@@ -358,7 +358,7 @@ for (const { label, open, skip } of [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const) {
-  describe(`the migration of the requests, on ${label} (FRU-238)`, { skip }, () => {
+  describe(`the migration of the requests, on ${label} (FRU-238)`, { skip: skip !== false }, () => {
     it('applies on a database with live sessions, which go on as sessions of their workspace', async () => {
       const database = await open();
       try {
@@ -402,7 +402,7 @@ for (const { label, open, skip } of [
  * and a request made on one is answered and claimed on the other. The pace of the claims is shared:
  * the `Kv` is in the database.
  */
-describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES }, () => {
+describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES !== false }, () => {
   it('makes a request on one replica, answers it on the other, and gives one session to claims on both', async () => {
     const own = await ownDatabase();
     const pools = [createPgDatabase(own.url, 'public'), createPgDatabase(own.url, 'public')];
@@ -507,7 +507,7 @@ describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES }, (
  */
 describe(
   'a browser ended while its extension refreshes, on two connections (FRU-238)',
-  { skip: NO_REAL_POSTGRES },
+  { skip: NO_REAL_POSTGRES !== false },
   () => {
     async function endsTheSuccessor(create: (database: Database) => ConnectStore): Promise<string | undefined> {
       const database = await createRealDatabase();

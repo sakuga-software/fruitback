@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore, Site } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';

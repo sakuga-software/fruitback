@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { type ChildProcess, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
@@ -125,7 +125,7 @@ function freePort(): Promise<number> {
 
 describe('the worker of development, as a process (FRU-223)', () => {
   const started: ChildProcess[] = [];
-  after(() => {
+  afterAll(() => {
     for (const child of started) child.kill();
   });
 

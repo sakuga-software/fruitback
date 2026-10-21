@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { DrizzleQueryError, type SQL, eq, sql } from 'drizzle-orm';
@@ -46,7 +46,7 @@ const SECOND: Entry = {
 
 const folders: string[] = [];
 
-after(() => {
+afterAll(() => {
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
@@ -240,7 +240,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
    * statement for a schema that is there (FRU-219): a role that can create in the schema is enough,
    * as it was for the tool of before.
    */
-  describe('a role that cannot create in its database', { skip: NO_REAL_POSTGRES }, () => {
+  describe('a role that cannot create in its database', { skip: NO_REAL_POSTGRES !== false }, () => {
     /** A database of its own, and a role that can make tables in `public` and nothing in the database. */
     async function withALesserRole(use: (database: Database) => Promise<void>): Promise<void> {
       const own = await ownDatabase();
@@ -346,7 +346,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
    * and the worker refused one that put another schema first. The worker now sets the search path of
    * each connection itself (FRU-219): the one of somebody else has no effect.
    */
-  describe('an address whose search path puts another schema first', { skip: NO_REAL_POSTGRES }, () => {
+  describe('an address whose search path puts another schema first', { skip: NO_REAL_POSTGRES !== false }, () => {
     /** A database of its own, with a schema `other`, and an address whose search path starts with it. */
     async function withAnotherSchemaFirst(use: (database: Database, address: string) => Promise<void>): Promise<void> {
       const own = await ownDatabase();
@@ -396,7 +396,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
    * replicas are. `pg_sleep` holds the first migration open long enough for the second process to
    * reach it: 1.5 s, because the two processes do not start at the same instant on a busy machine.
    */
-  describe('two processes that start together', { skip: NO_REAL_POSTGRES }, () => {
+  describe('two processes that start together', { skip: NO_REAL_POSTGRES !== false }, () => {
     const SLOW: Entry = {
       tag: '0000_slow',
       when: 1_000,
@@ -500,7 +500,7 @@ function behindAPoolerInTransactionMode(database: PgDatabase, route: (statement:
 
 describe(
   'a pooler in transaction mode, which loses the lock of the migrations (FRU-335)',
-  { skip: NO_REAL_POSTGRES },
+  { skip: NO_REAL_POSTGRES !== false },
   () => {
     const SAYS_THE_POOLER = /a connection pooler in transaction mode \(PgBouncer with pool_mode = transaction\)/;
     const SENDS_TO_THE_DOC = /docs\/self-hosting\.md, « Behind a connection pooler »/;
@@ -769,7 +769,7 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
 
   it(
     'answers a statement that the data refuses as an error with its code, not as an outage, and without its values',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       const database = await createRealDatabase();
       try {
@@ -815,24 +815,30 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
     });
   });
 
-  it('answers a BIGINT of the schema as a number, on the driver that ships', { skip: NO_REAL_POSTGRES }, async () => {
-    const database = await createRealDatabase();
-    try {
-      await migrated(database);
-      const instant = 1_760_000_000_000;
-      await database.run((db) =>
-        db.insert(pairings).values({ code_hash: 'digest', subject: 'acc_1', created_at: instant, expires_at: instant }),
-      );
+  it(
+    'answers a BIGINT of the schema as a number, on the driver that ships',
+    { skip: NO_REAL_POSTGRES !== false },
+    async () => {
+      const database = await createRealDatabase();
+      try {
+        await migrated(database);
+        const instant = 1_760_000_000_000;
+        await database.run((db) =>
+          db
+            .insert(pairings)
+            .values({ code_hash: 'digest', subject: 'acc_1', created_at: instant, expires_at: instant }),
+        );
 
-      const rows = await database.run((db) =>
-        db.select({ created_at: pairings.created_at }).from(pairings).where(eq(pairings.code_hash, 'digest')),
-      );
+        const rows = await database.run((db) =>
+          db.select({ created_at: pairings.created_at }).from(pairings).where(eq(pairings.code_hash, 'digest')),
+        );
 
-      assert.deepEqual(rows, [{ created_at: instant }]);
-    } finally {
-      await database.close();
-    }
-  });
+        assert.deepEqual(rows, [{ created_at: instant }]);
+      } finally {
+        await database.close();
+      }
+    },
+  );
 });
 
 /**
@@ -844,11 +850,11 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
  * The database of a case is dropped when its connections have ended, not while they end (FRU-196).
  *
  * A pool of `pg` with no listener, as `postgres-numbers.test.ts` makes one: an error on one of its
- * connections is an unhandled error of the process, and `node:test` gives it to the test that runs.
+ * connections is an unhandled error of the process, and vitest fails the run on it.
  * Here the pool has a listener that counts. Eight connections, so that one at least is still on the
  * server when `end()` answers.
  */
-describe('the database of a case, when it is dropped (FRU-196)', { skip: NO_REAL_POSTGRES }, () => {
+describe('the database of a case, when it is dropped (FRU-196)', { skip: NO_REAL_POSTGRES !== false }, () => {
   /** How many connections of a pool that has ended read an error, when its database is dropped. */
   async function errorsOfAnEndedPool(how: 'drop' | 'dropAtOnce'): Promise<number> {
     const own = await ownDatabase();

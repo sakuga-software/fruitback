@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { GOOGLE, envWith } from './auth-worker.fixture.ts';
 import { REQUIRED_WITH_DATABASE, type WorkerEnv, readConfig } from './env.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';

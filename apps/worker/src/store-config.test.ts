@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { envWith } from './auth-worker.fixture.ts';
 import { REFUSED_SINCE_POSTGRES, readConfig, type WorkerEnv } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason, storeProviderFor } from './store-config.ts';

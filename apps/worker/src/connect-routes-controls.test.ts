@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import type { Account, AccountStore } from './accounts.ts';
 import { mutatedModule } from './conformance.fixture.ts';
 import type { ConnectStore } from './connect.ts';

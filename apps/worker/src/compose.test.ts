@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_PORT, DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';

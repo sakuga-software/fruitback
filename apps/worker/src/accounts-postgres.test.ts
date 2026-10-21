@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
@@ -267,7 +267,7 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
     assert.equal(await outcomeOf(CASE, WITHOUT_CONFLICT, HELD, createPgliteDatabase), 'passed');
   });
 
-  it('fails on a real server when the insert names no conflict', { skip: NO_REAL_POSTGRES }, async () => {
+  it('fails on a real server when the insert names no conflict', { skip: NO_REAL_POSTGRES !== false }, async () => {
     const outcome = await outcomeOf(CASE, WITHOUT_CONFLICT, HELD, createRealDatabase);
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
@@ -290,7 +290,7 @@ describe('two lists of destinations for one site, on two connections (FRU-141)',
     assert.equal(await outcomeOf(CASE, WITHOUT_LOCK, HELD, createPgliteDatabase), 'passed');
   });
 
-  it('fails on a real server with no lock on the site', { skip: NO_REAL_POSTGRES }, async () => {
+  it('fails on a real server with no lock on the site', { skip: NO_REAL_POSTGRES !== false }, async () => {
     const outcome = await outcomeOf(CASE, WITHOUT_LOCK, HELD, createRealDatabase);
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');

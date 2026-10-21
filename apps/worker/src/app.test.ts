@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { SEED_STAGES, type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
@@ -76,7 +77,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 describe('POST /feedback', () => {
@@ -707,7 +708,7 @@ describe('the Kv the transport hands over (FRU-49)', () => {
 
   it('refuses a metered call with 503 when the Kv does not answer, and keeps its CORS headers', async () => {
     const stub = installLinearStub();
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
 
     const response = await post(seedFixture(), { kv: unreachableKv() });
 
@@ -730,7 +731,7 @@ describe('the Kv the transport hands over (FRU-49)', () => {
   it('answers 201 when the write lands and the cache cannot be told', async () => {
     // A 502 tells the widget to retry, and the retry would plant the same note twice.
     installLinearStub();
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
     const kv = createMemoryKv();
     const refusingWrites: Kv = {
       ...kv,

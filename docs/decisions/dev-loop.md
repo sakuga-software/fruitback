@@ -78,9 +78,9 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
     guard tests read the documents, the workflows and the specs.
 - **`pre-push` runs two test files at a time.** It sets `FRUITBACK_TEST_CONCURRENCY` to 2 when the
   variable is not already set. The `test` script of each package passes it to `node --test` as
-  `--test-concurrency`, before the files. CI does not set it, so there `node --test` uses every core
-  but one. `githooks.test.ts` fails on a package that does not pass it, and on a workflow that
-  sets it.
+  `--test-concurrency`, before the files; the `vitest.config.ts` of the worker gives it to
+  `maxWorkers`. CI does not set it, so there both use every core but one. `githooks.test.ts` fails
+  on a package that does not pass it, and on a workflow that sets it.
 - **`pre-push` starts Nx, and so every test, without the variables of git that name a repository.**
   Git gives a hook `GIT_DIR`. With it, a `git` that a test starts in a temporary directory works on
   the repository that pushes. `githooks.test.ts` runs the function of the hook that removes them.

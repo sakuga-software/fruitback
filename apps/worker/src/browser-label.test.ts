@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { UNKNOWN_BROWSER, browserLabel, everyBrowserLabel } from './browser-label.ts';
 
 /** User agents as the browsers send them (2026). Each one names its family and its system once. */

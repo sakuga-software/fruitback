@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { REPLY_LENGTH } from './app.ts';
 import { REPLY_LIMIT } from './rate-limit.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
@@ -30,7 +30,7 @@ const memberOf = (id: string, workspace: string, account: string, role: string) 
   `INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('${id}', '${workspace}', '${account}', '${role}', now())`;
 
 for (const { label, open, skip } of DATABASES) {
-  describe(`a workspace keeps an owner, on ${label} (FRU-324)`, { skip }, () => {
+  describe(`a workspace keeps an owner, on ${label} (FRU-324)`, { skip: skip !== false }, () => {
     async function acme(database: PgDatabase) {
       const accounts = createPostgresAccountStore(database);
       const ana = await accounts.signIn({ provider: 'email', subject: 'ana@acme.dev', email: 'ana@acme.dev' });
@@ -91,7 +91,7 @@ for (const { label, open, skip } of DATABASES) {
  */
 describe(
   'a route of the organization plugin while the administrator deletes an owner, on a real server (FRU-324)',
-  { skip: NO_REAL_POSTGRES },
+  { skip: NO_REAL_POSTGRES !== false },
   () => {
     /** What the route does: take Bob away, or (`remove-the-deleted`) Bob removes Ana. */
     type Ask = 'remove-member' | 'update-member-role' | 'leave' | 'remove-the-deleted';

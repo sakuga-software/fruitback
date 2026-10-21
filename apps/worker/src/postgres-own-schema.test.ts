@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it, onTestFinished } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { sql } from 'drizzle-orm';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -96,7 +97,7 @@ for (const { label, open, skip } of [
   { label: 'PGlite', open: () => createPgliteDatabase(SCHEMA), skip: false as string | false },
   { label: 'a real server', open: () => createRealDatabase(SCHEMA), skip: NO_REAL_POSTGRES },
 ]) {
-  describe(`a worker in a schema of its own, on ${label} (FRU-219)`, { skip }, () => {
+  describe(`a worker in a schema of its own, on ${label} (FRU-219)`, { skip: skip !== false }, () => {
     it('signs a person in and keeps a note, in its schema, and changes no table and no row of public', async () => {
       const database = await opening(open);
       await anotherApplicationIn(database);
@@ -178,26 +179,30 @@ describe('a database of today, with no schema named (FRU-219)', () => {
     { label: 'PGlite', open: () => createPgliteDatabase(), skip: false as string | false },
     { label: 'a real server', open: () => createRealDatabase(), skip: NO_REAL_POSTGRES },
   ]) {
-    it(`starts with nothing run again, when Drizzle itself made it in public, on ${label}`, { skip }, async () => {
-      const database = await opening(open);
-      // As every image did until this one: `migrate` of Drizzle, in `public`.
-      await database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED }));
-      const accounts = createPostgresAccountStore(database);
-      await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-      const journal = () =>
-        rowsOf(database, `SELECT id, hash, created_at FROM public."${APPLIED.migrationsTable}" ORDER BY id`);
-      const before = { journal: await journal(), tables: await whatIsIn(database, 'public') };
-      assert.ok(before.journal.length >= 6);
+    it(
+      `starts with nothing run again, when Drizzle itself made it in public, on ${label}`,
+      { skip: skip !== false },
+      async () => {
+        const database = await opening(open);
+        // As every image did until this one: `migrate` of Drizzle, in `public`.
+        await database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED }));
+        const accounts = createPostgresAccountStore(database);
+        await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+        const journal = () =>
+          rowsOf(database, `SELECT id, hash, created_at FROM public."${APPLIED.migrationsTable}" ORDER BY id`);
+        const before = { journal: await journal(), tables: await whatIsIn(database, 'public') };
+        assert.ok(before.journal.length >= 6);
 
-      await migrate(database);
+        await migrate(database);
 
-      assert.deepEqual({ journal: await journal(), tables: await whatIsIn(database, 'public') }, before);
-      assert.equal(database.schema, 'public');
-    });
+        assert.deepEqual({ journal: await journal(), tables: await whatIsIn(database, 'public') }, before);
+        assert.equal(database.schema, 'public');
+      },
+    );
   }
 });
 
-describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
+describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL_POSTGRES !== false }, () => {
   /** One database, a pool in `tenant_a` and one in `tenant_b`. */
   async function twoWorkers(use: (a: PgDatabase, b: PgDatabase, admin: PgDatabase) => Promise<void>): Promise<void> {
     const own = await ownDatabase();
@@ -283,7 +288,7 @@ describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL
   });
 });
 
-describe('a connection that does not take its schema (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
+describe('a connection that does not take its schema (FRU-219)', { skip: NO_REAL_POSTGRES !== false }, () => {
   // Raised in review. The statement that fails here does not end the session, as a `SET` that a
   // time limit or a cancel stops would not: the server stays ready, and takes the next statement.
   it('serves no statement at all: the one of the caller is refused, and never reaches the server', async () => {
@@ -303,51 +308,55 @@ describe('a connection that does not take its schema (FRU-219)', { skip: NO_REAL
   });
 });
 
-describe('a database that the tool of before left in another schema (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
-  // Raised in review. That tool followed the search path of the address. FRU-181 refused such a path;
-  // the worker sets its own now, and would find `public` empty and make a worker with no account.
-  it('is refused with the schema to name, and nothing is written in the empty one', async () => {
-    const own = await ownDatabase();
-    const before = createPgDatabase(own.url, 'other_tool', { max: 1 });
-    const admin = createPgDatabase(own.url, 'public', { max: 1 });
-    const worker = createPgDatabase(own.url, 'public', { max: 1 });
-    try {
-      await rowsOf(admin, 'CREATE SCHEMA other_tool');
-      await madeByTheHomeMadeTool(before);
+describe(
+  'a database that the tool of before left in another schema (FRU-219)',
+  { skip: NO_REAL_POSTGRES !== false },
+  () => {
+    // Raised in review. That tool followed the search path of the address. FRU-181 refused such a path;
+    // the worker sets its own now, and would find `public` empty and make a worker with no account.
+    it('is refused with the schema to name, and nothing is written in the empty one', async () => {
+      const own = await ownDatabase();
+      const before = createPgDatabase(own.url, 'other_tool', { max: 1 });
+      const admin = createPgDatabase(own.url, 'public', { max: 1 });
+      const worker = createPgDatabase(own.url, 'public', { max: 1 });
+      try {
+        await rowsOf(admin, 'CREATE SCHEMA other_tool');
+        await madeByTheHomeMadeTool(before);
 
-      await assert.rejects(migrate(worker), (error: unknown) => {
-        assert.ok(error instanceof StoreError);
-        assert.match(error.message, /left this database in the schema « other_tool »/);
-        assert.match(error.message, /Set FRUITBACK_DATABASE_SCHEMA=other_tool/);
+        await assert.rejects(migrate(worker), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /left this database in the schema « other_tool »/);
+          assert.match(error.message, /Set FRUITBACK_DATABASE_SCHEMA=other_tool/);
 
-        return true;
-      });
-      assert.deepEqual(await tablesOf(admin, 'public'), []);
+          return true;
+        });
+        assert.deepEqual(await tablesOf(admin, 'public'), []);
 
-      // And named, it is adopted there, as in public.
-      await migrate(before);
-      assert.ok((await tablesOf(admin, 'other_tool')).includes(APPLIED.migrationsTable));
-      // The control: a `schema_migrations` of another application, in another schema, is not one.
-      const third = createPgDatabase(own.url, 'third', { max: 1 });
-      await rowsOf(admin, 'CREATE SCHEMA another_app');
-      await rowsOf(admin, 'CREATE TABLE another_app.schema_migrations (version text PRIMARY KEY)');
-      await rowsOf(admin, `INSERT INTO another_app.schema_migrations VALUES ('20240101')`);
-      await rowsOf(admin, 'CREATE SCHEMA third');
-      // `other_tool` is under Drizzle now, and the third worker starts: neither is in its way.
-      await migrate(third);
-      assert.ok((await tablesOf(admin, 'third')).includes(APPLIED.migrationsTable));
-      await third.close();
-    } finally {
-      await worker.close();
-      await before.close();
-      await admin.close();
-      await own.drop();
-    }
-  });
-});
+        // And named, it is adopted there, as in public.
+        await migrate(before);
+        assert.ok((await tablesOf(admin, 'other_tool')).includes(APPLIED.migrationsTable));
+        // The control: a `schema_migrations` of another application, in another schema, is not one.
+        const third = createPgDatabase(own.url, 'third', { max: 1 });
+        await rowsOf(admin, 'CREATE SCHEMA another_app');
+        await rowsOf(admin, 'CREATE TABLE another_app.schema_migrations (version text PRIMARY KEY)');
+        await rowsOf(admin, `INSERT INTO another_app.schema_migrations VALUES ('20240101')`);
+        await rowsOf(admin, 'CREATE SCHEMA third');
+        // `other_tool` is under Drizzle now, and the third worker starts: neither is in its way.
+        await migrate(third);
+        assert.ok((await tablesOf(admin, 'third')).includes(APPLIED.migrationsTable));
+        await third.close();
+      } finally {
+        await worker.close();
+        await before.close();
+        await admin.close();
+        await own.drop();
+      }
+    });
+  },
+);
 
-describe('a role that may still use public, beside its schema (FRU-266)', { skip: NO_REAL_POSTGRES }, () => {
-  it('is said once in the log, and not refused; nothing is said once it may not, nor for a worker in public', async (t) => {
+describe('a role that may still use public, beside its schema (FRU-266)', { skip: NO_REAL_POSTGRES !== false }, () => {
+  it('is said once in the log, and not refused; nothing is said once it may not, nor for a worker in public', async () => {
     const own = await ownDatabase();
     const admin = createPgDatabase(own.url, 'public', { max: 1 });
     const role = `w_${new URL(own.url).pathname.slice(1)}`;
@@ -355,7 +364,8 @@ describe('a role that may still use public, beside its schema (FRU-266)', { skip
     lesser.username = role;
     lesser.password = 'not-a-secret-of-a-test';
     const said: string[] = [];
-    t.mock.method(console, 'warn', (line: unknown) => void said.push(String(line)));
+    const warned = mockMethod(console, 'warn', (line: unknown) => void said.push(String(line)));
+    onTestFinished(() => warned.mockRestore());
     const migrateAs = async (schema: string): Promise<void> => {
       const database = createPgDatabase(lesser.href, schema, { max: 1 });
       try {
@@ -406,7 +416,7 @@ describe('a role that may still use public, beside its schema (FRU-266)', { skip
   });
 });
 
-describe('a role that has its schema and nothing else (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
+describe('a role that has its schema and nothing else (FRU-219)', { skip: NO_REAL_POSTGRES !== false }, () => {
   it('is enough: no right on public, none on the database, and the worker signs a person in', async () => {
     const own = await ownDatabase();
     const admin = createPgDatabase(own.url, 'public', { max: 1 });
@@ -536,7 +546,7 @@ describe('the name of the schema (FRU-219)', () => {
 
   it(
     'refuses every word that this PostgreSQL prints between quotes, and no other word',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       const database = await createRealDatabase();
       try {

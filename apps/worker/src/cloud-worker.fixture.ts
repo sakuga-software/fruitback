@@ -20,7 +20,7 @@ import { createPostgresConnectStore, createPostgresSessionStore } from './sessio
  * `CLOUD_WORKER` as JSON): Playwright compiles a spec as CommonJS and cannot import the worker, which
  * is ES modules. The spec starts this file, and hands it each request the console sends to the
  * address of the worker. `/__test/sent` and `/__test/received` answer what a test reads: the mail,
- * and the requests. It imports nothing of `node:test`.
+ * and the requests. It imports nothing of vitest.
  */
 export async function cloudWorker(options: {
   consoleUrl: string;

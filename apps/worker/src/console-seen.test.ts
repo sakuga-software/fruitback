@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import type { AccountStore } from './accounts.ts';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
@@ -185,58 +185,67 @@ const { opening } = databasesOfACase();
 const FIREFOX_ON_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0';
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the short label of the browser of a session of the console, on ${label} (FRU-249)`, { skip }, () => {
-    /** A link asked for and spent by a browser that says who it is. */
-    async function signInWith(worker: Awaited<ReturnType<typeof workerOf>>, userAgent: string): Promise<string> {
-      const headers = { 'User-Agent': userAgent };
-      assert.equal(
-        (await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' }, headers })).status,
-        202,
-      );
-      const answer = await worker.call('/console/auth/email/redeem', { body: { token: worker.lastToken() }, headers });
-      assert.equal(answer.status, 200);
+  describe(
+    `the short label of the browser of a session of the console, on ${label} (FRU-249)`,
+    { skip: skip !== false },
+    () => {
+      /** A link asked for and spent by a browser that says who it is. */
+      async function signInWith(worker: Awaited<ReturnType<typeof workerOf>>, userAgent: string): Promise<string> {
+        const headers = { 'User-Agent': userAgent };
+        assert.equal(
+          (await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' }, headers })).status,
+          202,
+        );
+        const answer = await worker.call('/console/auth/email/redeem', {
+          body: { token: worker.lastToken() },
+          headers,
+        });
+        assert.equal(answer.status, 200);
 
-      return answer.headers
-        .getSetCookie()
-        .map((each) => each.split(';')[0])
-        .join('; ');
-    }
+        return answer.headers
+          .getSetCookie()
+          .map((each) => each.split(';')[0])
+          .join('; ');
+      }
 
-    it('keeps « Firefox on Linux », and not the user agent, and lists it with the session', async () => {
-      const worker = await workerOf(await opening(open));
-      const cookie = await signInWith(worker, FIREFOX_ON_LINUX);
+      it('keeps « Firefox on Linux », and not the user agent, and lists it with the session', async () => {
+        const worker = await workerOf(await opening(open));
+        const cookie = await signInWith(worker, FIREFOX_ON_LINUX);
 
-      assert.deepEqual(await rowsOf(worker.database, 'SELECT browser, "userAgent", "ipAddress" FROM "session"'), [
-        { browser: 'Firefox on Linux', userAgent: null, ipAddress: null },
-      ]);
-      const listed = await worker.call('/console/sessions', { headers: { Cookie: cookie } });
-      const { sessions } = (await listed.json()) as { sessions: Record<string, unknown>[] };
-      assert.equal(sessions.length, 1);
-      assert.equal(sessions[0]?.browser, 'Firefox on Linux');
-      assert.equal('userAgent' in (sessions[0] ?? {}), false);
-    });
+        assert.deepEqual(await rowsOf(worker.database, 'SELECT browser, "userAgent", "ipAddress" FROM "session"'), [
+          { browser: 'Firefox on Linux', userAgent: null, ipAddress: null },
+        ]);
+        const listed = await worker.call('/console/sessions', { headers: { Cookie: cookie } });
+        const { sessions } = (await listed.json()) as { sessions: Record<string, unknown>[] };
+        assert.equal(sessions.length, 1);
+        assert.equal(sessions[0]?.browser, 'Firefox on Linux');
+        assert.equal('userAgent' in (sessions[0] ?? {}), false);
+      });
 
-    it('keeps the label beside the user agent when the operator keeps addresses', async () => {
-      const worker = await workerOf(await opening(open), { trackIp: true });
-      await signInWith(worker, FIREFOX_ON_LINUX);
+      it('keeps the label beside the user agent when the operator keeps addresses', async () => {
+        const worker = await workerOf(await opening(open), { trackIp: true });
+        await signInWith(worker, FIREFOX_ON_LINUX);
 
-      assert.deepEqual(await rowsOf(worker.database, 'SELECT browser, "userAgent" FROM "session"'), [
-        { browser: 'Firefox on Linux', userAgent: FIREFOX_ON_LINUX },
-      ]);
-    });
+        assert.deepEqual(await rowsOf(worker.database, 'SELECT browser, "userAgent" FROM "session"'), [
+          { browser: 'Firefox on Linux', userAgent: FIREFOX_ON_LINUX },
+        ]);
+      });
 
-    it('says « A browser » for a session opened before the label, or by a client it does not know', async () => {
-      const worker = await workerOf(await opening(open));
-      const cookie = await signInWith(worker, 'curl/8.7.1');
-      assert.deepEqual(await rowsOf(worker.database, 'SELECT browser FROM "session"'), [{ browser: 'A browser' }]);
+      it('says « A browser » for a session opened before the label, or by a client it does not know', async () => {
+        const worker = await workerOf(await opening(open));
+        const cookie = await signInWith(worker, 'curl/8.7.1');
+        assert.deepEqual(await rowsOf(worker.database, 'SELECT browser FROM "session"'), [{ browser: 'A browser' }]);
 
-      await rowsOf(worker.database, 'UPDATE "session" SET browser = NULL');
-      const { sessions } = (await (await worker.call('/console/sessions', { headers: { Cookie: cookie } })).json()) as {
-        sessions: { browser?: string }[];
-      };
-      assert.equal(sessions[0]?.browser, 'A browser');
-    });
-  });
+        await rowsOf(worker.database, 'UPDATE "session" SET browser = NULL');
+        const { sessions } = (await (
+          await worker.call('/console/sessions', { headers: { Cookie: cookie } })
+        ).json()) as {
+          sessions: { browser?: string }[];
+        };
+        assert.equal(sessions[0]?.browser, 'A browser');
+      });
+    },
+  );
 }
 
 /** An extension that the person of `token` paired for `workspace`, through the console: its tokens. */

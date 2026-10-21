@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { IDENTITY_SECRET, envWith as workerEnv } from './auth-worker.fixture.ts';
@@ -14,7 +15,7 @@ const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
 const opened = worlds();
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 function envWith(overrides: Partial<WorkerEnv> = {}): Promise<World> {
@@ -28,7 +29,7 @@ function envWith(overrides: Partial<WorkerEnv> = {}): Promise<World> {
 function fakeLinear(keys: string[] = [LINEAR_KEY]) {
   const issues: { teamId: string; projectId?: string; description: string; id: string }[] = [];
   const asked: string[] = [];
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
     asked.push(init.headers.Authorization ?? '');
     if (!keys.includes(init.headers.Authorization ?? ''))
       return Response.json({ errors: [{ message: 'no' }] }, { status: 401 });
@@ -191,15 +192,15 @@ describe('a workspace connects Linear (FRU-121)', () => {
     const world = await acme(env);
     const body = { kind: 'linear', apiKey: LINEAR_KEY };
 
-    mock.method(globalThis, 'fetch', async () => new Response('bad gateway', { status: 502 }));
+    mockMethod(globalThis, 'fetch', async () => new Response('bad gateway', { status: 502 }));
     const down = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
-    mock.restoreAll();
-    mock.method(globalThis, 'fetch', async () => {
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async () => {
       throw new TypeError('fetch failed');
     });
     const unreachable = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
-    mock.restoreAll();
-    mock.method(globalThis, 'fetch', async () =>
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async () =>
       Response.json(
         { errors: [{ message: 'Authentication required', extensions: { code: 'AUTHENTICATION_ERROR' } }] },
         { status: 400 },
@@ -207,10 +208,8 @@ describe('a workspace connects Linear (FRU-121)', () => {
     );
     const refused = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
 
-    mock.restoreAll();
-    mock.method(globalThis, 'fetch', async () =>
-      Response.json({ errors: [{ message: 'Forbidden' }] }, { status: 403 }),
-    );
+    vi.restoreAllMocks();
+    mockMethod(globalThis, 'fetch', async () => Response.json({ errors: [{ message: 'Forbidden' }] }, { status: 403 }));
     const forbidden = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
     assert.deepEqual(
       await forbidden.json(),

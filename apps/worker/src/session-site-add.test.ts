@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { CONSOLE, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, digest, mintAccessToken, redeemPairing } from './session.ts';

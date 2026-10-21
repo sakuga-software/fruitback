@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { handleRequest, kvFor } from './app.ts';
 import { KvError, processKv } from './kv.ts';
 import { KV_TABLE, createPostgresKv } from './kv-postgres.ts';
@@ -40,7 +40,7 @@ function watched(database: Database): { database: Database; answers: Record<stri
   };
 }
 
-describe('two replicas that count at once, on a real server (FRU-67)', { skip: NO_REAL_POSTGRES }, () => {
+describe('two replicas that count at once, on a real server (FRU-67)', { skip: NO_REAL_POSTGRES !== false }, () => {
   /** Two pools of one connection each, on one database: two replicas, as far as the server can tell. */
   async function twoReplicas() {
     const own = await ownDatabase();
@@ -120,7 +120,7 @@ describe('two replicas that count at once, on a real server (FRU-67)', { skip: N
 
 describe(
   'a write of the Kv that does not wait for the disk, on a real server (FRU-67)',
-  { skip: NO_REAL_POSTGRES },
+  { skip: NO_REAL_POSTGRES !== false },
   () => {
     // `public`, and a schema of its own (FRU-219): the Kv writes in the schema of its worker, and its
     // `SET LOCAL` leaves the search path that the pool set as it was.

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
@@ -15,7 +15,7 @@ import { migrate } from './postgres-migrate.ts';
 const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of DATABASES) {
-  describe(`the column of the verdict of a note, on ${label} (FRU-295)`, { skip }, () => {
+  describe(`the column of the verdict of a note, on ${label} (FRU-295)`, { skip: skip !== false }, () => {
     it('keeps every row of the index, and counts no note of before until a read says a verdict can be given', async () => {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0018_workspace_suspensions'));
