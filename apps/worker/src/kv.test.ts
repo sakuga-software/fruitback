@@ -149,6 +149,16 @@ function contract(name: string, connect: () => Kv, more: { skip?: string | false
       await assert.rejects(kv.incr(k, 10_000), KvError);
     });
 
+    it('refuses a count that would pass 2^53 from the last safe one, and keeps the stored count', async () => {
+      // The stored value is safe here: only the sum is not.
+      const kv = open();
+      const k = key();
+
+      await kv.set(k, '9007199254740991', 10_000);
+      await assert.rejects(kv.incr(k, 10_000), KvError);
+      assert.equal(await kv.get(k), '9007199254740991');
+    });
+
     it('refuses a stored count below -2^53 rather than round it', async () => {
       // `Number()` reads -(2^53 + 1) as -2^53, and adding one gives a safe integer one too high.
       // Raised in review.
@@ -253,6 +263,30 @@ describe('the memory Kv, bounded', () => {
 
     clock = 500;
     assert.equal(await kv.get('short'), undefined);
+
+    assert.equal(kv.size(), 1);
+  });
+
+  it('reads an entry as expired at the instant of its expiry, not one millisecond later', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    // The first call sweeps, at 0: the next sweep is due at 1 000, so only the read can drop it.
+    await kv.set('short', 'answer', 10);
+
+    clock = 9;
+    assert.equal(await kv.get('short'), 'answer');
+    clock = 10;
+    assert.equal(await kv.get('short'), undefined);
+  });
+
+  it('sweeps an entry that expires at the instant of the sweep', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    await kv.set('short', 'answer', 1_000);
+    await kv.set('long', 'answer', 600_000);
+
+    clock = 1_000;
+    await kv.get('long');
 
     assert.equal(kv.size(), 1);
   });

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
-import { originsFromClients, readClientMap, resolveClient } from './clients.ts';
+import { originsFromClients, readClientMap, resolveClient, unreadableClients, workspacesOf } from './clients.ts';
 
 // A `ClientPolicy` since FRU-29: `teamId` and `projectId` moved to the Linear connector, which is
 // where a team means something. `linear.test.ts` covers their fallback now.
@@ -188,6 +188,10 @@ describe('originsFromClients', () => {
     assert.deepEqual(originsFromClients(clients), ['https://one.test', 'https://two.test']);
   });
 
+  it('adds nothing for a client with no origins', () => {
+    assert.deepEqual(originsFromClients({ a: {}, b: { origins: ['https://one.test'] } }), ['https://one.test']);
+  });
+
   it('is empty on a single-client worker', () => {
     assert.deepEqual(originsFromClients(undefined), []);
   });
@@ -231,5 +235,58 @@ describe('the identity secret is never inherited', () => {
 
     assert.ok(resolved.ok);
     assert.equal(resolved.policy.identitySecret, 'the-worker-wide-secret-long-enough');
+  });
+});
+
+describe('unreadableClients', () => {
+  const SECRET = 's'.repeat(32);
+
+  it('names the single client when it is read with a token and nothing can sign one', () => {
+    assert.deepEqual(unreadableClients({ read: 'authenticated', clients: undefined, identitySecret: undefined }), [
+      '<single client>',
+    ]);
+    assert.deepEqual(unreadableClients({ read: 'authenticated', clients: undefined, identitySecret: SECRET }), []);
+    assert.deepEqual(unreadableClients({ read: 'public', clients: undefined, identitySecret: undefined }), []);
+  });
+
+  it('names each mapped client read with a token and with no key of its own, its own read first', () => {
+    const clients = {
+      inherits: {},
+      closed: { read: 'authenticated' },
+      open: { read: 'public' },
+      keyed: { read: 'authenticated', identitySecret: SECRET },
+    } as const;
+
+    assert.deepEqual(unreadableClients({ read: 'authenticated', clients, identitySecret: SECRET }), [
+      'inherits',
+      'closed',
+    ]);
+    assert.deepEqual(unreadableClients({ read: 'public', clients, identitySecret: SECRET }), ['closed']);
+  });
+
+  it('reads a client of a workspace with a session token, only on a worker that opens sessions', () => {
+    const clients = { site: { read: 'authenticated', workspace: 'ws_1' }, loose: { read: 'authenticated' } } as const;
+
+    assert.deepEqual(unreadableClients({ read: 'public', clients, identitySecret: SECRET, sessions: true }), ['loose']);
+    // No sessions: said, or left to its default.
+    assert.deepEqual(unreadableClients({ read: 'public', clients, identitySecret: SECRET, sessions: false }), [
+      'site',
+      'loose',
+    ]);
+    assert.deepEqual(unreadableClients({ read: 'public', clients, identitySecret: SECRET }), ['site', 'loose']);
+    // Sessions, but no key on the worker.
+    assert.deepEqual(unreadableClients({ read: 'public', clients, identitySecret: undefined, sessions: true }), [
+      'site',
+      'loose',
+    ]);
+  });
+});
+
+describe('workspacesOf', () => {
+  it('names each workspace of the map once, and none for a client outside one', () => {
+    const clients = { a: { workspace: 'ws_1' }, b: {}, c: { workspace: 'ws_2' }, d: { workspace: 'ws_1' } };
+
+    assert.deepEqual(workspacesOf(clients), ['ws_1', 'ws_2']);
+    assert.deepEqual(workspacesOf(undefined), []);
   });
 });
