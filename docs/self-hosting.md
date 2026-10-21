@@ -550,8 +550,8 @@ that schema alone, so a search path in the address, on the role or on the databa
   **While the role may use `public`, the worker says so in its log** when it migrates, once for each
   start: « the role of FRUITBACK_DATABASE_URL may use the schema « public » … ». It starts all the
   same: a database may be shared on purpose.
-- **A pooler must keep a session.** The search path and the lock of the migrations are the state of
-  a session: PgBouncer in transaction mode loses both, and the worker then refuses to migrate.
+- **A pooler must keep a session**: PgBouncer in session mode, never in transaction mode. See
+  « Behind a connection pooler » below.
 - **Two workers can share one database**, each in its schema: they do not see each other.
 - **Back it up by schema**: `pg_dump -n fruitback`, as `apps/worker/cloud/snapshot-pg.sh` does with
   `PGSCHEMA=fruitback`. A dump of the whole database holds the other application too.
@@ -559,6 +559,86 @@ that schema alone, so a search path in the address, on the role or on the databa
   too: `ALTER TABLE public.<table> SET SCHEMA fruitback` for every table of the worker,
   `__drizzle_migrations` included, and set the variable. The worker does not move a database by
   itself. Not tried here: no worker needs it today.
+
+### Behind a connection pooler (FRU-267)
+
+**In short:**
+
+- **PgBouncer in session mode works**, in `public` and in a schema of its own. Point
+  `FRUITBACK_DATABASE_URL` at the pooler; nothing else changes on the worker.
+- **Transaction mode is not supported.** It passes a quick look with one worker, and fails when two
+  workers start together: a migration runs twice, the lock of the migrations stays held by a
+  connection of the pooler, and requests then wait without an answer. **Use session mode.**
+- **Session mode shares no connection between clients**, so it saves none: each connection of the
+  worker holds one of the server while it is open. A worker opens 10 at most. Give the pool of the
+  pooler 10 for each worker, and more for whatever else uses it.
+- **Keep the reset of PgBouncer** (`server_reset_query`, `DISCARD ALL` by default in session mode). It
+  is what gives the next client a clean connection. Not tried: a pooler with it turned off.
+
+The trial is `apps/worker/pgbouncer/trial.sh`, with its compose file beside it. It starts PostgreSQL 17,
+PgBouncer 1.26.1 in the mode it is given and a worker behind it, plays the path of « The same path
+with no browser » (the first administrator, a workspace, a site, a note, reads), asks the pooler what
+it keeps of a session, starts two workers together on an empty database, and removes everything:
+
+```bash
+docker build -f apps/worker/Dockerfile -t fruitback-worker:local .
+FRUITBACK_IMAGE=fruitback-worker:local apps/worker/pgbouncer/trial.sh session fruitback
+FRUITBACK_IMAGE=fruitback-worker:local apps/worker/pgbouncer/trial.sh transaction fruitback
+```
+
+The pooler of the trial, as `trial.sh` writes it (the password is in `userlist.txt`):
+
+```ini
+[databases]
+fruitback = host=postgres port=5432 dbname=fruitback
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+pool_mode = session
+max_client_conn = 200
+default_pool_size = 40
+```
+
+**Measured on 2026-10-21**, with the image of `main` at `86286cf`, PgBouncer 1.26.1 and PostgreSQL
+17, on a laptop. Each mode was run in `public` and in the schema `fruitback`; the start of two workers
+together was run six times in session mode (three in each schema) and ten times in transaction
+mode (six in `fruitback`, four in `public`).
+
+| What the worker needs                                                                         | Session mode                                       | Transaction mode                                                                                                                                 |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| One worker: start, 21 migrations, the first administrator, a workspace, a site, a note, reads | all answered as without a pooler                   | the same in these runs, where no other client came between two statements of the worker                                                          |
+| The search path of the schema, set on each connection (`SET search_path`)                     | kept, and reset for the next client                | **given to the next client**: a client that set it, then another that asked, read the first one's path                                           |
+| The lock of the migrations (`pg_advisory_lock`, then `pg_advisory_unlock`)                    | held and given back by the same session            | **lost**: with another client in between, the unlock ran on another connection (`you don't own a lock`), and the lock stayed held                |
+| Two workers that start together on an empty database                                          | 6 out of 6: one waited, both started               | 6 out of 6 in a schema: one of the two migrated at the same time and failed; in 5 the lock stayed held, and in 4 a read waited without an answer |
+| The lock of the role of administrator (`pg_advisory_xact_lock`, in a transaction)             | held for the transaction: the second client waited | the same: a transaction keeps its connection                                                                                                     |
+| The rate limit and the cache (`Kv`): `synchronous_commit` set for one statement               | `off` for that statement, `on` after it            | the same                                                                                                                                         |
+| `LISTEN` and `NOTIFY` (the worker uses neither today)                                         | the notification arrived                           | **lost**: the client that listened was on another connection when it came                                                                        |
+
+**What an operator sees in transaction mode.** Nothing at the first start of one worker: `/health`
+answers `200`, and the log says « better-auth is ready ». The failure comes with a second worker, or a
+restart while another request runs. The log of the worker that lost says one of:
+
+```text
+[fruitback] better-auth did not start: PostgreSQL did not answer: schema "fruitback" already exists
+[fruitback] better-auth did not start: PostgreSQL did not answer: relation "connectors" already exists
+[fruitback] better-auth did not start: PostgreSQL refused a statement: duplicate key value violates unique constraint "pg_type_typname_nsp_index"
+```
+
+and, when the lock of the migrations stayed held, a read of that worker answers nothing: it waits on
+the lock (`pg_stat_activity` shows `wait_event` `advisory`), and `/health` stays `200`. The worker does
+not name the pooler: the guard of the search path (« A pooler that shares one session between
+clients loses it ») did not fire in these runs, since every connection of one worker sets the same
+path. To get out of it: put the pooler in session mode, restart PgBouncer (its connections, and the
+lock they hold, end), then the workers.
+
+**In `public`**, transaction mode failed less often in these runs: two workers started 4 times out of
+4, and one read once waited without an answer after both restarted. Not supported either: the lock
+of the migrations is lost the same way.
+
+**Not tried:** another pooler (pgcat, Supavisor, the pooler of a managed database), PgBouncer with
+TLS, statement mode, and a pooler on another host than the database.
 
 ## Back it up
 

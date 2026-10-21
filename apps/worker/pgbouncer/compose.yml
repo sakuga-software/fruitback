@@ -1,0 +1,57 @@
+# A worker behind PgBouncer, to try a pooler before you put one in front of yours (FRU-267).
+# Not for production: `trial.sh` starts it, plays a short path through it, and removes it with its
+# volumes. Its database, its pooler and its worker are of this file alone. docs/self-hosting.md,
+# « Behind a connection pooler », says what was measured with it.
+name: ${TRIAL_PROJECT:-fruitback-pgbouncer-trial}
+services:
+  postgres:
+    # The image of docker-compose.yml.
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: fruitback
+      POSTGRES_DB: fruitback
+      POSTGRES_PASSWORD: ${TRIAL_PASSWORD:?trial.sh sets it}
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'fruitback', '-d', 'fruitback']
+      interval: 2s
+      retries: 30
+
+  # PgBouncer 1.26.1. Its configuration is the file trial.sh writes, with the pool mode it is given.
+  pgbouncer:
+    image: edoburu/pgbouncer@sha256:8638aa563607256d3c7440437534195f1066a92b68015d89ae9d6b935b444a6d
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${TRIAL_DIR:?trial.sh sets it}/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ${TRIAL_DIR}/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-p', '6432', '-U', 'fruitback', '-d', 'fruitback']
+      interval: 2s
+      retries: 30
+
+  worker: &worker
+    image: ${FRUITBACK_IMAGE:-ghcr.io/sakuga-software/fruitback-worker:edge}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:${TRIAL_PORT:-8094}:8080'
+    environment:
+      PORT: 8080
+      ALLOWED_ORIGINS: http://localhost:5500
+      RATE_LIMIT_PER_MINUTE: ${TRIAL_RATE:-1000}
+      # Through the pooler, never to the database directly.
+      FRUITBACK_DATABASE_URL: postgres://fruitback:${TRIAL_PASSWORD}@pgbouncer:6432/fruitback
+      FRUITBACK_DATABASE_SCHEMA: ${TRIAL_SCHEMA:-}
+      FRUITBACK_PUBLIC_URL: http://localhost:${TRIAL_PORT:-8094}
+      FRUITBACK_CONSOLE_URL: http://localhost:8081
+      FRUITBACK_AUTH_SECRET: ${TRIAL_AUTH_SECRET:?trial.sh sets it}
+      FRUITBACK_IDENTITY_SECRET: ${TRIAL_IDENTITY_SECRET:?trial.sh sets it}
+      FRUITBACK_FIRST_ADMIN: ${TRIAL_FIRST_ADMIN:-}
+
+  # A second worker on the same database, for two workers that start together.
+  worker2:
+    <<: *worker
+    profiles: [two]
+    ports: []
