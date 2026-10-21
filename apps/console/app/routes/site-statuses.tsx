@@ -52,6 +52,12 @@ const GITHUB_NAMES: Readonly<Record<string, string>> = {
 };
 
 const NOT_CHANGED = msg('This status did not change. Try again.');
+
+/**
+ * What `writeOne` answers when another write holds the lock: nothing was sent. It is never a success:
+ * an editor stays open with what was typed, and nothing is said as done.
+ */
+const BUSY = Symbol('busy');
 const STATUS_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace sets the statuses of a site.'),
   'too-many-statuses': msg('A site holds {count} statuses at most.'),
@@ -134,8 +140,8 @@ export default function SiteStatuses() {
   // The lock itself, set before the first await: `writing` is state, so two presses in one render both
   // read it as false, and two writes would leave at once (FRU-123, the lite review of pull request 493).
   const busy = useRef(false);
-  const writeOne = useCallback(async <T,>(write: () => Promise<T>): Promise<T | undefined> => {
-    if (busy.current) return undefined;
+  const writeOne = useCallback(async <T,>(write: () => Promise<T>): Promise<T | typeof BUSY> => {
+    if (busy.current) return BUSY;
     busy.current = true;
     setWriting(true);
     try {
@@ -292,7 +298,7 @@ type StatusListProps = {
   path: string;
   writing: boolean;
   /** Runs one write, or nothing while another is running: one write at a time for the whole page. */
-  writeOne: <T>(write: () => Promise<T>) => Promise<T | undefined>;
+  writeOne: <T>(write: () => Promise<T>) => Promise<T | typeof BUSY>;
   onSay: (words: string) => void;
 };
 
@@ -364,6 +370,7 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
   async function reset(status: ScreenStatus) {
     setProblem(undefined);
     const refused = await writeOne(() => save(resetOf(status)));
+    if (refused === BUSY) return;
     if (refused !== undefined) setProblem(refused);
     else onSay(t('{name} is back to what it was.', { name: nameOf(resetOf(status)) }));
     setFocus({ key: status.key, control: 'edit' });
@@ -378,7 +385,7 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
         `${path}/${encodeURIComponent(source)}/${encodeURIComponent(status.key)}${query}`,
       ),
     );
-    if (removed === undefined) return;
+    if (removed === BUSY) return;
     if (!removed.ok && removed.error === 'status-in-use' && removed.notes !== undefined && moveTo === undefined)
       return setOpen({ key: status.key, what: 'move', notes: removed.notes });
     if (!removed.ok)
@@ -469,6 +476,8 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
                   disabled={writing}
                   onSave={async (next) => {
                     const refused = await writeOne(() => save(next));
+                    // Another write held the lock: nothing was sent, and the editor keeps what was typed.
+                    if (refused === BUSY) return NOT_CHANGED;
                     if (refused === undefined) close(status.key, 'edit');
 
                     return refused;
@@ -535,6 +544,7 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
                 ),
               };
               const refused = await writeOne(() => save(status));
+              if (refused === BUSY) return NOT_CHANGED;
               if (refused === undefined) {
                 setAdding(false);
                 setFocus({ key: status.key, control: 'edit' });

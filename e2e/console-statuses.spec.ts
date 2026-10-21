@@ -51,7 +51,13 @@ const ROWS: Row[] = [
 
 const SITE = { id: 's1', origin: 'https://preview.client.fr', visibility: 'members' };
 
-type Worker = { sent: Sent[]; rows: Row[]; deleteAnswer?: (path: string) => { status: number; json: unknown } };
+type Worker = {
+  sent: Sent[];
+  rows: Row[];
+  deleteAnswer?: (path: string) => { status: number; json: unknown };
+  /** Holds the answer to a written status this long, in ms: a write that is still on its way. */
+  slow?: number;
+};
 
 async function workerWith(
   page: Page,
@@ -79,9 +85,13 @@ async function workerWith(
     }
     if (pathname === `${STATUSES}/order`) return route.fulfill({ json: body });
     const kept = body as Row;
-    worker.rows = [...worker.rows.filter((each) => each.key !== kept.key || each.source !== kept.source), kept];
+    const write = () => {
+      worker.rows = [...worker.rows.filter((each) => each.key !== kept.key || each.source !== kept.source), kept];
 
-    return route.fulfill({ json: { status: kept } });
+      return route.fulfill({ json: { status: kept } });
+    };
+
+    return worker.slow === undefined ? write() : new Promise((resolve) => setTimeout(resolve, worker.slow)).then(write);
   };
   await stubWorker(page, {
     locale: options.locale ?? 'en',
@@ -297,6 +307,31 @@ test('two presses in one moment write once: the lock is taken before the first a
   await expect(page.locator('main [aria-live="polite"]')).toHaveText('To do is now 3 of 7.');
   await page.waitForTimeout(300);
   expect(worker.sent.map((each) => each.path)).toEqual([`${STATUSES}/order`]);
+});
+
+test('two presses on « Save » in one moment write once, and the editor closes only on the answer', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.slow = 1500;
+  await open(page);
+
+  await item(page, 'waiting').getByRole('button', { name: 'Edit Waiting for client' }).click();
+  const editor = page.getByRole('region', { name: 'Edit Waiting for client' });
+  await editor.getByRole('textbox', { name: 'Name' }).fill('Waiting for the client');
+  // The second press finds the lock taken: it sends nothing and closes nothing (lite review of PR 493).
+  await editor.getByRole('button', { name: 'Save' }).evaluate((button: HTMLElement) => {
+    button.click();
+    button.click();
+  });
+  // While the first write is on its way, the editor stays, with what was typed.
+  await page.waitForTimeout(500);
+  await expect(editor.getByRole('textbox', { name: 'Name' })).toHaveValue('Waiting for the client');
+  await expect(editor).toHaveCount(1);
+  await expect(editor).toHaveCount(0);
+  await expect(item(page, 'waiting')).toContainText('Waiting for the client');
+  await page.waitForTimeout(300);
+  expect(worker.sent.map((each) => [each.method, (each.body as Row).name])).toEqual([
+    ['POST', 'Waiting for the client'],
+  ]);
 });
 
 test('deletes an empty status after asking twice', async ({ page }) => {
