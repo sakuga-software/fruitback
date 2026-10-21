@@ -1,3 +1,4 @@
+import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'vitest';
@@ -709,6 +710,20 @@ const CONSOLE_WRITES: readonly Write[] = [
     body: () => ({ destinations: [] }),
     status: 200,
   },
+  // FRU-366: the statuses of a site. The status added first is the one ordered, then removed.
+  {
+    method: 'POST',
+    rest: (fx) => `/sites/${fx.site.id}/statuses`,
+    body: () => ({ source: 'own', key: 'waiting', stage: DEFAULT_SEED_STAGE }),
+    status: 200,
+  },
+  {
+    method: 'POST',
+    rest: (fx) => `/sites/${fx.site.id}/statuses/order`,
+    body: () => ({ order: [{ source: 'own', key: 'waiting' }] }),
+    status: 200,
+  },
+  { method: 'DELETE', rest: (fx) => `/sites/${fx.site.id}/statuses/own/waiting`, status: 200 },
   { method: 'POST', rest: () => '/domains', body: () => ({ domain: 'acme.test' }), status: 201 },
   { method: 'DELETE', rest: (fx) => `/domains/${fx.spareDomain}`, status: 204 },
   { method: 'POST', rest: (fx) => `/domains/${fx.domain}/check`, status: 200 },
@@ -765,7 +780,16 @@ function covers(route: string, rest: string): boolean {
 describe('the one guard of the writes of a suspended workspace (FRU-282)', () => {
   it('refuses every write of the console API with 409 and writes nothing, and each one works after the restoration', async () => {
     const fx = await fixtures(await anInstance());
-    const tables = ['sites', 'domains', 'connectors', 'deliveries', 'site_destinations', 'pairings', 'organization'];
+    const tables = [
+      'sites',
+      'domains',
+      'connectors',
+      'deliveries',
+      'site_destinations',
+      'statuses',
+      'pairings',
+      'organization',
+    ];
     const snapshot = async () =>
       Promise.all(
         tables.map(async (table) =>
