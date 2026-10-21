@@ -48,6 +48,7 @@ import {
   domains,
   invitation_sites,
   last_seen,
+  note_index,
   seeds,
   site_destinations,
   site_shares,
@@ -57,6 +58,7 @@ import {
 } from './postgres-schema.ts';
 import { MAX_STATUSES } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
+import { identifierFor } from './seed-rows.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -270,6 +272,30 @@ function siteStatusOf(row: typeof statuses.$inferSelect): SiteStatus {
     origin: row.origin as SiteStatus['origin'],
     hidden: row.hidden,
   };
+}
+
+/**
+ * The stage of notes the worker keeps, in the index of the notes too, in the transaction of `db`
+ * (FRU-366, found in the heavy review of #487). The index learns a stage from a read of a page
+ * (FRU-237): a note that a status moved, on a page nobody opens again, would keep its old stage in
+ * the list and the counts of the console for good. A note of the worker is `FB-<id>` there, with no
+ * connector; `checked_at` is now, since the worker is the store that just set the stage.
+ */
+async function restageIndex(db: Db, site: string, ids: readonly number[], stage: string, now: number): Promise<void> {
+  if (ids.length === 0) return;
+  await db
+    .update(note_index)
+    .set({ stage, checked_at: now })
+    .where(
+      and(
+        eq(note_index.site_id, site),
+        isNull(note_index.connector_id),
+        inArray(
+          note_index.reference,
+          ids.map((id) => identifierFor(id)),
+        ),
+      ),
+    );
 }
 
 /** Thrown inside a transaction to roll it back, and caught by the method that threw it. */
@@ -744,10 +770,19 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         // The notes of a status the team added follow its stage: `statusOf` draws a note by its status
         // only when the two agree, and a note's stage is what every reader without the list draws.
         if (status.source === OWN_SOURCE && !isBuiltIn(status.source, status.key)) {
-          await db
+          const now = Date.now();
+          const moved = await db
             .update(seeds)
-            .set({ stage: status.stage, updated_at: Date.now() })
-            .where(and(eq(seeds.client_id, site), eq(seeds.status_key, status.key), ne(seeds.stage, status.stage)));
+            .set({ stage: status.stage, updated_at: now })
+            .where(and(eq(seeds.client_id, site), eq(seeds.status_key, status.key), ne(seeds.stage, status.stage)))
+            .returning({ id: seeds.id });
+          await restageIndex(
+            db,
+            site,
+            moved.map((row) => row.id),
+            status.stage,
+            now,
+          );
         }
 
         return 'saved';
@@ -810,12 +845,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             const notes = Number(counted?.notes ?? 0);
             if (notes > 0) return { removed: false as const, reason: 'in-use' as const, notes };
           } else {
+            const now = Date.now();
             const changed = await db
               .update(seeds)
-              .set({ status_key: target.key, stage: target.stage, updated_at: Date.now() })
+              .set({ status_key: target.key, stage: target.stage, updated_at: now })
               .where(held)
               .returning({ id: seeds.id });
             moved = changed.length;
+            await restageIndex(
+              db,
+              site,
+              changed.map((row) => row.id),
+              target.stage,
+              now,
+            );
           }
         } else if (moveTo !== undefined) {
           return { removed: false as const, reason: 'invalid-target' as const };

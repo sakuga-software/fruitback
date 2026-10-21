@@ -260,6 +260,10 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   built-in status of its stage, so moving the status would draw that note with another stage.
 - **A status the team added takes its notes with it** when it changes stage, in the same transaction:
   `statusOf` draws a note by its status only when the two agree.
+- **A note that a status moves takes its new stage in the index of the notes too**, in the same
+  transaction (`restageIndex`, found in the heavy review of #487). The index learns a stage from a
+  read of the page (FRU-237), so a note on a page nobody opens again would keep its old stage in the
+  list and the counts of the console.
 - **A source is `own` or a connector the site sends to** (`400 unknown-source`).
 - **`MAX_STATUSES` rows per site** (`409 too-many-statuses`), what a reader keeps of one read.
 - **`moveTo` is a key of the worker's store**: a built-in status (the notes then have no

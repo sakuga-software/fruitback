@@ -183,6 +183,23 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     assert.deepEqual(await rowsOf(team.database, `SELECT key FROM statuses WHERE site_id = '${site}'`), []);
   });
 
+  it('writes the new stage of the notes it moves in the index of the notes, with no read of their page', async () => {
+    // Found in the heavy review of #487: the index learns a stage from a read of the page only.
+    const { team, token, workspace, site } = await acme();
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
+    await plant(team, site, NEW as string, 'waiting', 'seed-1');
+    await read(team, site);
+    const indexed = () => rowsOf(team.database, `SELECT seed_id, stage FROM note_index WHERE site_id = '${site}'`);
+    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: NEW }], 'the read wrote the note in the index');
+
+    await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo=parked'), { token });
+    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: CLOSED }]);
+
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: DONE } });
+    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: DONE }]);
+  });
+
   it('takes the notes of a status the team added to the stage it moves to', async () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
