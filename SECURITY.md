@@ -1909,8 +1909,11 @@ Each one waits in the database of the worker until the tracker has it, and no lo
 - **The worker checks the type against the bytes, and the size.** An image must start as PNG, JPEG,
   WebP or GIF start, a PDF with `%PDF-`, a text must be UTF-8 with no NUL byte; any other file is kept
   and sent as `application/octet-stream`, whatever its sender said. Nothing is decoded. The limits:
-  10 MB for an image, a PDF or another file, 2 MB for a text, 5 files and 25 MB for one note, and
-  50 files or 100 MB in transit for one account (`429 transit-full`). The name is cleaned of its
+  10 MB for an image, a PDF or another file, 2 MB for a text, 5 files and 25 MB for one note, 20
+  files a minute for one session (`429 rate-limited`, whatever its address), and 50 files or 100 MB
+  in transit for one account (`429 transit-full`). The limit of all requests by address
+  (`RATE_LIMIT_PER_MINUTE`) is counted before any of them. A refused file is not kept
+  (`admitFile`, `admitNote` of `attachments.ts`). The name is cleaned of its
   path, its control characters and its quotes, and cut at 120 characters.
 - **How long: until the tracker has it, 7 days at most.** Linear takes the bytes before the issue is
   written (`fileUpload`, then a `PUT` to the address Linear gives, https only), then

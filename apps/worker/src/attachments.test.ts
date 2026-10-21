@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createMemoryKv } from './kv.ts';
 import {
   ATTACHMENT_NAME_LENGTH,
   ATTACHMENT_TRANSIT_DAYS,
@@ -22,9 +23,12 @@ import { createPostgresAttachmentStore } from './attachments-postgres.ts';
 import {
   ATTACHMENTS_PATH,
   type AttachmentStore,
+  MAX_FILES_PER_MINUTE,
   MAX_HELD_BYTES,
   MAX_HELD_FILES,
   type OutgoingFile,
+  admitFile,
+  admitNote,
   SIGNED_URL_MS,
   TRANSIT_MS,
   attachmentIdOf,
@@ -409,6 +413,82 @@ describe('POST /attachments (FRU-331)', () => {
   });
 });
 
+describe('the limits of the files of a person and of a note (FRU-331)', () => {
+  it('stops a session at MAX_FILES_PER_MINUTE files a minute, and not another session', async () => {
+    const env = await envWith();
+    const { acme, alice_token, site, tokenOf } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    for (let n = 0; n < MAX_FILES_PER_MINUTE; n += 1) {
+      assert.equal((await upload(env, { attachments }, site, alice_token)).status, 201, `file ${n + 1}`);
+    }
+    const over = await upload(env, { attachments }, site, alice_token);
+    assert.equal(over.status, 429);
+    assert.deepEqual(await over.json(), { error: 'rate-limited', maxFilesPerMinute: MAX_FILES_PER_MINUTE });
+    assert.equal(attachments.size(), MAX_FILES_PER_MINUTE, 'the refused file is not kept');
+    // The control: another person of the workspace, in the same minute, sends one.
+    const carl = await signInTo(env, 'carl@acme.dev');
+    await memberOf(env, acme.id, carl.id, 'member');
+    assert.equal((await upload(env, { attachments }, site, await tokenOf(carl.id, acme.id))).status, 201);
+  });
+
+  it('stops an address at the limit of all its requests, and not another address', async () => {
+    const env = await envWith({ env: { RATE_LIMIT_PER_MINUTE: '3' } });
+    const { alice_token, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    const from = (ip: string) =>
+      handleRequest(
+        new Request(`${WORKER}${ATTACHMENTS_PATH}?client=${site}&name=a.png`, {
+          method: 'POST',
+          headers: { Origin: EXTENSION, Authorization: `Bearer ${alice_token}`, 'Content-Type': 'image/png' },
+          body: PNG,
+        }),
+        env.env,
+        { ...env.context, attachments, clientIp: ip },
+      );
+    for (let n = 0; n < 3; n += 1) assert.equal((await from('198.18.9.1')).status, 201);
+    const over = await from('198.18.9.1');
+    assert.equal(over.status, 429);
+    assert.deepEqual(await over.json(), { error: 'rate-limited' });
+    // The control: the same person from another address.
+    assert.equal((await from('198.18.9.2')).status, 201);
+  });
+
+  it('takes MAX_ATTACHMENTS_PER_NOTE files in a note, and refuses one more', async () => {
+    const env = await envWith();
+    const { alice_token, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    const ids: string[] = [];
+    for (let n = 0; n <= MAX_ATTACHMENTS_PER_NOTE; n += 1) {
+      ids.push(((await (await upload(env, { attachments }, site, alice_token)).json()) as { id: string }).id);
+    }
+    const over = await post(env, { attachments }, alice_token, noteOf(site), ids);
+    assert.equal(over.status, 400);
+    assert.deepEqual(await over.json(), { error: 'invalid-attachments', max: MAX_ATTACHMENTS_PER_NOTE });
+    // The control: one fewer goes.
+    const sent = await post(env, { attachments }, alice_token, noteOf(site), ids.slice(0, MAX_ATTACHMENTS_PER_NOTE));
+    assert.equal(sent.status, 201, await sent.clone().text());
+  });
+
+  it('decides by the minute, the files and the bytes of the account, and by the count and the bytes of a note', async () => {
+    const kv = createMemoryKv();
+    const files = { heldBy: async () => ({ files: 0, bytes: 0 }) };
+    const now = Date.parse('2026-10-21T10:00:30Z');
+    for (let n = 0; n < MAX_FILES_PER_MINUTE; n += 1)
+      assert.equal(await admitFile(files, kv, 'acc_a', 1, now), undefined);
+    assert.equal(await admitFile(files, kv, 'acc_a', 1, now), 'files-per-minute');
+    assert.equal(await admitFile(files, kv, 'acc_b', 1, now), undefined, 'another account');
+    assert.equal(await admitFile(files, kv, 'acc_a', 1, now + 60_000), undefined, 'the next minute');
+    const full = { heldBy: async () => ({ files: MAX_HELD_FILES - 1, bytes: MAX_HELD_BYTES - 10 }) };
+    assert.equal(await admitFile(full, createMemoryKv(), 'acc_c', 10, now), undefined);
+    assert.equal(await admitFile(full, createMemoryKv(), 'acc_c', 11, now), 'transit-full');
+
+    assert.equal(admitNote(Array.from({ length: MAX_ATTACHMENTS_PER_NOTE }, () => 1)), undefined);
+    assert.equal(admitNote(Array.from({ length: MAX_ATTACHMENTS_PER_NOTE + 1 }, () => 1)), 'too-many-files');
+    assert.equal(admitNote([MAX_ATTACHMENT_BYTES_PER_NOTE]), undefined);
+    assert.equal(admitNote([MAX_ATTACHMENT_BYTES_PER_NOTE, 1]), 'too-large');
+  });
+});
+
 describe('the files of a note, sent with it (FRU-331)', () => {
   it('hands the files to the store of the site, then removes them from the transit', async () => {
     const env = await envWith();
@@ -734,6 +814,7 @@ describe('what SECURITY.md and docs/privacy.md say of the files (FRU-331)', () =
       stated.includes(`${MAX_ATTACHMENTS_PER_NOTE} files and ${MAX_ATTACHMENT_BYTES_PER_NOTE / MB} MB for one note`),
     );
     assert.ok(stated.includes(`${MAX_HELD_FILES} files or ${MAX_HELD_BYTES / MB} MB in transit for one account`));
+    assert.ok(stated.includes(`${MAX_FILES_PER_MINUTE} files a minute for one session`));
     assert.ok(stated.includes(`cut at ${ATTACHMENT_NAME_LENGTH} characters`));
     assert.ok(stated.includes(`until the tracker has it, ${ATTACHMENT_TRANSIT_DAYS} days at most`));
     assert.equal(SIGNED_URL_MS, 60 * 60 * 1_000);

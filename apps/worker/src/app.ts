@@ -81,9 +81,12 @@ import { sessionStillValid } from './session-check.ts';
 import {
   ATTACHMENTS_PATH,
   type AttachmentStore,
+  MAX_FILES_PER_MINUTE,
   MAX_HELD_BYTES,
   MAX_HELD_FILES,
   type OutgoingFile,
+  admitFile,
+  admitNote,
   TRANSIT_MS,
   attachmentIdOf,
   attachmentIdsOf,
@@ -1576,8 +1579,11 @@ async function handleAttachment(
   const checked = checkAttachment(declared, body);
   if (!checked.ok) return json(400, { error: checked.error }, headers);
 
-  const held = await files.heldBy(account, now);
-  if (held.files >= MAX_HELD_FILES || held.bytes + body.byteLength > MAX_HELD_BYTES)
+  // The limits of the person (FRU-331): files a minute for the session, files and bytes in transit.
+  const refused = await admitFile(files, context.kv ?? kvFor(config), account, body.byteLength, now);
+  if (refused === 'files-per-minute')
+    return json(429, { error: 'rate-limited', maxFilesPerMinute: MAX_FILES_PER_MINUTE }, headers);
+  if (refused === 'transit-full')
     return json(429, { error: 'transit-full', maxFiles: MAX_HELD_FILES, maxBytes: MAX_HELD_BYTES }, headers);
 
   const id = newAttachmentId();
@@ -2202,8 +2208,11 @@ async function takeFiles(
     );
   });
   if (gone.length > 0) return { ok: false, status: 410, body: { error: 'attachment-gone', ids: gone } };
-  const total = found.reduce((sum, file) => sum + (file?.content.byteLength ?? 0), 0);
-  if (total > MAX_ATTACHMENT_BYTES_PER_NOTE) {
+  const admitted = admitNote(found.map((file) => file?.content.byteLength ?? 0));
+  if (admitted === 'too-many-files') {
+    return { ok: false, status: 400, body: { error: 'invalid-attachments', max: MAX_ATTACHMENTS_PER_NOTE } };
+  }
+  if (admitted === 'too-large') {
     return { ok: false, status: 413, body: { error: 'payload-too-large', maxBytes: MAX_ATTACHMENT_BYTES_PER_NOTE } };
   }
 

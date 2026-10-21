@@ -671,15 +671,17 @@ a change when the account refuses one of them, and marks only those as known`. O
   `captureScreenshot`, which posts a `capture-request` with the area of the element on the bridge.
   The background takes the picture of the tab (`tabs.captureVisibleTab`), cuts the area out
   (`createImageBitmap`, `OffscreenCanvas`), and sends the PNG to `POST /screenshot` of the worker of
-  the stored entry, for its client, with the session of that worker. **Since FRU-331 that route is
-  `POST /attachments`, and it answers an id in transit, not an address: FRU-332 moves this path.** `src/capture.ts` holds every
+  the stored entry, for its client, with the session of that worker. **Since FRU-331 the mount offers
+  no picture of the element**: its route is gone, and a picture asked for would go nowhere, in
+  silence (raised by the `heavy` review of #427). FRU-332 brings the capture of the page and of an
+  area in its place, as a file of the note. `src/capture.ts` holds every
   case where it gives up.
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.
 - **A capture that fails costs the picture, never the note.** No `activeTab`, no session, an http
   worker, a site that embeds its own widget, a worker with no database, ten seconds without an
-  answer: the note goes without a picture. test:`private mode: a picture the browser cannot take
-costs the picture, never the note`.
+  answer: the note goes without a picture. Since FRU-331 none is asked for:
+  test:`private mode: the extension offers no picture of the element, and the note goes`.
 - **The setting is off by default**, in the settings of the widget, as on any host that offers it.
 
 ### The reasons, and what is not done

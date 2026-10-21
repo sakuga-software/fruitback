@@ -3,10 +3,13 @@ import {
   ATTACHMENT_NAME_LENGTH,
   ATTACHMENT_TRANSIT_DAYS,
   type AttachmentKind,
+  MAX_ATTACHMENTS_PER_NOTE,
   MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENT_BYTES_PER_NOTE,
   OPAQUE_TYPE,
   attachmentKindOf,
 } from '@fruitback/shared';
+import type { Kv } from './kv.ts';
 
 /**
  * The files of a note in transit (FRU-331), on their way to the ticket of the tracker.
@@ -44,6 +47,49 @@ export const SIGNED_URL_MS = 60 * 60 * 1_000;
  */
 export const MAX_HELD_FILES = 50;
 export const MAX_HELD_BYTES = 100 * 1_024 * 1_024;
+
+/**
+ * The most files one session sends in a minute, whatever their size. The limit of all requests by
+ * address (`RATE_LIMIT_PER_MINUTE`) applies before it: this one follows the person from address to
+ * address, and stops a script that sends files and never a note.
+ */
+export const MAX_FILES_PER_MINUTE = 20;
+
+/**
+ * Whether one more file of `bytes` may come in transit now for `account`, or why not (FRU-331). The
+ * route asks it before it keeps anything, so a refused file costs no write:
+ *
+ * - `files-per-minute`: the session sent `MAX_FILES_PER_MINUTE` in the last minute (`429`).
+ * - `transit-full`: the account holds `MAX_HELD_FILES` files, or would pass `MAX_HELD_BYTES` (`429`).
+ *
+ * The limit of one file is the route's (`maxBytesFor`, `413`), and the limits of one note are
+ * `admitNote`'s. A `Kv` that does not answer throws: the route answers `503`, as for the rate limit.
+ */
+export async function admitFile(
+  files: Pick<AttachmentStore, 'heldBy'>,
+  kv: Pick<Kv, 'incr'>,
+  account: string,
+  bytes: number,
+  now: number,
+): Promise<'files-per-minute' | 'transit-full' | undefined> {
+  // Counted first, and counted when refused, as every limit of the worker counts.
+  const sent = await kv.incr(`fruitback:attachments:${account}:${Math.floor(now / 60_000)}`, 60_000);
+  if (sent > MAX_FILES_PER_MINUTE) return 'files-per-minute';
+  const held = await files.heldBy(account, now);
+  if (held.files >= MAX_HELD_FILES || held.bytes + bytes > MAX_HELD_BYTES) return 'transit-full';
+
+  return undefined;
+}
+
+/**
+ * Whether the files of one note may go together, or why not: more than `MAX_ATTACHMENTS_PER_NOTE`
+ * files, or more than `MAX_ATTACHMENT_BYTES_PER_NOTE` bytes together.
+ */
+export function admitNote(sizes: readonly number[]): 'too-many-files' | 'too-large' | undefined {
+  if (sizes.length > MAX_ATTACHMENTS_PER_NOTE) return 'too-many-files';
+
+  return sizes.reduce((sum, size) => sum + size, 0) > MAX_ATTACHMENT_BYTES_PER_NOTE ? 'too-large' : undefined;
+}
 
 export type StoredAttachment = {
   id: string;
