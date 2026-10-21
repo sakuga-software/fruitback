@@ -204,7 +204,8 @@ test('an administrator sees the frame and the instance, with the values of the m
   const nav = page.getByRole('navigation', { name: 'Instance' });
   await expect(nav.getByRole('link')).toHaveText(['Instance', 'Workspaces', 'Users', 'Notes', 'My workspaces']);
   await expect(nav.getByRole('link', { name: 'Instance' })).toHaveAttribute('aria-current', 'page');
-  await expect(nav.getByRole('link', { name: 'My workspaces' })).toHaveAttribute('href', '/');
+  // Straight to the first workspace, not through the front door (FRU-356).
+  await expect(nav.getByRole('link', { name: 'My workspaces' })).toHaveAttribute('href', '/w/w1/sites');
   await expect(rail(page).getByRole('link', { name: 'Self-hosting guide' })).toHaveAttribute(
     'href',
     'https://fruitback.com/self-hosting.html',

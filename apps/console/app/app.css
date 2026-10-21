@@ -684,6 +684,67 @@ textarea {
   }
 }
 
+/*
+  The moves between the screens of a workspace, between workspaces and to the administration
+  (FRU-356). The rail is one block that holds still, and the screen beside it cross-fades: the old
+  one goes in 120 ms, the new one comes in 220 ms from 4 px lower. A browser with no view transitions
+  changes the screen at once. With reduced motion nothing moves.
+*/
+.kit-rail {
+  view-transition-name: rail;
+}
+
+.kit-screen {
+  view-transition-name: screen;
+}
+
+::view-transition-group(rail) {
+  animation: none;
+}
+
+/* The rail of the new page shows at once: the old picture would stay over it until the end. */
+::view-transition-old(rail) {
+  display: none;
+}
+
+::view-transition-new(rail) {
+  animation: none;
+}
+
+::view-transition-old(screen) {
+  animation: kit-screen-out 120ms ease-out both;
+}
+
+::view-transition-new(screen) {
+  animation: kit-screen-in var(--duration-fast) var(--ease-settle) both;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 120ms;
+}
+
+@keyframes kit-screen-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes kit-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* The drop of a pin: the shape of a status, of the entry of the rail, of a success. */
 .kit-drop {
   display: inline-block;
