@@ -125,7 +125,7 @@ jobs:
         if: steps.hold.outcome == 'failure'
         env:
           PACKAGE: ${{ matrix.package }}
-        run: echo "::warning title=mutation::$PACKAGE scores under its line (see the summary of this job). This does not block a pull request; it fails on main."
+        run: echo "::warning title=mutation::$PACKAGE is under its line, or a file of it was not measured (see the summary of this job). This does not block a pull request; it fails on main."
 
       - name: Keep the report
         if: always()
@@ -146,8 +146,9 @@ jobs:
           PACKAGE: ${{ matrix.package }}
         run: node tools/ci/durations.ts --name "$NAME" --timeout 150 --stryker "$PACKAGE"
 
-  # Runs only when every job of `mutation` passed: a job that failed or ran out of time has failed
-  # the run already.
+  # On `main`, the schedule and by hand, runs only when every job of `mutation` passed: a job that
+  # failed or ran out of time has failed the run already. On a pull request, `continue-on-error`
+  # counts such a job as passed, so this runs too, finds the file that was not measured, and warns.
   line:
     name: mutation line ${{ matrix.package }}
     needs: [plan, mutation]
@@ -200,4 +201,4 @@ jobs:
         if: steps.hold.outcome == 'failure'
         env:
           PACKAGE: ${{ matrix.package }}
-        run: echo "::warning title=mutation::$PACKAGE scores under its line (see the summary of this job). This does not block a pull request; it fails on main."
+        run: echo "::warning title=mutation::$PACKAGE is under its line, or a file of it was not measured (see the summary of this job). This does not block a pull request; it fails on main."
