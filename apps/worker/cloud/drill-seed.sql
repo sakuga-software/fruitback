@@ -40,6 +40,16 @@ INSERT INTO site_destinations (site_id, position, connector_id, team_id, project
   ('site_drill1', 1, 'con_drill1', 'team_1', NULL, 'Hook, team 1'),
   ('site_drill2', 0, 'con_drill1', NULL, NULL, NULL);
 
+-- The statuses of a site (FRU-365): a state of a connector renamed and recoloured, one re-staged and
+-- hidden, a status of the worker's own store added by the team, with a text colour it chose, and one
+-- of another site. Five rows, a count no other table has.
+INSERT INTO statuses (site_id, source, key, name, stage, color, text_color, position, origin, hidden) VALUES
+  ('site_drill1', 'con_drill1', 'st_review', 'In Review', 'ripening', '#7dd3fc', NULL, 2, 'tracker', false),
+  ('site_drill1', 'con_drill1', 'st_wontfix', NULL, 'composted', NULL, NULL, 5, 'tracker', true),
+  ('site_drill1', 'own', 'waiting', 'Waiting for the client', 'green', '#5560c4', '#ffffff', 1, 'team', false),
+  ('site_drill1', 'own', 'ripe', 'Shipped', 'ripe', NULL, NULL, 3, 'tracker', false),
+  ('site_drill2', 'con_drill1', 'st_review', NULL, 'ripe', NULL, NULL, 0, 'tracker', false);
+
 -- The domains of a workspace (FRU-103): one never proven, one proven that covers the previews of a
 -- site, one whose proof is lost, and three more so the count is no other table's.
 INSERT INTO domains (id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id) VALUES
@@ -99,10 +109,11 @@ INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, 
 -- The notes the worker keeps itself, and the replies to them (FRU-218). An explicit number, as the
 -- copy of a SQLite file writes them, and the sequence moved after it: a restore that left the
 -- sequence at 1 would give the next note the number of one that exists. Three notes and two replies.
-INSERT INTO seeds (id, client_id, page_url, stage, seed, created_at, updated_at) VALUES
-  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'seeded', '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
-  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'ripe', '{"id":"sd_drill2","note":"Done."}', 2, 3),
-  (7, NULL, 'https://staging.acme.dev/', 'seeded', '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
+-- The second note is in a status of its site (FRU-365); the others are drawn by their stage.
+INSERT INTO seeds (id, client_id, page_url, stage, status_key, seed, created_at, updated_at) VALUES
+  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'seeded', NULL, '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
+  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'ripe', 'ripe', '{"id":"sd_drill2","note":"Done."}', 2, 3),
+  (7, NULL, 'https://staging.acme.dev/', 'seeded', NULL, '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
 SELECT setval(pg_get_serial_sequence('seeds', 'id'), 7);
 
 INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES
