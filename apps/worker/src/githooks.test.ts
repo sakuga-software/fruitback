@@ -24,6 +24,8 @@ const HOOKS = [
 const INSTALLER = new URL('.githooks/install.mjs', ROOT);
 /** What the `test` script of a package passes to `node --test`: nothing, unless the variable is set. */
 const CONCURRENCY = '${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY}';
+/** The part of the test files that a job of CI runs (FRU-344): with no variable, every file. */
+const SHARD = '${FRUITBACK_TEST_SHARD:+--test-shard=$FRUITBACK_TEST_SHARD}';
 
 /** The `-e '^…'` patterns of the line that filters what the hook gives to oxfmt. */
 function leftOutOfFormat(hook: string): string[] {
@@ -123,7 +125,11 @@ describe('the git hooks', () => {
       );
       assert.ok(scripts.length >= 7, `only ${scripts.length} packages run node --test`);
       for (const { file, test } of scripts) {
-        assert.ok(test.startsWith(`node --test ${CONCURRENCY} '`), `${file} runs every test file at once: ${test}`);
+        // FRU-344. The worker takes the part of its files that a job of CI runs, after the bound.
+        assert.ok(
+          test.startsWith(`node --test ${CONCURRENCY} '`) || test.startsWith(`node --test ${CONCURRENCY} ${SHARD} '`),
+          `${file} runs every test file at once: ${test}`,
+        );
       }
 
       const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');

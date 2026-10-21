@@ -92,12 +92,15 @@ function projects(): Project[] {
         name: string;
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
-        nx?: { targets?: { test?: { inputs?: string[] } } };
+        nx?: { targets?: { test?: { inputs?: (string | { env: string })[] } } };
       };
       found.push({
         root: `${group}/${directory}`,
         name: manifest.name,
-        inputs: manifest.nx?.targets?.test?.inputs ?? NX.targetDefaults.test.inputs,
+        // An input of the environment (`{ "env": … }`, FRU-344) names no file a test reads.
+        inputs: (manifest.nx?.targets?.test?.inputs ?? NX.targetDefaults.test.inputs).filter(
+          (input): input is string => typeof input === 'string',
+        ),
         declared: manifest.nx?.targets?.test?.inputs !== undefined,
         dependencies: Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }),
       });

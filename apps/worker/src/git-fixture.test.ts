@@ -18,8 +18,11 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 /** Everything a build, a browser or a package manager wrote. */
 const IGNORED = new Set(['node_modules', 'dist', '.git', '.output', '.react-router', '.wxt', '.nx', '.stryker-tmp']);
 
-/** The two files that may start git: the fixture, and the script of the mutation job that tests wrap in `apart`. */
-const ALLOWED = ['apps/worker/src/git.fixture.ts', 'tools/mutation/scope.ts'];
+/**
+ * The files that may start git: the fixture, the script of the mutation job that tests wrap in
+ * `apart`, and the script of CI that reads the files of a pull request (FRU-344), which no test runs.
+ */
+const ALLOWED = ['apps/worker/src/git.fixture.ts', 'tools/ci/changes.ts', 'tools/mutation/scope.ts'];
 
 /** A call that starts git itself, or hands a line that begins with `git` to a shell. */
 const STARTS_GIT = /\b(?:exec|execSync|execFile|execFileSync|spawn|spawnSync)\(\s*['"`]git\b/;
