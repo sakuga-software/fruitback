@@ -552,7 +552,14 @@ export async function createSeedBatch(
 }
 
 const ISSUES_QUERY = `
-  query FruitbackIssues($filter: IssueFilter!, $first: Int!, $after: String, $comments: Int!) {
+  query FruitbackIssues(
+    $filter: IssueFilter!
+    $first: Int!
+    $after: String
+    $comments: Int!
+    $attachments: Int!
+    $attachmentFilter: AttachmentFilter!
+  ) {
     issues(filter: $filter, first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -566,7 +573,7 @@ const ISSUES_QUERY = `
         comments(first: $comments) {
           nodes { id body createdAt user { name } }
         }
-        attachments(first: 10) {
+        attachments(first: $attachments, filter: $attachmentFilter) {
           nodes { title url subtitle }
         }
       }
@@ -585,7 +592,10 @@ export type IssueNode = {
   /** `id` is what a connector's exceptions name (FRU-102). The in-memory Linear has none. */
   state: { id?: string; name: string; type: string } | null;
   comments?: { nodes: CommentNode[] } | null;
-  /** The attachments of the issue (FRU-331). Only the ones marked `ATTACHMENT_SUBTITLE` are read. */
+  /**
+   * The attachments of the issue (FRU-331). Linear sends only the ones marked `ATTACHMENT_SUBTITLE`
+   * (FRU-348), and `attachmentsOf` keeps only those too.
+   */
   attachments?: { nodes: { title: string; url: string; subtitle: string | null }[] } | null;
 };
 
@@ -616,6 +626,18 @@ function optionalComments(comments: SeedComment[] | undefined): { comments?: See
  * longer than this belongs in Linear, which the pin links to.
  */
 export const COMMENTS_PER_ISSUE = 20;
+
+/**
+ * Attachments fetched per issue (FRU-348). Linear keeps only the ones that Fruitback made
+ * (`ATTACHMENT_SUBTITLE`), so the links that the team or another integration added do not take the
+ * places. Fruitback attaches files only when it creates the issue, at most `MAX_ATTACHMENTS_PER_NOTE`.
+ * The margin keeps the files of older notes if that limit goes down. The bound keeps the read of a
+ * page small, like `COMMENTS_PER_ISSUE`.
+ */
+export const ATTACHMENTS_PER_ISSUE = 50;
+
+/** Linear filters the attachments of an issue by this, so it sends only the files of Fruitback. */
+const FRUITBACK_ATTACHMENTS = { subtitle: { eq: ATTACHMENT_SUBTITLE } } as const;
 
 /**
  * Stop walking after this many pages. A page with 500 pins is not a page the widget can render
@@ -653,6 +675,8 @@ export async function fetchSeedIssues(
       // fetched. `first: 0` may or may not be accepted by Linear, and a read that fails outright for
       // those clients would be a far worse bug than one wasted comment on the wire.
       comments: policy.showComments ? COMMENTS_PER_ISSUE : 1,
+      attachments: ATTACHMENTS_PER_ISSUE,
+      attachmentFilter: FRUITBACK_ATTACHMENTS,
     });
 
     for (const node of result.issues.nodes) {

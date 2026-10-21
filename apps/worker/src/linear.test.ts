@@ -263,3 +263,45 @@ describe('the files of a note, in Linear (FRU-331)', () => {
     assert.equal('attachments' in (toSeedIssue(storedIssueFromSeed(seed), seed.page.url) ?? {}), false);
   });
 });
+
+describe('the files of a note, read back from Linear (FRU-348)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const POLICY = {
+    showComments: true,
+    identitySecret: undefined,
+    read: 'public',
+    write: 'public',
+    locale: 'en',
+  } as const;
+  const config = { apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined };
+
+  it('finds the files of Fruitback behind more than ten other attachments of the issue', async () => {
+    const seed = seedFixture();
+    const links = Array.from({ length: 12 }, (_, index) => ({
+      title: `PR #${index + 1}`,
+      url: `https://github.com/acme/app/pull/${index + 1}`,
+      subtitle: 'Open',
+    }));
+    const ours = [
+      { title: 'capture.png', url: 'https://uploads.linear.app/a/capture.png', subtitle: ATTACHMENT_SUBTITLE },
+      { title: 'log.txt', url: 'https://uploads.linear.app/a/log.txt', subtitle: ATTACHMENT_SUBTITLE },
+    ];
+    const stub = installLinearStub({
+      storedIssues: [storedIssueFromSeed(seed, { attachments: { nodes: [...links, ...ours] } })],
+    });
+
+    const [issue] = await createLinearStore(config).findForPage(
+      { url: seed.page.url, clientId: undefined },
+      undefined,
+      POLICY,
+    );
+
+    assert.deepEqual(issue?.attachments, [
+      { name: 'capture.png', url: 'https://uploads.linear.app/a/capture.png' },
+      { name: 'log.txt', url: 'https://uploads.linear.app/a/log.txt' },
+    ]);
+    // Linear is asked for the files of Fruitback only, so the links of the team take no place.
+    assert.deepEqual(stub.calls.at(-1)?.variables.attachmentFilter, { subtitle: { eq: ATTACHMENT_SUBTITLE } });
+  });
+});

@@ -30,7 +30,14 @@ export type StoredIssue = {
   state: { name: string; type: string } | null;
   /** What Linear returns for the nested `comments` connection (FRU-13). */
   comments?: { nodes: { id: string; body: string; createdAt: string; user: { name: string } | null }[] } | null;
+  /**
+   * Every attachment of the issue, in the order of Linear (FRU-348). The stub sends back only what
+   * the `attachments(first:, filter:)` of the query asks for, as Linear does.
+   */
+  attachments?: { nodes: StoredAttachment[] } | null;
 };
+
+export type StoredAttachment = { title: string; url: string; subtitle: string | null };
 
 export type LinearStub = {
   calls: GraphqlCall[];
@@ -148,7 +155,8 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
         const stored = options.storedIssues ?? [];
         const pageSize = options.issuesPageSize ?? stored.length;
         const offset = Number(variables.after ?? 0);
-        const nodes = pageSize > 0 ? stored.slice(offset, offset + pageSize) : stored;
+        const page = pageSize > 0 ? stored.slice(offset, offset + pageSize) : stored;
+        const nodes = page.map((issue) => withAskedAttachments(issue, query, variables));
         const next = offset + nodes.length;
 
         return jsonResponse({
@@ -249,6 +257,29 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       return call.variables.filter as Record<string, unknown>;
     },
   };
+}
+
+/**
+ * The attachments of an issue as Linear answers `attachments(first: …, filter: …)` (FRU-348): the
+ * filter on the subtitle first, then the first ones. Each argument is read from the query, as a
+ * literal or as a variable, so a query that asks for too few is answered with too few.
+ */
+function withAskedAttachments(issue: StoredIssue, query: string, variables: Record<string, unknown>): StoredIssue {
+  if (issue.attachments == null) return issue;
+  const args = /attachments\(([^)]*)\)/.exec(query)?.[1] ?? '';
+  const valueOf = (name: string): unknown => {
+    const raw = new RegExp(`${name}:\\s*(\\$\\w+|\\d+)`).exec(args)?.[1];
+    if (raw === undefined) return undefined;
+
+    return raw.startsWith('$') ? variables[raw.slice(1)] : Number(raw);
+  };
+  // Linear sends 50 when the query names no `first`.
+  const first = (valueOf('first') as number | undefined) ?? 50;
+  const filter = valueOf('filter') as { subtitle?: { eq?: string } } | undefined;
+  const subtitle = filter?.subtitle?.eq;
+  const kept = issue.attachments.nodes.filter((each) => subtitle === undefined || each.subtitle === subtitle);
+
+  return { ...issue, attachments: { nodes: kept.slice(0, first) } };
 }
 
 function jsonResponse(body: unknown): Response {
