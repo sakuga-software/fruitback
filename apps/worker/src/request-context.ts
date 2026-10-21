@@ -1,5 +1,5 @@
 import type { Auth } from './auth.ts';
-import { type ClientMap, originsFromClients } from './clients.ts';
+import { type ClientMap, type ClientPolicy, type ClientResolution, originsFromClients } from './clients.ts';
 import type { AccountStore, Reach, Role } from './accounts.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { ConnectStore } from './connect.ts';
@@ -11,8 +11,8 @@ import type { Kv } from './kv.ts';
 import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { NoteIndex } from './notes-index.ts';
-import type { SessionStore } from './session.ts';
-import type { SeedStore } from './store.ts';
+import type { SessionIdentity, SessionStore } from './session.ts';
+import type { ReplyAuthor, SeedStore } from './store.ts';
 
 /**
  * What one request of `app.ts` reads, out of `app.ts` so that each module of routes names it
@@ -118,3 +118,36 @@ export type Served = WorkerConfig & {
  * says that a caller is a person of the workspace is the key, never a claim.
  */
 export type Verified = IdentityResult & { session?: true };
+
+/** The checks of the caller that `app.ts` keeps, and that its modules of routes call. */
+export type CallerChecks = {
+  /** Which client a request belongs to, and what was decided for it: `routeFor` of `app.ts`. */
+  routeFor: (request: Request, config: Served, clientId: string | undefined) => ClientResolution;
+  /** Who writes a reply, or why nobody may: `replyAuthorFor` of `app.ts`. */
+  replyAuthorFor: (
+    request: Request,
+    policy: ClientPolicy,
+    workspace: string | undefined,
+    typed: string | undefined,
+    accounts: AccountStore | undefined,
+  ) => Promise<{ ok: true; author: ReplyAuthor; account: boolean } | { ok: false; status: number; reason: string }>;
+  /** The answer to a write of a session of an account that ended: `endedSession` of `app.ts`. */
+  endedSession: (
+    stillWrites: () => Promise<boolean>,
+    corsHeaders: Record<string, string>,
+  ) => Promise<Response | undefined>;
+  /** The person of a session still valid in the store: `sessionWrites` of `app.ts`. */
+  sessionWrites: (request: Request, config: Served, context: RequestContext) => Promise<SessionIdentity | undefined>;
+  /** The account that writes in a workspace for a site: `writerIn` of `app.ts`. */
+  writerIn: (
+    request: Request,
+    config: Served,
+    context: RequestContext,
+    workspace: string,
+    site: string | undefined,
+  ) => Promise<string | undefined>;
+  /** Whether the caller is a guest, who reads no reference of a tracker: `hidesTracker` of `app.ts`. */
+  hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
+  /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
+  REPLY_LENGTH: number;
+};
