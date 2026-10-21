@@ -103,12 +103,14 @@ jobs:
 
       # `inPlace`: the guard tests of the worker read files of the root, and a sandbox would move
       # them out of reach. This checkout is thrown away after the job.
+      # 3 runners on the 4 vCPU of the job, not 4: with 4, mutants that are killed late run out of
+      # their budget and count as killed by a timeout, survivors included (FRU-345, conventions.md).
       - name: Mutate
         id: mutate
         working-directory: ${{ matrix.package }}
         env:
           MUTATE: ${{ matrix.file }}
-        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 4 --fileLogLevel info
+        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 3 --fileLogLevel info
 
       # The line of the file. The line of the package needs every file: `line` holds it.
       - name: Hold the line
