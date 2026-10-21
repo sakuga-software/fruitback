@@ -347,6 +347,9 @@ describe('a file of a note in a relayed request (FRU-332)', () => {
     for (const more of [
       { body: 'A'.repeat(MAX_FILE_BASE64 + 4), encoding: 'base64' },
       { body: 'not base64!', encoding: 'base64' },
+      { body: 'A', encoding: 'base64' },
+      { body: 'AAAAA', encoding: 'base64' },
+      { body: 'A===', encoding: 'base64' },
       { body: 'iVBO', encoding: 'binary' },
       { body: '', encoding: 'base64' },
       { method: 'GET', body: 'iVBO', encoding: 'base64' },

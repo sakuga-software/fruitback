@@ -546,7 +546,15 @@ function allowedHeaders(value: unknown): Record<string, string> {
 }
 
 function isFileBody(body: unknown): body is string {
-  return typeof body === 'string' && body.length > 0 && body.length <= MAX_FILE_BASE64 && BASE64.test(body);
+  // A length that is not a multiple of 4 is no base64 that `atob` reads: refused here, with a clear
+  // refusal, rather than thrown in the background (raised by the balanced review of #433).
+  return (
+    typeof body === 'string' &&
+    body.length > 0 &&
+    body.length % 4 === 0 &&
+    body.length <= MAX_FILE_BASE64 &&
+    BASE64.test(body)
+  );
 }
 
 function isWithinBodyCap(body: unknown): body is string {
