@@ -176,6 +176,31 @@ describe('cached', () => {
     );
   });
 
+  it('still answers the read when the Kv answers for the version of the page but not for the entry', async () => {
+    // The version is read first, so a Kv that is down for every key never reaches the entry. This
+    // one fails only on the entry: on its read, then on its write.
+    const isEntry = (key: string) => key.startsWith('fruitback:read:');
+    const brokenRead: Kv = {
+      ...kv,
+      get: async (key) => {
+        if (isEntry(key)) throw new KvError('the store is down');
+
+        return kv.get(key);
+      },
+    };
+    const brokenWrite: Kv = {
+      ...kv,
+      set: async (key, value, ttl) => {
+        if (isEntry(key)) throw new KvError('the store is down');
+
+        return kv.set(key, value, ttl);
+      },
+    };
+
+    assert.equal(await cached(brokenRead, PAGE, 'k', async () => 'read failed'), 'read failed');
+    assert.equal(await cached(brokenWrite, PAGE, 'other', async () => 'write failed'), 'write failed');
+  });
+
   it('reads an entry that is not JSON as a miss, and replaces it', async () => {
     // The first read writes the entry. Then something else corrupts it in the store.
     const keys: string[] = [];
