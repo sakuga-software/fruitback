@@ -432,6 +432,36 @@ describe('an installation_id that the browser says, and the installations that G
     assert.deepEqual(setup.github.exchanges(), []);
   });
 
+  it('goes back with « unauthorized-app » and writes nothing when the App asks for no user authorization', async () => {
+    const setup = await setUp({ alice: [7] }, { 7: 'acme' });
+    const acme = await workspaceOf(setup.world, 'Acme');
+    const left = await leave(setup, acme);
+    const said = console.error;
+    const lines: string[] = [];
+    console.error = (...args: unknown[]) => void lines.push(args.join(' '));
+    let back: Response;
+    try {
+      // What GitHub sends when « Request user authorization (OAuth) during installation » is off.
+      back = await setup.call(
+        'GET',
+        `/auth/github-app/callback?installation_id=7&setup_action=install&state=${left.state}`,
+        {
+          cookie: left.cookie,
+        },
+      );
+    } finally {
+      console.error = said;
+    }
+
+    assert.equal(back.headers.get('Location'), `${CONSOLE}/w/${acme.workspace.id}/connectors?github=unauthorized-app`);
+    assert.deepEqual(await setup.world.accounts.connectors(acme.workspace.id), []);
+    assert.deepEqual(setup.github.exchanges(), []);
+    assert.ok(
+      lines.some((line) => line.includes('Request user authorization (OAuth) during installation')),
+      lines.join('\n'),
+    );
+  });
+
   it('refuses, and writes nothing, when the exchange or the list fails', async () => {
     const setup = await setUp({ alice: [1, 2, 7] }, { 7: 'acme' });
     const acme = await workspaceOf(setup.world, 'Acme');

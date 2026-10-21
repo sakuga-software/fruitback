@@ -56,7 +56,15 @@ export async function githubAppTicket(
  * - `forbidden`, `suspended`: the role or the workspace changed during the flow.
  * - `failed`: anything else. GitHub said nothing usable, or the flow is not one of this browser.
  */
-type Word = 'connected' | 'requested' | 'elsewhere' | 'refused' | 'forbidden' | 'suspended' | 'failed';
+type Word =
+  | 'connected'
+  | 'requested'
+  | 'elsewhere'
+  | 'refused'
+  | 'forbidden'
+  | 'suspended'
+  | 'unauthorized-app'
+  | 'failed';
 
 /** Back to the connectors of the workspace, with a word. Nothing of GitHub is echoed. */
 function back(context: GithubAppFlowContext, workspace: string | undefined, word: Word): Response {
@@ -105,7 +113,16 @@ async function callback(request: Request, context: GithubAppFlowContext): Promis
   if (action !== 'install' && action !== 'update') return back(context, workspace, 'failed');
   const id = params.get('installation_id') ?? '';
   const code = params.get('code') ?? '';
-  if (!INSTALLATION_ID.test(id) || code === '') return back(context, workspace, 'failed');
+  if (!INSTALLATION_ID.test(id)) return back(context, workspace, 'failed');
+  // GitHub sends a code only when the App asks for the user authorization at its installation. Without
+  // it, the worker cannot check who reaches the installation, and it attaches nothing.
+  if (code === '') {
+    console.error(
+      '[fruitback] the GitHub App sent no code on its installation: turn on « Request user authorization (OAuth) during installation » in its settings',
+    );
+
+    return back(context, workspace, 'unauthorized-app');
+  }
   const installation = Number(id);
 
   // Asked again here: ten minutes passed, and a role can change in ten minutes.

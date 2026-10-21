@@ -783,4 +783,8 @@ the Keychain entries, and add these.
   `<app id>:<client id>:<client secret>`, and `FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY` is the PEM of a
   key of « Private keys » of the App, on one line with each line break written as `\n`. Keep both in
   the Keychain of the operator. The key mints a token for every repository of every organisation that
-  installed the App: `SECURITY.md` says how to replace it.
+  installed the App: `SECURITY.md` says how to replace it. **The installation flow needs three settings
+  of the App** (FRU-360): the Callback URL `https://api.fruitback.com/auth/github-app/callback`,
+  « Request user authorization (OAuth) during installation » on (without it, GitHub sends no `code`,
+  and each installation goes back with `unauthorized-app`), and « Expire user authorization tokens »
+  on.

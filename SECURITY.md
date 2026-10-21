@@ -1446,6 +1446,10 @@ of a workspace installs it on GitHub, and GitHub sends the person back to
   does not revoke the token: that call sends the token and the secret to another route. Keep
   « Expire user authorization tokens » on in the settings of the App, so the token ends in eight
   hours. With that setting off, the token stays valid until the person revokes the App.
+- **No code, no connector.** GitHub sends the `code` only when « Request user authorization (OAuth)
+  during installation » is on in the settings of the App. Without a `code`, the worker cannot check who
+  reaches the installation: it attaches nothing, answers `unauthorized-app`, and says the setting in
+  its log. It never attaches an installation on the word of the `installation_id` alone.
 - **The flow is bound to the browser, as Linear's is.** It starts with a ticket that only an owner
   or an admin gets, spent once and good for a minute. The `state` is bound to the browser that
   started by a `SameSite=Lax` cookie, issued by this worker, spent once, and good for ten minutes. A

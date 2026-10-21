@@ -4112,6 +4112,11 @@ the mechanism, `SECURITY.md` (« The GitHub App key ») says what the key reache
 
 ### The rules, in short
 
+- **The App asks for the user authorization at its installation, or nothing is attached.** With
+  « Request user authorization (OAuth) during installation » off, GitHub sends back no `code`: the
+  worker cannot check who reaches the installation, writes no connector, answers `unauthorized-app`
+  and names the setting in its log. A review of #461 asked for a word of its own: `failed`
+  hid the cause. The three settings are in `apps/worker/cloud/README.md`.
 - **The flow is Linear's.** `POST /console/workspaces/<id>/connectors/github/start`, for an owner or
   an admin, answers `201 { url }`: a ticket for `GET /auth/github-app/start`, good for a minute and
   spent once. That navigation sets the cookie `fruitback_github_app_state` on the path of the
