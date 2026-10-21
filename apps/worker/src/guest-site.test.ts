@@ -9,7 +9,7 @@ import { CONSOLE, type World, memberOf, signInTo, workspaceIn, worlds } from './
 import { mutatedModule } from './conformance.fixture.ts';
 import { digest } from './session.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createMemoryScreenshotStore } from './screenshots.ts';
+import { createMemoryAttachmentStore } from './attachments.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
 
 /**
@@ -65,6 +65,7 @@ function trackerStore(): SeedStore {
   return {
     name: 'tracker',
     scope: () => 'tracker',
+    attachments: true,
     async create(seed) {
       return created(seed);
     },
@@ -103,6 +104,7 @@ function send(
   if (options.token?.includes('=')) headers.Cookie = options.token;
   else if (options.token !== undefined) headers.Authorization = `Bearer ${options.token}`;
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.bytes !== undefined) headers['Content-Type'] = 'image/png';
   ip += 1;
   const body = options.bytes ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
 
@@ -120,8 +122,8 @@ function send(
 async function acme() {
   const world = await open();
   const store = trackerStore();
-  const screenshots = createMemoryScreenshotStore();
-  const context: Partial<RequestContext> = { store, screenshots, connectStore: world.connectStore };
+  const attachments = createMemoryAttachmentStore();
+  const context: Partial<RequestContext> = { store, attachments, connectStore: world.connectStore };
   const call = (method: string, path: string, options: Parameters<typeof send>[5] = {}, handle = handleRequest) =>
     send(world, context, handle, method, path, options);
 
@@ -261,33 +263,16 @@ const ROUTES: readonly Route[] = [
     },
   },
   {
-    name: 'POST /screenshot',
+    name: 'POST /attachments',
     token: 'workspace',
     async reads(team, token, site, handle) {
       const answer = await team.call(
         'POST',
-        `/screenshot?client=${site.id}`,
+        `/attachments?client=${site.id}`,
         { token, origin: EXTENSION, bytes: png() },
         handle,
       );
       return answer.status === 201;
-    },
-  },
-  {
-    name: 'GET /screenshot/<id>',
-    token: 'workspace',
-    async reads(team, token, site, handle) {
-      // A picture that the owner sent on that site.
-      const owner = await workspaceSession(team, team.alice, team.workspace);
-      const sent = await team.call('POST', `/screenshot?client=${site.id}`, {
-        token: owner,
-        origin: EXTENSION,
-        bytes: png(),
-      });
-      assert.equal(sent.status, 201, await sent.clone().text());
-      const { id } = (await sent.json()) as { id: string };
-      const answer = await team.call('GET', `/screenshot/${id}`, { token, origin: EXTENSION }, handle);
-      return answer.status === 200;
     },
   },
   {
@@ -715,10 +700,10 @@ describe('the guest of one site (FRU-250)', () => {
         ],
       },
       {
-        guard: 'a picture is of the site of its note',
+        guard: 'a file is of the site of its note',
         from: 'const reaches = async (account: string) => readsSite(await reachIn(workspace, account), site);',
         to: 'const reaches = async (account: string) => (await reachIn(workspace, account)) !== undefined;',
-        routes: ['POST /screenshot', 'GET /screenshot/<id>'],
+        routes: ['POST /attachments'],
       },
     ];
     for (const plant of IN_APP) {
@@ -863,9 +848,9 @@ describe('the guest of one site (FRU-250)', () => {
             }),
         ],
         [
-          'POST /screenshot',
+          'POST /attachments',
           (team, t) =>
-            team.call('POST', `/screenshot?client=${team.shared}`, {
+            team.call('POST', `/attachments?client=${team.shared}`, {
               token: t.workspace,
               origin: EXTENSION,
               bytes: png(),

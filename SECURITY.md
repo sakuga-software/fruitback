@@ -125,7 +125,7 @@ and an address are a claim by whoever was on the page, and they are stored as on
 
 ### A seed is stored in the clear, in your database or your tracker
 
-The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
+The whole seed — note, page URL, selector, the reporter's name and address — is
 stored as it arrived, and **where** depends on the connector:
 
 | Store      | Where a seed lands                                                                              | Who can read it                                                                                                      |
@@ -529,7 +529,7 @@ to one workspace: it reads every site of every workspace the account is a member
 of each request**, with the role the account has there. Its access token carries `scope: 'account'`
 and no `ws`, and a client of a workspace accepts it, signed with the worker key, only while the
 account is a member of that workspace: the role is read in the database at every read, every note and
-every picture, as `GET /session/sites` reads it. A member removed or demoted is cut at the next call,
+every file, as `GET /session/sites` reads it. A member removed or demoted is cut at the next call,
 with the access token still unexpired in their extension. It never reads more than a session paired
 for the workspace would (test:`lets each role approve, and gives the session what a session of the
 workspace gets, and no more`). An account with no workspace gets a session that reads nothing. The
@@ -583,7 +583,7 @@ cases run on PostgreSQL 17, and a store that reads apart from the statement that
 10 minutes, and nothing reaches a token already minted. So a route that **writes** for an extension
 asks the store, at each call, whether the session of the token is still live, still the same person,
 still a member of its workspace or still an account (`sessionStillValid` of `session-check.ts`). The
-routes that write are the picture of a note, the creation of a site of FRU-255, and the note itself,
+routes that write are a file of a note (FRU-331), the creation of a site of FRU-255, and the note itself,
 alone or in a batch, when a session of an account signs it: once per request. A session ended a
 second ago writes nothing (test:`writes nothing for a session that ended, a note or a picture, with
 the access token it still holds, and reads in its window`). That closes the case of a stolen refresh
@@ -776,7 +776,8 @@ A comment coming back from the tracker is rendered as `textContent`, never as ma
 written by anyone who can comment on the issue, displayed inside a client's page.
 
 The widget bundles no rasteriser. If you supply `captureScreenshot`, the image lands in **your**
-storage and the seed holds a URL; whether that URL is public is your decision, not the widget's.
+storage and the seed holds a URL; whether that URL is public is your decision, not the widget's. The
+files that a note carries through the worker are another path: see _The files of a note, in transit_.
 
 ### The identity verifier is hand-written
 
@@ -921,9 +922,9 @@ site read by `members`, a read with no session answers `401`
   A token that a site signs is no session, and is refused for a write where a read takes it
   (test:`takes no token that a site signs as a session, and sees it taken when the check is out`).
   The refusal of a read says `canWrite: false`, so the widget offers no note that would be refused:
-  one bit, which a page could learn from a `POST` anyway. `POST /screenshot` asked for a session of
-  the workspace on every site already (FRU-44), and still does
-  (test:`is refused with no session, whoever may leave a note, and kept for a member`).
+  one bit, which a page could learn from a `POST` anyway. `POST /attachments`, which replaced
+  `POST /screenshot` (FRU-331), asks for a session of the workspace on every site
+  (test:`is refused with no session, whoever may leave a note, and passes the guard for a member`).
 - **« Anyone on the page » (`writers: anyone`): a note sent with no session is kept there**, as a
   claim, as on every site that everyone reads: its sender cannot read it back, and the members find
   it, in the worker or in the tracker of the site
@@ -1412,6 +1413,11 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
   whatever the receiver sends in that time, and the body of the answer is not read.
 - A workspace can make the worker send requests to a third party: one per note its own sites
   receive, and six more attempts at most. The notes are rate-limited where they come in.
+- **The files of a note travel as addresses, not as bytes** (FRU-331). The queue keeps the id, the
+  name, the type and the size of each file. Each attempt signs, in its body, an address of one hour
+  on the public address of the worker for each file that still waits, and leaves out a file whose
+  transit ended. The receiver reads the bytes there, and the file goes one hour after the delivery
+  arrived: see _The files of a note, in transit_.
 
 ### Signing in with GitHub (FRU-97)
 
@@ -1566,9 +1572,8 @@ no other site of the workspace; they never read a reference of the tracker.
   yours. test:`writes no share for somebody who accepts the invitation of another person`. A guest
   invitation whose sites were all removed is refused at the acceptance.
 - **Every route that answers a thing of one site reads the role and the sites of the person at the
-  request** (`AccountStore.reach`): `GET` and `POST /feedback` (a batch too), `POST /screenshot` and
-  `GET /screenshot/<id>` (a picture keeps the site of its note; one sent before has none, and no
-  guest reads it), `GET /session/sites` for both kinds of session, `GET /console/workspaces/<id>/sites`
+  request** (`AccountStore.reach`): `GET` and `POST /feedback` (a batch too), `POST /attachments` (a
+  file keeps the site of its note, and only its sender names it in a note of that site), `GET /session/sites` for both kinds of session, `GET /console/workspaces/<id>/sites`
   and `/notes`. **A session of a workspace is asked it too**: its token names the workspace, not the
   site. On another site the answer is the one a person of another workspace gets. `guest-site.test.ts`
   asks each route, on the shared site and on another, and plants one violation for each guard:
@@ -1882,40 +1887,66 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
   and the id of a note to open, and the panel takes it from the tab it follows only. A page that
   forges one buys a read of its own notes, or an open row.
 
-### The picture of a note, taken by the extension (FRU-44)
+### The files of a note, in transit (FRU-331)
 
-The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the
-element in the background, sent to `POST /screenshot` of the worker of the site's entry. The widget
-writes the address it gets back in the seed. The setting is off until the reviewer turns it on.
+**Fruitback stores no file: the ticket of the tracker does** (decision of 2026-10-20, FRU-198). A
+note that goes to a tracker can carry files: a capture of the page or of an area, an image, any file.
+Each one waits in the database of the worker until the tracker has it, and no longer.
 
-- **No new permission.** The capture needs `activeTab`, which the manifest already declares and the
-  browser grants when the reviewer opens the popup on the page, until the page navigates. Without
-  it the browser refuses the capture, and the note goes without a picture.
-- **Only a session of a member sends a picture, and only a member reads it.** `POST /screenshot`
-  takes the session token of the extension, a `client` (the site of the note), and keeps the
-  picture for the workspace of that site when the token is a session of that workspace and its
-  person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
-  anybody else with a token, as for a picture that does not exist; `401` with no token. **« A
-  member » is anybody of the workspace, a guest included, on the site of the picture**: a guest reads
-  the notes of the sites shared with them, and the address of a picture is in its note. A picture
-  keeps its site (FRU-250); a guest reads none of another site, and none sent before it was kept. test:`is sent and read by a guest of the workspace, as by a member`. The address
-  is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
-  the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
-- **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,
-  `413` over 1 MB (`MAX_SCREENSHOT_BYTES`), `400` for bytes that do not start like a PNG, or declare
-  a side over 8,192 pixels. A picture is answered with `Content-Type: image/png`, `nosniff`, a
-  `Content-Security-Policy` of `default-src 'none'` and `Cache-Control: private, no-store`.
-- **What the page decides is the area, and nothing else.** The capture request travels on the page
-  bridge, which the page can forge: it buys a picture of its own tab, sent to the worker of its own
-  entry, with a session it never sees, and only when `activeTab` was granted. The background refuses
-  a request from a tab that is not the active one, and the endpoint, the client and the token come
-  from the stored entry and the session, never from the message.
-- **A picture is kept when its note is written, not when it is sent.** A note kept for later
-  (FRU-124) holds the address of its picture in the seed that waits in the tab. A note that is never
-  sent leaves a picture that no note names; it goes with its workspace, and nothing else removes it.
+- **Who sends one: a session of the workspace of the site, a guest on a site shared with them, and
+  nobody else.** `POST /attachments?client=<site>` takes the session token of the extension, and
+  keeps the file when the token is a session of the workspace of that site, its person reads that
+  site now, and the session is still valid in the store (`writerIn`, as every write). No token, a
+  token of a site, a session of another workspace: `401`. test:`is sent by every role of the workspace, a guest on a site shared with them, and by nobody else`.
+- **Only the sender names a file, in a note of the same site.** `POST /feedback?attachments=<id>,…`
+  hands the files to the store of the site with the note. A file of another person, of another site,
+  taken by another note, or past its transit answers `410 attachment-gone`, and nothing is written.
+  test:`answers 410 attachment-gone for a file of another person, another note, or past its transit, and writes nothing`.
+  A batch takes no file (`400 attachments-in-batch`).
+- **A note with no tracker takes no file.** A site whose notes stay in Fruitback, or go to GitHub,
+  whose API takes no file, answers `409 attachments-not-taken`, on the file and on the note; a read
+  says it to the widget with `canAttach: false`.
+- **The worker checks the type against the bytes, and the size.** An image must start as PNG, JPEG,
+  WebP or GIF start, a PDF with `%PDF-`, a text must be UTF-8 with no NUL byte; any other file is kept
+  and sent as `application/octet-stream`, whatever its sender said. Nothing is decoded. The limits:
+  10 MB for an image, a PDF or another file, 2 MB for a text, 5 files and 25 MB for one note, 20
+  files a minute for one session (`429 rate-limited`, whatever its address), and 50 files or 100 MB
+  in transit for one account (`429 transit-full`). The limit of all requests by address
+  (`RATE_LIMIT_PER_MINUTE`) is counted before any of them. A refused file is not kept
+  (`admitFile`, `admitNote` of `attachments.ts`). The name is cleaned of its
+  path, its control characters and its quotes, and cut at 120 characters.
+- **How long: until the tracker has it, 7 days at most.** Linear takes the bytes before the issue is
+  written (`fileUpload`, then a `PUT` to the address Linear gives, https only), then
+  `attachmentCreate` names the file on the issue; the file leaves the worker at once. A file that
+  Linear does not take before the issue is written stays, and the note is refused with `502`: the
+  widget sends both again. Once the issue exists, a file that Linear refuses is lost and leaves the
+  worker too. A REST address gets each file by an address of one hour in the signed body of each
+  attempt (below); the file goes one hour after the delivery arrived. Every file ends 7 days after it
+  came, whatever happened: it reads as absent from then on, and the loop of the deliveries and each
+  new file sweep it. A note whose delivery arrives later goes without it.
+- **Fruitback serves no file to a person.** No route answers a file to a member, a guest, a page or a
+  browser: `GET /screenshot/<id>` is gone. The one read is
+  `GET /attachments/<id>?expires=…&signature=…`, for the receiver of a delivery: an HMAC-SHA256 of the
+  id and the end, with a key derived from `FRUITBACK_SECRETS_KEY`, compared in constant time, that
+  answers for one hour and only for a file that a note took; anything else is `404`, as a file that
+  does not exist. It answers as a download (`Content-Disposition: attachment`), with no CORS header,
+  `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
+  `Cross-Origin-Resource-Policy: same-origin` and `Cache-Control: private, no-store`. Whoever holds
+  the address in that hour reads the file: the address travels only in the body of the delivery,
+  over https, to the address the workspace connected.
+  test:`answers 404 to a signature that ended, that is not this one, or to a file no note took`.
+- **The pictures of before FRU-331** end 7 days after the migration, which deletes none; the sweep
+  removes them then. Until then a waiting delivery whose seed names one carries it by a signed
+  address, and a note of before sent again by its sender goes with it; nothing else reads them.
+- **Who reads a file after: the people of the tracker.** A read of the page says the names of the
+  files of a note and the address the tracker gave each, for the readers of the note; a guest reads
+  the names only, as a guest reads no reference of a tracker.
+- **The capture of a page or of an area needs no new permission** of the extension: `activeTab`, as
+  before. What the page decides is the area, and nothing else: the endpoint, the client and the
+  token come from the stored entry and the session, never from a message of the page.
 
-What the picture shows is whatever the element showed on the screen, the open composer of the
-widget included when it covers the element.
+What a capture shows is whatever the page showed on the screen, the open composer of the widget
+included when it covers it.
 
 ### The administrator of the instance (FRU-261)
 
@@ -2033,12 +2064,12 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
   While a workspace is suspended:
   - **its sites answer the widget and the extension as sites that do not exist**: the same status,
     the same headers and the same bytes, on `GET /feedback`, `POST /feedback`, the replies and
-    `POST /screenshot`, from the origin of the site, from another origin and with none:
+    `POST /attachments`, from the origin of the site, from another origin and with none:
     test:`answers every route of the widget that takes a site, for a site of a suspended workspace, with the bytes of an unknown site`.
     The origin of a site stops being allowed, unless a site of another workspace has the same one:
     test:`stops allowing the origin of a site that no other workspace has, as an origin that no site has`.
     `GET /session/sites` answers as if the workspace were deleted, `POST /session/sites` as for a
-    workspace that does not exist, and a picture as one that does not exist. **No note is taken, and
+    workspace that does not exist. **No note is taken, and
     the notes that the worker keeps stay** in its database;
   - **its members sign in and read everything in the console**, and `/console/me` says the suspension;
   - **every write of the workspace is refused with `409 workspace-suspended`**, by one guard, after

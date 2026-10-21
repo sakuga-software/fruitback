@@ -1,4 +1,5 @@
 import { type Seed, seedSchema } from './seed.ts';
+import { seedAttachmentSchema } from './attachments.ts';
 import { z } from 'zod';
 
 /**
@@ -111,6 +112,11 @@ export const seedIssueSchema = z.object({
    * every other note and every other reader: the worker says it only to the person it names.
    */
   mine: z.literal(true).optional(),
+  /**
+   * The files of the note, as its tracker keeps them (FRU-331): a name, and the address of the
+   * tracker. Absent when the store says nothing of them. Read-envelope field.
+   */
+  attachments: z.array(seedAttachmentSchema).optional(),
   seed: seedSchema,
 });
 

@@ -22,7 +22,11 @@ import { useWide } from '../wide';
  * that they are not there yet: no button connects what does not exist.
  */
 const LATER = [
-  { name: 'GitHub Issues', detail: msg('An issue per note, in one repository.') },
+  // FRU-331: the API of an issue of GitHub takes no file, so the files of a note will not go there.
+  {
+    name: 'GitHub Issues',
+    detail: msg('An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.'),
+  },
   { name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
   { name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
   { name: 'Trello', detail: msg('A card in the list you choose.') },
@@ -313,7 +317,10 @@ export default function Connectors() {
                     </Under>
                   )}
                 </Source>
-                <Source name={t(KINDS.rest.name)} detail={t('POST each note to your own endpoint.')}>
+                <Source
+                  name={t(KINDS.rest.name)}
+                  detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
+                >
                   {adding === 'rest' ? (
                     <Under>
                       <AddRest

@@ -229,32 +229,22 @@ test('the rules go to the account of the browser only when the reviewer asks, an
 });
 
 /**
- * The picture of a note, taken by the browser (FRU-44). Here the capture cannot succeed: no popup was
- * opened on the page, so the browser grants no `activeTab`, and the reviewer has no session. The
- * promise of the ticket is what is left to check: a capture that fails costs the picture, never the
- * note. The cases where it gives up, and the one where it uploads, are in `src/capture.test.ts`.
+ * The picture of the element of FRU-44 went to `POST /screenshot`, which FRU-331 removes: the
+ * extension no longer offers it, so no picture is asked for and lost in silence. A note still goes.
+ * FRU-332 brings the capture of the page and of an area, as a file of the note.
  */
-test('private mode: a picture the browser cannot take costs the picture, never the note', async ({ extension }) => {
+test('private mode: the extension offers no picture of the element, and the note goes', async ({ extension }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-capture');
 
-  // The extension offers the picture, and it is off until the reviewer turns it on.
   await page.getByLabel('Open Fruitback settings').click();
-  const setting = page.locator('[name="screenshot"]');
-  await expect(setting).not.toBeChecked();
-  await setting.check();
+  await expect(page.getByRole('dialog', { name: 'Fruitback settings' })).toBeVisible();
+  await expect(page.locator('[name="screenshot"]')).toHaveCount(0);
   await page.getByLabel('Open Fruitback settings').click();
 
   await plantOnTheLatteCard(page, /Leave feedback/, 'Sans image, et pourtant envoyée');
-  // Not in silence (FRU-238): the composer says the note went without the picture it asked for, and
-  // the title of its card keeps what the note was sent as (FRU-326).
-  await expect(page.locator('[data-fruitback-sent-text]')).toHaveText(
-    /^Sent without the picture, which could not be taken\./,
-  );
-  await expect(page.locator('[data-fruitback-sent-title]')).toHaveText(/^Sent( as \S+)?$/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-
   const [seed] = await seedsOn(page);
   expect(seed?.note).toBe('Sans image, et pourtant envoyée');
   expect(seed && 'screenshot' in seed).toBe(false);

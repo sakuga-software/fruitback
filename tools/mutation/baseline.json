@@ -13,6 +13,10 @@
       "src/issue.ts": {
         "score": 100,
         "mutants": 25
+      },
+      "src/attachments.ts": {
+        "score": 92.5,
+        "mutants": 40
       }
     }
   },

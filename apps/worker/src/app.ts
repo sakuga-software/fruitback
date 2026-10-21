@@ -1,4 +1,5 @@
 import {
+  MAX_ATTACHMENTS_PER_NOTE,
   SEED_STAGES,
   type Seed,
   type SeedIssue,
@@ -29,7 +30,7 @@ import {
   oneAtATime,
   renameWorkspaceWithPlugin,
 } from './auth-organization.ts';
-import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
@@ -50,6 +51,7 @@ import {
   type ReplyAuthor,
   type SeedStore,
   StoreError,
+  takesAttachments,
   takesChecks,
   takesReplies,
 } from './store.ts';
@@ -68,20 +70,14 @@ import {
   postgresInstanceAdmin,
   postgresKv,
   postgresNoteIndex,
-  postgresScreenshotStore,
+  postgresAttachmentStore,
   postgresSessionStore,
 } from './postgres-stores.ts';
 import type { ConnectStore } from './connect.ts';
 import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
 import { sessionStillValid } from './session-check.ts';
-import {
-  MAX_SCREENSHOT_BYTES,
-  SCREENSHOT_PATH,
-  type ScreenshotStore,
-  newScreenshotId,
-  pngSize,
-  screenshotIdOf,
-} from './screenshots.ts';
+import { ATTACHMENTS_PATH, type AttachmentStore, attachmentIdsOf } from './attachments.ts';
+import { handleAttachment, legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { withoutAddress } from './postgres.ts';
 import {
   type SessionIdentity,
@@ -322,10 +318,18 @@ async function notesOfReader(
  * A note as a guest reads it (FRU-250): no reference in the tracker, no address of the issue, and no
  * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
  */
-function withoutTracker<T extends { id: string; identifier: string; url?: string }>(issue: T, seed: string): T {
-  const { url: _url, ...rest } = issue;
+function withoutTracker<
+  T extends { id: string; identifier: string; url?: string; attachments?: SeedIssue['attachments'] },
+>(issue: T, seed: string): T {
+  const { url: _url, attachments, ...rest } = issue;
 
-  return { ...rest, id: seed, identifier: seed } as T;
+  // The address of a file is the tracker's (FRU-331): a guest reads its name only.
+  return {
+    ...rest,
+    ...(attachments === undefined ? {} : { attachments: attachments.map(({ name }) => ({ name })) }),
+    id: seed,
+    identifier: seed,
+  } as T;
 }
 
 /**
@@ -401,7 +405,15 @@ export async function deliverPending(
   const accounts = held ?? accountStoreFor(config.config);
   if (accounts === undefined) return;
 
-  await deliverDue({ accounts, secretsKey: config.config.secretsKey, send, ...(now === undefined ? {} : { now }) });
+  const attachments = attachmentStoreFor(config.config);
+  await deliverDue({
+    accounts,
+    secretsKey: config.config.secretsKey,
+    send,
+    ...(attachments === undefined ? {} : { attachments }),
+    ...(config.config.publicUrl === undefined ? {} : { publicUrl: config.config.publicUrl }),
+    ...(now === undefined ? {} : { now }),
+  });
 }
 
 /** What the transport knows and the request itself cannot say. */
@@ -437,8 +449,8 @@ export type RequestContext = {
    * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
    */
   auth?: Auth | Promise<Auth>;
-  /** Where the pictures of the notes are kept (FRU-44). A suite hands over one in memory. */
-  screenshots?: ScreenshotStore;
+  /** Where the files of the notes wait for their tracker (FRU-331). A suite hands over one in memory. */
+  attachments?: AttachmentStore;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
@@ -844,9 +856,42 @@ async function routed(
     }
   }
 
-  if (pathname === SCREENSHOT_PATH || pathname.startsWith(`${SCREENSHOT_PATH}/`)) {
+  // Resolved once here, not inside each handler: see `RequestContext.store`.
+  const storeOfRequest = (): SeedStore => {
+    const own = context.store ?? storeFor(served);
+
+    // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
+    return accounts === undefined
+      ? own
+      : createRoutedStore(
+          own,
+          createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth, {
+            // FRU-331: a delivery carries the address of a file on this worker, which needs both.
+            filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
+          }),
+        );
+  };
+
+  if (pathname === ATTACHMENTS_PATH || pathname.startsWith(`${ATTACHMENTS_PATH}/`)) {
     try {
-      return await handleScreenshot(request, pathname, served, context, cors.headers);
+      return await handleAttachment(request, pathname, {
+        files: context.attachments ?? attachmentStoreFor(served),
+        store: storeOfRequest(),
+        headers: cors.headers,
+        secretsKey: served.secretsKey,
+        kv: () => context.kv ?? kvFor(served),
+        route: (site) => {
+          const route = routeFor(request, served, site);
+          if (!route.ok) return { ok: false, response: routingFailure(route, cors.headers) };
+
+          return {
+            ok: true,
+            workspace: route.policy.sessions?.workspace,
+            place: () => chosenPlace(request, served, route),
+          };
+        },
+        writer: (workspace, site) => writerIn(request, served, context, workspace, site),
+      });
     } catch (error) {
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
       throw error;
@@ -859,13 +904,7 @@ async function routed(
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
-  // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const own = context.store ?? storeFor(served);
-  // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
-  const store =
-    accounts === undefined
-      ? own
-      : createRoutedStore(own, createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth));
+  const store = storeOfRequest();
 
   if (replyTo !== undefined) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
@@ -890,9 +929,17 @@ async function routed(
 
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
-    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
-    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex, () =>
-        sessionWrites(request, served, context).then((session) => session !== undefined),
+    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex, context)
+    : postFeedback(
+        request,
+        served,
+        watchedStore(store, accounts),
+        kv,
+        cors.headers,
+        context.clientIp,
+        noteIndex,
+        () => sessionWrites(request, served, context).then((session) => session !== undefined),
+        context,
       );
 }
 
@@ -1368,10 +1415,10 @@ function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
   return target?.connector === undefined ? { kind: 'fruitback' } : { kind: 'connector', connector: target.connector };
 }
 
-export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | undefined {
+export function attachmentStoreFor(config: WorkerConfig): AttachmentStore | undefined {
   return config.databaseUrl === undefined
     ? undefined
-    : postgresScreenshotStore(config.databaseUrl, config.databaseSchema);
+    : postgresAttachmentStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**
@@ -1449,93 +1496,6 @@ async function writerIn(
   const session = await sessionWrites(request, config, context);
 
   return session?.subject === account ? account : undefined;
-}
-
-/**
- * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
- * `GET /screenshot/<id>` answers it.
- *
- * **Both answer somebody of the workspace, whatever their role, and nobody else.** A picture shows a
- * page of a staging site, so it is never read without a session, as the pins of a public site are
- * (FRU-84 is still open on what a public site may show). A guest sends one and reads one (FRU-213):
- * a guest reads the notes of the workspace, and the address of the picture is in the note. The right
- * asked for is to be of the workspace, and not `see-tracker`, which is about the tracker and what
- * the team answers there. That somebody is the session of the extension: its token, signed with the
- * worker key, names the account and the workspace, and the role is read at each request. A picture is sent for a client (`?client=`, the site of the note) and belongs to
- * the workspace of that site. To anybody who is not one of its members, with a token, a picture
- * answers `404`, as one that does not exist.
- *
- * The rest is the guard of the write path: the rate limit above, the CORS of the sites and of the
- * extension, `413` over `MAX_SCREENSHOT_BYTES`, `400` for bytes that are not a PNG. A worker with no
- * database keeps no picture, and answers `404` on both.
- */
-async function handleScreenshot(
-  request: Request,
-  pathname: string,
-  config: Served,
-  context: RequestContext,
-  headers: Record<string, string>,
-): Promise<Response> {
-  const store = context.screenshots ?? screenshotStoreFor(config);
-  if (store === undefined) return json(404, { error: 'not-found' }, headers);
-
-  if (pathname === SCREENSHOT_PATH) {
-    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-    // The picture is of the workspace of the site whose note it goes with: the client of the call.
-    const route = routeFor(request, config, normalizeClientId(new URL(request.url).searchParams.get('client')));
-    if (!route.ok) return routingFailure(route, headers);
-    const workspace = route.policy.sessions?.workspace;
-    // The site of the note: a guest sends a picture on a site shared with them only (FRU-250).
-    const site = normalizeClientId(new URL(request.url).searchParams.get('client'));
-    // A write: a member of the workspace, with a session read again in the store (FRU-238).
-    const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace, site);
-    if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
-
-    const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
-    if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_SCREENSHOT_BYTES }, headers);
-    const size = pngSize(body);
-    if (size === undefined) return json(400, { error: 'not-a-png' }, headers);
-
-    const id = newScreenshotId();
-    await store.put({
-      id,
-      workspace,
-      account,
-      ...(site === undefined ? {} : { site }),
-      png: body,
-      ...size,
-      createdAt: Date.now(),
-    });
-    const base = config.publicUrl ?? new URL(request.url).origin;
-
-    // `id` is what a caller builds the address from, at the address it reaches this worker by: `url`
-    // is this worker's own idea of itself, which behind a proxy and with no `FRUITBACK_PUBLIC_URL`
-    // is an inner address (raised in review).
-    return json(201, { id, url: `${base}${SCREENSHOT_PATH}/${id}`, ...size }, headers);
-  }
-
-  const id = screenshotIdOf(pathname);
-  if (id === undefined) return json(404, { error: 'not-found' }, headers);
-  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-  if (readBearerToken(request.headers.get('Authorization')) === undefined)
-    return json(401, { error: 'identity-required' }, headers);
-  const found = await store.get(id);
-  // A picture of another workspace answers as one that does not exist, and so does a picture of a
-  // site that is not shared with a guest (FRU-250).
-  if (found === undefined || (await memberOf(request, config, found.workspace, found.site)) === undefined)
-    return json(404, { error: 'not-found' }, headers);
-
-  return new Response(found.png, {
-    status: 200,
-    headers: {
-      ...headers,
-      'Content-Type': 'image/png',
-      // Read by a member with a token: no shared cache keeps it, and no browser runs it as a page.
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': "default-src 'none'",
-    },
-  });
 }
 
 /**
@@ -1780,6 +1740,7 @@ async function getFeedback(
   kv: Kv,
   corsHeaders: Record<string, string>,
   noteIndex?: NoteIndex,
+  context?: RequestContext,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
   const requested = params.get('url');
@@ -1880,13 +1841,25 @@ async function getFeedback(
 
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
+    // FRU-331: whether a note of this reader may carry files, for a reader who may send one (a
+    // session of the workspace that reads this site). Asked at each request, like the places.
+    const attaches =
+      route.client?.workspace !== undefined &&
+      clientId !== undefined &&
+      (context?.attachments ?? attachmentStoreFor(config)) !== undefined &&
+      (await memberOf(request, config, route.client.workspace, clientId)) !== undefined;
     const offered =
       places.length > 0 && (await seesTracker(request, config, route.policy))
         ? {
-            destinations: places.map((place) => ({
-              id: place.id,
-              ...(place.label === undefined ? {} : { label: place.label }),
-            })),
+            destinations: await Promise.all(
+              places.map(async (place) => ({
+                id: place.id,
+                ...(place.label === undefined ? {} : { label: place.label }),
+                ...(attaches
+                  ? { canAttach: await takesAttachments(store, placedAt(route.client as ClientConfig, place)) }
+                  : {}),
+              })),
+            ),
           }
         : {};
 
@@ -1905,6 +1878,9 @@ async function getFeedback(
         ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
         // FRU-330: absent where this reader may leave a note, as on every worker of before.
         ...((await writesHere(request, route.policy)) ? {} : { canWrite: false }),
+        // FRU-331: `false` says that the notes of this site stay in Fruitback, or go to a tracker that
+        // takes no file: the widget offers no file and says why. Absent: this reader sends none.
+        ...(attaches ? { canAttach: await takesAttachments(store, route.client) } : {}),
         ...batchOffer(config),
       },
       // No browser cache, deliberately. The read cache above is what protects the Linear
@@ -1965,7 +1941,15 @@ async function postFeedback(
   noteIndex: NoteIndex | undefined,
   /** Whether the session of the token still writes, read in the store (FRU-238). */
   stillWrites: () => Promise<boolean>,
+  context?: RequestContext,
 ): Promise<Response> {
+  // FRU-331: the files of the note, by their ids in transit. Read before the body: a bad list is
+  // refused whatever the note says.
+  const attachmentIds = attachmentIdsOf(new URL(request.url).searchParams.get('attachments'), MAX_ATTACHMENTS_PER_NOTE);
+  if (attachmentIds === null) {
+    return json(400, { error: 'invalid-attachments', max: MAX_ATTACHMENTS_PER_NOTE }, corsHeaders);
+  }
+
   const body = await readBoundedText(request);
   if (body === null) {
     return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
@@ -1980,6 +1964,8 @@ async function postFeedback(
 
   // FRU-124: an array is a batch, an object is one note, as before.
   if (Array.isArray(payload)) {
+    // A note with files goes alone: the files of a batch would have to say which note is theirs.
+    if (attachmentIds.length > 0) return json(400, { error: 'attachments-in-batch' }, corsHeaders);
     return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex, stillWrites);
   }
 
@@ -2010,7 +1996,33 @@ async function postFeedback(
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
 
   try {
-    const issue = await store.create(attributed, target, route.policy);
+    // A note of before FRU-331, sent again, names its picture in its seed: it goes with it while the
+    // migration keeps it, and the note is never refused for it.
+    const noteFiles = {
+      files: context?.attachments ?? attachmentStoreFor(config),
+      store,
+      writer:
+        context === undefined
+          ? undefined
+          : (workspace: string, site: string | undefined) => writerIn(request, config, context, workspace, site),
+    };
+    const workspaceOfNote = route.client?.workspace;
+    const legacy = await legacyAttachment(noteFiles, target, workspaceOfNote, attributed, attachmentIds);
+    const named = legacy?.id === undefined ? attachmentIds : [...attachmentIds, legacy.id];
+    const taken =
+      named.length === 0
+        ? undefined
+        : await takeFiles(noteFiles, target, workspaceOfNote, attributed.id, clientId, named);
+    if (taken !== undefined && !taken.ok) return json(taken.status, taken.body, corsHeaders);
+    const { files: answered, ...issue } = await store.create(
+      attributed,
+      target,
+      route.policy,
+      taken?.ok === true ? taken.files : undefined,
+    );
+    // The tracker has the files, or refused them once the note was written: none stays in transit.
+    // A file that a delivery carries later stays until that delivery arrives, or its transit ends.
+    const filesOutcome = taken?.ok === true ? await settleFiles(taken.store, taken.files, answered) : undefined;
     await invalidatePages(kv, [attributed.page.url]);
     const workspace = route.client?.workspace;
     if (workspace !== undefined && clientId !== undefined) {
@@ -2020,7 +2032,18 @@ async function postFeedback(
 
     const hidden = await hidesTracker(request, config, route.policy);
 
-    return json(201, { issue: hidden ? withoutTracker(issue, attributed.id) : issue }, corsHeaders);
+    return json(
+      201,
+      {
+        issue: hidden ? withoutTracker(issue, attributed.id) : issue,
+        ...(filesOutcome === undefined ? {} : { attachments: filesOutcome }),
+        // The note named a picture that its place takes no file for: it goes without it, and says why.
+        ...(legacy?.notTaken === undefined
+          ? {}
+          : { attachments: { sent: 0, lost: 0, waiting: 0, notTaken: legacy.notTaken } }),
+      },
+      corsHeaders,
+    );
   } catch (error) {
     if (error instanceof StoreError) {
       // Upstream failed, not the caller: 502 tells the widget to keep the note and retry.

@@ -140,7 +140,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-eight BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-nine BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'admin_actions.at',
     'admin_reads.at',
@@ -167,6 +167,7 @@ it('knows the thirty-eight BIGINT columns of the worker, and that better-auth ha
     'pairings.expires_at',
     'pairings.redeemed_at',
     'screenshots.created_at',
+    'screenshots.expires_at',
     'seed_comments.created_at',
     'seed_comments.id',
     'seed_comments.seed_id',

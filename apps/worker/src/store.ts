@@ -1,5 +1,6 @@
 import type { Seed, SeedComment, SeedIssue, SeedStage } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
+import type { OutgoingFile } from './attachments.ts';
 
 /**
  * Where a seed is stored, behind one interface (FRU-29).
@@ -33,6 +34,19 @@ export class StoreError extends Error {}
  * would be a URL the caller could follow to nowhere.
  */
 export type CreatedIssue = { id: string; identifier: string; url?: string };
+
+/**
+ * What became of the files of a note (FRU-331), by their ids in transit, for a store that takes them.
+ *
+ * - `sent`: the tracker has the file. The worker removes it from the transit.
+ * - `lost`: the note is written, and the tracker refused the file. The worker removes it too: the
+ *   note is not sent again for it.
+ * - `waiting`: a delivery carries the file later. It stays in transit until that delivery arrives.
+ */
+export type FilesAnswer = { sent: string[]; lost: string[]; waiting: string[] };
+
+/** A note planted with its files. */
+export type CreatedWithFiles = CreatedIssue & { files?: FilesAnswer };
 
 /** What became of one seed of a batch: its issue, or a store that did not keep it. */
 export type BatchAnswer = { issue: CreatedIssue } | { error: 'store-unavailable' };
@@ -80,7 +94,26 @@ export type SeedStore = {
    * worker just uses the string.
    */
   scope(client: ClientConfig | undefined): string;
-  create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue>;
+  /**
+   * Plant one seed. `files` are its attachments in transit (FRU-331), for a store that takes them
+   * (`attachments`): the store sends them to its tracker, and says what became of each.
+   *
+   * A store throws `StoreError` when the note is not written: the files then stay in transit, and the
+   * widget sends the note again. Once the note is written, a file that fails is `lost`, never a throw.
+   */
+  create(
+    seed: Seed,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+    files?: readonly OutgoingFile[],
+  ): Promise<CreatedWithFiles>;
+  /**
+   * `true` on a store that sends the files of a note to its tracker (FRU-331). Absent: it takes
+   * none, as a store with no tracker (« Kept in Fruitback ») and GitHub, whose API takes no file.
+   */
+  readonly attachments?: true;
+  /** Whether the store of this client takes files, for a store that routes by client. */
+  attachmentsFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
    * Plant several seeds as one batch (FRU-124): a tracker groups them under one parent, and each
    * seed is still its own issue, with its own state. One answer for each seed, in order.
@@ -159,6 +192,11 @@ export type ReplyTarget = { issue: string; clientId: string | undefined };
 
 /** A reply to write: what somebody typed, and who they are. */
 export type NewReply = { body: string; author: ReplyAuthor };
+
+/** Whether a store takes the files of a note for this client (FRU-331). */
+export async function takesAttachments(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+  return store.attachmentsFor === undefined ? store.attachments === true : store.attachmentsFor(client);
+}
 
 /** Whether a store takes a reply for this client. */
 export async function takesReplies(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {

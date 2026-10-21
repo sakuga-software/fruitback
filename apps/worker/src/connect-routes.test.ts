@@ -963,7 +963,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
 /**
  * A session of an account ended in My account, while its access token is still signed and not
- * expired: a note, a batch, a note to a chosen place and a picture are refused; a read is not (FRU-238).
+ * expired: a note, a batch, a note to a chosen place and a file are refused; a read is not (FRU-238).
  * The scenario of a route test, and of its planted violations below.
  */
 async function endedWritesNothing(worker: Worker): Promise<void> {
@@ -974,7 +974,7 @@ async function endedWritesNothing(worker: Worker): Promise<void> {
   const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
   const picture = () =>
-    worker.call(`/screenshot?client=${acme.members}`, {
+    worker.call(`/attachments?client=${acme.members}`, {
       method: 'POST',
       origin: EXTENSION,
       headers: { ...bearer, 'Content-Type': 'image/png' },
@@ -986,7 +986,7 @@ async function endedWritesNothing(worker: Worker): Promise<void> {
     'a note to a chosen place': () =>
       worker.call('/feedback?destination=a-place', { body: note, origin: EXTENSION, headers: bearer }),
   };
-  // The session writes: a note goes, and the picture is read up to its bytes, which are no PNG.
+  // The session writes: a note goes, and the file is read up to its bytes, which are no PNG.
   assert.equal((await writes['a note']()).status, 201);
   assert.equal((await picture()).status, 400);
 

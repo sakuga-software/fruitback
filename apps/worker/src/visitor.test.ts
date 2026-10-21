@@ -9,7 +9,11 @@ import { mutatedModule } from './conformance.fixture.ts';
 import { WORKER, type World, callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresScreenshotStore } from './screenshots-postgres.ts';
+import { createPostgresAttachmentStore } from './attachments-postgres.ts';
+import { createMemoryAttachmentStore } from './attachments.ts';
+import type { AttachmentSeams } from './attachment-routes.ts';
+import { createMemoryKv } from './kv.ts';
+import type { SeedStore } from './store.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
@@ -491,10 +495,13 @@ function onePixel(): Uint8Array {
   return all;
 }
 
-/** `POST /screenshot` as the relay sends it: the PNG as the body, and the site of the note. */
+/**
+ * `POST /attachments` as the relay sends it (FRU-331, which replaced `POST /screenshot`): the PNG as
+ * the body, and the site of the note.
+ */
 function sendPicture(handle: Handle, world: World, site: string, token?: string): Promise<Response> {
   return handle(
-    new Request(`${WORKER}/screenshot?client=${site}`, {
+    new Request(`${WORKER}/attachments?client=${site}&name=page.png`, {
       method: 'POST',
       headers: {
         Origin: SITE,
@@ -504,12 +511,12 @@ function sendPicture(handle: Handle, world: World, site: string, token?: string)
       body: onePixel(),
     }),
     world.env,
-    { clientIp: '198.18.1.2', ...world.context, screenshots: createPostgresScreenshotStore(world.database) },
+    { clientIp: '198.18.1.2', ...world.context, attachments: createPostgresAttachmentStore(world.database) },
   );
 }
 
 describe('a picture with a note, on a site that its members read (FRU-330)', () => {
-  it('is refused with no session, whoever may leave a note, and kept for a member', async () => {
+  it('is refused with no session, whoever may leave a note, and passes the guard for a member', async () => {
     const { handleRequest: real } = await import('./app.ts');
     for (const writers of ['members', 'anyone'] as const) {
       const { world, admin, workspace, site } = await workerWithASite('members', writers);
@@ -517,23 +524,44 @@ describe('a picture with a note, on a site that its members read (FRU-330)', () 
       const refused = await sendPicture(real, world, site);
       assert.equal(refused.status, 401, writers);
       assert.deepEqual(await refused.json(), { error: 'identity-required' }, writers);
-      // The control: the session that the relay sends.
+      // The control: the session that the relay sends passes the guard. The notes of this site stay
+      // in Fruitback, which takes no file (FRU-331): the next answer is that one.
       const kept = await sendPicture(real, world, site, await sessionOf(world, admin.id, workspace));
-      assert.equal(kept.status, 201, `${writers}: ${await kept.clone().text()}`);
+      assert.equal(kept.status, 409, `${writers}: ${await kept.clone().text()}`);
+      assert.deepEqual(await kept.json(), { error: 'attachments-not-taken' }, writers);
     }
   });
 
   it('is kept with no session when the guard of the route is taken out', async () => {
-    const mutant = await mutatedModule('app.ts', {
-      from: "if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);",
-      to: "if (workspace === undefined) return json(401, { error: 'identity-required' }, headers);",
+    // The route of the files, with a place that takes them and a request with no session.
+    const seams = (): AttachmentSeams => ({
+      files: createMemoryAttachmentStore(),
+      store: { attachments: true } as unknown as SeedStore,
+      headers: {},
+      secretsKey: undefined,
+      kv: () => createMemoryKv(),
+      route: () => ({ ok: true, workspace: 'ws_acme', place: async () => undefined }),
+      writer: async () => undefined,
+    });
+    const request = () =>
+      new Request(`${WORKER}/attachments?client=site_acme&name=page.png`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/png' },
+        body: onePixel(),
+      });
+    const { handleAttachment } = await import('./attachment-routes.ts');
+    // The control: the route as it is refuses it.
+    assert.equal((await handleAttachment(request(), '/attachments', seams())).status, 401);
+
+    const mutant = await mutatedModule('attachment-routes.ts', {
+      from: 'if (workspace === undefined || account === undefined || site === undefined)',
+      to: 'if (workspace === undefined || site === undefined)',
     });
     try {
-      const { world, site } = await workerWithASite('members', 'members');
-      // Past the guard, the store is asked to keep a picture of nobody, and the database refuses the row.
-      const passed = await sendPicture(mutant.module.handleRequest as Handle, world, site).then(
+      const mutated = mutant.module.handleAttachment as typeof handleAttachment;
+      const passed = await mutated(request(), '/attachments', seams()).then(
         (sent) => sent.status !== 401,
-        (error: unknown) => /account_id/.test(String(error)),
+        (error: unknown) => /account/.test(String(error)),
       );
       assert.equal(passed, true);
     } finally {
