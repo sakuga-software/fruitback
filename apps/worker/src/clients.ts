@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { isExtensionOrigin } from './cors.ts';
+import {
+  CLIENT_MAP_EMPTY,
+  CLIENT_MAP_INVALID_SHAPE,
+  CLIENT_MAP_NOT_JSON,
+  READ_CHOSEN_IN_CONSOLE_NOTICE,
+  publicReadNotice,
+} from './messages.ts';
 
 /**
  * One worker, several client sites (FRU-15).
@@ -218,19 +225,12 @@ export function readExposureNotice(options: {
   accounts: boolean;
 }): string | undefined {
   if (options.accounts) {
-    return (
-      '[fruitback] who reads a site is chosen site by site, in the console: members only, or everyone. ' +
-      'FRUITBACK_READ does not apply to a worker with accounts.'
-    );
+    return READ_CHOSEN_IN_CONSOLE_NOTICE;
   }
   const open = openReadClients(options);
   if (open.length === 0) return undefined;
 
-  return (
-    `[fruitback] read is public for ${open.join(', ')}: their pins, authors and replies ` +
-    'are readable by anyone who can reach this worker. Set FRUITBACK_READ=authenticated, ' +
-    'or "read": "authenticated" per client, to require a token.'
-  );
+  return publicReadNotice(open);
 }
 
 export type ClientMapResult = { ok: true; clients: ClientMap | undefined } | { ok: false; reason: string };
@@ -249,12 +249,12 @@ export function readClientMap(value: string | undefined): ClientMapResult {
   try {
     parsed = JSON.parse(value);
   } catch {
-    return { ok: false, reason: 'not valid JSON' };
+    return { ok: false, reason: CLIENT_MAP_NOT_JSON };
   }
 
   const result = clientMapSchema.safeParse(parsed);
-  if (!result.success) return { ok: false, reason: result.error.issues[0]?.message ?? 'invalid shape' };
-  if (Object.keys(result.data).length === 0) return { ok: false, reason: 'no client in the map' };
+  if (!result.success) return { ok: false, reason: result.error.issues[0]?.message ?? CLIENT_MAP_INVALID_SHAPE };
+  if (Object.keys(result.data).length === 0) return { ok: false, reason: CLIENT_MAP_EMPTY };
 
   return { ok: true, clients: result.data };
 }
