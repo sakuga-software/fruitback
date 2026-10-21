@@ -1,22 +1,22 @@
 {
   "packages/shared": {
-    "score": 87.29,
+    "score": 99.51,
     "files": {
       "src/markdown-description.ts": {
-        "score": 83.4,
-        "mutants": 235
+        "score": 100,
+        "mutants": 175
       },
       "src/seed.ts": {
-        "score": 90.9,
-        "mutants": 165
+        "score": 100,
+        "mutants": 149
       },
       "src/issue.ts": {
         "score": 100,
         "mutants": 25
       },
       "src/attachments.ts": {
-        "score": 92.5,
-        "mutants": 40
+        "score": 100,
+        "mutants": 35
       },
       "src/contrast.ts": {
         "score": 93.33,
@@ -32,8 +32,8 @@
         "mutants": 208
       },
       "src/identity.ts": {
-        "score": 93.5,
-        "mutants": 200
+        "score": 96.95,
+        "mutants": 164
       },
       "src/kv.ts": {
         "score": 86.48,
@@ -52,8 +52,8 @@
         "mutants": 60
       },
       "src/session.ts": {
-        "score": 96,
-        "mutants": 75
+        "score": 97.89,
+        "mutants": 95
       },
       "src/store-config.ts": {
         "score": 100,
