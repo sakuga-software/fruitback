@@ -45,26 +45,34 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
   if (origin === null) return { allowed: true, headers: {} };
 
   const allowAny = allowedOrigins.includes(ALLOW_ANY_ORIGIN);
-  const allowed = allowAny || isExtensionOrigin(origin) || allowedOrigins.some((candidate) => candidate === origin);
+  const allowed = allowAny || isExtensionOrigin(origin) || allowedOrigins.includes(origin);
   if (!allowed) return { allowed: false, headers: {} };
 
+  return { allowed: true, headers: allowOrigin(origin) };
+}
+
+/**
+ * The headers that let `origin` read the answer, the same for the widget's routes and the
+ * extension's.
+ *
+ * - `Vary`: the response differs per origin, and without it a shared cache would serve the wrong
+ *   header.
+ * - `GET`: `/session/sites`, which the extension asks with its access token.
+ * - `Authorization` is not optional here, and leaving it out made the identity feature unreachable
+ *   from a browser (FRU-25). `embed.ts` sends `Authorization: Bearer …` on both the read and the
+ *   write when a host mints a token. That header is not CORS-safelisted, so the request is
+ *   preflighted, and a preflight that does not list it is refused by the browser before the worker
+ *   sees anything — `read: 'authenticated'` answered nobody, and a verified reporter could never be
+ *   posted cross-origin. Raised in review; nothing server-side could have noticed, because the
+ *   request never arrived.
+ */
+function allowOrigin(origin: string): Record<string, string> {
   return {
-    allowed: true,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      // The response differs per origin; without this a shared cache would serve the wrong header.
-      Vary: 'Origin',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      // `Authorization` is not optional here, and leaving it out made the identity feature
-      // unreachable from a browser (FRU-25). `embed.ts` sends `Authorization: Bearer …` on both the
-      // read and the write when a host mints a token. That header is not CORS-safelisted, so the
-      // request is preflighted, and a preflight that does not list it is refused by the browser
-      // before the worker sees anything — `read: 'authenticated'` answered nobody, and a verified
-      // reporter could never be posted cross-origin. Raised in review; nothing server-side could
-      // have noticed, because the request never arrived.
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
+    'Access-Control-Allow-Origin': origin,
+    Vary: 'Origin',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
   };
 }
 
@@ -86,17 +94,7 @@ export function openCors(request: Request): CorsDecision {
   const origin = request.headers.get('Origin');
   if (origin === null) return { allowed: true, headers: {} };
 
-  return {
-    allowed: true,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      Vary: 'Origin',
-      // GET and Authorization for `/session/sites`, which the extension asks with its access token.
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
-  };
+  return { allowed: true, headers: allowOrigin(origin) };
 }
 
 /**

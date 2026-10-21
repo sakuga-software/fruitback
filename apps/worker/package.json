@@ -63,6 +63,7 @@
           "{workspaceRoot}/.github/**/*",
           "{workspaceRoot}/.githooks/**/*",
           "{workspaceRoot}/.oxfmtignore",
+          "{workspaceRoot}/tools/mutation-study/*.ts",
           "{workspaceRoot}/tools/mutation/*.ts",
           "{workspaceRoot}/tools/mutation/baseline.json",
           "{workspaceRoot}/apps/playground/vite.config.ts",

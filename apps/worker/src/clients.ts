@@ -182,11 +182,7 @@ export function unreadableClients(options: {
 
 /** The workspaces the clients of this map belong to, each once. */
 export function workspacesOf(clients: ClientMap | undefined): string[] {
-  if (clients === undefined) return [];
-
-  return [
-    ...new Set(Object.values(clients).flatMap((client) => (client.workspace === undefined ? [] : [client.workspace]))),
-  ];
+  return [...new Set(Object.values(clients ?? {}).flatMap((client) => client.workspace ?? []))];
 }
 
 /**
@@ -244,7 +240,7 @@ export type ClientMapResult = { ok: true; clients: ClientMap | undefined } | { o
  * pooling every client into one team, which is exactly the failure this file exists to prevent.
  */
 export function readClientMap(value: string | undefined): ClientMapResult {
-  if (value === undefined || value.trim() === '') return { ok: true, clients: undefined };
+  if (!value?.trim()) return { ok: true, clients: undefined };
 
   let parsed: unknown;
   try {
@@ -346,9 +342,7 @@ export type ResolveClientOptions = {
  * cache key alike.
  */
 export function normalizeClientId(value: string | null | undefined): string | undefined {
-  const trimmed = value?.trim();
-
-  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+  return value?.trim() || undefined;
 }
 
 export function resolveClient({
@@ -417,7 +411,5 @@ export function resolveClient({
 
 /** Every origin any client may be embedded on — the allowlist a multi-tenant worker actually serves. */
 export function originsFromClients(clients: ClientMap | undefined): string[] {
-  if (clients === undefined) return [];
-
-  return [...new Set(Object.values(clients).flatMap((client) => client.origins ?? []))];
+  return [...new Set(Object.values(clients ?? {}).flatMap((client) => client.origins ?? []))];
 }
