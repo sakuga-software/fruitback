@@ -59,18 +59,18 @@ receiver to say anything at all.
 
 One table, `statuses`, in the worker's PostgreSQL:
 
-| Column       | Type                   | Meaning                                                                                                      |
-| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `site_id`    | text, not null         | The site. Cascade on delete, like `site_destinations`.                                                       |
-| `source`     | text, not null         | Where the state comes from: the id of the connector of a destination, or `own` for the worker's store.       |
-| `key`        | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).     |
-| `name`       | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                  |
-| `stage`      | text, not null         | One of the five.                                                                                             |
-| `color`      | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies. |
-| `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                       |
-| `position`   | integer, not null      | The order on the board.                                                                                      |
-| `origin`     | `tracker` or `team`    | `tracker`: read from the provider, cannot be deleted here. `team`: added in the console.                     |
-| `hidden`     | boolean, default false | Not offered as a choice in the console or the extension. The read still names it (FRU-366).                  |
+| Column       | Type                   | Meaning                                                                                                                                                  |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site_id`    | text, not null         | The site. Cascade on delete, like `site_destinations`.                                                                                                   |
+| `source`     | text, not null         | Where the state comes from: the id of the connector of a destination, or `own` for the worker's store.                                                   |
+| `key`        | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).                                                 |
+| `name`       | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                                                              |
+| `stage`      | text, not null         | One of the five.                                                                                                                                         |
+| `color`      | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies.                                             |
+| `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                                                                   |
+| `position`   | integer, not null      | The order on the board.                                                                                                                                  |
+| `origin`     | `tracker` or `team`    | `tracker`: a state of the provider, or a built-in status; removing its row gives back what the tracker or the worker says. `team`: added in the console. |
+| `hidden`     | boolean, default false | Not offered as a choice in the console or the extension. The read still names it (FRU-366).                                                              |
 
 The primary key is `(site_id, source, key)`. An entry exists only when the team changed something
 or added a status: a tracker state with no row takes the tracker's name, the stage of its type and
