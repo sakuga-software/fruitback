@@ -351,7 +351,15 @@ async function routed(
   }
 
   if (consoleRoute && accounts !== undefined) {
-    return handleConsole(request, pathname, { served, context, accounts, kv, noteIndex, cors });
+    return handleConsole(request, pathname, {
+      served,
+      context,
+      accounts,
+      kv,
+      noteIndex,
+      cors,
+      ...githubAppOf(context, served),
+    });
   }
 
   if (pairing) return handlePairing(request, served, context);

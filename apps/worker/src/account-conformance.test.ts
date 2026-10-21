@@ -253,6 +253,15 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     }),
   },
   {
+    breaks: 'attaches one installation to one workspace, and again to the same one keeps its connector (FRU-360)',
+    by: 'gives the installation of one workspace to another',
+    replace: {
+      after: 'async attachInstallation(',
+      from: 'eq(connectors.workspace_id, workspace),',
+      to: 'sql`true`,',
+    },
+  },
+  {
     breaks: 'keeps the settings of a connector, set from its own workspace only',
     by: 'sets the settings of a connector for any workspace',
     replace: {

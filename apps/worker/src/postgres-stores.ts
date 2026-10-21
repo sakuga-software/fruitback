@@ -85,6 +85,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     removeSite: true,
     addConnector: true,
     connectors: true,
+    attachInstallation: true,
     removeConnector: true,
     resealConnector: true,
     noteConnector: true,

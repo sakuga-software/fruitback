@@ -2,6 +2,15 @@ import { createHash } from 'node:crypto';
 import { type AccountStore, can } from './accounts.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import type { Kv } from './kv.ts';
+import {
+  STATE_TTL_MS,
+  issueTicket,
+  random,
+  redirect,
+  spendState,
+  spendTicket,
+  stateCookie as cookieOf,
+} from './oauth-flow.ts';
 import { listLinearTeams } from './linear.ts';
 import { open, seal } from './secrets.ts';
 import { StoreError } from './store.ts';
@@ -31,13 +40,11 @@ const TOKEN = 'https://api.linear.app/oauth/token';
 const REVOKE = 'https://api.linear.app/oauth/revoke';
 const CALL_TIMEOUT_MS = 10_000;
 
-/** A minute to go from the console to the worker. The ticket is spent by that one navigation. */
-export const TICKET_TTL_MS = 60 * 1_000;
-/** Ten minutes to come back from Linear. A `state` older than that is a page somebody left open. */
-export const STATE_TTL_MS = 10 * 60 * 1_000;
 /** A token this close to its end is refreshed before it is used. */
 export const REFRESH_MARGIN_MS = 5 * 60 * 1_000;
 const STATE_COOKIE = 'fruitback_linear_state';
+const TICKETS = 'fruitback:linear-ticket:';
+const STATES = 'fruitback:linear-oauth:';
 
 /**
  * What a Linear connector keeps, sealed. A connector made before FRU-134 holds the key alone, as
@@ -218,10 +225,6 @@ export type LinearOAuthContext = {
   now?: number;
 };
 
-function random(bytes: number): string {
-  return Buffer.from(crypto.getRandomValues(new Uint8Array(bytes))).toString('base64url');
-}
-
 /**
  * A ticket for one start of the flow, for this person in this workspace.
  *
@@ -232,44 +235,13 @@ export async function linearTicket(
   context: Pick<LinearOAuthContext, 'kv' | 'publicUrl'>,
   who: { workspace: string; account: string },
 ): Promise<string> {
-  const ticket = random(24);
-  await context.kv.set(`fruitback:linear-ticket:${ticket}`, JSON.stringify(who), TICKET_TTL_MS);
+  const ticket = await issueTicket(context.kv, TICKETS, who);
 
   return `${context.publicUrl}${LINEAR_START}?ticket=${ticket}`;
 }
 
-/** Reads a value of the Kv once. The Kv has no delete: an entry that ends in a millisecond reads as spent. */
-async function spend(kv: Kv, key: string): Promise<Record<string, unknown> | undefined> {
-  const kept = await kv.get(key);
-  if (kept === undefined || kept === '') return undefined;
-  await kv.set(key, '', 1);
-
-  try {
-    return JSON.parse(kept) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-}
-
-function redirect(location: string, cookies: string[] = []): Response {
-  const headers = new Headers({ Location: location, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
-  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
-
-  return new Response(null, { status: 302, headers });
-}
-
-/** `SameSite=Lax`, not `Strict`: Linear sends the person back with a navigation from another site. */
 function stateCookie(value: string, maxAge: number): string {
-  return `${STATE_COOKIE}=${value}; Path=${LINEAR_CALLBACK}; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
-}
-
-function readCookie(request: Request, name: string): string | undefined {
-  for (const part of (request.headers.get('Cookie') ?? '').split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return rest.join('=') || undefined;
-  }
-
-  return undefined;
+  return cookieOf(STATE_COOKIE, LINEAR_CALLBACK, value, maxAge);
 }
 
 /** Back to the connectors of the workspace, with a word the console can show. Nothing of Linear is echoed. */
@@ -292,14 +264,13 @@ export async function handleLinearOAuth(
 }
 
 async function start(request: Request, context: LinearOAuthContext): Promise<Response> {
-  const ticket = new URL(request.url).searchParams.get('ticket') ?? '';
-  const who = /^[\w-]{16,64}$/.test(ticket) ? await spend(context.kv, `fruitback:linear-ticket:${ticket}`) : undefined;
-  if (typeof who?.workspace !== 'string' || typeof who.account !== 'string') return back(context, undefined, 'failed');
+  const who = await spendTicket(context.kv, TICKETS, new URL(request.url).searchParams.get('ticket') ?? '');
+  if (who === undefined) return back(context, undefined, 'failed');
 
   const state = random(24);
   const verifier = random(48);
   await context.kv.set(
-    `fruitback:linear-oauth:${state}`,
+    `${STATES}${state}`,
     JSON.stringify({ verifier, workspace: who.workspace, account: who.account }),
     STATE_TTL_MS,
   );
@@ -322,10 +293,7 @@ async function start(request: Request, context: LinearOAuthContext): Promise<Res
 
 async function callback(request: Request, context: LinearOAuthContext): Promise<Response> {
   const params = new URL(request.url).searchParams;
-  const state = params.get('state') ?? '';
-  // The state must be the one this browser left with, and one this worker issued.
-  if (state === '' || readCookie(request, STATE_COOKIE) !== state) return back(context, undefined, 'failed');
-  const kept = await spend(context.kv, `fruitback:linear-oauth:${state}`);
+  const kept = await spendState(request, context.kv, { cookie: STATE_COOKIE, prefix: STATES });
   if (typeof kept?.verifier !== 'string' || typeof kept.workspace !== 'string' || typeof kept.account !== 'string') {
     return back(context, undefined, 'failed');
   }

@@ -7,15 +7,7 @@ import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
-import {
-  connectors,
-  deliveries,
-  email_links,
-  pairings,
-  seed_comments,
-  seeds,
-  site_destinations,
-} from './postgres-schema.ts';
+import { deliveries, email_links, pairings, seed_comments, seeds, site_destinations } from './postgres-schema.ts';
 
 /**
  * The `user_version` of each file of the last worker that wrote one: the one version this command
@@ -118,6 +110,22 @@ const members = pgTable(
     index('members_by_account').on(table.account_id),
   ],
 );
+
+/**
+ * `connectors` as `COPY_SCHEMA` has it: FRU-360 added `installation`, which no file holds. Each
+ * connector copied here has NULL there: no file holds a connector of the GitHub App.
+ */
+const connectors = pgTable('connectors', {
+  id: text('id').primaryKey(),
+  workspace_id: text('workspace_id').notNull(),
+  kind: text('kind').notNull(),
+  label: text('label').notNull(),
+  sealed: text('sealed').notNull(),
+  created_at: instant('created_at').notNull(),
+  attention: text('attention'),
+  attention_at: instant('attention_at'),
+  settings: text('settings').notNull().default('{}'),
+});
 
 /**
  * `sites` as `COPY_SCHEMA` has it: FRU-330 added `writers`, which no file holds. `0021_sites_writers`

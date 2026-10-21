@@ -47,7 +47,8 @@ import {
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
-import { readGithubRepository } from './github-connector.ts';
+import { type GithubApp, readGithubRepository } from './github-connector.ts';
+import { githubAppTicket } from './github-app-flow.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
@@ -78,6 +79,8 @@ export type ConsoleApiContext = {
   noteIndex?: NoteIndex;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
+  /** The GitHub App of the connectors (FRU-360). Absent: a workspace does not install it here. */
+  githubApp?: GithubApp;
   publicUrl?: string;
   /**
    * The person of the cookie of better-auth, or `undefined` (FRU-147). Absent: better-auth is off,
@@ -302,6 +305,16 @@ const CONNECTORS_UNAVAILABLE = { error: 'connectors-unavailable' } as const;
 /** Whether a workspace can connect Linear with OAuth here: the application, a key to seal with, an address. */
 function linearOAuthReady(context: ConsoleApiContext): boolean {
   return context.linearOAuth !== undefined && context.secretsKey !== undefined && context.publicUrl !== undefined;
+}
+
+/** Whether a workspace can install the GitHub App here: the App, a key to seal with, an address, a Kv. */
+function githubAppReady(context: ConsoleApiContext): boolean {
+  return (
+    context.githubApp !== undefined &&
+    context.secretsKey !== undefined &&
+    context.publicUrl !== undefined &&
+    context.kv !== undefined
+  );
 }
 
 function connectorView(connector: Connector): {
@@ -725,6 +738,8 @@ export async function handleConsoleApi(
           available: context.secretsKey !== undefined,
           // The console offers « Connect with Linear » only where the worker can do it.
           linearOAuth: linearOAuthReady(context),
+          // The console offers « Install the GitHub App » only where the worker can do it (FRU-360).
+          githubApp: githubAppReady(context),
         },
         headers,
       );
@@ -783,6 +798,21 @@ export async function handleConsoleApi(
       return json(404, CONNECTORS_UNAVAILABLE, headers);
     }
     const url = await linearTicket(
+      { kv: context.kv, publicUrl: context.publicUrl },
+      { workspace: workspaceId as string, account: account.id },
+    );
+
+    return json(201, { url }, headers);
+  }
+
+  // FRU-360: where the browser goes to install the GitHub App. The console sends it there.
+  if (rest === '/connectors/github/start') {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+    if (!githubAppReady(context) || context.kv === undefined || context.publicUrl === undefined) {
+      return json(404, CONNECTORS_UNAVAILABLE, headers);
+    }
+    const url = await githubAppTicket(
       { kv: context.kv, publicUrl: context.publicUrl },
       { workspace: workspaceId as string, account: account.id },
     );
