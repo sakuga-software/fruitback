@@ -81,6 +81,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
               id: seeds.id,
               page_url: seeds.page_url,
               stage: seeds.stage,
+              status_key: seeds.status_key,
               seed: seeds.seed,
               at: seeds.updated_at,
             })
@@ -132,6 +133,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
                   id: row.id,
                   page_url: row.page_url,
                   stage: row.stage,
+                  status_key: row.status_key,
                   seed: row.seed,
                   updatedAt: new Date(row.at).toISOString(),
                 },

@@ -1,4 +1,12 @@
-import { MIN_TEXT_CONTRAST, SEED_STAGES, STATUS_COLOR, type SeedStage, contrastRatio } from '@fruitback/shared';
+import {
+  MIN_TEXT_CONTRAST,
+  SEED_STAGES,
+  STATUS_COLOR,
+  type SeedStage,
+  type SeedStatus,
+  contrastRatio,
+  readableTextColor,
+} from '@fruitback/shared';
 
 /**
  * A status of a site, as the table `statuses` keeps it (FRU-365), and what a write must hold.
@@ -105,4 +113,56 @@ export function readSiteStatus(
       hidden,
     },
   };
+}
+
+/**
+ * A built-in status of the worker's store: `own`, and a key that is one of the five stages (FRU-366).
+ * Its stage is its key and does not change: a note with no `status_key` is in the built-in status of
+ * its stage, so a built-in moved to another stage would draw that note with a stage it does not have.
+ */
+export function isBuiltIn(source: string, key: string): boolean {
+  return source === OWN_SOURCE && (SEED_STAGES as readonly string[]).includes(key);
+}
+
+/**
+ * Where a status comes from, as the worker decides it rather than the request: a state of a tracker
+ * or a built-in status is `tracker`, a status the team added to the worker's store is `team`.
+ */
+export function originOf(source: string, key: string): StatusOrigin {
+  return source === OWN_SOURCE && !isBuiltIn(source, key) ? 'team' : 'tracker';
+}
+
+/**
+ * The ink of the widget's theme (`--fruitback-color-text` of packages/widget/src/theme.ts): the dark
+ * text that `readableTextColor` tries first. The worker names it to compute the text of a status
+ * whose team chose a background and no text; `theme.ts` stays the one source of the palette.
+ */
+export const STATUS_INK = '#18181b';
+
+/**
+ * The `statuses` of a read for one site (FRU-366): every row of the site, and the five built-in
+ * statuses of the worker's store that no row changed. A row's key becomes `<source>:<key>`, unique in
+ * the read. A colour with no text colour gets the one `readableTextColor` computes, so the text of a
+ * pin reaches 4.5:1 whatever the widget.
+ */
+export function envelopeStatuses(rows: readonly SiteStatus[]): SeedStatus[] {
+  const listed = rows.map((row) => {
+    const textColor = row.textColor ?? (row.color === null ? undefined : readableTextColor(row.color, STATUS_INK));
+
+    return {
+      key: `${row.source}:${row.key}`,
+      name: row.name ?? '',
+      stage: row.stage,
+      ...(row.color === null ? {} : { color: row.color }),
+      ...(textColor === undefined ? {} : { textColor }),
+    };
+  });
+  const changed = new Set(listed.map((status) => status.key));
+  const builtIn = SEED_STAGES.filter((stage) => !changed.has(`${OWN_SOURCE}:${stage}`)).map((stage) => ({
+    key: `${OWN_SOURCE}:${stage}`,
+    name: '',
+    stage,
+  }));
+
+  return [...listed, ...builtIn];
 }

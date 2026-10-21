@@ -33,6 +33,8 @@ import {
   takesReplies,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
+import { type SiteStatus, envelopeStatuses } from './site-statuses.ts';
+import type { AccountStore } from './accounts.ts';
 
 /**
  * The routes of the notes of a page (FRU-374), out of `app.ts` so that a review reads them in one
@@ -154,6 +156,11 @@ export async function getFeedback(
     );
     const stages = SEED_STAGES.filter((stage) => reported.some((each) => each.includes(stage)));
 
+    // FRU-366: the statuses of the site, which `status` on each note names. Asked at each request, and
+    // never in the cached answer: a change in the console shows at the next read. A read that cannot
+    // reach them keeps its pins, with the built-in statuses only, which draw each pin by its stage.
+    const statuses = envelopeStatuses(await statusesOfSite(context?.accounts, route.client?.workspace, clientId));
+
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
     // FRU-331: whether a note of this reader may carry files, for a reader who may send one (a
@@ -185,6 +192,7 @@ export async function getFeedback(
         url,
         issues,
         stages,
+        statuses,
         ...offered,
         // Asked at each request like the places, and absent for a reader the worker cannot name.
         ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
@@ -508,4 +516,22 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
+}
+
+/** The rows of the statuses of a site of a workspace, or none: a site of the environment has no row. */
+async function statusesOfSite(
+  accounts: AccountStore | undefined,
+  workspace: string | undefined,
+  site: string | undefined,
+): Promise<SiteStatus[]> {
+  if (accounts === undefined || workspace === undefined || site === undefined) return [];
+  try {
+    return (await accounts.siteStatuses(workspace, site)) ?? [];
+  } catch (error) {
+    console.error(
+      `[fruitback] the statuses of a site did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return [];
+  }
 }

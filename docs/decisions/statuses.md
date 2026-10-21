@@ -3,8 +3,8 @@
 FRU-352 asks for three things: statuses a team adds, statuses read from the tracker (Linear, GitHub,
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
-below follow them. Built: the contract (FRU-364), and the table, its migration and the text colour
-(FRU-365). The rest is FRU-366 to FRU-371.
+below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), and the API
+of the console with the statuses in the read (FRU-366). The rest is FRU-367 to FRU-371.
 
 ## Statuses
 
@@ -243,6 +243,43 @@ Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Ad
   go through `t`, and every new sentence has its French.
 - A board in `design/` should come first: the screen is new.
 
+### The API of the console, and the read (FRU-366)
+
+Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites`:
+
+| Route                                      | What it does                                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `GET …/statuses`                           | The rows of the site, by `position`, then source and key.                                                       |
+| `POST …/statuses`                          | Adds a status, or changes the one of that source and key. `readSiteStatus` first; the worker sets `origin`.     |
+| `POST …/statuses/order`                    | `{ order: [{ source, key }] }`: each one takes its place. One unknown, or one twice: nothing changes.           |
+| `DELETE …/statuses/<source>/<key>?moveTo=` | Removes it. Its notes go to `moveTo` first; with notes and no `moveTo`: `409 status-in-use`, with their number. |
+
+- **POST, not PUT**: the CORS of the console allows `GET`, `POST` and `DELETE` (`console-cors.ts`),
+  as every other write of the console.
+- **A built-in status keeps its stage** (`400 built-in-stage`): a note with no `status_key` is in the
+  built-in status of its stage, so moving the status would draw that note with another stage.
+- **A status the team added takes its notes with it** when it changes stage, in the same transaction:
+  `statusOf` draws a note by its status only when the two agree.
+- **A source is `own` or a connector the site sends to** (`400 unknown-source`).
+- **`MAX_STATUSES` rows per site** (`409 too-many-statuses`), what a reader keeps of one read.
+- **`moveTo` is a key of the worker's store**: a built-in status (the notes then have no
+  `status_key`, and its stage) or another status the team added. A state of a tracker, or a built-in
+  status, holds no note of its own: removing its row brings back what the tracker or the worker says,
+  and a `moveTo` there is refused.
+
+`GET /feedback` now carries `statuses`, asked at each request and never in the cached answer:
+
+- **The rows of the site, then the five built-in statuses that no row changed**, always: a site of
+  the environment, or a read that cannot reach the database of the accounts, gets the five only, and
+  each pin keeps its stage. The failure is written in the log, never in the answer.
+- **A colour with no text colour gets the one `readableTextColor` computes**, on `STATUS_INK`, the
+  ink of `theme.ts`, so a widget that does not compute it still writes a text over 4.5:1.
+- **A note the worker keeps says `status: own:<status_key, or its stage>`.** The notes of Linear and
+  GitHub say theirs with FRU-368 and FRU-369; until then they have none, and `statusOf` draws their
+  stage, as before.
+- **A change shows at the next read for the list, and within `CACHE_TTL_MS` (15 s) for a note** that a
+  removal or a change of stage moved: the notes of a page are in the read cache, the list is not.
+
 ### The colours
 
 - The defaults stay those of FRU-334, in `theme.ts`, and a host can still set `--fruitback-stage-*`.
@@ -272,8 +309,8 @@ Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Ad
   sweeps every 97th colour of the cube: the worst answer is 4.50007:1 (the ink on `#5385ae`), and the
   worst black 4.67:1.
 - **The refusal is `readSiteStatus` of `apps/worker/src/site-statuses.ts`**: a text colour with no
-  background colour, or under 4.5:1 on it, is refused, never corrected. FRU-366 calls it on every
-  write.
+  background colour, or under 4.5:1 on it, is refused, never corrected. The routes of FRU-366 call it
+  on every write.
 
 ### Migration
 

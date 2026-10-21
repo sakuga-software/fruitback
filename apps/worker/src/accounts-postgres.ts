@@ -1,4 +1,20 @@
-import { and, asc, desc, eq, exists, inArray, isNotNull, isNull, lt, lte, notExists, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  notExists,
+  or,
+  sql,
+} from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
@@ -36,8 +52,11 @@ import {
   site_destinations,
   site_shares,
   sites,
+  statuses,
   workspace_suspensions,
 } from './postgres-schema.ts';
+import { MAX_STATUSES } from '@fruitback/shared';
+import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -225,6 +244,36 @@ export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
   );
   await db.delete(organization).where(eq(organization.id, workspace));
 }
+
+/** Whether `site` is a site of `workspace`, read in the transaction of `db`, and held until it ends. */
+async function siteHeld(db: Db, workspace: string, site: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: sites.id })
+    .from(sites)
+    .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+    // `of`: the same lock as a bare FOR UPDATE on one table, and a text the mutation of FRU-141 does not take.
+    .for('update', { of: sites });
+
+  return rows.length === 1;
+}
+
+/** A row of `statuses` as the store hands it over. */
+function siteStatusOf(row: typeof statuses.$inferSelect): SiteStatus {
+  return {
+    source: row.source,
+    key: row.key,
+    name: row.name,
+    stage: row.stage as SiteStatus['stage'],
+    color: row.color,
+    textColor: row.text_color,
+    position: row.position,
+    origin: row.origin as SiteStatus['origin'],
+    hidden: row.hidden,
+  };
+}
+
+/** Thrown inside a transaction to roll it back, and caught by the method that threw it. */
+class RolledBack extends Error {}
 
 export function createPostgresAccountStore(database: Database): AccountStore {
   /** `work` on the database, with its schema. The first call of a process applies the migrations. */
@@ -651,6 +700,130 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
 
       return removed.length === 1;
+    },
+
+    async siteStatuses(workspace, site) {
+      return run(async (db) => {
+        const owned = await db
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)));
+        if (owned.length === 0) return undefined;
+        const rows = await db
+          .select()
+          .from(statuses)
+          .where(eq(statuses.site_id, site))
+          .orderBy(asc(statuses.position), asc(statuses.source), asc(statuses.key));
+
+        return rows.map(siteStatusOf);
+      });
+    },
+
+    async putSiteStatus(workspace, site, status) {
+      return transaction(async (db) => {
+        if (!(await siteHeld(db, workspace, site))) return 'not-found';
+        const there = await db
+          .select({ key: statuses.key, source: statuses.source })
+          .from(statuses)
+          .where(eq(statuses.site_id, site));
+        const known = there.some((row) => row.source === status.source && row.key === status.key);
+        if (!known && there.length >= MAX_STATUSES) return 'too-many';
+
+        const values = {
+          name: status.name,
+          stage: status.stage,
+          color: status.color,
+          text_color: status.textColor,
+          position: status.position,
+          hidden: status.hidden,
+        };
+        await db
+          .insert(statuses)
+          .values({ site_id: site, source: status.source, key: status.key, origin: status.origin, ...values })
+          .onConflictDoUpdate({ target: [statuses.site_id, statuses.source, statuses.key], set: values });
+        // The notes of a status the team added follow its stage: `statusOf` draws a note by its status
+        // only when the two agree, and a note's stage is what every reader without the list draws.
+        if (status.source === OWN_SOURCE && !isBuiltIn(status.source, status.key)) {
+          await db
+            .update(seeds)
+            .set({ stage: status.stage, updated_at: Date.now() })
+            .where(and(eq(seeds.client_id, site), eq(seeds.status_key, status.key), ne(seeds.stage, status.stage)));
+        }
+
+        return 'saved';
+      });
+    },
+
+    async orderSiteStatuses(workspace, site, order) {
+      try {
+        return await transaction(async (db) => {
+          if (!(await siteHeld(db, workspace, site))) return 'not-found' as const;
+          for (const [position, { source, key }] of order.entries()) {
+            const moved = await db
+              .update(statuses)
+              .set({ position })
+              .where(and(eq(statuses.site_id, site), eq(statuses.source, source), eq(statuses.key, key)))
+              .returning({ key: statuses.key });
+            if (moved.length !== 1) throw new RolledBack();
+          }
+
+          return 'saved' as const;
+        });
+      } catch (error) {
+        if (error instanceof RolledBack) return 'unknown-status';
+        throw error;
+      }
+    },
+
+    async removeSiteStatus(workspace, site, { source, key }, moveTo) {
+      return transaction(async (db) => {
+        const missing = { removed: false as const, reason: 'not-found' as const };
+        if (!(await siteHeld(db, workspace, site))) return missing;
+        const which = and(eq(statuses.site_id, site), eq(statuses.source, source), eq(statuses.key, key));
+        const row = (await db.select({ key: statuses.key }).from(statuses).where(which))[0];
+        if (row === undefined) return missing;
+
+        let moved = 0;
+        // Only a status the team added to the worker's store holds notes of its own.
+        if (source === OWN_SOURCE && !isBuiltIn(source, key)) {
+          let target: { key: string | null; stage: string } | undefined;
+          if (moveTo !== undefined && moveTo !== key) {
+            if (isBuiltIn(OWN_SOURCE, moveTo)) {
+              // NULL is the built-in status of the note's stage.
+              target = { key: null, stage: moveTo };
+            } else {
+              const other = (
+                await db
+                  .select({ stage: statuses.stage })
+                  .from(statuses)
+                  .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, moveTo)))
+              )[0];
+              if (other !== undefined) target = { key: moveTo, stage: other.stage };
+            }
+          }
+          if (moveTo !== undefined && target === undefined) {
+            return { removed: false as const, reason: 'invalid-target' as const };
+          }
+          const held = and(eq(seeds.client_id, site), eq(seeds.status_key, key));
+          if (target === undefined) {
+            const [counted] = await db.select({ notes: count() }).from(seeds).where(held);
+            const notes = Number(counted?.notes ?? 0);
+            if (notes > 0) return { removed: false as const, reason: 'in-use' as const, notes };
+          } else {
+            const changed = await db
+              .update(seeds)
+              .set({ status_key: target.key, stage: target.stage, updated_at: Date.now() })
+              .where(held)
+              .returning({ id: seeds.id });
+            moved = changed.length;
+          }
+        } else if (moveTo !== undefined) {
+          return { removed: false as const, reason: 'invalid-target' as const };
+        }
+        await db.delete(statuses).where(which);
+
+        return { removed: true as const, moved };
+      });
     },
 
     async addConnector(workspace, { kind, label, sealed }) {
