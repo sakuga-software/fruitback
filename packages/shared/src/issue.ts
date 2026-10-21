@@ -61,6 +61,98 @@ export function offeredStages(value: unknown): SeedStage[] {
 }
 
 /**
+ * A colour of a status: `#` and six hexadecimal digits, nothing else (FRU-364).
+ *
+ * The value is written into a style. `var(…)`, `url(…)` or a named colour would be read there too, so
+ * the worker refuses them on save and every reader drops them.
+ */
+export const STATUS_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/** At most this many statuses in one read. A reader keeps the first ones and drops the rest. */
+export const MAX_STATUSES = 200;
+
+/** The key of a status: unique in one read, never shown. */
+const statusKeySchema = z.string().min(1).max(200);
+
+/**
+ * A status of a site, as the read envelope lists it (FRU-352, FRU-364).
+ *
+ * Data that a team configured, never a constant of this package: the contract holds the shape and no
+ * value. A status always belongs to one of the five stages. The stage keeps the lifecycle — the
+ * filters, the counts, the fallback — and an old widget reads nothing else.
+ */
+export const seedStatusSchema = z.object({
+  key: statusKeySchema,
+  /** What the team or the tracker calls it. Empty means the word of the widget for the stage. */
+  name: z.string().max(200),
+  stage: z.enum(SEED_STAGES),
+  /** Absent means the colour of the stage, which a host can still set. */
+  color: z.string().regex(STATUS_COLOR).optional(),
+  /** Absent means the foreground of the stage, or one computed from `color`. Only with `color`. */
+  textColor: z.string().regex(STATUS_COLOR).optional(),
+});
+
+export type SeedStatus = z.infer<typeof seedStatusSchema>;
+
+const statusCoreSchema = seedStatusSchema.pick({ key: true, name: true, stage: true });
+
+function isStatusColor(value: unknown): value is string {
+  return typeof value === 'string' && STATUS_COLOR.test(value);
+}
+
+/**
+ * The statuses of a read, from its `statuses` field (FRU-364). Tolerant, like `offeredStages`.
+ *
+ * - Absent or not a list: no status. A worker from before sends nothing, and every pin keeps the
+ *   colour of its stage.
+ * - An entry with no key, a stage outside the five, or a key already seen: dropped. The first wins.
+ * - A colour that is not `#rrggbb`: dropped from its entry, which keeps the colour of its stage.
+ * - A text colour with no background colour: dropped. Its contrast was measured against a background
+ *   that this entry no longer has.
+ * - The first `MAX_STATUSES` valid statuses are kept: a dropped entry does not count.
+ *
+ * Never throws: the list comes from another process, and a bad entry must not hide a pin.
+ */
+export function offeredStatuses(value: unknown): SeedStatus[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<string>();
+  const kept: SeedStatus[] = [];
+  for (const entry of value) {
+    if (kept.length === MAX_STATUSES) break;
+    const core = statusCoreSchema.safeParse(entry);
+    if (!core.success || seen.has(core.data.key)) continue;
+    seen.add(core.data.key);
+    // An object, since its core parsed.
+    const { color, textColor } = entry as Record<string, unknown>;
+    const colored = isStatusColor(color);
+    kept.push({
+      ...core.data,
+      ...(colored ? { color } : {}),
+      ...(colored && isStatusColor(textColor) ? { textColor } : {}),
+    });
+  }
+
+  return kept;
+}
+
+/**
+ * The status of an issue in a list from `offeredStatuses`, or `undefined` to draw its stage.
+ *
+ * `undefined` too when the status belongs to another stage than the issue. `stage` is what an old
+ * widget draws, so a new widget follows it: two readers of the same answer never disagree on a stage.
+ */
+export function statusOf(
+  issue: Pick<SeedIssue, 'stage' | 'status'>,
+  statuses: readonly SeedStatus[],
+): SeedStatus | undefined {
+  // No key is empty, so an issue with no `status` finds nothing.
+  const status = statuses.find((candidate) => candidate.key === issue.status);
+
+  return status?.stage === issue.stage ? status : undefined;
+}
+
+/**
  * A reply from the team, as the widget shows it (FRU-13).
  *
  * Part of the read envelope, not of the seed. Comments live in whichever store answers — Linear, and
@@ -96,6 +188,12 @@ export const seedIssueSchema = z.object({
   title: z.string(),
   stage: z.enum(SEED_STAGES),
   stateName: z.string(),
+  /**
+   * The key of its status in the `statuses` of the same read (FRU-364). Absent: the note is drawn by
+   * its stage, as before. `stage` and `stateName` stay filled, for a widget that reads only them.
+   * Read-envelope field, so `SEED_VERSION` does not move.
+   */
+  status: statusKeySchema.optional(),
   updatedAt: z.string(),
   /**
    * Oldest first, so the thread reads as a conversation. Absent means the worker did not ask for
