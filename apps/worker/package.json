@@ -73,7 +73,16 @@
           "{workspaceRoot}/apps/playground/demo/**/*",
           "{workspaceRoot}/packages/widget/src/embed.ts",
           "{workspaceRoot}/apps/extension/src/session.ts",
-          "{workspaceRoot}/apps/extension/src/endpoint.ts"
+          "{workspaceRoot}/apps/extension/src/endpoint.ts",
+          "{workspaceRoot}/apps/**/*.ts",
+          "{workspaceRoot}/apps/**/*.tsx",
+          "{workspaceRoot}/apps/**/*.mjs",
+          "{workspaceRoot}/apps/**/*.js",
+          "{workspaceRoot}/packages/**/*.ts",
+          "{workspaceRoot}/packages/**/*.tsx",
+          "{workspaceRoot}/packages/**/*.mjs",
+          "{workspaceRoot}/packages/**/*.js",
+          "{workspaceRoot}/tools/**/*.ts"
         ]
       }
     }

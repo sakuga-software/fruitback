@@ -123,7 +123,11 @@ describe('PGlite under two locales', () => {
 });
 
 describe('the code of the repository', () => {
-  /** The variables of the environment that name a locale, which the probe does not watch. */
+  /**
+   * The variables of the environment that name a locale, which the probe does not watch. It reads
+   * every source of `apps`, `packages` and `tools`: the `test` target of the worker declares them as
+   * inputs, so that Nx never replays this from its cache after one of them changed (raised in review).
+   */
   it('reads no variable of the locale itself', () => {
     const readers: string[] = [];
     const walk = (directory: string) => {
