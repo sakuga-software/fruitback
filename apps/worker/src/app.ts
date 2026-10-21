@@ -1,6 +1,5 @@
 import {
   MAX_ATTACHMENTS_PER_NOTE,
-  MAX_ATTACHMENT_BYTES_PER_NOTE,
   SEED_STAGES,
   type Seed,
   type SeedIssue,
@@ -31,7 +30,7 @@ import {
   oneAtATime,
   renameWorkspaceWithPlugin,
 } from './auth-organization.ts';
-import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
@@ -49,7 +48,6 @@ import {
   type BatchMemory,
   type CheckVerdict,
   type CreatedIssue,
-  type FilesAnswer,
   type ReplyAuthor,
   type SeedStore,
   StoreError,
@@ -78,26 +76,8 @@ import {
 import type { ConnectStore } from './connect.ts';
 import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
 import { sessionStillValid } from './session-check.ts';
-import {
-  ATTACHMENTS_PATH,
-  type AttachmentStore,
-  MAX_FILES_PER_MINUTE,
-  MAX_HELD_BYTES,
-  MAX_HELD_FILES,
-  type OutgoingFile,
-  admitFile,
-  admitNote,
-  TRANSIT_MS,
-  attachmentIdOf,
-  attachmentIdsOf,
-  attachmentName,
-  isLegacyFileId,
-  legacyFileOf,
-  checkAttachment,
-  maxBytesFor,
-  newAttachmentId,
-  verifiesSignedRead,
-} from './attachments.ts';
+import { ATTACHMENTS_PATH, type AttachmentStore, attachmentIdsOf } from './attachments.ts';
+import { handleAttachment, legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { withoutAddress } from './postgres.ts';
 import {
   type SessionIdentity,
@@ -894,7 +874,24 @@ async function routed(
 
   if (pathname === ATTACHMENTS_PATH || pathname.startsWith(`${ATTACHMENTS_PATH}/`)) {
     try {
-      return await handleAttachment(request, pathname, served, context, cors.headers, storeOfRequest());
+      return await handleAttachment(request, pathname, {
+        files: context.attachments ?? attachmentStoreFor(served),
+        store: storeOfRequest(),
+        headers: cors.headers,
+        secretsKey: served.secretsKey,
+        kv: () => context.kv ?? kvFor(served),
+        route: (site) => {
+          const route = routeFor(request, served, site);
+          if (!route.ok) return { ok: false, response: routingFailure(route, cors.headers) };
+
+          return {
+            ok: true,
+            workspace: route.policy.sessions?.workspace,
+            place: () => chosenPlace(request, served, route),
+          };
+        },
+        writer: (workspace, site) => writerIn(request, served, context, workspace, site),
+      });
     } catch (error) {
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
       throw error;
@@ -1502,120 +1499,6 @@ async function writerIn(
 }
 
 /**
- * The files of the notes in transit (FRU-331): see `attachments.ts`.
- *
- * `POST /attachments?client=<site>&name=<name>[&destination=<place>]`, the bytes as the body and
- * their type in `Content-Type`: a session of the workspace of the site, whatever its role, keeps one
- * file for a note of that site, as `writerIn` says for a write. A guest sends one on a site shared
- * with them. Nobody else: `401`.
- *
- * - `409 attachments-not-taken` when the store of the place takes no file: the note stays in
- *   Fruitback (« Kept in Fruitback »), or goes to GitHub, whose API takes none.
- * - `413` over the limit of the kind of the file (`MAX_ATTACHMENT_BYTES`), `400 type-mismatch` for
- *   bytes that are not what the type says, `400 empty-file`.
- * - `429 transit-full` when the account already holds `MAX_HELD_FILES` or `MAX_HELD_BYTES`.
- *
- * `GET /attachments/<id>?expires=…&signature=…` is the read of the receiver of a delivery of a REST
- * connector, and the one read of a file there is: a signature of this worker that has not ended, or
- * `404`, as for a file that does not exist. No CORS header, a download, and nothing a browser runs.
- * There is no read for a member, a guest or a page: **Fruitback serves no file to a person**.
- */
-async function handleAttachment(
-  request: Request,
-  pathname: string,
-  config: Served,
-  context: RequestContext,
-  headers: Record<string, string>,
-  store: SeedStore,
-): Promise<Response> {
-  const files = context.attachments ?? attachmentStoreFor(config);
-  if (files === undefined) return json(404, { error: 'not-found' }, headers);
-  const now = Date.now();
-
-  if (pathname !== ATTACHMENTS_PATH) {
-    const id = attachmentIdOf(pathname);
-    if (id === undefined) return json(404, { error: 'not-found' }, headers);
-    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
-    // No CORS header on any answer of this read: no page of any origin reads the bytes.
-    const query = new URL(request.url).searchParams;
-    if (config.secretsKey === undefined || !verifiesSignedRead(config.secretsKey, id, query, now))
-      return json(404, { error: 'not-found' });
-    const found = await files.get(id, now);
-    // A file that no note took is no file of a delivery. A picture of before FRU-331 (`shot_`) is
-    // named by the seed of its delivery, not taken: the signature of that delivery is its proof.
-    if (found === undefined || (found.seed === undefined && !isLegacyFileId(found.id)))
-      return json(404, { error: 'not-found' });
-
-    return new Response(found.content, {
-      status: 200,
-      headers: {
-        'Content-Type': found.type,
-        'Content-Length': String(found.content.byteLength),
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(found.name)}`,
-        'Cache-Control': 'private, no-store',
-        'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'none'; sandbox",
-        'Cross-Origin-Resource-Policy': 'same-origin',
-      },
-    });
-  }
-
-  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-  const params = new URL(request.url).searchParams;
-  const site = normalizeClientId(params.get('client'));
-  const route = routeFor(request, config, site);
-  if (!route.ok) return routingFailure(route, headers);
-  const workspace = route.policy.sessions?.workspace;
-  // A write: a member of the workspace, with a session read again in the store (FRU-238).
-  const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace, site);
-  if (workspace === undefined || account === undefined || site === undefined)
-    return json(401, { error: 'identity-required' }, headers);
-
-  const target = await chosenPlace(request, config, route);
-  if (target === null) return json(403, { error: 'destination-not-allowed' }, headers);
-  if (!(await takesAttachments(store, target))) return json(409, { error: 'attachments-not-taken' }, headers);
-
-  const declared = request.headers.get('Content-Type');
-  const maxBytes = maxBytesFor(declared);
-  const body = await readBoundedBytes(request, maxBytes);
-  if (body === null) return json(413, { error: 'payload-too-large', maxBytes }, headers);
-  const checked = checkAttachment(declared, body);
-  if (!checked.ok) return json(400, { error: checked.error }, headers);
-
-  // The limits of the person (FRU-331): files a minute for the session, files and bytes in transit.
-  const refused = await admitFile(files, context.kv ?? kvFor(config), account, body.byteLength, now);
-  if (refused === 'files-per-minute')
-    return json(429, { error: 'rate-limited', maxFilesPerMinute: MAX_FILES_PER_MINUTE }, headers);
-  if (refused === 'transit-full')
-    return json(429, { error: 'transit-full', maxFiles: MAX_HELD_FILES, maxBytes: MAX_HELD_BYTES }, headers);
-
-  const id = newAttachmentId();
-  const name = attachmentName(params.get('name'));
-  const expiresAt = now + TRANSIT_MS;
-  await files.put({
-    id,
-    workspace,
-    account,
-    site,
-    name,
-    type: checked.type,
-    content: body,
-    createdAt: now,
-    expiresAt,
-  });
-  // The files whose transit ended go with the next one that comes: a worker that receives files sweeps.
-  await files
-    .sweep(now)
-    .catch((error: unknown) => console.error('[fruitback] the files in transit were not swept', error));
-
-  return json(
-    201,
-    { id, name, type: checked.type, size: body.byteLength, expiresAt: new Date(expiresAt).toISOString() },
-    headers,
-  );
-}
-
-/**
  * Whether the person of a session is still a member of the workspace it names (FRU-149).
  *
  * `verifyForClient` compares the workspace of an access token, and never a role: until a person
@@ -2115,12 +1998,21 @@ async function postFeedback(
   try {
     // A note of before FRU-331, sent again, names its picture in its seed: it goes with it while the
     // migration keeps it, and the note is never refused for it.
-    const legacy = await legacyAttachment(request, config, context, store, route, target, attributed, attachmentIds);
+    const noteFiles = {
+      files: context?.attachments ?? attachmentStoreFor(config),
+      store,
+      writer:
+        context === undefined
+          ? undefined
+          : (workspace: string, site: string | undefined) => writerIn(request, config, context, workspace, site),
+    };
+    const workspaceOfNote = route.client?.workspace;
+    const legacy = await legacyAttachment(noteFiles, target, workspaceOfNote, attributed, attachmentIds);
     const named = legacy?.id === undefined ? attachmentIds : [...attachmentIds, legacy.id];
     const taken =
       named.length === 0
         ? undefined
-        : await takeFiles(request, config, context, store, route, target, attributed.id, clientId, named);
+        : await takeFiles(noteFiles, target, workspaceOfNote, attributed.id, clientId, named);
     if (taken !== undefined && !taken.ok) return json(taken.status, taken.body, corsHeaders);
     const { files: answered, ...issue } = await store.create(
       attributed,
@@ -2159,134 +2051,6 @@ async function postFeedback(
     }
     throw error;
   }
-}
-
-/**
- * The files that a note names, given to it (FRU-331), or the answer that refuses the note.
- *
- * - `409 attachments-not-taken`: the store of the place takes no file.
- * - `401`: only the session that sent the files names them, as a write (`writerIn`).
- * - `410 attachment-gone`: a file is not one this person sent for this site, or its transit ended,
- *   or another note took it. `ids` says which: the widget keeps the note and its text, and the
- *   person sends it again without them.
- * - `413`: the files of one note are over `MAX_ATTACHMENT_BYTES_PER_NOTE` together.
- *
- * Nothing is written before every file is checked: a refusal leaves the files where they were.
- */
-async function takeFiles(
-  request: Request,
-  config: Served,
-  context: RequestContext | undefined,
-  store: SeedStore,
-  route: Extract<ClientResolution, { ok: true }>,
-  target: ClientConfig | undefined,
-  seed: string,
-  site: string | undefined,
-  ids: readonly string[],
-): Promise<
-  | { ok: true; store: AttachmentStore; files: OutgoingFile[] }
-  | { ok: false; status: number; body: Record<string, unknown> }
-> {
-  const files = context?.attachments ?? attachmentStoreFor(config);
-  if (files === undefined || !(await takesAttachments(store, target))) {
-    return { ok: false, status: 409, body: { error: 'attachments-not-taken' } };
-  }
-  const workspace = route.client?.workspace;
-  const account =
-    workspace === undefined || context === undefined
-      ? undefined
-      : await writerIn(request, config, context, workspace, site);
-  if (account === undefined || site === undefined) {
-    return { ok: false, status: 401, body: { error: 'identity-required' } };
-  }
-
-  const now = Date.now();
-  const found = await Promise.all(ids.map((id) => files.get(id, now)));
-  const gone = ids.filter((id, index) => {
-    const file = found[index];
-
-    return (
-      file === undefined ||
-      file.account !== account ||
-      file.workspace !== workspace ||
-      // A picture of before FRU-250 names no site: its workspace and its sender decide.
-      (file.site !== '' && file.site !== site) ||
-      (file.seed !== undefined && file.seed !== seed)
-    );
-  });
-  if (gone.length > 0) return { ok: false, status: 410, body: { error: 'attachment-gone', ids: gone } };
-  const admitted = admitNote(found.map((file) => file?.content.byteLength ?? 0));
-  if (admitted === 'too-many-files') {
-    return { ok: false, status: 400, body: { error: 'invalid-attachments', max: MAX_ATTACHMENTS_PER_NOTE } };
-  }
-  if (admitted === 'too-large') {
-    return { ok: false, status: 413, body: { error: 'payload-too-large', maxBytes: MAX_ATTACHMENT_BYTES_PER_NOTE } };
-  }
-
-  const claimed = await files.claim(ids, seed, now);
-  // Another note took one between the read and the claim: none is sent, and the note is refused.
-  if (claimed.length !== ids.length) {
-    const kept = new Set(claimed.map((file) => file.id));
-
-    return { ok: false, status: 410, body: { error: 'attachment-gone', ids: ids.filter((id) => !kept.has(id)) } };
-  }
-
-  return {
-    ok: true,
-    store: files,
-    files: claimed.map((file) => ({ id: file.id, name: file.name, type: file.type, content: file.content })),
-  };
-}
-
-/**
- * The picture of before FRU-331 that a seed names, when it is still in transit and this note may take
- * it (its sender, its workspace, a store that takes files), or `undefined`. Never a refusal: a note
- * whose picture is gone goes without it, as it would have before. `notTaken: 'no-tracker'`: the
- * seed names a picture and the place of the note takes no file (a note kept in Fruitback, GitHub):
- * the answer says why the picture is not joined, as `canAttach: false` says it on a read.
- */
-async function legacyAttachment(
-  request: Request,
-  config: Served,
-  context: RequestContext | undefined,
-  store: SeedStore,
-  route: Extract<ClientResolution, { ok: true }>,
-  target: ClientConfig | undefined,
-  seed: Seed,
-  named: readonly string[],
-): Promise<{ id?: string; notTaken?: 'no-tracker' } | undefined> {
-  const id = legacyFileOf(seed);
-  const workspace = route.client?.workspace;
-  if (id === undefined || named.includes(id) || named.length >= MAX_ATTACHMENTS_PER_NOTE) return undefined;
-  if (!(await takesAttachments(store, target))) return { notTaken: 'no-tracker' };
-  const files = context?.attachments ?? attachmentStoreFor(config);
-  if (files === undefined || context === undefined || workspace === undefined) return undefined;
-  const found = await files.get(id, Date.now());
-  if (found === undefined || found.workspace !== workspace) return undefined;
-  if (found.seed !== undefined && found.seed !== seed.id) return undefined;
-  const account = await writerIn(request, config, context, workspace, seed.client?.id);
-
-  return account === found.account ? { id } : undefined;
-}
-
-/**
- * Removes from the transit the files that the tracker has, or refused, and answers how many of each
- * (FRU-331). A store that said nothing of them sent none: they are lost, and removed too.
- */
-async function settleFiles(
-  files: AttachmentStore,
-  sent: readonly OutgoingFile[],
-  answer: FilesAnswer | undefined,
-): Promise<{ sent: number; lost: number; waiting: number }> {
-  const outcome = answer ?? { sent: [], lost: sent.map((file) => file.id), waiting: [] };
-  try {
-    await files.remove([...outcome.sent, ...outcome.lost]);
-  } catch (error) {
-    // The note is written. A file that stays goes at the end of its transit.
-    console.error('[fruitback] files of a written note were not removed from the transit', error);
-  }
-
-  return { sent: outcome.sent.length, lost: outcome.lost.length, waiting: outcome.waiting.length };
 }
 
 /**

@@ -9,7 +9,7 @@
 -- account `transit-full` (heavy review of #427). Until then a note still
 -- on its way is delivered with its picture: a waiting delivery whose seed names it carries it
 -- (withSignedFiles of rest-connector.ts), and so does a note of before sent again by its sender
--- (legacyFileOf of app.ts).
+-- (legacyAttachment of attachment-routes.ts).
 ALTER TABLE "screenshots" ALTER COLUMN "width" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "screenshots" ALTER COLUMN "height" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "screenshots" ADD COLUMN "name" text DEFAULT 'screenshot.png' NOT NULL;--> statement-breakpoint

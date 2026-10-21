@@ -3973,6 +3973,11 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   (`withSignedFiles`). The queue keeps ids, never an address: an attempt a day later must not carry
   one that ended. The signature of the delivery covers the body that carries them. The file goes one
   hour after the `2xx`: the receiver may read it after it answered.
+- **The routes of the files live in `attachment-routes.ts`**, not in `app.ts`: `POST /attachments`,
+  the signed read, and what a note of `POST /feedback` takes (`takeFiles`, `legacyAttachment`,
+  `settleFiles`). `app.ts` hands them the route of the site, who writes (`writerIn`) and the stores
+  of the request. A review reads every check of a file in one file (heavy review of #427: `app.ts`
+  was too large for it).
 - **The one read of a file needs a signature of this worker** (`verifiesSignedRead`): no route reads a
   file for a member or a page. A file that no note took is no file of a delivery, and answers `404`
   even signed.
