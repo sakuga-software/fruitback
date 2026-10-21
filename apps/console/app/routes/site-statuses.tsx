@@ -280,8 +280,15 @@ export default function SiteStatuses() {
                 />
               );
             const tracker = typeof read.tracker === 'string' ? undefined : read.tracker;
-            // The switch is the site's (FRU-368): it is drawn once, above the first list of Linear.
-            const first = all.findIndex((each) => each.kind === 'linear') === index;
+            // The switch is the site's (FRU-368): it is drawn once, above the first list of Linear that
+            // was read. A team that was not read draws no list, and must not take the switch with it
+            // (lite review of pull request 495).
+            const first =
+              all.findIndex(
+                (each) =>
+                  each.kind === 'linear' &&
+                  tracker?.trackers.find((one) => one.connector === each.connector.id)?.states !== undefined,
+              ) === index;
 
             return (
               <StatusList

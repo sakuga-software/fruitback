@@ -555,6 +555,32 @@ test('a Linear team that the worker could not read says so, and is read again', 
   await expect(section.locator('ol > li')).toHaveCount(6);
 });
 
+test('the switch stays when the first Linear team of the site could not be read', async ({ page }) => {
+  const other = { connector: 'l2', teamId: 't2', label: 'Linear · Acme docs' };
+  await workerWith(page, {
+    site: { ...SITE, destination: LINEAR_PLACE, destinations: [LINEAR_PLACE, other] },
+    connectors: [
+      ...LINEAR_CONNECTORS,
+      { id: 'l2', kind: 'linear', label: 'Linear', createdAt: '2026-10-01T00:00:00Z' },
+    ],
+    rows: [],
+    tracker: {
+      trackerColours: false,
+      trackers: [
+        { ...LINEAR_PLACE, error: 'tracker-unreachable' },
+        { ...other, states: STATES },
+      ],
+    },
+  });
+  await open(page);
+
+  await expect(page.getByRole('region', { name: 'Linear · Acme web' }).getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('switch', { name: "Use Linear's colours" })).toHaveCount(1);
+  await expect(
+    page.getByRole('region', { name: 'Linear · Acme docs' }).getByRole('switch', { name: "Use Linear's colours" }),
+  ).toBeVisible();
+});
+
 test('at 390 px in French, Linear and its switch', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page, {
