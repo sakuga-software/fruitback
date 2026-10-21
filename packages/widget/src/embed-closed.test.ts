@@ -58,6 +58,7 @@ describe('a site whose notes are « Members only », for a reader with no sessio
 
     assert.equal(launch.textContent, 'Notes from members only');
     assert.equal(launch.getAttribute('aria-disabled'), 'true');
+    assert.equal(launch.title, 'Only members of this site leave notes here. Ask its team to invite you.');
     launch.click();
     assert.equal(
       root.querySelector('[data-fruitback-announcer]')?.textContent,
@@ -93,6 +94,7 @@ describe('a site whose notes are « Members only », for a reader with no sessio
 
     assert.equal(launch.textContent, 'Leave feedback');
     assert.equal(launch.hasAttribute('aria-disabled'), false);
+    assert.equal(launch.hasAttribute('title'), false);
     assert.equal(widget.leaveFeedback(), true);
   });
 

@@ -577,11 +577,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       launchLabel.textContent = offer.label;
       button.removeAttribute('aria-pressed');
       button.setAttribute('aria-disabled', 'true');
+      // Seen too, under a pointer: the live region speaks to a screen reader only.
+      button.title = offer.sentence;
       container.dataset.fruitbackClosed = '';
 
       return;
     }
     button.removeAttribute('aria-disabled');
+    button.removeAttribute('title');
     delete container.dataset.fruitbackClosed;
     // The sign-in offer, when there is one, keeps its words.
     offerSignIn(signIn);
