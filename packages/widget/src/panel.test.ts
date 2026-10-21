@@ -56,12 +56,12 @@ describe('createConfigPanel', () => {
   });
 
   it('shows what the store holds when it opens', () => {
-    const { input } = mount({ hiddenStages: ['composted'], screenshot: false });
+    const { input } = mount({ hiddenStages: ['closed'], screenshot: false });
 
     panel?.open();
 
-    assert.equal(input('stage-composted').checked, false, 'a hidden stage is an unticked box');
-    assert.equal(input('stage-ripe').checked, true);
+    assert.equal(input('stage-closed').checked, false, 'a hidden stage is an unticked box');
+    assert.equal(input('stage-done').checked, true);
   });
 
   it('holds no field to type in: where the notes go is not for the reporter to say (FRU-89)', () => {
@@ -80,16 +80,16 @@ describe('createConfigPanel', () => {
 
     panel?.open();
 
-    assert.ok(page.document.activeElement === input('stage-seeded'));
+    assert.ok(page.document.activeElement === input('stage-new'));
   });
 
   it('hides a stage when its box is unticked', () => {
     const { page, store, input } = mount();
     panel?.open();
 
-    toggle(input('stage-ripe'), false, page.document);
+    toggle(input('stage-done'), false, page.document);
 
-    assert.deepEqual(store.get().hiddenStages, ['ripe']);
+    assert.deepEqual(store.get().hiddenStages, ['done']);
   });
 
   it('hides both resolved stages from the one shortcut', () => {
@@ -98,18 +98,18 @@ describe('createConfigPanel', () => {
 
     toggle(input('hide-resolved'), true, page.document);
 
-    assert.deepEqual(store.get().hiddenStages, ['ripe', 'composted']);
+    assert.deepEqual(store.get().hiddenStages, ['done', 'closed']);
   });
 
   it('leaves the stages the reporter chose alone when the shortcut is used', () => {
     // The shortcut owns the two resolved stages and nothing else. Rewriting the whole set from it
     // would silently undo a choice made two clicks earlier.
-    const { page, store, input } = mount({ ...DEFAULTS, hiddenStages: ['seeded'] });
+    const { page, store, input } = mount({ ...DEFAULTS, hiddenStages: ['new'] });
     panel?.open();
 
     toggle(input('hide-resolved'), true, page.document);
 
-    assert.deepEqual(store.get().hiddenStages, ['seeded', 'ripe', 'composted']);
+    assert.deepEqual(store.get().hiddenStages, ['new', 'done', 'closed']);
   });
 
   it('repaints when the config changes from somewhere else', () => {
@@ -117,9 +117,9 @@ describe('createConfigPanel', () => {
     const { store, input } = mount();
     panel?.open();
 
-    store.set({ hiddenStages: ['green'] });
+    store.set({ hiddenStages: ['todo'] });
 
-    assert.equal(input('stage-green').checked, false);
+    assert.equal(input('stage-todo').checked, false);
   });
 
   it('closes from its own button', () => {
@@ -238,7 +238,7 @@ describe('copying the feedback as text (FRU-109)', () => {
 });
 
 describe('the stages a store can report (FRU-32)', () => {
-  const GITHUB: SeedStage[] = ['seeded', 'ripe', 'composted'];
+  const GITHUB: SeedStage[] = ['new', 'done', 'closed'];
 
   function mountOffering(stages: SeedStage[], defaults: WidgetConfig = DEFAULTS) {
     const page: MountedPage = mountPage('<main></main>');
@@ -256,8 +256,8 @@ describe('the stages a store can report (FRU-32)', () => {
   it('offers a box only for the stages the store reports', () => {
     const { label } = mountOffering(GITHUB);
 
-    assert.equal(label('stage-green').hidden, true);
-    assert.equal(label('stage-ripening').hidden, true);
+    assert.equal(label('stage-todo').hidden, true);
+    assert.equal(label('stage-progress').hidden, true);
     for (const stage of GITHUB) assert.equal(label(`stage-${stage}`).hidden, false, stage);
     assert.equal(label('hide-resolved').hidden, false);
   });
@@ -274,37 +274,37 @@ describe('the stages a store can report (FRU-32)', () => {
   it('follows a later read that reports other stages', () => {
     const { offered, label } = mountOffering([...GITHUB]);
 
-    offered.set(['seeded']);
+    offered.set(['new']);
 
-    assert.equal(label('stage-ripe').hidden, true);
+    assert.equal(label('stage-done').hidden, true);
     // The shortcut controls only resolved stages. With none to offer, it would do nothing.
     assert.equal(label('hide-resolved').hidden, true);
   });
 
   it('keeps a stage the reporter hid, when the store stops reporting it', () => {
-    const { page, store, input } = mountOffering(GITHUB, { ...DEFAULTS, hiddenStages: ['green'] });
+    const { page, store, input } = mountOffering(GITHUB, { ...DEFAULTS, hiddenStages: ['todo'] });
 
-    toggle(input('stage-ripe'), false, page.document);
+    toggle(input('stage-done'), false, page.document);
 
-    assert.deepEqual(store.get().hiddenStages, ['green', 'ripe']);
+    assert.deepEqual(store.get().hiddenStages, ['todo', 'done']);
   });
 
   it('leaves a resolved stage the store does not offer as the reporter set it', () => {
-    // Found in review: unticking the shortcut also showed `composted` again, with no box to say so.
-    const { page, store, input } = mountOffering(['seeded', 'ripe'], {
+    // Found in review: unticking the shortcut also showed `closed` again, with no box to say so.
+    const { page, store, input } = mountOffering(['new', 'done'], {
       ...DEFAULTS,
-      hiddenStages: ['ripe', 'composted'],
+      hiddenStages: ['done', 'closed'],
     });
 
     toggle(input('hide-resolved'), false, page.document);
-    assert.deepEqual(store.get().hiddenStages, ['composted']);
+    assert.deepEqual(store.get().hiddenStages, ['closed']);
 
     toggle(input('hide-resolved'), true, page.document);
-    assert.deepEqual(store.get().hiddenStages, ['ripe', 'composted']);
+    assert.deepEqual(store.get().hiddenStages, ['done', 'closed']);
   });
 
   it('ticks the shortcut from the resolved stages the store offers', () => {
-    const { input } = mountOffering(['seeded', 'ripe'], { ...DEFAULTS, hiddenStages: ['ripe'] });
+    const { input } = mountOffering(['new', 'done'], { ...DEFAULTS, hiddenStages: ['done'] });
 
     assert.equal(input('hide-resolved').checked, true);
   });
@@ -343,8 +343,8 @@ describe('the panel as a dialog (FRU-51)', () => {
     gear.focus();
 
     panel?.open();
-    assert.ok(page.document.activeElement === input('stage-seeded'), 'the first box has no focus after the open');
-    keyOn(page, input('stage-seeded'), 'Escape');
+    assert.ok(page.document.activeElement === input('stage-new'), 'the first box has no focus after the open');
+    keyOn(page, input('stage-new'), 'Escape');
 
     assert.equal(panel?.isOpen, false);
     assert.ok(page.document.activeElement === gear, 'focus did not go back to the gear');

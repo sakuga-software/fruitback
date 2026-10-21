@@ -6,7 +6,7 @@ import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
 import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar, StatusDot } from '../ui';
 import { ago } from '../ago';
-import { STAGE_NAMES, STAGE_STATUS } from './connector-parts';
+import { STAGE_NAMES } from './connector-parts';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
@@ -505,7 +505,7 @@ function Legend() {
     >
       {STAGES.map((stage) => (
         <li key={stage} className="flex items-center gap-[7px]">
-          <StatusDot status={STAGE_STATUS[stage]} />
+          <StatusDot status={stage} />
           {t(STAGE_NAMES[stage])}
         </li>
       ))}
@@ -541,11 +541,11 @@ function Counts({ site }: { site: Site }) {
   if (total === 0) return <span className="text-hint text-muted">{t('Waiting for the first note')}</span>;
   const values = {
     count: total,
-    new: notes.seeded,
-    todo: notes.green,
-    progress: notes.ripening,
-    done: notes.ripe,
-    closed: notes.composted,
+    new: notes.new,
+    todo: notes.todo,
+    progress: notes.progress,
+    done: notes.done,
+    closed: notes.closed,
   };
   const label =
     total === 1
@@ -560,11 +560,11 @@ function Counts({ site }: { site: Site }) {
       <StatusBar
         label={label}
         counts={{
-          new: notes.seeded,
-          todo: notes.green,
-          progress: notes.ripening,
-          done: notes.ripe,
-          closed: notes.composted,
+          new: notes.new,
+          todo: notes.todo,
+          progress: notes.progress,
+          done: notes.done,
+          closed: notes.closed,
         }}
       />
     </span>

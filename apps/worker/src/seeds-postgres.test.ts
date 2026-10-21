@@ -175,7 +175,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
-      assert.equal(found?.stage, 'seeded');
+      assert.equal(found?.stage, 'new');
       assert.equal(found?.stateName, '');
     });
 

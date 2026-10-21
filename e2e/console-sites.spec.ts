@@ -44,12 +44,12 @@ const MINUTE = 60_000;
  */
 const NOON = new Date(2026, 9, 13, 12, 0, 0);
 const since = (minutes: number, from: Date = NOON) => new Date(from.getTime() - minutes * MINUTE).toISOString();
-const counts = (seeded: number, green: number, ripening: number, ripe: number, composted: number) => ({
-  seeded,
-  green,
-  ripening,
-  ripe,
-  composted,
+const counts = (fresh: number, todo: number, progress: number, done: number, closed: number) => ({
+  new: fresh,
+  todo,
+  progress,
+  done,
+  closed,
 });
 /** The summary of the sites (FRU-237): the counts of the mockup, its ways on the page, its last notes. */
 const SITES = [

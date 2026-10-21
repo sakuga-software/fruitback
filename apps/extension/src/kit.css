@@ -323,27 +323,27 @@ button.kit-switch[aria-checked='true'] .kit-knob {
   transform: rotate(45deg);
 }
 
-.kit-drop[data-stage='seeded'] {
-  --drop-on: var(--on-stage-seeded);
-  background: var(--stage-seeded);
+.kit-drop[data-stage='new'] {
+  --drop-on: var(--on-stage-new);
+  background: var(--stage-new);
 }
 
-.kit-drop[data-stage='green'] {
-  --drop-on: var(--on-stage-green);
-  background: var(--stage-green);
+.kit-drop[data-stage='todo'] {
+  --drop-on: var(--on-stage-todo);
+  background: var(--stage-todo);
 }
 
-.kit-drop[data-stage='ripening'] {
-  --drop-on: var(--on-stage-ripening);
-  background: var(--stage-ripening);
+.kit-drop[data-stage='progress'] {
+  --drop-on: var(--on-stage-progress);
+  background: var(--stage-progress);
 }
 
-.kit-drop[data-stage='ripe'] {
-  background: var(--stage-ripe);
+.kit-drop[data-stage='done'] {
+  background: var(--stage-done);
 }
 
-.kit-drop[data-stage='composted'] {
-  background: var(--stage-composted);
+.kit-drop[data-stage='closed'] {
+  background: var(--stage-closed);
 }
 
 /* A row that leads somewhere: 52 px, the drop, the words, the chevron. */

@@ -75,6 +75,9 @@ const DYNAMIC_READS: Record<string, string[]> = {
   'packages/widget/src/markup.test.ts: new URL(file, directory)': ['packages/widget/src/', 'packages/shared/src/'],
   // The files `CLAUDE.md` and the decisions pages link to: every one of them is a document.
   'apps/worker/src/claude-md.test.ts: new URL(path, document)': ['**/*.md', 'docs/decisions/'],
+  // The code, searched for the old names of the stages (FRU-355).
+  'apps/worker/src/stage-names.test.ts: ../../../${folder}': ['apps/', 'packages/', 'e2e/'],
+  'apps/worker/src/stage-names.test.ts: ../../../${file}': ['apps/', 'packages/', 'e2e/'],
   // The configuration of drizzle-kit, written beside a copy of the migrations in a temporary directory.
   "apps/worker/src/postgres-drift.test.ts: join(folder, '..', 'drizzle.config.json')": [],
 };

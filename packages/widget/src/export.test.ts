@@ -111,8 +111,8 @@ describe('the feedback of a page as text (FRU-109)', () => {
   });
 
   it('uses the word of the store for the status, and the stage when the store gives none', () => {
-    const named = text([{ issue: note({ stateName: 'In Review', stage: 'ripening' }), placement: 'found' }]);
-    const unnamed = text([{ issue: note({ stateName: '', stage: 'ripening' }), placement: 'found' }]);
+    const named = text([{ issue: note({ stateName: 'In Review', stage: 'progress' }), placement: 'found' }]);
+    const unnamed = text([{ issue: note({ stateName: '', stage: 'progress' }), placement: 'found' }]);
 
     assert.match(named, /^## 1\. FB-12 — In Review$/m);
     assert.match(unnamed, /^## 1\. FB-12 — In progress$/m);
@@ -231,7 +231,7 @@ describe('the words of the copied text', () => {
   it('come from the catalog: French labels, the same data, the same dates', () => {
     const french = createTranslator({ locale: 'fr' });
     const issue = note(
-      { stateName: '', stage: 'green', comments: [{ id: 'c1', body: 'Vu.', createdAt: '2026-10-07T08:00:00.000Z' }] },
+      { stateName: '', stage: 'todo', comments: [{ id: 'c1', body: 'Vu.', createdAt: '2026-10-07T08:00:00.000Z' }] },
       { reporter: { name: 'Camille' } },
     );
     const output = text([{ issue, placement: 'approximate' }], french);

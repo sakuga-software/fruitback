@@ -137,7 +137,7 @@ export async function getFeedback(
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
     const issues: SeedIssue[] = all.map((issue) => {
-      const checked = issue.stage === 'ripe' ? checkedOf(issue.comments) : undefined;
+      const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
       const marked = {
         ...issue,
         ...(checked === undefined ? {} : { checked }),

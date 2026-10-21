@@ -22,7 +22,7 @@ export const SITE_PAGE_SIZE = 50;
 /** As long as a read of the popup may take: the panel says « could not be read » after it. */
 const READ_TIMEOUT_MS = 10_000;
 
-const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 export type SiteStage = (typeof STAGES)[number];
 
 /** A note of the site, as the index of the worker keeps it. */

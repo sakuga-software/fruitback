@@ -24,7 +24,7 @@ const KEPT = {
   // Not the first 64 characters of the text: a screen that shows the excerpt of a kept note is seen.
   excerpt: 'An excerpt the screen must not show for a note Fruitback keeps.',
   text: KEPT_TEXT,
-  stage: 'seeded',
+  stage: 'new',
   channel: 'script',
   author: { kind: 'visitor' },
   place: { kind: 'fruitback' },
@@ -40,7 +40,7 @@ const SENT = {
   site: { id: 's1', origin: 'https://staging.acme.dev' },
   page: { url: 'https://staging.acme.dev/', host: 'staging.acme.dev', path: '/' },
   excerpt: SENT_EXCERPT,
-  stage: 'green',
+  stage: 'todo',
   channel: 'extension',
   author: { kind: 'site' },
   place: { kind: 'linear', connector: 'c1', label: 'Linear · Acme' },

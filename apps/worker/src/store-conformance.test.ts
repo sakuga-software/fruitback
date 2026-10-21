@@ -372,7 +372,7 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
       await rowsOf(opened(), `UPDATE seeds SET stage = 'marmalade' WHERE id = ${Number(created.id)}`);
     },
     markDone: async (created) => {
-      await rowsOf(opened(), `UPDATE seeds SET stage = 'ripe' WHERE id = ${Number(created.id)}`);
+      await rowsOf(opened(), `UPDATE seeds SET stage = 'done' WHERE id = ${Number(created.id)}`);
     },
     plantReplies: async (store, seed, count) => {
       const created = await store.create(seed, undefined, POLICY);

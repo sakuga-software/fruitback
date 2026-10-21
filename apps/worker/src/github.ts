@@ -121,19 +121,19 @@ export type GithubStoreOptions = {
 };
 
 /** The stages `stageForGithubIssue` can return, in `SEED_STAGES` order. */
-export const GITHUB_STAGES: readonly SeedStage[] = ['seeded', 'ripe', 'composted'];
+export const GITHUB_STAGES: readonly SeedStage[] = ['new', 'done', 'closed'];
 
 /**
- * An issue's state and `state_reason`, projected onto the pin's ripeness.
+ * An issue's state and `state_reason`, projected onto the stage of the pin.
  *
  * An issue closed before GitHub added `state_reason` has no reason. Closed then meant done, so it is
- * `ripe`. A state this store does not know gets the contract's default, so the pin stays visible.
+ * `done`. A state this store does not know gets the contract's default, so the pin stays visible.
  */
 export function stageForGithubIssue(state: string, stateReason: string | null | undefined): SeedStage {
-  if (state === 'open') return 'seeded';
+  if (state === 'open') return 'new';
   if (state !== 'closed') return DEFAULT_SEED_STAGE;
 
-  return stateReason === 'not_planned' || stateReason === 'duplicate' ? 'composted' : 'ripe';
+  return stateReason === 'not_planned' || stateReason === 'duplicate' ? 'closed' : 'done';
 }
 
 function stateNameFor(state: string, stateReason: string | null | undefined): string {

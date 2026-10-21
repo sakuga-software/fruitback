@@ -24,9 +24,9 @@ for (const { label, open, skip } of DATABASES) {
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_acme', 'Acme', 'ws_acme', now())`,
         `INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES ('site_acme', 'ws_acme', 'https://acme.dev', 'members', 1)`,
         `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, author_account_id, place, created_at, checked_at) VALUES
-           ('site_acme', 'sd_done', 'ws_acme', 'https://acme.dev/', 'Done', 'ripe', 'member', 'acc_bob', 'fruitback', 1, 1),
-           ('site_acme', 'sd_open', 'ws_acme', 'https://acme.dev/', 'Open', 'green', 'member', 'acc_bob', 'fruitback', 2, 2),
-           ('site_acme', 'sd_visitor', 'ws_acme', 'https://acme.dev/', 'Visitor', 'ripe', 'visitor', NULL, 'fruitback', 3, 3)`,
+           ('site_acme', 'sd_done', 'ws_acme', 'https://acme.dev/', 'Done', 'done', 'member', 'acc_bob', 'fruitback', 1, 1),
+           ('site_acme', 'sd_open', 'ws_acme', 'https://acme.dev/', 'Open', 'todo', 'member', 'acc_bob', 'fruitback', 2, 2),
+           ('site_acme', 'sd_visitor', 'ws_acme', 'https://acme.dev/', 'Visitor', 'done', 'visitor', NULL, 'fruitback', 3, 3)`,
       ]) {
         await rowsOf(database, statement);
       }
@@ -56,7 +56,7 @@ for (const { label, open, skip } of DATABASES) {
             id: '1',
             identifier: 'FB-1',
             title: 'Done',
-            stage: 'ripe',
+            stage: 'done',
             stateName: '',
             updatedAt: '',
             comments: [],

@@ -144,7 +144,7 @@ export type PanelState =
       notes: PanelNotes;
     };
 
-export type NotesTab = 'open' | 'done';
+export type NotesTab = 'open' | 'finished';
 
 /**
  * The notes, or where their read is. `reading`: the widget has not read yet, or is not mounted yet;
@@ -268,16 +268,16 @@ function cross(document: Document): SVGSVGElement {
 
 /** The word of each stage: the widget's words, as the popup says them. */
 const STAGE_WORD: Record<PanelNote['stage'], string> = {
-  seeded: msg('New'),
-  green: msg('To do'),
-  ripening: msg('In progress'),
-  ripe: msg('Done'),
-  composted: msg('Closed'),
+  new: msg('New'),
+  todo: msg('To do'),
+  progress: msg('In progress'),
+  done: msg('Done'),
+  closed: msg('Closed'),
 };
 
 /** « Open » is what is left to do: new, to do, in progress. « Done » is done and closed. */
 export function tabOf(note: PanelNote): NotesTab {
-  return note.stage === 'ripe' || note.stage === 'composted' ? 'done' : 'open';
+  return note.stage === 'done' || note.stage === 'closed' ? 'finished' : 'open';
 }
 
 /**
@@ -285,7 +285,7 @@ export function tabOf(note: PanelNote): NotesTab {
  * « Ready to check », and not in « Done ». `mine` and `checked` are the worker's word (FRU-294).
  */
 export function toCheck(note: PanelNote): boolean {
-  return note.stage === 'ripe' && note.mine === true && note.checked === undefined;
+  return note.stage === 'done' && note.mine === true && note.checked === undefined;
 }
 
 /** The order of the pins: by their number, the notes with no number last. */
@@ -326,7 +326,7 @@ function authorOf(note: PanelNote): string {
 
 /** What a row says after its stage: who checked or reopened it, or who wrote it when. */
 function saidOf(note: PanelNote, now: number, reopenedAt: string | undefined): string {
-  if (note.checked !== undefined && note.stage === 'ripe') {
+  if (note.checked !== undefined && note.stage === 'done') {
     return note.mine === true
       ? t('Checked by you · {age}', { age: ageOf(note.checked.at, now) })
       : t('Checked by {name} · {age}', { name: note.checked.by, age: ageOf(note.checked.at, now) });
@@ -492,27 +492,27 @@ function notesPart(document: Document, options: PanelOptions, notes: PanelNotes)
   const ready = notes.filter(toCheck).sort(byNumber);
   const open = notes.filter((note) => tabOf(note) === 'open').sort(byNumber);
   // A note to check waits in its block, not in « Done ».
-  const done = notes.filter((note) => tabOf(note) === 'done' && !toCheck(note)).sort(byNumber);
+  const done = notes.filter((note) => tabOf(note) === 'finished' && !toCheck(note)).sort(byNumber);
   const tabs = segmentedTabs(document, {
     label: t('Notes on this page'),
     size: 'panel',
     tabs: [
       { id: 'open', label: t('Open · {count}', { count: open.length }) },
-      { id: 'done', label: t('Done · {count}', { count: done.length }) },
+      { id: 'finished', label: t('Done · {count}', { count: done.length }) },
     ],
     selected: options.tab,
-    onSelect: (id) => options.onTab(id === 'done' ? 'done' : 'open'),
+    onSelect: (id) => options.onTab(id === 'finished' ? 'finished' : 'open'),
   });
   tabs.classList.add('panel-tabs');
-  const shown = options.tab === 'done' ? done : open;
+  const shown = options.tab === 'finished' ? done : open;
   const list = make(document, 'ul', 'panel-list');
   list.setAttribute('role', 'tabpanel');
-  list.setAttribute('aria-label', options.tab === 'done' ? t('Done notes') : t('Open notes'));
+  list.setAttribute('aria-label', options.tab === 'finished' ? t('Done notes') : t('Open notes'));
   for (const note of shown) list.append(noteRow(document, options, note));
   const parts: Node[] = ready.length > 0 ? [readyBlock(document, options, ready), tabs, list] : [tabs, list];
   if (shown.length === 0) {
     parts.push(
-      make(document, 'p', 'panel-none', options.tab === 'done' ? t('No note is done yet.') : t('No note is open.')),
+      make(document, 'p', 'panel-none', options.tab === 'finished' ? t('No note is done yet.') : t('No note is open.')),
     );
   }
 
@@ -679,7 +679,7 @@ function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[
       make(document, 'span', 'ready-meta', fixedLine(note, now)),
     );
     head.append(
-      statusDrop(document, { stage: 'ripe', ...(note.number === undefined ? {} : { number: note.number }) }),
+      statusDrop(document, { stage: 'done', ...(note.number === undefined ? {} : { number: note.number }) }),
       words,
     );
     const checking = options.checking?.id === note.id ? options.checking : undefined;

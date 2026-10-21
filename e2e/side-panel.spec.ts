@@ -293,7 +293,7 @@ test('« Notes on this page » lists the pins of the page, opens a row from a pi
   const pins = await page.locator('[data-fruitback-pin]').evaluateAll((all) =>
     all.map((pin) => ({
       number: pin.querySelector('.fruitback-pin-badge')?.textContent?.trim() ?? '',
-      done: ['ripe', 'composted'].includes((pin as HTMLElement).dataset.fruitbackStage ?? ''),
+      done: ['done', 'closed'].includes((pin as HTMLElement).dataset.fruitbackStage ?? ''),
     })),
   );
   const open = pins.filter((pin) => !pin.done);
@@ -415,9 +415,9 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
   }
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(4);
   for (const [note, stage] of [
-    ['Check note 2', 'ripe'],
-    ['Check note 3', 'ripe'],
-    ['Check note 4', 'composted'],
+    ['Check note 2', 'done'],
+    ['Check note 3', 'done'],
+    ['Check note 4', 'closed'],
   ] as const) {
     const id = await pinFor(page, note).getAttribute('data-fruitback-pin');
     const moved = await fetch(`${AUTHENTICATED_WORKER_ORIGIN}/__dev/stage`, {
@@ -435,7 +435,7 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
         await page.reload();
         await expect(page.locator('[data-fruitback-pin]')).toHaveCount(4);
 
-        return page.locator('[data-fruitback-pin][data-fruitback-stage="ripe"]').count();
+        return page.locator('[data-fruitback-pin][data-fruitback-stage="done"]').count();
       },
       { timeout: 40_000, intervals: [3_000] },
     )
@@ -470,7 +470,7 @@ test('« Ready to check »: « Looks fixed » sends a note to Done, « Still wro
     .toBe(`${said.newStage} · ${said.reopenedByYou} · ${said.justNow}`);
 
   // The pins of the page say the same: the store moved the note, and the widget read it.
-  await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="seeded"]')).not.toHaveCount(0);
+  await expect(page.locator('[data-fruitback-pin][data-fruitback-stage="new"]')).not.toHaveCount(0);
 });
 
 test('a tab whose widget is gone does not leave the panel reading for ever (FRU-299, review)', async ({
@@ -620,13 +620,13 @@ test('« Search and options »: the search, « Whole site » over three pages, t
       page,
       `[...document.querySelectorAll('.search-chip')].map((chip) => chip.dataset.stage + ' ' + chip.querySelector('.search-chip-count').textContent)`,
     );
-  expect(await chips()).toEqual(['all 3', 'seeded 3', 'green 0', 'ripening 0', 'ripe 0']);
-  expect(await clickPanel(page, '.search-chip[data-stage="ripening"]')).toBe(true);
+  expect(await chips()).toEqual(['all 3', 'new 3', 'todo 0', 'progress 0', 'done 0']);
+  expect(await clickPanel(page, '.search-chip[data-stage="progress"]')).toBe(true);
   await expect.poll(async () => (await searchRows(page)).length).toBe(0);
-  expect(await clickPanel(page, '.search-chip[data-stage="seeded"]')).toBe(true);
+  expect(await clickPanel(page, '.search-chip[data-stage="new"]')).toBe(true);
   await expect.poll(async () => (await searchRows(page)).length).toBe(3);
   await search(page, `${tag} mocha`);
-  await expect.poll(chips, { timeout: 15_000 }).toEqual(['all 1', 'seeded 1', 'green 0', 'ripening 0', 'ripe 0']);
+  await expect.poll(chips, { timeout: 15_000 }).toEqual(['all 1', 'new 1', 'todo 0', 'progress 0', 'done 0']);
 
   // axe, in the panel, with the options open.
   const violations = await inPanel<{ id: string; nodes: number }[]>(
@@ -705,7 +705,7 @@ test('a new search during « Show more » draws no page of the words of before (
         seed,
         excerpt,
         page: { url: 'http://localhost:5177/?case=elsewhere', path: '/?case=elsewhere' },
-        stage: 'seeded',
+        stage: 'new',
         author: { kind: 'anonymous' },
         createdAt: new Date().toISOString(),
       });

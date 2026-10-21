@@ -7,7 +7,8 @@ import { migrate } from './postgres-migrate.ts';
 /**
  * `0025_site_statuses` (FRU-365) on a database that holds connectors and sites already, made from an
  * empty one. The stages that FRU-102 kept per Linear connector go to every site of that connector;
- * what `readConnectorSettings` would not keep goes nowhere; nothing of before changes.
+ * what `readConnectorSettings` would not keep goes nowhere; nothing of before changes. It stops at
+ * `0025`: the data are of before FRU-355, and `0026_stage_names` renames them (its own test).
  */
 
 const { opening } = databasesOfACase();
@@ -66,7 +67,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, migrationsThrough('0024_github_installation'));
       for (const statement of BEFORE) await rowsOf(database, statement);
 
-      await migrate(database);
+      await migrate(database, migrationsThrough('0025_site_statuses'));
 
       const copied = await rowsOf(
         database,

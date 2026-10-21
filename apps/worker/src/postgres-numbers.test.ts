@@ -87,7 +87,7 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   // for the time of one statement.
   await rowsOf(
     database,
-    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES ('site_1', 'https://acme.dev/', 'seeded', '{}', 1, 1)`,
+    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES ('site_1', 'https://acme.dev/', 'new', '{}', 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'a reply', 1)`);
   await rowsOf(database, 'ALTER TABLE seed_comments DROP CONSTRAINT seed_comments_seed_id_fkey');
@@ -107,7 +107,7 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   await rowsOf(
     database,
     `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, created_at, checked_at)
-       VALUES ('site_acme', 'sd_1', 'ws_acme', 'https://acme.dev/', 'A note', 'seeded', 'visitor', 'fruitback', 1, 1)`,
+       VALUES ('site_acme', 'sd_1', 'ws_acme', 'https://acme.dev/', 'A note', 'new', 'visitor', 'fruitback', 1, 1)`,
   );
   // FRU-261: one read of an administrator of the instance.
   await rowsOf(

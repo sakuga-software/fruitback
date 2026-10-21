@@ -395,7 +395,7 @@ export function accountCases(it: Declare<AccountStore>): void {
     const linear = await store.addConnector(acme.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
     const other = await store.addConnector(acme.id, { kind: 'linear', label: 'Other', sealed: 'sealed' });
     const settingsOf = async (id: string) => (await store.connectors(acme.id)).find((each) => each.id === id)?.settings;
-    const quiet = { showComments: false, stages: { state_triage: 'green', state_review: 'ripe' } } as const;
+    const quiet = { showComments: false, stages: { state_triage: 'todo', state_review: 'done' } } as const;
 
     assert.deepEqual(linear.settings, DEFAULT_CONNECTOR_SETTINGS);
     assert.equal(await store.setConnectorSettings(globex.id, linear.id, quiet), false);

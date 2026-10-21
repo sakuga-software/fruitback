@@ -35,12 +35,12 @@ describe('what a stored config cannot say (FRU-89)', () => {
   it('does not read a stored endpoint or client id, under any key', () => {
     for (const key of [CONFIG_STORAGE_KEY, 'fruitback:config:extension']) {
       const storage = fakeStorage({
-        [key]: JSON.stringify({ endpoint: 'https://evil.test', clientId: 'theirs', hiddenStages: ['composted'] }),
+        [key]: JSON.stringify({ endpoint: 'https://evil.test', clientId: 'theirs', hiddenStages: ['closed'] }),
       });
 
       const config = createConfigStore({ defaults: DEFAULTS, storage, key }).get();
 
-      assert.deepEqual(config, { hiddenStages: ['composted'], screenshot: false });
+      assert.deepEqual(config, { hiddenStages: ['closed'], screenshot: false });
     }
   });
 
@@ -74,7 +74,7 @@ describe('the name a reporter asked to keep (FRU-91)', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
 
     store.set({ reporterName: 'Alice' });
-    store.set({ hiddenStages: ['ripe'] });
+    store.set({ hiddenStages: ['done'] });
 
     assert.equal(store.get().reporterName, 'Alice');
   });
@@ -102,7 +102,7 @@ describe('the place a member last chose (FRU-123)', () => {
     store.set({ destination: 'dst_design' });
     assert.equal(createConfigStore({ defaults: DEFAULTS, storage }).get().destination, 'dst_design');
 
-    store.set({ hiddenStages: ['ripe'] });
+    store.set({ hiddenStages: ['done'] });
     assert.equal(store.get().destination, 'dst_design', 'another preference erased the choice');
 
     store.set({ destination: undefined });
@@ -135,11 +135,11 @@ describe('createConfigStore', () => {
 
   it('persists a change and reads it back into the next store', () => {
     const storage = fakeStorage();
-    createConfigStore({ defaults: DEFAULTS, storage }).set({ hiddenStages: ['composted'] });
+    createConfigStore({ defaults: DEFAULTS, storage }).set({ hiddenStages: ['closed'] });
 
     const next = createConfigStore({ defaults: { ...DEFAULTS, screenshot: true }, storage });
 
-    assert.deepEqual(next.get().hiddenStages, ['composted']);
+    assert.deepEqual(next.get().hiddenStages, ['closed']);
     // The whole config was written, so the stored `screenshot` wins over the new default.
     assert.equal(next.get().screenshot, false);
   });
@@ -160,13 +160,13 @@ describe('createConfigStore', () => {
     // This is a string a human can reach in devtools, so it is parsed the way a seed is: a bad one
     // costs the reporter their preferences, never the widget.
     const storage = fakeStorage({
-      [CONFIG_STORAGE_KEY]: JSON.stringify({ screenshot: 'yes', hiddenStages: ['ripe', 'banana'] }),
+      [CONFIG_STORAGE_KEY]: JSON.stringify({ screenshot: 'yes', hiddenStages: ['done', 'banana'] }),
     });
 
     const store = createConfigStore({ defaults: DEFAULTS, storage });
 
     assert.equal(store.get().screenshot, false, 'a string is not a switch');
-    assert.deepEqual(store.get().hiddenStages, ['ripe'], 'and `banana` is not a stage');
+    assert.deepEqual(store.get().hiddenStages, ['done'], 'and `banana` is not a stage');
   });
 
   it('survives a storage that is not JSON at all', () => {
@@ -204,12 +204,12 @@ describe('the config is nobody else’s to mutate', () => {
     // The caller keeps their array and pushes to it later. Without a copy, the store's state would
     // change with nothing persisted and nobody told.
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
-    const stages: SeedStage[] = ['ripe'];
+    const stages: SeedStage[] = ['done'];
 
     store.set({ hiddenStages: stages });
-    stages.push('composted');
+    stages.push('closed');
 
-    assert.deepEqual(store.get().hiddenStages, ['ripe']);
+    assert.deepEqual(store.get().hiddenStages, ['done']);
   });
 
   it('refuses a write to what `get` handed out, loudly', () => {
@@ -221,7 +221,7 @@ describe('the config is nobody else’s to mutate', () => {
     assert.throws(() => {
       (config as { screenshot: boolean }).screenshot = true;
     }, TypeError);
-    assert.throws(() => (config.hiddenStages as SeedStage[]).push('ripe'), TypeError);
+    assert.throws(() => (config.hiddenStages as SeedStage[]).push('done'), TypeError);
     assert.equal(store.get().screenshot, false);
   });
 });

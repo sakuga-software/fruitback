@@ -19,7 +19,7 @@ import type { SiteNote, SiteStage } from './site-notes.ts';
 export type Scope = 'page' | 'site';
 
 /** The chips: every note, or one status. « Closed » has no chip; « All » counts it. */
-export const STAGE_FILTERS = ['all', 'seeded', 'green', 'ripening', 'ripe'] as const;
+export const STAGE_FILTERS = ['all', 'new', 'todo', 'progress', 'done'] as const;
 export type StageFilter = (typeof STAGE_FILTERS)[number];
 
 /** The notes of the whole site, or where their read is. */
@@ -56,19 +56,19 @@ export type SearchHandlers = {
 
 /** The word of each status, as the rows say it. */
 export const STAGE_WORD: Record<SiteStage, string> = {
-  seeded: msg('New'),
-  green: msg('To do'),
-  ripening: msg('In progress'),
-  ripe: msg('Done'),
-  composted: msg('Closed'),
+  new: msg('New'),
+  todo: msg('To do'),
+  progress: msg('In progress'),
+  done: msg('Done'),
+  closed: msg('Closed'),
 };
 
 const FILTER_WORD: Record<StageFilter, string> = {
   all: msg('All'),
-  seeded: msg('New'),
-  green: msg('To do'),
-  ripening: msg('In progress'),
-  ripe: msg('Done'),
+  new: msg('New'),
+  todo: msg('To do'),
+  progress: msg('In progress'),
+  done: msg('Done'),
 };
 
 /** The words of a search: lower case, no accent, so « cafe » finds « Café ». */
@@ -87,8 +87,8 @@ export function matchesPage(note: PanelNote, q: string): boolean {
 
 /** How many notes of each chip: `all` counts every one. */
 export function countsOf(notes: readonly { stage: SiteStage }[]): Record<StageFilter, number> {
-  const counts = { all: notes.length, seeded: 0, green: 0, ripening: 0, ripe: 0 };
-  for (const note of notes) if (note.stage !== 'composted') counts[note.stage] += 1;
+  const counts = { all: notes.length, new: 0, todo: 0, progress: 0, done: 0 };
+  for (const note of notes) if (note.stage !== 'closed') counts[note.stage] += 1;
 
   return counts;
 }

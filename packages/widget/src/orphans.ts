@@ -119,7 +119,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       // Identity *and* stage, and the stage is in there because the entry draws it: each row carries
       // a drop in its stage's colour. FRU-24 left this over-invalidating on purpose, pending the
       // ticket that would decide how a stage shows up here; that ticket is FRU-36, and this is the
-      // answer. Drop the stage from this key and a note that ripens keeps the colour it had.
+      // answer. Drop the stage from this key and a note that changes stage keeps the colour it had.
       const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
       if (next === drawn) return;
       drawn = next;
@@ -169,7 +169,7 @@ function entry(
   item.className = 'fruitback-orphans-item';
   item.dataset.fruitbackOrphan = issue.seed.id;
 
-  // How ripe the note is, as the pin's shape in the stage's colour — the same vocabulary the page
+  // The stage of the note, as the pin's shape in the stage's colour — the same vocabulary the page
   // itself uses, which is what a reporter has to be able to match up. The stage is named in the
   // button's accessible name rather than in the mark, because colour alone is not a label.
   const mark = createIcon(document, 'drop');

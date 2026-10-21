@@ -25,20 +25,20 @@ const ANCHOR = {
 const REVIEW = seedIssueFixture({
   id: 'issue_1',
   identifier: 'FB-1',
-  stage: 'ripening',
+  stage: 'progress',
   stateName: 'In Review',
   seed: seedFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
 });
 const DONE = seedIssueFixture({
   id: 'issue_2',
   identifier: 'FB-2',
-  stage: 'ripe',
+  stage: 'done',
   stateName: 'Done',
   seed: seedFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR }),
 });
 const STATUSES = [
-  { key: 'linear:st_review', name: 'In Review', stage: 'ripening', color: '#7dd3fc', textColor: '#18181b' },
-  { key: 'linear:st_done', name: 'Shipped', stage: 'ripe', color: '#15803d' },
+  { key: 'linear:st_review', name: 'In Review', stage: 'progress', color: '#7dd3fc', textColor: '#18181b' },
+  { key: 'linear:st_done', name: 'Shipped', stage: 'done', color: '#15803d' },
 ];
 
 const cleanup: (() => void)[] = [];

@@ -14,9 +14,9 @@ import type { SiteConfig } from './sites.ts';
  */
 
 /** The notes of a site by stage (FRU-237), as the worker counts them. Absent when its index did not answer. */
-export type StageCounts = { seeded: number; green: number; ripening: number; ripe: number; composted: number };
+export type StageCounts = { new: number; todo: number; progress: number; done: number; closed: number };
 
-export const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 
 /**
  * A workspace of the session, and the role the person holds there (an account's session only).
@@ -168,11 +168,11 @@ function countsOf(value: unknown): StageCounts | undefined {
 
     return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : undefined;
   };
-  const [seeded, green, ripening, ripe, composted] = STAGES.map(whole);
-  if (seeded === undefined || green === undefined || ripening === undefined || ripe === undefined) return undefined;
-  if (composted === undefined) return undefined;
+  const [fresh, todo, progress, done, closed] = STAGES.map(whole);
+  if (fresh === undefined || todo === undefined || progress === undefined || done === undefined) return undefined;
+  if (closed === undefined) return undefined;
 
-  return { seeded, green, ripening, ripe, composted };
+  return { new: fresh, todo, progress, done, closed };
 }
 
 /** Bounded, like every call the extension makes: a worker that never answers must not hold the popup. */

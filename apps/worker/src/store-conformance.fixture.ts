@@ -296,10 +296,10 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
           const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
 
-          assert.equal(written?.stage, 'ripe');
+          assert.equal(written?.stage, 'done');
           assert.equal(written?.comment.body, checkText(check, POLICY.locale));
           const [found] = await find(PAGE, 'acme');
-          assert.equal(found?.stage, 'ripe');
+          assert.equal(found?.stage, 'done');
           assert.deepEqual(
             found?.comments?.map((comment) => comment.body),
             [checkText(check, POLICY.locale)],
@@ -318,9 +318,9 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
           const written = await store.check({ issue: created.id, clientId: 'acme' }, check, undefined, POLICY);
 
-          assert.equal(written?.stage, 'seeded');
+          assert.equal(written?.stage, 'new');
           const [found] = await find(PAGE, 'acme');
-          assert.equal(found?.stage, 'seeded');
+          assert.equal(found?.stage, 'new');
           assert.deepEqual(
             found?.comments?.map((comment) => comment.body),
             [checkText(check, POLICY.locale)],

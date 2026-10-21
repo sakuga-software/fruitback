@@ -42,7 +42,7 @@ const issues: StoredIssue[] = [];
 /**
  * New issues walk through the workflow states rather than all landing in `backlog`, so the overlay
  * shows every pin colour without anyone having to triage a fake ticket. `stageForLinearState` maps
- * these to seeded / green / ripening / ripe / composted.
+ * these to new / todo / progress / done / closed.
  */
 /**
  * Canned replies, so the dev loop shows a pin that has been answered (FRU-13).

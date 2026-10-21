@@ -45,12 +45,12 @@ const ACTIONS = [
   /^Delete .*account$/,
 ];
 
-const counts = (seeded: number, green: number, ripening: number, ripe: number, composted: number) => ({
-  seeded,
-  green,
-  ripening,
-  ripe,
-  composted,
+const counts = (fresh: number, todo: number, progress: number, done: number, closed: number) => ({
+  new: fresh,
+  todo,
+  progress,
+  done,
+  closed,
 });
 
 const WORKSPACES = [
@@ -84,7 +84,7 @@ const WORKSPACES = [
     members: 1,
     sites: 1,
     // A worker that counts no stage sends none: the screen reads it as zero.
-    notes: { seeded: 1 },
+    notes: { new: 1 },
     destinations: [],
     pendingDeliveries: 0,
   },

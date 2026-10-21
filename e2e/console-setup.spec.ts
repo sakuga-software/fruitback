@@ -360,7 +360,7 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
         const first =
           stub.notedFrom !== undefined && reads >= stub.notedFrom
             ? {
-                notes: { seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
+                notes: { new: 1, todo: 0, progress: 0, done: 0, closed: 0 },
                 ...(stub.noDay === true ? {} : { lastNoteAt: new Date().toISOString() }),
                 via: ['extension'],
               }

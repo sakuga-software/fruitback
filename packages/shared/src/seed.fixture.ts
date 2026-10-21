@@ -60,7 +60,7 @@ export function seedIssueFixture(overrides: Partial<SeedIssue> = {}): SeedIssue 
     identifier: 'SKG-901',
     url: 'https://linear.app/sakuga-software/issue/SKG-901',
     title: 'Le bouton est trop petit',
-    stage: 'ripening',
+    stage: 'progress',
     stateName: 'In Progress',
     updatedAt: '2026-08-05T10:00:00.000Z',
     seed: seedFixture(),

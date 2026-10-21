@@ -121,7 +121,7 @@ async function theNoteOfTheMockUp(page: Page): Promise<void> {
     };
     for (const issue of body.issues) {
       issue.stateName = 'In progress';
-      issue.stage = 'ripening';
+      issue.stage = 'progress';
       issue.seed.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
       issue.seed.reporter = { name: 'Camille Durand' };
       issue.comments = [

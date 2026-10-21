@@ -544,7 +544,7 @@ export function showSiteFacts(
           t('{count} fixes to check', { count: String(facts.toCheck) }),
         ),
         subtitle: t('Marked done by the team'),
-        stage: 'ripe',
+        stage: 'done',
         onClick: options.onOpenPanel,
       }),
     );
@@ -557,7 +557,7 @@ export function showSiteFacts(
             ? t('No open note')
             : plural(facts.open, t('1 open note'), t('{count} open notes', { count: String(facts.open) })),
         subtitle: t('New, to do or in progress'),
-        stage: 'ripening',
+        stage: 'progress',
         onClick: options.onOpenPanel,
       }),
     );

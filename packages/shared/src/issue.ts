@@ -23,14 +23,14 @@ export function buildIssueLabels(seed: Seed): string[] {
 }
 
 /**
- * How ripe a pin looks. The widget stores no status of its own; it renders what the store reports.
+ * The stage of a pin. The widget stores no status of its own; it renders what the store reports.
  *
  * The vocabulary belongs here, the projection onto it does not. Linear has workflow state types,
  * GitHub has open/closed, a SQL store has its own column, so each connector owns its own mapping.
  * A provider's states named here make every consumer of this package depend on that provider
  * (FRU-23).
  */
-export const SEED_STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+export const SEED_STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 export type SeedStage = (typeof SEED_STAGES)[number];
 
 /**
@@ -40,7 +40,7 @@ export type SeedStage = (typeof SEED_STAGES)[number];
  * one, and the pin must still be drawn. Drop it and a note disappears from the page because someone
  * added a workflow column.
  */
-export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
+export const DEFAULT_SEED_STAGE: SeedStage = 'new';
 
 /**
  * The stages a store can report, read from the `stages` field of the read envelope (FRU-32).
@@ -202,7 +202,7 @@ export const seedIssueSchema = z.object({
   comments: z.array(seedCommentSchema).optional(),
   /**
    * Who said that a note marked done looks fixed, and when (FRU-294). Read from its replies, in the
-   * store: present only on a `ripe` note whose newest verdict is « fixed ». Read-envelope field.
+   * store: present only on a `done` note whose newest verdict is « fixed ». Read-envelope field.
    */
   checked: z.object({ by: z.string(), at: z.string() }).optional(),
   /**

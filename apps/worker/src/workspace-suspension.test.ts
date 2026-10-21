@@ -671,7 +671,7 @@ async function fixtures(on: Instance): Promise<Fixtures> {
   await rowsOf(
     database,
     `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
-       VALUES ('${on.site.id}', 'sd_late', '${on.acme}', '${PAGE}', 'A note', 'seeded', 'visitor', 'connector', '${rest}', 'FB-1', 1, 1)`,
+       VALUES ('${on.site.id}', 'sd_late', '${on.acme}', '${PAGE}', 'A note', 'new', 'visitor', 'connector', '${rest}', 'FB-1', 1, 1)`,
   );
   const delivery = await accounts.enqueueDelivery(
     rest,

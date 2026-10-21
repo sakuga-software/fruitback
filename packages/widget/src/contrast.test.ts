@@ -18,9 +18,9 @@ type Pair = { foreground: string; background: string; minimum: number; where: st
 
 /** The stages whose drop is not written in the shared foreground: the three light fills (FRU-334). */
 const ON_STAGE: Partial<Record<string, string>> = {
-  seeded: 'color-on-stage-seeded',
-  green: 'color-on-stage-green',
-  ripening: 'color-on-stage-ripening',
+  new: 'color-on-stage-new',
+  todo: 'color-on-stage-todo',
+  progress: 'color-on-stage-progress',
 };
 
 /**
@@ -238,20 +238,20 @@ describe('the contrast of the default tokens (FRU-51)', () => {
 
   it('writes new, to do and in progress black, and done and closed white (FRU-334)', () => {
     // The « Texte » column of the ticket: black on the three light fills, white on the two dark ones.
-    const written = { seeded: '#18181b', green: '#18181b', ripening: '#18181b', ripe: '#fff', composted: '#fff' };
+    const written = { new: '#18181b', todo: '#18181b', progress: '#18181b', done: '#fff', closed: '#fff' };
     for (const tokens of [light, dark]) {
       const read = Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[ON_STAGE[stage] ?? 'color-on-stage']]));
       assert.deepEqual(read, written);
     }
-    for (const stage of ['seeded', 'green', 'ripening'] as const) {
+    for (const stage of ['new', 'todo', 'progress'] as const) {
       assert.equal(onStageToken(stage), `var(--fruitback-color-on-stage-${stage}, var(--fruitback-color-on-stage))`);
     }
     // The control: white on the grey of « to do » is what the black replaces, and it cannot be read.
-    assert.ok(ratio('#ffffff', light['stage-green'] ?? '') < 1.5);
+    assert.ok(ratio('#ffffff', light['stage-todo'] ?? '') < 1.5);
   });
 
   it('holds the five statuses chosen by Mathieu, in both schemes (FRU-334)', () => {
-    const chosen = { seeded: '#bec2c8', green: '#d9dbdf', ripening: '#f3bb3d', ripe: '#5560c4', composted: '#a52a3a' };
+    const chosen = { new: '#bec2c8', todo: '#d9dbdf', progress: '#f3bb3d', done: '#5560c4', closed: '#a52a3a' };
     for (const tokens of [light, dark]) {
       assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), chosen);
     }
@@ -261,10 +261,10 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     // A pin lies on the page of the host: its edge does not follow the scheme of the reader.
     assert.equal(light['color-stage-edge'], dark['color-stage-edge']);
     // Without the edge, the light stages are the failures it fixes: the control of the pairs above.
-    const unedged = (['seeded', 'green', 'ripening'] as const).filter(
+    const unedged = (['new', 'todo', 'progress'] as const).filter(
       (stage) => ratio(light[`stage-${stage}`] ?? '', light['color-surface'] ?? '') < 3,
     );
-    assert.deepEqual(unedged, ['seeded', 'green', 'ripening']);
+    assert.deepEqual(unedged, ['new', 'todo', 'progress']);
   });
 
   it('keeps the red of the widget as its accent, in the light scheme (FRU-292, FRU-372)', () => {

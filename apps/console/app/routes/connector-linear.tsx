@@ -28,7 +28,6 @@ import {
   OAUTH_LABEL,
   type PanelProps,
   STAGE_NAMES,
-  STAGE_STATUS,
   SitesState,
   moment,
   personOf,
@@ -165,7 +164,7 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
                   />
                 </svg>
                 <span className="flex min-w-0 items-center gap-[8px]">
-                  <StatusDot status={STAGE_STATUS[stage]} />
+                  <StatusDot status={stage} />
                   <span className="min-w-0 flex-1">
                     <Choice
                       compact

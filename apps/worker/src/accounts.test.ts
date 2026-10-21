@@ -208,18 +208,18 @@ describe('the settings a row of a connector holds (FRU-102)', () => {
   it('keeps each exception that is one, and loses only the entry that is not', () => {
     const row = JSON.stringify({
       showComments: false,
-      stages: { s_kept: 'ripe', s_broken: 'purple', 'not an id': 'green' },
+      stages: { s_kept: 'done', s_broken: 'purple', 'not an id': 'todo' },
     });
 
-    assert.deepEqual(connectorSettingsOf(row), { showComments: false, stages: { s_kept: 'ripe' } });
+    assert.deepEqual(connectorSettingsOf(row), { showComments: false, stages: { s_kept: 'done' } });
   });
 
   it('reads the defaults from a value that is not settings, field by field', () => {
     assert.deepEqual(connectorSettingsOf('not json'), DEFAULT_CONNECTOR_SETTINGS);
     assert.deepEqual(connectorSettingsOf(undefined), DEFAULT_CONNECTOR_SETTINGS);
-    assert.deepEqual(connectorSettingsOf('{"showComments":"no","stages":{"s1":"green"}}'), {
+    assert.deepEqual(connectorSettingsOf('{"showComments":"no","stages":{"s1":"todo"}}'), {
       showComments: true,
-      stages: { s1: 'green' },
+      stages: { s1: 'todo' },
     });
   });
 });

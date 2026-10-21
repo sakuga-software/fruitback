@@ -16,7 +16,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 const DROP = 'M12 19.9 L7.05 14.95 A7 7 0 1 1 16.95 14.95 Z';
 
 /** The five stages of a note, the names of the contract. */
-export type Stage = 'seeded' | 'green' | 'ripening' | 'ripe' | 'composted';
+export type Stage = 'new' | 'todo' | 'progress' | 'done' | 'closed';
 
 function make<K extends keyof HTMLElementTagNameMap>(
   document: Document,

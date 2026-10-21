@@ -121,20 +121,20 @@ async function acme() {
     await index.record([entry], BASE + i * 1_000);
   };
   const atShop = { workspace, site: shop.id, origin: shop.origin };
-  await plant(atShop, 1, '/', 'seeded', LONG, bob.id);
-  await plant(atShop, 2, '/', 'green', 'Could the title mention Bordeaux?');
-  await plant(atShop, 3, '/cart', 'ripening', '29 € for the Mocha, the price list says 27 €.');
-  await plant(atShop, 4, '/cart', 'ripe', 'The total does not add up.');
-  await plant(atShop, 5, '/subscriptions', 'ripening', 'The email field is too short on mobile.');
-  await plant(atShop, 6, '/subscriptions', 'composted', 'Wrong currency.');
+  await plant(atShop, 1, '/', 'new', LONG, bob.id);
+  await plant(atShop, 2, '/', 'todo', 'Could the title mention Bordeaux?');
+  await plant(atShop, 3, '/cart', 'progress', '29 € for the Mocha, the price list says 27 €.');
+  await plant(atShop, 4, '/cart', 'done', 'The total does not add up.');
+  await plant(atShop, 5, '/subscriptions', 'progress', 'The email field is too short on mobile.');
+  await plant(atShop, 6, '/subscriptions', 'closed', 'Wrong currency.');
   const atAdmin = { workspace, site: admin.id, origin: admin.origin };
-  await plant(atAdmin, 7, '/users', 'seeded', 'The secret admin note.');
-  await plant(atAdmin, 8, '/users', 'green', 'Another admin note.');
+  await plant(atAdmin, 7, '/users', 'new', 'The secret admin note.');
+  await plant(atAdmin, 8, '/users', 'todo', 'Another admin note.');
 
   const zed = await signInTo(world, 'zed@other.dev');
   const other = await workspaceIn(world, zed.token, 'Other');
   const otherSite = await world.accounts.addSite(other, { origin: 'https://other.dev', visibility: 'members' });
-  await plant({ workspace: other, site: otherSite.id, origin: otherSite.origin }, 9, '/', 'seeded', 'Of Other.');
+  await plant({ workspace: other, site: otherSite.id, origin: otherSite.origin }, 9, '/', 'new', 'Of Other.');
 
   return { world, workspace, shop, admin, otherSite, alice, bob, gina, zed };
 }
@@ -180,10 +180,10 @@ describe('the notes of a whole site, in GET /session/notes (FRU-306)', () => {
     const { world, shop, alice } = await acme();
     const { accessToken } = await sessionOf(world, alice);
 
-    const ripening = await read(world, accessToken, `?site=${shop.id}&stage=ripening`);
+    const progress = await read(world, accessToken, `?site=${shop.id}&stage=progress`);
     assert.deepEqual(
-      ripening.notes.map((note) => note.stage),
-      ['ripening', 'ripening'],
+      progress.notes.map((note) => note.stage),
+      ['progress', 'progress'],
     );
     assert.equal((await read(world, accessToken, `?site=${shop.id}&q=mocha`)).total, 1);
     assert.equal(
@@ -192,7 +192,7 @@ describe('the notes of a whole site, in GET /session/notes (FRU-306)', () => {
       'the owner finds a reference',
     );
 
-    assert.equal((await ask(world, accessToken, `?site=${shop.id}&stage=ripe-ish`)).status, 400);
+    assert.equal((await ask(world, accessToken, `?site=${shop.id}&stage=done-ish`)).status, 400);
     assert.equal((await ask(world, accessToken, `?site=${shop.id}&limit=500`)).status, 400);
     assert.equal((await ask(world, accessToken, '')).status, 400, 'a site is required');
   });

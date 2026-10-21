@@ -240,7 +240,7 @@ export async function createCheck(
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
-  if (check.verdict === 'fixed') return { comment: seedCommentOf(comment), stage: 'ripe' };
+  if (check.verdict === 'fixed') return { comment: seedCommentOf(comment), stage: 'done' };
 
   const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
   if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
@@ -732,7 +732,7 @@ function seedCommentOf(comment: CommentNode): SeedComment {
 }
 
 /**
- * Linear's workflow state types, projected onto the pin's ripeness.
+ * Linear's workflow state types, projected onto the stage of the pin.
  *
  * This is the connector's half of the status story, and it lives here rather than in
  * `@fruitback/shared` because it is Linear's vocabulary (FRU-23). The contract owns `SeedStage`;
@@ -752,13 +752,13 @@ export const LINEAR_STATE_TYPES = [
 export type LinearStateType = (typeof LINEAR_STATE_TYPES)[number];
 
 const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
-  triage: 'seeded',
-  backlog: 'seeded',
-  unstarted: 'green',
-  started: 'ripening',
-  completed: 'ripe',
-  canceled: 'composted',
-  duplicate: 'composted',
+  triage: 'new',
+  backlog: 'new',
+  unstarted: 'todo',
+  started: 'progress',
+  completed: 'done',
+  canceled: 'closed',
+  duplicate: 'closed',
 };
 
 /** An unrecognised state colours the pin rather than hiding it — see `DEFAULT_SEED_STAGE`. */

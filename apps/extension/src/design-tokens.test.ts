@@ -41,15 +41,15 @@ const COPIES = {
   success: 'color-success',
   unplaced: 'color-unplaced',
   'on-stage': 'color-on-stage',
-  'on-stage-seeded': 'color-on-stage-seeded',
-  'on-stage-green': 'color-on-stage-green',
-  'on-stage-ripening': 'color-on-stage-ripening',
+  'on-stage-new': 'color-on-stage-new',
+  'on-stage-todo': 'color-on-stage-todo',
+  'on-stage-progress': 'color-on-stage-progress',
   'stage-edge': 'color-stage-edge',
-  'stage-seeded': 'stage-seeded',
-  'stage-green': 'stage-green',
-  'stage-ripening': 'stage-ripening',
-  'stage-ripe': 'stage-ripe',
-  'stage-composted': 'stage-composted',
+  'stage-new': 'stage-new',
+  'stage-todo': 'stage-todo',
+  'stage-progress': 'stage-progress',
+  'stage-done': 'stage-done',
+  'stage-closed': 'stage-closed',
   // One accent everywhere since FRU-372: the red of the console and of the widget, in both schemes.
   accent: 'color-accent',
   'accent-strong': 'color-accent-strong',
@@ -178,13 +178,13 @@ const PAIRS = [
   { foreground: 'line-strong', background: 'surface', minimum: 3, where: 'the track of a switch that is off' },
   { foreground: 'line-strong', background: 'surface-raised', minimum: 3, where: 'a switch of the page that is off' },
   // The number of a drop: black on the three light fills, white on done and closed (FRU-334).
-  ...(['seeded', 'green', 'ripening'] as const).map((stage) => ({
+  ...(['new', 'todo', 'progress'] as const).map((stage) => ({
     foreground: `on-stage-${stage}`,
     background: `stage-${stage}`,
     minimum: 4.5,
     where: `the number of a drop (${stage})`,
   })),
-  ...(['ripe', 'composted'] as const).map((stage) => ({
+  ...(['done', 'closed'] as const).map((stage) => ({
     foreground: 'on-stage',
     background: `stage-${stage}`,
     minimum: 4.5,

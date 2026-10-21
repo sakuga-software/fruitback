@@ -8,7 +8,7 @@ const REVIEW = {
   source: 'con_linear',
   key: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
   name: 'In Review',
-  stage: 'ripening',
+  stage: 'progress',
   color: '#7dd3fc',
   textColor: '#18181b',
   position: 3,
@@ -22,13 +22,13 @@ describe('a status of a site, as a write holds it (FRU-365)', () => {
   });
 
   it('reads a status of the worker with only what it must have, and the rest as the table defaults it', () => {
-    assert.deepEqual(readSiteStatus({ source: 'own', key: 'closed:completed', stage: 'ripe' }), {
+    assert.deepEqual(readSiteStatus({ source: 'own', key: 'closed:completed', stage: 'done' }), {
       ok: true,
       status: {
         source: 'own',
         key: 'closed:completed',
         name: null,
-        stage: 'ripe',
+        stage: 'done',
         color: null,
         textColor: null,
         position: 0,
@@ -80,7 +80,7 @@ describe('a status of a site, as a write holds it (FRU-365)', () => {
       [{ stage: undefined }, 'invalid-stage'],
       [{ color: 'red' }, 'invalid-color'],
       [{ color: '#fff' }, 'invalid-color'],
-      [{ color: 'var(--fruitback-stage-ripe)' }, 'invalid-color'],
+      [{ color: 'var(--fruitback-stage-done)' }, 'invalid-color'],
       [{ color: 'x#7dd3fc' }, 'invalid-color'],
       [{ textColor: 'black' }, 'invalid-color'],
       [{ textColor: 0 }, 'invalid-color'],

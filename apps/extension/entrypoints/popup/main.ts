@@ -746,7 +746,7 @@ async function siteOfWorkspaceOn(
           {
             ...(destination === undefined ? {} : { destination: destination.label }),
             ...(toCheck === undefined ? {} : { toCheck }),
-            ...(notes === undefined ? {} : { open: notes.seeded + notes.green + notes.ripening }),
+            ...(notes === undefined ? {} : { open: notes.new + notes.todo + notes.progress }),
           },
         );
       });

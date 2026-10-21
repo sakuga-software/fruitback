@@ -37,7 +37,7 @@ function storeOfStages() {
             id: `issue_${index + 1}`,
             identifier: `FB-${kept.indexOf(seed) + 1}`,
             title: seed.note.slice(0, 20),
-            stage: stages.get(seed.id) ?? 'seeded',
+            stage: stages.get(seed.id) ?? 'new',
             stateName: 'Whatever',
             updatedAt: '2026-10-13T00:00:00.000Z',
             seed,
@@ -154,13 +154,13 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
     const one = sites.find((site) => site.id === acme);
     const none = sites.find((site) => site.id === quiet);
 
-    assert.deepEqual(one?.notes, { seeded: 2, green: 0, ripening: 0, ripe: 0, composted: 0 });
+    assert.deepEqual(one?.notes, { new: 2, todo: 0, progress: 0, done: 0, closed: 0 });
     assert.deepEqual(one?.via, ['script', 'extension']);
     assert.equal(typeof one?.lastNoteAt, 'string');
     assert.equal(typeof one?.asOf, 'string');
     assert.equal(one?.undelivered, 0);
     // A site with no note: five zeros, no way, and no last note.
-    assert.deepEqual(none?.notes, { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 });
+    assert.deepEqual(none?.notes, { new: 0, todo: 0, progress: 0, done: 0, closed: 0 });
     assert.deepEqual(none?.via, []);
     assert.equal('lastNoteAt' in (none ?? {}), false);
   });
@@ -168,7 +168,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
   it('moves a count when a read of the page finds the note at another stage in its store', async () => {
     const { world, alice, workspace, acme, stages } = await aWorkspace();
     const seed = await leave(world, acme, 'Done in the tracker later.');
-    stages.set(seed.id, 'ripe');
+    stages.set(seed.id, 'done');
 
     const read = await callOn(
       world,
@@ -179,7 +179,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
     assert.equal(read.status, 200, await read.clone().text());
 
     const one = (await sitesOf(world, workspace, alice.token)).find((site) => site.id === acme);
-    assert.deepEqual(one?.notes, { seeded: 0, green: 0, ripening: 0, ripe: 1, composted: 0 });
+    assert.deepEqual(one?.notes, { new: 0, todo: 0, progress: 0, done: 1, closed: 0 });
   });
 
   it('writes a note from before the index at the first read of its page, with what the read says and no way', async () => {
@@ -275,7 +275,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
       ['guest', people.guest.token],
     ] as const) {
       const one = (await sitesOf(world, workspace, token)).find((site) => site.id === acme);
-      assert.equal((one?.notes as Record<string, number> | undefined)?.seeded, 1, role);
+      assert.equal((one?.notes as Record<string, number> | undefined)?.new, 1, role);
       // What did not arrive is about the tracker: `see-tracker`, which a guest does not have.
       assert.equal('undelivered' in (one ?? {}), role !== 'guest', role);
     }
@@ -303,7 +303,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
     });
     assert.equal(answer.status, 200, await answer.clone().text());
     const one = ((await answer.json()) as { sites: Record<string, unknown>[] }).sites.find((site) => site.id === acme);
-    assert.deepEqual(one?.notes, { seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 });
+    assert.deepEqual(one?.notes, { new: 1, todo: 0, progress: 0, done: 0, closed: 0 });
     assert.deepEqual(one?.via, ['extension']);
     assert.equal('undelivered' in (one ?? {}), false);
   });
@@ -379,7 +379,7 @@ describe('forget, and the index (FRU-237)', () => {
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
               issue,
-              stage: 'seeded',
+              stage: 'new',
             },
           ],
           Date.now(),
@@ -400,7 +400,7 @@ describe('forget, and the index (FRU-237)', () => {
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
             issue: { identifier: planted[0] ?? '' },
-            stage: 'seeded',
+            stage: 'new',
           },
         ],
         Date.now(),
@@ -455,16 +455,16 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         site.id,
         { kind: 'fruitback' },
         [
-          issueOf('sd_same', 'FB-1', 'first', 'ripe'),
-          issueOf('sd_same', 'FB-2', 'second', 'green'),
-          issueOf('sd_other', 'FB-3', 'third', 'ripe'),
+          issueOf('sd_same', 'FB-1', 'first', 'done'),
+          issueOf('sd_same', 'FB-2', 'second', 'todo'),
+          issueOf('sd_other', 'FB-3', 'third', 'done'),
         ],
         Date.now(),
       );
 
       assert.deepEqual(await rowsOf(database, 'SELECT seed_id, reference, stage FROM note_index ORDER BY seed_id'), [
-        { seed_id: 'sd_other', reference: 'FB-3', stage: 'ripe' },
-        { seed_id: 'sd_same', reference: 'FB-1', stage: 'ripe' },
+        { seed_id: 'sd_other', reference: 'FB-3', stage: 'done' },
+        { seed_id: 'sd_same', reference: 'FB-1', stage: 'done' },
       ]);
     } finally {
       await database.close();
@@ -494,7 +494,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
             issue,
-            stage: 'seeded',
+            stage: 'new',
           },
         ],
         Date.now(),
@@ -549,7 +549,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
               issue: { identifier: id === 'sd_tracked' ? 'ACM-151' : 'ACM-152' },
-              stage: 'seeded',
+              stage: 'new',
             },
           ],
           Date.now(),
@@ -600,7 +600,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             author: { kind: 'member', account: alice.id },
             place: { kind: 'fruitback' },
             issue: { identifier: 'FB-1' },
-            stage: 'seeded',
+            stage: 'new',
           },
         ],
         Date.now(),
@@ -640,7 +640,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
             issue,
-            stage: 'seeded',
+            stage: 'new',
           },
         ],
         Date.now(),
@@ -696,7 +696,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
               issue,
-              stage: 'seeded',
+              stage: 'new',
             },
           ],
           Date.now(),

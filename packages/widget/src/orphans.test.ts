@@ -74,16 +74,16 @@ describe('createOrphanList', () => {
     //
     // That ticket is FRU-36 and the answer is a drop in the stage's colour, so the signature is
     // honest again and this can assert what a reader sees. Drop `:${stage}` from the key in
-    // `orphans.ts` and a note that ripens keeps the colour it had — which is what this catches.
+    // `orphans.ts` and a note that changes stage keeps the colour it had — which is what this catches.
     const page = mount();
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'seeded' })]);
+    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'new' })]);
     const before = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
-    assert.equal(before.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-seeded)');
+    assert.equal(before.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-new)');
 
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'composted' })]);
+    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'closed' })]);
 
     const after = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
-    assert.equal(after.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-composted)');
+    assert.equal(after.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-closed)');
   });
 
   it('says the stage in words too, because colour alone is not a label', () => {
@@ -91,7 +91,7 @@ describe('createOrphanList', () => {
     // nobody who cannot separate the five colours either.
     const page = mount();
 
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'ripe' })]);
+    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' })]);
 
     assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Done · Une note');
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');

@@ -183,6 +183,13 @@
       "when": 1792591381371,
       "tag": "0025_site_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792598203304,
+      "tag": "0026_stage_names",
+      "breakpoints": true
     }
   ]
 }

@@ -490,8 +490,8 @@ describe('3 · a site on (FRU-298)', () => {
         row.querySelector('.kit-drop')?.getAttribute('data-stage'),
       ]),
       [
-        ['2 fixes to check', 'Marked done by the team', 'ripe'],
-        ['3 open notes', 'New, to do or in progress', 'ripening'],
+        ['2 fixes to check', 'Marked done by the team', 'done'],
+        ['3 open notes', 'New, to do or in progress', 'progress'],
       ],
     );
     for (const row of screen.querySelectorAll<HTMLButtonElement>('.kit-row')) row.click();

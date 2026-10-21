@@ -138,7 +138,7 @@ async function sixtyNotes() {
         author: { kind: 'visitor' },
         place: { kind: 'fruitback' },
         issue: { identifier: 'FB-1' },
-        stage: 'seeded',
+        stage: 'new',
       },
     ],
     BASE + 999_000,
@@ -244,7 +244,7 @@ describe('the notes of a workspace (FRU-244)', () => {
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
             issue: { identifier: id },
-            stage: 'seeded',
+            stage: 'new',
           },
         ],
         at,
@@ -273,17 +273,17 @@ describe('the notes of a workspace (FRU-244)', () => {
     const site = (sites[1] as { id: string }).id;
     const cases: [string, (note: Planted) => boolean][] = [
       [`site=${site}`, (note) => note.site === site],
-      ['stage=ripe', (note) => note.stage === 'ripe'],
+      ['stage=done', (note) => note.stage === 'done'],
       [`place=${rest.id}`, (note) => note.place === rest.id],
       [
-        `site=${site}&stage=green&place=${linear.id}`,
-        (note) => note.site === site && note.stage === 'green' && note.place === linear.id,
+        `site=${site}&stage=todo&place=${linear.id}`,
+        (note) => note.site === site && note.stage === 'todo' && note.place === linear.id,
       ],
       ['q=checkout', (note) => contains(note.note, 'checkout')],
       ['q=quiet', (note) => contains(note.origin, 'quiet')],
       ['q=page-3', (note) => contains(note.url, 'page-3')],
       ['q=ACM-1', (note) => contains(note.reference, 'ACM-1')],
-      ['q=ripe', (note) => contains(note.stage, 'ripe')],
+      ['q=done', (note) => contains(note.stage, 'done')],
       ['q=checkout%20shop', (note) => contains(note.note, 'checkout') && contains(note.origin, 'shop')],
       ['q=%25', () => false],
       ['q=_', () => false],
@@ -302,7 +302,7 @@ describe('the notes of a workspace (FRU-244)', () => {
       const all = planted.filter((note) =>
         withoutPlace === query
           ? keeps(note)
-          : (note.site === site || !query.includes('site=')) && (note.stage === 'green' || !query.includes('stage=')),
+          : (note.site === site || !query.includes('site=')) && (note.stage === 'todo' || !query.includes('stage=')),
       );
       assert.equal(answer.counts.all, all.length, `${query}: all`);
     }
@@ -327,7 +327,7 @@ describe('the notes of a workspace (FRU-244)', () => {
       'limit=7',
       'limit=51',
       'limit=abc',
-      'stage=done',
+      'stage=ripe',
       'site=a%20b',
       'mine=yes',
       `q=${'a'.repeat(201)}`,

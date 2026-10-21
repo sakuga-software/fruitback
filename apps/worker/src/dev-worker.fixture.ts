@@ -120,7 +120,7 @@ async function setWriters(
     .end(JSON.stringify({ id: site.id, writers: site.writers }));
 }
 
-const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'];
+const STAGES = ['new', 'todo', 'progress', 'done', 'closed'];
 
 /** `POST /__dev/stage`: the note whose seed has this id goes to this stage. `404` for no such note. */
 async function moveStage(database: PgDatabase, incoming: IncomingMessage, response: ServerResponse): Promise<void> {

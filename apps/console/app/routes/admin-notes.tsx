@@ -6,7 +6,7 @@ import { msg, t } from '../i18n';
 import { Choice, DataTable, Field, Lead, LinkButton, StatusDot, Title } from '../ui';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
-import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
+import { KINDS, STAGE_NAMES } from './connector-parts';
 import { NotePages, NotesFailed, Reference, excerptOf } from './notes';
 import { siteLabel } from '../site-address';
 
@@ -249,7 +249,7 @@ function NoteRow({ note }: { note: InstanceNote }) {
       <td className="whitespace-nowrap">
         {isStage(note.stage) ? (
           <span className="inline-flex items-center gap-[8px]">
-            <StatusDot status={STAGE_STATUS[note.stage]} size={10} />
+            <StatusDot status={note.stage} size={10} />
             {t(STAGE_NAMES[note.stage])}
           </span>
         ) : (

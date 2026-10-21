@@ -143,7 +143,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               eq(note_index.workspace_id, workspace),
               eq(note_index.author_kind, 'member'),
               eq(note_index.author_account_id, account),
-              eq(note_index.stage, 'ripe'),
+              eq(note_index.stage, 'done'),
               // `false`: a read saw the replies of a place that takes a verdict, and none was « fixed ».
               eq(note_index.confirmed, false),
             ),

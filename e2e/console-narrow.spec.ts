@@ -30,7 +30,7 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
         excerpt: 'The order form rejects postcodes with a space, and says nothing of why it does so.',
         page: { url: `https://${LONG_HOST}/contact`, host: LONG_HOST, path: '/contact' },
         site: { id: 's1' },
-        stage: 'seeded',
+        stage: 'new',
         author: { kind: 'anonymous' },
         place: { kind: 'fruitback' },
         createdAt: '2026-10-13T08:00:00.000Z',

@@ -18,7 +18,7 @@ import { DESTINATION_ID_MAX } from './destinations.ts';
  */
 
 export type WidgetConfig = {
-  /** Stages whose pins are not drawn. `ripe` and `composted` are what "resolved" means. */
+  /** Stages whose pins are not drawn. `done` and `closed` are what "resolved" means. */
   hiddenStages: SeedStage[];
   /**
    * Attach an image of the element to the note (FRU-6). **Off by default**, and only offered when
@@ -69,7 +69,7 @@ export type ConfigStoreOptions = {
 export const CONFIG_STORAGE_KEY = 'fruitback:config';
 
 /** The stages a reporter usually stops caring about: done, and cancelled. */
-export const RESOLVED_STAGES: SeedStage[] = ['ripe', 'composted'];
+export const RESOLVED_STAGES: SeedStage[] = ['done', 'closed'];
 
 export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const key = options.key ?? CONFIG_STORAGE_KEY;

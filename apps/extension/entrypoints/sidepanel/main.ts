@@ -492,7 +492,7 @@ async function sendVerdict(id: string, verdict: CheckVerdict): Promise<void> {
     if (verdict === 'wrong') reopened[id] = new Date().toISOString();
     open = id;
     // The note is in Done when it looks fixed, back in Open when it is still wrong.
-    tab = verdict === 'fixed' ? 'done' : 'open';
+    tab = verdict === 'fixed' ? 'finished' : 'open';
     await readNotes();
 
     return;

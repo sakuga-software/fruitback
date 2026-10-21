@@ -104,7 +104,7 @@ export type Connector = {
   settings?: ConnectorSettings;
 };
 /** The five stages of a pin, in the order of the widget. */
-export const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 export type Stage = (typeof STAGES)[number];
 /** What a workspace sets on a tracker (FRU-102): the replies, and the stages some states take. */
 export type ConnectorSettings = { showComments: boolean; stages: Record<string, Stage> };

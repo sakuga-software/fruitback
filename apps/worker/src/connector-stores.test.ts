@@ -235,7 +235,7 @@ describe('the stages a read reports, for a site that sends to the tracker of its
     // The store of the worker reports three stages, as GitHub does (`GITHUB_STAGES`).
     const own: SeedStore = {
       name: 'three-stages',
-      stages: ['green', 'ripe', 'composted'],
+      stages: ['todo', 'done', 'closed'],
       scope: () => '',
       create: async () => ({ id: 'x', identifier: 'X-1' }),
       findForPage: async () => [],
@@ -255,14 +255,14 @@ describe('the stages a read reports, for a site that sends to the tracker of its
 
     // Linear answers for this site: its five stages.
     assert.deepEqual(await stagesOf('https://staging.acme.dev', acme.site.id), [
-      'seeded',
-      'green',
-      'ripening',
-      'ripe',
-      'composted',
+      'new',
+      'todo',
+      'progress',
+      'done',
+      'closed',
     ]);
     // A site with no destination is read in the store of the worker: its three.
-    assert.deepEqual(await stagesOf('https://plain.acme.dev', plain.id), ['green', 'ripe', 'composted']);
+    assert.deepEqual(await stagesOf('https://plain.acme.dev', plain.id), ['todo', 'done', 'closed']);
   });
 
   // No connector of a workspace says three stages yet, so a fake one stands for GitHub (FRU-357).
@@ -355,21 +355,21 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
     assert.equal((await acme.write('Acme: one.')).status, 201);
     assert.equal((await globex.write('Globex: one.')).status, 201);
     // The stage of the type of « Todo », and its reply.
-    assert.deepEqual(await acme.pins(), [{ stage: 'green', comments: 1 }]);
+    assert.deepEqual(await acme.pins(), [{ stage: 'todo', comments: 1 }]);
 
     const set = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
       token: acme.token,
-      body: { showComments: false, stages: { state_todo: 'ripening' } },
+      body: { showComments: false, stages: { state_todo: 'progress' } },
     });
     assert.equal(set.status, 200, await set.clone().text());
     // A new note empties the cache of the page, as a change of the settings does not.
     assert.equal((await acme.write('Acme: two.')).status, 201);
 
     assert.deepEqual(await acme.pins(), [
-      { stage: 'ripening', comments: undefined },
-      { stage: 'ripening', comments: undefined },
+      { stage: 'progress', comments: undefined },
+      { stage: 'progress', comments: undefined },
     ]);
-    assert.deepEqual(await globex.pins(), [{ stage: 'green', comments: 1 }], 'the other workspace is not touched');
+    assert.deepEqual(await globex.pins(), [{ stage: 'todo', comments: 1 }], 'the other workspace is not touched');
 
     // The defaults again: the exception is gone, and the replies come back.
     const back = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
@@ -378,7 +378,7 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
     });
     assert.equal(back.status, 200);
     assert.equal((await acme.write('Acme: three.')).status, 201);
-    assert.deepEqual((await acme.pins())[0], { stage: 'green', comments: 1 });
+    assert.deepEqual((await acme.pins())[0], { stage: 'todo', comments: 1 });
   });
 
   it('lists the states of the teams its sites send to, each with the stage of its type, and its settings', async () => {
@@ -391,8 +391,8 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
     assert.deepEqual(await listed.json(), {
       // In the order of the board, and no state of a team no site sends to.
       states: [
-        { id: 'state_triage', name: 'Triage', type: 'triage', teamId: 'team_design', team: 'Design', stage: 'seeded' },
-        { id: 'state_todo', name: 'Todo', type: 'unstarted', teamId: 'team_design', team: 'Design', stage: 'green' },
+        { id: 'state_triage', name: 'Triage', type: 'triage', teamId: 'team_design', team: 'Design', stage: 'new' },
+        { id: 'state_todo', name: 'Todo', type: 'unstarted', teamId: 'team_design', team: 'Design', stage: 'todo' },
       ],
       settings: DEFAULT_CONNECTOR_SETTINGS,
     });
@@ -409,9 +409,9 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
     for (const body of [
       { showComments: 'no' },
       { stages: { state_todo: 'purple' } },
-      { stages: { 'a state': 'green' } },
-      { stages: ['green'] },
-      { stages: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`state_${index}`, 'green'])) },
+      { stages: { 'a state': 'todo' } },
+      { stages: ['todo'] },
+      { stages: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`state_${index}`, 'todo'])) },
     ]) {
       const refused = await settings(body);
       assert.equal(refused.status, 400, JSON.stringify(body).slice(0, 80));

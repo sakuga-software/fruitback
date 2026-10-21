@@ -484,15 +484,15 @@ GitHub App, see [Storing the seeds in GitHub Issues](#storing-the-seeds-in-githu
 
 What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
 Replies column and the last column with the code. A stage is named here as it is stored, in the
-`stage` column and in the JSON. The widget shows `seeded` as **New**, `green` as **To do**, `ripening`
-as **In progress**, `ripe` as **Done** and `composted` as **Closed**.
+`stage` column and in the JSON. The widget shows `new` as **New**, `todo` as **To do**, `progress`
+as **In progress**, `done` as **Done** and `closed` as **Closed**.
 
-| Store      | Stages                                             | What changes the stage                                                          | Replies                                                                             | Runs in production |
-| ---------- | -------------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------ |
-| `postgres` | `seeded`, `green`, `ripening`, `ripe`, `composted` | An `UPDATE` of the `stage` column of `seeds`. Nothing in the worker changes it. | The newest 20 rows of the `seed_comments` table. Nothing in the worker writes them. | yes                |
-| `linear`   | `seeded`, `green`, `ripening`, `ripe`, `composted` | The workflow state of the issue.                                                | The newest 20 comments on the issue.                                                | yes                |
-| `github`   | `seeded`, `ripe`, `composted`                      | Closing the issue, and the reason for the close.                                | The newest 20 comments on the issue.                                                | yes                |
-| `memory`   | `seeded`, `green`, `ripening`, `ripe`, `composted` | Nothing. Each note gets the next state in a fixed list.                         | Two canned replies, on every third note.                                            | no                 |
+| Store      | Stages                                      | What changes the stage                                                          | Replies                                                                             | Runs in production |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------ |
+| `postgres` | `new`, `todo`, `progress`, `done`, `closed` | An `UPDATE` of the `stage` column of `seeds`. Nothing in the worker changes it. | The newest 20 rows of the `seed_comments` table. Nothing in the worker writes them. | yes                |
+| `linear`   | `new`, `todo`, `progress`, `done`, `closed` | The workflow state of the issue.                                                | The newest 20 comments on the issue.                                                | yes                |
+| `github`   | `new`, `done`, `closed`                     | Closing the issue, and the reason for the close.                                | The newest 20 comments on the issue.                                                | yes                |
+| `memory`   | `new`, `todo`, `progress`, `done`, `closed` | Nothing. Each note gets the next state in a fixed list.                         | Two canned replies, on every third note.                                            | no                 |
 
 ## In a database you already run
 
@@ -822,11 +822,11 @@ the worker mints expires after one hour and reaches one repository.
 What you give up: GitHub has two issue states, so a pin has three stages instead of five, and the
 settings panel offers only these three.
 
-| The issue                                                      | The stage of the pin         |
-| -------------------------------------------------------------- | ---------------------------- |
-| open, reopened included                                        | `seeded`, shown as New       |
-| closed as completed, or closed before GitHub recorded a reason | `ripe`, shown as Done        |
-| closed as not planned, or as a duplicate                       | `composted`, shown as Closed |
+| The issue                                                      | The stage of the pin      |
+| -------------------------------------------------------------- | ------------------------- |
+| open, reopened included                                        | `new`, shown as New       |
+| closed as completed, or closed before GitHub recorded a reason | `done`, shown as Done     |
+| closed as not planned, or as a duplicate                       | `closed`, shown as Closed |
 
 **On a public repository, every note is public**, with the name and the address of the reporter when
 they typed one. See [SECURITY.md](../SECURITY.md).

@@ -15,7 +15,7 @@ import {
   Problem,
   StatusDot,
 } from '../ui';
-import { KINDS, STAGE_NAMES, STAGE_STATUS } from './connector-parts';
+import { KINDS, STAGE_NAMES } from './connector-parts';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
@@ -459,7 +459,7 @@ function NoteRow({
       </td>
       <td className="whitespace-nowrap">
         <span className="inline-flex items-center gap-[8px]">
-          <StatusDot status={STAGE_STATUS[note.stage]} size={10} />
+          <StatusDot status={note.stage} size={10} />
           {t(STAGE_NAMES[note.stage])}
         </span>
       </td>

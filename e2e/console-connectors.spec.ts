@@ -57,11 +57,11 @@ const SITES = [
 ];
 const STATES = (
   [
-    ['Triage', 'seeded'],
-    ['Todo', 'green'],
-    ['In Progress', 'ripening'],
-    ['Done', 'ripe'],
-    ['Canceled', 'composted'],
+    ['Triage', 'new'],
+    ['Todo', 'todo'],
+    ['In Progress', 'progress'],
+    ['Done', 'done'],
+    ['Canceled', 'closed'],
   ] as const
 ).map(([name, stage], index) => ({ id: `st${index}`, name, type: 'x', teamId: 't1', team: 'Acme web', stage }));
 const LATE = [
@@ -573,7 +573,7 @@ test('a status that is chosen is sent, and the drop beside it follows', async ({
     .poll(() => worker.sent.at(-1))
     .toEqual({
       pathname: '/console/workspaces/w1/connectors/c1/settings',
-      body: { showComments: true, stages: { st0: 'ripe' } },
+      body: { showComments: true, stages: { st0: 'done' } },
     });
   await expect(first.getByRole('button', { name: /Status for Triage/ })).toContainText('Done');
   // The colour of « Done » is the token of the console (FRU-334), read where the page defines it:

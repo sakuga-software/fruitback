@@ -19,15 +19,15 @@ import { StoreError } from './store.ts';
  */
 
 describe('stageForLinearState', () => {
-  it('ripens the pin along the Linear workflow', () => {
-    assert.equal(stageForLinearState('backlog'), 'seeded');
-    assert.equal(stageForLinearState('triage'), 'seeded');
-    assert.equal(stageForLinearState('unstarted'), 'green');
-    assert.equal(stageForLinearState('started'), 'ripening');
-    assert.equal(stageForLinearState('completed'), 'ripe');
-    assert.equal(stageForLinearState('canceled'), 'composted');
-    // The SKG team has a "Duplicate" state; a duplicated pin must not read as freshly seeded.
-    assert.equal(stageForLinearState('duplicate'), 'composted');
+  it('moves the pin along the Linear workflow', () => {
+    assert.equal(stageForLinearState('backlog'), 'new');
+    assert.equal(stageForLinearState('triage'), 'new');
+    assert.equal(stageForLinearState('unstarted'), 'todo');
+    assert.equal(stageForLinearState('started'), 'progress');
+    assert.equal(stageForLinearState('completed'), 'done');
+    assert.equal(stageForLinearState('canceled'), 'closed');
+    // The SKG team has a "Duplicate" state; a duplicated pin must not read as new.
+    assert.equal(stageForLinearState('duplicate'), 'closed');
   });
 
   it('draws an unrecognised state instead of hiding it, at the contract’s default', () => {
@@ -36,7 +36,7 @@ describe('stageForLinearState', () => {
     assert.equal(stageForLinearState('someCustomType'), DEFAULT_SEED_STAGE);
     assert.equal(stageForLinearState(''), DEFAULT_SEED_STAGE);
 
-    // Asserted against the constant, not against `'seeded'`: every connector answers the same way
+    // Asserted against the constant, not against `'new'`: every connector answers the same way
     // for a state it does not know, so the rule is the contract's and a connector spelling the
     // literal itself is how the next one comes to disagree. Which stage that is stays pinned in
     // `packages/shared/src/linear.test.ts`, where the constant is declared.
@@ -120,7 +120,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       ['FruitbackCreateComment', 'FruitbackIssueStates', 'FruitbackReopenIssue'],
     );
     assert.deepEqual(stub.calls[2]?.variables, { id: 'issue_1', input: { stateId: 'st_backlog' } });
-    assert.equal(answer?.stage, 'seeded');
+    assert.equal(answer?.stage, 'new');
     assert.equal(answer?.comment.body, '**Bob** via Fruitback · member of Acme\nReopened: still wrong');
   });
 
@@ -139,7 +139,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       stub.calls.map((call) => call.operation),
       ['FruitbackCreateComment'],
     );
-    assert.equal(answer?.stage, 'ripe');
+    assert.equal(answer?.stage, 'done');
     assert.equal(answer?.comment.body, '**Bob** via Fruitback · membre de Acme\nVérifié : semble corrigé');
   });
 

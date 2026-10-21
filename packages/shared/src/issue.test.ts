@@ -26,8 +26,8 @@ describe('the stage vocabulary', () => {
   // package is installed by every consumer of the widget, and a `LinearStateType` here made all of
   // them depend on Linear. `apps/worker/src/linear.test.ts` owns that mapping's tests now. What is
   // still the contract's is the vocabulary itself and the fallback every connector uses.
-  it('is the five stages the widget draws, in ripening order', () => {
-    assert.deepEqual([...SEED_STAGES], ['seeded', 'green', 'ripening', 'ripe', 'composted']);
+  it('is the five stages the widget draws, in their order', () => {
+    assert.deepEqual([...SEED_STAGES], ['new', 'todo', 'progress', 'done', 'closed']);
   });
 
   it('falls back to a stage that exists, and to that one', () => {
@@ -35,22 +35,22 @@ describe('the stage vocabulary', () => {
     // The value is pinned here rather than in a connector's tests, because every connector reads
     // this constant: this is the one place a change to it should be heard. Moving it silently
     // repaints every pin whose state a provider renamed.
-    assert.equal(DEFAULT_SEED_STAGE, 'seeded');
+    assert.equal(DEFAULT_SEED_STAGE, 'new');
   });
 });
 
 describe('offeredStages (FRU-32)', () => {
   it('keeps the stages a worker reports, in the order of the contract', () => {
-    assert.deepEqual(offeredStages(['composted', 'seeded', 'ripe']), ['seeded', 'ripe', 'composted']);
+    assert.deepEqual(offeredStages(['closed', 'new', 'done']), ['new', 'done', 'closed']);
   });
 
   it('drops a value that is not a stage, and a repeated one', () => {
-    assert.deepEqual(offeredStages(['seeded', 'seeded', 'blue', 3]), ['seeded']);
+    assert.deepEqual(offeredStages(['new', 'new', 'blue', 3]), ['new']);
   });
 
   it('offers every stage if the worker sends nothing usable', () => {
     // A worker from before FRU-32 sends no field. Its panel must not lose a box.
-    for (const value of [undefined, null, 'seeded', [], ['blue']]) {
+    for (const value of [undefined, null, 'new', [], ['blue']]) {
       assert.deepEqual(offeredStages(value), [...SEED_STAGES], JSON.stringify(value));
     }
   });
@@ -64,7 +64,7 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
       identifier: 'FRU-2',
       url: 'https://linear.app/sakuga-software/issue/FRU-2/le-bouton-est-trop-petit',
       title: 'Le bouton est trop petit',
-      stage: 'ripening',
+      stage: 'progress',
       stateName: 'In Progress',
       updatedAt: '2026-08-05T10:00:00.000Z',
       comments: [
@@ -83,7 +83,7 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
 
   it('reads checked and mine, and refuses a checked with no name or no instant, and a mine that is not true (FRU-294)', () => {
     const issue = realisticIssue({
-      stage: 'ripe',
+      stage: 'done',
       checked: { by: 'Bob', at: '2026-10-20T10:00:00.000Z' },
       mine: true,
     });
@@ -118,10 +118,10 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
 });
 
 describe('the statuses of a read (FRU-364)', () => {
-  const doing = { key: 'linear:st_1', name: 'In Review', stage: 'ripening', color: '#7dd3fc', textColor: '#18181b' };
+  const doing = { key: 'linear:st_1', name: 'In Review', stage: 'progress', color: '#7dd3fc', textColor: '#18181b' };
 
   it('reads an issue with no status, as every worker before FRU-364 sends it', () => {
-    const issue = { ...seedIssueFixtureLike(), stage: 'ripe', stateName: 'Done' };
+    const issue = { ...seedIssueFixtureLike(), stage: 'done', stateName: 'Done' };
     const parsed = seedIssueSchema.parse(issue);
 
     assert.deepEqual(parsed, issue);
@@ -143,8 +143,8 @@ describe('the statuses of a read (FRU-364)', () => {
 
   it('keeps a status as the worker sent it', () => {
     assert.deepEqual(offeredStatuses([doing]), [doing]);
-    assert.deepEqual(offeredStatuses([{ key: 'own:seeded', name: '', stage: 'seeded' }]), [
-      { key: 'own:seeded', name: '', stage: 'seeded' },
+    assert.deepEqual(offeredStatuses([{ key: 'own:new', name: '', stage: 'new' }]), [
+      { key: 'own:new', name: '', stage: 'new' },
     ]);
   });
 
@@ -152,8 +152,8 @@ describe('the statuses of a read (FRU-364)', () => {
     const kept = offeredStatuses([
       null,
       'linear:st_1',
-      { name: 'No key', stage: 'seeded' },
-      { key: '', name: 'Empty key', stage: 'seeded' },
+      { name: 'No key', stage: 'new' },
+      { key: '', name: 'Empty key', stage: 'new' },
       { key: 'x', name: 'Blue', stage: 'blue' },
       doing,
       { ...doing, name: 'Second with the same key' },
@@ -166,7 +166,7 @@ describe('the statuses of a read (FRU-364)', () => {
     for (const color of [
       'red',
       '#fff',
-      'var(--fruitback-stage-ripe)',
+      'var(--fruitback-stage-done)',
       'url(https://x.test/a.png)',
       '#7dd3fcff',
       '#7dd3fc;',
@@ -195,7 +195,7 @@ describe('the statuses of a read (FRU-364)', () => {
     const many = Array.from({ length: MAX_STATUSES + 5 }, (_, index) => ({
       key: `k${index}`,
       name: '',
-      stage: 'seeded',
+      stage: 'new',
     }));
     const kept = offeredStatuses(many);
 
@@ -205,20 +205,20 @@ describe('the statuses of a read (FRU-364)', () => {
 
   it('counts only the statuses it keeps against that bound', () => {
     // Found in review: a bound taken on the raw list let dropped entries push a valid one out.
-    const dropped = Array.from({ length: MAX_STATUSES }, () => ({ key: '', name: '', stage: 'seeded' }));
-    const kept = offeredStatuses([...dropped, { key: 'after', name: '', stage: 'ripe' }]);
+    const dropped = Array.from({ length: MAX_STATUSES }, () => ({ key: '', name: '', stage: 'new' }));
+    const kept = offeredStatuses([...dropped, { key: 'after', name: '', stage: 'done' }]);
 
-    assert.deepEqual(kept, [{ key: 'after', name: '', stage: 'ripe' }]);
+    assert.deepEqual(kept, [{ key: 'after', name: '', stage: 'done' }]);
   });
 
   it('gives the status of an issue only when it is in the list and of the same stage', () => {
     const statuses = offeredStatuses([doing]);
 
-    assert.deepEqual(statusOf({ stage: 'ripening', status: doing.key }, statuses), doing);
-    assert.equal(statusOf({ stage: 'ripening' }, statuses), undefined, 'no status: the stage');
-    assert.equal(statusOf({ stage: 'ripening', status: 'linear:gone' }, statuses), undefined, 'unknown key: the stage');
+    assert.deepEqual(statusOf({ stage: 'progress', status: doing.key }, statuses), doing);
+    assert.equal(statusOf({ stage: 'progress' }, statuses), undefined, 'no status: the stage');
+    assert.equal(statusOf({ stage: 'progress', status: 'linear:gone' }, statuses), undefined, 'unknown key: the stage');
     // The stage is what an old widget draws. A new one must not draw another stage from the same answer.
-    assert.equal(statusOf({ stage: 'ripe', status: doing.key }, statuses), undefined, 'other stage: the stage');
+    assert.equal(statusOf({ stage: 'done', status: doing.key }, statuses), undefined, 'other stage: the stage');
   });
 });
 
@@ -228,7 +228,7 @@ function seedIssueFixtureLike() {
     id: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
     identifier: 'FRU-2',
     title: 'Le bouton est trop petit',
-    stage: 'ripening',
+    stage: 'progress',
     stateName: 'In Review',
     updatedAt: '2026-10-21T10:00:00.000Z',
     seed: seedFixture(),
