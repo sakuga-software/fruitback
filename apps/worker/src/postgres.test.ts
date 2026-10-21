@@ -469,7 +469,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
  * each statement out of a transaction. A transaction stays in the first session: PgBouncer keeps one
  * on one connection too.
  */
-function behindAPoolerInTransactionMode(database: PgDatabase, route: (statement: string) => 0 | 1): Database {
+function behindAPoolerInTransactionMode(database: PgDatabase, route: (statement: string) => 0 | 1 | 'fails'): Database {
   const dialect = new PgDialect();
 
   return {
@@ -482,7 +482,13 @@ function behindAPoolerInTransactionMode(database: PgDatabase, route: (statement:
             get(target, key, receiver) {
               if (key !== 'execute') return Reflect.get(target, key, receiver);
 
-              return (query: SQL) => sessions[route(dialect.sqlToQuery(query).sql)]!.execute(query);
+              return (query: SQL) => {
+                const session = route(dialect.sqlToQuery(query).sql);
+                if (session === 'fails')
+                  return Promise.reject(new StoreError('PostgreSQL did not answer: the connection ended'));
+
+                return sessions[session]!.execute(query);
+              };
             },
           });
 
@@ -593,6 +599,34 @@ describe(
         );
         // The unlock gave back the hold of the refused worker, and left the one of the other client.
         assert.deepEqual((after as { rows: unknown[] }).rows, [{ n: 1 }]);
+      } finally {
+        await database.close();
+      }
+    });
+
+    // Raised in review: the error of a step is what the operator reads, not the one of the unlock after it.
+    it('keeps the refusal that names the pooler when the unlock after it fails too', async () => {
+      const database = await createRealDatabase();
+      try {
+        // The lock in the first session, the next statement in the second, and an unlock that fails.
+        const pooled = behindAPoolerInTransactionMode(database, (statement) => {
+          if (statement.includes('pg_advisory_unlock(')) return 'fails';
+
+          return statement.includes('pg_advisory_lock(') ? 0 : 1;
+        });
+
+        await assert.rejects(
+          migrate(pooled, folderOf([FIRST]), () => {}),
+          (error: unknown) => {
+            assert.ok(error instanceof StoreError, String(error));
+            assert.match(
+              error.message,
+              /^The lock of the migrations was taken in one session, and a connection pooler/,
+            );
+
+            return true;
+          },
+        );
       } finally {
         await database.close();
       }

@@ -589,6 +589,7 @@ export async function migrate(
       ),
     );
     let toldOfThePooler = false;
+    let failed = false;
     try {
       if (lock?.held === true) {
         toldOfThePooler = true;
@@ -611,9 +612,20 @@ export async function migrate(
         await step();
       }
       await warnWhenPublicIsOpen(db, schema, warn);
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
+      // After a failure, an unlock that fails too does not hide the cause (raised in review). `alone`
+      // closes the connection of a failure, and the lock of a session ends with it.
+      const answer = await db
+        .execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK}) AS released`)
+        .catch((error: unknown) => {
+          if (failed) return undefined;
+          throw error;
+        });
       // `false` when this statement ran in a session that does not hold the lock: another one keeps it.
-      const [unlock] = rowsOf(await db.execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK}) AS released`));
+      const [unlock] = answer === undefined ? [{ released: true }] : rowsOf(answer);
       if (unlock?.released !== true && !toldOfThePooler) {
         warn(`[fruitback] The lock of the migrations is still held by another session: ${POOLER_IN_TRANSACTION_MODE}`);
       }
