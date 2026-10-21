@@ -1,0 +1,337 @@
+import { type AccountStore, can } from './accounts.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { type ClientConfig, type ClientPolicy, type ClientResolution, normalizeClientId } from './clients.ts';
+import { type Kv, KvError } from './kv.ts';
+import {
+  canonicalizeRequestedPage,
+  indexed,
+  invalidatePages,
+  placeOf,
+  placedAt,
+  routingFailure,
+} from './note-helpers.ts';
+import type { NoteIndex } from './notes-index.ts';
+import { checkReplyLimit } from './rate-limit.ts';
+import { checkedOf } from './reply-text.ts';
+import type { RequestContext, Served } from './request-context.ts';
+import type { SessionIdentity } from './session.ts';
+import { type CheckVerdict, type ReplyAuthor, type SeedStore, StoreError, takesChecks, takesReplies } from './store.ts';
+
+/**
+ * The routes that write under a note (FRU-363), out of `app.ts` so that a review reads them in one
+ * file: a reply (`POST /feedback/<id>/replies`, FRU-257) and a verdict on a note done
+ * (`POST /feedback/<id>/check`, FRU-294). Every check of the caller stays in `app.ts`, which hands
+ * it over in `CallerChecks`, under the names the routes call it by.
+ */
+
+/** The checks of the caller that `app.ts` keeps, and the routes of this file call. */
+export type CallerChecks = {
+  /** Which client a request belongs to, and what was decided for it: `routeFor` of `app.ts`. */
+  routeFor: (request: Request, config: Served, clientId: string | undefined) => ClientResolution;
+  /** Who writes a reply, or why nobody may: `replyAuthorFor` of `app.ts`. */
+  replyAuthorFor: (
+    request: Request,
+    policy: ClientPolicy,
+    workspace: string | undefined,
+    typed: string | undefined,
+    accounts: AccountStore | undefined,
+  ) => Promise<{ ok: true; author: ReplyAuthor; account: boolean } | { ok: false; status: number; reason: string }>;
+  /** The answer to a write of a session of an account that ended: `endedSession` of `app.ts`. */
+  endedSession: (
+    stillWrites: () => Promise<boolean>,
+    corsHeaders: Record<string, string>,
+  ) => Promise<Response | undefined>;
+  /** The person of a session still valid in the store: `sessionWrites` of `app.ts`. */
+  sessionWrites: (request: Request, config: Served, context: RequestContext) => Promise<SessionIdentity | undefined>;
+  /** The account that writes in a workspace for a site: `writerIn` of `app.ts`. */
+  writerIn: (
+    request: Request,
+    config: Served,
+    context: RequestContext,
+    workspace: string,
+    site: string | undefined,
+  ) => Promise<string | undefined>;
+  /** Whether the caller is a guest, who reads no reference of a tracker: `hidesTracker` of `app.ts`. */
+  hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
+  /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
+  REPLY_LENGTH: number;
+};
+
+/** `POST /feedback/<id>/replies`: the id of the issue of a note, as a read answers it (FRU-257). */
+export const REPLY_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/replies$/;
+
+/**
+ * `POST /feedback/<id>/replies?client=<site>` with `{ url, body, name? }` (FRU-257).
+ *
+ * The note must be one that a read of that page answers for that site: the id alone names an issue
+ * of a tracker, which can be of another site. The reply goes to the place where the note was found,
+ * and the page is read again by everybody after it.
+ */
+export async function postReply(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: { clientIp: string; accounts: AccountStore | undefined; stillWrites: () => Promise<boolean> },
+  checks: CallerChecks,
+): Promise<Response> {
+  const { routeFor, replyAuthorFor, endedSession, REPLY_LENGTH } = checks;
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const {
+    url: requested,
+    body,
+    name,
+  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
+  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  if (typeof body !== 'string' || body.trim() === '' || [...body].length > REPLY_LENGTH) {
+    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
+  }
+  if (name !== undefined && typeof name !== 'string') return json(400, { error: 'invalid-name' }, corsHeaders);
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  if (!route.policy.showComments) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+
+  try {
+    // The accounts are read here: a store that does not answer is `502`, as for the reply itself.
+    const who = await replyAuthorFor(request, route.policy, route.client?.workspace, name, context.accounts);
+    if (!who.ok) return json(who.status, { error: 'identity-required', reason: who.reason }, corsHeaders);
+    if (who.account) {
+      const ended = await endedSession(context.stillWrites, corsHeaders);
+      if (ended !== undefined) return ended;
+    }
+
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    for (const target of targets) {
+      const found = await store.findForPage({ url, clientId }, target, route.policy);
+      if (!found.some((each) => each.id === issue)) continue;
+      if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
+      // Counted once the reply is one the worker would take: a refusal costs no reply of the minute.
+      if (who.author.kind === 'visitor' && !(await checkReplyLimit(kv, context.clientIp))) {
+        return json(429, { error: 'rate-limited' }, corsHeaders);
+      }
+      const comment = await store.reply?.({ issue, clientId }, { body, author: who.author }, target, route.policy);
+      if (comment === undefined) break;
+      await invalidatePages(kv, [url]);
+
+      return json(201, { comment }, corsHeaders);
+    }
+
+    return json(404, { error: 'not-found' }, corsHeaders);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+    throw error;
+  }
+}
+
+/** `POST /feedback/<id>/check`: a verdict on a note that the team marked done (FRU-294). */
+export const CHECK_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/check$/;
+
+const VERDICTS: readonly CheckVerdict[] = ['fixed', 'wrong'];
+
+/** How long one verdict holds its note against a second one, at most: a worker that dies while it writes (FRU-294). */
+export const CHECK_LOCK_MS = 15_000;
+
+/**
+ * The account that left a note, as the index keeps it (FRU-294). An index that does not answer is a
+ * store that does not answer: `502`, and the person tries again. Never « nobody », which would refuse
+ * the author as if they were somebody else.
+ */
+async function indexedAuthorOf(
+  index: NoteIndex | undefined,
+  workspace: string,
+  site: string,
+  seed: string,
+): Promise<string | undefined> {
+  if (index === undefined) return undefined;
+  try {
+    return (await index.authors(workspace, site, [seed])).get(seed);
+  } catch (error) {
+    throw new StoreError(
+      `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
+ * `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` (FRU-294).
+ *
+ * « Looks fixed » writes a marked reply under the note, and the note stays done. « Still wrong »
+ * writes the marked reply, then reopens the note in its store. **The store stays the one source of the
+ * stage and of the verdict**: nothing is kept here.
+ *
+ * - **Who.** A session of the extension, read again in the store as for every write (2026-10-14),
+ *   of a person who reads the site now. And of them, the person who left the note (the index keeps
+ *   their account) or a role that manages the sites. Anybody else of the workspace: `403`.
+ * - **When.** Only on a note that its store says is `ripe` now (`409 not-done`), and not confirmed
+ *   already (`409 already-checked`).
+ */
+export async function postCheck(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: {
+    clientIp: string;
+    accounts: AccountStore | undefined;
+    noteIndex: NoteIndex | undefined;
+    context: RequestContext;
+  },
+  checks: CallerChecks,
+): Promise<Response> {
+  const { routeFor, sessionWrites, writerIn, hidesTracker, REPLY_LENGTH } = checks;
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const {
+    url: requested,
+    verdict,
+    body,
+  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
+  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  if (typeof verdict !== 'string' || !VERDICTS.includes(verdict as CheckVerdict)) {
+    return json(400, { error: 'invalid-verdict', verdicts: VERDICTS }, corsHeaders);
+  }
+  if (body !== undefined && (typeof body !== 'string' || [...body].length > REPLY_LENGTH)) {
+    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
+  }
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  try {
+    const workspace = route.client?.workspace;
+    const { accounts } = context;
+    // A session of the extension, still valid in the store: no token, a token of a site, a cookie of
+    // the console, a session that ended, all stop here.
+    const session = await sessionWrites(request, config, context.context);
+    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+      return json(401, { error: 'identity-required' }, corsHeaders);
+    }
+    const account = await writerIn(request, config, context.context, workspace, clientId);
+    const reach = await accounts.reach(workspace, session.subject);
+    // A person of the workspace who does not read this site (a guest of another site): `403`. Anybody
+    // else, a workspace that is suspended included (FRU-282): `401`, as for no session.
+    if (account === undefined) {
+      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
+
+      return reach === undefined || suspended
+        ? json(401, { error: 'identity-required' }, corsHeaders)
+        : json(403, { error: 'not-allowed' }, corsHeaders);
+    }
+    if (!route.policy.showComments) return json(403, { error: 'checks-not-taken' }, corsHeaders);
+
+    // A guest reads a note by the id the widget gave it, never by the id of the tracker (FRU-250).
+    const hidden = await hidesTracker(request, config, route.policy);
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    for (const target of targets) {
+      // Read now in the store, never in the cache: the stage that decides is the store's.
+      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
+        hidden ? each.seed.id === issue : each.id === issue,
+      );
+      if (found === undefined) continue;
+
+      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
+      const manages = reach !== undefined && can(reach.role, 'manage-sites');
+      if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
+      if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
+      if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
+      if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
+      // No count of its own, as for the reply of a member (FRU-257): only a member gives a verdict,
+      // and the limit of all requests applies above.
+      // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
+      // and would write two verdicts. The second is refused while the first is written; after it, the
+      // read under the key sees the verdict of the first.
+      const lock = `fruitback:check:${clientId}:${found.seed.id}`;
+      if ((await kv.incr(lock, CHECK_LOCK_MS)) > 1) return json(409, { error: 'check-in-progress' }, corsHeaders);
+      try {
+        // Read again under the key: a request that read the note before another wrote its verdict
+        // takes the key after it, and must see that verdict.
+        const now = (await store.findForPage({ url, clientId }, target, route.policy)).find(
+          (each) => each.id === found.id,
+        );
+        if (now === undefined) break;
+        if (now.stage !== 'ripe') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
+        if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
+        const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
+        const membership = memberships.find((each) => each.workspace.id === workspace);
+        if (person === undefined || membership === undefined) {
+          return json(401, { error: 'identity-required' }, corsHeaders);
+        }
+        const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
+        const answer = await store.check?.(
+          { issue: found.id, clientId },
+          {
+            verdict: verdict as CheckVerdict,
+            author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
+            ...typed,
+          },
+          target,
+          route.policy,
+        );
+        if (answer === undefined) break;
+        await invalidatePages(kv, [url]);
+        // The stage the store answers now, for the counts of the console and of the extension.
+        await indexed(context.noteIndex, (index) =>
+          index.refresh(
+            workspace,
+            clientId,
+            placeOf(target),
+            [{ ...now, stage: answer.stage, comments: [...(now.comments ?? []), answer.comment] }],
+            Date.now(),
+            { verdicts: true },
+          ),
+        );
+
+        return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
+      } finally {
+        // Freed once the store answered, whatever it said: the store holds the verdict from then on,
+        // and the guards above read it there. A verdict that failed is not refused on its retry.
+        await kv.set(lock, '0', 1).catch(() => undefined);
+      }
+    }
+
+    return json(404, { error: 'not-found' }, corsHeaders);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+    throw error;
+  }
+}
+
+function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...headers },
+  });
+}
