@@ -23,6 +23,13 @@ describe('createSeed', () => {
     assert.throws(() => seedFixture({ page: { url: 'javascript:alert(1)', path: '/' } }));
   });
 
+  it('accepts a page URL over plain http', () => {
+    assert.equal(
+      seedFixture({ page: { url: 'http://localhost:5173/pricing', path: '/pricing' } }).page.url,
+      'http://localhost:5173/pricing',
+    );
+  });
+
   it('rejects a malformed timestamp', () => {
     assert.throws(() => seedFixture({ createdAt: 'yesterday' }));
   });
@@ -208,5 +215,25 @@ describe('canonicalizePageUrl', () => {
 
   it('throws on a relative URL rather than guessing an origin', () => {
     assert.throws(() => canonicalizePageUrl('/pricing'));
+  });
+});
+
+describe('the message of an invalid seed (FRU-377)', () => {
+  it('names the path of each field, with the words of its rule', () => {
+    const seed = JSON.parse(JSON.stringify(seedFixture()));
+
+    assert.deepEqual(parseSeed({ ...seed, createdAt: 'yesterday', page: { ...seed.page, url: 'ftp://x' } }), {
+      ok: false,
+      reason: 'invalid',
+      message: 'createdAt: expected an ISO 8601 timestamp; page.url: expected an absolute http(s) URL',
+    });
+  });
+});
+
+describe('the identity of a page whose scheme the URL standard does not know (FRU-377)', () => {
+  it('lowercases its host, and keeps the slash of its root', () => {
+    // `URL` lowercases the host of http and https on its own, and never leaves their path empty.
+    // It does neither for another scheme, so this is where those two lines show.
+    assert.equal(canonicalizePageUrl('app://Host.Example/'), 'app://host.example/');
   });
 });

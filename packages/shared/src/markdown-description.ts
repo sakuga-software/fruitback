@@ -1,4 +1,11 @@
-import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseResult, parseSeed } from './seed.ts';
+import {
+  canonicalizePageUrl,
+  type Seed,
+  type SeedParseFailure,
+  type SeedParseResult,
+  type SeedReporter,
+  parseSeed,
+} from './seed.ts';
 
 /**
  * A seed stored in a markdown description, with the issue still readable by whoever triages it
@@ -38,19 +45,21 @@ export type TeamWords = {
   caption: string;
 };
 
+const ENGLISH: TeamWords = {
+  page: 'Page',
+  element: 'Element',
+  component: 'Component',
+  viewport: 'Viewport',
+  reportedBy: 'Reported by',
+  client: 'Client',
+  anonymous: 'Anonymous',
+  verified: 'verified',
+  unverified: 'unverified — self-declared',
+  caption: '**Fruitback data** · machine-readable, do not edit',
+};
+
 export const TEAM_WORDS: Record<string, TeamWords> = {
-  en: {
-    page: 'Page',
-    element: 'Element',
-    component: 'Component',
-    viewport: 'Viewport',
-    reportedBy: 'Reported by',
-    client: 'Client',
-    anonymous: 'Anonymous',
-    verified: 'verified',
-    unverified: 'unverified — self-declared',
-    caption: '**Fruitback data** · machine-readable, do not edit',
-  },
+  en: ENGLISH,
   fr: {
     page: 'Page',
     element: 'Élément',
@@ -73,10 +82,12 @@ export const TEAM_WORDS: Record<string, TeamWords> = {
  * at boot, where an operator sees it.
  */
 export function teamWords(locale: string | undefined): TeamWords {
-  const tag = (locale ?? '').toLowerCase();
-  const base = tag.split('-')[0] ?? '';
+  // An absent locale becomes the word `undefined`, which no catalog names: English.
+  const tag = String(locale).toLowerCase();
+  // A limit of 1 keeps the part before the first `-`, and `join` turns it into a string.
+  const base = tag.split('-', 1).join();
 
-  return TEAM_WORDS[tag] ?? TEAM_WORDS[base] ?? (TEAM_WORDS.en as TeamWords);
+  return TEAM_WORDS[tag] ?? TEAM_WORDS[base] ?? ENGLISH;
 }
 
 /**
@@ -85,7 +96,7 @@ export function teamWords(locale: string | undefined): TeamWords {
  * Free to reword: the parser recognises the block by parsing it, never by matching this caption.
  * `finds the block by its JSON, never by the caption above it` fails if that stops being true.
  */
-export const SEED_BLOCK_CAPTION = TEAM_WORDS.en?.caption ?? '';
+export const SEED_BLOCK_CAPTION = ENGLISH.caption;
 
 const DEFAULT_TITLE_MAX_LENGTH = 80;
 
@@ -136,7 +147,7 @@ export function buildIssueMetadata(seed: Seed, { locale }: DescriptionOptions = 
   }
 
   lines.push(`**${words.viewport}** · ${seed.viewport.width}×${seed.viewport.height}${formatDpr(seed.viewport.dpr)}`);
-  lines.push(`**${words.reportedBy}** · ${formatReporter(seed.reporter, words)}`);
+  lines.push(`**${words.reportedBy}** · ${formatReporter(words, seed.reporter)}`);
 
   if (seed.client) {
     lines.push(`**${words.client}** · ${seed.client.name ?? seed.client.id}`);
@@ -152,14 +163,14 @@ export function buildIssueMetadata(seed: Seed, { locale }: DescriptionOptions = 
  * checked against a signed token is an identity. Rendering them the same way would let anyone put a
  * colleague's name on a complaint and have it read as theirs.
  */
-function formatReporter(reporter: Seed['reporter'], words: TeamWords): string {
+function formatReporter(words: TeamWords, reporter: SeedReporter = {}): string {
   // A token carrying only `sub` identifies someone perfectly well; it just does not name them.
   // Reading that as "Anonymous" would throw away the one distinction this line exists to make.
   // The name itself is the reporter's own word, so it is never translated.
-  const who = [reporter?.name, reporter?.email].filter(Boolean).join(' · ') || reporter?.id;
-  if (who === undefined || who.length === 0) return words.anonymous;
+  const who = [reporter.name, reporter.email].filter(Boolean).join(' · ') || reporter.id;
+  if (!who) return words.anonymous;
 
-  return reporter?.verified === true ? `${who} (${words.verified})` : `${who} (${words.unverified})`;
+  return `${who} (${reporter.verified ? words.verified : words.unverified})`;
 }
 
 function formatDpr(dpr: number | undefined): string {
@@ -202,11 +213,17 @@ export function parseSeedFromDescription(description: string | null | undefined)
   // A real failure (a corrupted or too-new block) beats reporting "no seed here".
   let failure: SeedParseFailure = { ok: false, reason: 'not-found' };
 
-  for (const block of iterateFencedBlocks(description)) {
-    const value = tryParseJson(block.body);
-    if (value === undefined) continue;
+  for (const lines of iterateFencedBlocks(description)) {
+    let result: SeedParseResult;
+    try {
+      // `trim` also drops a no-break space, which `JSON.parse` refuses and an editor can leave.
+      // Stryker disable next-line StringLiteral: JSON needs no line break between its tokens, so the lines of a block parse the same joined by nothing.
+      result = parseSeed(JSON.parse(lines.join('\n').trim()));
+    } catch {
+      // Not JSON: a block of code or of prose. `parseSeed` itself never throws.
+      continue;
+    }
 
-    const result = parseSeed(value);
     if (result.ok) return result;
     if (result.reason !== 'not-found') failure = result;
   }
@@ -214,48 +231,38 @@ export function parseSeedFromDescription(description: string | null | undefined)
   return failure;
 }
 
-function tryParseJson(body: string): unknown {
-  const trimmed = body.trim();
-  if (!trimmed.startsWith('{')) return undefined;
+/**
+ * The lines of each fenced block, in order. A fence is a run of three backticks or tildes or more,
+ * indented by three spaces at most. A block closes on a run of the same character, as long at least,
+ * with nothing after it.
+ */
+function* iterateFencedBlocks(markdown: string): Generator<string[]> {
+  let fence: string | null = null;
+  let lines: string[] = [];
 
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return undefined;
-  }
-}
+  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+    const run = /^ {0,3}(?:`{3,}|~{3,})/.exec(line)?.[0].trimStart();
 
-type FencedBlock = { info: string; body: string };
-
-function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
-  const fencePattern = /^ {0,3}(`{3,}|~{3,})[ \t]*(.*)$/;
-  let open: { marker: string; info: string; body: string[] } | null = null;
-
-  for (const line of lines) {
-    const match = fencePattern.exec(line);
-
-    if (open === null) {
-      if (match) open = { marker: match[1] ?? '', info: (match[2] ?? '').trim(), body: [] };
+    if (fence === null) {
+      if (run) fence = run;
       continue;
     }
 
-    const run = match?.[1] ?? '';
-    const closes =
-      run.length >= open.marker.length && run.charAt(0) === open.marker.charAt(0) && (match?.[2] ?? '').trim() === '';
-
-    if (closes) {
-      yield { info: open.info, body: open.body.join('\n') };
-      open = null;
+    // A run is all one character, so `includes` checks both the character and the length.
+    if (line.trim() === run && run.includes(fence)) {
+      yield lines;
+      fence = null;
+      lines = [];
       continue;
     }
 
-    open.body.push(line);
+    lines.push(line);
   }
 
   // An unterminated fence still yields — a tracker that truncates a long description must not lose
   // the seed.
-  if (open !== null) yield { info: open.info, body: open.body.join('\n') };
+  // Stryker disable next-line ConditionalExpression: with no open fence `lines` is empty, and an empty block parses as nothing.
+  if (fence !== null) yield lines;
 }
 
 /**

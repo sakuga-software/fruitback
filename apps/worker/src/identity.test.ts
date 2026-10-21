@@ -85,10 +85,25 @@ describe('verifyIdentityToken', () => {
   });
 
   it('refuses anything that is not three segments', async () => {
-    for (const value of ['', 'nope', 'a.b', 'a.b.c.d', '..', 'a.b.']) {
-      const result = await verifyIdentityToken(value, SECRET);
-      assert.equal(result.ok, false, `${value} should be refused`);
+    // A good token with a segment more or less: each segment that is read is valid, so only the
+    // count refuses them.
+    const good = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
+    const [header, payload] = good.split('.');
+
+    for (const value of ['', 'nope', 'a.b', 'a.b.c.d', '..', 'a.b.', `${header}.${payload}`, `${good}.`, `${good}.x`]) {
+      assert.deepEqual(
+        await verifyIdentityToken(value, SECRET),
+        { ok: false, reason: 'malformed' },
+        `${value} should be refused`,
+      );
     }
+  });
+
+  it('refuses a token as malformed when the secret is no key at all', async () => {
+    // WebCrypto refuses an HMAC key of zero bytes, so the signature cannot even be computed.
+    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
+
+    assert.deepEqual(await verifyIdentityToken(token, ''), { ok: false, reason: 'malformed' });
   });
 
   it('refuses `alg: none`, which is the whole reason to check the header', async () => {
@@ -320,6 +335,33 @@ describe('verifyIdentityToken', () => {
       ok: true,
       reporter: { id: 'user_42', verified: true },
     });
+  });
+
+  it('reports the chain of a session up to 64 characters, the length of its digest, and no longer', async () => {
+    // The chain is a SHA-256 digest in hex: 64 characters. A longer `sid` is no chain of this worker.
+    for (const [sid, chain] of [
+      ['c'.repeat(64), 'c'.repeat(64)],
+      ['c'.repeat(65), undefined],
+      ['', undefined],
+    ] as const) {
+      const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR), sid }, SECRET);
+      const result = await verifyIdentityToken(token, SECRET);
+
+      assert.ok(result.ok);
+      assert.equal(result.chain, chain, `sid of ${sid.length} characters`);
+    }
+  });
+
+  it('ignores an issue time that is not a number, as it ignores an absent one', async () => {
+    // `iat` is optional, and only a number in the future refuses a token. A string far in the future
+    // is not read as a time.
+    const now = 1_800_000_000_000;
+    const token = signRaw(
+      { alg: 'HS256', typ: 'JWT' },
+      JSON.stringify({ sub: 'user_42', exp: now / 1000 + 3600, iat: String(now / 1000 + 3600) }),
+    );
+
+    assert.equal((await verifyIdentityToken(token, SECRET, now)).ok, true);
   });
 });
 
