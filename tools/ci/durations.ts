@@ -6,9 +6,9 @@ import { join } from 'node:path';
  *
  * The dry run of the mutation of the worker went from 1 min 07 on 2026-10-12 to 9 min 29 on
  * 2026-10-20, and no one saw it until the full run ran out of its 150 minutes. So the last step of
- * each long job writes what it took to the summary of the run, and a `::warning::` when it took more
- * than 60 % of its limit. For a mutation job: the dry run too, against `dryRunTimeoutMinutes`, and
- * the number of mutants and of test files.
+ * each long job writes what it took to the summary of the run and to its log, and a `::warning::`
+ * when it took more than 60 % of its limit. For a mutation job: the dry run too, against
+ * `dryRunTimeoutMinutes`, and the number of mutants and of test files.
  *
  *   node tools/ci/durations.ts --name <job> --timeout <minutes> [--stryker <package>]
  *
@@ -170,7 +170,9 @@ function main(argv: string[]): void {
 
   const text = summary(name, measures, counts);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, text);
-  else process.stdout.write(text);
+  // The log too: the summary shows only to a signed-in reader, and no API returns it. The log is
+  // what `gh run view --log` and an agent read.
+  process.stdout.write(`::group::Durations\n${text}::endgroup::\n`);
   for (const line of warnings(name, measures)) console.log(line);
 }
 

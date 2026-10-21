@@ -209,7 +209,8 @@ write <package> <mutation.json>` prints it from the report of a full run.
 - **A long job writes its durations, and warns past 60 % of its limit** (FRU-343). The dry run of
   the worker went from 1 min 07 to 9 min 29 in eight days, and no one saw it until the full run ran
   out of time. The last step of each mutation job, and of `test`, `postgres`, the parts of `e2e` and
-  `docker image`, runs `tools/ci/durations.ts`: a table in the summary of the run, and a `::warning::`
+  `docker image`, runs `tools/ci/durations.ts`: a table in the summary of the run and in the log of the step (the
+  summary shows only to a signed-in reader, and no API returns it), and a `::warning::`
   past 60 % of `timeout-minutes`, or of `dryRunTimeoutMinutes` for the dry run. It never fails the
   job. The step repeats the `timeout-minutes` of its job, and `ci-durations.test.ts` holds the two
   equal.

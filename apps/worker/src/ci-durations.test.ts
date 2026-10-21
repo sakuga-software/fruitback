@@ -157,6 +157,11 @@ describe('durations.ts', () => {
 
       assert.match(printed, /^::warning title=postgres nears its limit::Job took 7 min \d+ s, 70 % of its 10 minutes/m);
       assert.match(readFileSync(out, 'utf8'), /^\| Job \| 7 min \d+ s \| 10 min \| 70 %, past 60 % \|$/m);
+      // The same table in the log, which an API returns, and the summary does not.
+      assert.match(
+        printed,
+        /^::group::Durations\n### Durations of postgres\n[^]*^\| Job \| 7 min \d+ s \| 10 min \| 70 %, past 60 % \|$[^]*^::endgroup::$/m,
+      );
 
       // A stryker.config.json that is not JSON: a warning about the script, and still exit 0.
       writeFileSync(join(dir, 'stryker.config.json'), 'not json');
