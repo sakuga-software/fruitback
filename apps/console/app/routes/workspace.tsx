@@ -1,6 +1,14 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from 'react-router';
-import { type Me, type Role, type Workspace, callUntilAnswered, onWorkspaceSuspended, saveLanguage } from '../api';
+import {
+  type Me,
+  type Role,
+  type Workspace,
+  callUntilAnswered,
+  knownMe,
+  onWorkspaceSuspended,
+  saveLanguage,
+} from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
@@ -41,12 +49,22 @@ const ROLE_WORDS: Readonly<Record<Role, string>> = {
   guest: msg('Guest'),
 };
 
+/** The context of workspace `id` in what `/console/me` answered, if it names it. */
+function contextOf(me: Me | undefined, id: string | undefined): WorkspaceContext | undefined {
+  const workspace = me?.workspaces.find((each) => each.id === id);
+
+  return me === undefined || workspace === undefined ? undefined : { me, workspace };
+}
+
 export default function WorkspaceFrame() {
   useLocale();
   const { workspace: id } = useParams();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [context, setContext] = useState<WorkspaceContext | undefined>();
+  // Drawn at once from the last answer of this tab (FRU-356), and read again below.
+  const [read, setContext] = useState<WorkspaceContext | undefined>(() => contextOf(knownMe(), id));
+  // A change of workspace draws the new one from the last answer too, while the worker is asked.
+  const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
@@ -100,12 +118,12 @@ export default function WorkspaceFrame() {
         workspaces={context.me.workspaces}
         sections={sections}
         current={current?.path}
-        onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`)}
+        onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
         admin={context.me.instanceAdmin === true}
       />
       <div className="min-w-0 flex-[999_1_640px]">
         <SuspendedBanner workspace={context.workspace} />
-        <main className={`box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.width ?? ''}`}>
+        <main className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.width ?? ''}`}>
           <Outlet context={context} />
         </main>
       </div>
@@ -335,6 +353,8 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
           <Link
             key={entry.to}
             to={entry.to}
+            // A move between screens and frames cross-fades the screen, the rail held (FRU-356).
+            viewTransition
             {...(active ? { 'aria-current': 'page' as const } : {})}
             className={`flex min-h-[40px] flex-none items-center gap-[10px] rounded-box text-body leading-auto whitespace-nowrap ${
               active

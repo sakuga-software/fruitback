@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router';
-import { API, type Me, callUntilAnswered, saveLanguage } from '../api';
+import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
 import { useLocale } from '../use-locale';
@@ -38,7 +38,13 @@ export default function AdminFrame() {
   useLocale();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const [context, setContext] = useState<AdminContext | undefined>();
+  // Drawn at once from the last answer of this tab (FRU-356), and read again below. The worker
+  // answers `404` to each route of the administration for anybody else: this protects nothing alone.
+  const [context, setContext] = useState<AdminContext | undefined>(() => {
+    const me = knownMe();
+
+    return me?.instanceAdmin === true ? { me } : undefined;
+  });
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
@@ -56,9 +62,11 @@ export default function AdminFrame() {
 
   return (
     <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start">
-      <AdminRail current={current?.path} />
+      <AdminRail current={current?.path} back={context.me.workspaces[0]?.id} />
       <div className="min-w-0 flex-[999_1_640px]">
-        <main className={`box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.layout ?? ''}`}>
+        <main
+          className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.layout ?? ''}`}
+        >
           <Outlet context={context} />
         </main>
       </div>
@@ -70,7 +78,7 @@ export default function AdminFrame() {
  * The rail of the instance: its host and what it is, the screens of the administration, the way back
  * to the workspaces of the person, and the guide of a server.
  */
-function AdminRail({ current }: { current: string | undefined }) {
+function AdminRail({ current, back }: { current: string | undefined; back: string | undefined }) {
   useLocale();
   const instance = instanceOf(API);
   const head = (
@@ -101,7 +109,8 @@ function AdminRail({ current }: { current: string | undefined }) {
         label={t('Instance')}
         entries={[
           ...SCREENS.map((screen) => ({ to: screen.path, label: t(screen.label), current: screen.path === current })),
-          { to: '/', label: t('My workspaces'), current: false },
+          // Straight to the first workspace: the front door asked three questions before it went there.
+          { to: back === undefined ? '/' : `/w/${back}/sites`, label: t('My workspaces'), current: false },
         ]}
       />
     </RailFrame>

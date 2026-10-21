@@ -331,7 +331,7 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   await expect(sections(page).locator('[aria-current="page"]')).toHaveText('Sites');
 });
 
-test('a change of workspace shows nothing of the workspace of before while the new one is read', async ({ page }) => {
+test('a change of workspace draws the new one at once, and reads nothing of the one before', async ({ page }) => {
   // The worker answers who is signed in at once, until the test holds its answers.
   const asked: string[] = [];
   let holding = false;
@@ -357,16 +357,15 @@ test('a change of workspace shows nothing of the workspace of before while the n
   await page.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w2/sites`);
 
-  // The address names the new workspace, and the worker has not answered: no screen, and no rail.
-  await expect(page.getByText('Loading…')).toBeVisible();
-  await expect(page.locator('main')).toHaveCount(0);
-  await expect(rail(page)).toHaveCount(0);
+  // The worker has not answered yet: the frame draws the new workspace from the last answer of the
+  // tab (FRU-356), with its rail, and the screen is of the new workspace.
+  await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
+  await expect(page.locator('main h1')).toBeVisible();
   // Nothing was read in the workspace of before under the address of the new one.
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
 
   release();
   await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
-  await expect(page.locator('main h1')).toBeVisible();
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
   // The control: the screen of the new workspace reads its own lists. Its title can come before the
   // request, so the request is waited for (FRU-268: one run of four workers was faster than it).

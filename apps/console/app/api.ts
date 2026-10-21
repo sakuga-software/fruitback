@@ -227,6 +227,19 @@ async function answer<T>(response: Response | undefined, workspace?: string): Pr
  */
 export type Left = 'changed' | 'ended';
 let tabAccount: string | undefined;
+/**
+ * The last `/console/me` the worker answered in this tab (FRU-356), in memory only. The frame of a
+ * workspace and the frame of the administration draw it at once when they mount, and ask again: a
+ * move between them showed « Loading… » with no rail for 37 to 115 frames (measured at 250 ms of
+ * latency). It is forgotten at any `401`, at a sign-out, and when the tab stops: it is never an
+ * answer about somebody else. The worker decides what each call may read; this decides what is drawn.
+ */
+let lastMe: Me | undefined;
+
+/** The last `/console/me` of this tab, while the same session holds. `undefined` before the first. */
+export function knownMe(): Me | undefined {
+  return left === undefined ? lastMe : undefined;
+}
 let left: Left | undefined;
 /** A call the person made was refused with `401`: the banner says so, and the screen stays. */
 let endSeen = false;
@@ -245,6 +258,7 @@ export function onLeft(listener: (why: Left) => void): () => void {
 function leave(why: Left): void {
   if (left !== undefined) return;
   left = why;
+  lastMe = undefined;
   for (const listener of leftListeners) listener(why);
 }
 
@@ -323,6 +337,7 @@ async function ask<T>(
   // A tab that stopped sends nothing.
   if (left !== undefined) return LEFT;
   const response = await send(method, to, body);
+  if (response?.status === 401) lastMe = undefined;
   if (response?.status === 401 && options.quiet !== true) {
     endSeen = true;
     for (const listener of signedOutListeners) listener();
@@ -339,6 +354,7 @@ async function ask<T>(
       }
       tabAccount = id;
       endSeen = false;
+      lastMe = result.data as Me;
     }
   }
 
@@ -421,7 +437,10 @@ export async function signOut(): Promise<boolean> {
   if (left !== undefined) return false;
   const out = (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
   // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is.
-  if (out) tabAccount = undefined;
+  if (out) {
+    tabAccount = undefined;
+    lastMe = undefined;
+  }
 
   return out;
 }
@@ -530,7 +549,10 @@ export async function signOutEverywhere(): Promise<boolean> {
   // The session of the browser is of another account now: this tab does not end it (FRU-210).
   if (left !== undefined) return false;
   const out = (await send('POST', '/console/auth/revoke-sessions', {}))?.ok === true;
-  if (out) tabAccount = undefined;
+  if (out) {
+    tabAccount = undefined;
+    lastMe = undefined;
+  }
 
   return out;
 }

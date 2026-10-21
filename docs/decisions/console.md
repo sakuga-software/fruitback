@@ -257,6 +257,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
   type) against the mockup, each state under the pointer, under a press and with focus, 4.5:1 for
   every text on what is behind it, and axe. A build has no `/kit` (`kit-route.test.ts`).
+- **A move between frames keeps the rail on screen** (FRU-356). Each frame (`routes/workspace.tsx`,
+  `routes/admin.tsx`) asked `/console/me` when it mounted and drew « Loading… » with no rail until
+  the worker answered: measured at 250 ms of latency, 37 frames of the page with no rail on the way to
+  the administration, 115 on the way back, which went through the front door and its three questions.
+  Now `knownMe()` in `api.ts` holds the last answer of the tab, in memory: a frame draws it at once and
+  asks again. It is forgotten at any `401`, at a sign-out, and when the tab stops (FRU-210); a change
+  of workspace draws the new one from it, never the one before. « My workspaces » leads to the first
+  workspace itself. Rail entries and the change of workspace use view transitions: the rail holds
+  still, the screen cross-fades (120 ms out, 220 ms in from 4 px lower), nothing moves with
+  `prefers-reduced-motion`. No colour transition on the rail: `e2e/console-frame.spec.ts` reads the
+  colours of a hovered entry and would read them halfway. `e2e/console-moves.spec.ts` reads every
+  frame of a move, with a control.
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
