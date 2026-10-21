@@ -380,8 +380,22 @@ describe('readBearerToken', () => {
     assert.equal(readBearerToken('bearer abc.def'), 'abc.def');
   });
 
+  it('reads it with spaces around the header and more than one space after the scheme (FRU-345)', () => {
+    assert.equal(readBearerToken('  Bearer abc.def  '), 'abc.def');
+    assert.equal(readBearerToken('Bearer \t abc.def'), 'abc.def');
+  });
+
   it('is undefined for anything else', () => {
-    for (const value of [null, '', 'abc.def', 'Basic abc', 'Bearer', 'Bearer a b']) {
+    for (const value of [
+      null,
+      '',
+      'abc.def',
+      'Basic abc',
+      'Bearer',
+      'Bearer a b',
+      'NotBearer abc.def',
+      'Basic Bearer abc.def',
+    ]) {
       assert.equal(readBearerToken(value), undefined, `${value} is not a bearer token`);
     }
   });
