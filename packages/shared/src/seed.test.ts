@@ -1,3 +1,4 @@
+// FRU-341: a line added to measure an incremental mutation run. Do not merge.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SEED_KIND, SEED_VERSION, canonicalizePageUrl, parseSeed } from './seed.ts';
