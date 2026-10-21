@@ -146,6 +146,9 @@ export type ReadAccess = 'public' | 'authenticated';
  */
 export type WriteAccess = 'public' | 'authenticated';
 
+/** How a worker with no `FRUITBACK_CLIENTS` is named where a list names clients. */
+const SINGLE_CLIENT = '<single client>';
+
 /**
  * Clients that could never be read, because they ask for a verified reader and have no key to
  * verify one with.
@@ -167,7 +170,7 @@ export function unreadableClients(options: {
   const { read, clients, identitySecret, sessions = false } = options;
 
   if (clients === undefined) {
-    return read === 'authenticated' && identitySecret === undefined ? ['<single client>'] : [];
+    return read === 'authenticated' && identitySecret === undefined ? [SINGLE_CLIENT] : [];
   }
 
   return Object.entries(clients)
@@ -194,7 +197,7 @@ export function workspacesOf(clients: ClientMap | undefined): string[] {
 export function openReadClients(options: { read: ReadAccess; clients: ClientMap | undefined }): string[] {
   const { read, clients } = options;
 
-  if (clients === undefined) return read === 'public' ? ['<single client>'] : [];
+  if (clients === undefined) return read === 'public' ? [SINGLE_CLIENT] : [];
 
   return Object.entries(clients)
     .filter(([, client]) => (client.read ?? read) === 'public')
