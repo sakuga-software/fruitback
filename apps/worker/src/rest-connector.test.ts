@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -1257,5 +1257,63 @@ describe('a file of a delivery whose attempt fails (FRU-331)', () => {
     assert.notEqual(urls(up.got)[0], urls(down.got)[0], 'with a new signature');
     // The control: the 2xx is what ends it, an hour after.
     assert.equal(attachments.all()[0]?.expiresAt, t1 + SIGNED_URL_MS);
+  });
+});
+
+describe('a delivery that arrived, with a store of files that does not answer (FRU-331)', () => {
+  it('is written as arrived all the same, and is not sent again; its files keep their transit', async () => {
+    const env = await envWith();
+    const world = await acme(env);
+    const connector = await world.accounts.addConnector(world.workspace.id, {
+      kind: 'rest',
+      label: 'REST · hooks.acme.dev',
+      sealed: sealTarget({ url: TARGET, secret: 'a-secret-of-enough-length' }, SECRETS_KEY),
+    });
+    const body = JSON.stringify({
+      version: 1,
+      event: 'note.created',
+      workspace: world.workspace.id,
+      site: { id: 's' },
+      identifier: 'FB-1',
+      seed: seedFixture(),
+      attachments: [{ id: `att_${'1'.repeat(32)}`, name: 'a.png', type: 'image/png', size: 2 }],
+    });
+    const files = createMemoryAttachmentStore();
+    await files.put({
+      id: `att_${'1'.repeat(32)}`,
+      workspace: world.workspace.id,
+      account: 'acc_a',
+      site: 's',
+      name: 'a.png',
+      type: 'image/png',
+      content: new Uint8Array([1, 2]),
+      createdAt: 0,
+      expiresAt: Date.now() + 60_000,
+      seed: 'sd_2f8c1a90',
+    });
+    const failing = {
+      ...files,
+      endAt: async () => {
+        throw new Error('the database went away');
+      },
+    };
+    await world.accounts.enqueueDelivery(connector.id, body, 0);
+    const errors = mock.method(console, 'error', () => undefined);
+    const { got, send } = receiver();
+    const pass = (store: typeof files) =>
+      deliverDue({
+        accounts: world.accounts,
+        secretsKey: SECRETS_KEY,
+        send,
+        attachments: store,
+        publicUrl: 'https://a.test',
+        now: () => Date.now(),
+      });
+
+    assert.deepEqual(await pass(failing), { delivered: 1, failed: 0 });
+    await pass(failing);
+    assert.equal(got.length, 1, 'sent once: the note is not sent again for its files');
+    assert.ok(errors.mock.calls.some((call) => String(call.arguments[0]).includes('keep their transit')));
+    errors.mock.restore();
   });
 });

@@ -4006,5 +4006,12 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   review found a note on its way that the match could miss. Until the end, `withSignedFiles` carries
   the picture that the seed of a waiting delivery names, and `legacyFileOf` in `postFeedback` the
   picture of a note of before sent again by its sender.
+- **The limits of a person are read before the write, not reserved** (`admitFile`). The count of a
+  minute is one `incr`, atomic, and counted after the size and the type passed: a refused file costs
+  no count. The files and bytes in transit are read, then the file is written: two requests at the
+  same moment can each pass, so an account can hold one file of 10 MB per request in flight over
+  `MAX_HELD_BYTES`, and never more than the 20 of its minute.
+- **A delivery that arrived is written first**, then the end of its files: a store of files that does
+  not answer then costs the files their hour, never a second sending of the note.
 - **An attempt of a delivery changes nothing of a file**: it reads and signs. A `2xx` brings the end
   of the files it carried to one hour; a failure leaves them, and the next attempt signs them again.

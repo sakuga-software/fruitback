@@ -270,10 +270,14 @@ export async function deliverDue({
     }
 
     if (status !== undefined && status >= 200 && status < 300) {
-      // The receiver has the addresses of the files: they answer until the end of their signature,
-      // and the files go then. Never later than the end of their transit.
-      await attachments?.endAt(files, now() + SIGNED_URL_MS);
+      // The note arrived: that is written first, or a store of files that fails would send it again.
       await accounts.settleDelivery(delivery.id, { delivered: true });
+      // The receiver has the addresses of the files: they answer until the end of their signature,
+      // and the files go then. A store that does not answer leaves them to the end of their transit,
+      // 7 days at most, and the log says so.
+      await attachments?.endAt(files, now() + SIGNED_URL_MS).catch((error: unknown) => {
+        console.error('[fruitback] the files of a delivery that arrived keep their transit', delivery.id, error);
+      });
       return true;
     }
 
