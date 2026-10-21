@@ -218,6 +218,46 @@ export const site_destinations = pgTable(
 );
 
 /**
+ * The statuses of a site (FRU-352, FRU-365): what the team renamed, recoloured, re-staged or added,
+ * per site. `docs/decisions/statuses.md` is the model.
+ *
+ * - `source` is where the state comes from: the id of the connector of a destination of the site, or
+ *   `own` for the store of the worker. It is not a foreign key: when a destination changes, the rows
+ *   of the old source stay, unused, and going back restores them.
+ * - A row exists only for what the team changed or added. A state of the tracker with no row keeps
+ *   its name, the stage of its type and the colour of its stage.
+ * - `name`, `color` and `text_color` NULL: the name of the tracker, the colour of the stage (FRU-334)
+ *   and a text colour computed from the background. A colour is `#rrggbb`; `site-statuses.ts`
+ *   refuses anything else, and a text colour under 4.5:1 on its background.
+ * - `0025_site_statuses` copies the stages that FRU-102 kept per connector, in
+ *   `connectors.settings`, to every site of that connector. The JSON stays one version.
+ */
+export const statuses = pgTable(
+  'statuses',
+  {
+    site_id: text('site_id').notNull(),
+    source: text('source').notNull(),
+    key: text('key').notNull(),
+    name: text('name'),
+    stage: text('stage').notNull(),
+    color: text('color'),
+    text_color: text('text_color'),
+    position: integer('position').notNull().default(0),
+    // `tracker`: a state read from the provider, which the console cannot delete. `team`: added.
+    origin: text('origin').notNull().default('tracker'),
+    hidden: boolean('hidden').notNull().default(false),
+  },
+  (table) => [
+    primaryKey({ name: 'statuses_pkey', columns: [table.site_id, table.source, table.key] }),
+    foreignKey({
+      name: 'statuses_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
  * The sites an invitation of a guest names (FRU-250): the guest of one site reads these and no other.
  * Written by the route that invites, after better-auth kept the invitation. A site that goes, or an
  * invitation that goes, takes its rows with it.
@@ -486,6 +526,9 @@ export const seeds = pgTable(
     client_id: text('client_id'),
     page_url: text('page_url').notNull(),
     stage: text('stage').notNull(),
+    // The key of its status in `statuses`, with the source `own` (FRU-365). NULL: the built-in status
+    // of its stage. Written with the stage, never alone (FRU-367).
+    status_key: text('status_key'),
     seed: text('seed').notNull(),
     created_at: instant('created_at').notNull(),
     updated_at: instant('updated_at').notNull(),

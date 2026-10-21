@@ -176,6 +176,13 @@
       "when": 1792581591441,
       "tag": "0024_github_installation",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792591381371,
+      "tag": "0025_site_statuses",
+      "breakpoints": true
     }
   ]
 }
