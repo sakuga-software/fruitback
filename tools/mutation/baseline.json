@@ -15,8 +15,8 @@
         "mutants": 25
       },
       "src/attachments.ts": {
-        "score": 0,
-        "mutants": 0
+        "score": 92.5,
+        "mutants": 40
       }
     }
   },
