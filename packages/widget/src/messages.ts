@@ -56,6 +56,34 @@ export const ENGLISH = {
   'settings.copied': 'Copied',
   'settings.copyManually': 'Copy the text from here',
 
+  // FRU-332: the files of a note. The worker takes them only when the note goes to a tracker.
+  'composer.attach': 'Attachments',
+  'composer.attachPage': 'Capture the page',
+  'composer.attachArea': 'Capture an area',
+  'composer.attachImage': 'Image',
+  'composer.attachFile': 'File',
+  // Said in place of the four ways, when the note stays in Fruitback (`canAttach: false`).
+  'composer.attachNoTracker': 'This note stays in Fruitback, with no tracker: it takes no file.',
+  'composer.attachRemove': 'Remove {name}',
+  'composer.attachSending': 'Sending…',
+  // Why a file did not go, under its name. The text of the note stays in every case.
+  'composer.attachTooLarge': 'Too large: 10 MB for an image, a PDF or a file, 2 MB for a text, 25 MB for a note',
+  'composer.attachType': 'This file is not what its type says',
+  'composer.attachTooMany': 'A note takes 5 files at most',
+  'composer.attachNoTrackerShort': 'This destination takes no file',
+  'composer.attachFull': 'Too many files on their way: send your notes first',
+  'composer.attachSignedOut': 'Your session has ended: sign in again',
+  'composer.attachCapture': 'The capture was not taken',
+  'composer.attachRetry': 'Did not go: remove it, then try again',
+  'composer.failedAttachmentGone':
+    'A file of this note is no longer on its way. Your text is kept: remove the file, then send again.',
+  'composer.failedNoTracker': 'This destination takes no file. Your text is kept: remove the files, then send again.',
+  // The area that a capture takes (FRU-332). The keyboard is enough, and the help says how.
+  'area.dialog': 'Choose an area of the page',
+  'area.help':
+    'Drag to draw an area. The arrows move it, Shift and the arrows change its size, Enter takes it, Esc cancels.',
+  'area.take': 'Take this area',
+  'area.cancel': 'Cancel',
   'composer.placeholder': 'What should change?',
   // The label above the field of the note (FRU-305), which names it.
   'composer.label': 'Your comment',
@@ -141,6 +169,9 @@ export const ENGLISH = {
   // The identifier and an arrow, in a chip (FRU-256, FRU-304): the widget does not know the name of
   // the store behind the worker. A message all the same, so that a language can put a word around it.
   'thread.link': '{identifier} →',
+  // FRU-332: the files of a sent note, as its tracker keeps them. The widget shows no file.
+  'thread.attachments': { one: '{count} attachment', other: '{count} attachments' },
+  'thread.attachmentsIn': 'in {identifier}',
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   // The chip of the capsule of the dock (FRU-303), beside its dashed drop: the drop says « note ».

@@ -990,6 +990,7 @@ function buildThread(
       element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
       ...sourceBlock(document, issue),
+      ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
       // checks; a reader who is told nothing believes it.
       ...uncertaintyNote(document, resolution, t),
@@ -1173,6 +1174,30 @@ function link(document: Document, issue: SeedIssue, t: Translator): HTMLElement[
   anchor.textContent = t.text('thread.link', { identifier: issue.identifier });
 
   return [anchor];
+}
+
+/**
+ * « 1 attachment, in DEV-3 » (FRU-332): how many files the note has in its tracker, and the way to its
+ * ticket, where they are. **No file is shown here**: the files are the tracker's, and Fruitback serves
+ * none. A reader with no link to the tracker (a guest) reads the count alone.
+ */
+function attachmentsLine(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
+  const count = issue.attachments?.length ?? 0;
+  if (count === 0) return [];
+  const line = document.createElement('p');
+  line.className = 'fruitback-thread-files';
+  line.dataset.fruitbackFiles = String(count);
+  line.append(t.plural('thread.attachments', count, { count }));
+  if (issue.url !== undefined) {
+    const anchor = document.createElement('a');
+    anchor.href = issue.url;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer noopener';
+    anchor.textContent = t.text('thread.attachmentsIn', { identifier: issue.identifier });
+    line.append(' · ', anchor);
+  }
+
+  return [line];
 }
 
 /**
@@ -1521,6 +1546,10 @@ const STYLES = `
 .fruitback-thread-note { margin: 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fruitback-thread-meta { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
 /* What the note points at: the selector, then the component and the file, in mono (FRU-304). */
+.fruitback-thread-files { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-files a { color: var(--fruitback-color-text); text-underline-offset: 2px; }
+.fruitback-thread-files a:hover { color: var(--fruitback-color-accent-strong); }
+.fruitback-thread-files a:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-thread-source {
   display: flex;
   flex-direction: column;

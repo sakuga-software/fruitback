@@ -36,6 +36,12 @@ export const REPLY_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/replies$/;
  */
 export const CHECK_PATH = /^\/feedback\/[A-Za-z0-9_-]{1,100}\/check$/;
 
+/**
+ * The path of a file of a note on its way (FRU-332): `POST /attachments`, its bytes in base64 between
+ * the page and the background. The only path that takes a body in base64.
+ */
+export const ATTACHMENTS_PATH = '/attachments';
+
 export type RelaySeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
@@ -85,6 +91,11 @@ export function createRelay({ readSite, ensureAccess, renewAccess, send, warn }:
     // the call to the stored endpoint instead would make the widget report to a worker nobody on the
     // page chose, and report success for it.
     if (!targets(request.url, site.endpoint)) return relayRefusal('endpoint-not-declared-for-this-site');
+    // A file goes to `POST /attachments` and nowhere else; nothing else goes there.
+    const file = isAttachmentsPath(request.url, site.endpoint);
+    if (file !== (request.encoding === 'base64') || (file && request.method !== 'POST')) {
+      return relayRefusal('endpoint-not-declared-for-this-site');
+    }
 
     // The token below is a bearer credential, and this call is the only thing carrying it. An
     // `http://` worker would put it on the wire in the clear, where the page's own network already
@@ -121,6 +132,7 @@ export function createRelay({ readSite, ensureAccess, renewAccess, send, warn }:
           ...(contentType === undefined ? {} : { 'Content-Type': contentType }),
         },
         ...(request.body !== undefined ? { body: request.body } : {}),
+        ...(request.encoding === 'base64' ? { encoding: 'base64' as const } : {}),
       });
 
     try {
@@ -147,8 +159,8 @@ function isTimeout(error: unknown): boolean {
 /**
  * The one URL this origin's widget is allowed to ask for.
  *
- * An allowlist of three paths, the notes, a reply under one note, and a verdict on one note
- * (FRU-300), so a route the widget grows
+ * An allowlist of four paths, the notes, a reply under one note, a verdict on one note
+ * (FRU-300), and a file of a note (FRU-332), so a route the widget grows
  * later is refused here until somebody adds it — rather than the relay becoming a way to reach
  * anything on that worker. The origin and
  * the path are compared apart because an endpoint may carry a path of its own
@@ -167,7 +179,19 @@ function targets(url: string, endpoint: string): boolean {
     if (!target.pathname.startsWith(base)) return false;
     const rest = target.pathname.slice(base.length);
 
-    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest);
+    return REPLY_PATH.test(rest) || CHECK_PATH.test(rest) || rest === ATTACHMENTS_PATH;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the call is `POST /attachments` of this endpoint (FRU-332). */
+function isAttachmentsPath(url: string, endpoint: string): boolean {
+  try {
+    const target = new URL(url);
+    const files = new URL(`${endpoint}${ATTACHMENTS_PATH}`);
+
+    return target.origin === files.origin && target.pathname === files.pathname;
   } catch {
     return false;
   }

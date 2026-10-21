@@ -31,6 +31,32 @@ export const FRENCH: Catalog = {
   'settings.copied': 'Copié',
   'settings.copyManually': 'Copiez le texte d’ici',
 
+  'composer.attach': 'Pièces jointes',
+  'composer.attachPage': 'Capturer la page',
+  'composer.attachArea': 'Capturer une zone',
+  'composer.attachImage': 'Image',
+  'composer.attachFile': 'Fichier',
+  'composer.attachNoTracker': 'Cette note reste dans Fruitback, sans tracker : elle ne prend aucun fichier.',
+  'composer.attachRemove': 'Retirer {name}',
+  'composer.attachSending': 'Envoi…',
+  'composer.attachTooLarge':
+    'Trop lourd : 10 Mo pour une image, un PDF ou un fichier, 2 Mo pour un texte, 25 Mo pour une note',
+  'composer.attachType': 'Ce fichier n’est pas ce que dit son type',
+  'composer.attachTooMany': 'Une note prend 5 fichiers au plus',
+  'composer.attachNoTrackerShort': 'Cette destination ne prend aucun fichier',
+  'composer.attachFull': 'Trop de fichiers en route : envoyez d’abord vos notes',
+  'composer.attachSignedOut': 'Votre session est terminée : reconnectez-vous',
+  'composer.attachCapture': 'La capture n’a pas été prise',
+  'composer.attachRetry': 'N’est pas parti : retirez-le, puis réessayez',
+  'composer.failedAttachmentGone':
+    'Un fichier de cette note n’est plus en route. Votre texte est gardé : retirez le fichier, puis renvoyez.',
+  'composer.failedNoTracker':
+    'Cette destination ne prend aucun fichier. Votre texte est gardé : retirez les fichiers, puis renvoyez.',
+  'area.dialog': 'Choisir une zone de la page',
+  'area.help':
+    'Glissez pour tracer une zone. Les flèches la déplacent, Maj et les flèches changent sa taille, Entrée la prend, Échap annule.',
+  'area.take': 'Prendre cette zone',
+  'area.cancel': 'Annuler',
   'composer.placeholder': 'Que faut-il changer ?',
   'composer.label': 'Votre note',
   'composer.dialog': 'Nouvelle note',
@@ -96,6 +122,8 @@ export const FRENCH: Catalog = {
   'thread.uncertain':
     'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
   'thread.link': '{identifier} →',
+  'thread.attachments': { one: '{count} pièce jointe', other: '{count} pièces jointes' },
+  'thread.attachmentsIn': 'dans {identifier}',
 
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.chip': { one: '{count} détachée', other: '{count} détachées' },

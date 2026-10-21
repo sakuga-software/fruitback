@@ -16,6 +16,12 @@ export type TransportRequest = {
   headers: Record<string, string>;
   /** Absent on a read. */
   body?: string;
+  /**
+   * `base64`: `body` is the base64 of bytes, a file of a note (FRU-331). The transport sends the
+   * bytes. A string, because a message between the page and the background of the extension carries
+   * text, not bytes.
+   */
+  encoding?: 'base64';
 };
 
 /**
@@ -48,8 +54,29 @@ export const fetchTransport: FruitbackTransport = async (request) => {
   const response = await fetch(request.url, {
     method: request.method,
     headers: request.headers,
-    ...(request.body === undefined ? {} : { body: request.body }),
+    ...(request.body === undefined
+      ? {}
+      : { body: request.encoding === 'base64' ? bytesOfBase64(request.body) : request.body }),
   });
 
   return { ok: response.ok, status: response.status, body: await response.text() };
 };
+
+/** The bytes of a base64 string. `atob` refuses a string that is not base64: the call then fails. */
+export function bytesOfBase64(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+
+  return bytes;
+}
+
+/** The base64 of bytes, by pieces: a spread of ten megabytes into `String.fromCharCode` overflows the stack. */
+export function base64OfBytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
+  }
+
+  return btoa(binary);
+}

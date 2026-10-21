@@ -42,6 +42,15 @@ const ALLOWED_HEADERS = ['Content-Type'];
 /** The worker refuses a body over 64 KiB (`MAX_BODY_BYTES` in `apps/worker/src/app.ts`). */
 const MAX_BODY_BYTES = 64 * 1_024;
 
+/**
+ * The longest file of a note in base64 (FRU-332): 10 MB, the most the worker takes of one file
+ * (`MAX_ATTACHMENT_BYTES`), is 13 981 016 characters of base64. A longer one is refused here.
+ */
+export const MAX_FILE_BASE64 = Math.ceil((10 * 1_024 * 1_024) / 3) * 4;
+
+/** Base64, and nothing else: a body that is not base64 goes nowhere. */
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
 /** Long enough for a UUID, short enough that a page cannot post a megabyte of it. */
 /**
  * The longest id the channel carries: a request, a note. A seed id of the widget is 15 characters
@@ -184,15 +193,19 @@ export type CaptureRequestMessage = {
   channel: typeof CHANNEL;
   kind: 'capture-request';
   id: string;
-  area: { left: number; top: number; width: number; height: number; scale: number };
+  /** An area of the visible page (FRU-332). Absent: the whole visible page. */
+  area?: { left: number; top: number; width: number; height: number; scale: number };
 };
 
-/** The address of the picture, or nothing: no picture, for whatever reason. */
+/**
+ * The capture, as a PNG in base64, or nothing: no capture, for whatever reason (FRU-332). It goes to
+ * the worker as a file of the note, through the relay, like any file the person chose.
+ */
 export type CaptureResponseMessage = {
   channel: typeof CHANNEL;
   kind: 'capture-response';
   id: string;
-  picture?: { url: string; width: number; height: number };
+  picture?: { name: string; type: 'image/png'; size: number; base64: string };
 };
 
 /**
@@ -483,9 +496,15 @@ function parseRelayRequestMessage(data: Record<string, unknown>): RelayRequestMe
 export function parseRelayRequest(value: unknown): RelayRequest | undefined {
   if (!isRecord(value)) return undefined;
 
-  const { url, method, headers, body } = value;
+  const { url, method, headers, body, encoding } = value;
   if (!isWorkerEndpoint(url)) return undefined;
   if (method !== 'GET' && method !== 'POST') return undefined;
+  // FRU-332: the bytes of a file, in base64, sent as bytes by the background.
+  if (encoding !== undefined) {
+    if (encoding !== 'base64' || method !== 'POST' || !isFileBody(body)) return undefined;
+
+    return { url, method, headers: allowedHeaders(headers), body, encoding };
+  }
   if (body !== undefined && !isWithinBodyCap(body)) return undefined;
 
   return {
@@ -526,6 +545,10 @@ function allowedHeaders(value: unknown): Record<string, string> {
   return headers;
 }
 
+function isFileBody(body: unknown): body is string {
+  return typeof body === 'string' && body.length > 0 && body.length <= MAX_FILE_BASE64 && BASE64.test(body);
+}
+
 function isWithinBodyCap(body: unknown): body is string {
   return typeof body === 'string' && new TextEncoder().encode(body).byteLength <= MAX_BODY_BYTES;
 }
@@ -537,7 +560,10 @@ function isCoordinate(value: unknown): value is number {
 
 function parseCaptureRequest(data: Record<string, unknown>): CaptureRequestMessage | undefined {
   const id = parseId(data.id);
-  if (id === undefined || !isRecord(data.area)) return undefined;
+  if (id === undefined) return undefined;
+  // FRU-332: no area is the whole visible page.
+  if (data.area === undefined) return { channel: CHANNEL, kind: 'capture-request', id };
+  if (!isRecord(data.area)) return undefined;
   const { left, top, width, height, scale } = data.area;
   if (![left, top, width, height].every(isCoordinate)) return undefined;
   if (typeof scale !== 'number' || !(scale > 0 && scale <= 8)) return undefined;
@@ -554,19 +580,25 @@ function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMes
   const id = parseId(data.id);
   if (id === undefined) return undefined;
   const picture = isRecord(data.picture) ? data.picture : undefined;
+  const name = picture?.name;
+  const size = picture?.size;
+  const base64 = picture?.base64;
   const ok =
     picture !== undefined &&
-    isWorkerEndpoint(picture.url) &&
-    typeof picture.width === 'number' &&
-    typeof picture.height === 'number';
+    picture.type === 'image/png' &&
+    typeof name === 'string' &&
+    name.length > 0 &&
+    name.length <= 120 &&
+    typeof size === 'number' &&
+    Number.isSafeInteger(size) &&
+    size > 0 &&
+    isFileBody(base64);
 
   return {
     channel: CHANNEL,
     kind: 'capture-response',
     id,
-    ...(ok
-      ? { picture: { url: picture.url as string, width: picture.width as number, height: picture.height as number } }
-      : {}),
+    ...(ok ? { picture: { name, type: 'image/png' as const, size, base64 } } : {}),
   };
 }
 

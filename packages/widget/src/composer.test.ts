@@ -103,7 +103,9 @@ describe('what the popover looks like (FRU-36)', () => {
     const labels = [...(composer?.element.querySelectorAll('.fruitback-composer-label') ?? [])].map(
       (label) => label.textContent,
     );
-    assert.deepEqual(labels, ['Your comment', 'Name (optional)']);
+    // « Attachments » is in the tree, hidden while no host offers files (FRU-332).
+    assert.deepEqual(labels, ['Your comment', 'Name (optional)', 'Attachments']);
+    assert.equal(composer?.element.querySelector('[data-fruitback-attach]')?.hasAttribute('hidden'), true);
     // A label wraps its field: it is the name of the field.
     assert.equal(field().closest('label')?.querySelector('.fruitback-composer-label')?.textContent, 'Your comment');
     const name = composer?.element.querySelector('[data-fruitback-name]') as HTMLInputElement;

@@ -1,8 +1,17 @@
-import type { SeedReporter } from '@fruitback/shared';
+import { MAX_ATTACHMENTS_PER_NOTE, type SeedReporter } from '@fruitback/shared';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
+import {
+  type AttachOffer,
+  type AttachRefusal,
+  IMAGE_ACCEPT,
+  type PickedFile,
+  readPicked,
+  readableSize,
+  refusalBefore,
+} from './attachments.ts';
 
 /**
  * The note popover: what the reporter actually writes in.
@@ -49,8 +58,12 @@ export type SentAs = {
  * - `signed-out`: the worker wants an identity it did not get (`401`): a session that ended, a token
  *   out of date (FRU-193). The team of the site can do nothing; the reporter signs in again.
  * - `too-large`: the note is too heavy (`413`). It goes once it is shorter, or without its picture.
+ * - `attachment-gone`: a file of the note is no longer on its way (`410`, FRU-332). It goes once the
+ *   file is removed, or sent again.
+ * - `no-tracker`: the place of the note takes no file (`409`). It goes without its files, or to
+ *   another place.
  */
-export type SendFailure = 'retry' | 'wait' | 'refused' | 'signed-out' | 'too-large';
+export type SendFailure = 'retry' | 'wait' | 'refused' | 'signed-out' | 'too-large' | 'attachment-gone' | 'no-tracker';
 
 export type ComposerOptions = {
   document?: Document;
@@ -77,6 +90,8 @@ export type ComposerOptions = {
     note: string,
     reporter?: SeedReporter,
     destination?: string,
+    /** The ids in transit of the files of the note (FRU-332), in their order. Empty: none. */
+    attachments?: readonly string[],
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>;
   onClose?: () => void;
   /**
@@ -128,6 +143,12 @@ export type ComposerOptions = {
    * picture offers none. **The composer never ticks it**: what it shows is what the reporter chose.
    */
   picture?: PictureChoice;
+  /**
+   * The files of the note (FRU-332): a capture of the page or of an area, an image, any file. Left
+   * out, or while `offer` says `none`, the composer shows nothing of them. `no-tracker`: a sentence
+   * says that the note takes no file, and no way to join one is offered.
+   */
+  attachments?: AttachSeam;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
   /**
@@ -153,6 +174,39 @@ export type ComposerOptions = {
 export type Autosave = {
   read(): string | undefined;
   write(text: string): void;
+};
+
+/**
+ * How a composer joins files to a note (FRU-332). The composer holds the list and its words; the host
+ * takes a capture, and sends each file to the worker as soon as it is joined, so a refusal is said
+ * while the note is still being written.
+ */
+export type AttachSeam = {
+  /** What the worker said of files, for the place the note goes to now. */
+  offer(destination: string | undefined): AttachOffer;
+  /** The offer changed: a read answered. */
+  subscribe(listener: () => void): () => void;
+  /** Whether the host can capture the page: the extension can, a page alone cannot. */
+  captures(): boolean;
+  /** A capture of the visible page, or of an area the person chooses. `cancelled`: Esc, or « Cancel ». */
+  capture(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | undefined>;
+  /** Sends one file on its way. Its id is what the note names. */
+  upload(
+    file: PickedFile,
+    destination: string | undefined,
+  ): Promise<{ ok: true; id: string } | { ok: false; refusal: AttachRefusal }>;
+};
+
+/** A file of the note in the composer, from the moment it is joined. */
+type Held = {
+  key: number;
+  name: string;
+  size: number;
+  state: 'sending' | 'ready' | 'refused';
+  id?: string;
+  refusal?: AttachRefusal;
+  /** Settles when the worker answered for it. */
+  sent?: Promise<void>;
 };
 
 export type PictureChoice = {
@@ -256,6 +310,21 @@ export function createComposer(options: ComposerOptions): Composer {
   const destination = root.querySelector('[data-fruitback-destination]') as HTMLButtonElement;
   const placeList = root.querySelector('[data-fruitback-destinations]') as HTMLElement;
   const gone = root.querySelector('[data-fruitback-destination-gone]') as HTMLElement;
+  const attach = root.querySelector('[data-fruitback-attach]') as HTMLElement;
+  const attachLabel = root.querySelector('[data-fruitback-attach-label]') as HTMLElement;
+  const attachWays = root.querySelector('[data-fruitback-attach-ways]') as HTMLElement;
+  const attachPage = root.querySelector('[data-fruitback-attach-page]') as HTMLButtonElement;
+  const attachArea = root.querySelector('[data-fruitback-attach-area]') as HTMLButtonElement;
+  const attachImage = root.querySelector('[data-fruitback-attach-image]') as HTMLButtonElement;
+  const attachFile = root.querySelector('[data-fruitback-attach-file]') as HTMLButtonElement;
+  const imageInput = root.querySelector('[data-fruitback-attach-image-input]') as HTMLInputElement;
+  const fileInput = root.querySelector('[data-fruitback-attach-file-input]') as HTMLInputElement;
+  const attachNone = root.querySelector('[data-fruitback-attach-none]') as HTMLElement;
+  const attachList = root.querySelector('[data-fruitback-attach-list]') as HTMLElement;
+  const seam = options.attachments;
+  /** The files of the note being written, in the order they were joined. */
+  let held: Held[] = [];
+  let heldKeys = 0;
   const memory = options.memory;
   const isIdentified = (): boolean =>
     typeof options.identified === 'function' ? options.identified() : options.identified === true;
@@ -281,6 +350,147 @@ export function createComposer(options: ComposerOptions): Composer {
   keep.textContent = t.text('composer.keep');
   signIn.textContent = t.text('composer.signIn');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
+  attachLabel.textContent = t.text('composer.attach');
+  attachPage.textContent = t.text('composer.attachPage');
+  attachArea.textContent = t.text('composer.attachArea');
+  attachImage.textContent = t.text('composer.attachImage');
+  attachFile.textContent = t.text('composer.attachFile');
+  attachNone.textContent = t.text('composer.attachNoTracker');
+  imageInput.accept = IMAGE_ACCEPT;
+
+  /** Whether « Keep for later » is offered at this open. A note with files is sent, never kept. */
+  let keepOffered = false;
+
+  /**
+   * The files of the note, and the ways to join one (FRU-332), as the worker offers them now for
+   * the place the note goes to. A note with files is not kept for later: a draft waits in the tab,
+   * and its files would wait in the worker with no note that sends them.
+   */
+  function drawAttachments(): void {
+    const offer = seam?.offer(selected) ?? 'none';
+    attach.hidden = offer === 'none' && held.length === 0;
+    attachWays.hidden = offer !== 'offered';
+    attachNone.hidden = offer !== 'no-tracker';
+    const captures = seam?.captures() === true;
+    attachPage.hidden = !captures;
+    attachArea.hidden = !captures;
+    const full = held.filter((each) => each.state !== 'refused').length >= MAX_FILES;
+    for (const way of [attachPage, attachArea, attachImage, attachFile])
+      way.setAttribute('aria-disabled', String(full));
+    keep.hidden = !keepOffered || held.length > 0;
+
+    const hadFocus = attachList.contains(deepActiveElement(document));
+    attachList.hidden = held.length === 0;
+    attachList.replaceChildren(
+      ...held.map((each) => {
+        const item = document.createElement('li');
+        item.className = 'fruitback-composer-file';
+        item.dataset.fruitbackFile = each.state;
+        const words = document.createElement('span');
+        words.className = 'fruitback-composer-file-words';
+        const named = document.createElement('span');
+        named.className = 'fruitback-composer-file-name';
+        // The name is the person's file, or the page's: text, never markup.
+        named.textContent = each.name;
+        const detail = document.createElement('span');
+        detail.className = 'fruitback-composer-file-detail';
+        detail.textContent = detailOf(each);
+        words.append(named, detail);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'fruitback-composer-file-remove';
+        remove.dataset.fruitbackFileRemove = String(each.key);
+        remove.setAttribute('aria-label', t.text('composer.attachRemove', { name: each.name }));
+        remove.append(createIcon(document, 'close'));
+        item.append(words, remove);
+
+        return item;
+      }),
+    );
+    if (hadFocus) (attachList.querySelector('button') ?? attachFile).focus();
+  }
+
+  /** What a line of the list says under the name: why it did not go, or its size. */
+  function detailOf(each: Held): string {
+    if (each.state === 'refused') return t.text(REFUSALS[each.refusal ?? 'retry']);
+    const size = readableSize(each.size, t.locale);
+
+    return each.state === 'sending' ? `${size} · ${t.text('composer.attachSending')}` : size;
+  }
+
+  /** Joins a file: refused at once when the widget can tell, sent on its way otherwise. */
+  function join(file: PickedFile): void {
+    const key = (heldKeys += 1);
+    const refusal = refusalBefore(
+      file,
+      held.filter((each) => each.state !== 'refused'),
+    );
+    if (refusal !== undefined) {
+      held = [...held, { key, name: file.name, size: file.size, state: 'refused', refusal }];
+      drawAttachments();
+
+      return;
+    }
+    const mine = session;
+    const entry: Held = { key, name: file.name, size: file.size, state: 'sending' };
+    entry.sent = (seam?.upload(file, selected) ?? Promise.resolve({ ok: false as const, refusal: 'retry' as const }))
+      .catch(() => ({ ok: false as const, refusal: 'retry' as const }))
+      .then((answer) => {
+        if (mine !== session) return;
+        if (answer.ok) {
+          entry.state = 'ready';
+          entry.id = answer.id;
+        } else {
+          entry.state = 'refused';
+          entry.refusal = answer.refusal;
+        }
+        drawAttachments();
+      });
+    held = [...held, entry];
+    drawAttachments();
+  }
+
+  async function capture(kind: 'page' | 'area', from: HTMLButtonElement): Promise<void> {
+    if (seam === undefined || from.getAttribute('aria-disabled') === 'true') return;
+    const mine = session;
+    const taken = await seam.capture(kind).catch(() => undefined);
+    if (mine !== session) return;
+    from.focus();
+    if (taken === 'cancelled') return;
+    if (taken === undefined) {
+      held = [
+        ...held,
+        { key: (heldKeys += 1), name: CAPTURE_NAME[kind], size: 0, state: 'refused', refusal: 'capture' },
+      ];
+      drawAttachments();
+
+      return;
+    }
+    join(taken);
+  }
+
+  async function pickFrom(input: HTMLInputElement): Promise<void> {
+    const mine = session;
+    const files = [...(input.files ?? [])];
+    // Emptied, so the same file chosen again is a change.
+    input.value = '';
+    for (const file of files) {
+      let read: PickedFile;
+      try {
+        read = await readPicked(file);
+      } catch {
+        if (mine !== session) return;
+        held = [
+          ...held,
+          { key: (heldKeys += 1), name: file.name, size: file.size, state: 'refused', refusal: 'retry' },
+        ];
+        drawAttachments();
+        continue;
+      }
+      if (mine !== session) return;
+      join(read);
+    }
+  }
 
   /** The places as the line was last drawn from them, and the id of the one it shows. */
   let places: readonly Destination[] = [];
@@ -302,6 +512,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'sent' || next === 'kept';
     keep.disabled = send.disabled;
+    for (const way of [attachPage, attachArea, attachImage, attachFile]) way.disabled = next === 'sending';
     field.readOnly = next === 'sending';
     // A failure is a card of its own above the foot (FRU-305): « Did not go through », then what to
     // do. The sentence is the one of its cause (FRU-156).
@@ -348,10 +559,18 @@ export function createComposer(options: ComposerOptions): Composer {
     let withoutPicture = false;
     let sentAs: SentAs['sentAs'] | undefined;
     try {
+      // The files still on their way go first: the note names the ones the worker took. Awaited
+      // only then: a note with no file in flight is sent in the same turn, as before FRU-332.
+      const inFlight = held.filter((each) => each.state === 'sending').map((each) => each.sent);
+      if (inFlight.length > 0) {
+        await Promise.all(inFlight);
+        if (mine !== session) return;
+      }
+      const ids = held.flatMap((each) => (each.state === 'ready' && each.id !== undefined ? [each.id] : []));
       const result =
         action === 'keep' && options.keep !== undefined
           ? await options.keep.onKeep(field.value, reporterFromFields(), selected)
-          : await options.onSubmit(field.value, reporterFromFields(), selected);
+          : await options.onSubmit(field.value, reporterFromFields(), selected, ids);
       if (result === false) failure = 'retry';
       else if (typeof result === 'string') failure = result;
       else if (typeof result === 'object' && result !== null) {
@@ -367,6 +586,15 @@ export function createComposer(options: ComposerOptions): Composer {
       if (mine !== session) return;
 
       // The text stays exactly where it is. Retrying is one more click, not one more typing session.
+      // A file that is no longer on its way says so under its name: the person removes it.
+      if (failure === 'attachment-gone' || failure === 'no-tracker') {
+        for (const each of held) {
+          if (each.state !== 'ready') continue;
+          each.state = 'refused';
+          each.refusal = failure === 'no-tracker' ? 'no-tracker' : 'retry';
+        }
+        drawAttachments();
+      }
       setState('failed', failure);
       field.focus();
       return;
@@ -380,6 +608,8 @@ export function createComposer(options: ComposerOptions): Composer {
       closing = view?.setTimeout(close, KEPT_MS) ?? 0;
       return;
     }
+    held = [];
+    drawAttachments();
     showSent(sentAs, withoutPicture);
     // The card is read where focus is: on its link when there is one, on the card otherwise.
     if (!sentOpen.hidden) sentOpen.focus();
@@ -434,7 +664,8 @@ export function createComposer(options: ComposerOptions): Composer {
     field.value = restored;
     showPicture();
     askForNameOrNot();
-    keep.hidden = options.keep?.offered() !== true;
+    held = [];
+    keepOffered = options.keep?.offered() === true;
     showRememberedName();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
     // the many notes that go where the one before went.
@@ -442,6 +673,7 @@ export function createComposer(options: ComposerOptions): Composer {
     gone.textContent = '';
     foldPlaces(true);
     drawDestinations();
+    drawAttachments();
     setState('idle');
     // Said, and quietly: the person finds the text they left, and knows why it is there.
     if (restored !== '') status.textContent = t.text('composer.restored');
@@ -636,10 +868,33 @@ export function createComposer(options: ComposerOptions): Composer {
     selected = input.value;
     gone.textContent = '';
     showSelected();
+    drawAttachments();
     choice?.remember(input.value);
   });
 
-  const stopFollowingPlaces = choice?.subscribe(drawDestinations);
+  const stopFollowingPlaces = choice?.subscribe(() => {
+    drawDestinations();
+    drawAttachments();
+  });
+  const stopFollowingOffer = seam?.subscribe(drawAttachments);
+  attachPage.addEventListener('click', () => void capture('page', attachPage));
+  attachArea.addEventListener('click', () => void capture('area', attachArea));
+  attachImage.addEventListener('click', () => {
+    if (attachImage.getAttribute('aria-disabled') !== 'true') imageInput.click();
+  });
+  attachFile.addEventListener('click', () => {
+    if (attachFile.getAttribute('aria-disabled') !== 'true') fileInput.click();
+  });
+  imageInput.addEventListener('change', () => void pickFrom(imageInput));
+  fileInput.addEventListener('change', () => void pickFrom(fileInput));
+  attachList.addEventListener('click', (event) => {
+    const button = (event.target as Element).closest?.('[data-fruitback-file-remove]') as HTMLElement | null;
+    if (button === null) return;
+    const key = Number(button.dataset.fruitbackFileRemove);
+    // The file stays in the worker until its transit ends: no note names it.
+    held = held.filter((each) => each.key !== key);
+    drawAttachments();
+  });
 
   // Kept at the tick, like every preference: it is the reporter's, with or without a note sent.
   picture.addEventListener('change', () => options.picture?.set(picture.checked));
@@ -677,6 +932,7 @@ export function createComposer(options: ComposerOptions): Composer {
       document.removeEventListener('click', onDocumentClick, true);
       focus.destroy();
       stopFollowingPlaces?.();
+      stopFollowingOffer?.();
       stopFollowingPicture?.();
       root.remove();
       style.remove();
@@ -715,7 +971,27 @@ const FAILURES = {
   refused: 'composer.failedRefused',
   'signed-out': 'composer.failedSignedOut',
   'too-large': 'composer.failedTooLarge',
+  'attachment-gone': 'composer.failedAttachmentGone',
+  'no-tracker': 'composer.failedNoTracker',
 } as const satisfies Record<SendFailure, MessageKey>;
+
+/** Why a file did not go, under its name (FRU-332). */
+const REFUSALS = {
+  'too-large': 'composer.attachTooLarge',
+  type: 'composer.attachType',
+  'too-many': 'composer.attachTooMany',
+  'no-tracker': 'composer.attachNoTrackerShort',
+  full: 'composer.attachFull',
+  'signed-out': 'composer.attachSignedOut',
+  capture: 'composer.attachCapture',
+  retry: 'composer.attachRetry',
+} as const satisfies Record<AttachRefusal, MessageKey>;
+
+/** The name of a capture whose bytes never came, for its line in the list. */
+const CAPTURE_NAME = { page: 'page.png', area: 'area.png' } as const;
+
+/** The most files of a note: the ways to join one are off beyond it. */
+const MAX_FILES = MAX_ATTACHMENTS_PER_NOTE;
 
 const TEMPLATE = `
   <div class="fruitback-composer-head">
@@ -740,6 +1016,19 @@ const TEMPLATE = `
     <label data-fruitback-picture-label class="fruitback-composer-check" hidden>
       <input data-fruitback-picture type="checkbox" name="fruitback-picture" /><span></span>
     </label>
+    <div data-fruitback-attach class="fruitback-composer-attach" role="group" aria-labelledby="fruitback-composer-attach-label" hidden>
+      <span data-fruitback-attach-label id="fruitback-composer-attach-label" class="fruitback-composer-label"></span>
+      <div data-fruitback-attach-ways class="fruitback-composer-attach-ways">
+        <button type="button" data-fruitback-attach-page class="fruitback-composer-attach-way"></button>
+        <button type="button" data-fruitback-attach-area class="fruitback-composer-attach-way"></button>
+        <button type="button" data-fruitback-attach-image class="fruitback-composer-attach-way"></button>
+        <button type="button" data-fruitback-attach-file class="fruitback-composer-attach-way"></button>
+        <input data-fruitback-attach-image-input type="file" tabindex="-1" aria-hidden="true" hidden />
+        <input data-fruitback-attach-file-input type="file" multiple tabindex="-1" aria-hidden="true" hidden />
+      </div>
+      <p data-fruitback-attach-none class="fruitback-composer-attach-none" hidden></p>
+      <ul data-fruitback-attach-list class="fruitback-composer-files" hidden></ul>
+    </div>
     <button type="button" data-fruitback-destination class="fruitback-composer-identify" aria-expanded="false" hidden></button>
     <div data-fruitback-destinations class="fruitback-composer-places" role="radiogroup" hidden></div>
     <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
@@ -899,6 +1188,55 @@ const STYLES = `
   accent-color: var(--fruitback-color-accent);
   cursor: pointer;
 }
+/* The files of the note (FRU-332): the ways to join one, then the list, each with its remove button. */
+.fruitback-composer-attach { display: flex; flex-direction: column; gap: 6px; }
+.fruitback-composer-attach[hidden], .fruitback-composer-attach-ways[hidden], .fruitback-composer-files[hidden],
+.fruitback-composer-attach-way[hidden], .fruitback-composer-attach-none[hidden] { display: none; }
+.fruitback-composer-attach-ways { display: flex; flex-wrap: wrap; gap: 6px; }
+.fruitback-composer-attach-way {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-composer-attach-way:hover:not([disabled]):not([aria-disabled="true"]) { background: var(--fruitback-color-surface-sunken); }
+.fruitback-composer-attach-way:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-composer-attach-way[disabled], .fruitback-composer-attach-way[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.fruitback-composer-attach-none { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-files { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.fruitback-composer-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  padding-inline: 10px 4px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+}
+.fruitback-composer-file-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fruitback-composer-file-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fruitback-composer-file-detail { font-size: 11px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-file[data-fruitback-file="refused"] .fruitback-composer-file-detail { color: var(--fruitback-color-accent-strong); }
+.fruitback-composer-file-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--fruitback-radius-sm);
+  background: transparent;
+  color: var(--fruitback-color-text-muted);
+  cursor: pointer;
+}
+.fruitback-composer-file-remove .fruitback-icon { width: 12px; height: 12px; }
+.fruitback-composer-file-remove:hover { background: var(--fruitback-color-surface); color: var(--fruitback-color-text); }
+.fruitback-composer-file-remove:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 /* Where the note goes, when there are several places (FRU-123). */
 .fruitback-composer-places { display: flex; flex-direction: column; gap: 6px; }
 .fruitback-composer-places[hidden] { display: none; }
