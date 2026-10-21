@@ -1,3 +1,4 @@
+import { timingSafeEqual as sameBytes } from 'node:crypto';
 import type { SeedReporter } from '@fruitback/shared';
 
 /**
@@ -100,46 +101,46 @@ export async function verifyIdentityToken(
   secret: string,
   now: number = Date.now(),
 ): Promise<IdentityResult> {
-  if (token.length > MAX_TOKEN_BYTES) return { ok: false, reason: 'malformed' };
+  if (token.length > MAX_TOKEN_BYTES) return refuse('malformed');
 
   const parts = token.split('.');
-  if (parts.length !== 3) return { ok: false, reason: 'malformed' };
+  if (parts.length !== 3) return refuse('malformed');
 
   const [header, payload, signature] = parts as [string, string, string];
 
   // Before the signature, not after. `alg: none` is the whole reason JWT verifiers get written
   // wrong: read the algorithm out of the token and a forger picks it for you.
   const algorithm = readJson<{ alg?: unknown; typ?: unknown }>(header);
-  if (algorithm === undefined) return { ok: false, reason: 'malformed' };
-  if (algorithm.alg !== ALGORITHM) return { ok: false, reason: 'unsupported-alg' };
-  if (algorithm.typ !== undefined && algorithm.typ !== 'JWT') return { ok: false, reason: 'malformed' };
+  if (algorithm === undefined) return refuse('malformed');
+  if (algorithm.alg !== ALGORITHM) return refuse('unsupported-alg');
+  if (algorithm.typ !== undefined && algorithm.typ !== 'JWT') return refuse('malformed');
 
   let expected: ArrayBuffer;
   try {
     expected = await hmac(`${header}.${payload}`, secret);
   } catch {
-    return { ok: false, reason: 'malformed' };
+    return refuse('malformed');
   }
 
   // Compared byte by byte in constant time. A `===` on the base64 leaks how much of the signature
   // was right through how long the comparison took, which is enough to forge one byte at a time.
   if (!timingSafeEqual(base64UrlDecode(signature), new Uint8Array(expected))) {
-    return { ok: false, reason: 'bad-signature' };
+    return refuse('bad-signature');
   }
 
   const claims = readJson<IdentityClaims>(payload);
-  if (claims === undefined) return { ok: false, reason: 'malformed' };
+  if (claims === undefined) return refuse('malformed');
 
-  if (typeof claims.sub !== 'string' || claims.sub.length === 0) return { ok: false, reason: 'invalid-claims' };
-  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return { ok: false, reason: 'invalid-claims' };
+  if (!filled(claims.sub)) return refuse('invalid-claims');
+  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return refuse('invalid-claims');
   // `scope` of a token signed by a site is the site's own claim, as JWTs often carry one: it is not
   // read, and does not refuse the token (raised in review). Only `scope: 'account'` with no workspace
   // says a session of an account (FRU-238), and only a caller that verified with the worker key reads it.
 
   const seconds = now / 1000;
-  if (claims.exp + CLOCK_SKEW_SECONDS <= seconds) return { ok: false, reason: 'expired' };
+  if (claims.exp + CLOCK_SKEW_SECONDS <= seconds) return refuse('expired');
   if (typeof claims.iat === 'number' && claims.iat - CLOCK_SKEW_SECONDS > seconds) {
-    return { ok: false, reason: 'not-yet-valid' };
+    return refuse('not-yet-valid');
   }
 
   return {
@@ -148,17 +149,15 @@ export async function verifyIdentityToken(
     // not survive: the whole point is that this line is the worker's word.
     reporter: {
       id: claims.sub,
-      ...(typeof claims.name === 'string' && claims.name.length > 0 ? { name: claims.name } : {}),
-      ...(typeof claims.email === 'string' && claims.email.length > 0 ? { email: claims.email } : {}),
+      ...(filled(claims.name) ? { name: claims.name } : {}),
+      ...(filled(claims.email) ? { email: claims.email } : {}),
       verified: true,
     },
     // Beside the reporter and not in it: the reporter is stored in the seed, and the workspace is a
     // routing fact about the token.
-    ...(typeof claims.ws === 'string' && claims.ws.length > 0 ? { workspace: claims.ws } : {}),
+    ...(filled(claims.ws) ? { workspace: claims.ws } : {}),
     ...(claims.scope === 'account' && claims.ws === undefined ? { account: true as const } : {}),
-    ...(typeof claims.sid === 'string' && claims.sid.length > 0 && claims.sid.length <= 64
-      ? { chain: claims.sid }
-      : {}),
+    ...(filled(claims.sid) && claims.sid.length <= 64 ? { chain: claims.sid } : {}),
   };
 }
 
@@ -174,6 +173,15 @@ export function stripClaimedVerification(reporter: SeedReporter | undefined): Se
   const { verified: _claimed, ...claimed } = reporter;
 
   return Object.keys(claimed).length > 0 ? claimed : undefined;
+}
+
+function refuse(reason: IdentityFailure): IdentityResult {
+  return { ok: false, reason };
+}
+
+/** A claim that is a string with something in it. A token is not ours to trust until this says so. */
+function filled(claim: unknown): claim is string {
+  return typeof claim === 'string' && claim.length > 0;
 }
 
 function readJson<T>(segment: string): T | undefined {
@@ -195,12 +203,8 @@ async function hmac(signingInput: string, secret: string): Promise<ArrayBuffer> 
 }
 
 function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-
-  let difference = 0;
-  for (let index = 0; index < a.length; index += 1) difference |= (a[index] ?? 0) ^ (b[index] ?? 0);
-
-  return difference === 0;
+  // Node's comparison takes the same time whatever bytes differ, and throws on two lengths.
+  return a.length === b.length && sameBytes(a, b);
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {

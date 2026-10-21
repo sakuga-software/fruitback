@@ -390,13 +390,15 @@ export async function mintAccessToken(
     throw new Error('a session of an account names no workspace');
   }
   const seconds = Math.floor(now / 1000);
+  // The claims go through `JSON.stringify`, which leaves out a key whose value is `undefined`: the
+  // token holds `name`, `email`, `ws`, `scope` and `sid` only when they have a value.
   const claims: IdentityClaims = {
     sub: identity.subject,
-    ...(identity.name === undefined ? {} : { name: identity.name }),
-    ...(identity.email === undefined ? {} : { email: identity.email }),
-    ...(identity.workspace === undefined ? {} : { ws: identity.workspace }),
-    ...(identity.account === true ? { scope: 'account' as const } : {}),
-    ...(chain === undefined ? {} : { sid: chain }),
+    name: identity.name,
+    email: identity.email,
+    ws: identity.workspace,
+    scope: identity.account === true ? 'account' : undefined,
+    sid: chain,
     iat: seconds,
     exp: seconds + ACCESS_TTL_SECONDS,
   };
