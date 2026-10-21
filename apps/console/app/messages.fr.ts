@@ -1091,4 +1091,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Empty: the name in Linear, « {name} ».': 'Vide : le nom dans Linear, « {name} ».',
   "Use Linear's colours": 'Utiliser les couleurs de Linear',
   "Linear's colour": 'Couleur de Linear',
+  'A text colour of your own goes with a colour of your own.':
+    'Une couleur de texte à vous va avec une couleur de fond à vous.',
 };

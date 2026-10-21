@@ -221,6 +221,29 @@ test('an edit shows the contrast, refuses a text under 4.5:1 without sending it,
   await expect(item(page, 'waiting').getByRole('button', { name: 'Edit Waiting for client' })).toBeFocused();
 });
 
+test('a text colour of the team goes with a colour of the team: on the colour of a stage, the text is Auto', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+
+  await item(page, 'waiting').getByRole('button', { name: 'Edit Waiting for client' }).click();
+  const editor = page.getByRole('region', { name: 'Edit Waiting for client' });
+  await editor.getByText('Your colour', { exact: true }).nth(1).click();
+  await editor.getByRole('textbox', { name: 'Hex code of the text' }).fill('#000000');
+  // Back to the colour of the stage: the text goes back to Auto, and cannot be chosen.
+  await editor.getByText('Colour of the stage', { exact: true }).click();
+  await expect(editor.getByRole('radio', { name: 'Auto: dark or white, whichever reads better' })).toBeChecked();
+  await expect(editor.getByRole('radio', { name: 'Your colour' }).nth(1)).toBeDisabled();
+  await expect(editor.getByText('A text colour of your own goes with a colour of your own.')).toBeVisible();
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toHaveCount(0);
+  // What the worker takes: no text colour without a colour (`text-without-color`).
+  expect(worker.sent.at(-1)?.body).toEqual(
+    row({ key: 'waiting', stage: 'todo', name: 'Waiting for client', origin: 'team', position: 5 }),
+  );
+});
+
 test('a built-in status keeps its stage, and Escape closes the editor with focus back on « Edit »', async ({
   page,
 }) => {

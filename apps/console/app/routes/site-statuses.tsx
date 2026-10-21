@@ -927,7 +927,11 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
   }, [adding]);
 
   const color = background === 'own' ? (colourOf(typedBackground) ?? null) : null;
-  const textColor = text === 'own' ? (colourOf(typedText) ?? null) : null;
+  // A text colour goes with a colour of the team only: the worker refuses one on the colour of a stage
+  // or of the tracker (`text-without-color`), and the list would not draw it (lite review of pull
+  // request 495). With no colour of its own, the text is Auto.
+  const textChoice = background === 'own' ? text : 'auto';
+  const textColor = textChoice === 'own' ? (colourOf(typedText) ?? null) : null;
   // With no colour of its own, the status takes its default: the tracker's when the site asks, else its stage's.
   const drawn = coloursOf(stage, background === 'own' ? color : (status.defaultColor ?? null), textColor);
   // A colour that is not typed yet draws nothing of its own: the stage, until it is one.
@@ -942,8 +946,8 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
     const found: typeof errors = {};
     if (adding && name.trim() === '') found.name = t('Give the status a name.');
     if (background === 'own' && color === null) found.background = t(typeColour);
-    if (text === 'own' && textColor === null) found.text = t(typeColour);
-    else if (text === 'own' && !reads(drawn.ratio))
+    if (textChoice === 'own' && textColor === null) found.text = t(typeColour);
+    else if (textChoice === 'own' && !reads(drawn.ratio))
       found.text = t('Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.');
     setErrors(found);
     setProblem(undefined);
@@ -956,7 +960,7 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
       name: name.trim() === '' ? null : name.trim(),
       stage,
       color: background === 'own' ? color : null,
-      textColor: text === 'own' ? textColor : null,
+      textColor: textChoice === 'own' ? textColor : null,
     });
     if (refused !== undefined) setProblem(refused);
   }
@@ -1035,14 +1039,18 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
           <div className="flex flex-col gap-[8px]">
             <Radios
               label={t('Text')}
-              value={text}
+              value={textChoice}
               onChange={setText}
+              disabled={background !== 'own'}
+              {...(background === 'own'
+                ? {}
+                : { hint: t('A text colour of your own goes with a colour of your own.') })}
               options={[
                 { value: 'auto', label: t('Auto: dark or white, whichever reads better') },
                 { value: 'own', label: t('Your colour') },
               ]}
             />
-            {text === 'own' ? (
+            {textChoice === 'own' ? (
               <span className="flex items-start gap-[10px] pl-[26px]">
                 <span
                   aria-hidden="true"
