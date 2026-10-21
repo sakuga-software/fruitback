@@ -18,6 +18,11 @@ export type SitesImport =
   | { ok: true; sites: Record<string, SiteConfig>; skipped: string[] }
   | { ok: false; reason: 'not-json' | 'not-a-sites-file' | 'newer-version' };
 
+/** The rules a file of `exportSites` holds: a pattern the store could not read is not written. */
+export function exportedCount(sites: Record<string, SiteConfig>): number {
+  return Object.keys(sites).filter((pattern) => parseSitePattern(pattern) === pattern).length;
+}
+
 export function exportSites(sites: Record<string, SiteConfig>): string {
   const entries = Object.entries(sites)
     .filter(([pattern]) => parseSitePattern(pattern) === pattern)

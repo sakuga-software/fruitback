@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SITES_FORMAT, SITES_FORMAT_VERSION, exportSites, importSites } from './site-transfer.ts';
+import { SITES_FORMAT, SITES_FORMAT_VERSION, exportSites, exportedCount, importSites } from './site-transfer.ts';
 import type { SiteConfig } from './sites.ts';
 
 const sites: Record<string, SiteConfig> = {
@@ -18,6 +18,15 @@ const file = (body: Record<string, unknown>): string =>
   JSON.stringify({ format: SITES_FORMAT, version: SITES_FORMAT_VERSION, ...body });
 
 describe('exportSites and importSites', () => {
+  it('counts the rules the file holds, without reading it back (FRU-319)', () => {
+    const all = { ...sites, 'not a pattern': sites['https://globex.dev']! };
+    const written = Object.keys((JSON.parse(exportSites(all)) as { sites: object }).sites).length;
+
+    assert.equal(exportedCount(all), written);
+    // The control: the pattern the store cannot read is in the input and not in the count.
+    assert.equal(exportedCount(all), Object.keys(all).length - 1);
+  });
+
   it('reads back exactly what it wrote', () => {
     assert.deepEqual(importSites(exportSites(sites)), { ok: true, sites, skipped: [] });
   });

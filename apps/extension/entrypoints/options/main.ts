@@ -6,7 +6,7 @@ import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { SYNC_SETTING, fits } from '../../src/site-sync.ts';
-import { exportSites, importSites } from '../../src/site-transfer.ts';
+import { exportSites, exportedCount, importSites } from '../../src/site-transfer.ts';
 import { RULES_FILE, downloadedSummary, shareRules } from '../../src/share-rules.ts';
 import {
   type SiteConfig,
@@ -447,8 +447,8 @@ function transfer(): HTMLElement {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1_000);
       share.result.classList.remove('problem');
-      // Counted in the file itself: a pattern the store could not read is not written.
-      share.result.textContent = downloadedSummary(Object.keys((JSON.parse(text) as { sites: object }).sites).length);
+      // The rules the file holds, counted by the rule that writes it, not by reading the file back.
+      share.result.textContent = downloadedSummary(exportedCount(current));
     },
     onFile: (file) => void importFile(file, share.result),
   });
