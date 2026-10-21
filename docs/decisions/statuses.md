@@ -113,7 +113,7 @@ status?: string;           // a key of `statuses`; statusOf(issue, statuses) res
   - a colour that is not `#rrggbb` is dropped from its entry, which then takes the stage colour;
   - a text colour with no background colour is dropped: its contrast was measured on a background
     the entry no longer has;
-  - the first `MAX_STATUSES` entries are kept.
+  - the first `MAX_STATUSES` valid statuses are kept: a dropped entry does not count.
 - **`statusOf(issue, statuses)`** gives the status of an issue, or `undefined` to draw its stage:
   when `status` is absent, names no entry, or names an entry of another stage.
 - **`status` on an issue is strict** (1 to 200 characters), like `url`. Only the worker parses an
@@ -284,8 +284,9 @@ the widgets cached on host pages and for self-hosted workers.
 ### Risks
 
 - **A colour is written into a style.** `style.setProperty` cannot leave its declaration, but a value
-  like `var(--x)` or `url(…)` would still be read. Hence `#rrggbb` only, checked on both ends; a line
-  in [SECURITY.md](../../SECURITY.md) in the same commit.
+  like `var(--x)` or `url(…)` would still be read. Hence `#rrggbb` only, checked on both ends. The line
+  in [SECURITY.md](../../SECURITY.md) lands with the first code that stores a colour (FRU-366) or
+  writes one into a style (FRU-370), in the same commit; FRU-364 does neither.
 - **The contract grows.** Two optional fields, tolerant reads, no version bump. The danger is the
   next field: the amended FRU-24 rule must still refuse a constant in a type.
 - **A Linear state changes with no webhook.** The cost is a console page that shows the old list
@@ -307,16 +308,16 @@ the widgets cached on host pages and for self-hosted workers.
 
 Created by the orchestrator after the decisions, children of FRU-352.
 
-| Ticket  | What                                                                                                                                        | Critical | Why                                  |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------ |
-| FRU-364 | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, `statusOf`; the FRU-24 rule in contract.md; this page.                | **Yes**  | Public contract                      |
-| FRU-365 | Worker: the table of statuses per site, `seeds.status_key`, the copy of the FRU-102 exceptions to every site of their connector.            | **Yes**  | Data migration                       |
-| FRU-366 | Worker: console API to read, add, change and order the statuses of a site, with the 4.5:1 refusal and the text colour function in `shared`. | **Yes**  | New writes, roles                    |
-| FRU-367 | Worker, notes kept in Fruitback: the five built-in statuses, and the route that changes the status of a note.                               | **Yes**  | Writes a note, and its stage with it |
-| FRU-368 | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours » per site.                                              | No       | Read path only                       |
-| FRU-369 | Worker, GitHub: the four fixed statuses, renamable and recolourable per site.                                                               | No       | Read path only                       |
-| FRU-370 | Widget and extension draw the name and the colour of the status, with the stage as fallback; `PanelNote` carries them. `/tfp`.              | No       | Display; the fallback is FRU-364's   |
-| FRU-371 | Console: the board in `design/`, then the statuses screen of a site and the status select in the list of notes. `/tfp`.                     | No       | Display, behind FRU-366 and FRU-367  |
+| Ticket  | What                                                                                                                                                                         | Critical | Why                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------ |
+| FRU-364 | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, `statusOf`; the FRU-24 rule in contract.md; this page.                                                 | **Yes**  | Public contract                      |
+| FRU-365 | Worker: the table of statuses per site, `seeds.status_key`, the copy of the FRU-102 exceptions to every site of their connector.                                             | **Yes**  | Data migration                       |
+| FRU-366 | Worker: console API to read, add, change and order the statuses of a site, with the 4.5:1 refusal and the text colour function in `shared`; the SECURITY.md line on colours. | **Yes**  | New writes, roles                    |
+| FRU-367 | Worker, notes kept in Fruitback: the five built-in statuses, and the route that changes the status of a note.                                                                | **Yes**  | Writes a note, and its stage with it |
+| FRU-368 | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours » per site.                                                                               | No       | Read path only                       |
+| FRU-369 | Worker, GitHub: the four fixed statuses, renamable and recolourable per site.                                                                                                | No       | Read path only                       |
+| FRU-370 | Widget and extension draw the name and the colour of the status, with the stage as fallback; `PanelNote` carries them; SECURITY.md on what reaches a style. `/tfp`.          | No       | Display; the fallback is FRU-364's   |
+| FRU-371 | Console: the board in `design/`, then the statuses screen of a site and the status select in the list of notes. `/tfp`.                                                      | No       | Display, behind FRU-366 and FRU-367  |
 
 Order: FRU-364, then FRU-365, then FRU-366 to FRU-369 in any order, then FRU-370 and FRU-371. The
 REST inbound route and the GitHub Project Status field have no ticket: decisions 5 and 4 left them out.

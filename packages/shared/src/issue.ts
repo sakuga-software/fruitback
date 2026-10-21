@@ -109,6 +109,7 @@ function isStatusColor(value: unknown): value is string {
  * - A colour that is not `#rrggbb`: dropped from its entry, which keeps the colour of its stage.
  * - A text colour with no background colour: dropped. Its contrast was measured against a background
  *   that this entry no longer has.
+ * - The first `MAX_STATUSES` valid statuses are kept: a dropped entry does not count.
  *
  * Never throws: the list comes from another process, and a bad entry must not hide a pin.
  */
@@ -117,12 +118,13 @@ export function offeredStatuses(value: unknown): SeedStatus[] {
 
   const seen = new Set<string>();
   const kept: SeedStatus[] = [];
-  for (const entry of value.slice(0, MAX_STATUSES)) {
-    if (typeof entry !== 'object' || entry === null) continue;
-    const { color, textColor } = entry as Record<string, unknown>;
+  for (const entry of value) {
+    if (kept.length === MAX_STATUSES) break;
     const core = statusCoreSchema.safeParse(entry);
     if (!core.success || seen.has(core.data.key)) continue;
     seen.add(core.data.key);
+    // An object, since its core parsed.
+    const { color, textColor } = entry as Record<string, unknown>;
     const colored = isStatusColor(color);
     kept.push({
       ...core.data,
@@ -144,7 +146,7 @@ export function statusOf(
   issue: Pick<SeedIssue, 'stage' | 'status'>,
   statuses: readonly SeedStatus[],
 ): SeedStatus | undefined {
-  if (issue.status === undefined) return undefined;
+  // No key is empty, so an issue with no `status` finds nothing.
   const status = statuses.find((candidate) => candidate.key === issue.status);
 
   return status?.stage === issue.stage ? status : undefined;

@@ -170,6 +170,8 @@ describe('the statuses of a read (FRU-364)', () => {
       'url(https://x.test/a.png)',
       '#7dd3fcff',
       '#7dd3fc;',
+      'red#7dd3fc',
+      ['#7dd3fc'],
       7,
     ]) {
       assert.deepEqual(
@@ -199,6 +201,14 @@ describe('the statuses of a read (FRU-364)', () => {
 
     assert.equal(kept.length, MAX_STATUSES);
     assert.equal(kept.at(-1)?.key, `k${MAX_STATUSES - 1}`);
+  });
+
+  it('counts only the statuses it keeps against that bound', () => {
+    // Found in review: a bound taken on the raw list let dropped entries push a valid one out.
+    const dropped = Array.from({ length: MAX_STATUSES }, () => ({ key: '', name: '', stage: 'seeded' }));
+    const kept = offeredStatuses([...dropped, { key: 'after', name: '', stage: 'ripe' }]);
+
+    assert.deepEqual(kept, [{ key: 'after', name: '', stage: 'ripe' }]);
   });
 
   it('gives the status of an issue only when it is in the list and of the same stage', () => {
