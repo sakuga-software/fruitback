@@ -32,3 +32,5 @@ export type { FruitbackMessages, MessageKey, PluralMessage } from './messages.ts
 // `fetchTransport` stays internal: it is the behaviour a host gets by passing nothing, never
 // something to import and wrap.
 export type { FruitbackTransport, TransportRequest, TransportResponse } from './transport.ts';
+// FRU-332: what `captureVisible` is handed and gives back.
+export type { CaptureArea, PickedFile } from './attachments.ts';

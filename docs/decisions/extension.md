@@ -665,42 +665,52 @@ a change when the account refuses one of them, and marks only those as known`. O
 - **A large rule that replaces a smaller one keeps the smaller one in the account.** Removing it there
   would remove the rule in the other browsers, which know it.
 
-## The picture of a note, taken by the browser (FRU-44)
+## A capture of the page, taken by the browser (FRU-44, FRU-332)
 
 ### The rules, in short
 
-- **The widget asks, and `packages/widget` does not change.** The page world gives `init` a
-  `captureScreenshot`, which posts a `capture-request` with the area of the element on the bridge.
-  The background takes the picture of the tab (`tabs.captureVisibleTab`), cuts the area out
-  (`createImageBitmap`, `OffscreenCanvas`), and sends the PNG to `POST /screenshot` of the worker of
-  the stored entry, for its client, with the session of that worker. **Since FRU-331 the mount offers
-  no picture of the element**: its route is gone, and a picture asked for would go nowhere, in
-  silence (raised by the `heavy` review of #427). FRU-332 brings the capture of the page and of an
-  area in its place, as a file of the note. `src/capture.ts` holds every
-  case where it gives up.
+- **The extension captures, and sends nothing.** The page world gives `init` a `captureVisible`
+  (and puts it on `window.fruitbackExtension`, beside the transport, for the widget of a site of a
+  workspace). It posts a `capture-request` on the bridge, with the area the person chose or none for
+  the whole visible page. The background takes the tab (`tabs.captureVisibleTab`), cuts the area out
+  (`createImageBitmap`, `OffscreenCanvas`), and answers the PNG in base64. The widget joins it to the
+  note like a file of the disk, and it goes through the relay to `POST /attachments`, then to the
+  ticket of the tracker (FRU-331). `src/capture.ts` holds every case where it gives up.
+- **Only for a site of a workspace, with a session**: a site in team mode, switched on, on an https
+  worker (or loopback), with a session open for it. A page that asks for a capture elsewhere gets none.
+- **The relay carries a file to `POST /attachments` only**: its body in base64 (`encoding:
+'base64'`, 10 MB of bytes at most, `MAX_FILE_BASE64`), sent as bytes by the background. Base64 to any
+  other path, a body of text to `/attachments`, and a read of `/attachments/<id>` are refused.
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.
-- **A capture that fails costs the picture, never the note.** No `activeTab`, no session, an http
-  worker, a site that embeds its own widget, a worker with no database, ten seconds without an
-  answer: the note goes without a picture. Since FRU-331 none is asked for:
-  test:`private mode: the extension offers no picture of the element, and the note goes`.
-- **The setting is off by default**, in the settings of the widget, as on any host that offers it.
+- **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
+  worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
+  text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a
+  JPEG of a large screen (balanced review of #433); an answer after the delay finds no request and
+  is dropped, and nothing was sent.
+- **A capture over the limit of an image (10 MB) goes as a JPEG of quality 0.85**, `page.jpg` or
+  `area.jpg`: a PNG of a whole page of a 5K screen can pass it. A JPEG still over it is answered
+  as too large, with its size and no bytes, and the composer says « Too large » rather than « not
+  taken ». The three hops of that answer are `captureAnswerOf` of `src/capture.ts` (the background),
+  then `captureResponseOf` (the bridge) and `pictureOfAnswer` (the page world) of
+  `src/capture-answer.ts`, which reaches no module of the session; and
+  `capture-composer.test.ts` runs them, from a tab over the limit to « Too large » in the composer.
+  The size of a PNG of a real 5K page, and of its JPEG, is not measured.
+- **The picture of the element of FRU-44 is gone from the extension**: its route, `POST /screenshot`,
+  answered an address that Fruitback served, and Fruitback serves no file now. `captureScreenshot`
+  stays a seam of the widget for a site that stores its own pictures.
 
-### The reasons, and what is not done
+### The reasons, and what is not measured
 
-The decision of 2026-10-06 said « SQLite first ». A worker always has PostgreSQL since 2026-10-11,
-so the pictures are a table of its database (`screenshots`), and a worker with none keeps no picture.
-It said « after the publication on the stores » too: the orchestrator of the agents asked for it
-now, on Mathieu's delegation, behind the setting that is off.
-
-- **Measured on Chromium 145**: `captureVisibleTab` is refused with the host of the origin, with
-  `*://*/*`, and with `activeTab` declared but not granted; it works with `<all_urls>`. The success
-  path in a browser needs the gesture on the extension, which an automated browser cannot make: it
-  is not in the E2E suite, and was not tried by hand.
-- **Only a member reads a picture**, so a link in a tracker answers `401` to a browser that opens
-  it: nothing shows the picture to a person yet. A page of the console that does is the next step.
-- **The picture shows what the screen showed**, the composer of the widget included when it covers
-  the element.
+- **Base64 between the page and the background**, because `runtime.sendMessage` carries what JSON
+  carries, not bytes. 10 MB of a file is 13.3 MB of text, under the 64 MB that Chromium documents for
+  a message (not measured with a file that size).
+- **Measured on Chromium 145** (FRU-44): `captureVisibleTab` is refused with the host of the origin,
+  with `*://*/*`, and with `activeTab` declared but not granted; it works with `<all_urls>`. The
+  success path in a browser needs the gesture on the extension, which an automated browser cannot
+  make: the E2E suite joins a file of the disk instead, and a capture that is refused says so.
+- **The capture shows what the screen showed**: the widget is hidden for the two frames before it,
+  and the area of the capture is drawn by the widget, then removed before the capture is taken.
 
 ## A problem, and the one thing to do about it (FRU-90)
 

@@ -1,4 +1,4 @@
-import type { FruitbackTransport } from '@fruitback/widget';
+import type { CaptureArea, FruitbackTransport, PickedFile } from '@fruitback/widget';
 
 /**
  * What the extension puts on a team-mode page, and how the site finds it (FRU-57).
@@ -34,6 +34,12 @@ export const EXTENSION_API_VERSION = 1;
 export type FruitbackExtensionApi = {
   version: typeof EXTENSION_API_VERSION;
   transport: FruitbackTransport;
+  /**
+   * A capture of the visible page or of an area of it (FRU-332), which the site passes to `init` as
+   * `captureVisible`, beside the transport. A new field: a site that does not pass it offers no
+   * capture, and joins the files of the disk all the same. The version does not move.
+   */
+  captureVisible?: (area?: CaptureArea) => Promise<PickedFile | undefined>;
 };
 
 /**

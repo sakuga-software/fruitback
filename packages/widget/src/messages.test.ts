@@ -14,13 +14,22 @@ import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { type SendFailure, type SentAs, type SentWithoutPicture, createComposer, failureText } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
+import { type AttachRefusal, readableSize } from './attachments.ts';
+import { pickArea } from './area.ts';
 import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
 import { type ReadState, createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { type ReplyFailure, createOverlay } from './overlay.ts';
-import { globalNavigatorSpeaks, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
+import {
+  globalNavigatorSpeaks,
+  keyboardEventCtor,
+  mountPage,
+  pressKey,
+  setDocumentSize,
+  setRect,
+} from './dom.fixture.ts';
 
 describe('createTranslator', () => {
   it('speaks English when nobody asked for anything', () => {
@@ -284,6 +293,8 @@ describe('every word the widget shows', () => {
       identifier: 'ID-1',
       stateName: '',
       comments: [],
+      // FRU-332: the files of the note, in its tracker. The thread says how many, and links the ticket.
+      attachments: [{ name: 'FILE ONE', url: 'https://tracker.test/file' }],
       seed: seedFixture({
         id: 'sd_found',
         note: 'NOTE ONE',
@@ -480,6 +491,72 @@ describe('every word the widget shows', () => {
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
     snapshots.push(...shown(host.root));
     restoredText = undefined;
+    composer.close();
+
+    // FRU-332: the files of a note. The four ways, a capture on its way, each refusal, the two
+    // failures of a send with files, then a note that stays in Fruitback, and the area of a capture.
+    let offer: 'offered' | 'no-tracker' = 'offered';
+    const uploads: ((answer: { ok: true; id: string } | { ok: false; refusal: AttachRefusal }) => void)[] = [];
+    const filed = createComposer({
+      document: page.document,
+      host: host.panel,
+      translator,
+      onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture | SentAs>((resolve) => (answer = resolve)),
+      attachments: {
+        offer: () => offer,
+        subscribe: () => () => {},
+        captures: () => true,
+        capture: async () => ({ name: 'FILE.png', type: 'image/png', size: 2_048, base64: 'AA==' }),
+        upload: () => new Promise((resolve) => uploads.push(resolve)),
+      },
+    });
+    cleanup.push(() => filed.destroy());
+    const capturePage = () =>
+      (filed.element.querySelector('[data-fruitback-attach-page]') as HTMLButtonElement).click();
+    const filedSend = filed.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+    filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    snapshots.push(...shown(host.root));
+    for (const refusal of [
+      'too-large',
+      'type',
+      'too-many',
+      'no-tracker',
+      'full',
+      'signed-out',
+      'capture',
+      'retry',
+    ] as const) {
+      capturePage();
+      await settle();
+      snapshots.push(...shown(host.root));
+      uploads.shift()?.({ ok: false, refusal });
+      await settle();
+      snapshots.push(...shown(host.root));
+    }
+    filed.close();
+    for (const failure of ['attachment-gone', 'no-tracker'] as const) {
+      filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
+      capturePage();
+      await settle();
+      uploads.shift()?.({ ok: true, id: `att_${'0'.repeat(32)}` });
+      await settle();
+      filedSend.click();
+      answer(failure);
+      await settle();
+      snapshots.push(...shown(host.root));
+      filed.close();
+    }
+    offer = 'no-tracker';
+    filed.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    snapshots.push(...shown(host.root));
+    filed.close();
+    const area = pickArea({ document: page.document, host: host.root, translator });
+    snapshots.push(...shown(host.root));
+    const AreaKeyboardEvent = keyboardEventCtor(page);
+    (host.root.querySelector('[data-fruitback-area]') as HTMLElement).dispatchEvent(
+      new AreaKeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    assert.equal(await area, undefined);
 
     // The copy button, with a clipboard that takes the text and then with one that refuses it.
     const copy = host.root.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;
@@ -559,6 +636,10 @@ describe('every word the widget shows', () => {
       // The component and the file behind the element, which the bubble shows as the note carries them (FRU-256).
       'CheckoutCta',
       'src/components/checkout-cta.tsx',
+      // FRU-332: the name of a file, and its size as `Intl` writes it.
+      'FILE.png',
+      'page.png',
+      readableSize(2_048, translator.locale),
     ];
     // The short selector the frame of a capture writes (FRU-303), the tag of an element of the page.
     // Matched whole: as a part, « i » would take that letter out of every other text.

@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CHANNEL, NAME_MAX, parseBridgeMessage, parseRelayRequest, parseRelayResponse } from './protocol.ts';
+import {
+  CHANNEL,
+  MAX_FILE_BASE64,
+  NAME_MAX,
+  parseBridgeMessage,
+  parseRelayRequest,
+  parseRelayResponse,
+} from './protocol.ts';
 
 describe('parseBridgeMessage', () => {
   it('accepts a mount the isolated world sent', () => {
@@ -271,43 +278,113 @@ describe('the relay messages', () => {
 });
 
 /**
- * The answer of the background to a capture, as the bridge reads it (FRU-44). The address is the one
- * `capture.ts` builds: the endpoint of the entry, then `/screenshot/<id>`. Raised in a review of #209:
- * if the check of the address refused a path after the endpoint, the picture would be lost here, in
- * silence, after the worker kept it.
+ * The answer of the background to a capture, as the bridge reads it (FRU-332): a PNG in base64, which
+ * the widget joins to the note. Anything else is no capture, and the answer stays.
  */
-describe('the answer to a capture (FRU-44)', () => {
-  const ID = 'shot_0123456789abcdef0123456789abcdef';
-  const answer = (url: string) =>
-    parseBridgeMessage({
+describe('the answer to a capture (FRU-332)', () => {
+  const answer = (picture: unknown) =>
+    parseBridgeMessage({ channel: CHANNEL, kind: 'capture-response', id: 'req1', picture });
+  const PNG = { name: 'page.png', type: 'image/png', size: 3, base64: 'iVBO' };
+
+  it('keeps a capture of the page, field by field', () => {
+    assert.deepEqual(answer({ ...PNG, extra: 'dropped' }), {
       channel: CHANNEL,
       kind: 'capture-response',
       id: 'req1',
-      picture: { url, width: 120, height: 60 },
+      picture: PNG,
     });
+  });
 
-  for (const endpoint of [
-    'https://worker.test',
-    'https://api.acme.dev/fruitback',
-    'http://localhost:8788',
-    'http://127.0.0.1:8788',
-  ]) {
-    it(`keeps the address of a picture on ${endpoint}`, () => {
-      const url = `${endpoint}/screenshot/${ID}`;
-
-      assert.deepEqual(answer(url), {
-        channel: CHANNEL,
-        kind: 'capture-response',
-        id: 'req1',
-        picture: { url, width: 120, height: 60 },
-      });
-    });
-  }
-
-  it('drops an address that is not http(s), and keeps the answer with no picture', () => {
-    for (const url of ['javascript:alert(1)', 'data:image/png;base64,AAAA', 'not a url']) {
-      assert.deepEqual(answer(url), { channel: CHANNEL, kind: 'capture-response', id: 'req1' }, url);
+  it('drops a capture that is not a PNG in base64, and keeps the answer with no picture', () => {
+    for (const picture of [
+      { ...PNG, type: 'text/html' },
+      { ...PNG, base64: '<script>' },
+      { ...PNG, base64: '' },
+      { ...PNG, size: 0 },
+      { ...PNG, name: '' },
+      { ...PNG, base64: 'A'.repeat(MAX_FILE_BASE64 + 4) },
+      { url: 'https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef', width: 1, height: 1 },
+    ]) {
+      assert.deepEqual(answer(picture), { channel: CHANNEL, kind: 'capture-response', id: 'req1' });
     }
+  });
+
+  it('keeps a capture as a JPEG, the fallback of a PNG over the limit', () => {
+    const jpeg = { name: 'page.jpg', type: 'image/jpeg', size: 3, base64: '/9j/' };
+    assert.deepEqual(answer(jpeg), { channel: CHANNEL, kind: 'capture-response', id: 'req1', picture: jpeg });
+  });
+
+  it('keeps a capture said too large, with its name and its size, so the widget can say why', () => {
+    const tooLarge = { name: 'page.jpg', size: 12_000_000 };
+    const said = (large: unknown) =>
+      parseBridgeMessage({ channel: CHANNEL, kind: 'capture-response', id: 'req1', tooLarge: large });
+
+    assert.deepEqual(said({ ...tooLarge, extra: 'dropped' }), {
+      channel: CHANNEL,
+      kind: 'capture-response',
+      id: 'req1',
+      tooLarge,
+    });
+    for (const large of [
+      { ...tooLarge, size: 0 },
+      { ...tooLarge, size: 1.5 },
+      { ...tooLarge, name: '' },
+      { ...tooLarge, name: 'a'.repeat(121) },
+      'big',
+    ]) {
+      assert.deepEqual(said(large), { channel: CHANNEL, kind: 'capture-response', id: 'req1' });
+    }
+  });
+
+  it('reads a request of a capture with no area as the whole page, and with one as that area', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'capture-request', id: 'req1' }), {
+      channel: CHANNEL,
+      kind: 'capture-request',
+      id: 'req1',
+    });
+    const area = { left: 1, top: 2, width: 3, height: 4, scale: 2 };
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'capture-request', id: 'req1', area }), {
+      channel: CHANNEL,
+      kind: 'capture-request',
+      id: 'req1',
+      area,
+    });
+    assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'capture-request', id: 'req1', area: 'all' }), undefined);
+  });
+});
+
+describe('a file of a note in a relayed request (FRU-332)', () => {
+  const request = (more: Record<string, unknown>) => ({
+    url: 'https://worker.test/attachments?client=acme&name=a.png',
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    ...more,
+  });
+
+  it('carries a body in base64 up to the largest file the worker takes', () => {
+    assert.deepEqual(parseRelayRequest(request({ body: 'iVBORw0K', encoding: 'base64' })), {
+      ...request({}),
+      body: 'iVBORw0K',
+      encoding: 'base64',
+    });
+    assert.notEqual(parseRelayRequest(request({ body: 'A'.repeat(MAX_FILE_BASE64), encoding: 'base64' })), undefined);
+  });
+
+  it('refuses a file over that size, a body that is not base64, another encoding, or a read', () => {
+    for (const more of [
+      { body: 'A'.repeat(MAX_FILE_BASE64 + 4), encoding: 'base64' },
+      { body: 'not base64!', encoding: 'base64' },
+      { body: 'A', encoding: 'base64' },
+      { body: 'AAAAA', encoding: 'base64' },
+      { body: 'A===', encoding: 'base64' },
+      { body: 'iVBO', encoding: 'binary' },
+      { body: '', encoding: 'base64' },
+      { method: 'GET', body: 'iVBO', encoding: 'base64' },
+    ]) {
+      assert.equal(parseRelayRequest(request(more)), undefined, JSON.stringify(more).slice(0, 80));
+    }
+    // The control: a body of text keeps its cap of 64 KiB.
+    assert.equal(parseRelayRequest(request({ body: 'x'.repeat(64 * 1_024 + 1) })), undefined);
   });
 });
 

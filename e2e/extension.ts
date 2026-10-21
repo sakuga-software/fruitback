@@ -99,8 +99,12 @@ function copyWithLocalAccess(directory: string, extraPermissions: string[] = [])
   fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
   manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`, `${AUTHENTICATED_WORKER_ORIGIN}/*`];
-  if (extraPermissions.length > 0) {
-    manifest.permissions = [...((manifest.permissions as string[] | undefined) ?? []), ...extraPermissions];
+  // A host (`<all_urls>`, or a pattern with a scheme) is a host permission in MV3, not a permission.
+  const hosts = extraPermissions.filter((each) => each === '<all_urls>' || each.includes('://'));
+  const others = extraPermissions.filter((each) => !hosts.includes(each));
+  if (hosts.length > 0) manifest.host_permissions = [...(manifest.host_permissions as string[]), ...hosts];
+  if (others.length > 0) {
+    manifest.permissions = [...((manifest.permissions as string[] | undefined) ?? []), ...others];
   }
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 

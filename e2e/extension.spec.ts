@@ -229,11 +229,13 @@ test('the rules go to the account of the browser only when the reviewer asks, an
 });
 
 /**
- * The picture of the element of FRU-44 went to `POST /screenshot`, which FRU-331 removes: the
- * extension no longer offers it, so no picture is asked for and lost in silence. A note still goes.
- * FRU-332 brings the capture of the page and of an area, as a file of the note.
+ * The files of a note (FRU-332). In private mode the reviewer has no session, so the worker takes no
+ * file of theirs: the composer shows nothing of files, and the picture of the element of FRU-44,
+ * which went to `POST /screenshot`, is no longer offered. A note still goes.
  */
-test('private mode: the extension offers no picture of the element, and the note goes', async ({ extension }) => {
+test('private mode: no file and no picture of the element are offered without a session, and the note goes', async ({
+  extension,
+}) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-capture');
@@ -243,11 +245,62 @@ test('private mode: the extension offers no picture of the element, and the note
   await expect(page.locator('[name="screenshot"]')).toHaveCount(0);
   await page.getByLabel('Open Fruitback settings').click();
 
-  await plantOnTheLatteCard(page, /Leave feedback/, 'Sans image, et pourtant envoyée');
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
+  await expect(page.locator('[data-fruitback-attach]')).toBeHidden();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+  await plantOnTheLatteCard(page, /Leave feedback/, 'Sans fichier, et pourtant envoyée');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   const [seed] = await seedsOn(page);
-  expect(seed?.note).toBe('Sans image, et pourtant envoyée');
+  expect(seed?.note).toBe('Sans fichier, et pourtant envoyée');
   expect(seed && 'screenshot' in seed).toBe(false);
+});
+
+/**
+ * A note of a site of a workspace, with a file of the disk (FRU-332). The worker of the suite keeps its
+ * notes in its Linear in memory, which takes files as Linear does: the file goes through the relay to
+ * `POST /attachments`, the note names it, and its thread says « 1 attachment » with the link of its
+ * ticket. No file is shown on the page.
+ */
+test('team mode: a note joins a file of the disk, and its thread says how many files it has, with no file shown', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'team', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  const calls = workerCalls(page);
+  await openBareSite(page, 'ext-attach');
+  await mountTheSiteWidget(page, WORKER_ORIGIN);
+  await pairFromPopup(extension, page, (await mintPairing(REVIEWER, WORKER_ORIGIN)).code, REVIEWER);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
+  await mountTheSiteWidget(page, WORKER_ORIGIN);
+
+  await page.getByRole('button', { name: 'Team feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  const files = page.getByRole('group', { name: 'Attachments' });
+  await expect(files).toBeVisible();
+  await expect(files.getByRole('button', { name: 'Capture the page' })).toBeVisible();
+  await expect(files.getByRole('button', { name: 'Capture an area' })).toBeVisible();
+  // The inputs of the disk are opened by their buttons, never shown (the /tfp found them drawn).
+  await expect(page.locator('[data-fruitback-attach-file-input]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-attach-image-input]')).toBeHidden();
+  await page
+    .locator('[data-fruitback-attach-file-input]')
+    .setInputFiles({ name: 'log.txt', mimeType: 'text/plain', buffer: Buffer.from('une ligne de log') });
+  await expect(page.locator('.fruitback-composer-file')).toHaveAttribute('data-fruitback-file', 'ready');
+  await expect(page.locator('.fruitback-composer-file-name')).toHaveText('log.txt');
+
+  await page.getByPlaceholder('What should change?').fill('Avec un fichier');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await page.getByRole('button', { name: /^Note 1\b/ }).click();
+  await expect(page.locator('[data-fruitback-files]')).toHaveText(/^1 attachment · in \S+$/);
+  await expect(page.locator('.fruitback-thread img')).toHaveCount(0);
+
+  // Every call went through the background, the file included.
+  expect(calls).toEqual([]);
 });
 
 /** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
@@ -269,6 +322,8 @@ async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
         clientId: 'playground',
         label: 'Team feedback',
         transport: scope.fruitbackExtension.transport,
+        // FRU-332: the capture of the page, which the extension offers beside its transport.
+        captureVisible: (scope.fruitbackExtension as { captureVisible?: unknown }).captureVisible,
       });
     };
     // The extension can announce before or after this runs, so the site does both.

@@ -1,4 +1,6 @@
 export * from './anchor.ts';
+export * from './area.ts';
+export * from './attachments.ts';
 export * from './capture.ts';
 export * from './composer.ts';
 export * from './config.ts';

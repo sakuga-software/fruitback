@@ -1,6 +1,7 @@
 import { init } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, type CaptureResponseMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { createRelayTransport, randomId } from '../src/relay-transport.ts';
+import { pictureOfAnswer } from '../src/capture-answer.ts';
 import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
@@ -29,6 +30,13 @@ import {
  * The cost is that there is no `chrome.*` in here at all — hence the bridge, and hence the relay:
  * the transport this file hands the page posts a message, and the call is made where the token is.
  */
+/**
+ * How long the widget waits for a capture before it says that the capture was not taken. A capture
+ * can wait for the answer to a prompt of permission, then a crop and a JPEG of a large screen: ten
+ * seconds was too short for that (balanced review of #433). A late answer finds no request and is
+ * dropped.
+ */
+const CAPTURE_TIMEOUT_MS = 30_000;
 
 export default defineContentScript({
   // Registered by `background.ts` for the origins somebody turned on, never declared. See
@@ -44,9 +52,42 @@ export default defineContentScript({
     window[PAGE_SCRIPT_FLAG] = true;
 
     let widget: ReturnType<typeof init> | undefined;
-    /** The pictures asked for and not answered yet, by the id of the request (FRU-44). */
-    const pictures = new Map<string, (picture: CaptureResponseMessage['picture']) => void>();
+    /** The captures asked for and not answered yet, by the id of the request (FRU-44). */
+    const pictures = new Map<string, (answer: CaptureResponseMessage) => void>();
 
+    /**
+     * A capture of the visible page, or of an area of it, taken by the background (FRU-332): see
+     * `src/capture.ts`. Nothing comes back in thirty seconds, or the background could not take it: the
+     * composer says that the capture was not taken, and the note stays. A capture over the limit of
+     * the worker comes back as a file of its size and no bytes: the composer says it is too large.
+     */
+    const captureVisible = (area?: {
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+      scale: number;
+    }): Promise<CaptureResponseMessage['picture']> =>
+      new Promise((resolve) => {
+        const id = randomId(window);
+        const timer = setTimeout(() => {
+          pictures.delete(id);
+          resolve(undefined);
+        }, CAPTURE_TIMEOUT_MS);
+        pictures.set(id, (answer) => {
+          clearTimeout(timer);
+          resolve(pictureOfAnswer(answer));
+        });
+        window.postMessage(
+          {
+            channel: CHANNEL,
+            kind: 'capture-request',
+            id,
+            ...(area === undefined ? {} : { area }),
+          },
+          '*',
+        );
+      });
     /**
      * The mount that built `widget`, as it was posted (FRU-186).
      *
@@ -61,6 +102,8 @@ export default defineContentScript({
 
     const api: FruitbackExtensionApi = {
       version: EXTENSION_API_VERSION,
+      // FRU-332: for the widget of a site of a workspace, as for the one this script mounts.
+      captureVisible,
       transport: createRelayTransport({
         // Same target as the handshake below. The request is the page's own call, and the token it
         // comes back with is attached in the background, so nothing secret travels here.
@@ -235,7 +278,7 @@ export default defineContentScript({
       }
 
       if (message.kind === 'capture-response') {
-        pictures.get(message.id)?.(message.picture);
+        pictures.get(message.id)?.(message);
         pictures.delete(message.id);
 
         return;
@@ -295,9 +338,9 @@ export default defineContentScript({
         ...(message.relay === true
           ? { onSignIn: () => window.postMessage({ channel: CHANNEL, kind: 'sign-in' }, '*') }
           : {}),
-        // FRU-331: the picture of the element of FRU-44 is no longer offered. Its route, `POST
-        // /screenshot`, is gone: a picture asked for would go nowhere, in silence. FRU-332 brings the
-        // capture of the page and of an area in its place, as a file of the note.
+        // FRU-332: the capture of the page or of an area, for a site of a workspace: the files of a
+        // note go through the relay, with the session. The picture of the element of FRU-44 is gone.
+        ...(message.relay === true ? { captureVisible } : {}),
         // FRU-302: « Name on my notes », for a reporter who kept none on this site.
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
       });

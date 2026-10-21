@@ -1,52 +1,61 @@
+import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { AccessResult } from './session.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
- * The picture that goes with a note, taken by the browser itself (FRU-44).
+ * A capture of the page, taken by the browser itself (FRU-44, FRU-332).
  *
- * The widget asks for a picture of the element (`captureScreenshot`, its seam since SKG-495). The
- * page world passes the request across, and this, in the background, does the rest:
- * `tabs.captureVisibleTab`, the crop to the element, and the upload to the worker of the site, with
- * the session of the reviewer. **Nothing changes in `packages/widget`.**
+ * The widget asks for a capture of the visible page, or of an area the person chose on it
+ * (`captureVisible`, its seam). The page world passes the request across, and this, in the
+ * background, takes the visible part of the tab (`tabs.captureVisibleTab`), cuts the area out, and
+ * answers the PNG. **It sends nothing**: the widget joins it to the note like a file of the disk,
+ * and it goes to the worker through the relay, with the session of the reviewer, then to the ticket
+ * of the tracker (FRU-331). The address of FRU-44, `POST /screenshot`, is gone.
  *
  * **No new permission.** `captureVisibleTab` needs `activeTab` or `<all_urls>` (measured on Chromium
  * 145). The manifest declares `activeTab` already, and the browser grants it when the reviewer opens
  * the popup on the page, until the page navigates. Without that gesture the capture is refused, and
- * the note goes without its picture: **a capture that fails costs the picture, never the note.**
+ * the composer says that the capture was not taken: **a capture that fails costs the capture, never
+ * the note.**
  *
- * **Only a member reads the picture.** It is sent with the session of the worker of the site, and
- * the worker keeps it for the workspace of that session: no session, no picture.
+ * **Only for a site of a workspace, with a session**: the one place where the worker takes files. A
+ * page that asks for a capture of another site gets nothing.
  *
- * Every refusal is `undefined`, never an error: the widget treats them all as « no picture ».
+ * Every refusal is `undefined`, never an error.
  */
 
-/** Where on the screen the element is, in CSS pixels of the viewport, and the scale of the screen. */
+/** Where on the screen the area is, in CSS pixels of the viewport, and the scale of the screen. */
 export type CaptureArea = { left: number; top: number; width: number; height: number; scale: number };
 
-/** What the worker answered: the address of the picture, and its size in pixels. */
-export type CapturedPicture = { url: string; width: number; height: number };
+/** A capture, as the widget joins it to a note. */
+export type CapturedFile = { name: string; type: 'image/png' | 'image/jpeg'; size: number; base64: string };
+
+/**
+ * A capture over the limit of an image of the worker (`MAX_ATTACHMENT_BYTES.image`), even as a JPEG:
+ * its name and its size, and no bytes. The widget says it is too large, rather than « not taken ».
+ */
+export type TooLargeCapture = { tooLarge: { name: string; size: number } };
 
 export type CaptureSeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
-  /**
-   * A new access token, when the worker refused `refused` (FRU-238): a token minted before the worker
-   * names the session in it (`sid`) is refused by a route that writes, until the next refresh.
-   */
-  renewAccess?: (endpoint: string, refused: string) => Promise<AccessResult>;
   /** The visible part of the tab, as a PNG. Rejects without `activeTab`. */
   captureTab: () => Promise<Blob>;
   /** The area of `picture`, as a PNG. */
   crop: (picture: Blob, area: CaptureArea) => Promise<Blob>;
-  upload: (url: string, accessToken: string, png: Blob) => Promise<{ status: number; body: string }>;
+  /** The same picture as a JPEG, for a PNG over the limit of the worker (a page of a large screen). */
+  toJpeg?: (picture: Blob) => Promise<Blob>;
 };
 
-/** The path of the route that keeps a picture on the worker. */
-export const SCREENSHOT_PATH = '/screenshot';
+/** The name of a capture: a capture of the page, or of an area. */
+export const CAPTURE_NAMES = { page: 'page.png', area: 'area.png' } as const;
 
 export function createCapture(seams: CaptureSeams) {
-  return async (area: CaptureArea, origin: string | undefined): Promise<CapturedPicture | undefined> => {
+  return async (
+    area: CaptureArea | undefined,
+    origin: string | undefined,
+  ): Promise<CapturedFile | TooLargeCapture | undefined> => {
     try {
       return await take(seams, area, origin);
     } catch {
@@ -56,72 +65,54 @@ export function createCapture(seams: CaptureSeams) {
 }
 
 async function take(
-  { readSite, ensureAccess, renewAccess, captureTab, crop, upload }: CaptureSeams,
-  area: CaptureArea,
+  { readSite, ensureAccess, captureTab, crop, toJpeg }: CaptureSeams,
+  area: CaptureArea | undefined,
   origin: string | undefined,
-): Promise<CapturedPicture | undefined> {
+): Promise<CapturedFile | TooLargeCapture | undefined> {
   if (origin === undefined) return undefined;
   const site = await readSite(origin);
-  if (site === undefined || !site.enabled) return undefined;
-  // The widget on the page is ours only then; a site that embeds its own takes its own pictures.
-  const clientId = site.mode === 'private' ? site.clientId : site.mount?.clientId;
-  if (clientId === undefined) return undefined;
-  // The token goes on the wire with the picture, as on the relay.
+  if (site === undefined || !site.enabled || site.mode !== 'team') return undefined;
+  // The capture goes through the relay, with the token: never to a worker on an http address.
   if (!isSecureWorkerEndpoint(site.endpoint)) return undefined;
-
-  // Before the capture: a reviewer with no session gets no picture taken at all.
+  // Before the capture: a reviewer with no session gets no capture taken at all.
   const access = await ensureAccess(site.endpoint);
   if (!access.ok) return undefined;
 
-  const picture = await crop(await captureTab(), area);
-  const url = `${site.endpoint}${SCREENSHOT_PATH}?client=${encodeURIComponent(clientId)}`;
-  let answer = await upload(url, access.grant.accessToken, picture);
-  // Refused for its token: renewed once, and sent again. Twice refused, the note goes without it,
-  // and the composer says so (`{ picture: 'missed' }` in the widget).
-  if (refusedForItsToken(answer) && renewAccess !== undefined) {
-    const renewed = await renewAccess(site.endpoint, access.grant.accessToken);
-    if (!renewed.ok) return undefined;
-    answer = await upload(url, renewed.grant.accessToken, picture);
+  const tab = await captureTab();
+  const png = area === undefined ? tab : await crop(tab, area);
+  const name = area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area;
+  // A PNG of a whole page on a large screen can pass the limit of the worker: it goes as a JPEG, and
+  // a JPEG still over it is said too large, never « not taken » (raised by the balanced of #433).
+  let picture = png;
+  let type: CapturedFile['type'] = 'image/png';
+  if (png.size > MAX_ATTACHMENT_BYTES.image && toJpeg !== undefined) {
+    picture = await toJpeg(png);
+    type = 'image/jpeg';
   }
-  if (answer.status !== 201) return undefined;
+  const named = type === 'image/jpeg' ? name.replace(/\.png$/, '.jpg') : name;
+  if (picture.size > MAX_ATTACHMENT_BYTES.image) return { tooLarge: { name: named, size: picture.size } };
+  const bytes = new Uint8Array(await picture.arrayBuffer());
 
-  return pictureOn(answer.body, site.endpoint);
+  return { name: named, type, size: bytes.byteLength, base64: base64Of(bytes) };
 }
 
-/** `401 identity-required`: the worker took no session from this token. Any other refusal is final. */
-function refusedForItsToken(answer: { status: number; body: string }): boolean {
-  if (answer.status !== 401) return false;
-  try {
-    return (JSON.parse(answer.body) as { error?: unknown }).error === 'identity-required';
-  } catch {
-    return false;
+/** The base64 of bytes, by pieces: a spread of megabytes into `String.fromCharCode` overflows the stack. */
+export function base64Of(bytes: Uint8Array): string {
+  let binary = '';
+  for (let start = 0; start < bytes.length; start += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
   }
+
+  return btoa(binary);
 }
 
-/** The id that the worker gives a picture: 128 random bits. */
-const PICTURE_ID = /^shot_[0-9a-f]{32}$/;
+/** The bytes of base64, for the body of a relayed file. */
+export function bytesOf(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
 
-/**
- * The picture that the worker kept, at the address the extension reaches that worker by.
- *
- * **The address is built here, from the id and the endpoint of the stored entry**, and the `url` of
- * the answer is not read. A worker behind a proxy sees an inner address for itself when
- * `FRUITBACK_PUBLIC_URL` is not set, and would name a picture nobody reaches (raised in review). The
- * endpoint is the one address of that worker that is known to answer from here.
- */
-function pictureOn(body: string, endpoint: string): CapturedPicture | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(body);
-  } catch {
-    return undefined;
-  }
-  if (typeof parsed !== 'object' || parsed === null) return undefined;
-  const { id, width, height } = parsed as Record<string, unknown>;
-  if (typeof id !== 'string' || !PICTURE_ID.test(id)) return undefined;
-  if (typeof width !== 'number' || typeof height !== 'number') return undefined;
-
-  return { url: `${endpoint}${SCREENSHOT_PATH}/${id}`, width, height };
+  return bytes;
 }
 
 /**
@@ -140,4 +131,21 @@ export function pixelsOf(
   if (right <= left || bottom <= top) return undefined;
 
   return { left, top, width: right - left, height: bottom - top };
+}
+
+/**
+ * The first of the three hops of the answer to a capture (FRU-332): the background answers
+ * `captureAnswerOf`, then `capture-answer.ts` holds the two others. `capture-composer.test.ts` runs
+ * the three.
+ */
+
+/** The answer of the background to the content script: a picture, a capture said too large, or nothing. */
+export function captureAnswerOf(taken: CapturedFile | TooLargeCapture | undefined): {
+  picture?: CapturedFile;
+  tooLarge?: TooLargeCapture['tooLarge'];
+} {
+  if (taken === undefined) return {};
+  if ('tooLarge' in taken) return { tooLarge: taken.tooLarge };
+
+  return { picture: taken };
 }

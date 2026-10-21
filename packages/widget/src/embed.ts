@@ -18,6 +18,8 @@ import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from '
 import { type CaptureHost, type CaptureTarget, aboutTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
+import { type AttachOffer, type AttachRefusal, type CaptureArea, type PickedFile, refusalOf } from './attachments.ts';
+import { pickArea } from './area.ts';
 import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
 import {
   type BatchOffer,
@@ -30,6 +32,7 @@ import {
   withPlacesOfNow,
 } from './drafts.ts';
 import {
+  type Destination,
   type OfferedDestinations,
   createOfferedDestinations,
   destinationToSend,
@@ -97,6 +100,16 @@ export type FruitbackOptions = {
    * Failures are swallowed: the note is worth more than the picture.
    */
   captureScreenshot?: (element: Element) => Promise<CapturedScreenshot | undefined>;
+  /**
+   * Capture the visible page, or an area of it, as a file of the note (FRU-332): the browser
+   * extension does it with `tabs.captureVisibleTab`. `area` is in CSS pixels of the viewport, with the
+   * scale of the screen; absent, the whole visible page. The widget is hidden while it is taken.
+   *
+   * The file goes to the ticket of the tracker, through the worker, which keeps it only while it
+   * travels (FRU-331). Without it, « Capture the page » and « Capture an area » are not offered. A file
+   * of the disk is offered whatever this is, when the worker takes files for this reader.
+   */
+  captureVisible?: (area?: CaptureArea) => Promise<PickedFile | undefined>;
   /** Chrome the page mounts around the widget, which the pointer must skip. */
   ignore?: (element: Element) => boolean;
   /**
@@ -438,6 +451,8 @@ export function init(options: FruitbackOptions): Fruitback {
   let notesClosed = false;
   /** A read answered or failed, so `notesClosed` says what the worker said (FRU-330). */
   let writesKnown = false;
+  /** Told after each read that answered: what the worker says of files may have changed (FRU-332). */
+  const attachListeners = new Set<() => void>();
   // FRU-299: a list outside the page, told when to read the notes again. A listener that throws is
   // the list's problem, never the page's.
   const notesWatchers = new Set<(change: NotesChange) => void>();
@@ -468,7 +483,9 @@ export function init(options: FruitbackOptions): Fruitback {
         .map((draft) => draftIssue(draft)),
     ]);
   };
-  const reader = createReader(show, stages, destinations, readerIdentity, view, options);
+  const reader = createReader(show, stages, destinations, readerIdentity, view, options, () => {
+    for (const listener of attachListeners) listener();
+  });
   let lastReadAt = Number.NEGATIVE_INFINITY;
   // Per page (FRU-153): a navigation starts again at `pending`. A failed read after a good one
   // leaves the state and the pins alone, like it always did.
@@ -605,6 +622,34 @@ export function init(options: FruitbackOptions): Fruitback {
     overlay.select(issue.seed.id);
   }
 
+  /**
+   * A capture of the page or of an area (FRU-332). The area is chosen on the page, then the widget is
+   * hidden for the time of the capture: the file shows the page, not the composer over it.
+   */
+  async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | undefined> {
+    const take = options.captureVisible;
+    if (take === undefined) return undefined;
+    let area: CaptureArea | undefined;
+    if (kind === 'area') {
+      const chosen = await pickArea({ document, host: host.root, translator });
+      if (chosen === undefined) return 'cancelled';
+      area = { ...chosen, scale: view.devicePixelRatio || 1 };
+    }
+    const container = host.root.host as HTMLElement;
+    const visibility = container.style.visibility;
+    container.style.visibility = 'hidden';
+    try {
+      // Two frames: the page is painted without the widget before the browser takes it.
+      await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
+
+      return await take(area);
+    } catch {
+      return undefined;
+    } finally {
+      container.style.visibility = visibility;
+    }
+  }
+
   composer = createComposer({
     document,
     translator,
@@ -637,6 +682,18 @@ export function init(options: FruitbackOptions): Fruitback {
       set: (attach) => config.set({ screenshot: attach }),
       subscribe: (listener) => config.subscribe(() => listener()),
     },
+    // FRU-332: the files of a note, when the worker takes them for this reader and this place.
+    attachments: {
+      offer: (chosen) => attachOffer(readerIdentity, destinations.get(), chosen),
+      subscribe: (listener) => {
+        attachListeners.add(listener);
+
+        return () => attachListeners.delete(listener);
+      },
+      captures: () => options.captureVisible !== undefined,
+      capture: (kind) => captureFor(kind),
+      upload: (file, chosen) => uploadAttachment(options, file, destinationToSend(destinations.get(), chosen)),
+    },
     onClose: () => host.release(),
     autosave: {
       read: () => (typingPlace === undefined ? undefined : typing.get(typingPlace)?.text),
@@ -661,7 +718,7 @@ export function init(options: FruitbackOptions): Fruitback {
         return made.missedPicture ? { picture: 'missed' as const } : true;
       },
     },
-    onSubmit: async (note, reporter, chosen) => {
+    onSubmit: async (note, reporter, chosen, attachments = []) => {
       const destination = destinationToSend(destinations.get(), chosen);
       // The element this note is about, as it was sent: the composer may stand on another by the answer.
       const about = typingPlace;
@@ -672,6 +729,7 @@ export function init(options: FruitbackOptions): Fruitback {
         place,
         reporter,
         destination,
+        attachments,
         config: config.get(),
         options,
         onSeed: (id) => (seedId = id),
@@ -1000,6 +1058,8 @@ function createReader(
   identity: ReaderIdentity,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
+  /** Called after a read that answered, once the reader identity is set. */
+  onRead: () => void = () => undefined,
 ): () => Promise<ReadOutcome> {
   let generation = 0;
 
@@ -1037,6 +1097,7 @@ function createReader(
         batch?: unknown;
         canReply?: unknown;
         canWrite?: unknown;
+        canAttach?: unknown;
       };
       if (mine !== generation) return 'stale';
 
@@ -1053,7 +1114,10 @@ function createReader(
       identity.canReply = body.canReply === true;
       // The same rule, the other way (FRU-330): only `false` takes the note away.
       identity.canWrite = body.canWrite !== false;
+      // The same rule (FRU-332): absent, this reader sends no file; `false`, the note has no tracker.
+      identity.canAttach = typeof body.canAttach === 'boolean' ? body.canAttach : undefined;
       show(body.issues);
+      onRead();
 
       return 'read';
     } catch {
@@ -1094,6 +1158,7 @@ export async function plant({
   config,
   options,
   onSeed,
+  attachments = [],
 }: {
   note: string;
   target: CaptureTarget | null;
@@ -1106,6 +1171,8 @@ export async function plant({
   options: FruitbackOptions;
   /** The id of the seed about to be sent, so the caller finds its pin after the read (FRU-305). */
   onSeed?: (id: string) => void;
+  /** The ids in transit of the files of the note (FRU-332). */
+  attachments?: readonly string[];
 }): Promise<true | SentWithoutPicture | SendFailure> {
   const made = await seedFor({ note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
@@ -1119,7 +1186,7 @@ export async function plant({
   const response = await transportFor(options)({
     // The choice is in the query and nowhere else. The body stays the seed, and the relay of the
     // extension carries a query, and no header but the two below.
-    url: feedbackUrl(options, destination),
+    url: feedbackUrl(options, destination, attachments),
     method: 'POST',
     headers: writeHeaders(token),
     body: JSON.stringify(seed),
@@ -1165,19 +1232,82 @@ async function seedFor({
   return { seed, missedPicture: picture === 'missed' };
 }
 
-/** `?destination=` carries the choice, and nothing else does: the body stays the seed (FRU-123). */
-function feedbackUrl(options: FruitbackOptions, destination: string | undefined): string {
-  return destination === undefined
-    ? `${options.endpoint}/feedback`
-    : `${options.endpoint}/feedback?destination=${encodeURIComponent(destination)}`;
+/**
+ * `?destination=` carries the choice, and nothing else does: the body stays the seed (FRU-123). The
+ * files of the note travel the same way, as `?attachments=` (FRU-332): their ids are no part of a seed.
+ */
+function feedbackUrl(
+  options: FruitbackOptions,
+  destination: string | undefined,
+  attachments: readonly string[] = [],
+): string {
+  const query = new URLSearchParams();
+  if (destination !== undefined) query.set('destination', destination);
+  if (attachments.length > 0) query.set('attachments', attachments.join(','));
+  const search = query.toString();
+
+  return search === '' ? `${options.endpoint}/feedback` : `${options.endpoint}/feedback?${search}`;
 }
 
 /** What the last read of the page said of this reader. */
+type ReaderIdentity = {
+  identified: boolean;
+  batch?: BatchOffer | undefined;
+  canReply: boolean;
+  /**
+   * `canWrite` (FRU-330): `false` when the worker said that it takes no note of this reader here, in a
+   * read or in the refusal of one. Absent from the answer, `true`: every worker of before took notes.
+   */
+  canWrite: boolean;
+  /** FRU-332: `true` the worker takes files of this reader, `false` the note has no tracker. */
+  canAttach?: boolean | undefined;
+};
+
 /**
- * `canWrite` (FRU-330): `false` when the worker said that it takes no note of this reader here, in a
- * read or in the refusal of one. Absent from the answer, `true`: every worker of before took notes.
+ * What the composer offers of files, for the place the note goes to (FRU-332). A place the worker
+ * names says it for itself; the site says it for its first place, and for a note that names none.
  */
-type ReaderIdentity = { identified: boolean; batch?: BatchOffer | undefined; canReply: boolean; canWrite: boolean };
+export function attachOffer(
+  identity: ReaderIdentity,
+  places: readonly Destination[],
+  chosen: string | undefined,
+): AttachOffer {
+  if (identity.canAttach === undefined) return 'none';
+  const place = places.find((each) => each.id === chosen);
+  const takes = place?.canAttach ?? identity.canAttach;
+
+  return takes ? 'offered' : 'no-tracker';
+}
+
+/**
+ * One file on its way to the worker (FRU-332), through the transport of the host like every call:
+ * `POST /attachments`, its bytes in base64 for the transport, its type in `Content-Type`. The answer
+ * is its id in transit, which the note names, or why it did not go.
+ */
+export async function uploadAttachment(
+  options: FruitbackOptions,
+  file: PickedFile,
+  destination: string | undefined,
+): Promise<{ ok: true; id: string } | { ok: false; refusal: AttachRefusal }> {
+  const query = new URLSearchParams({ client: options.clientId, name: file.name });
+  if (destination !== undefined) query.set('destination', destination);
+  try {
+    const token = await options.identityToken?.();
+    const response = await transportFor(options)({
+      url: `${options.endpoint}/attachments?${query.toString()}`,
+      method: 'POST',
+      headers: { 'Content-Type': file.type, ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) },
+      body: file.base64,
+      encoding: 'base64',
+    });
+    if (!response.ok) return { ok: false, refusal: refusalOf(response) };
+    const { id } = JSON.parse(response.body) as { id?: unknown };
+
+    return typeof id === 'string' && /^att_[0-9a-f]{32}$/.test(id) ? { ok: true, id } : { ok: false, refusal: 'retry' };
+  } catch {
+    return { ok: false, refusal: 'retry' };
+  }
+}
 
 /**
  * A reply under a note (FRU-257), through the transport of the host like every call. The name is
@@ -1380,6 +1510,9 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
 export function failureOf(response: { status: number; body: string }): SendFailure {
   if (response.status === 429) return 'wait';
   if (response.status === 413) return 'too-large';
+  // FRU-332: a file of the note is no longer on its way, or the place takes no file.
+  if (response.status === 410) return 'attachment-gone';
+  if (response.status === 409 && errorOf(response.body) === 'attachments-not-taken') return 'no-tracker';
   // Not « try again »: a host that mints a bad token mints it again at the next send (FRU-193).
   if (response.status === 401) return 'signed-out';
   if (response.status === 403) {

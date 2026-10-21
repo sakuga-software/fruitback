@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CHECK_PATH, FEEDBACK_PATH, REPLY_PATH, type RelaySeams, createRelay } from './relay.ts';
+import { ATTACHMENTS_PATH, CHECK_PATH, FEEDBACK_PATH, REPLY_PATH, type RelaySeams, createRelay } from './relay.ts';
 import { type RelayRequest, type RelayResponse, parseRelayRequest } from './protocol.ts';
 import { resolveSite } from './site-patterns.ts';
 import type { SiteConfig } from './sites.ts';
@@ -368,8 +368,15 @@ describe('what the widget sends is what the relay allows', () => {
     const resolved = paths.map((path) => path?.replace(/\$\{[^}]+\}/g, 'issue_1'));
     assert.ok(resolved.includes('/feedback/issue_1/replies'), 'the guard no longer sees the path of a reply');
     assert.ok(resolved.includes('/feedback/issue_1/check'), 'the guard no longer sees the path of a verdict');
+    assert.ok(resolved.includes(ATTACHMENTS_PATH), 'the guard no longer sees the path of a file (FRU-332)');
     for (const path of resolved) {
-      assert.ok(path === FEEDBACK_PATH || REPLY_PATH.test(path ?? '') || CHECK_PATH.test(path ?? ''), path ?? '');
+      assert.ok(
+        path === FEEDBACK_PATH ||
+          path === ATTACHMENTS_PATH ||
+          REPLY_PATH.test(path ?? '') ||
+          CHECK_PATH.test(path ?? ''),
+        path ?? '',
+      );
     }
   });
 
@@ -448,5 +455,46 @@ describe('a call the worker refused for its session (FRU-238)', () => {
       assert.deepEqual(await other.relay(READ, 'https://acme.dev'), answer);
     }
     assert.equal(renewals, 1);
+  });
+});
+
+describe('a file of a note, through the relay (FRU-332)', () => {
+  const FILE: RelayRequest = {
+    url: 'https://worker.test/attachments?client=acme&name=page.png',
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    body: 'iVBORw0K',
+    encoding: 'base64',
+  };
+
+  it('sends it to POST /attachments, with its type, its body in base64, and the session', async () => {
+    const { relay, sent } = harness();
+
+    assert.deepEqual(await relay(FILE, 'https://acme.dev'), ANSWER);
+    assert.deepEqual(sent, [
+      {
+        url: FILE.url,
+        method: 'POST',
+        headers: { Authorization: 'Bearer access.1', 'Content-Type': 'image/png' },
+        body: 'iVBORw0K',
+        encoding: 'base64',
+      },
+    ]);
+  });
+
+  it('refuses base64 to another path, text to /attachments, and a read of /attachments', async () => {
+    for (const request of [
+      { ...WRITE, encoding: 'base64' as const, body: 'iVBO' },
+      { ...FILE, encoding: undefined },
+      { ...FILE, method: 'GET' as const },
+      { ...FILE, url: 'https://worker.test/attachments/att_0123456789abcdef0123456789abcdef' },
+    ]) {
+      const { relay, sent } = harness();
+      assert.partialDeepStrictEqual(await relay(request, 'https://acme.dev'), {
+        ok: false,
+        body: 'endpoint-not-declared-for-this-site',
+      });
+      assert.deepEqual(sent, [], JSON.stringify(request).slice(0, 120));
+    }
   });
 });

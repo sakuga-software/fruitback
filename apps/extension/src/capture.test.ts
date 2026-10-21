@@ -1,44 +1,44 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type CaptureSeams, createCapture, pixelsOf } from './capture.ts';
+import { type CaptureSeams, base64Of, bytesOf, createCapture, pixelsOf } from './capture.ts';
+import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import type { SiteConfig } from './sites.ts';
 
 /**
- * The capture of a note's picture, in the background (FRU-44): every case where it gives up, and the
- * one where it uploads. A refusal is « no picture », never an error.
+ * A capture of the page or of an area, in the background (FRU-44, FRU-332): every case where it gives
+ * up, and the one where it answers a PNG. It sends nothing: the widget joins it to the note, and it
+ * goes through the relay like any file. A refusal is « no capture », never an error.
  */
 
-const PRIVATE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', enabled: true, clientId: 'acme' };
+const TEAM: SiteConfig = {
+  mode: 'team',
+  endpoint: 'https://worker.test',
+  enabled: true,
+  mount: { clientId: 'acme' },
+};
 const GRANT = { accessToken: 'access.1', expiresAt: 0, identity: { subject: 'reviewer-1' } };
 const AREA = { left: 10, top: 20, width: 100, height: 40, scale: 2 };
-const PNG = new Blob([new Uint8Array([0x89, 0x50])], { type: 'image/png' });
+const TAB = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])], { type: 'image/png' });
+const CUT = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9])], { type: 'image/png' });
 
 function harness(overrides: Partial<CaptureSeams> = {}) {
   const calls: string[] = [];
   const capture = createCapture({
-    readSite: async () => PRIVATE,
-    ensureAccess: async () => ({ ok: true, grant: GRANT }),
+    readSite: async () => TEAM,
+    ensureAccess: async () => {
+      calls.push('access');
+
+      return { ok: true, grant: GRANT };
+    },
     captureTab: async () => {
       calls.push('capture');
 
-      return PNG;
+      return TAB;
     },
-    crop: async (picture) => {
+    crop: async () => {
       calls.push('crop');
 
-      return picture;
-    },
-    upload: async (url, token) => {
-      calls.push(`upload ${url} ${token}`);
-
-      return {
-        status: 201,
-        body: JSON.stringify({
-          id: 'shot_0123456789abcdef0123456789abcdef',
-          width: 200,
-          height: 80,
-        }),
-      };
+      return CUT;
     },
     ...overrides,
   });
@@ -46,105 +46,141 @@ function harness(overrides: Partial<CaptureSeams> = {}) {
   return { capture, calls };
 }
 
-describe('the picture of a note (FRU-44)', () => {
-  it('captures, crops and uploads it to the worker of the site, for its client, with the session', async () => {
+describe('a capture of the page or of an area (FRU-332)', () => {
+  it('answers the whole visible page as a PNG in base64, and sends it nowhere', async () => {
     const { capture, calls } = harness();
 
-    assert.deepEqual(await capture(AREA, 'https://acme.dev'), {
-      url: 'https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef',
-      width: 200,
-      height: 80,
+    assert.deepEqual(await capture(undefined, 'https://acme.dev'), {
+      name: 'page.png',
+      type: 'image/png',
+      size: 7,
+      base64: base64Of(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])),
     });
-    assert.deepEqual(calls, ['capture', 'crop', 'upload https://worker.test/screenshot?client=acme access.1']);
+    assert.deepEqual(calls, ['access', 'capture']);
   });
 
-  it('takes the client of a site of a workspace that the extension mounts', async () => {
-    const team: SiteConfig = {
-      mode: 'team',
-      endpoint: 'https://worker.test',
-      enabled: true,
-      mount: { clientId: 'site_1' },
-    };
-    const { capture, calls } = harness({ readSite: async () => team });
+  it('cuts the area that the person chose', async () => {
+    const { capture, calls } = harness();
 
-    assert.ok((await capture(AREA, 'https://acme.dev')) !== undefined);
-    assert.match(calls.at(-1) ?? '', /client=site_1 /);
+    const answer = await capture(AREA, 'https://acme.dev');
+    const taken = answer !== undefined && 'name' in answer ? answer : undefined;
+    assert.equal(taken?.name, 'area.png');
+    assert.deepEqual([...bytesOf(taken?.base64 ?? '')], [0x89, 0x50, 0x4e, 0x47, 9]);
+    assert.deepEqual(calls, ['access', 'capture', 'crop']);
   });
 
-  it('takes no picture at all without a session, a site, or a widget of its own', async () => {
-    const cases: Partial<CaptureSeams>[] = [
-      { ensureAccess: async () => ({ ok: false, reason: 'not-paired' }) },
-      { readSite: async () => undefined },
-      { readSite: async () => ({ ...PRIVATE, enabled: false }) },
-      { readSite: async () => ({ mode: 'team', endpoint: 'https://worker.test', enabled: true }) },
-      { readSite: async () => ({ ...PRIVATE, endpoint: 'http://worker.test' }) },
+  it('takes no capture at all without a session, a site of a workspace, or a secure worker', async () => {
+    const cases: [string, Partial<CaptureSeams>, string | undefined][] = [
+      ['no origin', {}, undefined],
+      ['no site', { readSite: async () => undefined }, 'https://acme.dev'],
+      ['a site switched off', { readSite: async () => ({ ...TEAM, enabled: false }) }, 'https://acme.dev'],
+      [
+        'a site in private mode',
+        {
+          readSite: async () => ({ mode: 'private', endpoint: 'https://worker.test', enabled: true, clientId: 'acme' }),
+        },
+        'https://acme.dev',
+      ],
+      ['an http worker', { readSite: async () => ({ ...TEAM, endpoint: 'http://worker.test' }) }, 'https://acme.dev'],
+      ['no session', { ensureAccess: async () => ({ ok: false, reason: 'not-paired' }) }, 'https://acme.dev'],
     ];
-    for (const overrides of cases) {
+    for (const [what, overrides, origin] of cases) {
       const { capture, calls } = harness(overrides);
-
-      assert.equal(await capture(AREA, 'https://acme.dev'), undefined);
-      assert.deepEqual(calls, [], JSON.stringify(overrides.readSite?.toString().slice(0, 60)));
+      assert.equal(await capture(undefined, origin), undefined, what);
+      assert.equal(calls.includes('capture'), false, `${what}: the tab was captured`);
     }
-    assert.equal(await harness().capture(AREA, undefined), undefined, 'a sender the browser could not name');
+    // The control: the same call on the site of a workspace, with a session, takes it.
+    assert.notEqual(await harness().capture(undefined, 'https://acme.dev'), undefined);
   });
 
-  it('gives up without an error when the browser refuses the capture: the note goes without it', async () => {
-    const { capture, calls } = harness({
+  it('gives up without an error when the browser refuses the capture, or the area is off the screen', async () => {
+    const refused = harness({
       captureTab: async () => {
         throw new Error("Either the '<all_urls>' or 'activeTab' permission is required.");
       },
     });
-
-    assert.equal(await capture(AREA, 'https://acme.dev'), undefined);
-    assert.deepEqual(calls, []);
-  });
-
-  // FRU-44, raised in review: behind a proxy, a worker with no FRUITBACK_PUBLIC_URL names itself by
-  // an inner address. The extension builds the address from the endpoint it called.
-  it('names the picture at the endpoint of the stored entry, whatever address the worker gives itself', async () => {
-    const inner = {
-      id: 'shot_0123456789abcdef0123456789abcdef',
-      url: 'http://10.0.0.7:8080/screenshot/shot_0123456789abcdef0123456789abcdef',
-      width: 2,
-      height: 1,
-    };
-    const behind: SiteConfig = { ...PRIVATE, endpoint: 'https://api.acme.dev/fruitback' };
-    const { capture } = harness({
-      readSite: async () => behind,
-      upload: async () => ({ status: 201, body: JSON.stringify(inner) }),
-    });
-
-    assert.deepEqual(await capture(AREA, 'https://acme.dev'), {
-      url: 'https://api.acme.dev/fruitback/screenshot/shot_0123456789abcdef0123456789abcdef',
-      width: 2,
-      height: 1,
-    });
-  });
-
-  it('keeps no answer of the worker that does not name a picture', async () => {
-    for (const answer of [
-      { status: 413, body: '{"error":"payload-too-large"}' },
-      { status: 201, body: 'not json' },
-      {
-        status: 201,
-        body: '{"url":"https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef","width":1,"height":1}',
+    assert.equal(await refused.capture(undefined, 'https://acme.dev'), undefined);
+    const off = harness({
+      crop: async () => {
+        throw new Error('the area is not on the screen');
       },
-      { status: 201, body: '{"id":"../feedback","width":1,"height":1}' },
-      { status: 201, body: '{"id":"shot_0123456789abcdef0123456789abcdef"}' },
-    ]) {
-      const { capture } = harness({ upload: async () => answer });
+    });
+    assert.equal(await off.capture(AREA, 'https://acme.dev'), undefined);
+  });
 
-      assert.equal(await capture(AREA, 'https://acme.dev'), undefined, answer.body);
-    }
+  it('turns bytes into base64 and back, past the size where a spread would overflow', () => {
+    const big = new Uint8Array(200_000).map((_, index) => index % 251);
+    assert.deepEqual(bytesOf(base64Of(big)), big);
+    assert.equal(base64Of(new Uint8Array([0xff, 0x00, 0x7f])), '/wB/');
+  });
+});
+
+/**
+ * A capture over the limit of an image of the worker (balanced review of #433): the bridge drops a body
+ * that large, and the widget said « not taken » with no cause. It goes as a JPEG, and a JPEG still over
+ * the limit is answered as too large, with its size and no bytes.
+ */
+describe('a capture over the limit of the worker (FRU-332)', () => {
+  const LIMIT = MAX_ATTACHMENT_BYTES.image;
+  const huge = new Blob([new Uint8Array(LIMIT + 1)], { type: 'image/png' });
+  const JPEG = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 7])], { type: 'image/jpeg' });
+
+  it('goes as a JPEG when the PNG is over the limit, and the JPEG is under it', async () => {
+    const seen: number[] = [];
+    const { capture } = harness({
+      captureTab: async () => huge,
+      toJpeg: async (picture) => {
+        seen.push(picture.size);
+
+        return JPEG;
+      },
+    });
+
+    assert.deepEqual(await capture(undefined, 'https://acme.dev'), {
+      name: 'page.jpg',
+      type: 'image/jpeg',
+      size: 4,
+      base64: base64Of(new Uint8Array([0xff, 0xd8, 0xff, 7])),
+    });
+    assert.deepEqual(seen, [LIMIT + 1]);
+  });
+
+  it('is answered as too large, with its size and no bytes, when the JPEG is still over the limit', async () => {
+    const still = new Blob([new Uint8Array(LIMIT + 2)], { type: 'image/jpeg' });
+    const { capture } = harness({ crop: async () => huge, toJpeg: async () => still });
+
+    assert.deepEqual(await capture(AREA, 'https://acme.dev'), { tooLarge: { name: 'area.jpg', size: LIMIT + 2 } });
+  });
+
+  it('is answered as too large without a JPEG to fall back on', async () => {
+    const { capture } = harness({ captureTab: async () => huge });
+
+    assert.deepEqual(await capture(undefined, 'https://acme.dev'), { tooLarge: { name: 'page.png', size: LIMIT + 1 } });
+  });
+
+  it('keeps a PNG of exactly the limit as a PNG, and makes no JPEG of it', async () => {
+    let jpegs = 0;
+    const { capture } = harness({
+      captureTab: async () => new Blob([new Uint8Array(LIMIT)], { type: 'image/png' }),
+      toJpeg: async () => {
+        jpegs += 1;
+
+        return JPEG;
+      },
+    });
+    const taken = await capture(undefined, 'https://acme.dev');
+
+    assert.equal(taken !== undefined && 'type' in taken ? taken.type : undefined, 'image/png');
+    assert.equal(jpegs, 0);
   });
 });
 
 describe('the area cut out of the capture', () => {
-  it('is the element, in pixels of the screen', () => {
+  it('is the area, in pixels of the screen', () => {
     assert.deepEqual(pixelsOf(AREA, { width: 2880, height: 1800 }), { left: 20, top: 40, width: 200, height: 80 });
   });
 
-  it('stops at the edge of the capture, and is nothing for an element out of view', () => {
+  it('stops at the edge of the capture, and is nothing for an area out of view', () => {
     assert.deepEqual(pixelsOf({ left: -10, top: 0, width: 30, height: 10, scale: 1 }, { width: 100, height: 100 }), {
       left: 0,
       top: 0,
@@ -156,77 +192,5 @@ describe('the area cut out of the capture', () => {
       undefined,
     );
     assert.equal(pixelsOf({ left: 0, top: 0, width: 0, height: 10, scale: 1 }, { width: 100, height: 100 }), undefined);
-  });
-});
-
-describe('a picture refused for an access token the worker no longer takes (FRU-238)', () => {
-  const REFUSED = { status: 401, body: JSON.stringify({ error: 'identity-required' }) };
-  const KEPT = {
-    status: 201,
-    body: JSON.stringify({ id: 'shot_0123456789abcdef0123456789abcdef', width: 200, height: 80 }),
-  };
-
-  it('renews the access once, and sends the picture again with the new token', async () => {
-    const tokens: string[] = [];
-    const renewed: string[] = [];
-    const { capture } = harness({
-      renewAccess: async (_endpoint, refused) => {
-        renewed.push(refused);
-
-        return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
-      },
-      upload: async (_url, token) => {
-        tokens.push(token);
-
-        return token === 'access.1' ? REFUSED : KEPT;
-      },
-    });
-
-    assert.equal((await capture(AREA, 'https://acme.dev'))?.width, 200);
-    assert.deepEqual(tokens, ['access.1', 'access.2']);
-    assert.deepEqual(renewed, ['access.1']);
-  });
-
-  it('gives up after one renewal, and on any other refusal renews nothing', async () => {
-    let renewals = 0;
-    const always = harness({
-      renewAccess: async () => {
-        renewals += 1;
-
-        return { ok: true, grant: { ...GRANT, accessToken: 'access.2' } };
-      },
-      upload: async () => REFUSED,
-    });
-    assert.equal(await always.capture(AREA, 'https://acme.dev'), undefined);
-    assert.equal(renewals, 1);
-
-    for (const answer of [
-      { status: 403, body: '{"error":"forbidden"}' },
-      { status: 401, body: '{"error":"other"}' },
-    ]) {
-      const other = harness({
-        renewAccess: async () => {
-          renewals += 1;
-
-          return { ok: true, grant: GRANT };
-        },
-        upload: async () => answer,
-      });
-      assert.equal(await other.capture(AREA, 'https://acme.dev'), undefined);
-    }
-    assert.equal(renewals, 1);
-
-    // A renewal that fails: no second upload.
-    let uploads = 0;
-    const ended = harness({
-      renewAccess: async () => ({ ok: false, reason: 'session-revoked-or-expired' }),
-      upload: async () => {
-        uploads += 1;
-
-        return REFUSED;
-      },
-    });
-    assert.equal(await ended.capture(AREA, 'https://acme.dev'), undefined);
-    assert.equal(uploads, 1);
   });
 });

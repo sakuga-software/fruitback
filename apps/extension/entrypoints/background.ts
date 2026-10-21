@@ -21,7 +21,7 @@ import {
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
-import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
+import { type CaptureArea, bytesOf, captureAnswerOf, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
@@ -203,25 +203,14 @@ export default defineBackground(() => {
     warn: (reason) => console.warn('[fruitback] the relay answered 401, with no session:', reason),
   });
 
-  /** The picture of a note (FRU-44): see `src/capture.ts`. */
-  const capture = (area: CaptureArea, origin: string | undefined, windowId: number) =>
+  /** A capture of the page or of an area (FRU-44, FRU-332): see `src/capture.ts`. It sends nothing. */
+  const capture = (area: CaptureArea | undefined, origin: string | undefined, windowId: number) =>
     createCapture({
       readSite,
       ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
-      renewAccess: (endpoint, refused) => sessions.renewAccess(endpoint, refused),
       captureTab: async () => (await fetch(await browser.tabs.captureVisibleTab(windowId, { format: 'png' }))).blob(),
       crop: cropPicture,
-      upload: async (url, accessToken, png) => {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'image/png' },
-          credentials: 'omit',
-          signal: AbortSignal.timeout(RELAY_CALL_TIMEOUT_MS),
-          body: png,
-        });
-
-        return { status: response.status, body: await response.text() };
-      },
+      toJpeg: jpegOf,
     })(area, origin);
 
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
@@ -319,9 +308,7 @@ export default defineBackground(() => {
 
         return false;
       }
-      void capture(parsed.area, senderOrigin(sender), windowId).then((picture) =>
-        sendResponse(picture === undefined ? {} : { picture }),
-      );
+      void capture(parsed.area, senderOrigin(sender), windowId).then((taken) => sendResponse(captureAnswerOf(taken)));
 
       return true;
     }
@@ -553,17 +540,32 @@ async function send(request: RelayRequest): Promise<RelayResponse> {
     // would otherwise keep this request in flight while the page is told the call failed — and a
     // reviewer told their note failed presses send again, which plants it twice. Raised in review.
     signal: AbortSignal.timeout(RELAY_CALL_TIMEOUT_MS),
-    ...(request.body !== undefined ? { body: request.body } : {}),
+    // FRU-332: a file of a note travels as base64 between the page and here, and leaves as bytes.
+    ...(request.body !== undefined
+      ? { body: request.encoding === 'base64' ? bytesOf(request.body) : request.body }
+      : {}),
   });
 
   return { ok: response.ok, status: response.status, body: await response.text() };
 }
 
-/** The area of the element, cut out of the capture of the tab, as a PNG (FRU-44). */
+/** The same picture as a JPEG of quality 0.85, for a PNG over the limit of the worker (FRU-332). */
+async function jpegOf(picture: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(picture);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('no 2d context');
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+}
+
+/** The area, cut out of the capture of the tab, as a PNG (FRU-44, FRU-332). */
 async function cropPicture(picture: Blob, area: CaptureArea): Promise<Blob> {
   const bitmap = await createImageBitmap(picture);
   const cut = pixelsOf(area, bitmap);
-  if (cut === undefined) throw new Error('the element is not on the screen');
+  if (cut === undefined) throw new Error('the area is not on the screen');
   const canvas = new OffscreenCanvas(cut.width, cut.height);
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('no 2d context');

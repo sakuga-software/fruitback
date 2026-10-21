@@ -702,6 +702,31 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   hit testing, which happy-dom has no `elementsFromPoint` for. The unit tests stop at the toggle and
   say so rather than asserting negatives that would hold even if nothing ran.
 
+## The files of a note (FRU-332)
+
+### The rules, in short
+
+- **Four ways, in the composer, when the worker takes files of this reader**: « Capture the page »,
+  « Capture an area » (both only with a `captureVisible` of the host), « Image » (PNG, JPEG) and
+  « File ». The worker says it on each read: `canAttach: true` offers them, `false` shows the sentence
+  that the note has no tracker and no way, absent shows nothing. A place of a member says it for
+  itself (`destinations[].canAttach`).
+- **A file goes on its way when it is joined**, through the transport (`POST /attachments`, its bytes
+  in base64 for any transport). A refusal is said under its name at once, and a file over its limit
+  (`MAX_ATTACHMENT_BYTES`, the same constants as the worker) or a sixth file is refused before it is
+  sent. The note names the files the worker took, in `?attachments=`, never in the seed; it waits for
+  a file still on its way.
+- **Each file shows its name, its size and a button to remove it**, named by the file. Nothing is
+  lost on a failure: a refused file, a `410 attachment-gone` or a `409 attachments-not-taken` of the
+  send keep the text and say what to do.
+- **A note with files is sent, never kept for later**: « Keep for later » goes while a file is joined.
+  A draft waits in the tab, and a batch cannot say which note a file is of.
+- **The widget shows no file that Fruitback serves.** A sent note says « 1 attachment » in its
+  thread, with the link of its ticket; a guest reads the count alone.
+- **The area of a capture works with the keyboard** (`area.ts`): an area is drawn at once in the
+  middle, the arrows move it, Shift and the arrows size it, Enter takes it, Esc cancels. A drag draws
+  a new one. The widget is hidden for the two frames before the capture.
+
 ## The settings panel
 
 ### The rules, in short

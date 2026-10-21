@@ -14,6 +14,8 @@ export type Destination = {
   id: string;
   /** What the worker calls the place. Absent for a place set before the worker wrote labels. */
   label?: string;
+  /** Whether a note to this place takes files (FRU-332), when the worker says it to this reader. */
+  canAttach?: boolean;
 };
 
 /** An id is a short digest. The limit keeps a hostile answer from putting a document in a URL. */
@@ -38,12 +40,16 @@ export function offeredDestinations(value: unknown): Destination[] {
   for (const entry of value as unknown[]) {
     if (typeof entry !== 'object' || entry === null) return [];
 
-    const { id, label } = entry as Record<string, unknown>;
+    const { id, label, canAttach } = entry as Record<string, unknown>;
     if (typeof id !== 'string' || id === '' || id.length > DESTINATION_ID_MAX || seen.has(id)) return [];
     seen.add(id);
 
     const name = typeof label === 'string' ? label.trim().slice(0, LABEL_MAX) : '';
-    places.push(name === '' ? { id } : { id, label: name });
+    places.push({
+      id,
+      ...(name === '' ? {} : { label: name }),
+      ...(typeof canAttach === 'boolean' ? { canAttach } : {}),
+    });
   }
 
   return places;
