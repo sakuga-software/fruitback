@@ -1001,4 +1001,89 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Un administrateur de cette instance l’a suspendu. Vous pouvez toujours le lire, mais rien ne peut y changer, et ses sites ne prennent aucune note. Pour le rétablir, contactez l’administrateur de cette instance.',
   'This workspace is suspended, so nothing in it can change. Contact the administrator of this instance.':
     'Ce workspace est suspendu : rien ne peut y changer. Contactez l’administrateur de cette instance.',
+
+  // The statuses of a site (FRU-371). « Stage » is « Phase »: « Étape » is the step of the setup.
+  Open: 'Ouverte',
+  'Closed as completed': 'Fermée, terminée',
+  'Closed as not planned': 'Fermée, non prévue',
+  'Closed as duplicate': 'Fermée, doublon',
+  'This status did not change. Try again.': 'Ce statut n’a pas changé. Réessayez.',
+  'Only an owner or an admin of the workspace sets the statuses of a site.':
+    'Seul un propriétaire ou un administrateur du workspace règle les statuts d’un site.',
+  'A site holds {count} statuses at most.': 'Un site a {count} statuts au plus.',
+  Breadcrumb: 'Fil d’Ariane',
+  'The name and the colour of each status, and the stage it belongs to. The stage decides the filters and the counts.':
+    'Le nom et la couleur de chaque statut, et la phase à laquelle il appartient. La phase décide des filtres et des comptes.',
+  'This site is not in the workspace any more.': 'Ce site n’est plus dans le workspace.',
+  'The statuses did not load': 'Les statuts n’ont pas été chargés',
+  'Fruitback did not answer. Your statuses are safe.': 'Fruitback n’a pas répondu. Vos statuts ne sont pas perdus.',
+  'Fruitback reads the states of Linear. Choose the stage of each one on the panel of Linear, in Connectors.':
+    'Fruitback lit les états de Linear. Choisissez la phase de chacun dans le panneau de Linear, dans Connecteurs.',
+  'Open Connectors': 'Ouvrir Connecteurs',
+  'The order did not change. Try again.': 'L’ordre n’a pas changé. Réessayez.',
+  '{name} is now {position} of {total}.': '{name} est maintenant en position {position} sur {total}.',
+  '{name} is back to what it was.': '{name} est revenu à son état d’origine.',
+  'This status is still here. Try again.': 'Ce statut est toujours là. Réessayez.',
+  '« {name} » was deleted.': '« {name} » a été supprimé.',
+  '« {name} » was deleted, and its notes are in « {target} ».':
+    '« {name} » a été supprimé, et ses notes sont dans « {target} ».',
+  'Notes kept in Fruitback': 'Notes gardées dans Fruitback',
+  GitHub: 'GitHub',
+  'Five statuses are built in, one for each stage. Rename them, recolour them, or add your own.':
+    'Cinq statuts sont intégrés, un par phase. Renommez-les, changez leur couleur, ou ajoutez les vôtres.',
+  'A GitHub issue has four states. Rename them, recolour them, or change their stage.':
+    'Une issue GitHub a quatre états. Renommez-les, changez leur couleur ou leur phase.',
+  'Add a status': 'Ajouter un statut',
+  Order: 'Ordre',
+  Stage: 'Phase',
+  Colour: 'Couleur',
+  Text: 'Texte',
+  'Delete {name}': 'Supprimer {name}',
+  '« {name} » goes from this site. If notes are in it, you choose where they go first.':
+    '« {name} » disparaît de ce site. Si des notes y sont, vous choisissez d’abord où elles vont.',
+  '« {name} » was added.': '« {name} » a été ajouté.',
+  'Added by your team': 'Ajouté par votre équipe',
+  'Built in': 'Intégré',
+  'In GitHub: {name}': 'Dans GitHub : {name}',
+  'Move {name} up': 'Monter {name}',
+  'Move {name} down': 'Descendre {name}',
+  'Colour of the stage': 'Couleur de la phase',
+  'Edit {name}': 'Modifier {name}',
+  Edit: 'Modifier',
+  Delete: 'Supprimer',
+  'Reset {name}': 'Rétablir {name}',
+  Reset: 'Rétablir',
+  Auto: 'Auto',
+  'reads well': 'se lit bien',
+  'under 4.5:1': 'sous 4,5:1',
+  'Type a colour to see how its text reads.': 'Saisissez une couleur pour voir comment son texte se lit.',
+  'Text on this colour: {ratio}. It reads well.': 'Texte sur cette couleur : {ratio}. Il se lit bien.',
+  'Text on this colour: {ratio}. Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':
+    'Texte sur cette couleur : {ratio}. Il faut 4,5:1 au moins : choisissez Auto, ou un texte plus foncé ou plus clair.',
+  'New status': 'Nouveau statut',
+  'Type a colour as # and six digits or letters from a to f.':
+    'Saisissez une couleur sous la forme # suivi de six chiffres ou lettres de a à f.',
+  'Give the status a name.': 'Donnez un nom au statut.',
+  'Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.':
+    'Il faut 4,5:1 au moins : choisissez Auto, ou un texte plus foncé ou plus clair.',
+  'Empty: « {name} », in the language of each person.': 'Vide : « {name} », dans la langue de chacun.',
+  'The stage decides the filters, the counts, and when a note looks fixed.':
+    'La phase décide des filtres, des comptes, et du moment où une note semble réglée.',
+  'A built-in status keeps its stage: the notes with no status of their own are in it.':
+    'Un statut intégré garde sa phase : les notes sans statut à elles y sont.',
+  'Your colour': 'Votre couleur',
+  'Hex code of the colour': 'Code hexadécimal de la couleur',
+  'Auto: dark or white, whichever reads better': 'Auto : foncé ou blanc, selon ce qui se lit le mieux',
+  'Hex code of the text': 'Code hexadécimal du texte',
+  Preview: 'Aperçu',
+  'On a light page': 'Sur une page claire',
+  'On a dark page': 'Sur une page sombre',
+  'Add the status': 'Ajouter le statut',
+  '1 note is in « {name} ».': '1 note est dans « {name} ».',
+  '{count} notes are in « {name} ».': '{count} notes sont dans « {name} ».',
+  'Choose where they go, then it is deleted. They take the stage of their new status.':
+    'Choisissez où elles vont, puis il est supprimé. Elles prennent la phase de leur nouveau statut.',
+  'Move them to': 'Les déplacer vers',
+  'Move 1 note and delete': 'Déplacer 1 note et supprimer',
+  'Move {count} notes and delete': 'Déplacer {count} notes et supprimer',
 };

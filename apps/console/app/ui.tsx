@@ -2,6 +2,7 @@ import {
   Alert,
   Description,
   Dropdown,
+  FieldError,
   Header,
   Button as HeroButton,
   Checkbox as HeroCheckbox,
@@ -281,6 +282,12 @@ type FieldProps = {
   /** Takes focus when it appears: the field a press of « Rename » opens. */
   autoFocus?: boolean;
   onFocus?: (event: FocusEvent<HTMLInputElement>) => void;
+  /** Why what is typed cannot be kept: the field is invalid, and this sentence describes it. */
+  error?: string;
+  /** The input itself, for a screen that gives it focus back: the field a refusal names. */
+  inputRef?: Ref<HTMLInputElement>;
+  /** A field of code, such as a colour: drawn in the mono font, with no correction of what is typed. */
+  code?: boolean;
 };
 
 /** A text field of HeroUI: its label, its input, and the hint the input is described by. */
@@ -293,6 +300,9 @@ export function Field({
   locked = false,
   compact = false,
   readOnly = false,
+  error,
+  inputRef,
+  code = false,
   ...input
 }: FieldProps) {
   return (
@@ -300,13 +310,21 @@ export function Field({
       fullWidth
       isDisabled={disabled}
       isRequired={required}
+      isInvalid={error !== undefined}
       className="kit-field"
       data-compact={compact}
       data-locked={locked}
+      data-code={code}
     >
       <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
-      <Input {...input} readOnly={readOnly || locked} />
+      <Input
+        {...input}
+        {...(inputRef === undefined ? {} : { ref: inputRef })}
+        {...(code ? { spellCheck: false, autoCapitalize: 'off', autoCorrect: 'off' } : {})}
+        readOnly={readOnly || locked}
+      />
       {hint === undefined ? null : <Description>{hint}</Description>}
+      {error === undefined ? null : <FieldError>{error}</FieldError>}
     </TextField>
   );
 }

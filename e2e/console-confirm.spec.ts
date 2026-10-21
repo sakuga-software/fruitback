@@ -65,7 +65,7 @@ const screens = [
       await page.getByRole('button', { name: MORE[locale], exact: true }).click();
       await page.getByRole('menuitem', { name: WORDS[locale].remove, exact: true }).click();
     },
-    // From the button of the menu, with the keyboard alone: the menu, its third and last item, Enter.
+    // From the button of the menu, with the keyboard alone: the menu, its fourth and last item, Enter.
     askWithKeys: async (page: Page) => {
       // Measured: a menu opened less than 100 ms after « Keep it » opens with focus on nothing. A
       // person does not press twice that fast; the test waits as a person does.
@@ -73,6 +73,8 @@ const screens = [
       await page.keyboard.press('Enter');
       await expect(page.getByRole('menu')).toBeVisible();
       await expect(page.getByRole('menuitem').first()).toBeFocused();
+      // « Statuses » (FRU-371) is the second item: « Remove » is three steps down.
+      await page.keyboard.press('ArrowDown');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('ArrowDown');
       await expect(page.getByRole('menuitem').last()).toBeFocused();

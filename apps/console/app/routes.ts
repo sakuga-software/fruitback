@@ -25,6 +25,7 @@ export default [
   route('connect/:request', 'routes/connect.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),
+    route('w/:workspace/sites/:site/statuses', 'routes/site-statuses.tsx'),
     route('w/:workspace/notes', 'routes/notes.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),

@@ -3,8 +3,9 @@
 FRU-352 asks for three things: statuses a team adds, statuses read from the tracker (Linear, GitHub,
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
-below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), and the API
-of the console with the statuses in the read (FRU-366). The rest is FRU-367 to FRU-371.
+below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), the API
+of the console with the statuses in the read (FRU-366), and the screen of the statuses of a site (FRU-371). The rest is
+FRU-367 to FRU-370, and the parts of FRU-371 that wait for them.
 
 ## Statuses
 
@@ -203,45 +204,44 @@ projects: read` permission of the GitHub App (every installation must approve th
 
 ### The console
 
-One screen per site (decision 2), under the site, which takes over the table of FRU-102 from the
-connector's page (FRU-371):
+The screen of FRU-371 is built to its board, `design/site-statuses/`, which the orchestrator
+validated on 2026-10-21 with the answers below. `apps/console/app/routes/site-statuses.tsx` draws it;
+`site-statuses.ts` merges the rows of the worker with the defaults, with no React, and
+`e2e/console-statuses.spec.ts` holds it in a browser.
 
-```
-Workspace › Sites › staging.acme.com › Statuses                               [ Save ]
-─────────────────────────────────────────────────────────────────────────────────────
-Statuses
-These are the states of the Linear team this site sends to (Acme · Web). Each one
-belongs to a stage, which decides the filters and the counts.
-
-[ ] Use Linear's colours                                    (Reset to defaults)
-
- Preview        Name (Linear)      Name shown       Stage          Colour      Text
- ─────────────  ─────────────────  ───────────────  ─────────────  ──────────  ───────────────
- (3) Backlog    Backlog            —                New       ▾    #bec2c8 ▣   Auto   9.90:1
- (3) Todo       Todo               To do            To do     ▾    #d9dbdf ▣   Auto  12.78:1
- (3) In Review  In Review          —                In progress ▾  #f3bb3d ▣   Auto  10.11:1
- (3) Done       Done               —                Done      ▾    #5560c4 ▣   Auto   5.45:1
- (3) Canceled   Canceled           —                Closed    ▾    #a52a3a ▣   #ffaaaa  3.87:1 ✕
-                                                                    Text below 4.5:1: choose Auto
-                                                                    or a darker or lighter colour.
- Team: Design (two states come from this team)
- ...
-```
-
-```
-Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Add a status ]
- Preview        Name             Stage          Colour      Text         Notes
- (3) New        New              New       ▾    default     Auto           12
- (3) Waiting    Waiting client   To do     ▾    #7dd3fc ▣   Auto  10.63:1   3   [Delete]
- ...
-```
-
-- The preview is a real pin and a real list row, drawn with the widget's styles.
-- Delete a status of the team: its notes move to the built-in status of its stage, and the dialog
-  says how many.
-- `manage-sites`, the role that already chooses a site's destination; FRU-366 confirms it. The words
-  go through `t`, and every new sentence has its French.
-- A board in `design/` should come first: the screen is new.
+- **A page of its own**, `/w/<workspace>/sites/<site>/statuses`, from the item « Statuses » of the menu
+  of a site row, for an owner or an admin (`manage-sites`). Another role gets no item, and the
+  address says who sets the statuses.
+- **One list per source of the site.** The worker's store, when the site has no destination or sends to
+  an address (REST); a GitHub destination, with its four states. A status shows its pin and its chip as
+  the widget draws them, its stage (a drop and a word), its colour, and the contrast of its text,
+  in words and with a mark.
+- **One status is written at a time, and there is no « Save » for the page.** The sketch of this page
+  drew one; the API writes one status (`POST …/statuses`), and a page-wide « Save » would be several
+  writes that can half fail. The editor opens under its row and saves that status; the order and
+  « Reset » write at once. One write at a time for the whole page (FRU-123): the controls wait.
+- **The order is two buttons per row**, « Move … up » and « Move … down », for a keyboard and a pointer
+  alike, with no dragging. The worker orders the rows it keeps, so a default with no row gets one first,
+  at its new place; then `POST …/order` writes the whole list. A live region says where the status is.
+- **A text under 4.5:1 is not sent.** « Save » stays enabled: a press gives focus to the field of the
+  text, which the sentence describes. The worker refuses it anyway (`text-under-contrast`). The
+  preview draws the colours chosen, refused ones too, and is hidden from a screen reader, which reads
+  the ratio in words.
+- **« Delete » for a status the team added, « Reset » for any other that differs**, with no
+  confirmation: a reset takes away a name and a colour, and moves no note. « Delete » asks twice
+  (FRU-165), then sends no `moveTo`: `200` was an empty status; `409 status-in-use` gives the count, and
+  the screen asks where the notes go, the built-in status of the same stage first. A count of the notes
+  in the read is a later addition to the API.
+- **« Stage » is « Phase » in French**, not « Étape », which is the step of the setup.
+- **`hidden` is not drawn**: it changes only what the status select of a note offers, which FRU-367
+  brings. The status select of the list of notes is a PR of its own, after FRU-367.
+- **A Linear destination is a sentence and a link to its panel, for now.** Until FRU-368, the worker
+  reads the stage of a Linear state from `connectors.settings.stages`, which the table of FRU-102 on the
+  panel of Linear writes; a row of the site with a Linear source would change nothing a pin shows. So
+  that table stays where it is, and FRU-368 moves it here with « Use Linear's colours ». The board
+  draws that part already (frames H and N).
+- **A GitHub list is written now and shows with FRU-369**, which sends `status` on a GitHub issue.
+  Until then a pin of GitHub draws its stage, as `statusOf` does for any issue with no `status`.
 
 ### The API of the console, and the read (FRU-366)
 
