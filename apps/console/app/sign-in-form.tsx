@@ -10,6 +10,7 @@ import {
 } from './api';
 import { locale, msg, t } from './i18n';
 import { awaitSignIn } from './tab-signal';
+import { GitHubMark, GoogleMark } from './provider-icons';
 import { AutoGrid, Button, Divider, Field, LinkButton, Problem, WideButton } from './ui';
 import { useLocale } from './use-locale';
 
@@ -241,8 +242,22 @@ export function ProviderButtons({
   };
   const buttons = (
     <>
-      {providers.google ? <WideButton onClick={() => leave('google')}>{t('Continue with Google')}</WideButton> : null}
-      {providers.github ? <WideButton onClick={() => leave('github')}>{t('Continue with GitHub')}</WideButton> : null}
+      {providers.google ? (
+        <WideButton onClick={() => leave('google')}>
+          <span className="inline-flex items-center gap-2.5">
+            <GoogleMark />
+            {t('Continue with Google')}
+          </span>
+        </WideButton>
+      ) : null}
+      {providers.github ? (
+        <WideButton onClick={() => leave('github')}>
+          <span className="inline-flex items-center gap-2.5">
+            <GitHubMark />
+            {t('Continue with GitHub')}
+          </span>
+        </WideButton>
+      ) : null}
     </>
   );
   if (layout === 'grid') {

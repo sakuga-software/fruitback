@@ -483,6 +483,66 @@ test.describe('the four states of the sign-in page, against the mockup (FRU-235)
     await context.close();
   });
 
+  for (const locale of ['en', 'fr'] as const) {
+    test(`the buttons of Google and GitHub carry their marks, drawn inline, in ${locale} at 390 px (FRU-362)`, async ({
+      browser,
+    }) => {
+      const context = await browser.newContext({
+        locale: locale === 'en' ? 'en-US' : 'fr-FR',
+        viewport: { width: 390, height: 844 },
+      });
+      const page = await context.newPage();
+      const outside: string[] = [];
+      page.on('request', (request) => {
+        const { origin } = new URL(request.url());
+        if (origin !== CONSOLE && origin !== WORKER_ORIGIN) outside.push(request.url());
+      });
+      await stubWorker(page);
+      await page.goto(`${CONSOLE}/sign-in`);
+      const names =
+        locale === 'en'
+          ? { google: 'Continue with Google', github: 'Continue with GitHub' }
+          : { google: 'Continuer avec Google', github: 'Continuer avec GitHub' };
+      for (const [provider, name] of Object.entries(names)) {
+        // The words are the whole name of the button: the mark is hidden from a screen reader.
+        const button = page.getByRole('button', { name, exact: true });
+        await expect(button).toBeVisible();
+        const mark = button.locator('svg');
+        await expect(mark).toHaveCount(1);
+        await expect(mark).toHaveAttribute('aria-hidden', 'true');
+        await expect(mark).toHaveAttribute('focusable', 'false');
+        // 18 px, before the words, on their line.
+        const box = (await mark.boundingBox())!;
+        // The left edge of the words themselves, read on their text.
+        const wordsX = await button.evaluate((element) => {
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+          const range = document.createRange();
+          range.selectNodeContents(walker.nextNode()!);
+
+          return range.getBoundingClientRect().x;
+        });
+        expect.soft(box.width, `${provider}: width`).toBe(18);
+        expect.soft(box.height, `${provider}: height`).toBe(18);
+        expect.soft(box.x + box.width, `${provider}: before the words`).toBeLessThanOrEqual(wordsX);
+        const fills = await mark
+          .locator('path')
+          .evaluateAll((paths) => paths.map((path) => getComputedStyle(path).fill));
+        if (provider === 'google') {
+          // The four colours of Google's guidelines, unchanged.
+          expect(fills).toEqual(['rgb(234, 67, 53)', 'rgb(66, 133, 244)', 'rgb(251, 188, 5)', 'rgb(52, 168, 83)']);
+        } else {
+          // One colour: the colour of the words.
+          expect(fills).toEqual([await button.evaluate((element) => getComputedStyle(element).color)]);
+        }
+      }
+      // Drawn inline: nothing was asked of a third party.
+      expect(outside).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+      expect((await new AxeBuilder({ page }).analyze()).violations.map((violation) => violation.id)).toEqual([]);
+      await context.close();
+    });
+  }
+
   test('a provider the worker does not offer has no button, and a worker that offers nothing has no form', async ({
     page,
   }) => {

@@ -66,6 +66,12 @@
   --color-rail-text: #d4d4d8;
   --color-rail-muted: #a1a1aa;
   --color-rail-accent: #ec5b57;
+  /* The four colours of Google's « G » (FRU-362). Its sign-in branding guidelines forbid changing
+     them: they paint the mark of « Continue with Google » and nothing else. */
+  --color-google-blue: #4285f4;
+  --color-google-green: #34a853;
+  --color-google-yellow: #fbbc05;
+  --color-google-red: #ea4335;
 
   /*
     The five statuses of FRU-334, chosen by Mathieu: the stages of the widget, copied from
