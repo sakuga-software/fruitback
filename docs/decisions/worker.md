@@ -3601,8 +3601,14 @@ tables, its journal and its people`. A person of one is not a person of the othe
   session mode keeps both, and two workers start together; transaction mode gives the search path to
   the next client, loses the lock of the migrations (the unlock runs on another connection and the
   lock stays held), and two workers that start together on an empty schema migrate at once and fail.
-  The guard of the search path does not see it: every connection of one worker sets the same path.
-  `docs/self-hosting.md`, « Behind a connection pooler », has the table.
+  The guard of the search path did not see it in those runs: every connection of one worker sets the
+  same path. `docs/self-hosting.md`, « Behind a connection pooler », has the table. **Since FRU-335
+  `migrate` names the pooler**: it refuses when the session that takes the lock held it already for
+  another client, or when a step runs in another session than the lock (`pg_backend_pid()`), and warns
+  when the unlock answers `false`. None of the three can fire when one connection is one session, so
+  a worker without a pooler or in session mode never says it. The checks are samples: one worker alone
+  behind transaction mode gets the same session each time, and is not told. Measured: two workers
+  together, 19 out of 20 runs named the pooler and none migrated twice.
 - **It does not move a database from `public`**, and does not copy from one schema to another.
 - **PGlite holds one schema per case as before.** The tests that need two roles, two schemas of one
   database or a setting of the database run on a real server (`test:postgres`, 17 in CI).

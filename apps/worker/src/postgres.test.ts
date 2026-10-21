@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { DrizzleQueryError, eq, sql } from 'drizzle-orm';
+import { DrizzleQueryError, type SQL, eq, sql } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 import { mutatedModule } from './conformance.fixture.ts';
 import {
   type Database,
+  type PgDatabase,
   causeOfQueryError,
   closeDatabases,
   createPgDatabase,
@@ -446,8 +448,8 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
     it('fails for one of the two when nothing holds the lock', async () => {
       const own = await ownDatabase();
       const unlocked = await mutatedModule('postgres-migrate.ts', {
-        from: 'await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);',
-        to: '',
+        from: 'pg_advisory_lock(${MIGRATION_LOCK}), pg_backend_pid() AS pid',
+        to: 'pg_backend_pid() AS pid',
       });
       try {
         const ended = await twoProcesses(unlocked.url, own.url);
@@ -460,6 +462,213 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
     });
   });
 });
+
+/**
+ * A pooler in transaction mode, played on one real server (FRU-335). `alone` holds two sessions, and
+ * `route` says which one runs each statement, as PgBouncer chooses a connection of the server for
+ * each statement out of a transaction. A transaction stays in the first session: PgBouncer keeps one
+ * on one connection too.
+ */
+function behindAPoolerInTransactionMode(database: PgDatabase, route: (statement: string) => 0 | 1 | 'fails'): Database {
+  const dialect = new PgDialect();
+
+  return {
+    ...database,
+    alone: (work) =>
+      database.alone((first, apply) =>
+        database.alone((second) => {
+          const sessions = [first, second];
+          const db = new Proxy(first, {
+            get(target, key, receiver) {
+              if (key !== 'execute') return Reflect.get(target, key, receiver);
+
+              return (query: SQL) => {
+                const session = route(dialect.sqlToQuery(query).sql);
+                if (session === 'fails')
+                  return Promise.reject(new StoreError('PostgreSQL did not answer: the connection ended'));
+
+                return sessions[session]!.execute(query);
+              };
+            },
+          });
+
+          return work(db, apply);
+        }),
+      ),
+  };
+}
+
+describe(
+  'a pooler in transaction mode, which loses the lock of the migrations (FRU-335)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    const SAYS_THE_POOLER = /a connection pooler in transaction mode \(PgBouncer with pool_mode = transaction\)/;
+    const SENDS_TO_THE_DOC = /docs\/self-hosting\.md, « Behind a connection pooler »/;
+    const held = (database: Database) =>
+      rowsOf(
+        database,
+        // In this database only: other files of the suite migrate theirs at the same time.
+        `SELECT count(*)::int AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND objid = ${0x4652_5542}
+          AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
+      );
+
+    it('refuses before it writes anything, and names the pooler, when the statement after the lock runs in another session', async () => {
+      const database = await createRealDatabase();
+      const warned: string[] = [];
+      try {
+        // The lock in the first session, everything after it in the second.
+        const pooled = behindAPoolerInTransactionMode(database, (statement) =>
+          statement.includes('pg_advisory_lock(') ? 0 : 1,
+        );
+
+        await assert.rejects(
+          migrate(pooled, folderOf([FIRST]), (line) => warned.push(line)),
+          (error: unknown) => {
+            assert.ok(error instanceof StoreError, String(error));
+            assert.match(
+              error.message,
+              /^The lock of the migrations was taken in one session, and a connection pooler/,
+            );
+            assert.match(error.message, SAYS_THE_POOLER);
+            assert.match(error.message, SENDS_TO_THE_DOC);
+            assert.match(error.message, /Nothing was migrated$/);
+
+            return true;
+          },
+        );
+        assert.deepEqual(warned, [], 'the refusal said it already');
+        assert.deepEqual(
+          await rowsOf(
+            database,
+            `SELECT to_regclass('${APPLIED.migrationsTable}') AS journal, to_regclass('first_things') AS made`,
+          ),
+          [{ journal: null, made: null }],
+        );
+        // `alone` closes a session that failed: the lock ends with it.
+        assert.deepEqual(await held(database), [{ n: 0 }]);
+      } finally {
+        await database.close();
+      }
+    });
+
+    // What two workers met in 5 runs out of 10 behind PgBouncer: the pooler gave the second one the
+    // session in which the first held the lock, and a lock of the session is taken again there.
+    it('refuses, and names the pooler, when its session held the lock already for another client', async () => {
+      const database = await createRealDatabase();
+      const warned: string[] = [];
+      let after: unknown;
+      try {
+        const shared: Database = {
+          ...database,
+          alone: (work) =>
+            database.alone(async (db, apply) => {
+              await db.execute(sql`SELECT pg_advisory_lock(${0x4652_5542})`);
+              try {
+                return await work(db, apply);
+              } finally {
+                after = await db.execute(
+                  sql`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND objid = ${0x4652_5542} AND pid = pg_backend_pid()`,
+                );
+              }
+            }),
+        };
+
+        await assert.rejects(
+          migrate(shared, folderOf([FIRST]), (line) => warned.push(line)),
+          (error: unknown) => {
+            assert.ok(error instanceof StoreError, String(error));
+            assert.match(
+              error.message,
+              /^The session that took the lock of the migrations held it already, for another client: /,
+            );
+            assert.match(error.message, SAYS_THE_POOLER);
+            assert.match(error.message, SENDS_TO_THE_DOC);
+            assert.match(error.message, /Nothing was migrated$/);
+
+            return true;
+          },
+        );
+        assert.deepEqual(warned, []);
+        assert.deepEqual(
+          await rowsOf(
+            database,
+            `SELECT to_regclass('${APPLIED.migrationsTable}') AS journal, to_regclass('first_things') AS made`,
+          ),
+          [{ journal: null, made: null }],
+        );
+        // The unlock gave back the hold of the refused worker, and left the one of the other client.
+        assert.deepEqual((after as { rows: unknown[] }).rows, [{ n: 1 }]);
+      } finally {
+        await database.close();
+      }
+    });
+
+    // Raised in review: the error of a step is what the operator reads, not the one of the unlock after it.
+    it('keeps the refusal that names the pooler when the unlock after it fails too', async () => {
+      const database = await createRealDatabase();
+      try {
+        // The lock in the first session, the next statement in the second, and an unlock that fails.
+        const pooled = behindAPoolerInTransactionMode(database, (statement) => {
+          if (statement.includes('pg_advisory_unlock(')) return 'fails';
+
+          return statement.includes('pg_advisory_lock(') ? 0 : 1;
+        });
+
+        await assert.rejects(
+          migrate(pooled, folderOf([FIRST]), () => {}),
+          (error: unknown) => {
+            assert.ok(error instanceof StoreError, String(error));
+            assert.match(
+              error.message,
+              /^The lock of the migrations was taken in one session, and a connection pooler/,
+            );
+
+            return true;
+          },
+        );
+      } finally {
+        await database.close();
+      }
+    });
+
+    it('migrates, then says that another session still holds the lock, when the unlock runs in another session', async () => {
+      const database = await createRealDatabase();
+      const warned: string[] = [];
+      try {
+        const pooled = behindAPoolerInTransactionMode(database, (statement) =>
+          statement.includes('pg_advisory_unlock(') ? 1 : 0,
+        );
+
+        await migrate(pooled, folderOf([FIRST]), (line) => warned.push(line));
+
+        assert.deepEqual(await applied(database), [1_000]);
+        assert.equal(warned.length, 1, JSON.stringify(warned));
+        assert.match(warned[0]!, /^\[fruitback\] The lock of the migrations is still held by another session: /);
+        assert.match(warned[0]!, SAYS_THE_POOLER);
+        assert.match(warned[0]!, SENDS_TO_THE_DOC);
+        // What the operator meets next: the first session went back to the pool with the lock.
+        assert.deepEqual(await held(database), [{ n: 1 }]);
+      } finally {
+        await database.close();
+      }
+    });
+
+    it('says nothing of a pooler when every statement runs in one session', async () => {
+      const database = await createRealDatabase();
+      const warned: string[] = [];
+      try {
+        await migrate(database, folderOf([FIRST]), (line) => warned.push(line));
+
+        assert.deepEqual(await applied(database), [1_000]);
+        assert.deepEqual(warned, []);
+        assert.deepEqual(await held(database), [{ n: 0 }]);
+      } finally {
+        await database.close();
+      }
+    });
+  },
+);
 
 describe('the pool of a process (FRU-141)', () => {
   it('is one for an address, however many stores a process builds', async () => {
