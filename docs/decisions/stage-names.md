@@ -143,7 +143,10 @@ next read.
 - `connectors.settings`, the JSON text where FRU-102 kept a stage per Linear state: only a value that
   is JSON and whose `stages` is an object is read, with CASE nested as in `0025`. Inside `stages`, a
   string that is an old name changes; every other key and value stays.
-- No status key is renamed: no code writes a built-in status of the source `own` yet (FRU-367).
+- The keys of the source `own`: its five built-in statuses are keyed by their stage (statuses.md),
+  so `statuses.key` of `own` and `seeds.status_key` are renamed too. A key is renamed only when the
+  site has no `own` status that holds the new name already, since a team may have added one keyed
+  `done` and the primary key must hold; a note then keeps the old key, which its status still has.
 - It can run twice. `stage-names-migration.test.ts` starts from a database migrated through `0025` and
   filled with old names, and proves the rename, a second run, and the rollback.
 

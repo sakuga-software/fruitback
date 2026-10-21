@@ -9,6 +9,12 @@
 -- cast must never see what pg_input_is_valid refused. Inside "stages", only a string value that is
 -- an old name changes; every other key and value stays.
 --
+-- The five built-in statuses of the source `own` have the name of their stage as their key
+-- (docs/decisions/statuses.md), so statuses.key of `own` and seeds.status_key are renamed too. A key
+-- is renamed only when the site has no `own` status that holds the new name already: a team may
+-- have added a status keyed `done`, and the primary key (site_id, source, key) must hold. A note
+-- keeps an old key when its site kept that status under it.
+--
 -- Rollback: the reverse UPDATE is REVERSE_SQL in stage-names-migration.test.ts, which runs it.
 UPDATE "seeds" SET "stage" = CASE "stage"
     WHEN 'seeded' THEN 'new' WHEN 'green' THEN 'todo' WHEN 'ripening' THEN 'progress'
@@ -37,4 +43,21 @@ UPDATE "connectors" SET "settings" = jsonb_set(
                                     WHERE jsonb_typeof(e."value") = 'string'
                                       AND e."value" #>> '{}' IN ('seeded', 'green', 'ripening', 'ripe', 'composted'))
                       ELSE false END
-            ELSE false END;
+            ELSE false END;--> statement-breakpoint
+UPDATE "statuses" AS s SET "key" = CASE s."key"
+    WHEN 'seeded' THEN 'new' WHEN 'green' THEN 'todo' WHEN 'ripening' THEN 'progress'
+    WHEN 'ripe' THEN 'done' WHEN 'composted' THEN 'closed' END
+ WHERE s."source" = 'own'
+   AND s."key" IN ('seeded', 'green', 'ripening', 'ripe', 'composted')
+   AND NOT EXISTS (SELECT 1 FROM "statuses" AS t
+                    WHERE t."site_id" = s."site_id" AND t."source" = 'own'
+                      AND t."key" = CASE s."key"
+    WHEN 'seeded' THEN 'new' WHEN 'green' THEN 'todo' WHEN 'ripening' THEN 'progress'
+    WHEN 'ripe' THEN 'done' WHEN 'composted' THEN 'closed' END);--> statement-breakpoint
+UPDATE "seeds" SET "status_key" = CASE "status_key"
+    WHEN 'seeded' THEN 'new' WHEN 'green' THEN 'todo' WHEN 'ripening' THEN 'progress'
+    WHEN 'ripe' THEN 'done' WHEN 'composted' THEN 'closed' END
+ WHERE "status_key" IN ('seeded', 'green', 'ripening', 'ripe', 'composted')
+   AND NOT EXISTS (SELECT 1 FROM "statuses" AS t
+                    WHERE t."site_id" = "seeds"."client_id" AND t."source" = 'own'
+                      AND t."key" = "seeds"."status_key");
