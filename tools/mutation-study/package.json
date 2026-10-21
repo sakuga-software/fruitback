@@ -1,0 +1,8 @@
+{
+  "name": "@fruitback/mutation-study",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reads the reports of the mutation jobs and says what each mutant cost (FRU-342). No dependency.",
+  "license": "MIT",
+  "type": "module"
+}

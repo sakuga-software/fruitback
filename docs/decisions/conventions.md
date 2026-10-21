@@ -289,3 +289,91 @@ write <package> <mutation.json>` prints it from the report of a full run.
 - **The run of a package uses the tests of that package only.** A survivor of `packages/shared` may be
   killed by a test of the worker or of the widget. The contract is tested where it is written, so the
   survivor is still a hole there.
+
+### What one mutant costs, and the cut to make next (FRU-342)
+
+A study, measured on 2026-10-21. Nothing here is applied yet: the runner, `stryker.config.json` and
+the workflow are as above, and the cut is a ticket of its own, critical because it changes the CI.
+
+**In short**
+
+- **Under `tap`, a mutant runs the test files that reach it, one process each, in their order, and
+  stops at the first that fails.** So `testsCompleted` is the place of the killer in `coveredBy`,
+  plus one, and a survivor runs all of `coveredBy`. That held for each of the 885 mutants of the full
+  run of #436 (run 39549806954). `node tools/mutation-study/cost.ts <mutation.json>…` checks it, and
+  replays a run with fewer test files without running StrykerJS.
+- **Half the time goes to mutants that time out, and they do not hang.** A timeout waits
+  1.5 × the net time of the files that reach the mutant, + 5 s, + the overhead of the whole dry run
+  (39 to 61 s in CI: one process start for each of the 103 files). The dry run runs one file at a
+  time, and the mutants run four at a time on four cores, so a mutant whose killer comes late in the
+  order runs out of that budget before it reaches it.
+- **The cut to make: for each mutated file, `tap.testFiles` holds the files that kill one of its
+  mutants first, read from `killedBy` of a full run.** A killed mutant still meets its killer, so it is
+  still killed. A survivor runs fewer files, so it still survives. Estimated from the run of #436: the
+  longest job from 81 to about 26 minutes, and the runner time from 327 to about 88 minutes.
+- **What the cut can lose is a timeout,** because no report says which file a timeout would have
+  failed. Four files keep their line even if every timeout survives. `cache.ts` was measured. Three
+  are not proven yet: the first CI run of the cut measures them, and the ratchet holds their lines.
+- **The ticket of the cut also has to:** change the guard of `mutation.test.ts` that wants
+  `src/**/*.test.ts`, which is the rule « the run of the worker leaves no test out »; keep the full
+  suite for the Monday run, which writes the killers again, as `ratchet.ts write` writes the lines;
+  and add `src/<file>.test.ts` to the killers of `src/<file>.ts`, so that a pull request that changes
+  that test is measured by it.
+
+**The measurements**
+
+From the eight reports of run 39549806954 (head 80e61837, 103 test files). « Reached » is
+`coveredBy`, « ran » is what the bail lets run, and « load time » is a mutant that half the test
+files or more reach: a top-level constant or schema, which every file that imports the module
+reaches.
+
+| Mutated file      | Mutants | Killed / timeout / survived / no coverage | Reached, mean | Ran, mean | Load time | Killers | Job, CI   | Job after the cut, estimated |
+| ----------------- | ------- | ----------------------------------------- | ------------- | --------- | --------- | ------- | --------- | ---------------------------- |
+| `cache.ts`        | 44      | 26 / 14 / 4 / 0                           | 22.9          | 15.8      | 3         | 4       | 50 min 42 | 5.5 min                      |
+| `clients.ts`      | 213     | 171 / 21 / 14 / 7                         | 23.6          | 7.0       | 48        | 13      | 58 min 12 | 14.9 min                     |
+| `cors.ts`         | 60      | 60 / 0 / 0 / 0                            | 29.7          | 5.7       | 5         | 7       | 21 min 04 | 6.4 min                      |
+| `identity.ts`     | 224     | 206 / 12 / 2 / 4                          | 24.4          | 5.2       | 1         | 9       | 81 min 15 | 25.6 min                     |
+| `kv.ts`           | 74      | 64 / 2 / 7 / 1                            | 35.3          | 7.7       | 34        | 8       | 37 min 43 | 12.0 min                     |
+| `rate-limit.ts`   | 72      | 62 / 3 / 5 / 2                            | 21.5          | 4.8       | 24        | 6       | 28 min 11 | 6.1 min                      |
+| `session.ts`      | 111     | 107 / 3 / 1 / 0                           | 28.4          | 4.3       | 10        | 8       | 31 min 50 | 14.4 min                     |
+| `store-config.ts` | 87      | 87 / 0 / 0 / 0                            | 20.7          | 1.9       | 25        | 3       | 17 min 38 | 3.5 min                      |
+
+- **Where the time goes**, priced with the `node --test` time of each file on a Mac: timeouts 53 %,
+  killed mutants 45 %, survivors 1 %. Timeouts are 76 % of `clients.ts` and 78 % of `cache.ts`. The
+  same model is 1.9 to 4.9 times under the CI durations, so only its ratios are used: each job after
+  the cut is its CI dry run and its CI mutant time, each scaled by the ratio of the model, plus its
+  setup. A timeout is priced as a timeout after the cut too, so the estimate is high.
+- **The killers.** `workspaces.test.ts` comes first in the order and kills first 89 mutants of
+  `clients.ts`, 98 of `identity.ts` and 44 of `session.ts`. The unit test of each file is among the
+  killers of that file. With the bail, `killedBy` names the first killer only, so a file that kills
+  what no other file kills is proven only when it is the one file that reaches the mutant: 80 killed
+  mutants, such as 22 of `identity.ts` by `identity.test.ts` and 28 of `rate-limit.ts` by
+  `rate-limit.test.ts`. The cut does not need more: it keeps every first killer.
+- **`cache.ts`, run on a Mac** (`--concurrency 2`, the same source as run 39549806954). With its 4
+  killers: 2 min 17, a dry run of 4 files in 7 seconds, the 26 killed still killed, the 4 survivors
+  still survivors, 12 of the 14 timeouts killed by `cache.test.ts`, and 2 survivors (lines 60 and
+  70). With all 105 files and `--test-timeout=30000`: 19 min 42, and the same status for each mutant:
+  the 2 run all 27 files that reach them, and all pass. So they did not hang in CI, they ran slower
+  than their budget. The line of `cache.ts`, 86.36, is 38 of 44: it already counts them as survivors.
+- **The score if every timeout survives**, against the line: `cors.ts` 100 (100), `store-config.ts`
+  100 (100), `session.ts` 96.40 (96), `kv.ts` 86.49 (86.48), all held; `cache.ts` measured above;
+  `identity.ts` 91.96 (93.5), `rate-limit.ts` 86.11 (89.39), `clients.ts` 80.28 (89.42), not proven.
+
+**The other two ways, and why not now**
+
+- **A runner that follows each test** (`coverageAnalysis: "perTest"` at the level of a test, which the
+  config already asks for but `tap` cannot give). StrykerJS has no runner for `node --test`. The
+  command runner has no coverage at all, so each mutant would run the whole suite. The vitest runner
+  would mean moving 105 test files and 43,749 lines off `node:test`: `describe` and `it` in every one,
+  `mock.method` 55 times in 25 files, `t.skip` in 4, `mock.timers` in 1, and 10 files that start a
+  process, whose coverage a runner in one process does not see. Either the worker leaves `node --test`
+  or it keeps two runners. Effort: days, and not measured. The cut above gives most of the gain first.
+- **Fewer static mutants.** Under `tap` there are none: the coverage of a test is that of its whole
+  process, module load included (`tap-test-runner.js`, `coverage.static` of each file becomes its
+  `perTest`). So `ignoreStatic` changes nothing. The load-time mutants above are 150 of 885 and a
+  third of the time, mostly through the timeouts of the schemas of `clients.ts`. Most are killed by
+  the first file that runs. Making those constants lazy would change code for the tool's sake, and the
+  cut already limits them to the killers.
+- **Not measured:** an order of `tap.testFiles` that puts the unit test first. The runner takes the
+  order of `glob`, which does not promise one. Nor a lower `--concurrency`, which would make fewer
+  timeouts and a longer job.
