@@ -144,6 +144,11 @@ export const STATUS_INK = '#18181b';
  * statuses of the worker's store that no row changed. A row's key becomes `<source>:<key>`, unique in
  * the read. A colour with no text colour gets the one `readableTextColor` computes, so the text of a
  * pin reaches 4.5:1 whatever the widget.
+ *
+ * `hidden` is not read here, on purpose: a hidden status is one the console and the extension do not
+ * offer as a choice (FRU-367, FRU-371), and the notes already in it keep its name and colour. Left out
+ * of the read, those notes would lose both and fall back to their stage. The filters of the widget
+ * are by stage, so they do not need it either.
  */
 export function envelopeStatuses(rows: readonly SiteStatus[]): SeedStatus[] {
   const listed = rows.map((row) => {

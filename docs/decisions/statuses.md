@@ -70,7 +70,7 @@ One table, `statuses`, in the worker's PostgreSQL:
 | `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                       |
 | `position`   | integer, not null      | The order on the board.                                                                                      |
 | `origin`     | `tracker` or `team`    | `tracker`: read from the provider, cannot be deleted here. `team`: added in the console.                     |
-| `hidden`     | boolean, default false | A tracker state the team does not want in the filters.                                                       |
+| `hidden`     | boolean, default false | Not offered as a choice in the console or the extension. The read still names it (FRU-366).                  |
 
 The primary key is `(site_id, source, key)`. An entry exists only when the team changed something
 or added a status: a tracker state with no row takes the tracker's name, the stage of its type and
@@ -277,6 +277,10 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **A note the worker keeps says `status: own:<status_key, or its stage>`.** The notes of Linear and
   GitHub say theirs with FRU-368 and FRU-369; until then they have none, and `statusOf` draws their
   stage, as before.
+- **`hidden` is not in the read.** A hidden status is one the console and the extension do not offer
+  as a choice (the status of a note, FRU-367; the screen, FRU-371). The notes already in it keep its
+  name and colour, which they would lose if the read left it out, and the filters of the widget are
+  by stage. The contract has no field for it (FRU-364), and needs none.
 - **A change shows at the next read for the list, and within `CACHE_TTL_MS` (15 s) for a note** that a
   removal or a change of stage moved: the notes of a page are in the read cache, the list is not.
 
