@@ -1160,7 +1160,8 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
     const sent = JSON.parse(signed.body) as { attachments: { name: string; url: string }[] };
     assert.equal(sent.attachments[0]?.name, 'screenshot.png');
     assert.ok(verifiesSignedRead(SECRETS_KEY, LEGACY, new URL(sent.attachments[0]?.url ?? '').searchParams, now));
-    assert.equal((await attachments.get(LEGACY, now))?.seed, 'sd_waiting', 'the signed read answers a file of a note');
+    assert.equal((await attachments.get(LEGACY, now))?.seed, undefined, 'an attempt changes nothing of a file');
+    assert.equal((await attachments.get(LEGACY, now))?.expiresAt, now + 60_000);
     // A failed attempt is followed by another: the picture, taken by this note, is carried again.
     const again = await withSignedFiles(body('ws_acme'), {
       attachments,
@@ -1194,5 +1195,67 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
       ).body,
       body('ws_acme'),
     );
+  });
+});
+
+describe('a file of a delivery whose attempt fails (FRU-331)', () => {
+  it('keeps the file as it was, and the next attempt signs it again; only a 2xx ends it an hour later', async () => {
+    const env = await envWith();
+    const world = await acme(env);
+    await receiving(env, world);
+    const attachments = createMemoryAttachmentStore();
+    const { code } = await createPairing(env.sessions, {
+      subject: world.owner.account.id,
+      workspace: world.workspace.id,
+    });
+    const redeemed = await redeemPairing(env.sessions, code, env.env.FRUITBACK_IDENTITY_SECRET as string);
+    assert.ok(redeemed.ok);
+    const ask = (path: string, init: RequestInit & { headers?: Record<string, string> }) =>
+      handleRequest(
+        new Request(`https://api.fruitback.test${path}`, {
+          ...init,
+          headers: { Origin: SITE, Authorization: `Bearer ${redeemed.session.accessToken}`, ...init.headers },
+        }),
+        env.env,
+        { ...env.context, attachments, clientIp: '203.0.113.30', kv: createMemoryKv() },
+      );
+    const sent = await ask(`/attachments?client=${world.site.id}&name=a.png`, {
+      method: 'POST',
+      body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      headers: { 'Content-Type': 'image/png' },
+    });
+    const { id } = (await sent.json()) as { id: string };
+    await ask(`/feedback?attachments=${id}`, {
+      method: 'POST',
+      body: JSON.stringify(note(world.site.id)),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const end = attachments.all()[0]?.expiresAt;
+    const pass = (send: Send, now: number) =>
+      deliverDue({
+        accounts: env.accounts,
+        secretsKey: SECRETS_KEY,
+        send,
+        attachments,
+        publicUrl: 'https://api.fruitback.test',
+        now: () => now,
+      });
+    const urls = (got: { body: string }[]) =>
+      got.map((each) => (JSON.parse(each.body) as { attachments?: { url: string }[] }).attachments?.[0]?.url);
+
+    const t0 = Date.now();
+    const down = receiver(() => 503);
+    await pass(down.send, t0);
+    assert.equal(urls(down.got).length, 1, 'the failed attempt carried the file');
+    assert.equal(attachments.all()[0]?.expiresAt, end, 'a failed attempt changes nothing of the file');
+    assert.equal(attachments.all()[0]?.seed, 'sd_2f8c1a90', 'still the file of its note');
+
+    const t1 = t0 + 61_000;
+    const up = receiver();
+    await pass(up.send, t1);
+    assert.equal(urls(up.got).length, 1, 'the next attempt signs it again');
+    assert.notEqual(urls(up.got)[0], urls(down.got)[0], 'with a new signature');
+    // The control: the 2xx is what ends it, an hour after.
+    assert.equal(attachments.all()[0]?.expiresAt, t1 + SIGNED_URL_MS);
   });
 });

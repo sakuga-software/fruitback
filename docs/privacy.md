@@ -195,9 +195,9 @@ the account of the member who left a note, and that is what says who may give a 
   no file. **Nobody reads a file in Fruitback**: no route shows one to a member, a guest or a page.
   Who reads it after is who reads the ticket in the tracker, and the receiver of the REST address.
   Deleting the workspace deletes the files that wait. The table is still named `screenshots`; the
-  pictures of before FRU-331 went with the migration when their note was delivered (a note that the
-  worker keeps names them, and no delivery waits for them); the others end 7 days after the
-  migration, and a note still on its way is delivered with its picture until then. **The pictures
+  migration of FRU-331 deletes no picture of before: each one ends 7 days after the migration, and
+  the sweep of the transit removes it then. A note still on its way is delivered with its picture
+  until then. **The pictures
   of the notes kept in Fruitback, with no tracker, are gone with this version**: Fruitback stores no
   image (decision of 2026-10-20), and the address in such a note, `GET /screenshot/<id>`, answers
   nothing any more. A note of before sent again to a site with no tracker goes without its picture,

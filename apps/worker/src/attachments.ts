@@ -197,6 +197,10 @@ export function isAttachmentId(value: string): boolean {
 /** The id of a picture of FRU-44, which the migration `0021` kept 7 days for a note on its way. */
 const LEGACY_ID = /^shot_[0-9a-f]{32}$/;
 
+export function isLegacyFileId(id: string): boolean {
+  return LEGACY_ID.test(id);
+}
+
 /**
  * The id that a path names, or `undefined`: `/attachments/att_…` and nothing after it. A picture of
  * before (`shot_…`) is named too: a delivery that waits carries it (`legacyFileOf`).

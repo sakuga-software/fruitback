@@ -1935,10 +1935,9 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   the address in that hour reads the file: the address travels only in the body of the delivery,
   over https, to the address the workspace connected.
   test:`answers 404 to a signature that ended, that is not this one, or to a file no note took`.
-- **The pictures of before FRU-331** stay in the table only while a note may still need them: the
-  migration deletes the ones whose note is delivered, and ends every other one 7 days after it ran.
-  Until then a waiting delivery whose seed names one carries it by a signed address, and a note of
-  before sent again by its sender goes with it; nothing else reads them.
+- **The pictures of before FRU-331** end 7 days after the migration, which deletes none; the sweep
+  removes them then. Until then a waiting delivery whose seed names one carries it by a signed
+  address, and a note of before sent again by its sender goes with it; nothing else reads them.
 - **Who reads a file after: the people of the tracker.** A read of the page says the names of the
   files of a note and the address the tracker gave each, for the readers of the note; a guest reads
   the names only, as a guest reads no reference of a tracker.

@@ -804,6 +804,31 @@ describe('the signed read of a file, for the receiver of a delivery (FRU-331)', 
     assert.equal(read.headers.get('Access-Control-Allow-Origin'), null, 'the call came with an Origin: no CORS header');
   });
 
+  it('answers a picture of before that its delivery names, which no note took', async () => {
+    const env = await envWith({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
+    const attachments = createMemoryAttachmentStore();
+    const legacy = `shot_${'f'.repeat(32)}`;
+    await attachments.put({
+      id: legacy,
+      workspace: 'ws_x',
+      account: 'acc_x',
+      site: '',
+      name: 'screenshot.png',
+      type: 'image/png',
+      content: PNG,
+      createdAt: 1,
+      expiresAt: Date.now() + 60_000,
+    });
+    const expires = Math.floor((Date.now() + SIGNED_URL_MS) / 1_000);
+    const read = await call(env, { attachments }, signedAttachmentPath(SECRETS_KEY, legacy, expires));
+    assert.equal(read.status, 200);
+    // The control: the same id, signed by another key.
+    assert.equal(
+      (await call(env, { attachments }, signedAttachmentPath(`${SECRETS_KEY}-other`, legacy, expires))).status,
+      404,
+    );
+  });
+
   it('answers 404 to a signature that ended, that is not this one, or to a file no note took', async () => {
     const { env, attachments, id } = await aFileOfANote();
     const expires = Math.floor((Date.now() + SIGNED_URL_MS) / 1_000);
@@ -926,7 +951,7 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(await store.get('att_2', 2_000), undefined);
     });
 
-    it('migrates the pictures of before: a delivered one goes, a waiting one and an orphan stay 7 days from the migration', async () => {
+    it('migrates the pictures of before: it deletes none, ends each 7 days after it runs, and the sweep takes them then', async () => {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0020_workspace_keeps_owner'));
       const day = 24 * 60 * 60 * 1_000;
@@ -935,16 +960,15 @@ for (const { label, open, skip } of DATABASES) {
       for (const statement of [
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_acme', 'Acme', 'ws_acme', now())`,
         // Delivered: a note that the worker keeps names it, and no delivery waits for it.
-        // Waiting: a delivery that waits names it. It came 8 days ago: the control, which the first
-        // version of the migration deleted for its age, and which must stay deliverable.
+        // Waiting: a delivery that waits names it, and it came 8 days ago: the first version of the
+        // migration deleted it for its age, the second kept it; this one deletes nothing.
         // Orphan: nothing names it, a note kept in a tab or a note that went to Linear.
         `INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
            ('${id('a')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - day}),
            ('${id('b')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 8 * day}),
            ('${id('c')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 2 * day})`,
         `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES
-           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1),
-           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}', 1, 1)`,
+           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1)`,
         `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES ('con_1', 'ws_acme', 'rest', 'REST', 'x', 1)`,
         `INSERT INTO deliveries (id, connector_id, body, created_at) VALUES
            ('dlv_1', 'con_1', '{"seed":{"id":"sd_b","screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}}', 1)`,
@@ -956,17 +980,15 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database);
       const after = Date.now();
 
-      const rows = await rowsOf(
-        database,
-        'SELECT id, expires_at, name, content_type, seed_id FROM screenshots ORDER BY id',
-      );
+      const rows = await rowsOf(database, 'SELECT id, expires_at, name, content_type FROM screenshots ORDER BY id');
       assert.deepEqual(
-        rows.map((row) => [row.id, row.name, row.content_type, row.seed_id]),
+        rows.map((row) => [row.id, row.name, row.content_type]),
         [
-          [id('b'), 'screenshot.png', 'image/png', null],
-          [id('c'), 'screenshot.png', 'image/png', null],
+          [id('a'), 'screenshot.png', 'image/png'],
+          [id('b'), 'screenshot.png', 'image/png'],
+          [id('c'), 'screenshot.png', 'image/png'],
         ],
-        'the delivered picture went, the waiting one and the orphan stayed',
+        'the migration deleted no row',
       );
       for (const row of rows) {
         const end = Number(row.expires_at);
@@ -975,6 +997,11 @@ for (const { label, open, skip } of DATABASES) {
           `${String(row.id)} ends 7 days after the migration`,
         );
       }
+      // The sweep of the transit takes them at their end, and not before (the control).
+      const store = createPostgresAttachmentStore(database);
+      assert.equal(await store.sweep(before + 7 * day - 1), 0);
+      assert.equal(await store.sweep(after + 7 * day), 3);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM screenshots'), []);
     });
   });
 }

@@ -91,6 +91,7 @@ import {
   attachmentIdOf,
   attachmentIdsOf,
   attachmentName,
+  isLegacyFileId,
   legacyFileOf,
   checkAttachment,
   maxBytesFor,
@@ -1540,8 +1541,10 @@ async function handleAttachment(
     if (config.secretsKey === undefined || !verifiesSignedRead(config.secretsKey, id, query, now))
       return json(404, { error: 'not-found' });
     const found = await files.get(id, now);
-    // A file that no note took is no file of a delivery.
-    if (found === undefined || found.seed === undefined) return json(404, { error: 'not-found' });
+    // A file that no note took is no file of a delivery. A picture of before FRU-331 (`shot_`) is
+    // named by the seed of its delivery, not taken: the signature of that delivery is its proof.
+    if (found === undefined || (found.seed === undefined && !isLegacyFileId(found.id)))
+      return json(404, { error: 'not-found' });
 
     return new Response(found.content, {
       status: 200,

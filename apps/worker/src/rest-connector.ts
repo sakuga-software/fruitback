@@ -342,16 +342,16 @@ export async function withSignedFiles(
     return { body, files: [] };
   }
   // A delivery of before FRU-331 names its picture in its seed, not in a list: it carries it while the
-  // migration keeps it, and gives it to its note so the signed read answers it.
+  // migration keeps it. **Nothing of a file changes here**: an attempt only reads and signs. The
+  // state of a file moves after a `2xx` only (`deliverDue`), and an attempt that fails leaves every
+  // file as it was, for the next attempt to sign it again.
   const legacy = parsed.seed === undefined ? undefined : legacyFileOf(parsed.seed);
-  const listed = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+  const listed = Array.isArray(parsed.attachments) ? [...parsed.attachments] : [];
   if (listed.length === 0 && legacy === undefined) return { body, files: [] };
   if (legacy !== undefined && attachments !== undefined && publicUrl !== undefined) {
     const found = await attachments.get(legacy, now);
     if (found !== undefined && found.workspace === parsed.workspace) {
-      const taken = await attachments.claim([legacy], parsed.seed.id, now);
-      if (taken.length === 1)
-        listed.push({ id: legacy, name: found.name, type: found.type, size: found.content.byteLength });
+      listed.push({ id: legacy, name: found.name, type: found.type, size: found.content.byteLength });
     }
   }
   if (listed.length === 0) return { body, files: [] };
