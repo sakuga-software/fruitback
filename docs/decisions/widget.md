@@ -713,7 +713,8 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   `role="menu"` under a button `aria-haspopup="menu"`: the arrows open it and go round, Home and End
   go to the ends, Enter takes a way, Esc closes it and gives the focus back to « Attach », Tab and a
   click out close it. A capture and a file picked give the focus back to « Attach »; Esc of the drop
-  zone hides it. The worker says on each read whether files go: `canAttach: true` offers the
+  zone hides it. While the note is sent, and after, no file joins it: the drop zone hides, and a file
+  dropped, picked or captured then is not taken, since no note would name it (FRU-373). The worker says on each read whether files go: `canAttach: true` offers the
   menu, `false` shows the sentence that the note has no tracker and no way, absent shows nothing. A
   place of a member says it for itself (`destinations[].canAttach`).
 - **No pin, no tooltip, no open thread and no frame of the element on a capture** (FRU-351): from

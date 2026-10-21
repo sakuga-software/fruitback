@@ -427,8 +427,17 @@ export function createComposer(options: ComposerOptions): Composer {
     return each.state === 'sending' ? `${size} · ${t.text('composer.attachSending')}` : size;
   }
 
+  /**
+   * Whether a file may still join the note: not while it is sent or after (FRU-351, raised in review).
+   * A file dropped, picked or captured then would go to the worker and be named by no note.
+   */
+  function joinable(): boolean {
+    return state !== 'sending' && state !== 'sent' && state !== 'kept';
+  }
+
   /** Joins a file: refused at once when the widget can tell, sent on its way otherwise. */
   function join(file: PickedFile): void {
+    if (!joinable()) return;
     const key = (heldKeys += 1);
     const refusal = refusalBefore(
       file,
@@ -516,6 +525,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
   /** Reads and joins the files the person chose or dropped, one by one, for this open only. */
   async function joinFiles(files: readonly File[], mine: number): Promise<void> {
+    if (!joinable()) return;
     for (const file of files) {
       let read: PickedFile;
       try {
@@ -556,7 +566,10 @@ export function createComposer(options: ComposerOptions): Composer {
     keep.disabled = send.disabled;
     for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
       way.disabled = next === 'sending';
-    if (next === 'sending') closeAttachMenu(false);
+    if (next === 'sending') {
+      closeAttachMenu(false);
+      dropZone.hidden = true;
+    }
     field.readOnly = next === 'sending';
     // A failure is a card of its own above the foot (FRU-305): « Did not go through », then what to
     // do. The sentence is the one of its cause (FRU-156).
