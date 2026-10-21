@@ -185,17 +185,17 @@ function filled(claim: unknown): claim is string {
   return typeof claim === 'string' && claim.length > 0;
 }
 
-// Stryker disable BlockStatement: an empty catch returns `undefined`, as this one does. The range is the whole function, because a directive cannot lead a `catch`.
 function readJson<T>(segment: string): T | undefined {
+  // A segment that is not JSON leaves `null`, which the last line refuses as it refuses a JSON `null`.
+  let parsed: unknown = null;
   try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(base64UrlDecode(segment)));
-
-    return typeof parsed === 'object' && parsed !== null ? (parsed as T) : undefined;
+    parsed = JSON.parse(new TextDecoder().decode(base64UrlDecode(segment)));
   } catch {
-    return undefined;
+    // Not JSON: `parsed` stays `null`.
   }
+
+  return typeof parsed === 'object' && parsed !== null ? (parsed as T) : undefined;
 }
-// Stryker restore BlockStatement
 
 async function hmac(signingInput: string, secret: string): Promise<ArrayBuffer> {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
