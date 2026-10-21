@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { AT_REST_PLUGIN, AUTH_BASE_PATH, startAuth } from './auth.ts';
 import {
   CONSOLE_URL,
-  DATABASES,
+  MIGRATED_DATABASES,
   PUBLIC_URL,
   ask,
   databasesOfACase,
@@ -24,7 +24,7 @@ import { rowsOf } from './postgres.fixture.ts';
 
 const { opening } = databasesOfACase();
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the options of better-auth, measured on an instance, on ${label} (FRU-144)`, { skip }, () => {
     it('opens no session with the row of the session table, and the bearer plugin opens one with the token alone', async () => {
       const database = await opening(open);

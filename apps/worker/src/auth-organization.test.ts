@@ -4,7 +4,7 @@ import { KvError } from './kv.ts';
 import { ROLES, type Role, can, mailboxOf } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { type Auth, INVITATION_SECONDS, INVITER_GONE, ROLE_REFUSED, startAuth } from './auth.ts';
-import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
+import { CONSOLE_URL, MIGRATED_DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
 import { INVITATIONS_PER_INVITER, INVITATIONS_PER_WORKSPACE, handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
@@ -117,7 +117,7 @@ const refresh = (worker: Worker, refreshToken: string) =>
 const sitesOf = (worker: Worker, accessToken: string) =>
   worker.call('/session/sites', { origin: null, headers: { Authorization: `Bearer ${accessToken}` } });
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the routes of the organization plugin, on ${label} (FRU-149)`, { skip }, () => {
     it('makes a workspace through the plugin for somebody of the cookie, with its owner and no « active » one', async () => {
       const worker = await workerOn(open);

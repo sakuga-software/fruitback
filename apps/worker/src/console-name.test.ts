@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { MAX_PERSON_NAME } from './accounts.ts';
-import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 
 /**
@@ -27,7 +27,7 @@ function claimsOf(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString()) as Record<string, unknown>;
 }
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the name of a person, on ${label} (FRU-249)`, { skip }, () => {
     async function signedIn() {
       const worker = await workerOf(await opening(open), { env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import { handleRequest } from './app.ts';
-import { CONSOLE_URL, DATABASES, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
+import { CONSOLE_URL, MIGRATED_DATABASES, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
 import { GOOGLE, cookieOf, workerOf } from './auth-worker.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -115,7 +115,7 @@ async function providersOf(database: PgDatabase, user: string): Promise<string[]
   ).map((row) => String(row.providerId));
 }
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the ways a person signs in, on ${label} (FRU-249)`, { skip }, () => {
     async function signedIn(email = 'alice@acme.dev') {
       const worker = await workerOf(await opening(open));

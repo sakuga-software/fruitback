@@ -3886,3 +3886,31 @@ close that too, for a second round trip and a store of tickets; it was not worth
 The screen of the mock-up says « Now », « 1 h ago ». A day serves it as « Today », « Yesterday »,
 « 3 days ago », says less of when a person works, and costs one write every ten minutes at most instead of one a
 call, a write that changes no row when the day is the same.
+
+## The databases of the tests on PGlite (FRU-339)
+
+### The rules, in short
+
+- A test process starts PGlite from `INITDB_FILE` of `pglite.fixture.ts`, the data folder that
+  `initdb` made: 0.2 s instead of 0.7 s. The first process that finds no file writes it, under
+  `node_modules/.cache`, with the version of PGlite in its name. test:`is written by the first instance, and starts as one that runs initdb`
+- `createPgliteDatabase` (and `databaseOn`) gives an empty `public`, as before. A case on the
+  migrations, the catalogue, or a database of before takes it.
+- `createMigratedPgliteDatabase` (and `migratedDatabaseOn`) gives `public` with every migration
+  applied and no row. `worlds()`, the conformance suites of the stores, the sessions and the accounts,
+  and `MIGRATED_DATABASES` of `auth.fixture.ts` take it. The real server of `MIGRATED_DATABASES` is the
+  one of `DATABASES`: in the CI job `postgres`, each case still applies every migration on an empty
+  database.
+- Between two cases it empties every table but the journal (`TRUNCATE … RESTART IDENTITY`), and
+  sets the session back (`RESET ALL`, temporary tables, advisory locks). When the shape of `public`
+  (tables, columns, defaults, indexes, constraints, triggers and their state, functions, types,
+  schemas, rows of the journal) is not the one `migrate` made, it empties `public` and applies the
+  migrations again. test:`gives no row of the case before, in any table, and the identities start again`
+  test:`gives no state of the session of the case before: settings, temporary tables, advisory locks`
+
+### Why
+
+Applying the migrations on PGlite took 50 ms a case, and emptying `public` 14 ms more: a third of the
+time of the suite, and the dry run of the mutation pass runs every test file in a process of its own
+(FRU-336). The store under test still calls `migrated`, and the first case of each process applies
+every migration on an empty database with `migrate` of `postgres-migrate.ts`. test:`is the database that migrate makes on an empty one, with every migration in its journal`

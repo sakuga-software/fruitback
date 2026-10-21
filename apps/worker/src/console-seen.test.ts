@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { AccountStore } from './accounts.ts';
-import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { dayOf, forgetSeen } from './last-seen.ts';
@@ -184,7 +184,7 @@ const { opening } = databasesOfACase();
 
 const FIREFOX_ON_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0';
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the short label of the browser of a session of the console, on ${label} (FRU-249)`, { skip }, () => {
     /** A link asked for and spent by a browser that says who it is. */
     async function signInWith(worker: Awaited<ReturnType<typeof workerOf>>, userAgent: string): Promise<string> {

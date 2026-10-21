@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 
 /**
@@ -10,7 +10,7 @@ import { workerOf } from './auth-worker.fixture.ts';
 
 const { opening } = databasesOfACase();
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the language of an account, on ${label} (FRU-119, FRU-216)`, { skip }, () => {
     async function signedIn() {
       const worker = await workerOf(await opening(open));

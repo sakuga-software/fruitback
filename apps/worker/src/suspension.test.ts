@@ -4,7 +4,7 @@ import { describe, it, mock } from 'node:test';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import type { BetterAuthOptions } from 'better-auth';
 import { ACCOUNT_SUSPENDED, SERVED_PATHS } from './auth.ts';
-import { CONSOLE_URL, DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { CONSOLE_URL, MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import { runPair } from './cli.ts';
 import { handleConsoleApi } from './console-api.ts';
@@ -288,7 +288,7 @@ const banned = async (worker: Worker, account: string): Promise<unknown> =>
 const banInTheDatabase = (worker: Worker, account: string) =>
   rowsOf(worker.database, `UPDATE "user" SET banned = true WHERE id = '${account}'`);
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(
     `what a ban does in better-auth 1.7.7, which the worker does not mount the admin plugin of, on ${label} (FRU-281)`,
     { skip },

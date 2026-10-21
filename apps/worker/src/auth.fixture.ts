@@ -3,7 +3,13 @@ import { afterEach } from 'node:test';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { type AuthConfig, authOptions } from './auth.ts';
 import type { PgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
+import {
+  NO_REAL_POSTGRES,
+  createMigratedPgliteDatabase,
+  createPgliteDatabase,
+  createRealDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresKv } from './kv-postgres.ts';
 
@@ -142,6 +148,15 @@ export async function signUp(
 export const DATABASES: readonly { label: string; open: () => Promise<PgDatabase>; skip: string | false }[] = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+];
+
+/**
+ * `DATABASES`, with the PGlite one migrated before the case (FRU-339): for a case whose subject is
+ * not the migrations. The real server is the same: there each case still applies every migration.
+ */
+export const MIGRATED_DATABASES: typeof DATABASES = [
+  { label: 'PGlite', open: createMigratedPgliteDatabase, skip: false },
+  ...DATABASES.slice(1),
 ];
 
 /**

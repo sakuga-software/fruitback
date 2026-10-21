@@ -9,7 +9,7 @@ import {
   AUTH_SECRET,
   NO_SESSIONS,
   CONSOLE_URL,
-  DATABASES,
+  MIGRATED_DATABASES,
   PUBLIC_URL,
   databasesOfACase,
   make,
@@ -122,7 +122,7 @@ async function throughProvider(worker: Awaited<ReturnType<typeof workerOn>>, pro
   return { start, back, location: back.headers.get('Location') ?? '', cookie: cookieOf(back) };
 }
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the link of the e-mail, through better-auth, on ${label} (FRU-147)`, { skip }, () => {
     it('opens a session with a link asked for, then spent, and the token reaches the worker in no address', async () => {
       const worker = await workerOn(open);
