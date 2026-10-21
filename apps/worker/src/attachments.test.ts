@@ -721,6 +721,39 @@ describe('a note of before FRU-331, with its picture (arbitration of 2026-10-21)
     assert.equal(attachments.size(), 0);
   });
 
+  it('says why the picture is not joined when the note has no tracker, as canAttach: false says it on a read', async () => {
+    const env = await envWith();
+    const { alice, acme, alice_token, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    await aPictureOf(env, alice.id, acme.id, site, attachments);
+    const kept = trackerDouble({ takes: false });
+
+    const sent = await post(env, { attachments, store: kept.store }, alice_token, withPicture(site), []);
+    assert.equal(sent.status, 201, 'the note goes');
+    assert.deepEqual(((await sent.json()) as { attachments?: unknown }).attachments, {
+      sent: 0,
+      lost: 0,
+      waiting: 0,
+      notTaken: 'no-tracker',
+    });
+    assert.deepEqual(kept.received[0]?.files, []);
+    const read = await call(
+      env,
+      { attachments, store: kept.store },
+      `/feedback?url=${encodeURIComponent('https://staging.acme.dev/pricing')}&client=${site}`,
+      { token: alice_token },
+    );
+    assert.equal(((await read.json()) as { canAttach?: boolean }).canAttach, false);
+    // The control: the same note to a tracker that takes files says it sent the picture.
+    const tracker = trackerDouble();
+    const control = await post(env, { attachments, store: tracker.store }, alice_token, withPicture(site), []);
+    assert.deepEqual(((await control.json()) as { attachments?: unknown }).attachments, {
+      sent: 1,
+      lost: 0,
+      waiting: 0,
+    });
+  });
+
   it('never refuses the note: the picture of another person, or one that is gone, stays out of it', async () => {
     const env = await envWith();
     const { acme, alice_token, site } = await setUp(env);

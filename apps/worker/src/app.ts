@@ -2113,7 +2113,7 @@ async function postFeedback(
     // A note of before FRU-331, sent again, names its picture in its seed: it goes with it while the
     // migration keeps it, and the note is never refused for it.
     const legacy = await legacyAttachment(request, config, context, store, route, target, attributed, attachmentIds);
-    const named = legacy === undefined ? attachmentIds : [...attachmentIds, legacy];
+    const named = legacy?.id === undefined ? attachmentIds : [...attachmentIds, legacy.id];
     const taken =
       named.length === 0
         ? undefined
@@ -2142,6 +2142,10 @@ async function postFeedback(
       {
         issue: hidden ? withoutTracker(issue, attributed.id) : issue,
         ...(filesOutcome === undefined ? {} : { attachments: filesOutcome }),
+        // The note named a picture that its place takes no file for: it goes without it, and says why.
+        ...(legacy?.notTaken === undefined
+          ? {}
+          : { attachments: { sent: 0, lost: 0, waiting: 0, notTaken: legacy.notTaken } }),
       },
       corsHeaders,
     );
@@ -2234,7 +2238,9 @@ async function takeFiles(
 /**
  * The picture of before FRU-331 that a seed names, when it is still in transit and this note may take
  * it (its sender, its workspace, a store that takes files), or `undefined`. Never a refusal: a note
- * whose picture is gone goes without it, as it would have before.
+ * whose picture is gone goes without it, as it would have before. `notTaken: 'no-tracker'`: the
+ * seed names a picture and the place of the note takes no file (a note kept in Fruitback, GitHub):
+ * the answer says why the picture is not joined, as `canAttach: false` says it on a read.
  */
 async function legacyAttachment(
   request: Request,
@@ -2245,19 +2251,19 @@ async function legacyAttachment(
   target: ClientConfig | undefined,
   seed: Seed,
   named: readonly string[],
-): Promise<string | undefined> {
+): Promise<{ id?: string; notTaken?: 'no-tracker' } | undefined> {
   const id = legacyFileOf(seed);
   const workspace = route.client?.workspace;
   if (id === undefined || named.includes(id) || named.length >= MAX_ATTACHMENTS_PER_NOTE) return undefined;
+  if (!(await takesAttachments(store, target))) return { notTaken: 'no-tracker' };
   const files = context?.attachments ?? attachmentStoreFor(config);
   if (files === undefined || context === undefined || workspace === undefined) return undefined;
   const found = await files.get(id, Date.now());
   if (found === undefined || found.workspace !== workspace) return undefined;
   if (found.seed !== undefined && found.seed !== seed.id) return undefined;
-  if (!(await takesAttachments(store, target))) return undefined;
   const account = await writerIn(request, config, context, workspace, seed.client?.id);
 
-  return account === found.account ? id : undefined;
+  return account === found.account ? { id } : undefined;
 }
 
 /**

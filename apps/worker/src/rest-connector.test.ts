@@ -1161,6 +1161,14 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
     assert.equal(sent.attachments[0]?.name, 'screenshot.png');
     assert.ok(verifiesSignedRead(SECRETS_KEY, LEGACY, new URL(sent.attachments[0]?.url ?? '').searchParams, now));
     assert.equal((await attachments.get(LEGACY, now))?.seed, 'sd_waiting', 'the signed read answers a file of a note');
+    // A failed attempt is followed by another: the picture, taken by this note, is carried again.
+    const again = await withSignedFiles(body('ws_acme'), {
+      attachments,
+      publicUrl: 'https://api.fruitback.test',
+      secretsKey: SECRETS_KEY,
+      now: now + 1_000,
+    });
+    assert.deepEqual(again.files, [LEGACY]);
 
     // The controls: another workspace, and a picture that is gone, leave the body as it was.
     assert.equal(

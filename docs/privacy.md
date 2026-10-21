@@ -197,7 +197,11 @@ the account of the member who left a note, and that is what says who may give a 
   Deleting the workspace deletes the files that wait. The table is still named `screenshots`; the
   pictures of before FRU-331 went with the migration when their note was delivered (a note that the
   worker keeps names them, and no delivery waits for them); the others end 7 days after the
-  migration, and a note still on its way is delivered with its picture until then.
+  migration, and a note still on its way is delivered with its picture until then. **The pictures
+  of the notes kept in Fruitback, with no tracker, are gone with this version**: Fruitback stores no
+  image (decision of 2026-10-20), and the address in such a note, `GET /screenshot/<id>`, answers
+  nothing any more. A note of before sent again to a site with no tracker goes without its picture,
+  and the answer says why (`notTaken: 'no-tracker'`).
 
 - **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
