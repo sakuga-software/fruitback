@@ -24,24 +24,24 @@
     "score": 92.5,
     "files": {
       "src/clients.ts": {
-        "score": 89.42,
-        "mutants": 208
+        "score": 100,
+        "mutants": 185
       },
       "src/identity.ts": {
         "score": 93.5,
         "mutants": 200
       },
       "src/kv.ts": {
-        "score": 86.48,
-        "mutants": 74
+        "score": 100,
+        "mutants": 72
       },
       "src/rate-limit.ts": {
-        "score": 89.39,
-        "mutants": 66
+        "score": 100,
+        "mutants": 55
       },
       "src/cache.ts": {
-        "score": 86.36,
-        "mutants": 44
+        "score": 100,
+        "mutants": 38
       },
       "src/cors.ts": {
         "score": 100,
