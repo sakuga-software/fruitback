@@ -1196,6 +1196,41 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
       body('ws_acme'),
     );
   });
+
+  it('carries a picture once when the note sent again after FRU-331 lists it already (FRU-337)', async () => {
+    const attachments = createMemoryAttachmentStore();
+    const now = Date.now();
+    await attachments.put({
+      id: LEGACY,
+      workspace: 'ws_acme',
+      account: 'acc_alice',
+      site: '',
+      name: 'screenshot.png',
+      type: 'image/png',
+      content: new Uint8Array([1, 2]),
+      createdAt: now - 60_000,
+      expiresAt: now + 60_000,
+      beforeTransit: true,
+    });
+    // The seed still names its picture, and the queue lists it: `legacyAttachment` took it.
+    const listed = JSON.stringify({
+      ...(JSON.parse(body('ws_acme')) as object),
+      attachments: [{ id: LEGACY, name: 'screenshot.png', type: 'image/png', size: 2 }],
+    });
+    const signed = await withSignedFiles(listed, {
+      attachments,
+      publicUrl: 'https://api.fruitback.test',
+      secretsKey: SECRETS_KEY,
+      now,
+    });
+
+    assert.deepEqual(signed.files, [LEGACY]);
+    const sent = JSON.parse(signed.body) as { attachments: { name: string }[] };
+    assert.deepEqual(
+      sent.attachments.map((file) => file.name),
+      ['screenshot.png'],
+    );
+  });
 });
 
 describe('a file of a delivery whose attempt fails (FRU-331)', () => {

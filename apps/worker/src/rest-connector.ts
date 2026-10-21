@@ -352,7 +352,10 @@ export async function withSignedFiles(
   const legacy = parsed.seed === undefined ? undefined : legacyFileOf(parsed.seed);
   const listed = Array.isArray(parsed.attachments) ? [...parsed.attachments] : [];
   if (listed.length === 0 && legacy === undefined) return { body, files: [] };
-  if (legacy !== undefined && attachments !== undefined && publicUrl !== undefined) {
+  // A note of before sent again after FRU-331 lists its picture already (`legacyAttachment`): it goes
+  // once, with one address (FRU-337, raised by every heavy review of #427).
+  const alreadyListed = listed.some((kept) => kept.id === legacy);
+  if (legacy !== undefined && !alreadyListed && attachments !== undefined && publicUrl !== undefined) {
     const found = await attachments.get(legacy, now);
     if (found !== undefined && found.workspace === parsed.workspace) {
       listed.push({ id: legacy, name: found.name, type: found.type, size: found.content.byteLength });
