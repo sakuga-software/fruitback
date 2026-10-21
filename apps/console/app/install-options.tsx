@@ -5,17 +5,18 @@ import { connectsBySignIn } from './instance';
 import { copyText, problemOf } from './problems';
 import { Button, Problem, Snippet } from './ui';
 import { useLocale } from './use-locale';
+import { WIDGET_SCRIPT_PATH } from './widget-script';
 
 /**
  * The two ways to put Fruitback on a site, as the Sites screen shows them for a site: the script
  * tag, and the browser of the person. The setup has its own drawing of them since FRU-239.
  */
 
-/** The script tag a site embeds, pointing at this console's copy of the widget. */
+/** The script tag a site embeds, pointing at this console's copy of the widget, at its versioned address (FRU-106). */
 export function snippetFor(site: Site): string {
   return [
     '<script',
-    `  src="${window.location.origin}/fruitback.iife.js"`,
+    `  src="${window.location.origin}${WIDGET_SCRIPT_PATH}"`,
     `  data-fruitback-endpoint="${API}"`,
     `  data-fruitback-client="${site.id}"`,
     '  defer',

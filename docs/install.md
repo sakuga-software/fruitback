@@ -15,7 +15,8 @@ visibility you choose at step 2, and the mode decides who can satisfy it.**
 
 > **The packages are not on npm yet.** Everything below describes the shape of the install; the
 > `npm i` lines will work once the first release is published. Until then, the `<script>` route works:
-> the console serves the script of the widget at `/fruitback.iife.js`, and
+> the console serves the script of the widget at `/v/<version>/fruitback.iife.js` (the snippet of the
+> console gives it) and at `/fruitback.iife.js`, and
 > `pnpm --filter @fruitback/widget build` produces the same file.
 
 ---

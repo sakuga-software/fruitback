@@ -9,11 +9,32 @@ server {
     # and lets the page call one worker, is what keeps an injected script from calling with it.
     set $csp "default-src 'self'; script-src 'self' __SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; connect-src 'self' __WORKER_ORIGIN__; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
-    # The widget's script is embedded by sites: any page may load it.
+    # The widget's script is embedded by sites: any page may load it. This address does not change
+    # when the script does, so a browser keeps it five minutes. Snippets given before FRU-106 use it.
     location = /fruitback.iife.js {
         add_header Access-Control-Allow-Origin * always;
         add_header Cache-Control "public, max-age=300" always;
         add_header X-Content-Type-Options nosniff always;
+    }
+
+    # The script of this image at its versioned address, the one the snippet gives (FRU-106). The
+    # version holds a hash of the file (`widget-version.mjs` writes it at build time), so the file at
+    # this address never changes: a browser keeps it one year and never asks again.
+    location = /v/__WIDGET_VERSION__/fruitback.iife.js {
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # The version of an image of before: a snippet copied before this image was deployed. The image
+    # has only its own script, so the browser is sent to it, and keeps that answer five minutes.
+    # `absolute_redirect off`: the Location is a path, and a proxy in front keeps its host and scheme.
+    location ~ ^/v/[^/]+/fruitback\.iife\.js$ {
+        absolute_redirect off;
+        add_header Access-Control-Allow-Origin * always;
+        add_header Cache-Control "public, max-age=300" always;
+        add_header X-Content-Type-Options nosniff always;
+        return 302 /v/__WIDGET_VERSION__/fruitback.iife.js;
     }
 
     # The address of the worker of this instance, written when the container started (FRU-222). It

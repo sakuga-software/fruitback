@@ -22,7 +22,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `transport.ts` sends it with every call (`credentials: 'include'`). There is nothing to refresh.
   See _The session of the console_ below for the worker of before, the `401` and the providers.
   The image hashes the inline scripts of `index.html` into its policy (`csp.mjs`), never
-  `'unsafe-inline'`, and serves the widget's script at `/fruitback.iife.js` until it has a CDN.
+  `'unsafe-inline'`, and serves the widget's script (FRU-106) at `/v/<version>/fruitback.iife.js`,
+  cached one year and `immutable`, which the snippet gives. The version is the version of the package
+  and 12 hex characters of the sha256 of the file (`widget-version.ts`): the file at one address never
+  changes. The address of before, `/fruitback.iife.js`, stays, cached five minutes, and the version of
+  another image answers `302` to this one's. No third-party CDN: it would see the address of every
+  visitor of every site.
   **The address of the worker is read when the page loads, not when it is built** (FRU-222):
   `/config.js`, which the container writes, sets `globalThis.__FRUITBACK__` before the bundle, and
   `apiFrom` of `instance.ts` reads it once. The file of the repository sets nothing, so `pnpm dev`
