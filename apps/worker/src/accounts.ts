@@ -155,7 +155,9 @@ export const DEFAULT_WRITERS: Writers = 'members';
 
 /**
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
- * teams, so `teamId` is required for one. An address that only receives has none (FRU-122).
+ * places, so `teamId` is required for one. An address that only receives has none (FRU-122).
+ *
+ * `teamId` is a team of Linear, or the repository `owner/name` of a `github` connector (FRU-359).
  */
 export type Destination = {
   connector: string;
@@ -222,10 +224,13 @@ export function destinationId(site: string, destination: Destination): string {
 }
 
 /**
- * What a workspace can connect. `linear` is a tracker: the notes live there. `rest` is an address
- * that receives each note, while the notes stay in the worker (FRU-122).
+ * What a workspace can connect. `linear` and `github` are trackers: the notes live there. `rest` is
+ * an address that receives each note, while the notes stay in the worker (FRU-122).
+ *
+ * A `github` connector keeps the id of an installation of the GitHub App of the worker (FRU-359),
+ * and nothing more. The key of the App is in the environment of the worker.
  */
-export const CONNECTOR_KINDS = ['linear', 'rest'] as const;
+export const CONNECTOR_KINDS = ['linear', 'rest', 'github'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
 
 export type DueDelivery = { id: string; connectorId: string; body: string; attempts: number };

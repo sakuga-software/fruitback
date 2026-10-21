@@ -10,6 +10,7 @@ import {
 import type { AccountStore, Reach, Role } from './accounts.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { ConnectStore } from './connect.ts';
+import type { GithubApp } from './github-connector.ts';
 import type { TxtResolver } from './domain-proof.ts';
 import type { WorkerConfig } from './env.ts';
 import type { IdentityResult } from './identity.ts';
@@ -71,6 +72,11 @@ export type RequestContext = {
   noteIndex?: NoteIndex;
   /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
   instanceAdmin?: InstanceAdminReads;
+  /**
+   * The GitHub App of the connectors and its tokens (FRU-359). Absent, the one of the process for
+   * `FRUITBACK_GITHUB_CONNECTOR`. A suite hands over one that calls a GitHub on a port of the machine.
+   */
+  githubApp?: GithubApp;
 };
 
 /**

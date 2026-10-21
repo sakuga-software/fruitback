@@ -4048,3 +4048,59 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   not answer then costs the files their hour, never a second sending of the note.
 - **An attempt of a delivery changes nothing of a file**: it reads and signs. A `2xx` brings the end
   of the files it carried to one hour; a failure leaves them, and the next attempt signs them again.
+
+## The `github` connector of a workspace (FRU-359)
+
+Decision of Mathieu of 2026-10-21 on FRU-188, option A: **one public GitHub App of the worker**,
+« Fruitback App » (`fruitback-app`, App ID 5409420, of `sakuga-software`), with Issues read and write,
+Metadata read, and no webhook. Each organisation of a client installs it. `github-connector.ts` is
+the mechanism, `SECURITY.md` (« The GitHub App key ») says what the key reaches and how to replace it.
+
+### The rules, in short
+
+- **The connector keeps the id of an installation, and nothing more**, sealed by
+  `FRUITBACK_SECRETS_KEY` (`sealInstallation`). No token is written anywhere: the key of the App is in
+  `FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY`, and the tokens are in the memory of the process.
+- **A token reaches one repository.** The mint sends `repositories: [<name>]`, and the answer of
+  GitHub must name the repository of the destination alone (`full_name`, without case): an
+  installation of another owner with a repository of the same name gives no token that the worker
+  uses.
+- **The cache of the tokens is keyed by the installation and the repository** (`createGithubApp`),
+  and it is one per process (`githubAppFor`): `createConnectorStores` builds a store per request.
+  A token is used until five minutes before its end, as in the store `github`.
+- **A refusal is « Needs attention »**: `403` or `422` on the mint, `403` or `404` on a call of the
+  repository, is `key-lacks-access`; `404` on the mint (no such installation) is `connection-ended`.
+  The token of a refused call is dropped. A `403` with `retry-after`, or with
+  `x-ratelimit-remaining: 0`, is a rate limit and changes nothing. A `422` on an issue call is a
+  refusal of the note, not of the connector.
+- **The destination keeps the repository in `teamId`**, in lower case: `site_destinations.team_id`
+  takes it with no migration, and `scope`, `destinationId` and `placedAt` carry it as they carry a
+  team. The store reads it again strictly before each call (`readGithubRepository`), and a client
+  with none is a `StoreError`: there is no repository by default.
+- **The issues, the labels and the stages are the store `github`'s** (`createIssueStore`,
+  `createTokenCache`, `readRsaPrivateKey` in `github.ts`). `FRUITBACK_STORE=github` keeps its own
+  variables, its lookup of the installation by repository, and its tests.
+- **`FRUITBACK_GITHUB_CONNECTOR` and its key go together.** One without the other, a value that is
+  not `<app id>:<client id>:<client secret>`, a key that is not RSA, or no `FRUITBACK_SECRETS_KEY`:
+  refused at boot, and no reason quotes a value. The PEM is read as `FRUITBACK_GITHUB_PRIVATE_KEY`
+  is: its line breaks as they are, or written as `\n`.
+
+### For FRU-360 and FRU-361
+
+- The console API takes `{ "connector": "<id>", "repository": "owner/name" }` for a `github`
+  connector, on `POST …/destination` and `POST …/destinations`, and refuses a `teamId` or a
+  `projectId` beside it. It answers the destination with the repository in `teamId`, and the label
+  `GitHub · owner/name`. Nothing asks GitHub when a destination is set.
+- `POST …/connectors` refuses the kind `github` (`400 invalid-connector`). FRU-360 writes the
+  connector, with `sealInstallation`, after it checks that the installation is of the person who
+  connects.
+- The routes `…/teams`, `…/states` and `…/settings` answer `404` for a `github` connector. The
+  console shows its connector with no settings until a ticket adds them.
+
+### What was not measured
+
+- **No real repository and no real installation.** The routes, the bodies and the answers are the
+  ones of the REST documentation, version 2022-11-28, played against a GitHub on a port of the
+  machine (`github-connector.test.ts`). That the answer of `access_tokens` lists `repositories` with
+  their `full_name` is the documentation's example: a first note on a real installation is the
+  measurement this lacks.

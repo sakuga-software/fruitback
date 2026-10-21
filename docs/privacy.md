@@ -74,6 +74,10 @@ store it is configured with:
 | `github`   | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
 | `postgres` | a row in the database of the worker, beside the accounts | you                                 |
 
+On the Cloud, a workspace can connect **its own GitHub** (FRU-359): an organisation installs the
+GitHub App of Fruitback, and each site sends its notes to one of its repositories, as issues. The
+worker keeps the id of the installation, and no key and no token of GitHub.
+
 On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
 in the worker and a copy is posted to that address, whole and signed. Who runs that address decides
 who reads the copy. [Receiving notes on your own address](rest-connector.md) is the request.

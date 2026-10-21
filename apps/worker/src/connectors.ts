@@ -2,6 +2,7 @@ import { SEED_STAGES } from '@fruitback/shared';
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
+import { type GithubApp, createGithubConnectorStore, openInstallation } from './github-connector.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
@@ -18,9 +19,29 @@ import { type SeedStore, StoreError, takesAttachments, takesChecks, takesReplies
  * store: a note written there would be invisible to the team that reads its tracker. The widget keeps
  * the note and tries again (`502 store-unavailable`).
  */
-const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (apiKey: string, settings: ConnectorSettings) => SeedStore> = {
-  // The team is the client's. This default is never read for a client that has a destination.
-  linear: (apiKey, settings) => createLinearStore({ apiKey, teamId: 'no-team', projectId: undefined }, settings.stages),
+type Kept = { connector: string; sealed: string; settings: ConnectorSettings };
+type TrackerAccess = {
+  accounts: AccountStore;
+  secretsKey: string | undefined;
+  now: () => number;
+  oauth: LinearOAuth | undefined;
+  githubApp: GithubApp | undefined;
+};
+
+const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: TrackerAccess) => Promise<SeedStore>> = {
+  async linear({ connector, sealed, settings }, { accounts, secretsKey, oauth, now }) {
+    // A token of OAuth near its end is refreshed here.
+    const apiKey = await linearAuthorization(connector, sealed, { accounts, secretsKey, oauth, now });
+
+    // The team is the client's. This default is never read for a client that has a destination.
+    return createLinearStore({ apiKey, teamId: 'no-team', projectId: undefined }, settings.stages);
+  },
+  // FRU-359: the repository is the client's, and the token of the App reaches that repository only.
+  async github({ sealed }, { secretsKey, githubApp }) {
+    if (githubApp === undefined) throw new StoreError('This worker has no GitHub App to reach a repository with');
+
+    return createGithubConnectorStore(githubApp, openInstallation(sealed, secretsKey));
+  },
 };
 
 /**
@@ -134,7 +155,14 @@ export function createConnectorStores(
    * Whether a delivery can carry the address of a file on this worker (FRU-331): it has a public
    * address and a key to sign with. Without them an address that receives takes no file.
    */
-  { filesReachable = false }: { filesReachable?: boolean } = {},
+  {
+    filesReachable = false,
+    githubApp,
+  }: {
+    filesReachable?: boolean;
+    /** The GitHub App of the worker (FRU-359), for a `github` connector. It holds the tokens of the process. */
+    githubApp?: GithubApp;
+  } = {},
 ): ConnectorStores {
   return async (connector, workspace, own) => {
     const kept = await accounts.sealedKey(connector);
@@ -151,10 +179,12 @@ export function createConnectorStores(
       return { ...noFiles, create: (seed, client, policy) => receiving.create(seed, client, policy) };
     }
 
-    // A token of OAuth near its end is refreshed here.
-    const authorization = await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now });
+    const store = await TRACKERS[kept.kind](
+      { connector, sealed: kept.sealed, settings: kept.settings },
+      { accounts, secretsKey, now, oauth, githubApp },
+    );
 
-    return withSettings(TRACKERS[kept.kind](authorization, kept.settings), kept.settings);
+    return withSettings(store, kept.settings);
   };
 }
 

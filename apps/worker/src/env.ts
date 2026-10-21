@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
+import { type GithubConnectorConfig, parseGithubConnector } from './github-connector.ts';
+import { readRsaPrivateKey } from './github.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
 import {
   DEFAULT_DATABASE_SCHEMA,
@@ -153,6 +155,16 @@ export type WorkerEnv = {
   /** The Linear application a workspace connects its Linear with (FRU-134): `<client id>:<client secret>`. */
   FRUITBACK_LINEAR_OAUTH?: string;
   /**
+   * The GitHub App a workspace connects its GitHub with (FRU-359): `<app id>:<client id>:<client secret>`.
+   * Not the store `github` of `FRUITBACK_GITHUB_APP_ID`. It goes with the next variable, never alone.
+   */
+  FRUITBACK_GITHUB_CONNECTOR?: string;
+  /**
+   * The private key of that App, as PEM: its line breaks as they are, or written as `\n` on one line.
+   * WARNING: it mints a token for every repository of every organisation that installed the App.
+   */
+  FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY?: string;
+  /**
    * What encrypts the keys of the connectors in the database of the accounts (FRU-121). At least 32 characters,
    * and not the identity secret. Absent, a workspace connects no tracker. WARNING: losing it loses
    * every connector, and changing it does the same.
@@ -273,6 +285,8 @@ const configSchema = z.object({
   google: z.custom<OAuthClient | undefined>().optional(),
   /** The application a workspace connects its Linear with, or absent: a personal key then (FRU-134). */
   linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
+  /** The GitHub App a workspace connects its GitHub with, or absent (FRU-359). */
+  githubConnector: z.custom<GithubConnectorConfig | undefined>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
   secretsKey: z.string().min(32).optional(),
   /** What better-auth signs its cookies with, or absent: better-auth is then off (FRU-144). */
@@ -496,6 +510,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
     google: env.FRUITBACK_GOOGLE_OAUTH ? parseOAuthClient(env.FRUITBACK_GOOGLE_OAUTH) : undefined,
     linearOAuth: env.FRUITBACK_LINEAR_OAUTH ? parseLinearOAuth(env.FRUITBACK_LINEAR_OAUTH) : undefined,
+    githubConnector: readGithubConnector(env),
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -741,6 +756,9 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     }
   }
 
+  const githubRefusal = githubConnectorRefusal(env, result.data, accounts);
+  if (githubRefusal !== undefined) return { ok: false, missing: [githubRefusal] };
+
   // Google sends the person back to the worker's own address, and better-auth signs them in.
   if (env.FRUITBACK_GOOGLE_OAUTH) {
     if (result.data.google === undefined) {
@@ -802,6 +820,43 @@ function readMail(env: WorkerEnv): TemSettings | undefined {
   if (credentials === undefined || from === undefined || !from.includes('@')) return undefined;
 
   return { ...credentials, from };
+}
+
+/** Both variables of the GitHub App of the connectors, read, or `undefined` (FRU-359). */
+function readGithubConnector(env: WorkerEnv): GithubConnectorConfig | undefined {
+  const app = env.FRUITBACK_GITHUB_CONNECTOR ? parseGithubConnector(env.FRUITBACK_GITHUB_CONNECTOR) : undefined;
+  const privateKey = env.FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY
+    ? readRsaPrivateKey(env.FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY)
+    : undefined;
+
+  return app === undefined || privateKey === undefined ? undefined : { ...app, privateKey };
+}
+
+/**
+ * Why the GitHub App of the connectors stops the worker, or `undefined` (FRU-359). The two variables
+ * go together, like the two halves of `FRUITBACK_LINEAR_OAUTH`. No reason quotes a value.
+ */
+function githubConnectorRefusal(env: WorkerEnv, config: WorkerConfig, accounts: boolean): string | undefined {
+  const app = env.FRUITBACK_GITHUB_CONNECTOR;
+  const key = env.FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY;
+  if (!app && !key) return undefined;
+  if (!app) {
+    return 'FRUITBACK_GITHUB_CONNECTOR (<app id>:<client id>:<client secret> of the GitHub App whose key is FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY: set the two, or neither)';
+  }
+  if (!key) {
+    return 'FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY (the private key, as PEM, of the GitHub App that FRUITBACK_GITHUB_CONNECTOR names: set the two, or neither)';
+  }
+  if (parseGithubConnector(app) === undefined) {
+    return 'FRUITBACK_GITHUB_CONNECTOR (<app id>:<client id>:<client secret>: the App ID in digits, then the client ID and a client secret of the App)';
+  }
+  if (readRsaPrivateKey(key) === undefined) {
+    return 'FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY (an RSA private key, as PEM, from « Private keys » of the GitHub App)';
+  }
+  if (!accounts || config.secretsKey === undefined) {
+    return 'FRUITBACK_DATABASE_URL and FRUITBACK_SECRETS_KEY (FRUITBACK_GITHUB_CONNECTOR connects the GitHub of a workspace, and keeps its installation sealed)';
+  }
+
+  return undefined;
 }
 
 /**

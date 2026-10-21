@@ -198,6 +198,43 @@ token to one repository and one hour, but the key itself does not expire. So:
 - If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
   the App, and restart the worker with the new key.
 
+**The App of the connectors is another key, and a larger one** (FRU-359). On the Cloud, a workspace
+connects its GitHub by an installation of the public App « Fruitback App »
+(`FRUITBACK_GITHUB_CONNECTOR`, `FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY`). Each organisation that
+installs it adds its repositories to what this one key reaches. Whoever holds
+`FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY` can mint a token for **every repository of every
+organisation that installed the App**, with Issues read and write. That person can read and write
+the issues of each client, and read their metadata. What holds it:
+
+- The key is in the environment of the worker only. The database keeps the id of each installation,
+  sealed by `FRUITBACK_SECRETS_KEY`, and no key and no token: a dump reaches no repository, even
+  with that secret.
+- The worker asks each token for the repository of one destination only (`repositories` of
+  `POST /app/installations/{id}/access_tokens`). The token lasts one hour, and the worker keeps it
+  in memory until five minutes before its end, by installation and repository: a token of one
+  repository is never used for another. GitHub says which repository the token reaches, and a token
+  that does not name the repository of the destination alone is not used.
+- A repository that the installation does not cover (GitHub answers `403`, `404` or `422` for the
+  token, `403` or `404` for the issue) makes the connector « Needs attention ». The worker then asks
+  no token for another repository. A rate limit of GitHub is not a refusal, and changes nothing.
+- The installation of the App is the client's consent, given on GitHub. **The worker does not check
+  yet that an installation is of the workspace that names it**: FRU-360 adds that check, with the
+  flow that attaches an installation. Until then, only the code of the worker attaches one.
+
+If the key leaks:
+
+1. Under **Private keys** in the settings of « Fruitback App », generate a new key.
+2. Put it in `FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY`, and restart the worker.
+3. Delete the old key on the same page. GitHub then refuses every token that the old key asks for.
+   A token minted before stays valid until its end, one hour at most: nobody can revoke it with the
+   key alone.
+4. Tell each organisation that installed the App: during the leak, its issues could be read and
+   written. The audit log of each organisation shows the calls of the App.
+
+Replace the key the same way once a year with no leak. Steps 1 to 3 cost no installation: an
+organisation keeps its installation, and the connectors work again after the restart. The client
+secret of `FRUITBACK_GITHUB_CONNECTOR` is replaced on the same page, under **Client secrets**.
+
 ### The keys of the extension stores
 
 `release-extension.yml` submits the extension to the Chrome Web Store and to AMO (FRU-329). The keys
@@ -1283,6 +1320,9 @@ go there. **This is the first secret of a customer that the Cloud holds.**
   sees nothing of the tracker: not the connector, not the destination of a site.
 - A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
   written to the worker's own store in its place: its team would not see it.
+- A `github` connector (FRU-359) keeps no key of the customer: the id of an installation of the App
+  of the worker, sealed the same way. « The GitHub App key » above says what the key of the App
+  reaches.
 
 ### The places a site can send to, and who chooses (FRU-123)
 
@@ -1297,7 +1337,9 @@ sets the list in the console, and a note goes to the first place unless a member
   read the page, so the field is added after the cache, for the caller of this request.
 - **A place is named by an opaque id.** It is a digest of the site, the connector, the team and the
   project. The ids of the connector and of the team stay in the worker. The label is written by the
-  worker from what the tracker answers when an admin sets the list, never from the request.
+  worker from what the tracker answers when an admin sets the list, never from the request. The one
+  exception is a repository of GitHub (FRU-359): its label is its name, `owner/name` in lower case,
+  which the worker reads strictly from the request. GitHub is asked when a note goes, not here.
 - **A member chooses with `POST /feedback?destination=<id>`.** The body stays the seed. An id the
   site does not have, and a caller who may not see the tracker, both get `403
 destination-not-allowed`, and nothing is written, in the first place either.
