@@ -725,7 +725,10 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   thread, with the link of its ticket; a guest reads the count alone.
 - **The area of a capture works with the keyboard** (`area.ts`): an area is drawn at once in the
   middle, the arrows move it, Shift and the arrows size it, Enter takes it, Esc cancels. A drag draws
-  a new one. The widget is hidden for the two frames before the capture.
+  a new one. The widget is hidden for the two frames before the capture. Esc and Enter give the focus
+  back to « Capture an area »: the area reads the active element through the Shadow root of the
+  widget (`deepActiveElement`), where `document.activeElement` is only its host (FRU-353,
+  test:`gives the focus back to « Capture an area » in the Shadow root of the widget, after Esc and after Enter`).
 
 ## The settings panel
 

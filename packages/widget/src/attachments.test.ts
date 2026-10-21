@@ -12,6 +12,7 @@ import { base64OfBytes, bytesOfBase64, fetchTransport } from './transport.ts';
 import type { TransportRequest } from './transport.ts';
 import { keyboardEventCtor, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
+import { deepActiveElement } from './focus.ts';
 
 /**
  * The files of a note, in the widget (FRU-332): the composer joins them and says why one did not go,
@@ -296,6 +297,28 @@ describe('the area of a capture (FRU-332)', () => {
     const taken = open();
     (taken.host.querySelector('.fruitback-area-take') as HTMLButtonElement).click();
     assert.deepEqual(await taken.chosen, { left: 250, top: 240, width: 500, height: 320 });
+  });
+
+  it('gives the focus back to « Capture an area » in the Shadow root of the widget, after Esc and after Enter', async () => {
+    for (const key of ['Escape', 'Enter']) {
+      const page = mountPage('<main></main>', { width: 1_000, height: 800 });
+      const container = page.document.createElement('div');
+      page.document.body.append(container);
+      const root = container.attachShadow({ mode: 'open' });
+      const button = page.document.createElement('button');
+      button.textContent = 'Capture an area';
+      root.append(button);
+      button.focus();
+      assert.equal(deepActiveElement(page.document), button, `${key}: the control of the case`);
+
+      const chosen = pickArea({ document: page.document, host: root, translator: t });
+      const overlay = root.querySelector('[data-fruitback-area]') as HTMLElement;
+      const KeyboardEvent = keyboardEventCtor(page);
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      await chosen;
+
+      assert.equal(deepActiveElement(page.document), button, `${key}: the focus is not back on its button`);
+    }
   });
 
   it('keeps an area inside the window, and never under its smallest side', () => {
