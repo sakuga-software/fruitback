@@ -296,13 +296,19 @@ describe('each test file is run (FRU-174)', () => {
  * vitest finds no suite in such a file, « No test suite found », and the `test` target of the
  * package fails. #456 and #461 each merged one beside the move of the worker to vitest (#450), and
  * `main` was red twice (FRU-345).
+ *
+ * Only a statement at the start of a line is an import that the file runs. A string that holds one,
+ * written to a file that a test then runs under `node --test` (`ci-locale.test.ts`), is not.
  */
+const NODE_TEST_IMPORT =
+  /^\s*import\b[^;'"`]*\bfrom\s*['"]node:test['"]|^\s*(?:const|let|var)\b[^\n]*=\s*(?:await\s+)?(?:require|import)\(\s*['"]node:test['"]\s*\)/m;
+
 function nodeTestUnderVitest(tests: string[], packages: Runner[], read: (file: string) => string): string[] {
   const vitest = packages.filter((candidate) => isVitest(candidate.script));
 
   return tests
     .filter((test) => vitest.some((candidate) => test.startsWith(`${candidate.root}/`)))
-    .filter((test) => /\bfrom\s*['"]node:test['"]|\b(?:require|import)\(\s*['"]node:test['"]\s*\)/.test(read(test)));
+    .filter((test) => NODE_TEST_IMPORT.test(read(test)));
 }
 
 describe('a test file is written for the runner of its package (FRU-345)', () => {
@@ -336,6 +342,11 @@ describe('a test file is written for the runner of its package (FRU-345)', () =>
       'apps/worker/src/e.test.ts':
         "import { describe, it } from 'vitest';\n// node:test took the reason in the options",
       'packages/shared/src/f.test.ts': "import { describe, it } from 'node:test';",
+      'apps/worker/src/g.test.ts':
+        "import { it } from 'vitest';\n    writeFileSync(file, `import { it } from 'node:test';\\nit('x', () => {});`);",
+      'apps/worker/src/h.test.ts':
+        "import { it } from 'vitest';\n      writeFileSync(file, \"import { it } from 'node:test';\\n\");",
+      'apps/worker/src/i.test.ts': "import {\n  after,\n  describe,\n} from 'node:test';",
     };
 
     assert.deepEqual(
@@ -345,6 +356,7 @@ describe('a test file is written for the runner of its package (FRU-345)', () =>
         'apps/worker/src/b.test.ts',
         'apps/worker/src/c.test.ts',
         'apps/worker/src/d.test.ts',
+        'apps/worker/src/i.test.ts',
       ],
     );
   });
