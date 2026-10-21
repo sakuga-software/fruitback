@@ -187,18 +187,33 @@ export async function openPopup(extension: LoadedExtension, site: Page, _origin 
 }
 
 /**
+ * What Playwright says when the page of a call closes under it. `TargetClosedError` is not in its
+ * public API, so the message is what is read.
+ */
+const TARGET_CLOSED = /Target page, context or browser has been closed/;
+
+/**
  * A click in the popup that closes it (FRU-375): the side panel, « Leave feedback ».
  *
  * The popup calls `window.close()` when the click is done. When that is fast (the side panel is
  * already open, so `sidePanel.open` answers at once), the popup closes before Playwright has the
  * answer to its click, and `click()` rejects with « Target page, context or browser has been
- * closed ». That error is the expected end here. Any other error, or a popup that stays open, fails.
+ * closed ». That error, on a popup that is closed, is the expected end here. Any other error is
+ * thrown, even when the popup is closed: a click that missed must not pass because the popup went
+ * for another reason. A popup that stays open fails too. `click-that-closes-popup.spec.ts` tests it.
  */
 export async function clickThatClosesPopup(popup: Page, target: Locator): Promise<void> {
   const closed = popup.waitForEvent('close');
-  await target.click().catch((error: unknown) => {
-    if (!popup.isClosed()) throw error;
-  });
+  try {
+    await target.click();
+  } catch (error) {
+    const closedUnderTheClick = popup.isClosed() && error instanceof Error && TARGET_CLOSED.test(error.message);
+    if (!closedUnderTheClick) {
+      // The wait for `close` rejects when the test ends: nobody awaits it now.
+      closed.catch(() => undefined);
+      throw error;
+    }
+  }
   await closed;
 }
 
