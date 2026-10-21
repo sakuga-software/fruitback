@@ -10,6 +10,7 @@ import { LANGUAGES, LONG_NOTE, LONG_URL, LONG_WORD, WIDTHS, overflows } from './
  */
 declare const chrome: {
   storage: { local: { get(key: string): Promise<Record<string, unknown>>; set(items: object): Promise<void> } };
+  tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
 
 const SHOTS = process.env.FRUITBACK_WRAP_SHOTS;
@@ -42,6 +43,21 @@ async function longRules(extension: LoadedExtension): Promise<void> {
   );
 }
 
+/** The side panel, in a tab opened behind `site`, `width` wide. */
+async function panelBehind(extension: LoadedExtension, site: Page, width: number): Promise<Page> {
+  await site.bringToFront();
+  const url = `chrome-extension://${extension.id}/sidepanel.html`;
+  await extension.worker.evaluate(async (panelUrl) => {
+    await chrome.tabs.create({ url: panelUrl, active: false });
+  }, url);
+  let panel: Page | undefined;
+  await expect.poll(() => (panel = extension.context.pages().find((each) => each.url() === url))).toBeDefined();
+  if (panel === undefined) throw new Error('the side panel did not open');
+  await panel.setViewportSize({ width, height: 900 });
+
+  return panel;
+}
+
 async function expectNothingRunsPast(page: Page, where: string, shot: string): Promise<void> {
   await page.waitForTimeout(300);
   if (SHOTS !== undefined) await page.screenshot({ path: `${SHOTS}/extension-${shot}.png`, fullPage: true });
@@ -52,6 +68,8 @@ for (const language of LANGUAGES) {
   test(`the pages of the extension in ${language}: nothing runs past its box at 320, 390 and 1280 px (FRU-350)`, async ({
     extension,
   }) => {
+    // Three widths of three pages, and a note planted first: more than the 30 s of one test.
+    test.setTimeout(120_000);
     // The rule of the playground through the page, so the browser grants it and the widget mounts:
     // the side panel then lists a note with long words.
     await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
@@ -83,12 +101,12 @@ for (const language of LANGUAGES) {
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectNothingRunsPast(page, `${at}: the welcome page`, `${at}-welcome`);
 
-      // The side panel follows the active tab: drawn in a tab of its own, behind the site.
-      await page.goto(`chrome-extension://${extension.id}/sidepanel.html`);
-      await site.bringToFront();
-      await expect(page.locator('.panel-row-note').first()).toBeVisible({ timeout: 10_000 });
-      await expectNothingRunsPast(page, `${at}: the side panel`, `${at}-sidepanel`);
-      await page.bringToFront();
+      // The side panel follows the active tab: drawn in a tab of its own that never becomes active,
+      // as `openPopup` opens the popup, so the site is the active tab from the first read.
+      const panel = await panelBehind(extension, site, width);
+      await expect(panel.locator('.panel-row-note').first()).toBeVisible({ timeout: 10_000 });
+      await expectNothingRunsPast(panel, `${at}: the side panel`, `${at}-sidepanel`);
+      await panel.close();
     }
 
     // The popup has its own width, 380 px.
