@@ -319,3 +319,70 @@ describe('the session the widget is told of (FRU-315)', () => {
     );
   });
 });
+
+describe('« Show CSS selectors » the widget is told of (FRU-349)', () => {
+  const SELECTORS = (shown: boolean) => ({ channel: CHANNEL, kind: 'selectors', shown });
+
+  function applying(site: SiteConfig | undefined, held: { shown: boolean; fails?: boolean }) {
+    const posts: BridgeMessage[] = [];
+    const state = { site };
+    const apply = createApply({
+      readSite: async () => state.site,
+      readShowSelectors: async () => (held.fails === true ? Promise.reject(new Error('storage')) : held.shown),
+      post: (message) => void posts.push(message),
+    });
+
+    return { posts, apply, state };
+  }
+
+  it('follows each mount, and says a change alone, without building the widget again', async () => {
+    const held = { shown: false };
+    const { posts, apply } = applying(SITE, held);
+
+    await apply();
+    assert.deepEqual(posts, [MOUNT, SELECTORS(false)]);
+
+    // Turned on in the preferences: said, and no mount over a note being written.
+    held.shown = true;
+    await apply();
+    assert.deepEqual(posts.slice(2), [SELECTORS(true)]);
+
+    // A change of storage that is not this one says nothing.
+    await apply();
+    assert.equal(posts.length, 3);
+
+    // The handshake: the page world may have missed both.
+    await apply(true);
+    assert.deepEqual(posts.slice(3), [MOUNT, SELECTORS(true)]);
+  });
+
+  it('is said to a widget we mount in team mode too', async () => {
+    const team: SiteConfig = { ...TEAM_SITE, mount: { clientId: 'site_1', workspace: 'Acme' } };
+    const { posts, apply } = applying(team, { shown: true });
+
+    await apply();
+    assert.deepEqual(
+      posts.map((message) => message.kind),
+      ['mount', 'selectors'],
+    );
+  });
+
+  it('says nothing to a site that embeds its own widget, or that is off', async () => {
+    const { posts, apply, state } = applying(TEAM_SITE, { shown: true });
+
+    await apply();
+    state.site = undefined;
+    await apply();
+    assert.deepEqual(posts, [ANNOUNCE, UNMOUNT]);
+  });
+
+  it('keeps what it said last when the read fails', async () => {
+    const held = { shown: true, fails: false };
+    const { posts, apply } = applying(SITE, held);
+
+    await apply();
+    held.fails = true;
+    await apply();
+    assert.deepEqual(posts, [MOUNT, SELECTORS(true)]);
+  });
+});

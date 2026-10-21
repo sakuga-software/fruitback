@@ -121,6 +121,11 @@ export type OverlayOptions = {
   translator?: Translator;
   /** How a reader replies to a note from its thread (FRU-257). Left out: no thread has a field. */
   reply?: ReplySeam;
+  /**
+   * Show the CSS selector of the element in a thread (FRU-349). Off by default: a reviewer reads the
+   * note, and the selector is for a developer. The note and the issue keep it either way.
+   */
+  showSelectors?: boolean;
 };
 
 /** Why a reply did not go. The text stays in its field in every case. */
@@ -187,6 +192,11 @@ export type Overlay = {
    * of the note chosen in the list stays, so the element it is about stays marked.
    */
   showPins(on: boolean): void;
+  /**
+   * Shows or hides the CSS selector in a thread (FRU-349). An open thread is drawn again, and a reply
+   * being typed in it keeps its text and its caret.
+   */
+  showSelectors(on: boolean): void;
   destroy(): void;
 };
 
@@ -236,6 +246,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let threadHome: HTMLElement | null = null;
   /** What had focus when the thread opened: its badge, or an entry of the detached-notes list. */
   let threadOpener: HTMLElement | null = null;
+  let selectorsShown = options.showSelectors === true;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStartedAt = 0;
@@ -557,7 +568,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         : undefined;
     const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
     thread?.remove();
-    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
+    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue), selectorsShown);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     mountThread(thread, entry);
     const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
@@ -587,7 +598,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     container.toggleAttribute('data-fruitback-choosing', home !== null);
     entry.pin.dataset.fruitbackOpen = '';
     entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
-    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue));
+    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue), selectorsShown);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     mountThread(thread, entry);
     // The thread is the last child of the container, far from its badge in the tab order.
@@ -689,6 +700,12 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     },
     showPins(on) {
       container.toggleAttribute('data-fruitback-pins-hidden', !on);
+    },
+    showSelectors(on) {
+      if (on === selectorsShown) return;
+      selectorsShown = on;
+      const open = placed.find((entry) => entry.pin.dataset.fruitbackOpen === '');
+      if (open !== undefined && thread !== null) reopenThread(open);
     },
     select(id, home) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);
@@ -903,20 +920,23 @@ function initialOf(name: string): string {
 /**
  * What the note points at, in a block of mono (FRU-304): the selector the note carries, then the
  * component and the file behind the element when the capture found them (FRU-256), as
- * « <AddToCart> · src/components/Card.tsx:42 ». A note with no source has the selector alone. As
- * text, like everything a note carries.
+ * « <AddToCart> · src/components/Card.tsx:42 ». As text, like everything a note carries.
+ *
+ * The selector shows only when the host asks for it (FRU-349). With no selector and no source, there
+ * is no block: an empty box says nothing.
  */
-function sourceBlock(document: Document, issue: SeedIssue): HTMLElement[] {
+function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean): HTMLElement[] {
   const source = issue.seed.source;
   const selector = issue.seed.anchor.selector;
   const line = source?.line === undefined ? '' : `:${source.line}`;
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;
   const parts = [component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
+  if (!showSelector && parts.length === 0) return [];
 
   return [
     element(document, 'div', 'fruitback-thread-source', [
-      element(document, 'p', 'fruitback-thread-selector', selector),
+      ...(showSelector ? [element(document, 'p', 'fruitback-thread-selector', selector)] : []),
       ...(parts.length > 0 ? [element(document, 'p', 'fruitback-thread-component', parts.join(' · '))] : []),
     ]),
   ];
@@ -948,6 +968,7 @@ function buildThread(
   resolution: AnchorResolution,
   t: Translator,
   reply: ReplyFooter | undefined,
+  showSelector: boolean,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -989,7 +1010,7 @@ function buildThread(
     element(document, 'div', 'fruitback-thread-body', [
       element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
-      ...sourceBlock(document, issue),
+      ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
       // checks; a reader who is told nothing believes it.

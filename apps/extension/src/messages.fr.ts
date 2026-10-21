@@ -224,6 +224,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Instead of floating pins only, on every site you review.':
     'Plutôt que les seules épingles, sur chaque site que vous relisez.',
   'Name on my notes': 'Nom sur mes notes',
+  // FRU-349.
+  'Show CSS selectors': 'Afficher les sélecteurs CSS',
+  'In the note of a pin. The issue in your tracker keeps the selector either way.':
+    'Dans la note d’une épingle. Le ticket de votre outil de suivi garde le sélecteur dans tous les cas.',
   'Prefilled in private mode. Team mode signs with your session.':
     'Prérempli en mode privé. Le mode équipe signe avec votre session.',
   'Not set': 'Aucun',

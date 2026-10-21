@@ -211,6 +211,7 @@ an `endpoint` and a `client-id` it mounts nothing, and it takes the widget away 
 | `identityToken` | a signed token, so a reporter is _verified_ — not on a site of the console yet, see [5](#5-identified-reporters) |
 | `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default                                 |
 | `transport`     | who carries the calls — the extension's, in team mode below                                                      |
+| `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin — off by default; the issue keeps it       |
 
 **One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
 `https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget

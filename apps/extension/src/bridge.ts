@@ -19,6 +19,8 @@ export type BridgeSeams = {
   readSignedOut?: (site: SiteConfig) => Promise<boolean>;
   /** « Name on my notes » (FRU-302): given to a widget we mount in private mode. */
   readName?: () => Promise<string | undefined>;
+  /** « Show CSS selectors » (FRU-349): said to a widget we mount, in either mode. */
+  readShowSelectors?: () => Promise<boolean>;
   post: (message: BridgeMessage) => void;
 };
 
@@ -27,6 +29,7 @@ export function createApply({
   readLanguage,
   readSignedOut,
   readName,
+  readShowSelectors,
   post,
 }: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
@@ -40,6 +43,8 @@ export function createApply({
   let posted: string | undefined;
   /** The session last said, so a change of storage that is not one of the session says nothing. */
   let said: boolean | undefined;
+  /** « Show CSS selectors » as last said, for the same reason. */
+  let selectorsSaid: boolean | undefined;
 
   // Three sources call this, and it awaits in the middle: the first run, the page world's handshake,
   // and every storage change. So two can be in flight, and the older one can resolve last and post a
@@ -51,10 +56,12 @@ export function createApply({
 
   return async (force = false): Promise<void> => {
     const mine = ++generation;
-    const [site, locale, name] = await Promise.all([
+    const [site, locale, name, selectors] = await Promise.all([
       readSite(),
       readLanguage?.().catch(() => undefined),
       readName?.().catch(() => undefined),
+      // A read that fails keeps what was said last: the selector is a help, never a reason to stop.
+      readShowSelectors?.().catch(() => selectorsSaid ?? false),
     ]);
     // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
     // widget offers without building it again over a note being written.
@@ -90,6 +97,14 @@ export function createApply({
       post({ channel: CHANNEL, kind: 'session', signedOut });
     } else if (!relayed) {
       said = undefined;
+    }
+    // FRU-349: after the mount, like the session, and again with each mount: the page world may keep
+    // the widget it has for a mount it was told twice.
+    if (message.kind === 'mount' && selectors !== undefined) {
+      if (mounting || selectors !== selectorsSaid) post({ channel: CHANNEL, kind: 'selectors', shown: selectors });
+      selectorsSaid = selectors;
+    } else if (message.kind !== 'mount') {
+      selectorsSaid = undefined;
     }
   };
 }

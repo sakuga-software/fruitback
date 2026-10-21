@@ -116,6 +116,18 @@ export type SessionMessage = {
 };
 
 /**
+ * « Show CSS selectors » of the preferences (FRU-349), for the widget we mounted: the thread of a pin
+ * shows the selector of its element, or not. Said apart from the mount, so a change does not build
+ * the widget again over a note being written. The page can read and forge it: it changes what a
+ * thread shows on this page, and nothing else.
+ */
+export type SelectorsMessage = {
+  channel: typeof CHANNEL;
+  kind: 'selectors';
+  shown: boolean;
+};
+
+/**
  * The widget asks for the sign-in (FRU-315): « Sign in to leave notes », « Sign in », « Sign in
  * again ». The page can forge it too: the background opens the popup, and only for a tab whose site
  * has a rule that wants a session.
@@ -418,6 +430,7 @@ export type BridgeMessage =
   | CaptureRequestMessage
   | CaptureResponseMessage
   | SessionMessage
+  | SelectorsMessage
   | SignInMessage;
 
 /**
@@ -438,6 +451,9 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     return typeof data.signedOut === 'boolean'
       ? { channel: CHANNEL, kind: 'session', signedOut: data.signedOut }
       : undefined;
+  }
+  if (data.kind === 'selectors') {
+    return typeof data.shown === 'boolean' ? { channel: CHANNEL, kind: 'selectors', shown: data.shown } : undefined;
   }
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
@@ -472,6 +488,9 @@ export const NAME_MAX = 120;
 
 /** The storage key of « Name on my notes » (FRU-302), in the local area of the extension. */
 export const NOTES_NAME_KEY = 'notesName';
+
+/** The storage key of « Show CSS selectors » (FRU-349), in the local area. Absent: off. */
+export const SHOW_SELECTORS_KEY = 'showSelectors';
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;

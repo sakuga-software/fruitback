@@ -260,10 +260,12 @@ describe('« Preferences » (FRU-302)', () => {
     onName: nothing,
     synced: false,
     onSynced: nothing,
+    selectors: false,
+    onSelectors: nothing,
     ...extra,
   });
 
-  it('has the four rows of the mock-up, in order', () => {
+  it('has the rows of the mock-up, and « Show CSS selectors » after the name (FRU-349), in order', () => {
     const section = preferencesSection(page(), options({ shortcut: 'Alt+Shift+F', onShortcut: nothing }));
 
     assert.equal(section.id, 'prefs');
@@ -272,6 +274,7 @@ describe('« Preferences » (FRU-302)', () => {
       [
         'Open notes in the sidebar',
         'Name on my notes',
+        'Show CSS selectors',
         'Leave feedback shortcut',
         'Keep my rules in the account of this browser',
       ],
@@ -289,23 +292,24 @@ describe('« Preferences » (FRU-302)', () => {
       options({
         onPanelOnClick: (on) => void calls.push(`panel:${on}`),
         onSynced: (on) => void calls.push(`sync:${on}`),
+        onSelectors: (on) => void calls.push(`selectors:${on}`),
       }),
     );
     const switches = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
 
     assert.deepEqual(
       switches.map((each) => each.getAttribute('aria-label')),
-      ['Open notes in the sidebar', 'Keep my rules in the account of this browser'],
+      ['Open notes in the sidebar', 'Show CSS selectors', 'Keep my rules in the account of this browser'],
     );
     for (const each of switches) each.click();
-    assert.deepEqual(calls, ['panel:true', 'sync:true']);
+    assert.deepEqual(calls, ['panel:true', 'selectors:true', 'sync:true']);
   });
 
   it('draws no panel row where the browser has no panel to open', () => {
     const { panelOnClick: _panel, ...firefox } = options();
     const section = preferencesSection(page(), firefox);
 
-    assert.equal(section.querySelectorAll('[role="switch"]').length, 1);
+    assert.equal(section.querySelectorAll('[role="switch"]').length, 2);
   });
 
   it('keeps the name as it is typed, trimmed, at most 120 characters', () => {
@@ -320,6 +324,17 @@ describe('« Preferences » (FRU-302)', () => {
     if (input !== null) input.value = '  Camille Durand ';
     input?.dispatchEvent(new (document.defaultView as unknown as typeof globalThis).Event('change'));
     assert.deepEqual(names, ['Camille Durand']);
+  });
+
+  it('shows « Show CSS selectors » off by default, and on when the preference is (FRU-349)', () => {
+    const switchOf = (section: HTMLElement) =>
+      section.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Show CSS selectors"]');
+
+    assert.equal(switchOf(preferencesSection(page(), options()))?.getAttribute('aria-checked'), 'false');
+    assert.equal(
+      switchOf(preferencesSection(page(), options({ selectors: true })))?.getAttribute('aria-checked'),
+      'true',
+    );
   });
 
   it('says « Not set » with no key, and where to change it with no settings to open', () => {
@@ -345,16 +360,24 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onName: refuse,
       synced: true,
       onSynced: refuse,
+      selectors: false,
+      onSelectors: refuse,
     });
-    const [panel, synced] = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+    const [panel, selectors, synced] = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
     const name = section.querySelector<HTMLInputElement>('input.pref-name');
-    if (panel === undefined || synced === undefined || name === null) throw new Error('no control');
+    if (panel === undefined || selectors === undefined || synced === undefined || name === null) {
+      throw new Error('no control');
+    }
 
     panel.click();
     assert.equal(panel.getAttribute('aria-checked'), 'true');
     await settle();
     assert.equal(panel.getAttribute('aria-checked'), 'false', 'the switch shows a value that was not kept');
     assert.equal(section.querySelector('.pref-problem')?.textContent, PREFERENCE_NOT_SAVED);
+
+    selectors.click();
+    await settle();
+    assert.equal(selectors.getAttribute('aria-checked'), 'false', 'the switch shows a value that was not kept');
 
     synced.click();
     await settle();
@@ -375,6 +398,8 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onName: () => Promise.resolve(),
       synced: false,
       onSynced: () => Promise.resolve(),
+      selectors: false,
+      onSelectors: () => Promise.resolve(),
     });
     const panel = section.querySelector<HTMLButtonElement>('[role="switch"]');
     if (panel === null) throw new Error('no switch');

@@ -246,6 +246,9 @@ export type PreferencesOptions = {
   onShortcut?: () => void;
   synced: boolean;
   onSynced: (on: boolean) => Promise<void> | void;
+  /** « Show CSS selectors » (FRU-349). Off by default. */
+  selectors: boolean;
+  onSelectors: (on: boolean) => Promise<void> | void;
 };
 
 /** What a preference whose write failed says: the control is back where it was. */
@@ -333,6 +336,24 @@ export function preferencesSection(document: Document, options: PreferencesOptio
   });
   card.append(
     row(document, t('Name on my notes'), t('Prefilled in private mode. Team mode signs with your session.'), name),
+  );
+
+  card.append(
+    row(
+      document,
+      t('Show CSS selectors'),
+      t('In the note of a pin. The issue in your tracker keeps the selector either way.'),
+      (() => {
+        const control: HTMLElement = toggle(document, {
+          checked: options.selectors,
+          label: t('Show CSS selectors'),
+          size: 'preference',
+          onChange: (on) => save(options.onSelectors(on), () => flipBack(control, on)),
+        });
+
+        return control;
+      })(),
+    ),
   );
 
   const shortcut = make(document, 'div', 'pref-shortcut');
