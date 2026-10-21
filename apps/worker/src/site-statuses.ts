@@ -1,4 +1,5 @@
 import {
+  MAX_STATUSES,
   MIN_TEXT_CONTRAST,
   SEED_STAGES,
   STATUS_COLOR,
@@ -7,6 +8,7 @@ import {
   contrastRatio,
   readableTextColor,
 } from '@fruitback/shared';
+import type { TrackerState } from './store.ts';
 
 /**
  * A status of a site, as the table `statuses` keeps it (FRU-365), and what a write must hold.
@@ -139,29 +141,66 @@ export function originOf(source: string, key: string): StatusOrigin {
  */
 export const STATUS_INK = '#18181b';
 
+/** The states of one tracker a site sends to (FRU-368): the source is the id of its connector. */
+export type TrackerSource = { source: string; states: readonly TrackerState[] };
+
 /**
  * The `statuses` of a read for one site (FRU-366): every row of the site, and the five built-in
  * statuses of the worker's store that no row changed. A row's key becomes `<source>:<key>`, unique in
  * the read. A colour with no text colour gets the one `readableTextColor` computes, so the text of a
  * pin reaches 4.5:1 whatever the widget.
  *
+ * FRU-368: each state of a tracker the site sends to is a status too, under its connector: the row the
+ * site keeps for it wins (name, stage, colours), then the tracker's name and the stage the store gives
+ * it. Its colour is the stage's, unless `trackerColours` takes the tracker's: the switch of the site,
+ * off by default (decision 3). A row of a tracker whose state is not listed stays as a row.
+ *
  * `hidden` is not read here, on purpose: a hidden status is one the console and the extension do not
  * offer as a choice (FRU-367, FRU-371), and the notes already in it keep its name and colour. Left out
  * of the read, those notes would lose both and fall back to their stage. The filters of the widget
  * are by stage, so they do not need it either.
  */
-export function envelopeStatuses(rows: readonly SiteStatus[]): SeedStatus[] {
-  const listed = rows.map((row) => {
-    const textColor = row.textColor ?? (row.color === null ? undefined : readableTextColor(row.color, STATUS_INK));
+export function envelopeStatuses(
+  rows: readonly SiteStatus[],
+  trackers: readonly TrackerSource[] = [],
+  trackerColours = false,
+): SeedStatus[] {
+  const entry = (key: string, name: string, stage: SeedStage, color: string | null, textColor: string | null) => {
+    const text = textColor ?? (color === null ? undefined : readableTextColor(color, STATUS_INK));
 
     return {
-      key: `${row.source}:${row.key}`,
-      name: row.name ?? '',
-      stage: row.stage,
-      ...(row.color === null ? {} : { color: row.color }),
-      ...(textColor === undefined ? {} : { textColor }),
+      key,
+      name,
+      stage,
+      ...(color === null ? {} : { color }),
+      ...(text === undefined ? {} : { textColor: text }),
     };
-  });
+  };
+  const covered = new Set(trackers.flatMap(({ source, states }) => states.map((state) => `${source}:${state.id}`)));
+  const listed = rows
+    .filter((row) => !covered.has(`${row.source}:${row.key}`))
+    .map((row) => entry(`${row.source}:${row.key}`, row.name ?? '', row.stage, row.color, row.textColor));
+  const tracked = trackers.flatMap(({ source, states }) =>
+    states
+      .map((state, index) => {
+        const row = rows.find((one) => one.source === source && one.key === state.id);
+        // A row's text colour goes with the row's colour only: `readSiteStatus` refuses one without it.
+        const color = row?.color ?? (trackerColours ? (state.color ?? null) : null);
+
+        return {
+          at: row?.position ?? MAX_STATUSES + index,
+          status: entry(
+            `${source}:${state.id}`,
+            row?.name ?? state.name,
+            row?.stage ?? state.stage,
+            color,
+            row?.color === null || row === undefined ? null : row.textColor,
+          ),
+        };
+      })
+      .sort((one, other) => one.at - other.at)
+      .map(({ status }) => status),
+  );
   const changed = new Set(listed.map((status) => status.key));
   const builtIn = SEED_STAGES.filter((stage) => !changed.has(`${OWN_SOURCE}:${stage}`)).map((stage) => ({
     key: `${OWN_SOURCE}:${stage}`,
@@ -169,5 +208,5 @@ export function envelopeStatuses(rows: readonly SiteStatus[]): SeedStatus[] {
     stage,
   }));
 
-  return [...listed, ...builtIn];
+  return [...listed, ...tracked, ...builtIn];
 }

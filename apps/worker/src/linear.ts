@@ -4,6 +4,7 @@ import {
   type SeedComment,
   type SeedIssue,
   type SeedStage,
+  STATUS_COLOR,
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
@@ -660,6 +661,7 @@ export async function fetchSeedIssues(
   query: SeedIssueQuery,
   policy: ClientPolicy,
   stages: StageExceptions = {},
+  statusSource?: string,
 ): Promise<SeedIssue[]> {
   const filter = buildSeedIssueFilter(routing, query);
   const found: SeedIssue[] = [];
@@ -680,7 +682,7 @@ export async function fetchSeedIssues(
     });
 
     for (const node of result.issues.nodes) {
-      const issue = toSeedIssue(node, query.url, policy, stages);
+      const issue = toSeedIssue(node, query.url, policy, stages, statusSource);
       // The write path stores the normalized client id in the seed, so the two are equal for every
       // note of this client. A read that names no client gets every seed of the page, as before.
       if (issue === null || (query.clientId !== undefined && issue.seed.client?.id !== query.clientId)) continue;
@@ -797,6 +799,7 @@ export function toSeedIssue(
   canonicalUrl: string,
   policy?: Pick<ClientPolicy, 'showComments'>,
   stages: StageExceptions = {},
+  statusSource?: string,
 ): SeedIssue | null {
   const parsed = parseSeedFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
@@ -814,6 +817,12 @@ export function toSeedIssue(
     title: node.title,
     stage: stageOf(node.state, stages),
     stateName: node.state?.name ?? '',
+    // FRU-368: the status of the issue is its state, named by the connector it was read through
+    // (`<connector>:<state id>`), as the statuses of the read name it. A store of the worker's own
+    // environment has no connector, and its issues say none.
+    ...(statusSource === undefined || node.state?.id === undefined
+      ? {}
+      : { status: `${statusSource}:${node.state.id}` }),
     updatedAt: node.updatedAt,
     ...optionalComments(policy?.showComments === false ? undefined : toSeedComments(node)),
     ...attachmentsOf(node),
@@ -889,13 +898,24 @@ export async function listLinearTeams(
   };
 }
 
-/** A workflow state of a team, as the panel of a connector shows it (FRU-102). */
-export type LinearState = { id: string; name: string; type: string; teamId: string; team: string; stage: SeedStage };
+/**
+ * A workflow state of a team, as the panel of a connector shows it (FRU-102). `color` is the one Linear
+ * draws it with (FRU-368), when it is `#rrggbb`: anything else is dropped, as it would reach a style.
+ */
+export type LinearState = {
+  id: string;
+  name: string;
+  type: string;
+  teamId: string;
+  team: string;
+  stage: SeedStage;
+  color?: string;
+};
 
 const STATES_QUERY = `
   query FruitbackStates($teams: [ID!]) {
     workflowStates(first: 250, filter: { team: { id: { in: $teams } } }) {
-      nodes { id name type position team { id name } }
+      nodes { id name type color position team { id name } }
     }
   }
 `;
@@ -912,6 +932,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
         id?: unknown;
         name?: unknown;
         type?: unknown;
+        color?: unknown;
         position?: unknown;
         team?: { id?: unknown; name?: unknown };
       }[];
@@ -919,7 +940,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
   }>({ apiKey, teamId: 'none' }, STATES_QUERY, { teams: [...teamIds] });
 
   const states = (data.workflowStates?.nodes ?? []).flatMap((node) => {
-    const { id, name, type, position, team } = node;
+    const { id, name, type, color, position, team } = node;
     if (typeof id !== 'string' || typeof name !== 'string' || typeof type !== 'string') return [];
     if (typeof team?.id !== 'string' || !teamIds.includes(team.id)) return [];
 
@@ -931,6 +952,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
         teamId: team.id,
         team: typeof team.name === 'string' ? team.name : '',
         stage: stageForLinearState(type),
+        ...(typeof color === 'string' && STATUS_COLOR.test(color) ? { color: color.toLowerCase() } : {}),
         position: typeof position === 'number' ? position : 0,
       },
     ];
@@ -948,7 +970,12 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
  * name. Bound to its configuration at construction rather than handed the worker's config per call,
  * which is what a store holding a connection — SQLite (FRU-31) — is going to need.
  */
-export function createLinearStore(config: LinearConfig, stages: StageExceptions = {}): SeedStore {
+export function createLinearStore(
+  config: LinearConfig,
+  stages: StageExceptions = {},
+  /** The connector the store reads through (FRU-368): the source of the status of each issue. */
+  statusSource?: string,
+): SeedStore {
   return {
     name: 'linear',
     // The team, because that is what separates one tenant's issues from another's here. The worker
@@ -961,7 +988,15 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
     createBatch: (seeds, client, policy, memory) =>
       createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>
-      fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
+      fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
+    // FRU-368: the states of the team of the client, each with its stage, as the statuses of a site.
+    trackerStates: async (client) =>
+      (await listLinearStates(config.apiKey, [linearRoutingFor(config, client).teamId])).map((state) => ({
+        id: state.id,
+        name: state.name,
+        stage: Object.hasOwn(stages, state.id) ? (stages[state.id] as SeedStage) : state.stage,
+        ...(state.color === undefined ? {} : { color: state.color }),
+      })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
   };

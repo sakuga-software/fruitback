@@ -34,6 +34,7 @@ import {
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
 import { type SiteStatus, envelopeStatuses } from './site-statuses.ts';
+import { trackerSourcesOf } from './tracker-states.ts';
 import type { AccountStore } from './accounts.ts';
 
 /**
@@ -159,7 +160,14 @@ export async function getFeedback(
     // FRU-366: the statuses of the site, which `status` on each note names. Asked at each request, and
     // never in the cached answer: a change in the console shows at the next read. A read that cannot
     // reach them keeps its pins, with the built-in statuses only, which draw each pin by its stage.
-    const statuses = envelopeStatuses(await statusesOfSite(context?.accounts, route.client?.workspace, clientId));
+    // FRU-368: the states of the trackers of the site are statuses too, in the trackers' colours when
+    // the site turned its switch on.
+    const [rows, trackers, trackerColours] = await Promise.all([
+      statusesOfSite(context?.accounts, route.client?.workspace, clientId),
+      trackerSourcesOf(kv, store, route.client),
+      trackerColoursOf(context?.accounts, route.client?.workspace, clientId),
+    ]);
+    const statuses = envelopeStatuses(rows, trackers, trackerColours);
 
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
@@ -516,6 +524,24 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
+}
+
+/** Whether a site draws its tracker's states in the tracker's colours (FRU-368). Off when it cannot say. */
+async function trackerColoursOf(
+  accounts: AccountStore | undefined,
+  workspace: string | undefined,
+  site: string | undefined,
+): Promise<boolean> {
+  if (accounts === undefined || workspace === undefined || site === undefined) return false;
+  try {
+    return (await accounts.siteTrackerColours(workspace, site)) === true;
+  } catch (error) {
+    console.error(
+      `[fruitback] the colours of a site did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return false;
+  }
 }
 
 /** The rows of the statuses of a site of a workspace, or none: a site of the environment has no row. */

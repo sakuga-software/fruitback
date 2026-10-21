@@ -3,7 +3,7 @@ import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
 import { type GithubApp, createGithubConnectorStore, openInstallation } from './github-connector.ts';
-import { createLinearStore } from './linear.ts';
+import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { type SeedStore, StoreError, takesAttachments, takesChecks, takesStatuses, takesReplies } from './store.ts';
@@ -19,7 +19,7 @@ import { type SeedStore, StoreError, takesAttachments, takesChecks, takesStatuse
  * store: a note written there would be invisible to the team that reads its tracker. The widget keeps
  * the note and tries again (`502 store-unavailable`).
  */
-type Kept = { connector: string; sealed: string; settings: ConnectorSettings };
+type Kept = { connector: string; workspace: string; sealed: string; settings: ConnectorSettings };
 type TrackerAccess = {
   accounts: AccountStore;
   secretsKey: string | undefined;
@@ -29,12 +29,27 @@ type TrackerAccess = {
 };
 
 const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: TrackerAccess) => Promise<SeedStore>> = {
-  async linear({ connector, sealed, settings }, { accounts, secretsKey, oauth, now }) {
+  async linear({ connector, workspace, sealed, settings }, { accounts, secretsKey, oauth, now }) {
     // A token of OAuth near its end is refreshed here.
     const apiKey = await linearAuthorization(connector, sealed, { accounts, secretsKey, oauth, now });
-
     // The team is the client's. This default is never read for a client that has a destination.
-    return createLinearStore({ apiKey, teamId: 'no-team', projectId: undefined }, settings.stages);
+    const config = { apiKey, teamId: 'no-team', projectId: undefined };
+    // The issues say their status as `<connector>:<state id>` (FRU-368). The states keep the
+    // exceptions of the connector (FRU-102): they are what a site with no row of its own shows.
+    const base = createLinearStore(config, settings.stages, connector);
+    // FRU-368: the stage a site gives a state wins over the exception of the connector, for that site.
+    const forSite = async (site: string | undefined): Promise<SeedStore> => {
+      const own = await siteStages(accounts, workspace, site, connector);
+
+      return own === undefined ? base : createLinearStore(config, { ...settings.stages, ...own }, connector);
+    };
+
+    return {
+      ...base,
+      findForPage: async (query, client, policy) => (await forSite(query.clientId)).findForPage(query, client, policy),
+      check: async (target, check, client, policy) =>
+        (await forSite(target.clientId)).check?.(target, check, client, policy),
+    };
   },
   // FRU-359: the repository is the client's, and the token of the App reaches that repository only.
   async github({ sealed }, { secretsKey, githubApp }) {
@@ -43,6 +58,31 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: Trac
     return createGithubConnectorStore(githubApp, openInstallation(sealed, secretsKey));
   },
 };
+
+/**
+ * The stages a site gives the states of a connector (FRU-368): the rows of its statuses whose source is
+ * that connector. `undefined` for a site with none, or whose rows did not answer: the store then reads
+ * with the exceptions of the connector, as before, and the read does not fail for a setting.
+ */
+async function siteStages(
+  accounts: AccountStore,
+  workspace: string,
+  site: string | undefined,
+  connector: string,
+): Promise<StageExceptions | undefined> {
+  if (site === undefined) return undefined;
+  try {
+    const rows = ((await accounts.siteStatuses(workspace, site)) ?? []).filter((row) => row.source === connector);
+
+    return rows.length === 0 ? undefined : Object.fromEntries(rows.map((row) => [row.key, row.stage]));
+  } catch (error) {
+    console.error(
+      `[fruitback] the statuses of a site did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return undefined;
+  }
+}
 
 /**
  * The store of a connector whose workspace does not show the replies of its tracker (FRU-102).
@@ -180,7 +220,7 @@ export function createConnectorStores(
     }
 
     const store = await TRACKERS[kept.kind](
-      { connector, sealed: kept.sealed, settings: kept.settings },
+      { connector, workspace, sealed: kept.sealed, settings: kept.settings },
       { accounts, secretsKey, now, oauth, githubApp },
     );
 
@@ -214,6 +254,12 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     checksFor: async (client) => takesChecks(await pick(client), client),
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
     statusesFor: async (client) => takesStatuses(await pick(client), client),
+    // FRU-368: the states of the tracker of the client, for the statuses of its site.
+    trackerStatesFor: async (client) => {
+      const store = await pick(client);
+
+      return store.trackerStates === undefined ? undefined : store.trackerStates(client);
+    },
     async reply(target, reply, client, policy) {
       const store = await pick(client);
       if (store.reply === undefined) throw new StoreError('The store of this site takes no reply');

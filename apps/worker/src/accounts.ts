@@ -417,6 +417,13 @@ export type AccountStore = {
    */
   siteStatuses(workspace: string, site: string): Promise<SiteStatus[] | undefined>;
   /**
+   * Whether a site draws the states of its tracker in the tracker's colours (FRU-368), a switch of the
+   * site that is off by default. `undefined` when the site is not of this workspace.
+   */
+  siteTrackerColours(workspace: string, site: string): Promise<boolean | undefined>;
+  /** Turns that switch. `false` when the site is not of this workspace. */
+  setSiteTrackerColours(workspace: string, site: string, on: boolean): Promise<boolean>;
+  /**
    * Adds a status to a site, or changes the one of that source and key: its name, stage, colours,
    * position and whether it is hidden. Its `origin` is written once, when it is added. A status the
    * team added to the worker's store that changes stage takes its notes to that stage, in the same

@@ -149,11 +149,10 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
 - `id`, `name`, `type` (a `String`, documented as `triage`, `backlog`, `unstarted`, `started`,
   `completed`, `canceled`, `duplicate`), `color` (« the state's UI color as a HEX string »),
   `position` (ascending within the type group), `archivedAt`. The `read` scope is enough.
-- Add `color` to `STATES_QUERY` and to the `state { … }` of the issue read: no extra request.
-- **No webhook reports a change of a workflow state.** A state added at Linear appears in the
-  console the next time its page opens, and on a pin as soon as an issue is in it: an unknown id
-  takes the stage of its type and the stage colour, as today. Nothing is cached that could go stale
-  except the team's own rows.
+- `color` is in `STATES_QUERY` (FRU-368). The issue read needs none: an issue says its state, and
+  the statuses of the read say its colour.
+- **No webhook reports a change of a workflow state**, so the states of a team are read again: see
+  _Linear, built (FRU-368)_ below.
 - Stage by type, as `STAGE_BY_STATE_TYPE` does now; the site's row overrides it (FRU-102 did it
   per connector).
 - Colour: the stage colour of FRU-334 by default (decision 3). A switch per site, « Use Linear's
@@ -280,9 +279,9 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   each pin keeps its stage. The failure is written in the log, never in the answer.
 - **A colour with no text colour gets the one `readableTextColor` computes**, on `STATUS_INK`, the
   ink of `theme.ts`, so a widget that does not compute it still writes a text over 4.5:1.
-- **A note the worker keeps says `status: own:<status_key, or its stage>`.** The notes of Linear and
-  GitHub say theirs with FRU-368 and FRU-369; until then they have none, and `statusOf` draws their
-  stage, as before.
+- **A note the worker keeps says `status: own:<status_key, or its stage>`.** A note of Linear says
+  `<connector>:<state id>` (FRU-368). The notes of GitHub say theirs with FRU-369; until then they
+  have none, and `statusOf` draws their stage, as before.
 - **`hidden` is not in the read.** A hidden status is one the console and the extension do not offer
   as a choice (the status of a note, FRU-367; the screen, FRU-371). The notes already in it keep its
   name and colour, which they would lose if the read left it out, and the filters of the widget are
@@ -332,6 +331,29 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   store only, and the routed store asks the store of the site (`statusesFor`).
 - **« Still wrong » keeps its effect**, and writes `status_key` NULL with the first stage: the note
   goes back to the built-in status of that stage, so its status and its stage still agree.
+
+### Linear, built (FRU-368)
+
+- **Each state of the team a site sends to is a status of that site**, under the source of its
+  connector: `<connector>:<state id>`. Its name is the site's row, or Linear's. Its stage is the
+  site's row, then the exception of the connector (FRU-102, `connectors.settings.stages`, kept), then
+  the stage of its type. The read of the issues gives a state the same stage, for that site
+  (`connectors.ts`, `siteStages`), so `statusOf` always finds the status of an issue of Linear.
+- **« Use Linear's colours » is a switch of the site, off by default** (decision 3):
+  `sites.tracker_colours`, migration `0027_sites_tracker_colours`. On, a state with no colour of the
+  site's row takes Linear's, and its text is computed (`readableTextColor`). Linear's colour is kept
+  only when it is `#rrggbb`, as any colour that reaches a style.
+- **Read again every ten minutes.** Linear sends no webhook when a state is added, renamed or
+  recoloured, so the states of each team are kept in the `Kv` for `TRACKER_STATES_TTL_MS` (ten
+  minutes, `tracker-states.ts`), and the first read after that asks Linear again. The statuses page
+  of the console reads them fresh and keeps what it read: opening it shows a change at once. A team
+  that Linear does not answer for gives no status to the read, and its pins keep their stage.
+- **Two routes of the console, `manage-sites` like the others**: `GET …/statuses/tracker`, the states
+  of each Linear team of the site with their stage and their colour, and the switch; `POST
+…/statuses/settings`, `{ trackerColours }`. A team Linear did not answer for says
+  `tracker-unreachable`, and the others are listed.
+- **A page's cached read keeps its stages for `CACHE_TTL_MS`** (15 s) after a row of the site changes:
+  the stage of a Linear issue is computed when the page is read from Linear.
 
 ### The colours
 

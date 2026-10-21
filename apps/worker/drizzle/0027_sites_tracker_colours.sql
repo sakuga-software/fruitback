@@ -1,0 +1,1 @@
+ALTER TABLE "sites" ADD COLUMN "tracker_colours" boolean DEFAULT false NOT NULL;

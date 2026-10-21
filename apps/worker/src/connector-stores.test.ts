@@ -62,11 +62,20 @@ function linearOf(organisations: Record<string, string>) {
       const teams = variables.teams as string[];
       // Linear answers the states of every team the filter names, and of no other.
       const nodes = [
-        { id: 'state_todo', name: 'Todo', type: 'unstarted', position: 1, team: { id: 'team_design', name: 'Design' } },
+        // Linear's own colours (FRU-368): an upper case one, and one that is no `#rrggbb`.
+        {
+          id: 'state_todo',
+          name: 'Todo',
+          type: 'unstarted',
+          color: '#5E6AD2',
+          position: 1,
+          team: { id: 'team_design', name: 'Design' },
+        },
         {
           id: 'state_triage',
           name: 'Triage',
           type: 'triage',
+          color: 'orange',
           position: 0,
           team: { id: 'team_design', name: 'Design' },
         },
@@ -392,7 +401,16 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
       // In the order of the board, and no state of a team no site sends to.
       states: [
         { id: 'state_triage', name: 'Triage', type: 'triage', teamId: 'team_design', team: 'Design', stage: 'new' },
-        { id: 'state_todo', name: 'Todo', type: 'unstarted', teamId: 'team_design', team: 'Design', stage: 'todo' },
+        {
+          id: 'state_todo',
+          name: 'Todo',
+          type: 'unstarted',
+          teamId: 'team_design',
+          team: 'Design',
+          stage: 'todo',
+          // FRU-368: the colour Linear draws it with, as `#rrggbb`. « orange » of Triage is dropped.
+          color: '#5e6ad2',
+        },
       ],
       settings: DEFAULT_CONNECTOR_SETTINGS,
     });
@@ -498,5 +516,161 @@ describe('the sites that take a reply, by where their notes go (FRU-257)', () =>
         connector,
       );
     }
+  });
+});
+
+describe('the states of Linear as the statuses of a site (FRU-368)', () => {
+  type Read = {
+    issues: { stage: string; status?: string }[];
+    statuses: { key: string; name: string; stage: string; color?: string; textColor?: string }[];
+  };
+  async function readOf(env: World, acme: Awaited<ReturnType<typeof tenant>>): Promise<Read> {
+    const page = 'https://staging.acme.dev/pricing';
+    const answer = await call(env, 'GET', `/feedback?url=${encodeURIComponent(page)}&client=${acme.site.id}`, {
+      origin: 'https://staging.acme.dev',
+    });
+    assert.equal(answer.status, 200, await answer.clone().text());
+
+    return (await answer.json()) as Read;
+  }
+  const ofLinear = (read: Read, connector: string) =>
+    read.statuses.filter((one) => one.key.startsWith(`${connector}:`));
+
+  it('names the state of each issue, lists the states of the team, and takes their colours when the site asks', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    assert.equal((await acme.write('Acme: one.')).status, 201);
+
+    const first = await readOf(env, acme);
+    assert.deepEqual(
+      first.issues.map((issue) => [issue.stage, issue.status]),
+      [['todo', `${acme.connector}:state_todo`]],
+    );
+    // The colours of the stages by default (decision 3).
+    assert.deepEqual(ofLinear(first, acme.connector), [
+      { key: `${acme.connector}:state_triage`, name: 'Triage', stage: 'new' },
+      { key: `${acme.connector}:state_todo`, name: 'Todo', stage: 'todo' },
+    ]);
+
+    const on = await call(env, 'POST', `${acme.base}/sites/${acme.site.id}/statuses/settings`, {
+      token: acme.token,
+      body: { trackerColours: true },
+    });
+    assert.equal(on.status, 200, await on.clone().text());
+    assert.deepEqual(ofLinear(await readOf(env, acme), acme.connector), [
+      { key: `${acme.connector}:state_triage`, name: 'Triage', stage: 'new' },
+      { key: `${acme.connector}:state_todo`, name: 'Todo', stage: 'todo', color: '#5e6ad2', textColor: '#ffffff' },
+    ]);
+  });
+
+  it('gives a state the stage the site chose, over the exception of the connector, for that site only', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const other = await env.accounts.addSite(acme.workspace.id, {
+      origin: 'https://docs.acme.dev',
+      visibility: 'everyone',
+    });
+    const routed = await call(env, 'POST', `${acme.base}/sites/${other.id}/destination`, {
+      token: acme.token,
+      body: { connector: acme.connector, teamId: 'team_design' },
+    });
+    assert.equal(routed.status, 200, await routed.clone().text());
+    // The exception of FRU-102, for every site of the connector.
+    const set = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
+      token: acme.token,
+      body: { showComments: true, stages: { state_todo: 'done' } },
+    });
+    assert.equal(set.status, 200);
+    assert.equal((await acme.write('Acme: one.')).status, 201);
+    assert.deepEqual(await acme.pins(), [{ stage: 'done', comments: 1 }]);
+
+    const row = await call(env, 'POST', `${acme.base}/sites/${acme.site.id}/statuses`, {
+      token: acme.token,
+      body: { source: acme.connector, key: 'state_todo', name: 'Ready', stage: 'progress' },
+    });
+    assert.equal(row.status, 200, await row.clone().text());
+
+    const read = await readOf(env, acme);
+    assert.deepEqual(
+      read.issues.map((issue) => issue.stage),
+      ['progress'],
+    );
+    assert.deepEqual(
+      ofLinear(read, acme.connector).find((one) => one.key === `${acme.connector}:state_todo`),
+      { key: `${acme.connector}:state_todo`, name: 'Ready', stage: 'progress' },
+    );
+    // The other site of the connector keeps the exception, and Linear's name.
+    const page = 'https://docs.acme.dev/pricing';
+    const there = await call(env, 'GET', `/feedback?url=${encodeURIComponent(page)}&client=${other.id}`, {
+      origin: 'https://docs.acme.dev',
+    });
+    const statuses = ((await there.json()) as Read).statuses;
+    assert.deepEqual(
+      statuses.find((one) => one.key === `${acme.connector}:state_todo`),
+      { key: `${acme.connector}:state_todo`, name: 'Todo', stage: 'done' },
+    );
+  });
+
+  it('lists the states for the statuses page, with the switch, and refuses who does not manage the sites', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const path = `${acme.base}/sites/${acme.site.id}/statuses`;
+
+    const listed = await call(env, 'GET', `${path}/tracker`, { token: acme.token });
+    assert.equal(listed.status, 200, await listed.clone().text());
+    assert.deepEqual(await listed.json(), {
+      trackerColours: false,
+      trackers: [
+        {
+          connector: acme.connector,
+          label: 'Linear · Design',
+          states: [
+            { id: 'state_triage', name: 'Triage', type: 'triage', stage: 'new' },
+            { id: 'state_todo', name: 'Todo', type: 'unstarted', stage: 'todo', color: '#5e6ad2' },
+          ],
+        },
+      ],
+    });
+
+    assert.equal(
+      (await call(env, 'POST', `${path}/settings`, { token: acme.token, body: { trackerColours: 'yes' } })).status,
+      400,
+    );
+    assert.equal(
+      (await call(env, 'PUT', `${path}/settings`, { token: acme.token, body: { trackerColours: true } })).status,
+      405,
+    );
+    const elsewhere = `${acme.base}/sites/unknown_site/statuses`;
+    assert.equal((await call(env, 'GET', `${elsewhere}/tracker`, { token: acme.token })).status, 404);
+    assert.equal(
+      (await call(env, 'POST', `${elsewhere}/settings`, { token: acme.token, body: { trackerColours: true } })).status,
+      404,
+    );
+
+    const { id: memberId, token: member } = await signInTo(env, 'member@acme.dev');
+    await memberOf(env, acme.workspace.id, memberId, 'member');
+    assert.equal((await call(env, 'GET', `${path}/tracker`, { token: member })).status, 403);
+    assert.equal(
+      (await call(env, 'POST', `${path}/settings`, { token: member, body: { trackerColours: true } })).status,
+      403,
+    );
+  });
+
+  it('says a team that Linear did not answer for, and keeps the read of the pins', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    assert.equal((await acme.write('Acme: one.')).status, 201);
+    // Linear refuses everything from now on.
+    linearOf({});
+
+    const listed = await call(env, 'GET', `${acme.base}/sites/${acme.site.id}/statuses/tracker`, { token: acme.token });
+    assert.equal(listed.status, 200, await listed.clone().text());
+    assert.deepEqual(((await listed.json()) as { trackers: unknown[] }).trackers, [
+      { connector: acme.connector, label: 'Linear · Design', error: 'tracker-unreachable' },
+    ]);
   });
 });
