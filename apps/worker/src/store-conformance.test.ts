@@ -9,7 +9,7 @@ import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './git
 import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
 import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
 import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './seed-rows.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
@@ -493,7 +493,7 @@ const SUBJECTS: ConformanceSubject[] = [
       return createGithubStore(GITHUB_CONFIG);
     },
   },
-  postgresSubject('PGlite', createPgliteDatabase, false),
+  postgresSubject('PGlite', createMigratedPgliteDatabase, false),
   postgresSubject('a real server', createRealDatabase, NO_REAL_POSTGRES),
   {
     provider: 'memory',

@@ -4,7 +4,7 @@ import { type Auth, CLIENT_IP_HEADER, authOptions, startAuth } from './auth.ts';
 import {
   AUTH_CONFIG,
   CONSOLE_URL,
-  DATABASES,
+  MIGRATED_DATABASES,
   NO_SESSIONS,
   PUBLIC_URL,
   databasesOfACase,
@@ -54,7 +54,7 @@ async function countsOf(database: PgDatabase): Promise<string[]> {
   return rows.map((row) => String(row.value));
 }
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the limiter of better-auth, on ${label} (FRU-229)`, { skip }, () => {
     it('makes two instances on one database share the ceiling of a route', async () => {
       const database = await opening(open);

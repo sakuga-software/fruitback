@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { Role } from './accounts.ts';
-import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
 import {
   CONNECTS_PER_ADDRESS,
@@ -198,7 +198,7 @@ async function everyValue(database: PgDatabase): Promise<string[]> {
   return values;
 }
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the extension asks, the console approves, on ${label} (FRU-238)`, { skip }, () => {
     it('connects an account of two workspaces: one request, one approval, one claim, and the sites of both', async () => {
       const worker = await workerOn(open);

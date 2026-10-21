@@ -6,7 +6,7 @@ import { CONSOLE_URL, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
 import { SESSION_COOKIE, workerOf } from './auth-worker.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
-import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
+import { createMigratedPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 
 /**
  * A worker with accounts, for a test of the routes of the console (FRU-150): the accounts are in
@@ -43,7 +43,7 @@ export function worlds(): (more?: { env?: Partial<WorkerEnv> }) => Promise<World
   const { opening } = databasesOfACase();
 
   return async (more = {}) => {
-    const worker = await workerOf(await opening(createPgliteDatabase), more);
+    const worker = await workerOf(await opening(createMigratedPgliteDatabase), more);
 
     return {
       ...worker,

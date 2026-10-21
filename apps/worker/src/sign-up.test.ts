@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it, mock } from 'node:test';
 import { SERVED_PATHS, authConfigOf } from './auth.ts';
 import { refusedSignUp } from './auth-routes.ts';
-import { CONSOLE_URL, DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { CONSOLE_URL, MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import { REQUIRED_WITH_DATABASE, readConfig } from './env.ts';
 import { adminLinkFor } from './first-admin.ts';
@@ -180,7 +180,7 @@ describe('the rule of who may create an account (FRU-278)', () => {
   });
 });
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`who may create an account, on ${label} (FRU-278)`, { skip }, () => {
     it('has a case for every way to sign in that the worker serves', async () => {
       const worker = await workerOn(open, 'invited');

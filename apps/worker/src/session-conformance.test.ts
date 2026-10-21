@@ -10,7 +10,7 @@ import {
   turn,
 } from './conformance.fixture.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
 import type { RotationOutcome, SessionIdentity, SessionStore } from './session.ts';
 import { sessionCases } from './session-conformance.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -23,7 +23,7 @@ import { createPostgresSessionStore } from './session-postgres.ts';
 const PGLITE = onDatabase(
   'the PostgreSQL session store, on PGlite',
   'createPostgresSessionStore',
-  createPgliteDatabase,
+  createMigratedPgliteDatabase,
   createPostgresSessionStore,
 );
 
@@ -530,7 +530,7 @@ describeControls('SessionStore', sessionCases, VIOLATIONS, PGLITE, async (change
     factory: 'createPostgresSessionStore',
     label: 'a changed PostgreSQL session store',
     async open() {
-      database = await createPgliteDatabase();
+      database = await createMigratedPgliteDatabase();
       const create = mutant.module.createPostgresSessionStore as (database: Database) => SessionStore;
 
       return create(database);

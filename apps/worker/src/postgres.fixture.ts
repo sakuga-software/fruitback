@@ -7,7 +7,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import { type SQL, sql } from 'drizzle-orm';
 import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
 import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
-import { databaseOn, newPglite } from './pglite.fixture.ts';
+import { databaseOn, migratedDatabaseOn, startPglite } from './pglite.fixture.ts';
 import { migrated, migrationsFolder } from './postgres-migrate.ts';
 
 /**
@@ -122,24 +122,33 @@ export function migrationsThrough(tag: string): string {
   return folder;
 }
 
-/** The PGlite of this process. It takes a second to start, so the cases share it. */
-let shared: PGlite | undefined;
+/** The PGlite of this process. It takes 0.2 s to start from `INITDB_FILE`, 0.7 s without it: the cases share it. */
+let shared: Promise<PGlite> | undefined;
 
-function pglite(): PGlite {
-  shared ??= newPglite();
+function pglite(): Promise<PGlite> {
+  shared ??= startPglite();
 
   return shared;
 }
 
 // An open instance keeps the process of a test file alive for ten seconds after its last test (measured).
 after(async () => {
-  await shared?.close();
+  const instance = shared;
   shared = undefined;
+  await (await instance)?.close();
 });
 
 /** An empty database on PGlite: the one database of the shared instance, with nothing in `public`. */
-export function createPgliteDatabase(schema = 'public'): Promise<PgDatabase> {
-  return databaseOn(pglite(), schema);
+export async function createPgliteDatabase(schema = 'public'): Promise<PgDatabase> {
+  return databaseOn(await pglite(), schema);
+}
+
+/**
+ * A migrated database on PGlite, with no row (FRU-339): the one database of the shared instance.
+ * For a case whose subject is not the migrations. See `migratedDatabaseOn`.
+ */
+export async function createMigratedPgliteDatabase(): Promise<PgDatabase> {
+  return migratedDatabaseOn(await pglite());
 }
 
 /** How long `drop` waits for the connections of a database to end, before it drops it all the same. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CONSOLE_URL, DATABASES, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
+import { CONSOLE_URL, MIGRATED_DATABASES, PUBLIC_URL, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 
 /**
@@ -42,7 +42,7 @@ const OTHERS: Record<string, string> = {
   'the console with a path': `${CONSOLE_URL}/`,
 };
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`the routes of the console answer the console, and no other origin, on ${label} (FRU-214)`, { skip }, () => {
     /** A worker, somebody signed in with a workspace and a site, and every route that reads something. */
     async function signedIn() {

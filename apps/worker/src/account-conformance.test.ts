@@ -14,7 +14,7 @@ import {
   turn,
 } from './conformance.fixture.ts';
 import type { Database } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
 
 /**
  * Each `AccountStore` against the conformance suite (FRU-140). A new implementation adds a subject
@@ -24,7 +24,7 @@ import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase 
 const PGLITE = onDatabase(
   'the PostgreSQL account store, on PGlite',
   'createPostgresAccountStore',
-  createPgliteDatabase,
+  createMigratedPgliteDatabase,
   createPostgresAccountStore,
 );
 
@@ -535,7 +535,7 @@ describeControls('AccountStore', accountCases, VIOLATIONS, PGLITE, async (change
     factory: 'createPostgresAccountStore',
     label: 'a changed PostgreSQL account store',
     async open() {
-      database = await createPgliteDatabase();
+      database = await createMigratedPgliteDatabase();
       const create = mutant.module.createPostgresAccountStore as (database: Database) => AccountStore;
 
       return create(database);

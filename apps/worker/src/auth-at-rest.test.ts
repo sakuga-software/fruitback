@@ -8,7 +8,7 @@ import { AT_REST_PLUGIN, DISABLED_PATHS, closedPath, sendLinkThrough, startAuth 
 import {
   AUTH_SECRET,
   CONSOLE_URL,
-  DATABASES,
+  MIGRATED_DATABASES,
   PUBLIC_URL,
   ask,
   databasesOfACase,
@@ -83,7 +83,7 @@ async function heldIn(database: Database, given: readonly string[]): Promise<str
 
 const { opening } = databasesOfACase();
 
-for (const { label, open, skip } of DATABASES) {
+for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(`a copy of the database of better-auth, and the secret beside it, on ${label} (FRU-181)`, { skip }, () => {
     // The reason for the layer, kept measured: what FRU-144 shipped.
     it('opened a session with the token of the table and the secret, before the layer', async () => {
@@ -453,7 +453,7 @@ describe('the layer between better-auth and its adapter (FRU-181)', () => {
   }
 
   it('knows every member of the adapter that better-auth builds, and no other', async () => {
-    const { options } = await optionsOn(await opening(DATABASES[0]?.open ?? (async () => assert.fail())));
+    const { options } = await optionsOn(await opening(MIGRATED_DATABASES[0]?.open ?? (async () => assert.fail())));
     const { betterAuth } = await import('better-auth');
     const context = await betterAuth(withoutTheLayer(options)).$context;
     const members = Object.keys(context.adapter);
