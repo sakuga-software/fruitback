@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, it } from 'vitest';
+import { describe, it, onTestFinished } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { sql } from 'drizzle-orm';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -355,7 +356,7 @@ describe(
 );
 
 describe('a role that may still use public, beside its schema (FRU-266)', { skip: NO_REAL_POSTGRES !== false }, () => {
-  it('is said once in the log, and not refused; nothing is said once it may not, nor for a worker in public', async (t) => {
+  it('is said once in the log, and not refused; nothing is said once it may not, nor for a worker in public', async () => {
     const own = await ownDatabase();
     const admin = createPgDatabase(own.url, 'public', { max: 1 });
     const role = `w_${new URL(own.url).pathname.slice(1)}`;
@@ -363,7 +364,8 @@ describe('a role that may still use public, beside its schema (FRU-266)', { skip
     lesser.username = role;
     lesser.password = 'not-a-secret-of-a-test';
     const said: string[] = [];
-    t.mock.method(console, 'warn', (line: unknown) => void said.push(String(line)));
+    const warned = mockMethod(console, 'warn', (line: unknown) => void said.push(String(line)));
+    onTestFinished(() => warned.mockRestore());
     const migrateAs = async (schema: string): Promise<void> => {
       const database = createPgDatabase(lesser.href, schema, { max: 1 });
       try {

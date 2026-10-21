@@ -1,5 +1,4 @@
 import { afterEach, describe, it, vi } from 'vitest';
-import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type Role, destinationId } from './accounts.ts';
@@ -14,6 +13,7 @@ import {
   worlds,
 } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
+import { mockMethod } from './mock.fixture.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';

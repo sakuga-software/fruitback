@@ -119,7 +119,7 @@ describe('CONTRIBUTING.md', () => {
   it('runs only package scripts and test files that exist', () => {
     const packages = workspaceScripts();
     const filtered = [...CONTRIBUTING.matchAll(/\bpnpm --filter (\S+) ([a-z][a-z0-9:-]*)/g)];
-    const files = [...CONTRIBUTING.matchAll(/\bcd (\S+) && node --test (\S+)/g)];
+    const files = [...CONTRIBUTING.matchAll(/\bcd (\S+) && (?:node --test|pnpm exec vitest run) (\S+)/g)];
 
     assert.ok(filtered.length >= 2 && files.length >= 1, 'the detector found no command to check');
     for (const [command, name = '', script = ''] of filtered) {

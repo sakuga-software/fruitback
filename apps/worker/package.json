@@ -68,6 +68,7 @@
           "{workspaceRoot}/tools/mutation/*.ts",
           "{workspaceRoot}/tools/mutation/baseline.json",
           "{workspaceRoot}/tools/ci/*.ts",
+          "{workspaceRoot}/tools/mutation/package.json",
           "{workspaceRoot}/apps/playground/vite.config.ts",
           "{workspaceRoot}/apps/playground/demo/**/*",
           "{workspaceRoot}/packages/widget/src/embed.ts",

@@ -24,7 +24,7 @@ const SITE = 'https://staging.acme.dev';
 
 afterEach(() => {
   vi.restoreAllMocks();
-  mock.timers.reset();
+  vi.useRealTimers();
 });
 
 const worldWith = worlds();
@@ -468,7 +468,7 @@ describe('a token of Linear that ends (FRU-134)', () => {
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, linear, world);
-    mock.timers.enable({ apis: ['Date'], now: Date.now() + 86_400_000 - REFRESH_MARGIN_MS + 1_000 });
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 86_400_000 - REFRESH_MARGIN_MS + 1_000 });
 
     return { env, linear, world, connector };
   }
@@ -553,7 +553,7 @@ describe('a token of Linear that ends (FRU-134)', () => {
         answer === 400 || answer === 401 ? 'connection-ended' : undefined,
         String(answer),
       );
-      mock.timers.reset();
+      vi.useRealTimers();
       vi.restoreAllMocks();
     }
   });

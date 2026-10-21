@@ -1,4 +1,5 @@
-import { describe, it } from 'vitest';
+import { describe, it, onTestFinished } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readBearerToken, signIdentityToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
@@ -330,15 +331,16 @@ describe('verifyIdentityToken', () => {
  * not by running out of time.
  */
 describe('the signing key', () => {
-  it('cannot be exported, when a token is signed and when one is verified', async (t) => {
+  it('cannot be exported, when a token is signed and when one is verified', async () => {
     const keys: CryptoKey[] = [];
     const importKey = crypto.subtle.importKey.bind(crypto.subtle);
-    t.mock.method(crypto.subtle, 'importKey', async (...args: Parameters<typeof importKey>) => {
+    const imported = mockMethod(crypto.subtle, 'importKey', async (...args: Parameters<typeof importKey>) => {
       const key = await importKey(...args);
       keys.push(key);
 
       return key;
     });
+    onTestFinished(() => imported.mockRestore());
 
     const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
     assert.equal((await verifyIdentityToken(token, SECRET)).ok, true);

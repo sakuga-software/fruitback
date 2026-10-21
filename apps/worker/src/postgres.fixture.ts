@@ -13,7 +13,7 @@ import { migrated, migrationsFolder } from './postgres-migrate.ts';
 /**
  * A PostgreSQL for the tests (FRU-141), in two forms.
  *
- * **PGlite** is a PostgreSQL in the process: `node --test` needs no service. It has one connection,
+ * **PGlite** is a PostgreSQL in the process: the tests need no service. It has one connection,
  * so a transaction holds every other call back, and no race can show there.
  *
  * **A real server** is the address in `FRUITBACK_TEST_DATABASE_URL`. There the calls of a case run

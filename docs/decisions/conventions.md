@@ -43,19 +43,22 @@ How this repository is formatted, tested and documented, and which test holds ea
     never restores `.nx`.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
-  `*.test.ts`, fixtures in `*.fixture.ts`.
+  `*.test.ts`, fixtures in `*.fixture.ts`. **The worker runs on vitest** (FRU-346): « Mutation
+  testing » below says why, and how.
   - **`node --test` exits 0 on a test file its glob does not match, on a glob that matches no file,
     and on `it.skip`** (FRU-174, measured). `test-discovery.test.ts` fails on a JavaScript or
     TypeScript file named `*.test.*` or `*.spec.*` (`.ts`, `.tsx`, `.js`, `.jsx`, and their `c` and
     `m` forms) that no `test` script and no Playwright directory reads, on a `test` script that
     reads no file, and on a skip with no reason. The reason goes in the options:
-    `{ skip: 'the reason' }`, never `it.skip(…)` nor `skip: true`.
+    `{ skip: 'the reason' }`, never `it.skip(…)` nor `skip: true`. vitest takes a boolean there, so
+    the worker writes `{ skip: NO_REAL_POSTGRES !== false }`, from a constant that holds the reason.
   - `assert.equal` / `assert.deepEqual` from `node:assert/strict` are the strict variants — no need
     for `strictEqual`.
   - Partial matching is `assert.partialDeepStrictEqual`. There is no `expect.arrayContaining`; assert
     the exact array, or narrow first with `assert.ok(result.ok)` and then compare.
   - Doubles come from `node:test`'s `mock` (`mock.method(globalThis, 'fetch', …)`), restored with
-    `mock.restoreAll()` in an `afterEach`.
+    `mock.restoreAll()` in an `afterEach`. In the worker, `mockMethod(globalThis, 'fetch', …)` of
+    `mock.fixture.ts`, restored with `vi.restoreAllMocks()`.
 - **Relative imports carry the `.ts` extension.** Node's ESM resolver requires it, and that is what
   lets `node --test` and `node --watch src/main.ts` run the sources with no build step. `tsc` accepts
   it through `allowImportingTsExtensions`, which is why both tsconfigs set `noEmit`.
@@ -161,6 +164,44 @@ How this repository is formatted, tested and documented, and which test holds ea
   to date before it merges, or by a merge queue. `ci.yml` declares `merge_group` so that a queue has a
   run to wait for. Do not remove it: a queue whose required check never reports never merges.
 
+### The worker on vitest (FRU-346)
+
+**In short**
+
+- **`pnpm test` of the worker is `vitest run`**, on `apps/worker/vitest.config.ts`: `include` is
+  `src/**/*.test.ts`, the pool is `forks` with `isolate`, so each test file has a process of its
+  own, as under `node --test`. A PGlite instance, a variable of the environment or a double never
+  passes from one file to the next. `FRUITBACK_TEST_CONCURRENCY` sets `maxWorkers`.
+  `node:assert/strict` stays.
+- **`src/vitest-setup.fixture.ts` removes `NODE_ENV=test` and `TEST`**, which vitest sets and
+  `node --test` did not. Under them better-auth leaves out its check of the origin, and three cases
+  of `auth-instance.test.ts` failed.
+- **StrykerJS runs the worker with `@stryker-mutator/vitest-runner` and `coverageAnalysis:
+"perTest"`**: a mutant runs only the tests that reach it, in workers that stay up. `vitest.related`
+  is `false`: `related` would keep only the tests that import a mutated file, and leave out a test
+  that starts the worker in a process or reads a document. `mutation.test.ts` holds both.
+- **vitest is 4.1.12, the same in the workspace and in `tools/mutation`.** The runner of StrykerJS
+  10.0.0 found no test under vitest 5.0.5, so every mutant survived (6.82 on `cache.ts`), and it
+  loads vitest from `tools/mutation` while the tests import the one of the workspace.
+  `mutation.test.ts` fails when the two differ.
+- **The runner of StrykerJS sets `pool: 'threads'` and one worker**, and keeps `isolate`: each test
+  file still starts its own instances. The whole suite passes that way (measured on 2026-10-21), and
+  `pglite-isolation.test.ts` holds the pool and `isolate` of the config.
+
+**Why, and the measurements** (2026-10-21, a Mac shared by other sessions, load 10 to 15,
+Node 25.8.1, two workers)
+
+- **Under `tap`, a mutant ran whole test files**, one process each (FRU-342, above). `cache.ts`
+  with the 4 test files that kill its mutants first: 155 s and 161 s under `tap`, 53 s and 51 s under
+  vitest, for the same 38 killed and the same survivors. The mutant of line 60 was a survivor in
+  three runs and a timeout in one, as it already moved in CI.
+- **The suite itself costs the same**: the 4 files in 4.7 to 7.5 s under `node --test`, 5.5 to
+  6.4 s under vitest; the whole worker in 161 to 204 s, and 135 to 250 s, as the load moved.
+- **The same tests pass**: the 1,942 of `node --test`, compared name by name, and the guards of this
+  change. `node:test` counts a skipped
+  `describe` as one test and vitest each test in it, so the skipped counts differ (145 and 568), and
+  each skip of one is a skip of the other.
+
 ### The reasons, and the history
 
 - **A stacked pull request had no check at all.** `ci.yml` held `pull_request: branches: [main]`, so
@@ -184,8 +225,9 @@ How this repository is formatted, tested and documented, and which test holds ea
 
 ### The rules, in short
 
-- **StrykerJS mutates the seed contract and the core of the worker** (FRU-172), with its `tap`
-  runner, which drives `node --test`. The scope is the `mutate` list of `packages/shared/stryker.config.json`
+- **StrykerJS mutates the seed contract and the core of the worker** (FRU-172). The seed contract
+  with its `tap` runner, which drives `node --test`; the worker with its `vitest` runner and the
+  coverage of each test (FRU-346, below). The scope is the `mutate` list of `packages/shared/stryker.config.json`
   and of `apps/worker/stryker.config.json`. `mutation.test.ts` fails on a file of
   `packages/shared/src` that the list leaves out.
 - **The score of a file may not go down.** `tools/mutation/baseline.json` holds the score of each

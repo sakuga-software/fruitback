@@ -38,8 +38,8 @@ export NX_DAEMON=false
 # Two typechecks at a time, then one package of tests at a time, and two test files at a time.
 # Without a bound, `node --test` runs the files of a package on every core but one, and
 # `NODE_OPTIONS` refuses `--test-concurrency` (measured). So the `test` script of each package passes
-# `FRUITBACK_TEST_CONCURRENCY` to it. CI does not set it, and runs on every core. Set it before the
-# push to use more cores.
+# `FRUITBACK_TEST_CONCURRENCY` to it; the `vitest.config.ts` of the worker gives it to `maxWorkers`.
+# CI does not set it, and runs on every core. Set it before the push to use more cores.
 export FRUITBACK_TEST_CONCURRENCY="${FRUITBACK_TEST_CONCURRENCY:-2}"
 
 # Git gives a hook `GIT_DIR`, and here it names the worktree that pushes. A test that starts git in

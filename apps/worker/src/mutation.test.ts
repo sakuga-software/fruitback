@@ -246,7 +246,9 @@ describe('the configuration of the mutation job', () => {
    * the module, fails on the first run and stops it: `security.test.ts` did, and it was left out of
    * the run until it imported the constants (measured in CI on 2026-10-11, FRU-179). Its tests of
    * behaviour did not count in the score for that time. So no test reads a mutated file as text, and
-   * no test is left out of the run.
+   * no test is left out of the run. Under vitest (FRU-346), the run reads the `include` of
+   * `vitest.config.ts`, and `related` would narrow it to the tests that import a mutated file: a test
+   * that starts the worker in a process, or reads a document, would be left out.
    */
   it('runs every test of the worker, and none reads a mutated file as text', () => {
     const scope = new Set(scopeOf(WORKER).map((file) => file.replace(/^src\//, '')));
@@ -257,10 +259,43 @@ describe('the configuration of the mutation job', () => {
           (match) => scope.has(match[1] ?? ''),
         ),
       );
-    const run = (WORKER as { tap?: { testFiles?: string[] } }).tap?.testFiles ?? [];
+    const { testRunner, vitest } = WORKER as {
+      testRunner?: string;
+      vitest?: { configFile?: string; related?: boolean };
+    };
+    const config = readFileSync(new URL('apps/worker/vitest.config.ts', ROOT), 'utf8');
 
     assert.deepEqual(readers, [], 'a test reads a mutated file as text: import the module and its constants');
-    assert.deepEqual(run, ['src/**/*.test.ts'], 'a test is left out of the mutation run of the worker');
+    assert.equal(testRunner, 'vitest');
+    assert.deepEqual(
+      vitest,
+      { configFile: 'vitest.config.ts', related: false },
+      'a test is left out of the mutation run of the worker',
+    );
+    assert.match(
+      config,
+      /^ {4}include: \['src\/\*\*\/\*\.test\.ts'\],$/m,
+      'a test is left out of the mutation run of the worker',
+    );
+  });
+
+  /**
+   * The runner of StrykerJS loads vitest from `tools/mutation`, and the tests import it from the
+   * workspace. Two versions would run the tests of one under the runner of the other.
+   * `@stryker-mutator/vitest-runner` 10.0.0 found no test under vitest 5.0.5 (measured on 2026-10-21):
+   * every mutant survived.
+   */
+  it('runs the worker under the vitest that its tests import, with the coverage of each test', () => {
+    const tools = JSON.parse(readFileSync(new URL('tools/mutation/package.json', ROOT), 'utf8')) as {
+      devDependencies: Record<string, string>;
+    };
+    const catalog = parseDocument(readFileSync(new URL('pnpm-workspace.yaml', ROOT), 'utf8')).toJS() as {
+      catalog: Record<string, string>;
+    };
+
+    assert.ok(tools.devDependencies.vitest !== undefined, 'tools/mutation installs no vitest');
+    assert.equal(tools.devDependencies.vitest, catalog.catalog.vitest);
+    assert.equal((WORKER as { coverageAnalysis?: string }).coverageAnalysis, 'perTest');
   });
 
   /**

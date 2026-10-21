@@ -228,3 +228,19 @@ describe('an instance of PGlite from the file of `initdb` (FRU-339)', () => {
     }
   });
 });
+
+/**
+ * The cases above hold within one process. From one test file to the next, the pool holds it: each
+ * file has its own process and its own modules, so its own instance of PGlite (FRU-346). A planted
+ * pair of files, each that keeps its database on `globalThis` and finds none, passed under this
+ * config and under the `threads` of StrykerJS, and failed under `--no-isolate` (measured on
+ * 2026-10-21).
+ */
+describe('a test file and the next (FRU-346)', () => {
+  it('gives each test file a process and modules of its own, so no database passes between files', async () => {
+    const { default: config } = await import('../vitest.config.ts');
+
+    assert.equal(config.test?.pool, 'forks');
+    assert.equal(config.test?.isolate, true);
+  });
+});

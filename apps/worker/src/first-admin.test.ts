@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { cookieOf } from './auth-worker.fixture.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { AUTH_BASE_PATH, SERVED_PATHS } from './auth.ts';
@@ -71,13 +72,10 @@ const people = async (world: World): Promise<string[]> =>
   (await rowsOf(world.database, 'SELECT email FROM "user" ORDER BY email')).map((row) => String(row.email));
 
 /** Everything written with `console`, while `work` runs. */
-async function saidDuring(t: { mock: { method: (...input: never[]) => unknown } }, work: () => Promise<void>) {
+async function saidDuring(work: () => Promise<void>) {
   const said: string[] = [];
-  const mock = t.mock as unknown as {
-    method(target: object, name: string, replacement: (...input: unknown[]) => void): { mock: { restore(): void } };
-  };
-  const spies = ['log', 'warn', 'error', 'info'].map((name) =>
-    mock.method(console, name, (...input: unknown[]) => void said.push(input.map(String).join(' '))),
+  const spies = (['log', 'warn', 'error', 'info'] as const).map((name) =>
+    mockMethod(console, name, (...input: unknown[]) => void said.push(input.map(String).join(' '))),
   );
   try {
     await work();
@@ -227,7 +225,7 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
     assert.equal((await open(world, token)).status, 401);
   });
 
-  it('writes its token on one line of the log, and nothing else of the worker ever writes it', async (t) => {
+  it('writes its token on one line of the log, and nothing else of the worker ever writes it', async () => {
     const world = await envOf();
     const lines = await firstAdminLines(linksOf(world), ADMIN);
     const token = tokenIn(lines);
@@ -236,7 +234,7 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
     const replaced = tokenIn((await adminLinkFor(linksOf(world), ADMIN)).lines);
     const last = tokenIn((await adminLinkFor(linksOf(world), ADMIN)).lines);
 
-    const said = await saidDuring(t as never, async () => {
+    const said = await saidDuring(async () => {
       assert.equal((await open(world, token)).status, 401);
       assert.equal((await open(world, replaced)).status, 401);
       assert.equal((await open(world, last)).status, 200);

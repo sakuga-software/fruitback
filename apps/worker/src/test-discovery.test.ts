@@ -13,8 +13,9 @@ import { fileURLToPath } from 'node:url';
  * - a glob that matches no file at all: `tests 0`;
  * - `it.skip(…)`: `skipped 1`.
  *
- * So a test can leave the suite with a green check. This file holds three rules, each on the files
- * of the repository and each on a planted violation:
+ * So a test can leave the suite with a green check. `vitest run`, the runner of the worker since
+ * FRU-346, exits 1 on a glob that matches no file, and the same rules still read what it runs. This
+ * file holds three rules, each on the files of the repository and each on a planted violation:
  *
  * 1. each test file is read by the `test` script of its package, or by Playwright;
  * 2. each `test` script reads one test file or more;
@@ -34,7 +35,7 @@ const SELF = fileURLToPath(import.meta.url).slice(REPOSITORY.length);
 /** A name that says « this is a test », whatever runs it. Playwright reads the same names by default. */
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
-/** A package with a `test` script, and the globs that script gives to `node --test`. */
+/** A package with a `test` script, and the globs that script gives to `node --test` or to vitest. */
 type Runner = { root: string; script: string; globs: string[] };
 
 /** Not a place where a source file lives: what a tool installs, builds or writes. */
@@ -57,7 +58,12 @@ function runners(): Runner[] {
       .scripts?.test;
     if (script === undefined) return [];
 
-    return [{ root: manifest.replace(/\/package\.json$/, ''), script, globs: globsOf(script) }];
+    const root = manifest.replace(/\/package\.json$/, '');
+    const globs = isVitest(script)
+      ? vitestGlobs(readFileSync(`${REPOSITORY}${root}/vitest.config.ts`, 'utf8'))
+      : globsOf(script);
+
+    return [{ root, script, globs }];
   });
 }
 
@@ -66,6 +72,20 @@ function globsOf(script: string): string[] {
   if (!isNodeTest(script)) return [];
 
   return [...script.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '');
+}
+
+/** The globs of `vitest run`: the `include` of the `vitest.config.ts` of the package, as literals. */
+function vitestGlobs(config: string): string[] {
+  const include = /\binclude: \[([^\]]*)\]/.exec(config)?.[1];
+  assert.ok(include !== undefined, 'vitest.config.ts no longer names its include as literals');
+  // With one of these, vitest no longer reads every file of its include, and rule 1 must learn it.
+  assert.doesNotMatch(
+    config,
+    /\b(?:exclude|dir|root|projects)\b/,
+    'vitest.config.ts filters its test files: update this guard',
+  );
+
+  return [...include.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '');
 }
 
 /** The directory of the specs, as `playwright.config.ts` names it. */
@@ -92,25 +112,32 @@ function unread(tests: string[], packages: Runner[], specs: string): string[] {
 }
 
 /**
- * Rule 2. The packages whose `node --test` reads no file.
+ * Rule 2. The packages whose `node --test` or `vitest run` reads no file.
  *
  * A script that is another command is not counted here: this guard does not know what it reads, and
  * `unknownRunners` says so in its own words.
  */
 function empty(tests: string[], packages: Runner[]): string[] {
   return packages
-    .filter((candidate) => isNodeTest(candidate.script))
+    .filter((candidate) => isNodeTest(candidate.script) || isVitest(candidate.script))
     .filter((candidate) => unread(tests, [candidate], '').length === tests.length)
     .map((candidate) => candidate.root);
 }
 
-/** The packages whose `test` script is not `node --test`: rules 1 and 2 cannot read what it runs. */
+/** The packages whose `test` script is neither: rules 1 and 2 cannot read what it runs. */
 function unknownRunners(packages: Runner[]): string[] {
-  return packages.filter((candidate) => !isNodeTest(candidate.script)).map((candidate) => candidate.root);
+  return packages
+    .filter((candidate) => !isNodeTest(candidate.script) && !isVitest(candidate.script))
+    .map((candidate) => candidate.root);
 }
 
 function isNodeTest(script: string): boolean {
   return /^node --test\b/.test(script);
+}
+
+/** `vitest run` and nothing more: a file or a filter after it would narrow what it reads. */
+function isVitest(script: string): boolean {
+  return script === 'vitest run';
 }
 
 /**
@@ -125,7 +152,9 @@ function isNodeTest(script: string): boolean {
  * - `.skip()` with no argument, as on the context of a test: `t.skip('the reason')`.
  *
  * A reason that the code computes (`{ skip: NO_REAL_POSTGRES }`) is not read here: TypeScript holds
- * its type where it is declared as `string | false`.
+ * its type where it is declared as `string | false`. vitest takes a boolean there
+ * (`{ skip: NO_REAL_POSTGRES !== false }`), and `it.skip` of vitest takes no reason, so it is read as
+ * one with none.
  */
 function bareSkips(file: string, source: string, specs: string): string[] {
   // The arguments up to the reason hold no parenthesis, or pairs that hold none: a callback with a
@@ -213,18 +242,40 @@ describe('each test file is run (FRU-174)', () => {
     assert.deepEqual(
       unknownRunners(RUNNERS),
       [],
-      'the test script of these packages is not node --test: teach this guard what that runner reads',
+      'the test script of these packages is neither node --test nor vitest run: teach this guard what that runner reads',
     );
   });
 
   it('fails on a test script that is another runner, in its own words', () => {
     const packages: Runner[] = [
       { root: 'packages/shared', script: "node --test 'src/**/*.test.ts'", globs: ['src/**/*.test.ts'] },
-      { root: 'packages/other-runner', script: 'vitest run', globs: [] },
+      { root: 'packages/other-runner', script: 'jest', globs: [] },
+      { root: 'packages/narrowed', script: 'vitest run src/a.test.ts', globs: [] },
+      { root: 'apps/worker', script: 'vitest run', globs: ['src/**/*.test.ts'] },
     ];
 
-    assert.deepEqual(unknownRunners(packages), ['packages/other-runner']);
-    assert.deepEqual(empty(['packages/shared/src/seed.test.ts', 'packages/other-runner/src/a.test.ts'], packages), []);
+    assert.deepEqual(unknownRunners(packages), ['packages/other-runner', 'packages/narrowed']);
+    assert.deepEqual(
+      empty(
+        ['packages/shared/src/seed.test.ts', 'packages/other-runner/src/a.test.ts', 'apps/worker/src/a.test.ts'],
+        packages,
+      ),
+      [],
+    );
+  });
+
+  it('reads the globs of vitest in its config, and refuses a config that filters them', () => {
+    assert.deepEqual(vitestGlobs("test: {\n    include: ['src/**/*.test.ts'],\n    pool: 'forks',\n  }"), [
+      'src/**/*.test.ts',
+    ]);
+    assert.deepEqual(vitestGlobs("include: ['src/**/*.test.ts', 'app/**/*.test.ts'],"), [
+      'src/**/*.test.ts',
+      'app/**/*.test.ts',
+    ]);
+    assert.throws(() => vitestGlobs('include: GLOBS,'));
+    assert.throws(() => vitestGlobs("include: ['src/**/*.test.ts'], exclude: ['src/slow.test.ts'],"));
+    assert.throws(() => vitestGlobs("include: ['src/**/*.test.ts'], dir: 'src/fast',"));
+    assert.throws(() => vitestGlobs("include: ['src/**/*.test.ts'], projects: ['a'],"));
   });
 
   it('has one spec or more for Playwright', () => {

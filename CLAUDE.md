@@ -20,7 +20,7 @@ Package manager is `pnpm@11.16.0` (pinned). Nx runs multi-project targets.
 ```bash
 pnpm install
 pnpm dev                                    # worker (a database in its process) + playground, see below
-pnpm test                                   # nx run-many -t test → node --test
+pnpm test                                   # nx run-many -t test → node --test, vitest for the worker
 pnpm e2e                                    # playwright, starts both servers itself
 pnpm typecheck
 pnpm lint                                   # oxlint
@@ -28,6 +28,7 @@ pnpm format:fix                             # oxfmt
 
 pnpm --filter @fruitback/shared test         # one package
 node --test src/seed.test.ts                 # one file, from the package directory
+pnpm exec vitest run src/cache.test.ts       # one file of the worker, from apps/worker
 ```
 
 **`pnpm dev` starts both halves. The ports are fixed, and these are them:**

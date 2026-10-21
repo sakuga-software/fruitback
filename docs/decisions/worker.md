@@ -732,7 +732,7 @@ any store` asks it of every spec rather than of Linear.
   deleted. Measured: a rethrow on the read path, and separately on the write path, fails the case for
   the three stores that can fail.
 - **A step can be a string.** The memory store assigns its own states, writes canned replies and has no
-  provider. `node:test` reports a reason as skipped. A step that passed with nothing checked would read
+  provider. The runner reports that case as skipped. A step that passed with nothing checked would read
   as conformance.
 - **The matrix test reads what the code holds**: the stages, the reply cap and whether the store runs
   in production. The reply cap of Linear, GitHub and SQLite comes from each subject, which imports the

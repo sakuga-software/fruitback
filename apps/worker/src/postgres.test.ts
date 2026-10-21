@@ -850,7 +850,7 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
  * The database of a case is dropped when its connections have ended, not while they end (FRU-196).
  *
  * A pool of `pg` with no listener, as `postgres-numbers.test.ts` makes one: an error on one of its
- * connections is an unhandled error of the process, and `node:test` gives it to the test that runs.
+ * connections is an unhandled error of the process, and vitest fails the run on it.
  * Here the pool has a listener that counts. Eight connections, so that one at least is still on the
  * server when `end()` answers.
  */
