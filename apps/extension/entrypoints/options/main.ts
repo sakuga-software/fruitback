@@ -7,7 +7,7 @@ import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { SYNC_SETTING, fits } from '../../src/site-sync.ts';
 import { exportSites, importSites } from '../../src/site-transfer.ts';
-import { RULES_FILE, shareRules } from '../../src/share-rules.ts';
+import { RULES_FILE, downloadedSummary, shareRules } from '../../src/share-rules.ts';
 import {
   type SiteConfig,
   type SiteMode,
@@ -439,12 +439,16 @@ function addForm(): HTMLElement {
 function transfer(): HTMLElement {
   const share = shareRules(document, {
     onDownload: () => {
-      const url = URL.createObjectURL(new Blob([exportSites(current)], { type: 'application/json' }));
+      const text = exportSites(current);
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
       const link = document.createElement('a');
       link.href = url;
       link.download = RULES_FILE;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      share.result.classList.remove('problem');
+      // Counted in the file itself: a pattern the store could not read is not written.
+      share.result.textContent = downloadedSummary(Object.keys((JSON.parse(text) as { sites: object }).sites).length);
     },
     onFile: (file) => void importFile(file, share.result),
   });

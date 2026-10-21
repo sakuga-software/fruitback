@@ -70,6 +70,11 @@ export type PopupFacts = {
    * now: it ended, and its widget reads and writes nothing until the person signs in again (FRU-238).
    */
   ruleWantsSession?: boolean;
+  /**
+   * The rule is of a site of the workspace of this build's Fruitback, and Fruitback did not answer
+   * (FRU-319). The site would say « On » while no note can be read or sent there.
+   */
+  ruleUnreachable?: boolean;
   /** A workspace of a session lists the origin (FRU-101). */
   offer: boolean;
   account: AccountState;
@@ -112,6 +117,8 @@ export function decide(facts: PopupFacts): PopupState {
   }
   // The rule is on and the browser took its access away: the one thing to do is to give it back.
   if (facts.rule && facts.accessRemoved === true) return { kind: 'no-access' };
+  // Its Fruitback does not answer: « On » would say all is well while nothing reaches it (FRU-319).
+  if (facts.rule && facts.ruleUnreachable === true) return { kind: 'unreachable' };
   if (facts.rule) return { kind: 'rule' };
   if (facts.offer) return { kind: 'offer' };
 

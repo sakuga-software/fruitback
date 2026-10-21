@@ -39,9 +39,11 @@ it changes who is shown the feedback and never who may fetch it.
 - **The language is the account's, then the browser's.** `GET /session/sites` answers `locale`, and
   `rememberLanguage` keeps it under `language` in `chrome.storage.local`. It is a tag and no
   credential, so the bridge reads it and `mount` carries it to the widget. **A worker that does not
-  answer changes nothing; no session left removes it.** The popup learns it without a draw, because
-  a draw loses what somebody types: the next popup shows it. A change of language builds the mounted
-  widget again, like a change of worker.
+  answer changes nothing; no session left removes it.** When the account speaks another language than
+  the one the popup opened in, the popup draws its screen again in it (FRU-319): the first popup after
+  a change in the console spoke the language of before. It does not draw a form, a pairing link, or a
+  screen with a field somebody is in or wrote in: a draw loses what somebody types, and the next popup
+  shows it. A change of language builds the mounted widget again, like a change of worker.
 - **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
   walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
   a popup nobody has. The mode labels are read **out of** `popup/main.ts` and the pairing failures are imported from
@@ -776,7 +778,17 @@ access in this browser » with **Grant access** beside it.
 - **The popup reads the tab it was opened on once.** Asked again after the console tab opened, the
   active tab is the console's.
 - **The pairing link and the « Paired as » row stay** for a self-hosted worker, inside the shell: they
-  are the only places where « worker » and « pair » remain.
+  are the only places where « worker » and « pair » remain. On screen 3 the person of a pairing is
+  said once more, in the foot, with « Log out » as a link (FRU-319): the head, a « Paired as » row and
+  the foot named them three times, and « Log out » was a filled pill of the weight of « Leave
+  feedback ».
+- **A site of the workspace of this Fruitback, when Fruitback does not answer, is screen 4**
+  (FRU-319), and not « On · Acme » with no line under it: `ruleUnreachable` in `decide`. A removed
+  access is said first, because it is fixed in this browser.
+- **The page of the extension names the workspace of a site of Fruitback** (FRU-319): « This origin
+  · Acme » under the site, and « The site ships nothing; the extension mounts the widget of Acme and
+  carries your session. » in its panel, where it said that the site embeds a dormant widget.
+  « Download » says what it wrote in the status of the card.
 
 ### The reasons, and what was measured
 

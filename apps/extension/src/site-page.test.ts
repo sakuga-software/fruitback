@@ -162,6 +162,38 @@ describe('the page of the extension (FRU-301)', () => {
     assert.deepEqual(done, ['remove']);
   });
 
+  it('names the workspace of a site of Fruitback, whose widget the extension mounts (FRU-319)', () => {
+    const cloud: RuleRow = {
+      pattern: 'https://staging.acme.dev',
+      site: {
+        mode: 'team',
+        endpoint: 'https://api.fruitback.com',
+        enabled: true,
+        mount: { clientId: 'w1', workspace: 'Acme' },
+      },
+      granted: true,
+    };
+    const document = page();
+    const table = sitesTable(document, { rows: [cloud, TEAM], onSelect: nothing, onToggle: nothing });
+    assert.deepEqual(
+      [...table.querySelectorAll('.rule-scope')].map((scope) => scope.textContent),
+      ['This origin · Acme', 'Every site this pattern covers'],
+    );
+    const aside = rulePanel(document, { row: cloud, onGrant: nothing, onSave: nothing, onRemove: nothing });
+    assert.equal(aside.querySelector('.panel-scope')?.textContent, 'This origin · Acme');
+    // Not « the site embeds a dormant widget »: the site embeds nothing.
+    assert.equal(
+      aside.querySelector('.panel-hint')?.textContent,
+      'The site ships nothing; the extension mounts the widget of Acme and carries your session.',
+    );
+    // The control: a team rule with no mount is the site's own widget, as before.
+    const own = rulePanel(document, { row: TEAM, onGrant: nothing, onSave: nothing, onRemove: nothing });
+    assert.equal(
+      own.querySelector('.panel-hint')?.textContent,
+      'The site embeds a dormant widget; the extension wakes it and carries your session.',
+    );
+  });
+
   it('says a rule that is on has no access, and offers to grant it', () => {
     let granted = 0;
     const aside = rulePanel(page(), { row: TEAM, onGrant: () => (granted += 1), onSave: nothing, onRemove: nothing });

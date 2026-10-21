@@ -56,6 +56,7 @@ import {
   siteOn,
   connecting,
   hostOf,
+  linkButton,
   loading,
   notAWebPage,
   problem,
@@ -116,6 +117,18 @@ let nextClaim: ReturnType<typeof setTimeout> | undefined;
 /** Which drawing the screen is: each `render` and each sign-in counts one. */
 let drawn = 0;
 
+/** Somebody is in a field of the screen, or wrote in one: a pairing code, a word. */
+function typing(): boolean {
+  const fields = [...(app?.querySelectorAll('input, textarea') ?? [])] as (HTMLInputElement | HTMLTextAreaElement)[];
+
+  return fields.some(
+    (field) => field.ownerDocument.activeElement === field || (field.type !== 'checkbox' && field.value !== ''),
+  );
+}
+
+/** The kind of the screen drawn last: a late language does not redraw a form (FRU-319). */
+let shownKind: PopupState['kind'] | undefined;
+
 const openSettings = (): void => void browser.runtime.openOptionsPage();
 
 /** The language of the account when the extension knows it, the browser's own otherwise. */
@@ -130,9 +143,22 @@ void spoken.then(() => {
 
   return render();
 });
-// Not awaited, and no draw after it: a draw would lose what somebody types in the form. The next
-// popup reads what this one learned.
-void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined);
+// Not awaited. When the account speaks another language than the one this popup opened in, the
+// screen is drawn again in it (FRU-319): the first popup after a change in the console spoke the
+// language of before. Not a form: a draw would lose what somebody types there. The next popup
+// reads what this one learned.
+void rememberLanguage(browser.storage.local, cloudSeams())
+  .then(() => spoken)
+  .then(async () => {
+    const kept = await storedLanguage(browser.storage.local);
+    const before = language();
+    if (shownKind === 'form' || shownKind === 'pair-link' || typing()) return;
+    setLanguage(kept ?? navigator.language);
+    if (language() === before) return;
+    document.documentElement.lang = language();
+    await render();
+  })
+  .catch(() => undefined);
 
 /**
  * @param editing Show the fields for an origin that already has an entry.
@@ -185,6 +211,9 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
     rule: found !== undefined,
     accessRemoved: found !== undefined && found.site.enabled && !(await holdsAccess(found.pattern)),
     ruleWantsSession: found !== undefined && (await wantsSession(found.site)),
+    // A site of the workspace of this Fruitback, which did not answer (FRU-319).
+    ruleUnreachable:
+      found !== undefined && found.site.enabled && found.site.endpoint === CLOUD && accountState === 'unreachable',
     offer: offer !== undefined,
     account: accountState,
     sessions: Object.keys(held).length,
@@ -193,6 +222,7 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
   app.replaceChildren(
     await draw(state, { origin: origin ?? '', tab, link, found, offer, account, pending: pendingNow }),
   );
+  shownKind = state.kind;
   if (state.kind === 'connecting' && pendingNow !== undefined) waitForTheConsole(pendingNow, state.unanswered);
 }
 
@@ -627,8 +657,11 @@ async function siteOfWorkspaceOn(
   account: Account | undefined,
 ): Promise<HTMLElement> {
   const workspace = site.mode === 'team' ? (site.mount?.workspace ?? '') : '';
-  // A session of a pairing with that worker is the person here too: the head names them.
-  const paired = account === undefined ? (await sessions.list())[site.endpoint] : undefined;
+  // A session of a pairing with that worker: the head names its person when no account is held, and
+  // the foot says it with its « Log out » (FRU-319). The session of the account is not one: it is
+  // the head and the foot of the account, and it logs out on the page of the extension.
+  const held = (await sessions.list())[site.endpoint];
+  const paired = held === undefined || held.account === true ? undefined : held;
   const person = account ?? (paired === undefined ? undefined : { name: describeIdentity(paired.identity) });
   const problem = element('p', '', 'problem');
   // FRU-296: the panel of the browser, opened in this click (before any `await`: the browser opens it
@@ -648,6 +681,7 @@ async function siteOfWorkspaceOn(
     on: site.enabled,
     ...(shortcut === undefined ? {} : { shortcut: keysOfShortcut(shortcut) }),
     ...(person === undefined ? {} : { account: person }),
+    ...(paired === undefined || account !== undefined ? {} : { foot: pairedFoot(site.endpoint, paired.identity) }),
     onToggle: (on) => {
       if (!on) {
         void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(problem));
@@ -670,8 +704,11 @@ async function siteOfWorkspaceOn(
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem);
-  // A session of a pairing is not in the head as an account is: its row, and its log out, stay here.
-  if (paired !== undefined) screen.querySelector('.popup-body')?.append(...(await session(site)));
+  // An account and a pairing with another worker (FRU-319): the foot is the account's, so the
+  // pairing keeps its row and its « Log out » in the body.
+  if (paired !== undefined && account !== undefined) {
+    screen.querySelector('.popup-body')?.append(pairedRow(site.endpoint, paired.identity));
+  }
   // FRU-298: where the notes go, the fixes to check and the open notes of the site, as the worker
   // lists them (FRU-295), added when it answers: the screen does not wait for it, and a worker that
   // does not answer leaves the lines out rather than zeros. Not for a screen that is gone by then.
@@ -763,7 +800,7 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
     // that was paired before the link.
     const said = pairedNow.has(link.endpoint) ? LINK_PAIRED : LINK_ALREADY_PAIRED;
 
-    return [paired(link.endpoint, held.identity), element('p', t(said), 'state')];
+    return [pairedRow(link.endpoint, held.identity), element('p', t(said), 'state')];
   }
 
   const submit = element('button', t('Pair with this worker'));
@@ -810,8 +847,61 @@ const pairedNow = new Set<string>();
  * Who this browser is paired as with a worker, and the way out. With no name, « Paired » alone and
  * the e-mail under it, in the secondary text (FRU-289), as the card of the page of the extension.
  */
-function paired(endpoint: string, identity: SessionIdentity): HTMLElement {
-  const out = element('button', t('Log out'));
+function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
+  const out = logOut(endpoint, element('button', t('Log out')));
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  const name = identity.name?.trim();
+  row.append(
+    element(
+      'span',
+      name === undefined || name === '' ? t('Paired') : t('Paired as {identity}', { identity: name }),
+      'state',
+    ),
+    out,
+  );
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'session';
+  wrapper.append(row);
+  if ((name === undefined || name === '') && identity.email !== undefined) {
+    const email = element('p', identity.email, 'state');
+    email.classList.add('identity-email');
+    wrapper.append(email);
+  }
+
+  return wrapper;
+}
+
+/**
+ * The foot of screen 3 for a session of a pairing (FRU-319): who it is, once, and « Log out » as a
+ * link. The person was written three times there (the head, a row « Paired as » and the foot), and
+ * « Log out » was a filled pill of the weight of « Leave feedback ».
+ */
+function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
+  const foot = element('div', '', 'popup-foot');
+  foot.classList.add('popup-foot-account');
+  // The rule of the row (FRU-289): « Paired as » a name, never as an address. With no name, « Paired »
+  // and the address beside it.
+  const name = identity.name?.trim();
+  const email = identity.email?.trim();
+  let who = t('Paired');
+  if (name !== undefined && name !== '') who = t('Paired as {identity}', { identity: name });
+  else if (email !== undefined && email !== '') who = `${who} · ${email}`;
+  foot.append(
+    element('span', who, 'who'),
+    logOut(
+      endpoint,
+      linkButton(document, t('Log out'), () => undefined),
+    ),
+  );
+
+  return foot;
+}
+
+/** Logs out of the session of `endpoint` on a click of `out`, then draws the popup again. */
+function logOut<B extends HTMLButtonElement>(endpoint: string, out: B): B {
   out.addEventListener('click', () => {
     out.disabled = true;
     // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
@@ -836,28 +926,7 @@ function paired(endpoint: string, identity: SessionIdentity): HTMLElement {
       });
   });
 
-  const row = document.createElement('div');
-  row.className = 'row';
-  const name = identity.name?.trim();
-  row.append(
-    element(
-      'span',
-      name === undefined || name === '' ? t('Paired') : t('Paired as {identity}', { identity: name }),
-      'state',
-    ),
-    out,
-  );
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'session';
-  wrapper.append(row);
-  if ((name === undefined || name === '') && identity.email !== undefined) {
-    const email = element('p', identity.email, 'state');
-    email.classList.add('identity-email');
-    wrapper.append(email);
-  }
-
-  return wrapper;
+  return out;
 }
 
 /**
@@ -922,7 +991,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
   // already holds stays on the screen, with its log out.
   if (held === undefined && site.mode !== 'team') return [];
-  if (held !== undefined) return [paired(endpoint, held.identity)];
+  if (held !== undefined) return [pairedRow(endpoint, held.identity)];
 
   const code = field(t('Pairing code'), 'ABCD-EFGH-JKMN');
   const submit = element('button', t('Pair with this worker'));

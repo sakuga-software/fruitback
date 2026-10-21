@@ -409,6 +409,25 @@ describe('3 · a site on (FRU-298)', () => {
       ...extra,
     });
 
+  it('takes the foot it is given in place of the one of an account (FRU-319)', () => {
+    const document = page();
+    const foot = document.createElement('div');
+    foot.className = 'popup-foot';
+    foot.textContent = 'Paired as Camille Durand';
+    const screen = on({ account: { name: 'Camille Durand', email: 'camille@acme.dev' }, foot });
+
+    assert.deepEqual(
+      [...screen.querySelectorAll('.popup-foot')].map((each) => each.textContent),
+      ['Paired as Camille Durand'],
+    );
+    // The control: with no foot given, the foot of the account.
+    assert.equal(
+      on({ account: { name: 'Camille Durand', email: 'camille@acme.dev' } }).querySelector('.popup-foot .who')
+        ?.textContent,
+      'camille@acme.dev',
+    );
+  });
+
   it('has the site and its named switch, « Leave feedback » with its keys, and the side panel', () => {
     const calls: string[] = [];
     const screen = on({}, calls);

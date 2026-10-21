@@ -479,6 +479,13 @@ body.popup-page {
   padding: 12px 16px;
 }
 
+/* « Log out » of a pairing, beside a long name (FRU-319): the name gives way, the link keeps one line. */
+.popup-foot-account button.link-button {
+  flex: none;
+  min-height: 24px;
+  white-space: nowrap;
+}
+
 .popup-foot .who {
   min-width: 0;
   overflow: hidden;

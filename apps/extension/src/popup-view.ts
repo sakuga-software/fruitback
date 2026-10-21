@@ -428,6 +428,8 @@ export type SiteOnOptions = {
   shortcut?: string[];
   facts?: SiteFacts;
   account?: Account;
+  /** The foot, in place of the one of an account: a session of a pairing and its log out (FRU-319). */
+  foot?: HTMLElement;
   onToggle: (on: boolean) => void;
   onLeaveFeedback: () => void;
   /** Opens the side panel: « Show all notes in a sidebar », and a click on a line. */
@@ -507,6 +509,7 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
       onSettings: options.onSettings,
       screen: 3,
       ...(options.account === undefined ? {} : { account: options.account }),
+      ...(options.foot === undefined ? {} : { foot: options.foot }),
     },
     ...body,
   );

@@ -145,6 +145,16 @@ describe('the ten states of before, in the four screens of the mock-up of 2026-1
     assert.deepEqual(unmapped(SCREEN_OF), []);
   });
 
+  it('says a rule of a site whose Fruitback does not answer is the screen of a problem (4) (FRU-319)', () => {
+    assert.deepEqual(on({ rule: true, ruleUnreachable: true, account: 'unreachable', sessions: 1 }), {
+      kind: 'unreachable',
+    });
+    // The control: the same rule, with its Fruitback answering, is the site that is on.
+    assert.deepEqual(on({ rule: true, ruleUnreachable: false, account: 'ok', sessions: 1 }), { kind: 'rule' });
+    // A removed access is fixed in this browser, so it is said first.
+    assert.deepEqual(on({ rule: true, ruleUnreachable: true, accessRemoved: true }), { kind: 'no-access' });
+  });
+
   it('says a rule whose access the browser removed is the screen of a problem (4)', () => {
     assert.deepEqual(on({ rule: true, accessRemoved: true }), { kind: 'no-access' });
     assert.deepEqual(on({ rule: true, accessRemoved: false }), { kind: 'rule' });
