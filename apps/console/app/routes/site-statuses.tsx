@@ -845,10 +845,10 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
               ]}
             />
             {background === 'own' ? (
-              <span className="flex items-end gap-[10px] pl-[26px]">
+              <span className="flex items-start gap-[10px] pl-[26px]">
                 <span
                   aria-hidden="true"
-                  className="kit-swatch mb-[13px]"
+                  className="kit-swatch mt-[35px]"
                   style={{ background: drawn.style.background }}
                 />
                 <span className="w-[180px]">
@@ -876,10 +876,10 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
               ]}
             />
             {text === 'own' ? (
-              <span className="flex items-end gap-[10px] pl-[26px]">
+              <span className="flex items-start gap-[10px] pl-[26px]">
                 <span
                   aria-hidden="true"
-                  className="kit-swatch mb-[13px]"
+                  className="kit-swatch mt-[35px]"
                   style={{ background: textColor ?? undefined }}
                 />
                 <span className="w-[180px]">
