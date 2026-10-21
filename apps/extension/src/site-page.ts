@@ -120,10 +120,17 @@ export type RuleRow = {
 };
 
 /** What a pattern covers, in a few words, and « imported » when it came from a rules file. */
-export function scopeOf(pattern: string, imported = false): string {
+export function scopeOf(pattern: string, imported = false, workspace?: string): string {
   const scope = isWildcardPattern(pattern) ? t('Every site this pattern covers') : t('This origin');
+  // A site of a workspace of Fruitback (FRU-319): its name, which the rule holds and the page did not say.
+  const named = workspace === undefined || workspace.trim() === '' ? scope : `${scope} · ${workspace.trim()}`;
 
-  return imported ? `${scope} · ${t('imported')}` : scope;
+  return imported ? `${named} · ${t('imported')}` : named;
+}
+
+/** The workspace of a rule whose widget the extension mounts and relays, when the rule names it. */
+function workspaceOf(site: SiteConfig): string | undefined {
+  return site.mode === 'team' ? site.mount?.workspace : undefined;
 }
 
 function hostOf(endpoint: string): string {
@@ -188,7 +195,7 @@ export function sitesTable(document: Document, options: TableOptions): HTMLEleme
     const open = button(document, 'rule-open', '', () => options.onSelect(row.pattern));
     open.append(
       make(document, 'span', 'rule-pattern', row.pattern),
-      make(document, 'span', 'rule-scope', scopeOf(row.pattern, row.imported)),
+      make(document, 'span', 'rule-scope', scopeOf(row.pattern, row.imported, workspaceOf(row.site))),
     );
     site.append(open);
 
@@ -234,6 +241,28 @@ const MODE_HINT: Record<SiteMode, string> = {
   team: msg('The site embeds a dormant widget; the extension wakes it and carries your session.'),
 };
 
+/**
+ * A team rule of a site of a workspace (FRU-319): the site embeds nothing, the extension mounts the
+ * widget and relays it. « The site embeds a dormant widget » was said of it, and was wrong.
+ */
+const MOUNT_HINT = msg(
+  'The site ships nothing; the extension mounts the widget of {workspace} and carries your session.',
+);
+const MOUNT_HINT_UNNAMED = msg(
+  'The site ships nothing; the extension mounts the widget of your workspace and carries your session.',
+);
+
+/** What the panel says of a mode, for this rule. */
+export function modeHint(site: SiteConfig, mode: SiteMode): string {
+  if (mode === 'team' && site.mode === 'team' && site.mount !== undefined) {
+    const workspace = site.mount.workspace?.trim();
+
+    return workspace === undefined || workspace === '' ? t(MOUNT_HINT_UNNAMED) : t(MOUNT_HINT, { workspace });
+  }
+
+  return t(MODE_HINT[mode]);
+}
+
 /** The panel of a rule: what it covers, its mode, its worker, what the browser holds, and its two actions. */
 export function rulePanel(document: Document, options: PanelOptions): HTMLElement {
   const { row } = options;
@@ -244,11 +273,11 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
   top.append(
     make(document, 'span', 'panel-label', t('Rule')),
     make(document, 'span', 'panel-pattern', row.pattern),
-    make(document, 'span', 'panel-scope', scopeOf(row.pattern, row.imported)),
+    make(document, 'span', 'panel-scope', scopeOf(row.pattern, row.imported, workspaceOf(row.site))),
   );
 
   let mode: SiteMode = row.site.mode;
-  const hint = make(document, 'span', 'panel-hint', t(MODE_HINT[mode]));
+  const hint = make(document, 'span', 'panel-hint', modeHint(row.site, mode));
   const modes = make(document, 'div', 'panel-field');
   modes.append(
     make(document, 'span', 'panel-label', t('Mode')),
@@ -262,7 +291,7 @@ export function rulePanel(document: Document, options: PanelOptions): HTMLElemen
       selected: mode,
       onSelect: (id) => {
         mode = id === 'team' ? 'team' : 'private';
-        hint.textContent = t(MODE_HINT[mode]);
+        hint.textContent = modeHint(row.site, mode);
         client.hidden = mode === 'team';
       },
     }),

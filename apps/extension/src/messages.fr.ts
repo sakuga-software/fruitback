@@ -87,6 +87,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Remove rule': 'Retirer la règle',
   'The site ships nothing; the extension mounts the widget for you only.':
     'Le site n’embarque rien ; l’extension monte le widget pour vous seul.',
+  'The site ships nothing; the extension mounts the widget of {workspace} and carries your session.':
+    'Le site n’embarque rien ; l’extension monte le widget de {workspace} et porte votre session.',
+  'The site ships nothing; the extension mounts the widget of your workspace and carries your session.':
+    'Le site n’embarque rien ; l’extension monte le widget de votre workspace et porte votre session.',
   'The site embeds a dormant widget; the extension wakes it and carries your session.':
     'Le site embarque un widget endormi ; l’extension le réveille et porte votre session.',
   'Access does not travel with a rule, and it can be removed in the settings of the browser. Nothing is mounted until you grant it.':
@@ -189,6 +193,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Changez-le dans Modules complémentaires, Gérer les raccourcis d’extensions.',
   'Add a rule': 'Ajouter une règle',
   'Import a rules file': 'Importer un fichier de règles',
+  'Downloaded {file}, with 1 rule.': '{file} téléchargé, avec 1 règle.',
+  'Downloaded {file}, with {count} rules.': '{file} téléchargé, avec {count} règles.',
   'Imported 1 rule.': '1 règle importée.',
   'Imported {count} rules.': '{count} règles importées.',
   'Skipped, because they are not valid: {patterns}.': 'Ignorées, parce qu’elles ne sont pas valides : {patterns}.',

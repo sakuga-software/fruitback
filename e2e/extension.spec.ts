@@ -544,13 +544,15 @@ test('the popup, the options page and the mounted widget speak the language of t
 
     return route.fulfill({ json: { workspace: { id: 'ws_1', name: 'Acme' }, sites: [], locale: 'fr' } });
   });
-  // This popup learns the language and does not draw again: it is still English.
+  // This popup opens in English, learns the language, and draws its screen again in French
+  // (FRU-319): the first popup after a change in the console spoke the language of before.
   const learner = await openPopup(extension, page);
   await expect
     .poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language')))
     .toEqual({ language: 'fr' });
   expect(asked[0]).toMatch(/^Bearer .+/);
-  await expect(learner.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await expect(learner.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
+  expect(await learner.evaluate(() => document.documentElement.lang)).toBe('fr');
   await learner.close();
 
   // The open tab gets the widget again, in French, with no reload.

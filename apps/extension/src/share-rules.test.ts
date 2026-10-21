@@ -2,7 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
-import { RULES_FILE, exportSummary, shareRules } from './share-rules.ts';
+import { RULES_FILE, downloadedSummary, exportSummary, shareRules } from './share-rules.ts';
 import { type RuleRow, rulePanel, scopeOf, sitesTable } from './site-page.ts';
 
 /**
@@ -73,6 +73,11 @@ describe('« Share rules » (FRU-290)', () => {
     share.setCount(1);
     assert.equal(summary(), '1 rule · fruitback-rules.json');
     assert.equal(exportSummary(0), '0 rules · fruitback-rules.json');
+  });
+
+  it('says what « Download » wrote, for a screen reader too (FRU-319)', () => {
+    assert.equal(downloadedSummary(1), 'Downloaded fruitback-rules.json, with 1 rule.');
+    assert.equal(downloadedSummary(3), 'Downloaded fruitback-rules.json, with 3 rules.');
   });
 
   it('downloads at a click on « Download »', () => {

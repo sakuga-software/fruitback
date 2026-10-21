@@ -51,6 +51,16 @@ export function exportSummary(count: number | undefined): string {
   return `${rules} · ${RULES_FILE}`;
 }
 
+/**
+ * What « Download » says once the file is written (FRU-319): the download was silent, and a screen
+ * reader heard nothing. Said in the result of the card, which is a polite status.
+ */
+export function downloadedSummary(count: number): string {
+  return count === 1
+    ? t('Downloaded {file}, with 1 rule.', { file: RULES_FILE })
+    : t('Downloaded {file}, with {count} rules.', { file: RULES_FILE, count });
+}
+
 export function shareRules(document: Document, options: ShareOptions): ShareSection {
   const section = make(document, 'section', 'page-section');
   section.classList.add('share');
