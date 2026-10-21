@@ -36,11 +36,13 @@ connector's environment, and what a second connector with no markdown body actua
   module** (FRU-363). `app.ts` holds `handleRequest`, `routed` (the delivery loop, `/health`, CORS,
   the method, the limit, then the dispatch), the checks of the caller (`verifyForClient`, `routeFor`,
   `writesWith`, `memberOf`, `sessionWrites`, `writerIn`, `attributionFor`, `replyAuthorFor`,
-  `endedSession`…), and `GET` and `POST /feedback`. The console is in `console-routes.ts`, `/pair` and
-  `/session/` in `session-routes.ts`, the replies and the verdicts under a note in `reply-routes.ts`,
-  the files in `attachment-routes.ts`. **A module of routes gets the checks of the caller from
-  `app.ts` in its seams, never through an import of `app.ts`**: a test that plants a change in a copy
-  of `app.ts` (`mutatedModule`) then reaches the routes of the module too. What a request reads is in
+  `endedSession`…). `GET` and `POST /feedback` are in `feedback-routes.ts` (FRU-374), the console in
+  `console-routes.ts`, `/pair` and `/session/` in `session-routes.ts`, the replies and the verdicts
+  under a note in `reply-routes.ts`, the files in `attachment-routes.ts`. **A module of routes gets
+  the checks of the caller from `app.ts` in its seams (`CallerChecks`), never through an import of
+  `app.ts`**: a test that plants a change in a copy of `app.ts` (`mutatedModule`) then reaches the
+  routes of the module too. A test that plants a change in a module that `app.ts` imports gets the
+  `handleRequest` of a copy of `app.ts` that imports the changed module. What a request reads is in
   `request-context.ts`, what the worker opens in `worker-stores.ts`, and the helpers of the notes,
   which check nobody, in `note-helpers.ts`.
 
@@ -50,10 +52,12 @@ connector's environment, and what a second connector with no markdown body actua
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
   behaviour in `app.ts` and its modules of routes, so it stays testable without opening a socket.
 - **`app.ts` was 108 KB, and no review read it** (FRU-363, after #427). Its routes moved, unchanged
-  and with no test changed, into one module for each group. `GET` and `POST /feedback` stay in
-  `app.ts`: `visitor.test.ts` and `connect-routes.test.ts` plant changes in their bodies there. To move
-  them, those tests have to plant their change in a module that `app.ts` imports, which is a change of
-  the tests of its own.
+  and with no test changed, into one module for each group: 58 KB. `GET` and `POST /feedback` stayed,
+  because `visitor.test.ts` and `connect-routes.test.ts` planted changes in their bodies in `app.ts`.
+  FRU-374 moved them too (36 KB): `mutatedModule` now loads `app.ts` through a changed module that it
+  imports, and those three plants name `feedback-routes.ts`, with the same text and the same
+  assertions. Measured: with the copy of `app.ts` importing the real module instead, exactly those
+  three tests fail.
 - The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
   `/health`, not as an opaque Linear error per request.
 - `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
@@ -1646,8 +1650,8 @@ an earlier migration, and writes nothing`.
 
 ### The guards, each planted out
 
-`visitor.test.ts` takes each guard of `app.ts` out of a copy of the module, and the case that holds
-it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, the check of
+`visitor.test.ts` takes each guard of `app.ts` and `feedback-routes.ts` out of a copy of its module,
+and the case that holds it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, the check of
 `verified.session` in `writesWith`, and the session that `POST /attachments` asks for. The account suite plants three violations of the store: a new
 site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
 `writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of

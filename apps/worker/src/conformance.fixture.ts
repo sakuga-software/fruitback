@@ -80,6 +80,10 @@ const SOURCES = new URL('./', import.meta.url);
  * The relative imports become absolute, so the changed module shares every other module with the
  * real one. The import of a package becomes the file that these sources resolve it to: the temporary
  * directory has no `node_modules` (FRU-180). `remove` deletes the temporary directory.
+ *
+ * When `app.ts` imports `file`, `module` also holds the exports of a copy of `app.ts` that imports
+ * the changed module (FRU-374), the ones of `file` first: a change planted in a module of routes
+ * then reaches `handleRequest`, as a change planted in `app.ts` does.
  */
 export async function mutatedModule(
   file: string,
@@ -94,21 +98,43 @@ export async function mutatedModule(
   const at = source.indexOf(from, start);
   assert.ok(at >= 0, `${file} no longer holds the text of a mutation: ${from}`);
 
-  const mutated = `${source.slice(0, at)}${to}${source.slice(at + from.length)}`
-    .replaceAll(/from '\.\//g, () => `from '${SOURCES.href}`)
-    .replaceAll(/from '([a-z@][^':]*)'/g, (_, specifier: string) => `from '${import.meta.resolve(specifier)}'`);
+  const mutated = absolute(`${source.slice(0, at)}${to}${source.slice(at + from.length)}`);
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-mutant-'));
   const path = join(directory, 'mutant.ts');
   writeFileSync(path, mutated);
 
   const url = pathToFileURL(path).href;
+  const own = (await import(url)) as Record<string, unknown>;
 
   return {
-    module: (await import(url)) as Record<string, unknown>,
+    module: { ...(await appThrough(file, url, directory)), ...own },
     // For a test that loads the changed module in another process.
     url,
     remove: () => rmSync(directory, { recursive: true, force: true }),
   };
+}
+
+/** A source of this directory whose imports name files: the real modules, and the packages they resolve. */
+function absolute(source: string): string {
+  return source
+    .replaceAll(/from '\.\//g, () => `from '${SOURCES.href}`)
+    .replaceAll(/from '([a-z@][^':]*)'/g, (_, specifier: string) => `from '${import.meta.resolve(specifier)}'`);
+}
+
+/**
+ * The exports of a copy of `app.ts` that imports the changed `file` at `mutant` in place of the real
+ * one, or none when `app.ts` does not import `file` (or is `file`).
+ */
+async function appThrough(file: string, mutant: string, directory: string): Promise<Record<string, unknown>> {
+  if (file === 'app.ts') return {};
+  const app = readFileSync(new URL('app.ts', SOURCES), 'utf8');
+  const imported = `from './${file}'`;
+  if (!app.includes(imported)) return {};
+
+  const path = join(directory, 'app.ts');
+  writeFileSync(path, absolute(app.replaceAll(imported, () => `from '${mutant}'`)));
+
+  return (await import(pathToFileURL(path).href)) as Record<string, unknown>;
 }
 
 export function describeControls<Store>(

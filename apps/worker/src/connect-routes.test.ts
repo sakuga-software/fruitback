@@ -1010,9 +1010,10 @@ async function endedWritesNothing(worker: Worker): Promise<void> {
 
 /** Each check of `app.ts` that a write makes, taken out: the scenario fails (FRU-238). */
 describe('the writes of an ended session, with a check of app.ts taken out (FRU-238)', () => {
-  for (const [what, change] of [
+  for (const [what, file, change] of [
     [
       'the note',
+      'feedback-routes.ts',
       {
         from: 'const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;',
         to: 'const ended = undefined;',
@@ -1020,6 +1021,7 @@ describe('the writes of an ended session, with a check of app.ts taken out (FRU-
     ],
     [
       'the batch',
+      'feedback-routes.ts',
       {
         from: 'const ended = account ? await endedSession(stillWrites, corsHeaders) : undefined;',
         to: 'const ended = undefined;',
@@ -1027,6 +1029,7 @@ describe('the writes of an ended session, with a check of app.ts taken out (FRU-
     ],
     [
       'the picture',
+      'app.ts',
       {
         from: '  return session?.subject === account ? account : undefined;',
         to: '  return account;',
@@ -1034,7 +1037,7 @@ describe('the writes of an ended session, with a check of app.ts taken out (FRU-
     ],
   ] as const) {
     it(`writes ${what} of an ended session when its check is taken out`, async () => {
-      const mutant = await mutatedModule('app.ts', change);
+      const mutant = await mutatedModule(file, change);
       try {
         const worker = await workerOf(await opening(createPgliteDatabase), {
           handle: mutant.module.handleRequest as never,

@@ -1,6 +1,6 @@
 import { type AccountStore, can } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
-import { type ClientConfig, type ClientPolicy, type ClientResolution, normalizeClientId } from './clients.ts';
+import { type ClientConfig, normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import {
   canonicalizeRequestedPage,
@@ -13,9 +13,8 @@ import {
 import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
 import { checkedOf } from './reply-text.ts';
-import type { RequestContext, Served } from './request-context.ts';
-import type { SessionIdentity } from './session.ts';
-import { type CheckVerdict, type ReplyAuthor, type SeedStore, StoreError, takesChecks, takesReplies } from './store.ts';
+import type { CallerChecks, RequestContext, Served } from './request-context.ts';
+import { type CheckVerdict, type SeedStore, StoreError, takesChecks, takesReplies } from './store.ts';
 
 /**
  * The routes that write under a note (FRU-363), out of `app.ts` so that a review reads them in one
@@ -23,39 +22,6 @@ import { type CheckVerdict, type ReplyAuthor, type SeedStore, StoreError, takesC
  * (`POST /feedback/<id>/check`, FRU-294). Every check of the caller stays in `app.ts`, which hands
  * it over in `CallerChecks`, under the names the routes call it by.
  */
-
-/** The checks of the caller that `app.ts` keeps, and the routes of this file call. */
-export type CallerChecks = {
-  /** Which client a request belongs to, and what was decided for it: `routeFor` of `app.ts`. */
-  routeFor: (request: Request, config: Served, clientId: string | undefined) => ClientResolution;
-  /** Who writes a reply, or why nobody may: `replyAuthorFor` of `app.ts`. */
-  replyAuthorFor: (
-    request: Request,
-    policy: ClientPolicy,
-    workspace: string | undefined,
-    typed: string | undefined,
-    accounts: AccountStore | undefined,
-  ) => Promise<{ ok: true; author: ReplyAuthor; account: boolean } | { ok: false; status: number; reason: string }>;
-  /** The answer to a write of a session of an account that ended: `endedSession` of `app.ts`. */
-  endedSession: (
-    stillWrites: () => Promise<boolean>,
-    corsHeaders: Record<string, string>,
-  ) => Promise<Response | undefined>;
-  /** The person of a session still valid in the store: `sessionWrites` of `app.ts`. */
-  sessionWrites: (request: Request, config: Served, context: RequestContext) => Promise<SessionIdentity | undefined>;
-  /** The account that writes in a workspace for a site: `writerIn` of `app.ts`. */
-  writerIn: (
-    request: Request,
-    config: Served,
-    context: RequestContext,
-    workspace: string,
-    site: string | undefined,
-  ) => Promise<string | undefined>;
-  /** Whether the caller is a guest, who reads no reference of a tracker: `hidesTracker` of `app.ts`. */
-  hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
-  /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
-  REPLY_LENGTH: number;
-};
 
 /** `POST /feedback/<id>/replies`: the id of the issue of a note, as a read answers it (FRU-257). */
 export const REPLY_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/replies$/;
