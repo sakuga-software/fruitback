@@ -80,21 +80,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # FRU-344. Under `test`, `locale-probe.ts` is loaded before each test file and writes the name
+      # of each one that reads the locale. The other targets run as before.
       - name: Run ${{ matrix.target }}
+        env:
+          FRUITBACK_LOCALE_PROBE: ${{ matrix.target == 'test' && format('{0}/locale-probe', runner.temp) || '' }}
+          NODE_OPTIONS: ${{ matrix.target == 'test' && format('--import={0}/tools/ci/locale-probe.ts', github.workspace) || '' }}
         run: pnpm exec nx run-many -t ${{ matrix.target }}
 
       # A test that reads the locale of the shell passes on this runner and fails on the machine of
       # somebody who works in French, or the reverse (FRU-172). Node takes the language of its own
-      # `navigator`, and the default of `Intl`, from these variables. `--skip-nx-cache` is what makes
-      # this a second run: the locale is no input of the `test` target, so Nx would replay the first.
-      - name: Run the tests again under a French locale
+      # `navigator`, and the default of `Intl`, from these variables. FRU-344: only the test files
+      # that read the locale in the run above run again; the whole suite again took half the job.
+      - name: Run the tests that read the locale again under a French locale
         if: matrix.target == 'test'
         env:
           LC_ALL: fr_FR.UTF-8
           LANG: fr_FR.UTF-8
+          PROBE: ${{ runner.temp }}/locale-probe
         run: |
           test "$(node -p 'navigator.language')" = fr-FR
-          pnpm exec nx run-many -t test --skip-nx-cache
+          node tools/ci/locale-rerun.ts "$PROBE"
 
       # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
       - name: Write the durations
