@@ -18,20 +18,9 @@ import {
 import { type AccountStore, can, readsSite } from './accounts.ts';
 import { SESSION_NOTES_PATH, handleSessionNotes } from './session-notes.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
-import { authFor } from './auth.ts';
-import {
-  createWorkspaceWithPlugin,
-  handleOrganizationRoutes,
-  mailAdminInvitation,
-  oneAtATime,
-  renameWorkspaceWithPlugin,
-} from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
-import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
-import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
-import { handleConsoleApi } from './console-api.ts';
-import { instanceFactsOf } from './instance-admin.ts';
-import { handleLinearOAuth } from './linear-oauth.ts';
+import { withRenewedCookie } from './auth-routes.ts';
+import { consoleCors, isConsoleRoute } from './console-cors.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
@@ -55,11 +44,11 @@ import { chargeRateLimit, checkRateLimit, checkReplyLimit, maxBatch } from './ra
 import { cached } from './cache.ts';
 import { type Kv, KvError } from './kv.ts';
 import { type Channel, type NoteIndex } from './notes-index.ts';
-import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
+import { handleExtensionConnect } from './connect-routes.ts';
 import { sessionStillValid } from './session-check.ts';
 import { ATTACHMENTS_PATH, attachmentIdsOf } from './attachments.ts';
 import { handleAttachment, legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
-import { withoutAddress } from './postgres.ts';
+import { handleConsole } from './console-routes.ts';
 import {
   type SessionIdentity,
   type SessionStore,
@@ -87,9 +76,7 @@ import {
   accountStoreFor,
   attachmentStoreFor,
   connectStoreFor,
-  instanceAdminFor,
   kvFor,
-  mailerFor,
   noteIndexFor,
   sessionStoreFor,
   storeFor,
@@ -396,165 +383,7 @@ async function routed(
   }
 
   if (consoleRoute && accounts !== undefined) {
-    const sessions = context.sessionStore ?? sessionStoreFor(served);
-    if (sessions === undefined || served.identitySecret === undefined)
-      return json(404, { error: 'not-found' }, cors.headers);
-    // better-auth, when it is on (FRU-147): the instance of the process, built at boot.
-    const auth = context.auth ?? authFor(served);
-    const mailer = context.mailer ?? mailerFor(served);
-
-    try {
-      // Which ways the routes of better-auth offer (FRU-135, FRU-147): the console asks before it
-      // draws a button. `betterAuth` is absent when it is off: then nobody signs in to the console.
-      // The two booleans of the path of before are gone with it (FRU-150).
-      if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
-        return json(
-          200,
-          auth === undefined
-            ? {}
-            : {
-                betterAuth: {
-                  email: mailer !== undefined,
-                  github: served.authGithub !== undefined,
-                  google: served.google !== undefined,
-                },
-              },
-          cors.headers,
-        );
-      }
-
-      // The routes of better-auth, and the worker's own beside them (FRU-147). A worker that has it
-      // off answers `404` there, as before.
-      if (isAuthRoute(pathname)) {
-        if (auth === undefined || served.consoleUrl === undefined)
-          return json(404, { error: 'not-found' }, cors.headers);
-        try {
-          const routes = {
-            auth,
-            accounts,
-            mailer,
-            kv,
-            consoleUrl: served.consoleUrl,
-            clientIp: context.clientIp,
-            trackIp: served.authTrackIp,
-          };
-          // The routes of the organization plugin first, each under its rule (FRU-149). A path of the
-          // plugin that has none answers `404` there, and never reaches the list below.
-          const answer =
-            (await handleOrganizationRoutes(request, pathname, { ...routes, sessions }, cors.headers)) ??
-            (await handleAuthRoutes(request, pathname, routes, cors.headers));
-          if (answer !== undefined) return answer;
-        } catch (error) {
-          // A `Kv` that stopped is not better-auth: it is answered above, as the limiter's outage.
-          if (error instanceof StoreError || error instanceof KvError) throw error;
-          // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
-          // a database that does not answer (FRU-144). Said in the log, with no address and no token.
-          const said = error instanceof Error ? error.message : String(error);
-          console.error(
-            `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? said : withoutAddress(said, served.databaseUrl)}`,
-          );
-
-          return json(502, { error: 'auth-unavailable' }, cors.headers);
-        }
-      }
-
-      // The way to Linear and back, for a workspace that connects it (FRU-134). Navigations too.
-      if (
-        served.linearOAuth !== undefined &&
-        served.publicUrl !== undefined &&
-        served.consoleUrl !== undefined &&
-        served.secretsKey !== undefined
-      ) {
-        const viaLinear = await handleLinearOAuth(request, pathname, {
-          oauth: served.linearOAuth,
-          publicUrl: served.publicUrl,
-          consoleUrl: served.consoleUrl,
-          accounts,
-          kv,
-          secretsKey: served.secretsKey,
-        });
-        if (viaLinear !== undefined) return viaLinear;
-      }
-
-      // The extension asks, the console approves (FRU-238): a request, and the browsers of the account.
-      const connect = context.connectStore ?? connectStoreFor(served);
-      if (auth !== undefined && served.consoleUrl !== undefined && connect !== undefined) {
-        const connected = await handleConsoleConnect(
-          request,
-          pathname,
-          {
-            connect,
-            accounts,
-            cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
-            consoleUrl: served.consoleUrl,
-          },
-          cors.headers,
-        );
-        if (connected !== undefined) return connected;
-      }
-
-      const answer = await handleConsoleApi(
-        request,
-        pathname,
-        {
-          accounts,
-          sessions,
-          ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
-          kv,
-          ...(noteIndex === undefined ? {} : { noteIndex }),
-          ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
-          ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
-          ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
-          // The administrator of the instance (FRU-261): the database of the accounts, and this configuration.
-          instance: {
-            reads: context.instanceAdmin ?? instanceAdminFor(served),
-            facts: instanceFactsOf(served, { auth: auth !== undefined, email: mailer !== undefined }),
-            // The writes in a workspace (FRU-283): one at a time with the plugin, and the message of
-            // an invitation as a member's, when this worker sends mail.
-            writes: {
-              oneAtATime,
-              ...(mailer === undefined || served.consoleUrl === undefined
-                ? {}
-                : {
-                    mailInvitation: (invitation) =>
-                      mailAdminInvitation(
-                        { kv, mailer, consoleUrl: served.consoleUrl as string, accounts },
-                        invitation,
-                      ),
-                  }),
-            },
-          },
-          // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
-          ...(auth === undefined || served.consoleUrl === undefined
-            ? {}
-            : {
-                cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
-                consoleUrl: served.consoleUrl,
-                // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
-                createWorkspace: async (each: Request, name: string) =>
-                  createWorkspaceWithPlugin(await auth, each.headers, name),
-                // And renamed by it (FRU-236).
-                renameWorkspace: async (each: Request, workspace: string, name: string) =>
-                  renameWorkspaceWithPlugin(await auth, each.headers, workspace, name),
-              }),
-        },
-        cors.headers,
-      );
-
-      return answer ?? json(404, { error: 'not-found' }, cors.headers);
-    } catch (error) {
-      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
-      // The cookie of a call of the console is read by better-auth (FRU-147): the same answer as on
-      // its own routes when it does not answer.
-      if (error instanceof AuthUnavailable) {
-        console.error(
-          `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? error.message : withoutAddress(error.message, served.databaseUrl)}`,
-        );
-
-        return json(502, { error: 'auth-unavailable' }, cors.headers);
-      }
-      throw error;
-    }
+    return handleConsole(request, pathname, { served, context, accounts, kv, noteIndex, cors });
   }
 
   if (pairing) {
