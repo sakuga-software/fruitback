@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import { API, type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
-import { PreviewScene } from '../preview-scene';
 import {
   type SetupCalls,
   type Stage,
@@ -19,7 +18,7 @@ import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
 import { PutDone, PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
-import { siteLabel } from '../site-address';
+import { SitePreview } from '../site-preview';
 import { instanceOf } from '../instance';
 
 /** Whether this console calls Fruitback Cloud: the build holds no flag, the host of the worker decides. */
@@ -313,27 +312,8 @@ export default function Setup() {
 
       <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
         {stage.kind === 'install' ? (
-          <BrowserFrame
-            address={siteLabel(stage.site.origin)}
-            // A picture of an example page, not the site of the person: the caption says so.
-            caption={t('An example page. Pins show the same way on your site.')}
-          >
-            <PreviewScene
-              launch={t('Leave feedback')}
-              hint={t('Click Leave feedback, then any part of the page.')}
-              {...(finished
-                ? {
-                    note: {
-                      status: t('New'),
-                      text: 'The headline runs to three lines on a phone. Could it be shorter?',
-                      by: t('{name} · just now', {
-                        name: stage.account.name ?? stage.account.email.split('@')[0] ?? '',
-                      }),
-                    },
-                  }
-                : {})}
-            />
-          </BrowserFrame>
+          // The site itself, live (FRU-354): `key` gives a site that changed a frame of its own.
+          <SitePreview key={stage.site.origin} origin={stage.site.origin} />
         ) : (
           <BrowserFrame
             address={t('your site')}

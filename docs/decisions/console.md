@@ -166,18 +166,28 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
   under the hint is 19.5 px higher than on the mockup.
-- **The last step is two cards, and the preview is a picture** (FRU-242). « Browser extension » and
-  « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
-  `install-options.tsx`). **The preview asks the site of the person for nothing**: it is the example
-  page of the mockup (`preview-scene.tsx`), with the address of the site in its bar, and no frame
-  (decided on 2026-10-13: a fixed illustration). Its caption says « An example page ». The picture
-  is `aria-hidden` and `inert`: its two buttons are drawn, and take no focus. **Its colours are the
-  example site's, in `preview-scene.css`, and are no tokens**: nothing of the console takes them.
+- **The last step is two cards, and the preview is the site itself** (FRU-242, FRU-354). « Browser
+  extension » and « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
+  `install-options.tsx`). **The preview frames the site the person added, in their browser**
+  (`site-preview.tsx`, decided on 2026-10-21 in place of the fixed illustration of 2026-10-13): the
+  origin, sandboxed with no `allow-top-navigation` and no referrer, laid out at 1280 px and scaled
+  down in a wide frame, at the width of the frame under 600 px. **No server request goes to the
+  site**, so the console cannot read a refusal: measured on 2026-10-21 in Chromium, Firefox and
+  WebKit, a frame refused by `X-Frame-Options` or `frame-ancestors` fires `load` like one that
+  shows, and its `location`, `origin`, `length` and resource timing read the same. So the caption
+  says what a blank frame means, and « Show its address instead » gives the domain, the icon of the
+  site (`/favicon.ico`, https only, a letter when it fails) and why; the choice is kept for that
+  origin in `localStorage`. From there « Show an example » shows the example page of before
+  (`preview-scene.tsx`, asked by Mathieu on 2026-10-21), `aria-hidden` and `inert`, captioned « An
+  example page »; it is not kept. **Its colours are the example site's, in `preview-scene.css`, and
+  are no tokens**: nothing of the console takes them. What the two addresses alone tell is shown with no frame
+  (`frame-refusal.ts`): an `http` site in an `https` console (mixed content, except a host of this
+  machine), and the console itself. The policy of the image allows it: `frame-src https: http:` and
+  `img-src https:` (SECURITY.md).
   **The setup ends at the first note on the site** (FRU-237 counts them): while the step waits it
   says « Waiting for your first note. », and reads the site again every five seconds while the tab
   is shown (`useFirstNote` in `setup.tsx`; a hidden tab asks nothing, a read that fails changes
-  nothing). At the first note the step is done by itself, the picture has its pin and its card,
-  and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
+  nothing). At the first note the step is done by itself, and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
   console » and « Connect a tracker ». The sentence says « Linear or your own API »: GitHub is no
   source of a workspace yet (FRU-188). « Open the console » stays under the cards while the step
   waits, for a person who sends no note now. **Still waiting**: « Signs in with this account. No

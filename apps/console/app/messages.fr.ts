@@ -635,7 +635,21 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open {site}': 'Ouvrir {site}',
   'Using Firefox?': 'Vous utilisez Firefox ?',
   'Install it in Firefox (beta)': 'L’installer dans Firefox (bêta)',
-  // The last step of the setup, and the example page of its preview (FRU-242).
+  // The last step of the setup (FRU-242), and the site itself in its preview (FRU-354).
+  'Your site, as it is now. A blank frame or an error means your site refuses to show inside another page.':
+    'Votre site, tel qu’il est. Un cadre vide ou une erreur signifie que votre site refuse de s’afficher dans une autre page.',
+  'Show its address instead': 'Afficher son adresse à la place',
+  '{site}, live': '{site}, en direct',
+  'Many sites refuse to show inside another page: their X-Frame-Options or Content-Security-Policy header says so. Fruitback does not ask your site, so it cannot tell. Pins show on the page itself.':
+    'Beaucoup de sites refusent de s’afficher dans une autre page : leur en-tête X-Frame-Options ou Content-Security-Policy le dit. Fruitback n’interroge pas votre site, il ne peut donc pas le savoir. Les pins s’affichent sur la page elle-même.',
+  'Your site is on http and this console on https: a browser does not show an http page inside an https one. Pins show on the page itself.':
+    'Votre site est en http et cette console en https : un navigateur n’affiche pas une page http dans une page https. Les pins s’affichent sur la page elle-même.',
+  'This is the address of the console itself: it cannot show inside itself.':
+    'C’est l’adresse de la console elle-même : elle ne peut pas s’afficher en elle-même.',
+  'Open {site} in a new tab': 'Ouvrir {site} dans un nouvel onglet',
+  'Show the live page': 'Afficher la page en direct',
+  'Show an example': 'Voir un exemple',
+  // The example page of before (FRU-242), on demand when the site cannot show (FRU-354).
   'An example page. Pins show the same way on your site.':
     'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
   'Leave feedback': 'Laisser une note',
@@ -679,7 +693,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your first note is in': 'Votre première note est arrivée',
   'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.':
     'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers Linear ou votre propre API quand vous voulez.',
-  '{name} · just now': '{name} · à l’instant',
   // How long ago (ago.ts).
   'Just now': 'À l’instant',
   '{count} min ago': 'il y a {count} min',

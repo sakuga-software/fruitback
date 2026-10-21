@@ -34,6 +34,9 @@
 .scene__links {
   display: flex;
   gap: 20px;
+  /* A word of the picture's menu stays whole on a phone: the rule of the text breaks it anywhere. */
+  overflow-wrap: normal;
+  white-space: nowrap;
   font-family: var(--font-sans);
   font-size: 13px;
 }
