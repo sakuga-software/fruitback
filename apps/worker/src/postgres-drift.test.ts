@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import config from '../drizzle.config.ts';
@@ -24,7 +24,7 @@ const KIT = join(WORKER, 'node_modules', 'drizzle-kit', 'bin.cjs');
 
 const copies: string[] = [];
 
-after(() => {
+afterAll(() => {
   for (const copy of copies) rmSync(copy, { recursive: true, force: true });
 });
 

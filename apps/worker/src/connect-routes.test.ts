@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import { describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { Role } from './accounts.ts';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
@@ -199,7 +200,7 @@ async function everyValue(database: PgDatabase): Promise<string[]> {
 }
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the extension asks, the console approves, on ${label} (FRU-238)`, { skip }, () => {
+  describe(`the extension asks, the console approves, on ${label} (FRU-238)`, { skip: skip !== false }, () => {
     it('connects an account of two workspaces: one request, one approval, one claim, and the sites of both', async () => {
       const worker = await workerOn(open);
       const alice = await person(worker, 'alice@acme.dev');
@@ -902,7 +903,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('keeps no request, claim or token in clear in any row, and writes none of them in the log', async () => {
       const lines: string[] = [];
       for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
-        mock.method(console, method, (...values: unknown[]) => void lines.push(values.map(String).join(' ')));
+        mockMethod(console, method, (...values: unknown[]) => void lines.push(values.map(String).join(' ')));
       }
       try {
         const worker = await workerOn(open);
@@ -938,7 +939,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
           for (const secret of secrets.slice(1)) assert.equal(url.includes(secret), false, url);
         }
       } finally {
-        mock.restoreAll();
+        vi.restoreAllMocks();
       }
     });
 
@@ -1110,7 +1111,7 @@ async function storeDownKeepsTheNote(worker: Worker): Promise<void> {
   const seed = seedFixture();
   const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
-  const down = mock.method(worker.sessions, 'liveIdentity', async () => {
+  const down = mockMethod(worker.sessions, 'liveIdentity', async () => {
     throw new StoreError('the sessions did not answer');
   });
   try {
@@ -1120,7 +1121,7 @@ async function storeDownKeepsTheNote(worker: Worker): Promise<void> {
       assert.deepEqual(await answer.json(), { error: 'store-unavailable' });
     }
   } finally {
-    down.mock.restore();
+    down.mockRestore();
   }
   const issues = (await (await read(worker, acme.members, 'https://acme.test', session.accessToken)).json()) as {
     issues: unknown[];

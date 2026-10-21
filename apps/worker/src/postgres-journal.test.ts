@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { git } from './git.fixture.ts';
 
@@ -129,7 +129,7 @@ function baseAt(commit: string): Base {
 
 const copies: string[] = [];
 
-after(() => {
+afterAll(() => {
   for (const copy of copies) rmSync(copy, { recursive: true, force: true });
 });
 

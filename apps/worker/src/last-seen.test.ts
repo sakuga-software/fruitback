@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { beforeEach, describe, it } from 'node:test';
+import { beforeEach, describe, it } from 'vitest';
 import type { AccountStore } from './accounts.ts';
 import { REMEMBER_MS, dayOf, forgetSeen, forgetSeenOf, seen } from './last-seen.ts';
 

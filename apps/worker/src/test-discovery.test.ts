@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { globSync, readFileSync } from 'node:fs';
 import { matchesGlob } from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 
 /**

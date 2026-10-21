@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { type Auth, CLIENT_IP_HEADER, authOptions, startAuth } from './auth.ts';
 import {
   AUTH_CONFIG,
@@ -55,7 +55,7 @@ async function countsOf(database: PgDatabase): Promise<string[]> {
 }
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the limiter of better-auth, on ${label} (FRU-229)`, { skip }, () => {
+  describe(`the limiter of better-auth, on ${label} (FRU-229)`, { skip: skip !== false }, () => {
     it('makes two instances on one database share the ceiling of a route', async () => {
       const database = await opening(open);
       await make(database);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { getMigrations } from 'better-auth/db/migration';
 import { sql } from 'drizzle-orm';
 import { INSTANCE_ADMIN_FIELDS, authId, type authOptions, startAuth } from './auth.ts';
@@ -150,7 +150,7 @@ async function drift(open: () => Promise<PgDatabase>, as: Made): Promise<string[
 for (const { label, open, skip } of DATABASES) {
   describe(
     `the schema of better-auth, migrated by Drizzle with the worker, on ${label} (FRU-144, FRU-180)`,
-    { skip },
+    { skip: skip !== false },
     () => {
       it('leaves better-auth nothing to create and nothing to add after the migrations of the worker', async () => {
         assert.deepEqual(await plan(await opening(open)), NOTHING);

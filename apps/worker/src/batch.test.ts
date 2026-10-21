@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import { afterEach, beforeEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { type Seed, parseSeedFromDescription } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -29,7 +30,7 @@ beforeEach(async () => {
   resetCacheState();
   resetMemoryLinear();
 });
-afterEach(() => mock.restoreAll());
+afterEach(() => vi.restoreAllMocks());
 
 function seeds(count: number): Seed[] {
   return Array.from({ length: count }, (_, index) =>
@@ -262,7 +263,7 @@ describe('a batch of notes (FRU-124)', () => {
       },
     };
     const kv = createMemoryKv();
-    mock.method(console, 'error', () => undefined);
+    mockMethod(console, 'error', () => undefined);
 
     // Not `500`: the first note is kept, and its answer must reach the widget and the `Kv`.
     const partial = await send(seeds(2), { kv, store });

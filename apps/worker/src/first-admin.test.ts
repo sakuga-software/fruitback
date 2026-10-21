@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { cookieOf } from './auth-worker.fixture.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { AUTH_BASE_PATH, SERVED_PATHS } from './auth.ts';
@@ -82,7 +82,7 @@ async function saidDuring(t: { mock: { method: (...input: never[]) => unknown } 
   try {
     await work();
   } finally {
-    for (const spy of spies) spy.mock.restore();
+    for (const spy of spies) spy.mockRestore();
   }
 
   return said;

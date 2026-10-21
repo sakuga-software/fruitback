@@ -1,4 +1,4 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -82,7 +82,7 @@ describe('the Linear store', () => {
 });
 
 describe('« Still wrong » in Linear (FRU-294)', () => {
-  afterEach(() => mock.restoreAll());
+  afterEach(() => vi.restoreAllMocks());
 
   const state = (id: string, type: string, position: number) => ({ id, name: id, type, position });
   const CHECKER = { kind: 'member' as const, name: 'Bob', workspace: 'Acme' };
@@ -164,7 +164,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
 });
 
 describe('the files of a note, in Linear (FRU-331)', () => {
-  afterEach(() => mock.restoreAll());
+  afterEach(() => vi.restoreAllMocks());
 
   const POLICY = {
     showComments: true,
@@ -224,7 +224,7 @@ describe('the files of a note, in Linear (FRU-331)', () => {
         false,
         JSON.stringify(options),
       );
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 

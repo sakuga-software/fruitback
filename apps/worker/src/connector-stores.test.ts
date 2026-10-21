@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { SEED_STAGES } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -16,7 +17,7 @@ const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const opened = worlds();
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 function envWith(): Promise<World> {
@@ -42,7 +43,7 @@ function linearOf(organisations: Record<string, string>) {
   const issues = new Map<string, { teamId: string; description: string }[]>(
     Object.values(organisations).map((name) => [name, []]),
   );
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
     const organisation = organisations[init.headers.Authorization ?? ''];
     if (organisation === undefined) return Response.json({ errors: [{ message: 'no' }] }, { status: 401 });
     const kept = issues.get(organisation) as { teamId: string; description: string }[];
@@ -306,7 +307,7 @@ describe('the store of a connector, built for the request that asks for it (FRU-
   /** The keys Linear was asked with, in order. */
   function askedKeys() {
     const asked: string[] = [];
-    mock.method(globalThis, 'fetch', async (_url: unknown, init: { headers: Record<string, string> }) => {
+    mockMethod(globalThis, 'fetch', async (_url: unknown, init: { headers: Record<string, string> }) => {
       asked.push(init.headers.Authorization ?? '');
 
       return Response.json({ data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } });

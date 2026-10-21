@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { cursorOf, noteIdOf } from './console-notes.ts';

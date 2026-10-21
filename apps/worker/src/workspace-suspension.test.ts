@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { newId } from './account-rows.ts';

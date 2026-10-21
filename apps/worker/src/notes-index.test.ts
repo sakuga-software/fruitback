@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import { describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
@@ -328,13 +329,13 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
       },
     };
     world.context = { ...world.context, noteIndex: broken };
-    const logged = mock.method(console, 'error', () => {});
+    const logged = mockMethod(console, 'error', () => {});
 
     try {
       await leave(world, acme, 'Kept all the same.');
-      assert.match(String(logged.mock.calls.at(-1)?.arguments[0]), /index of the notes was not written/);
+      assert.match(String(logged.mock.calls.at(-1)?.[0]), /index of the notes was not written/);
     } finally {
-      logged.mock.restore();
+      logged.mockRestore();
     }
     void workspace;
   });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -104,7 +104,7 @@ describe('a worker whose PostgreSQL closes a connection in a transaction (FRU-18
 
   it(
     'answers an error for that request, stays up, and serves the next one',
-    { skip: NO_REAL_POSTGRES, timeout: 30_000 },
+    { skip: NO_REAL_POSTGRES !== false, timeout: 30_000 },
     async () => {
       const own = await ownDatabase();
       cleanups.push(own.drop);

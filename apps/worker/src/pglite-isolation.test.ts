@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import { PGlite, types } from '@electric-sql/pglite';
 import { INITDB_FILE, databaseOn, migratedDatabaseOn, newPglite, shapeOf, startPglite } from './pglite.fixture.ts';
 import { type Row, journalDates, rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
@@ -65,7 +65,7 @@ async function writeSomething(database: PgDatabase): Promise<Row[]> {
 
 describe('a migrated database of PGlite, from one case to the next (FRU-339)', () => {
   const instance = newPglite();
-  after(() => instance.close());
+  afterAll(() => instance.close());
   let reference: string | undefined;
 
   it('is the database that migrate makes on an empty one, with every migration in its journal', async () => {

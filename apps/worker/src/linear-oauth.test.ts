@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -22,7 +23,7 @@ const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
   mock.timers.reset();
 });
 
@@ -72,7 +73,7 @@ function fakeLinear() {
     return { access_token: state.access, refresh_token: state.refresh, expires_in: 86_400, token_type: 'Bearer' };
   };
 
-  mock.method(globalThis, 'fetch', async (url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (url: unknown, init: { body: string; headers: Record<string, string> }) => {
     const address = String(url);
     if (address === 'https://api.linear.app/oauth/token') {
       const form = Object.fromEntries(new URLSearchParams(init.body));
@@ -326,7 +327,7 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
       get: (key) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.get(key)),
       set: (key, value, ttl) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.set(key, value, ttl)),
     };
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
 
     const asked = await callOn(
       env,
@@ -553,7 +554,7 @@ describe('a token of Linear that ends (FRU-134)', () => {
         String(answer),
       );
       mock.timers.reset();
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 

@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { AccountStore, ConnectorAttention } from './accounts.ts';
@@ -17,7 +18,7 @@ const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
 const opened = worlds();
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 function envWith(): Promise<World> {
@@ -32,7 +33,7 @@ function envWith(): Promise<World> {
  */
 function linearWith() {
   const world = { mode: 'working' as 'working' | 'revoked' | 'forbidden' | 'down', issues: [] as string[] };
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
     if (world.mode === 'down') return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
     if (world.mode === 'forbidden') return Response.json({ errors: [{ message: 'not you' }] }, { status: 403 });
     if (world.mode === 'revoked' || init.headers.Authorization !== LINEAR_KEY) {
@@ -244,7 +245,7 @@ describe('the store that notes its connector', () => {
   }
 
   it('answers what the store answered when the state cannot be kept: the note exists', async () => {
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
     const store = { name: 'fake', scope: () => '', create: async () => created } as unknown as SeedStore;
     const accounts = accountsThat(async () => {
       throw new Error('the accounts file is locked');
@@ -254,7 +255,7 @@ describe('the store that notes its connector', () => {
   });
 
   it('throws the error of the store, and not the one of the accounts, when both fail', async () => {
-    mock.method(console, 'error', () => {});
+    mockMethod(console, 'error', () => {});
     const refusal = new LinearKeyRefused('no');
     const store = {
       name: 'fake',

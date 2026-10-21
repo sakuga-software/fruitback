@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { type PgColumn, type PgTable, getTableConfig } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 import { pendingDeliveryOf } from './account-rows.ts';
@@ -190,7 +190,7 @@ for (const { label, open, skip } of [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ] as const) {
-  describe(`a BIGINT that a store reads, on ${label} (FRU-180)`, { skip }, () => {
+  describe(`a BIGINT that a store reads, on ${label} (FRU-180)`, { skip: skip !== false }, () => {
     it('is the number that was written, in every column, at 2^31, past 2^32 and at the last exact integer', async () => {
       const database = await withEveryTableFilled(open);
       const wrong: string[] = [];
@@ -344,7 +344,7 @@ for (const { label, open, skip } of [
 /**
  * The driver, before and after. PGlite cannot show it: its instance has a parser of its own.
  */
-describe('the driver that ships, before and after FRU-180', { skip: NO_REAL_POSTGRES }, () => {
+describe('the driver that ships, before and after FRU-180', { skip: NO_REAL_POSTGRES !== false }, () => {
   /** The pool as `postgres.ts` built it until FRU-180: `BIGINT` (type 20) is a number, for any statement. */
   function poolOfBefore(url: string): pg.Pool {
     return new pg.Pool({

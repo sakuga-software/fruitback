@@ -1,4 +1,4 @@
-import { after, describe, it } from 'node:test';
+import { afterAll, describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
@@ -16,7 +16,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * strictest ones measured: a canonical integer only, and nothing past 2^53.
  */
 function contract(name: string, connect: () => Kv, more: { skip?: string | false; closed?: () => Promise<void> } = {}) {
-  describe(`the ${name} Kv`, { skip: more.skip ?? false }, () => {
+  describe(`the ${name} Kv`, { skip: Boolean(more.skip) }, () => {
     const opened: Kv[] = [];
     const open = () => {
       const kv = connect();
@@ -26,7 +26,7 @@ function contract(name: string, connect: () => Kv, more: { skip?: string | false
     };
     const key = () => `fruitback:test:${randomUUID()}`;
 
-    after(async () => {
+    afterAll(async () => {
       await Promise.all(opened.map((kv) => kv.close()));
       await more.closed?.();
     });

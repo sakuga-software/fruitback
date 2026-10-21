@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { describe, it, mock } from 'node:test';
+import { describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { KvError } from './kv.ts';
 import { ROLES, type Role, can, mailboxOf } from './accounts.ts';
 import { handleRequest } from './app.ts';
@@ -118,7 +119,7 @@ const sitesOf = (worker: Worker, accessToken: string) =>
   worker.call('/session/sites', { origin: null, headers: { Authorization: `Bearer ${accessToken}` } });
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the routes of the organization plugin, on ${label} (FRU-149)`, { skip }, () => {
+  describe(`the routes of the organization plugin, on ${label} (FRU-149)`, { skip: skip !== false }, () => {
     it('makes a workspace through the plugin for somebody of the cookie, with its owner and no « active » one', async () => {
       const worker = await workerOn(open);
       const alice = await person(worker, 'alice@acme.dev');
@@ -162,7 +163,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         },
       } as unknown as Auth;
       const errors: string[] = [];
-      const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+      const logged = mockMethod(console, 'error', (line: string) => void errors.push(line));
       try {
         const answer = await handleRequest(
           new Request(`${PUBLIC_URL}/console/workspaces`, {
@@ -183,7 +184,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         assert.equal(answer.status, 502);
         assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
       } finally {
-        logged.mock.restore();
+        logged.mockRestore();
       }
       assert.deepEqual(errors, ['[fruitback] better-auth did not answer: the database of a test is down']);
       assert.deepEqual(await rowsOf(worker.database, 'SELECT id FROM organization'), []);
@@ -632,11 +633,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, 'SELECT id FROM invitation'), []);
 
       // The control: the same call with one role keeps an invitation, so the refusals are of the role.
-      const said = mock.method(console, 'warn', () => {});
+      const said = mockMethod(console, 'warn', () => {});
       try {
         assert.equal((await invite('guest')).role, 'guest');
       } finally {
-        said.mock.restore();
+        said.mockRestore();
       }
       assert.deepEqual(await rowsOf(worker.database, 'SELECT role FROM invitation'), [{ role: 'guest' }]);
     });
@@ -839,7 +840,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
       /** What Linear was asked, and how many connectors the workspace had at that moment. */
       const revoked: { url: string; body: string; connectors: number }[] = [];
-      const fetched = mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+      const fetched = mockMethod(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
         revoked.push({
           url: String(input instanceof Request ? input.url : input),
           body: String(init?.body),
@@ -863,7 +864,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         const deleted = await as(worker, acme.owner, `/console/workspaces/${acme.workspace}`, { method: 'DELETE' });
         assert.equal(deleted.status, 204);
       } finally {
-        fetched.mock.restore();
+        fetched.mockRestore();
       }
 
       // Linear was told while the connector was still there to read the token from.
@@ -1151,7 +1152,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       worker.kv.get = (key) => (key.startsWith('fruitback:invitation') ? down() : get.call(worker.kv, key));
       worker.kv.incr = (key, ttlMs, by) =>
         key.startsWith('fruitback:invitation') ? down() : incr.call(worker.kv, key, ttlMs, by);
-      const logged = mock.method(console, 'error', () => {});
+      const logged = mockMethod(console, 'error', () => {});
 
       try {
         const answer = await invite(worker, acme.owner, acme.workspace, { email: 'late@client.dev' });
@@ -1163,9 +1164,9 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
           (await rowsOf(worker.database, `SELECT id FROM invitation WHERE email = 'late@client.dev'`)).length,
           1,
         );
-        assert.match(String(logged.mock.calls.at(-1)?.arguments[0]), /no message was sent/);
+        assert.match(String(logged.mock.calls.at(-1)?.[0]), /no message was sent/);
       } finally {
-        logged.mock.restore();
+        logged.mockRestore();
       }
     });
 
@@ -1837,20 +1838,20 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('answers 502 when the message does not leave, keeps the invitation, and sends it again', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
-      const said = mock.method(console, 'error', () => {});
-      const refused = mock.method(worker.mail, 'send', async () => {
+      const said = mockMethod(console, 'error', () => {});
+      const refused = mockMethod(worker.mail, 'send', async () => {
         throw new MailError('The mail provider refused the message: 503');
       });
       try {
         const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' });
         assert.deepEqual([answer.status, await answer.json()], [502, { error: 'mail-unavailable' }]);
         assert.deepEqual(
-          said.mock.calls.map((each) => each.arguments[0]),
+          said.mock.calls.map((each) => each[0]),
           ['[fruitback] The mail provider refused the message: 503'],
         );
       } finally {
-        refused.mock.restore();
-        said.mock.restore();
+        refused.mockRestore();
+        said.mockRestore();
       }
       assert.deepEqual(await rowsOf(worker.database, 'SELECT email, status FROM invitation'), [
         { email: 'paul@client.dev', status: 'pending' },

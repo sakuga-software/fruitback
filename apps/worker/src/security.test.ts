@@ -1,5 +1,5 @@
 import { PROOF_GRACE_MS, RECHECK_MS } from './domain-proof.ts';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { SESSION_FRESH_SECONDS, SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
 import { readFileSync } from 'node:fs';

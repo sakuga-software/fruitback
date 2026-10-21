@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { workerOf } from './auth-worker.fixture.ts';
 
@@ -11,7 +11,7 @@ import { workerOf } from './auth-worker.fixture.ts';
 const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the language of an account, on ${label} (FRU-119, FRU-216)`, { skip }, () => {
+  describe(`the language of an account, on ${label} (FRU-119, FRU-216)`, { skip: skip !== false }, () => {
     async function signedIn() {
       const worker = await workerOf(await opening(open));
       const headers = { Cookie: await worker.signIn('alice@acme.dev') };

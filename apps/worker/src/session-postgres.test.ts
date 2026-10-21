@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { sql } from 'drizzle-orm';
@@ -281,7 +281,7 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
 
   it(
     'fails on a real server with a code that is read apart from the statement that spends it',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       failedOnItsAssertion(await outcomeOf(REDEEMED_TWICE, READS_THE_CODE_APART, A_SESSION, createRealDatabase));
     },
@@ -291,7 +291,7 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
     assert.equal(await outcomeOf(REFRESHED_TWICE, WITHOUT_THE_CHAIN, A_SUCCESSOR, createPgliteDatabase), 'passed');
   });
 
-  it('fails on a real server with no lock on the chain', { skip: NO_REAL_POSTGRES }, async () => {
+  it('fails on a real server with no lock on the chain', { skip: NO_REAL_POSTGRES !== false }, async () => {
     failedOnItsAssertion(await outcomeOf(REFRESHED_TWICE, WITHOUT_THE_CHAIN, A_SUCCESSOR, createRealDatabase));
   });
 
@@ -301,7 +301,7 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
 
   it(
     'fails on a real server with no lock on the chain, for a token and its successor',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       failedOnItsAssertion(await outcomeOf(TOKEN_AND_SUCCESSOR, WITHOUT_THE_CHAIN, A_SUCCESSOR, createRealDatabase));
     },
@@ -365,14 +365,18 @@ describe('the sessions of a member end while one of them refreshes, on two conne
     assert.equal(await outcomeOf(WITHOUT_THE_HOLD, createPgliteDatabase), 'passed');
   });
 
-  it('fails on a real server with no hold on the chains of the person', { skip: NO_REAL_POSTGRES }, async () => {
-    const outcome = await outcomeOf(WITHOUT_THE_HOLD, createRealDatabase);
+  it(
+    'fails on a real server with no hold on the chains of the person',
+    { skip: NO_REAL_POSTGRES !== false },
+    async () => {
+      const outcome = await outcomeOf(WITHOUT_THE_HOLD, createRealDatabase);
 
-    assert.ok(outcome instanceof assert.AssertionError, `the case did not fail on its assertion: ${String(outcome)}`);
-    assert.match(outcome.message, /the successor of the refresh is live/);
-  });
+      assert.ok(outcome instanceof assert.AssertionError, `the case did not fail on its assertion: ${String(outcome)}`);
+      assert.match(outcome.message, /the successor of the refresh is live/);
+    },
+  );
 
-  it('passes on a real server with the store as it is', { skip: NO_REAL_POSTGRES }, async () => {
+  it('passes on a real server with the store as it is', { skip: NO_REAL_POSTGRES !== false }, async () => {
     assert.equal(await outcomeOf(AS_IT_IS, createRealDatabase), 'passed');
   });
 });
@@ -437,7 +441,7 @@ describe('a person renames themself while their extension refreshes, on two conn
     assert.equal(await outcomeOf(WITHOUT_THE_HOLD, createPgliteDatabase), 'passed');
   });
 
-  it('fails on a real server when the rename holds nothing', { skip: NO_REAL_POSTGRES }, async () => {
+  it('fails on a real server when the rename holds nothing', { skip: NO_REAL_POSTGRES !== false }, async () => {
     const outcome = await outcomeOf(WITHOUT_THE_HOLD, createRealDatabase);
 
     assert.ok(outcome instanceof assert.AssertionError, `the case did not fail on its assertion: ${String(outcome)}`);
@@ -446,7 +450,7 @@ describe('a person renames themself while their extension refreshes, on two conn
 
   it(
     'gives the new name to a refresh in flight, on a real server, with the store as it is',
-    { skip: NO_REAL_POSTGRES },
+    { skip: NO_REAL_POSTGRES !== false },
     async () => {
       assert.equal(await outcomeOf(AS_IT_IS, createRealDatabase), 'passed');
     },
@@ -465,7 +469,7 @@ describe('the pair command of a worker on a database (FRU-142)', () => {
     database = undefined;
   });
 
-  it('writes the digest of its code in the database, and ends', { skip: NO_REAL_POSTGRES }, async () => {
+  it('writes the digest of its code in the database, and ends', { skip: NO_REAL_POSTGRES !== false }, async () => {
     // The worker takes one address: the database of this test, which the command migrates itself.
     const own = await ownDatabase();
     database = createPgDatabase(own.url, 'public', { max: 1 });

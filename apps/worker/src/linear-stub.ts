@@ -1,11 +1,11 @@
-import { mock } from 'node:test';
+import { mockMethod } from './mock.fixture.ts';
 import { type Seed, buildIssueDescription, buildIssueTitle } from '@fruitback/shared';
 
 /**
  * A fake Linear GraphQL endpoint, dispatching on the operation name. It records every call so a test
  * can assert what was actually sent — the description in particular, which has to round-trip.
  *
- * `fetch` is replaced through `node:test`'s mock registry, so `mock.restoreAll()` in an `afterEach`
+ * `fetch` is replaced through vitest's mock registry, so `vi.restoreAllMocks()` in an `afterEach`
  * puts the real one back.
  */
 
@@ -93,7 +93,7 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
   const createdLabels: string[] = [];
   const puts: PutCall[] = [];
 
-  mock.method(
+  mockMethod(
     globalThis,
     'fetch',
     async (url: unknown, init: { method?: string; body: string; headers?: Record<string, string> }) => {

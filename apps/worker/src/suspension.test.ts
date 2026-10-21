@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it, mock } from 'node:test';
+import { describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { canonicalizePageUrl } from '@fruitback/shared';
 import type { BetterAuthOptions } from 'better-auth';
 import { ACCOUNT_SUSPENDED, SERVED_PATHS } from './auth.ts';
@@ -83,7 +84,7 @@ async function byProvider(worker: Worker, provider: string, email: string): Prom
     .getSetCookie()
     .map((each) => each.split(';')[0])
     .join('; ');
-  const fetched = mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {
+  const fetched = mockMethod(globalThis, 'fetch', async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const body = answers(email)[`${url.origin}${url.pathname}`];
     if (body === undefined) throw new Error(`a test called ${url.origin}${url.pathname}`);
@@ -99,7 +100,7 @@ async function byProvider(worker: Worker, provider: string, email: string): Prom
 
     return { cookie: cookieOf(back), error: location.searchParams.get('error') };
   } finally {
-    fetched.mock.restore();
+    fetched.mockRestore();
   }
 }
 
@@ -291,7 +292,7 @@ const banInTheDatabase = (worker: Worker, account: string) =>
 for (const { label, open, skip } of MIGRATED_DATABASES) {
   describe(
     `what a ban does in better-auth 1.7.7, which the worker does not mount the admin plugin of, on ${label} (FRU-281)`,
-    { skip },
+    { skip: skip !== false },
     () => {
       it('has a case for every way to sign in that the worker serves', async () => {
         const worker = await workerOf(await opening(open));
@@ -370,7 +371,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     },
   );
 
-  describe(`an administrator suspends and restores an account, on ${label} (FRU-281)`, { skip }, () => {
+  describe(`an administrator suspends and restores an account, on ${label} (FRU-281)`, { skip: skip !== false }, () => {
     it('suspends an account: its cookie and its extensions are refused at their next call, and it signs in by no way', async () => {
       const on = await anInstance(open);
       const { worker, ana, carl, ofBeta, ofAccount } = on;
@@ -575,7 +576,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
   describe(
     `the trace of a suspension, which the owners of each workspace of the account read, on ${label} (FRU-281)`,
-    { skip },
+    { skip: skip !== false },
     () => {
       it('writes one row for each workspace of the account, and the owners of each read it beside the reads', async () => {
         const { worker, ana, bob, carl, alpha, beta, gamma } = await anInstance(open);
@@ -666,7 +667,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
   describe(
     `each entry point refuses a suspended account, with the ban alone in the database, on ${label} (FRU-281)`,
-    { skip },
+    { skip: skip !== false },
     () => {
       it('refuses the cookie on every route that reads it, and every token of the extension', async () => {
         const on = await anInstance(open);

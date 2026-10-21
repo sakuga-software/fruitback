@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type Role, destinationId } from './accounts.ts';
@@ -22,7 +23,7 @@ const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
 const opened = worlds();
 
 afterEach(() => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
 });
 
 function envWith(): Promise<World> {
@@ -48,7 +49,7 @@ function twoTeams() {
   const issues: { teamId: string; projectId?: string; description: string }[] = [];
   const reads: string[] = [];
   const answers = { as: 'working' as 'working' | 'revoked' | 'down' };
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
     if (answers.as === 'down') return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
     if (answers.as === 'revoked' || init.headers.Authorization !== LINEAR_KEY)
       return Response.json({ errors: [{ message: 'no' }] }, { status: 401 });
@@ -278,7 +279,7 @@ describe('a site that can send to several places (FRU-123)', () => {
       assert.equal(single.status, 200, as);
       assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [one], as);
 
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 
@@ -314,7 +315,7 @@ describe('a site that can send to several places (FRU-123)', () => {
         assert.equal((await world.place([one])).status, 200, `${route} ${as}`);
         assert.equal(await reasonOf(world, env), undefined, `${route} ${as}`);
 
-        mock.restoreAll();
+        vi.restoreAllMocks();
       }
     }
   });

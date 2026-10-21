@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { handleRequest } from './app.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
 import { IDENTITY_SECRET, envWith } from './auth-worker.fixture.ts';

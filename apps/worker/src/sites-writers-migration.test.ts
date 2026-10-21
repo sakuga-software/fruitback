@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
@@ -14,7 +14,7 @@ import { migrate } from './postgres-migrate.ts';
 const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of DATABASES) {
-  describe(`who may leave a note on a site, on ${label} (FRU-330)`, { skip }, () => {
+  describe(`who may leave a note on a site, on ${label} (FRU-330)`, { skip: skip !== false }, () => {
     it('gives « anyone » to every site of before, and « members » to a site made after', async () => {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0020_workspace_keeps_owner'));

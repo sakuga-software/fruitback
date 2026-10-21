@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
@@ -41,7 +41,7 @@ function seedOf(id: string, client: string | undefined, more: Partial<Seed> = {}
 const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of MIGRATED_DATABASES) {
-  describe(`the notes in the database, on ${label} (FRU-218)`, { skip }, () => {
+  describe(`the notes in the database, on ${label} (FRU-218)`, { skip: skip !== false }, () => {
     async function opened() {
       const database = await opening(open);
 

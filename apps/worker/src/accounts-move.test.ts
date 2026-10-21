@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
 import { getMigrations } from 'better-auth/db/migration';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
@@ -178,7 +178,7 @@ it('names the migration that moves the accounts, and the one before it', () => {
 });
 
 for (const { label, open, skip } of DATABASES) {
-  describe(`a database of before the accounts moved, on ${label} (FRU-146)`, { skip }, () => {
+  describe(`a database of before the accounts moved, on ${label} (FRU-146)`, { skip: skip !== false }, () => {
     it('finds each person again, under the same id, by each way they signed in with', async () => {
       const { database } = await databaseOfBefore(open);
       const accounts = createPostgresAccountStore(database);

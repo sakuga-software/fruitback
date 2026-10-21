@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type Verified, type handleRequest, verifyForClient, writesWith } from './app.ts';

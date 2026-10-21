@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'vitest';
 import { DEFAULT_SEED_STAGE, SEED_STAGES, type Seed, type SeedStage, canonicalizePageUrl } from '@fruitback/shared';
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
 import { handleRequest } from './app.ts';
@@ -144,7 +144,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
   describe(
     `the ${subject.provider} store keeps the SeedStore promises${where}`,
-    { skip: subject.skip ?? false },
+    { skip: Boolean(subject.skip) },
     () => {
       let store: SeedStore;
 
@@ -203,7 +203,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       // Only a worker without FRUITBACK_CLIENTS accepts a read that names no client.
       it(
         'gives a read that names no client every seed on the page',
-        { skip: subject.readWithNoClient ?? false },
+        { skip: Boolean(subject.readWithNoClient) },
         async () => {
           await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
           await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
@@ -217,7 +217,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'writes and reads a client in the tenant its configuration names',
-        { skip: skipReason(subject.otherTenant) },
+        { skip: skipReason(subject.otherTenant) !== false },
         async () => {
           if (typeof subject.otherTenant === 'string') return;
           const tenant = subject.otherTenant;
@@ -237,7 +237,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'draws a state it does not know at the default stage',
-        { skip: skipReason(subject.unknownState) },
+        { skip: skipReason(subject.unknownState) !== false },
         async () => {
           const created = await store.create(seedFor('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
           if (typeof subject.unknownState === 'function') await subject.unknownState(created);
@@ -261,7 +261,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'writes a reply that a read shows under its note, after the line of who wrote it',
-        { skip: subject.noReply ?? false },
+        { skip: Boolean(subject.noReply) },
         async () => {
           assert.ok(store.reply !== undefined, 'the store takes no reply and says no reason');
           const created = await store.create(seedFor('sd_answered', PAGE, 'acme'), undefined, POLICY);
@@ -287,7 +287,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'keeps a note done on « fixed », with a marked reply that a read shows under it',
-        { skip: subject.noCheck ?? skipReason(subject.markDone) },
+        { skip: (subject.noCheck ?? skipReason(subject.markDone)) !== false },
         async () => {
           assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
           const created = await store.create(seedFor('sd_fixed', PAGE, 'acme'), undefined, POLICY);
@@ -309,7 +309,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'reopens a note on « wrong », with a marked reply, and a read shows the stage it answered',
-        { skip: subject.noCheck ?? skipReason(subject.markDone) },
+        { skip: (subject.noCheck ?? skipReason(subject.markDone)) !== false },
         async () => {
           assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
           const created = await store.create(seedFor('sd_wrong', PAGE, 'acme'), undefined, POLICY);
@@ -343,7 +343,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         assert.equal('comments' in hidden, false);
       });
 
-      it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) }, async () => {
+      it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) !== false }, async () => {
         if (typeof subject.replyCap !== 'number') return;
         const cap = subject.replyCap;
         await subject.plantReplies(store, seedFor('sd_long_thread', PAGE, 'acme'), cap + 2);
@@ -368,7 +368,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'reports a provider error as store-unavailable, never as a 500',
-        { skip: skipReason(subject.broken) },
+        { skip: skipReason(subject.broken) !== false },
         async () => {
           if (typeof subject.broken === 'function') await assertStoreUnavailable(subject.broken());
         },
@@ -376,7 +376,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'reports an unreachable provider as store-unavailable, never as a 500',
-        { skip: skipReason(subject.unreachable) },
+        { skip: skipReason(subject.unreachable) !== false },
         async () => {
           if (typeof subject.unreachable === 'function') await assertStoreUnavailable(subject.unreachable());
         },
@@ -384,7 +384,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       it(
         'reports an answer it cannot read as store-unavailable, never as a 500',
-        { skip: skipReason(subject.garbled) },
+        { skip: skipReason(subject.garbled) !== false },
         async () => {
           if (typeof subject.garbled === 'function') await assertStoreUnavailable(subject.garbled());
         },

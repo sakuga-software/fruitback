@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { describe, it, mock } from 'node:test';
+import { describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { ClientPolicy } from './clients.ts';
@@ -61,7 +62,7 @@ function fakeLinear({ refuseLabels = false } = {}): { node(id: string): IssueNod
   };
   const issues: { teamId: string; labelIds: string[]; node: IssueNode }[] = [];
 
-  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
+  mockMethod(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0];
 
@@ -213,7 +214,7 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
   const labels = new Map<string, Set<string>>();
   const issues: GithubIssue[] = [];
 
-  mock.method(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
+  mockMethod(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
     const url = new URL(input);
     const method = init.method ?? 'GET';
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
@@ -301,22 +302,22 @@ const GITHUB_KEY = createPrivateKey(
 
 /** Every call to the provider answers `500`. */
 function providerErrors(): void {
-  mock.restoreAll();
-  mock.method(globalThis, 'fetch', async () => json(500, { message: 'down for maintenance' }));
+  vi.restoreAllMocks();
+  mockMethod(globalThis, 'fetch', async () => json(500, { message: 'down for maintenance' }));
 }
 
 /** Every call to the provider rejects, as `fetch` does when the network is down. */
 function networkDown(): void {
-  mock.restoreAll();
-  mock.method(globalThis, 'fetch', async () => {
+  vi.restoreAllMocks();
+  mockMethod(globalThis, 'fetch', async () => {
     throw new TypeError('fetch failed');
   });
 }
 
 /** Every call to the provider answers `200` with a page that is not JSON, as a proxy in front of it can. */
 function unreadableAnswers(): void {
-  mock.restoreAll();
-  mock.method(
+  vi.restoreAllMocks();
+  mockMethod(
     globalThis,
     'fetch',
     async () => new Response('<html>maintenance</html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
@@ -422,7 +423,9 @@ const SUBJECTS: ConformanceSubject[] = [
 
       return createLinearStore(LINEAR_CONFIG);
     },
-    close: () => mock.restoreAll(),
+    close: () => {
+      vi.restoreAllMocks();
+    },
     unknownState(created) {
       linear!.node(created.id).state = { name: 'Marmalade', type: 'marmalade' };
     },
@@ -470,7 +473,9 @@ const SUBJECTS: ConformanceSubject[] = [
 
       return createGithubStore(GITHUB_CONFIG);
     },
-    close: () => mock.restoreAll(),
+    close: () => {
+      vi.restoreAllMocks();
+    },
     unknownState(created) {
       github!.issue(created.id).state = 'marmalade';
     },
@@ -611,7 +616,7 @@ describe('Linear, in a team that refuses the labels (FRU-138)', () => {
       assert.deepEqual(await read('globex'), ['sd_theirs000001']);
       assert.deepEqual((await read(undefined)).sort(), ['sd_mine00000001', 'sd_theirs000001']);
     } finally {
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
   });
 });

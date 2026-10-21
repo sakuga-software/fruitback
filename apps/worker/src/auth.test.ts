@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
@@ -363,27 +364,31 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     assert.equal(down.library, 0);
   });
 
-  it('builds better-auth at boot on a real server, and serves its routes', { skip: NO_REAL_POSTGRES }, async () => {
-    // A database of its own, not a schema: see `postgres.fixture.ts`.
-    const { url, drop } = await ownDatabase();
+  it(
+    'builds better-auth at boot on a real server, and serves its routes',
+    { skip: NO_REAL_POSTGRES !== false },
+    async () => {
+      // A database of its own, not a schema: see `postgres.fixture.ts`.
+      const { url, drop } = await ownDatabase();
 
-    try {
-      const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
-
-      // FRU-147: `/ok` answers. FRU-206: `/get-session` is a route of better-auth the worker does not serve.
-      assert.deepEqual(on.statuses, [200, 200, 404]);
-      assert.equal(on.announced, 'ready');
-      assert.ok(on.library > 0);
-      const made = createPgDatabase(url, 'public', { max: 1 });
       try {
-        assert.deepEqual(await appliedDates(made), journalDates());
+        const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
+
+        // FRU-147: `/ok` answers. FRU-206: `/get-session` is a route of better-auth the worker does not serve.
+        assert.deepEqual(on.statuses, [200, 200, 404]);
+        assert.equal(on.announced, 'ready');
+        assert.ok(on.library > 0);
+        const made = createPgDatabase(url, 'public', { max: 1 });
+        try {
+          assert.deepEqual(await appliedDates(made), journalDates());
+        } finally {
+          await made.close();
+        }
       } finally {
-        await made.close();
+        await drop();
       }
-    } finally {
-      await drop();
-    }
-  });
+    },
+  );
 });
 
 /**
@@ -571,14 +576,14 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
       handler: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')),
     } as unknown as Auth;
     const errors: string[] = [];
-    const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+    const logged = mockMethod(console, 'error', (line: string) => void errors.push(line));
     try {
       const answer = await through(envWith(), 'GET', '/ok', database, rejecting);
 
       assert.equal(answer.status, 502);
       assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
     } finally {
-      logged.mock.restore();
+      logged.mockRestore();
     }
     assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
   });
@@ -589,7 +594,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
       api: { getSession: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')) },
     } as unknown as Auth;
     const errors: string[] = [];
-    const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+    const logged = mockMethod(console, 'error', (line: string) => void errors.push(line));
     try {
       const answer = await handleRequest(
         new Request('https://worker.test/console/me', {
@@ -603,7 +608,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
       assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
       assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE_URL);
     } finally {
-      logged.mock.restore();
+      logged.mockRestore();
     }
     assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
   });

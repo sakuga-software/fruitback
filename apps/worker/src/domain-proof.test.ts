@@ -1,4 +1,5 @@
-import { afterEach, describe, it, mock } from 'node:test';
+import { afterEach, describe, it, vi } from 'vitest';
+import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import type { RequestContext } from './app.ts';
@@ -36,7 +37,7 @@ const databases: PgDatabase[] = [];
 const envWith = worlds();
 
 afterEach(async () => {
-  mock.restoreAll();
+  vi.restoreAllMocks();
   for (const database of databases.splice(0)) await database.close();
 });
 
@@ -163,7 +164,7 @@ describe('the proofs, asked again', () => {
     const byId = async (id: string) => (await accounts.domains(workspace.id)).find((each) => each.id === id);
     await accounts.noteDomainCheck(acme.id, 'found', 1_000);
     const dns = zone();
-    const warned = mock.method(console, 'warn', () => {});
+    const warned = mockMethod(console, 'warn', () => {});
 
     // Not due yet.
     await recheckDomains(accounts, dns, 1_000 + RECHECK_MS - 1);
@@ -173,11 +174,11 @@ describe('the proofs, asked again', () => {
     assert.deepEqual(dns.asked, ['_fruitback.acme.dev'], 'a domain never proven is not asked by the timer');
     const lost = await byId(acme.id);
     assert.equal(lost?.lostAt, 1_000 + RECHECK_MS + 1);
-    assert.equal(warned.mock.callCount(), 1);
-    assert.match(String(warned.mock.calls[0]?.arguments[0]), /the domain acme\.dev of the workspace .* lost its proof/);
+    assert.equal(warned.mock.calls.length, 1);
+    assert.match(String(warned.mock.calls[0]?.[0]), /the domain acme\.dev of the workspace .* lost its proof/);
 
     await recheckDomains(accounts, dns, 1_000 + 3 * RECHECK_MS);
-    assert.equal(warned.mock.callCount(), 1, 'a loss is said once');
+    assert.equal(warned.mock.calls.length, 1, 'a loss is said once');
     assert.equal((await byId(acme.id))?.lostAt, 1_000 + RECHECK_MS + 1);
     assert.equal((await byId(never.id))?.lostAt, undefined);
   });
@@ -188,7 +189,7 @@ describe('the proofs, asked again', () => {
     const workspace = await accounts.createWorkspace('Acme', alice.id);
     const acme = await accounts.addDomain(workspace.id, 'acme.dev', 0);
     await accounts.noteDomainCheck(acme.id, 'found', 1_000);
-    const warned = mock.method(console, 'warn', () => {});
+    const warned = mockMethod(console, 'warn', () => {});
     const state = async (now: number) => proofState((await accounts.domains(workspace.id))[0] ?? {}, now);
 
     // Silent passes inside the grace: proven, and nothing said.
@@ -196,19 +197,16 @@ describe('the proofs, asked again', () => {
       await recheckDomains(accounts, silent, 1_000 + pass * (RECHECK_MS + 1));
     }
     assert.equal(await state(1_000 + PROOF_GRACE_MS), 'proven');
-    assert.equal(warned.mock.callCount(), 0);
+    assert.equal(warned.mock.calls.length, 0);
 
     // The pass that crosses the line says it, and the ones after it do not say it again.
     const after = 1_000 + PROOF_GRACE_MS + RECHECK_MS;
     await recheckDomains(accounts, silent, after);
     assert.equal(await state(after), 'lost');
-    assert.equal(warned.mock.callCount(), 1);
-    assert.match(
-      String(warned.mock.calls[0]?.arguments[0]),
-      /the DNS did not confirm the domain acme\.dev .* for 72 hours/,
-    );
+    assert.equal(warned.mock.calls.length, 1);
+    assert.match(String(warned.mock.calls[0]?.[0]), /the DNS did not confirm the domain acme\.dev .* for 72 hours/);
     await recheckDomains(accounts, silent, after + RECHECK_MS + 1);
-    assert.equal(warned.mock.callCount(), 1);
+    assert.equal(warned.mock.calls.length, 1);
     // No moment of loss is invented: the DNS never answered without the record.
     assert.equal((await accounts.domains(workspace.id))[0]?.lostAt, undefined);
   });
@@ -224,7 +222,7 @@ describe('the proofs, asked again', () => {
     // Proven long ago, and last asked inside the grace.
     await accounts.noteDomainCheck(domain.id, 'found', Date.now() - PROOF_GRACE_MS - 60_000);
     await accounts.noteDomainCheck(domain.id, 'unknown', Date.now() - RECHECK_MS - 60_000);
-    const warned = mock.method(console, 'warn', () => {});
+    const warned = mockMethod(console, 'warn', () => {});
 
     const checked = await call(
       env,
@@ -234,12 +232,12 @@ describe('the proofs, asked again', () => {
       { resolveTxt: silent },
     );
     assert.equal(((await checked.json()) as View).state, 'lost');
-    assert.equal(warned.mock.callCount(), 1);
-    assert.match(String(warned.mock.calls[0]?.arguments[0]), /the DNS did not confirm the domain acme\.dev/);
+    assert.equal(warned.mock.calls.length, 1);
+    assert.match(String(warned.mock.calls[0]?.[0]), /the DNS did not confirm the domain acme\.dev/);
 
     // The timer comes after: the click already said it.
     await recheckDomains(accounts, silent, Date.now() + RECHECK_MS);
-    assert.equal(warned.mock.callCount(), 1);
+    assert.equal(warned.mock.calls.length, 1);
   });
 
   it('changes nothing when the DNS does not answer', async () => {
@@ -365,7 +363,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
 
     // The owner of the zone takes the record away, and the next pass asks the DNS.
     delete records[domain.record.name];
-    mock.method(console, 'warn', () => {});
+    mockMethod(console, 'warn', () => {});
     const accounts = env.accounts;
     await recheckDomains(accounts, dns, t0 + RECHECK_MS + 60_000);
 
