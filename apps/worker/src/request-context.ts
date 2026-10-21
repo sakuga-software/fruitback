@@ -1,5 +1,12 @@
+import type { SeedIssue, SeedReporter } from '@fruitback/shared';
 import type { Auth } from './auth.ts';
-import { type ClientMap, type ClientPolicy, type ClientResolution, originsFromClients } from './clients.ts';
+import {
+  type ClientConfig,
+  type ClientMap,
+  type ClientPolicy,
+  type ClientResolution,
+  originsFromClients,
+} from './clients.ts';
 import type { AccountStore, Reach, Role } from './accounts.ts';
 import type { AttachmentStore } from './attachments.ts';
 import type { ConnectStore } from './connect.ts';
@@ -10,7 +17,7 @@ import type { InstanceAdminReads } from './instance-admin.ts';
 import type { Kv } from './kv.ts';
 import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
-import type { NoteIndex } from './notes-index.ts';
+import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
 import type { ReplyAuthor, SeedStore } from './store.ts';
 
@@ -150,4 +157,44 @@ export type CallerChecks = {
   hidesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
   /** The longest reply: `REPLY_LENGTH` of `app.ts`, where the side panel of the extension reads it. */
   REPLY_LENGTH: number;
+  /** Whether this caller may read the pins of this client: `authorizeRead` of `app.ts`. */
+  authorizeRead: (request: Request, policy: ClientPolicy) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** Whether the worker would take a note of this caller on this client: `writesHere` of `app.ts`. */
+  writesHere: (request: Request, policy: ClientPolicy) => Promise<boolean>;
+  /** The notes of `issues` that the reader of this request left: `notesOfReader` of `app.ts`. */
+  notesOfReader: (
+    request: Request,
+    config: Served,
+    policy: ClientPolicy,
+    workspace: string | undefined,
+    site: string | undefined,
+    issues: readonly SeedIssue[],
+    noteIndex: NoteIndex | undefined,
+  ) => Promise<Set<string>>;
+  /** The account of a session of the extension that reads `site` in `workspace` now: `memberOf` of `app.ts`. */
+  memberOf: (
+    request: Request,
+    config: Served,
+    workspace: string,
+    site: string | undefined,
+  ) => Promise<string | undefined>;
+  /** Whether the caller is a person who may see the tracker of this client: `seesTracker` of `app.ts`. */
+  seesTracker: (request: Request, config: Served, policy: ClientPolicy) => Promise<boolean>;
+  /** Whether the worker would sign a note of this caller with an identity it verified: `signsNotes` of `app.ts`. */
+  signsNotes: (request: Request, policy: ClientPolicy) => Promise<boolean>;
+  /** The reporter to store, and whether the worker vouches for it: `attributionFor` of `app.ts`. */
+  attributionFor: (
+    request: Request,
+    policy: ClientPolicy,
+    claimed: SeedReporter | undefined,
+  ) => Promise<
+    | { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean }
+    | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
+  >;
+  /** Where a member chose to send the note, or `null` for a place refused: `chosenPlace` of `app.ts`. */
+  chosenPlace: (
+    request: Request,
+    config: Served,
+    route: Extract<ClientResolution, { ok: true }>,
+  ) => Promise<ClientConfig | undefined | null>;
 };

@@ -378,9 +378,10 @@ function pageCall(
  * The real module is the control of each one, in the same world.
  */
 describe('the guards of « Members only », each planted out (FRU-330)', () => {
-  const PLANTS: readonly { guard: string; from: string; to: string; shows: string }[] = [
+  const PLANTS: readonly { guard: string; file: string; from: string; to: string; shows: string }[] = [
     {
       guard: 'a note with no session is refused',
+      file: 'app.ts',
       from: `    if (policy.write === 'authenticated') {
       return { ok: false, error: 'identity-required', reason: 'identity-required' };
     }`,
@@ -389,6 +390,7 @@ describe('the guards of « Members only », each planted out (FRU-330)', () => {
     },
     {
       guard: 'the refusal of a read says that a note would be refused',
+      file: 'feedback-routes.ts',
       from: 'const closed = (await writesHere(request, route.policy)) ? {} : { canWrite: false };',
       to: 'const closed = {};',
       shows: 'GET /feedback',
@@ -413,7 +415,7 @@ describe('the guards of « Members only », each planted out (FRU-330)', () => {
       const { handleRequest: real } = await import('./app.ts');
       assert.equal(await holds(real, plant.shows), true, 'the control: the real module holds the guard');
 
-      const mutant = await mutatedModule('app.ts', { from: plant.from, to: plant.to });
+      const mutant = await mutatedModule(plant.file, { from: plant.from, to: plant.to });
       try {
         assert.equal(await holds(mutant.module.handleRequest as Handle, plant.shows), false, plant.guard);
       } finally {
