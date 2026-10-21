@@ -32,12 +32,74 @@ jobs:
     # One job per Nx target, so a red check names what broke without opening the logs.
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
-    # FRU-343. `test` took 5 to 8 minutes in October 2026: `durations.ts` warns past 12.
-    timeout-minutes: 20
+    # FRU-343. Under a minute each in October 2026: `durations.ts` warns past 6.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        target: [lint, format, typecheck, test]
+        target: [lint, format, typecheck]
+
+    steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job reaches the remote after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.target }}
+        run: pnpm exec nx run-many -t ${{ matrix.target }}
+
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: ${{ matrix.target }}
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 10
+
+  test-part:
+    # FRU-344. One job took 8 to 9 minutes: the suite of the worker, about 4 minutes on the four cores
+    # of a runner, then the whole suite again under a French locale. The parts run side by side: every
+    # package but the worker in one part, and the test files of the worker cut in four
+    # (`FRUITBACK_TEST_SHARD`, `node --test --test-shard`). Each part runs under the locale of the
+    # runner and under a French one. `test` below is the one check that says whether every part passed.
+    name: test (${{ matrix.part }}, ${{ matrix.locale }})
+    runs-on: ubuntu-latest
+    # FRU-343. `durations.ts` warns past 9.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # `ci-split.test.ts` holds the parts of the worker to 1/N … N/N.
+        part: [packages, worker 1/4, worker 2/4, worker 3/4, worker 4/4]
+        locale: [runner, fr-FR]
     env:
       # FRU-180. The commit that `postgres-journal.test.ts` compares the migrations with: a migration
       # that the base has must be here, first, and unchanged. For a pull request the checkout is the
@@ -80,41 +142,63 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run ${{ matrix.target }}
-        run: pnpm exec nx run-many -t ${{ matrix.target }}
-
       # A test that reads the locale of the shell passes on this runner and fails on the machine of
       # somebody who works in French, or the reverse (FRU-172). Node takes the language of its own
-      # `navigator`, and the default of `Intl`, from these variables. `--skip-nx-cache` is what makes
-      # this a second run: the locale is no input of the `test` target, so Nx would replay the first.
-      - name: Run the tests again under a French locale
-        if: matrix.target == 'test'
-        env:
-          LC_ALL: fr_FR.UTF-8
-          LANG: fr_FR.UTF-8
+      # `navigator`, and the default of `Intl`, from these variables.
+      - name: Take a French locale
+        if: matrix.locale == 'fr-FR'
         run: |
-          test "$(node -p 'navigator.language')" = fr-FR
-          pnpm exec nx run-many -t test --skip-nx-cache
+          echo "LC_ALL=fr_FR.UTF-8" >> "$GITHUB_ENV"
+          echo "LANG=fr_FR.UTF-8" >> "$GITHUB_ENV"
+
+      - name: Check the locale Node reads
+        if: matrix.locale == 'fr-FR'
+        run: test "$(node -p 'navigator.language')" = fr-FR
+
+      - name: Run the tests of ${{ matrix.part }}
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          case "$PART" in
+            packages) pnpm exec nx run-many -t test --exclude @fruitback/worker ;;
+            'worker '*) FRUITBACK_TEST_SHARD="${PART#worker }" pnpm exec nx run @fruitback/worker:test ;;
+            *) echo "no such part: $PART"; exit 1 ;;
+          esac
 
       # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
       - name: Write the durations
         if: always()
         continue-on-error: true
         env:
-          NAME: ${{ matrix.target }}
-        run: node tools/ci/durations.ts --name "$NAME" --timeout 20
+          NAME: test ${{ matrix.part }} ${{ matrix.locale }}
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 15
+
+  test:
+    # The check that a pull request reads, under the name it had before the tests were cut in parts
+    # (FRU-344). It fails when a part failed, was cancelled, or did not run.
+    name: test
+    needs: test-part
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every part of the tests passed
+        env:
+          RESULT: ${{ needs.test-part.result }}
+        run: test "$RESULT" = success
 
   e2e-shard:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. The
-    # suite runs in three parts side by side, each on four workers (FRU-268): on one runner it took 6
-    # minutes of tests on four workers, 12 on one. `e2e` below is the one check that says whether
+    # suite runs in parts side by side, each on four workers (FRU-268): on one runner it took 6
+    # minutes of tests on four workers, 12 on one. Six parts since FRU-344: with three, the longest
+    # took 6 min 28, 5 min 29 of it in the suite. `e2e` below is the one check that says whether
     # every part passed.
     name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
     strategy:
       # A part that fails does not stop the others: their results are still worth reading.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     runs-on: ubuntu-latest
     # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
     # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
@@ -127,7 +211,7 @@ jobs:
       options: --user 1001
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
     # needs a newer Node than noble ships.
-    # The ceiling stops a browser that hangs. One part takes about 4 minutes (FRU-268).
+    # The ceiling stops a browser that hangs. One part of six takes about 3 minutes (FRU-344).
     timeout-minutes: 15
 
     steps:
@@ -205,15 +289,21 @@ jobs:
           RESULT: ${{ needs.e2e-shard.result }}
         run: test "$RESULT" = success
 
-  postgres:
+  postgres-part:
     # FRU-141, FRU-142. The accounts and the sessions in PostgreSQL, against a real server. `test` runs
     # the same cases on PGlite,
     # which is a PostgreSQL in the process with one connection: no race can show there. Here the calls
     # of a case run on several connections, and two processes migrate one empty database together.
     # `test:postgres` fails when the address is missing: a suite that is skipped proves nothing.
-    name: postgres
+    # FRU-344. Its files are cut in two parts side by side, each on a server of its own: one part
+    # took 3 to 4 minutes. `postgres` below says whether both passed.
+    name: postgres (${{ matrix.part }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1/2, 2/2]
     services:
       postgres:
         image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
@@ -266,6 +356,7 @@ jobs:
       - name: Run the account and session stores on a real PostgreSQL
         env:
           FRUITBACK_TEST_DATABASE_URL: postgres://postgres:ci-not-a-real-password@127.0.0.1:5432/fruitback
+          FRUITBACK_TEST_SHARD: ${{ matrix.part }}
         run: pnpm --filter @fruitback/worker test:postgres
 
       # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
@@ -273,8 +364,21 @@ jobs:
         if: always()
         continue-on-error: true
         env:
-          NAME: postgres
+          NAME: postgres ${{ matrix.part }}
         run: node tools/ci/durations.ts --name "$NAME" --timeout 10
+
+  postgres:
+    # The check that a pull request reads, under the name it had before it was cut in two (FRU-344).
+    name: postgres
+    needs: postgres-part
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Both parts on PostgreSQL passed
+        env:
+          RESULT: ${{ needs.postgres-part.result }}
+        run: test "$RESULT" = success
 
   dependencies:
     # FRU-143. The scan of the image reads the packages that a file of the image names. The worker is
@@ -305,9 +409,46 @@ jobs:
         # The lockfile is enough: nothing is installed.
         run: pnpm audit --prod
 
+  changes:
+    # FRU-344. Which images a pull request can change: `tools/ci/changes.ts` reads the files of the
+    # merge commit against the head of its base. A push, a merge queue and a release build them all.
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      worker: ${{ steps.changes.outputs.worker }}
+      web: ${{ steps.changes.outputs.web }}
+      compose: ${{ steps.changes.outputs.compose }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job reaches the remote after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+          # The merge commit and its first parent, the head of the base.
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Choose the images to build
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+        run: node tools/ci/changes.ts "$EVENT" >> "$GITHUB_OUTPUT"
+
   image:
-    # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
+    # Dokploy builds this same Dockerfile on push, so a broken one must fail here first. FRU-344: the
+    # images were one job of 4 to 6 minutes, built one after the other. The worker is here, the
+    # console and the demonstration in `image-web`, the two of docker-compose.yml in `compose`, side
+    # by side. Each runs when a file of its images, or one its steps read, changed (`changes`).
     name: docker image
+    needs: changes
+    if: needs.changes.outputs.worker == 'true'
     runs-on: ubuntu-latest
     # FRU-343. It took 3 to 5 minutes in October 2026: `durations.ts` warns past 9.
     timeout-minutes: 15
@@ -574,6 +715,37 @@ jobs:
           WORKER_IMAGE: fruitback-worker:ci
         run: sh apps/worker/cloud/restore-drill.sh
 
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: docker image
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 15
+
+  image-web:
+    # FRU-79, FRU-222. The demonstration and the console, as Dokploy builds them.
+    name: docker console
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    # FRU-343. `durations.ts` warns past 9.
+    timeout-minutes: 15
+
+    steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job runs git after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Build the image of the public demonstration
         # FRU-79. Dokploy builds this Dockerfile on push too. It is not published anywhere.
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -728,6 +900,60 @@ jobs:
           test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.fruitback.example" };'
           docker rm -f console-cloud
 
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: docker console
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 15
+
+  compose:
+    # FRU-48, FRU-225. The worker and the console of this commit, run by docker-compose.yml.
+    name: docker compose
+    needs: changes
+    if: needs.changes.outputs.compose == 'true'
+    runs-on: ubuntu-latest
+    # FRU-343. `durations.ts` warns past 9.
+    timeout-minutes: 15
+
+    steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job runs git after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the worker image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: false
+          load: true
+          tags: fruitback-worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build the image of the console
+        # FRU-222. The image that is published: built with no address of a worker in it.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          push: false
+          load: true
+          tags: fruitback-console:ci
+          cache-from: type=gha,scope=console
+          cache-to: type=gha,mode=max,scope=console
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -806,7 +1032,7 @@ jobs:
         if: always()
         continue-on-error: true
         env:
-          NAME: docker image
+          NAME: docker compose
         run: node tools/ci/durations.ts --name "$NAME" --timeout 15
 
   zizmor:
