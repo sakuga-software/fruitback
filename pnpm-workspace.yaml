@@ -27,5 +27,6 @@ catalog:
   oxlint: ^1.75.0
   pg: 8.23.1
   typescript: 7.0.2
+  vitest: 4.1.12
   yaml: ^2.9.0
   zod: ~4.3.6
