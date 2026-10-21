@@ -283,6 +283,9 @@ test('team mode: a note joins a file of the disk, and its thread says how many f
   await expect(files).toBeVisible();
   await expect(files.getByRole('button', { name: 'Capture the page' })).toBeVisible();
   await expect(files.getByRole('button', { name: 'Capture an area' })).toBeVisible();
+  // The inputs of the disk are opened by their buttons, never shown (the /tfp found them drawn).
+  await expect(page.locator('[data-fruitback-attach-file-input]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-attach-image-input]')).toBeHidden();
   await page
     .locator('[data-fruitback-attach-file-input]')
     .setInputFiles({ name: 'log.txt', mimeType: 'text/plain', buffer: Buffer.from('une ligne de log') });
@@ -292,7 +295,7 @@ test('team mode: a note joins a file of the disk, and its thread says how many f
   await page.getByPlaceholder('What should change?').fill('Avec un fichier');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  await page.locator('[data-fruitback-pin]').click();
+  await page.getByRole('button', { name: /^Note 1\b/ }).click();
   await expect(page.locator('[data-fruitback-files]')).toHaveText(/^1 attachment · in \S+$/);
   await expect(page.locator('.fruitback-thread img')).toHaveCount(0);
 

@@ -94,10 +94,10 @@ describe('the files of a note in the composer (FRU-332)', () => {
     q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
     await settle();
     assert.equal(uploads.length, 1);
-    assert.deepEqual(files(root), [['page.png', '4 byte · Sending…', 'sending']]);
+    assert.deepEqual(files(root), [['page.png', '0.1 kB · Sending…', 'sending']]);
     uploads[0]?.answer({ ok: true, id: ID });
     await settle();
-    assert.deepEqual(files(root), [['page.png', '4 byte', 'ready']]);
+    assert.deepEqual(files(root), [['page.png', '0.1 kB', 'ready']]);
   });
 
   it('names the files the worker took, and only those, in the note it sends, after the ones in flight', async () => {
@@ -435,7 +435,8 @@ describe('a file on its way, and the note that names it (FRU-332)', () => {
   });
 
   it('writes a size as a person reads it', () => {
-    assert.equal(readableSize(512, 'en'), '512 byte');
+    assert.equal(readableSize(512, 'en'), '0.5 kB');
+    assert.equal(readableSize(4, 'en'), '0.1 kB');
     assert.equal(readableSize(48 * 1_024, 'en'), '48 kB');
     // `Intl` puts a no-break space between the number and its unit in French.
     assert.equal(readableSize(2.5 * 1_024 * 1_024, 'fr').replace(/\s/gu, ' '), '2,5 Mo');

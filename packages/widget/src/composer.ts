@@ -1193,6 +1193,8 @@ const STYLES = `
 .fruitback-composer-attach[hidden], .fruitback-composer-attach-ways[hidden], .fruitback-composer-files[hidden],
 .fruitback-composer-attach-way[hidden], .fruitback-composer-attach-none[hidden] { display: none; }
 .fruitback-composer-attach-ways { display: flex; flex-wrap: wrap; gap: 6px; }
+/* The inputs of the disk are opened by their buttons: the reset of a host can show them, so they are hidden here. */
+.fruitback-composer-attach input[type="file"] { display: none; }
 .fruitback-composer-attach-way {
   min-height: 32px;
   padding: 0 10px;

@@ -94,21 +94,20 @@ export async function readPicked(file: File): Promise<PickedFile> {
   };
 }
 
-/** A size as a person reads it, in the language of the widget: « 48 KB », « 2.4 MB ». */
+/**
+ * A size as a person reads it, in the language of the widget: « 48 kB », « 2.4 MB ». In kilobytes at
+ * the least: « 30 byte » is what `Intl` writes for bytes in English, and nobody reads a file so.
+ */
 export function readableSize(bytes: number, locale: string): string {
-  const units = [
-    ['byte', 1],
-    ['kilobyte', 1_024],
-    ['megabyte', 1_024 * 1_024],
-  ] as const;
-  const [unit, size] = [...units].reverse().find(([, each]) => bytes >= each) ?? units[0];
-  const value = bytes / size;
+  const mega = bytes >= 1_024 * 1_024;
+  const unit = mega ? 'megabyte' : 'kilobyte';
+  const value = Math.max(bytes / (mega ? 1_024 * 1_024 : 1_024), 0.1);
   try {
     return new Intl.NumberFormat(locale, {
       style: 'unit',
       unit,
       unitDisplay: 'short',
-      maximumFractionDigits: value < 10 && unit !== 'byte' ? 1 : 0,
+      maximumFractionDigits: value < 10 ? 1 : 0,
     }).format(value);
   } catch {
     return `${Math.round(value)} ${unit}`;
