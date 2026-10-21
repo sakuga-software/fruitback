@@ -1,5 +1,6 @@
 import type { AccountStore, ConnectorTrouble } from './accounts.ts';
 import { createAll } from './batch.ts';
+import { GithubInstallationGone, GithubRepositoryRefused } from './github-connector.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
 import type { SeedStore } from './store.ts';
@@ -18,6 +19,9 @@ export function troubleOf(error: unknown): ConnectorTrouble | undefined {
   if (error instanceof LinearKeyRefused) return 'key-refused';
   if (error instanceof LinearKeyForbidden) return 'key-lacks-access';
   if (error instanceof LinearConnectionEnded) return 'connection-ended';
+  // FRU-359: the installation of the App does not cover the repository, or the App was removed.
+  if (error instanceof GithubRepositoryRefused) return 'key-lacks-access';
+  if (error instanceof GithubInstallationGone) return 'connection-ended';
 
   return undefined;
 }

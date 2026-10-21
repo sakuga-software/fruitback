@@ -82,17 +82,30 @@ export const COMMENTS_PER_ISSUE = 20;
  */
 const COMMENT_FETCHES_AT_ONCE = 4;
 
+/**
+ * The RSA private key of a GitHub App, from the PEM of a variable, or `undefined` for a value that is
+ * not one. The store `github` and the connector `github` (FRU-359) read their key with this.
+ *
+ * A `.env` file holds one line, so the PEM can arrive with its line breaks written as `\n`. A PEM
+ * with real line breaks is read as it is.
+ */
+export function readRsaPrivateKey(pem: string): KeyObject | undefined {
+  try {
+    const key = createPrivateKey(pem.replace(/\\n/g, '\n'));
+
+    return key.asymmetricKeyType === 'rsa' ? key : undefined;
+  } catch {
+    // The caller names the variable. The key itself must never reach a message.
+    return undefined;
+  }
+}
+
 const githubConfigSchema = z.object({
   /** The App ID, or its client ID. GitHub accepts both as `iss`. */
   appId: z.string().min(1),
   privateKey: z.string().transform((pem, context) => {
-    try {
-      // A `.env` file holds one line, so the PEM can arrive with its line breaks written as `\n`.
-      const key = createPrivateKey(pem.replace(/\\n/g, '\n'));
-      if (key.asymmetricKeyType === 'rsa') return key;
-    } catch {
-      // The issue below names the variable. The key itself must never reach a message.
-    }
+    const key = readRsaPrivateKey(pem);
+    if (key !== undefined) return key;
     context.addIssue({ code: 'custom', message: 'not an RSA private key' });
 
     return z.NEVER;
@@ -152,23 +165,34 @@ function encodeJson(value: unknown): string {
 }
 
 /** A failed GitHub call. The message holds the status only, because `app.ts` sends it to the widget. */
-class GithubResponseError extends StoreError {
+export class GithubResponseError extends StoreError {
   readonly status: number;
   readonly payload: unknown;
+  /**
+   * GitHub answers a secondary rate limit with `403` and `retry-after`, or with `x-ratelimit-remaining: 0`
+   * (the documentation of « Rate limits for the REST API »). That `403` is no refusal of access.
+   */
+  readonly rateLimited: boolean;
 
-  constructor(status: number, payload: unknown) {
+  constructor(status: number, payload: unknown, rateLimited = false) {
     super(`GitHub responded ${status}`);
     this.status = status;
     this.payload = payload;
+    this.rateLimited = rateLimited;
   }
 }
 
 type GithubCall = { method?: 'GET' | 'POST'; token: string; body?: unknown };
 
-async function githubFetch(path: string, { method = 'GET', token, body }: GithubCall): Promise<unknown> {
+/** `api` is for the tests: a GitHub on a port of the machine. */
+export async function githubFetch(
+  path: string,
+  { method = 'GET', token, body }: GithubCall,
+  api: string = GITHUB_API,
+): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(`${GITHUB_API}${path}`, {
+    response = await fetch(`${api}${path}`, {
       method,
       headers: {
         Accept: 'application/vnd.github+json',
@@ -186,17 +210,72 @@ async function githubFetch(path: string, { method = 'GET', token, body }: Github
   }
 
   const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new GithubResponseError(response.status, payload);
+  if (!response.ok) {
+    const rateLimited =
+      response.headers.get('retry-after') !== null || response.headers.get('x-ratelimit-remaining') === '0';
+    throw new GithubResponseError(response.status, payload, rateLimited);
+  }
 
   return payload;
 }
 
 const installationSchema = z.object({ id: z.number() });
-const accessTokenSchema = z.object({ token: z.string().min(1), expires_at: z.string() });
+export const accessTokenSchema = z.object({ token: z.string().min(1), expires_at: z.string() });
 
-type InstallationToken = { token: string; expiresAt: number };
+export type InstallationToken = { token: string; expiresAt: number };
 
-type TokenSource = { get(repository: string): Promise<string>; drop(repository: string, token: string): void };
+/** The tokens of one store, by repository. */
+export type TokenSource = { get(repository: string): Promise<string>; drop(repository: string, token: string): void };
+
+/**
+ * Installation tokens by key, shared by every request. A token is used until `TOKEN_REFRESH_MARGIN_MS`
+ * before its end, and one mint at a time runs for a key.
+ *
+ * WARNING: the key must name everything the token reaches. A token of one repository that is served
+ * under the key of another is a write in the wrong repository.
+ */
+export type TokenCache = {
+  get(key: string, mint: () => Promise<InstallationToken>): Promise<string>;
+  /** Forgets the token of `key` if it is still `token`. */
+  drop(key: string, token: string): void;
+};
+
+export function createTokenCache(now: () => number): TokenCache {
+  const tokens = new Map<string, Promise<InstallationToken>>();
+  const issued = new WeakMap<Promise<InstallationToken>, string>();
+
+  return {
+    async get(key, mint) {
+      for (;;) {
+        const held = tokens.get(key);
+
+        if (held === undefined) {
+          const minting = mint();
+          tokens.set(key, minting);
+          // This handler runs before the callers that wait on the same promise. So a failed mint
+          // leaves the map before any caller can see it, and the next request mints again.
+          minting.then(
+            (token) => issued.set(minting, token.token),
+            () => {
+              if (tokens.get(key) === minting) tokens.delete(key);
+            },
+          );
+
+          return (await minting).token;
+        }
+
+        const token = await held;
+        if (token.expiresAt - now() > TOKEN_REFRESH_MARGIN_MS) return token.token;
+        if (tokens.get(key) === held) tokens.delete(key);
+      }
+    },
+    drop(key, token) {
+      // A 401 can arrive late, for a token that a newer mint replaced. It must not evict the new token.
+      const held = tokens.get(key);
+      if (held !== undefined && issued.get(held) === token) tokens.delete(key);
+    },
+  };
+}
 
 /**
  * One installation token per repository, shared by every request.
@@ -205,8 +284,7 @@ type TokenSource = { get(repository: string): Promise<string>; drop(repository: 
  * organisation needs no more configuration. The App must be installed there.
  */
 function createTokenSource(config: GithubConfig, now: () => number): TokenSource {
-  const tokens = new Map<string, Promise<InstallationToken>>();
-  const issued = new WeakMap<Promise<InstallationToken>, string>();
+  const tokens = createTokenCache(now);
 
   async function mint(repository: string): Promise<InstallationToken> {
     const jwt = signAppJwt(config.appId, config.privateKey, now());
@@ -229,35 +307,8 @@ function createTokenSource(config: GithubConfig, now: () => number): TokenSource
   }
 
   return {
-    async get(repository) {
-      for (;;) {
-        const held = tokens.get(repository);
-
-        if (held === undefined) {
-          const minting = mint(repository);
-          tokens.set(repository, minting);
-          // This handler runs before the callers that wait on the same promise. So a failed mint
-          // leaves the map before any caller can see it, and the next request mints again.
-          minting.then(
-            (token) => issued.set(minting, token.token),
-            () => {
-              if (tokens.get(repository) === minting) tokens.delete(repository);
-            },
-          );
-
-          return (await minting).token;
-        }
-
-        const token = await held;
-        if (token.expiresAt - now() > TOKEN_REFRESH_MARGIN_MS) return token.token;
-        if (tokens.get(repository) === held) tokens.delete(repository);
-      }
-    },
-    drop(repository, token) {
-      // A 401 can arrive late, for a token that a newer mint replaced. It must not evict the new token.
-      const held = tokens.get(repository);
-      if (held !== undefined && issued.get(held) === token) tokens.delete(repository);
-    },
+    get: (repository) => tokens.get(repository, () => mint(repository)),
+    drop: (repository, token) => tokens.drop(repository, token),
   };
 }
 
@@ -324,18 +375,43 @@ function commentPages(count: number): number[] {
  * transit: refused. Not measured on a real repository: no App of a test repository is installed.
  */
 export function createGithubStore(config: GithubConfig, options: GithubStoreOptions = {}): SeedStore {
-  const now = options.now ?? Date.now;
-  const tokens = createTokenSource(config, now);
+  return createIssueStore({
+    repositoryOf: (client) => repositoryFor(config, client),
+    tokens: createTokenSource(config, options.now ?? Date.now),
+  });
+}
 
+/**
+ * What a store of GitHub issues needs, whoever holds the key: the store `github` of the worker, or the
+ * connector `github` of a workspace (FRU-359).
+ */
+export type IssueStoreOptions = {
+  /** The repository of the client. It throws a `StoreError` for a client that names none. */
+  repositoryOf: (client: ClientConfig | undefined) => string;
+  tokens: TokenSource;
+  /** For the tests: a GitHub on a port of the machine. */
+  api?: string;
+  /**
+   * The error to throw in place of a refusal of GitHub, or `undefined` to throw the refusal as it is.
+   * The token of the call is dropped before this error is thrown.
+   */
+  refused?: (error: GithubResponseError) => StoreError | undefined;
+};
+
+export function createIssueStore({ repositoryOf, tokens, api, refused }: IssueStoreOptions): SeedStore {
   async function call(repository: string, path: string, init: Omit<GithubCall, 'token'> = {}): Promise<unknown> {
     const token = await tokens.get(repository);
     try {
-      return await githubFetch(path, { ...init, token });
+      return await githubFetch(path, { ...init, token }, api);
     } catch (error) {
+      if (!(error instanceof GithubResponseError)) throw error;
       // GitHub revoked the token before its expiry, for example because the App was uninstalled.
       // The next request mints a new one instead of failing until the expiry.
-      if (error instanceof GithubResponseError && error.status === 401) tokens.drop(repository, token);
-      throw error;
+      if (error.status === 401) tokens.drop(repository, token);
+      const instead = refused?.(error);
+      if (instead === undefined) throw error;
+      tokens.drop(repository, token);
+      throw instead;
     }
   }
 
@@ -410,10 +486,10 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
   return {
     name: 'github',
     stages: GITHUB_STAGES,
-    scope: (client) => repositoryFor(config, client),
+    scope: (client) => repositoryOf(client),
 
     async create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue> {
-      const repository = repositoryFor(config, client);
+      const repository = repositoryOf(client);
       const labels = buildIssueLabels(seed).map(githubLabelName);
 
       for (const name of labels) await ensureLabel(repository, name);
@@ -430,7 +506,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
     },
 
     async findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
-      const repository = repositoryFor(config, client);
+      const repository = repositoryOf(client);
       const labels = (query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL]).map(
         githubLabelName,
       );

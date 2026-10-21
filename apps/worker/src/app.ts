@@ -11,8 +11,9 @@ import { type AccountStore, can, readsSite } from './accounts.ts';
 import { withRenewedCookie } from './auth-routes.ts';
 import { consoleCors, isConsoleRoute } from './console-cors.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
+import { type GithubApp, githubAppFor } from './github-connector.ts';
 import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
-import { type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
+import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import { type ReplyAuthor, type SeedStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -196,6 +197,13 @@ export function writesWith(policy: Pick<ClientPolicy, 'write'>, verified: Verifi
   return verified?.ok === true && verified.session === true;
 }
 
+/** The GitHub App of the connectors, as the options of `createConnectorStores` take it. */
+function githubAppOf(context: RequestContext, served: WorkerConfig): { githubApp?: GithubApp } {
+  if (context.githubApp !== undefined) return { githubApp: context.githubApp };
+
+  return served.githubConnector === undefined ? {} : { githubApp: githubAppFor(served.githubConnector) };
+}
+
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
   const seen: { cors?: Record<string, string> } = {};
   let answer: Response;
@@ -364,6 +372,7 @@ async function routed(
           createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth, {
             // FRU-331: a delivery carries the address of a file on this worker, which needs both.
             filesReachable: served.publicUrl !== undefined && served.secretsKey !== undefined,
+            ...githubAppOf(context, served),
           }),
         );
   };

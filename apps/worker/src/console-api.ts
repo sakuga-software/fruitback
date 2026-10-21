@@ -47,6 +47,7 @@ import {
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
+import { readGithubRepository } from './github-connector.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
@@ -209,7 +210,7 @@ async function counted<T>(read: () => Promise<T> | undefined): Promise<T | undef
 }
 
 /** What the worker calls each kind of source in the label of a destination. */
-const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'REST API' };
+const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'REST API', github: 'GitHub' };
 
 /** The place does not exist in the tracker of the connector: nothing must be kept for it. */
 class UnknownPlace extends Error {}
@@ -265,6 +266,11 @@ async function labelled(
     if (connector === undefined) throw new UnknownPlace();
     if (connector.kind === 'rest') {
       out.push({ ...destination, label: `${KIND_NAMES.rest} · ${connector.label}` });
+      continue;
+    }
+    // FRU-359: the repository is its own name. GitHub is asked when a note goes, not here.
+    if (connector.kind === 'github') {
+      out.push({ ...destination, label: `${KIND_NAMES.github} · ${destination.teamId ?? ''}` });
       continue;
     }
 
@@ -323,7 +329,9 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/;
  * The destination a body asks for, for a connector of this kind.
  *
  * A tracker has teams, so a team is required. An address that only receives has none, and a team
- * given for one is refused: it would be kept and mean nothing.
+ * given for one is refused: it would be kept and mean nothing. A `github` connector takes a
+ * `repository`, `owner/name`, and no team and no project (FRU-359). The destination keeps the
+ * repository as its `teamId`.
  */
 function destinationOf(body: Record<string, unknown> | undefined, kind: ConnectorKind): Destination | undefined {
   const { connector, teamId, projectId } = body ?? {};
@@ -331,6 +339,12 @@ function destinationOf(body: Record<string, unknown> | undefined, kind: Connecto
   // `null` is « none », as the route takes it for the project of a tracker.
   if (kind === 'rest')
     return (teamId ?? undefined) === undefined && (projectId ?? undefined) === undefined ? { connector } : undefined;
+  if (kind === 'github') {
+    const repository = readGithubRepository(body?.repository);
+    if (repository === undefined || teamId !== undefined || projectId !== undefined) return undefined;
+
+    return { connector, teamId: repository };
+  }
   if (typeof teamId !== 'string' || !ID.test(teamId)) return undefined;
   if (projectId !== undefined && projectId !== null && (typeof projectId !== 'string' || !ID.test(projectId))) {
     return undefined;

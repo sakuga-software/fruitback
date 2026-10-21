@@ -777,3 +777,10 @@ the Keychain entries, and add these.
   the application, so it needs no build argument. The Cloud serves workspaces of Linear other than
   ours: if the form of the application has a « Public » switch, turn it on. This was not tried yet
   with a second workspace of Linear.
+- **The GitHub App « Fruitback App »** (`fruitback-app`, App ID 5409420, of `sakuga-software`)
+  connects the GitHub of a workspace (FRU-359). It is public, with Issues read and write, Metadata
+  read, and no webhook. Two variables, set together: `FRUITBACK_GITHUB_CONNECTOR` is
+  `<app id>:<client id>:<client secret>`, and `FRUITBACK_GITHUB_CONNECTOR_PRIVATE_KEY` is the PEM of a
+  key of « Private keys » of the App, on one line with each line break written as `\n`. Keep both in
+  the Keychain of the operator. The key mints a token for every repository of every organisation that
+  installed the App: `SECURITY.md` says how to replace it.
