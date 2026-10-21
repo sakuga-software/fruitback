@@ -350,6 +350,33 @@ describe('the menu of « Attach » (FRU-351)', () => {
     assert.equal(menu.hidden, true);
   });
 
+  it('joins no file dropped or captured while the note is sent: no note would name it', async () => {
+    const { trigger, q, root, page, settle, uploads } = opened();
+    trigger.click();
+    q<HTMLButtonElement>('[data-fruitback-attach-drop]').click();
+    const zone = q<HTMLElement>('[data-fruitback-attach-dropzone]');
+    q<HTMLTextAreaElement>('[data-fruitback-note]').value = 'La note';
+    q<HTMLButtonElement>('[data-fruitback-send]').click();
+    await settle();
+    assert.equal(zone.hidden, true, 'the zone goes while the note is sent');
+
+    const view = page.view as unknown as { File: typeof File; Event: typeof Event };
+    const drop = new view.Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [new view.File(['x'], 'late.txt')] } });
+    zone.dispatchEvent(drop);
+    q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+    for (let tries = 0; tries < 10; tries += 1) await settle();
+    assert.deepEqual(files(root), []);
+    assert.equal(uploads.length, 0);
+    for (const way of ['trigger', 'file', 'area', 'page', 'drop']) {
+      assert.equal(
+        q<HTMLButtonElement>(`[data-fruitback-attach-${way}]`).disabled,
+        true,
+        `${way} is offered while the note is sent`,
+      );
+    }
+  });
+
   it('shows a zone where a dropped file joins the note, and Esc hides it and gives the focus back', async () => {
     const { trigger, q, root, page, settle, press, focused } = opened();
     const zone = q<HTMLElement>('[data-fruitback-attach-dropzone]');
