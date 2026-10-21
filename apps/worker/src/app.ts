@@ -37,7 +37,6 @@ import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import {
   type BatchAnswer,
-  type BatchMemory,
   type CheckVerdict,
   type CreatedIssue,
   type ReplyAuthor,
@@ -48,7 +47,7 @@ import {
   takesReplies,
 } from './store.ts';
 import { checkedOf } from './reply-text.ts';
-import { createAll } from './batch.ts';
+import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH, pairPage } from './pair-page.ts';
@@ -1752,87 +1751,6 @@ async function chosenPlace(
   }
 
   return placedAt(route.client, place);
-}
-
-/** How long a seed that was kept answers its issue again, for a widget that sends it twice. */
-const SENT_TTL_MS = 10 * 60_000;
-
-function sentKey(clientId: string | undefined, seedId: string): string {
-  return `fruitback:sent:${JSON.stringify([clientId ?? null, seedId])}`;
-}
-
-/** How long a seed that a request is planting is held from another request. */
-const SENDING_TTL_MS = 60_000;
-
-function sendingKey(clientId: string | undefined, seedId: string): string {
-  return `fruitback:sending:${JSON.stringify([clientId ?? null, seedId])}`;
-}
-
-/**
- * Takes a seed for this request, or says that another request holds it.
- *
- * `incr` is the one atomic call of a `Kv`: the request that reads 1 holds the seed. Two attempts of
- * one batch at the same moment would both read « not kept yet », and both plant it. A `Kv` that does
- * not answer holds nothing: the seed is sent, as before this guard.
- */
-async function hold(kv: Kv, clientId: string | undefined, seedId: string): Promise<boolean> {
-  try {
-    return (await kv.incr(sendingKey(clientId, seedId), SENDING_TTL_MS)) === 1;
-  } catch {
-    return true;
-  }
-}
-
-/** Gives a seed back when it was not kept, so the next attempt can take it at once. */
-async function release(kv: Kv, clientId: string | undefined, seedId: string): Promise<void> {
-  await kv.set(sendingKey(clientId, seedId), '0', SENDING_TTL_MS).catch(() => undefined);
-}
-
-function parentKey(clientId: string | undefined, scope: string, seedId: string): string {
-  return `fruitback:batch-parent:${JSON.stringify([clientId ?? null, scope, seedId])}`;
-}
-
-/**
- * The parent of a batch, from one attempt to the next (FRU-195), in the `Kv`: one entry for each seed,
- * for as long as a seed is remembered. An attempt that sends again only some of the notes still
- * finds the parent. The place is in the key: a parent of one team is not used for another.
- *
- * WARNING: nothing throws from here. A `Kv` that does not answer costs a second parent, not a note.
- */
-function batchMemory(
-  kv: Kv,
-  store: SeedStore,
-  clientId: string | undefined,
-  target: ClientConfig | undefined,
-  seeds: readonly Seed[],
-): BatchMemory {
-  const keys = (): string[] => {
-    const scope = store.scope(target);
-
-    return seeds.map((seed) => parentKey(clientId, scope, seed.id));
-  };
-  const write = async (value: string): Promise<void> => {
-    try {
-      await Promise.all(keys().map((key) => kv.set(key, value, SENT_TTL_MS)));
-    } catch {
-      // Not remembered: the next attempt writes a parent, as before FRU-195.
-    }
-  };
-
-  return {
-    async parent() {
-      try {
-        const found = await Promise.all(keys().map((key) => kv.get(key)));
-
-        // An entry that was forgotten is empty: the `Kv` has no delete.
-        return found.find((id) => id !== undefined && id !== '');
-      } catch {
-        return undefined;
-      }
-    },
-    keepParent: (id) => write(id),
-    forgetParent: () => write(''),
-  };
 }
 
 /**
