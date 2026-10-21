@@ -3977,8 +3977,13 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   file for a member or a page. A file that no note took is no file of a delivery, and answers `404`
   even signed.
 - **The table keeps its name, `screenshots`.** A rename is a prompt of `drizzle-kit` that nothing
-  answers in a script, and the name costs nothing. Its migration `0021` adds the columns, then three
-  statements that are not generated (its header says which) change the rows of FRU-44.
+  answers in a script, and the name costs nothing. Its migration `0021` adds the columns, then one
+  statement that is not generated (its header says which) changes the rows of FRU-44: each one
+  ends 7 days after it, and is marked `before_transit`.
+- **A picture of before counts for nothing in what an account holds** (`heldBy`, heavy review of
+  #427): an account with 50 of them got `transit-full` for 7 days with no file sent. The marker is
+  a column that the migration sets, not the prefix `shot_` of the id: nothing in the code then
+  depends on the form of an old id to count the quota.
 
 ### The reasons, and what was measured
 

@@ -107,13 +107,22 @@ export type StoredAttachment = {
   expiresAt: number;
   /** The note that took it: the id the widget gave the seed. Absent until a note names it. */
   seed?: string;
+  /**
+   * A picture of FRU-44, marked so by migration 0021 (`before_transit`). It counts for nothing in
+   * `heldBy` (heavy review of #427). A file of FRU-331 never has it.
+   */
+  beforeTransit?: true;
 };
 
 export type AttachmentStore = {
   put(attachment: StoredAttachment): Promise<void>;
   /** The file, or `undefined` when it is absent or past its end at `now`. */
   get(id: string, now: number): Promise<StoredAttachment | undefined>;
-  /** How many files, and how many bytes, an account holds now. */
+  /**
+   * How many files, and how many bytes, an account holds now. A picture of before (`beforeTransit`)
+   * counts for nothing: migration 0021 keeps each one 7 days, and an account that had 50 would get
+   * `transit-full` for 7 days with no file sent (heavy review of #427).
+   */
   heldBy(account: string, now: number): Promise<{ files: number; bytes: number }>;
   /**
    * Gives the files to one note. A file already given to another note is not taken again: the
@@ -145,7 +154,7 @@ export function createMemoryAttachmentStore(): AttachmentStore & { size(): numbe
       return found !== undefined && found.expiresAt > now ? found : undefined;
     },
     async heldBy(account, now) {
-      const mine = live(now).filter((each) => each.account === account);
+      const mine = live(now).filter((each) => each.account === account && each.beforeTransit !== true);
 
       return { files: mine.length, bytes: mine.reduce((sum, each) => sum + each.content.byteLength, 0) };
     },

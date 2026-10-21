@@ -700,10 +700,35 @@ describe('a note of before FRU-331, with its picture (arbitration of 2026-10-21)
       content: PNG,
       createdAt: Date.now() - 60_000,
       expiresAt: Date.now() + TRANSIT_MS,
+      // Migration 0021 marks every picture of before.
+      beforeTransit: true,
     });
     void env;
     void site;
   }
+
+  it('counts for nothing in the transit of its account: one with 50 pictures of before still sends a file', async () => {
+    const env = await envWith();
+    const { alice, alice_token, acme, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    for (let n = 0; n < MAX_HELD_FILES; n += 1) {
+      await attachments.put({
+        id: `shot_${String(n).padStart(32, '0')}`,
+        workspace: acme.id,
+        account: alice.id,
+        site: '',
+        name: 'screenshot.png',
+        type: 'image/png',
+        content: PNG,
+        createdAt: Date.now() - 60_000,
+        expiresAt: Date.now() + TRANSIT_MS,
+        beforeTransit: true,
+      });
+    }
+    assert.deepEqual(await attachments.heldBy(alice.id, Date.now()), { files: 0, bytes: 0 });
+    assert.equal((await upload(env, { attachments }, site, alice_token)).status, 201);
+    assert.deepEqual(await attachments.heldBy(alice.id, Date.now()), { files: 1, bytes: PNG.byteLength });
+  });
 
   it('goes with its note while the migration keeps it, for its sender', async () => {
     const env = await envWith();
@@ -999,7 +1024,21 @@ for (const { label, open, skip } of DATABASES) {
       }
       // The sweep of the transit takes them at their end, and not before (the control).
       const store = createPostgresAttachmentStore(database);
-      assert.equal(await store.sweep(before + 7 * day - 1), 0);
+      // They count for nothing in the transit of the account: 3 pictures of before, 0 held.
+      assert.deepEqual(await store.heldBy('acc_alice', after), { files: 0, bytes: 0 });
+      await store.put({
+        id: 'att_1',
+        workspace: 'ws_acme',
+        account: 'acc_alice',
+        site: 'site_acme',
+        name: 'capture.png',
+        type: 'image/png',
+        content: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        createdAt: after,
+        expiresAt: after + day,
+      });
+      assert.deepEqual(await store.heldBy('acc_alice', after), { files: 1, bytes: 4 }, 'a file sent now counts');
+      assert.equal(await store.sweep(before + 7 * day - 1), 1);
       assert.equal(await store.sweep(after + 7 * day), 3);
       assert.deepEqual(await rowsOf(database, 'SELECT id FROM screenshots'), []);
     });

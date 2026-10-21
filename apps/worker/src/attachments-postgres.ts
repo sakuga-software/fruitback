@@ -18,6 +18,7 @@ function attachmentOf(row: Row): StoredAttachment {
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     ...(row.seed_id === null ? {} : { seed: row.seed_id }),
+    ...(row.before_transit ? { beforeTransit: true as const } : {}),
   };
 }
 
@@ -61,7 +62,13 @@ export function createPostgresAttachmentStore(database: Database): AttachmentSto
             bytes: sql<number>`coalesce(sum(octet_length(${screenshots.content})), 0)::bigint`,
           })
           .from(screenshots)
-          .where(and(eq(screenshots.account_id, account), gt(screenshots.expires_at, now))),
+          .where(
+            and(
+              eq(screenshots.account_id, account),
+              gt(screenshots.expires_at, now),
+              eq(screenshots.before_transit, false),
+            ),
+          ),
       );
 
       // A sum of `bigint` comes back as a string from the driver: read as a number here, never as an instant.
