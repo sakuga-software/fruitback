@@ -279,6 +279,26 @@ test('moves a status with the keyboard: the order is written whole, said, and fo
   await expect(item(page, 'waiting').getByRole('button', { name: 'Move Waiting for client down' })).toBeFocused();
 });
 
+test('two presses in one moment write once: the lock is taken before the first answer', async ({ page }) => {
+  const worker = await workerWith(page, {
+    rows: ROWS.map((each) => ({ ...each })).concat(
+      ['new', 'todo', 'progress', 'done'].map((key, position) => row({ key, stage: key, position })),
+    ),
+  });
+  await open(page);
+
+  // Both clicks land before React draws again, so both see the controls enabled (lite review of #493).
+  await item(page, 'todo')
+    .getByRole('button', { name: 'Move To do down' })
+    .evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+  await expect(page.locator('main [aria-live="polite"]')).toHaveText('To do is now 3 of 7.');
+  await page.waitForTimeout(300);
+  expect(worker.sent.map((each) => each.path)).toEqual([`${STATUSES}/order`]);
+});
+
 test('deletes an empty status after asking twice', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);

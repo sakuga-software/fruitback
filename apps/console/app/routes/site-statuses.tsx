@@ -131,6 +131,20 @@ export default function SiteStatuses() {
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   const [read, setRead] = useState<Loaded | 'loading' | 'failed' | 'gone'>('loading');
   const [writing, setWriting] = useState(false);
+  // The lock itself, set before the first await: `writing` is state, so two presses in one render both
+  // read it as false, and two writes would leave at once (FRU-123, the lite review of pull request 493).
+  const busy = useRef(false);
+  const writeOne = useCallback(async <T,>(write: () => Promise<T>): Promise<T | undefined> => {
+    if (busy.current) return undefined;
+    busy.current = true;
+    setWriting(true);
+    try {
+      return await write();
+    } finally {
+      busy.current = false;
+      setWriting(false);
+    }
+  }, []);
   // What the live region says: a move, a deletion. Set to the same words twice, it is said again.
   const [said, setSaid] = useState('');
 
@@ -231,7 +245,7 @@ export default function SiteStatuses() {
                 onRows={onRows}
                 path={`${base}/sites/${encodeURIComponent(siteId)}/statuses`}
                 writing={writing}
-                onWriting={setWriting}
+                writeOne={writeOne}
                 onSay={(words) => setSaid((before) => (before === words ? `${words} ` : words))}
               />
             ),
@@ -277,12 +291,13 @@ type StatusListProps = {
   onRows: (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) => void;
   path: string;
   writing: boolean;
-  onWriting: (writing: boolean) => void;
+  /** Runs one write, or nothing while another is running: one write at a time for the whole page. */
+  writeOne: <T>(write: () => Promise<T>) => Promise<T | undefined>;
   onSay: (words: string) => void;
 };
 
 /** The statuses of one source of the site, in their order, and what can be done to each. */
-function StatusList({ kind, source, label, rows, onRows, path, writing, onWriting, onSay }: StatusListProps) {
+function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne, onSay }: StatusListProps) {
   useLocale();
   const statuses = statusesOf(kind, source, rows);
   const [open, setOpen] = useState<Open | undefined>();
@@ -310,17 +325,6 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, onWritin
     onRows((current) => [...current.filter((row) => row.source !== kept.source || row.key !== kept.key), kept]);
 
     return undefined;
-  }
-
-  /** One write at a time (FRU-123): every control of the lists waits for it. */
-  async function writeOne<T>(write: () => Promise<T>): Promise<T | undefined> {
-    if (writing) return undefined;
-    onWriting(true);
-    try {
-      return await write();
-    } finally {
-      onWriting(false);
-    }
   }
 
   async function move(index: number, step: -1 | 1) {
