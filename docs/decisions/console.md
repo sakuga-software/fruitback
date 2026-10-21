@@ -47,6 +47,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   not answer must not read as « every note arrived ». The same holds for the sites and the sources
   (FRU-162): `listed.ts` gives a read `loading`, `failed` or the list, only a list shows the empty
   state or a count, and a failed read says so with « Try again ».
+  **« Who can leave a note? » is asked for a site that its members read, and only there** (FRU-330):
+  `writers-pick.tsx`, in the form of the Sites screen and in the setup. « Members only » is chosen
+  for a new site, and its detail says that private mode carries no session. The form sends `writers`
+  only with `visibility: 'members'`. A row and the summary of the setup say the exception, « Notes
+  from anyone on the page », and nothing for « Members only » or for a worker of before.
   **A gesture that cannot be undone asks twice** (FRU-165): « Remove » a site and « Disconnect » a
   source go through `Confirm` (`confirm.tsx`), which says what the gesture costs, gives focus to
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and

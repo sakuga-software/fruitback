@@ -135,11 +135,20 @@ async function workerWith(
     if (worker.refuses !== undefined)
       return route.fulfill({ status: worker.refuses.status, json: { error: worker.refuses.error } });
     if (method === 'DELETE') return route.fulfill({ status: 204 });
-    const { url, visibility } = request.postDataJSON() as { url: string; visibility: string };
+    const { url, visibility, writers } = request.postDataJSON() as {
+      url: string;
+      visibility: string;
+      writers?: string;
+    };
 
     return route.fulfill({
       status: 201,
-      json: { id: `n${worker.sent.length}`, origin: new URL(url).origin, visibility },
+      json: {
+        id: `n${worker.sent.length}`,
+        origin: new URL(url).origin,
+        visibility,
+        ...(writers === undefined ? {} : { writers }),
+      },
     });
   };
   await stubWorker(page, { locale, workspaces: [{ ...ACME, role }], answer });
@@ -586,8 +595,51 @@ test('« Add a site » opens the form above the table, and a refusal keeps what 
   expect(worker.sent.at(-1)).toEqual({
     method: 'POST',
     pathname: '/console/workspaces/w1/sites',
-    body: { url: 'https://docs.acme.dev', visibility: 'members' },
+    body: { url: 'https://docs.acme.dev', visibility: 'members', writers: 'members' },
   });
+});
+
+test('« Who can leave a note? » is asked for a site that its members read, « Members only » first (FRU-330)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Add a site' });
+  const writers = form.getByRole('radiogroup', { name: 'Who can leave a note?' });
+
+  // A new site is « Members only », and the detail says what private mode needs.
+  await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
+  await expect(writers).toContainText('Private mode carries no session');
+  await expect(writers).toContainText(/«\sAnyone on the page\s»/);
+  await expectNoViolation(page, 'the form with « Who can leave a note? »');
+
+  // A site that everyone reads takes a note from anybody: the question is not asked, nor sent.
+  await form.getByText('Everyone who visits', { exact: true }).click();
+  await expect(writers).toHaveCount(0);
+  await form.getByRole('textbox', { name: 'Site address' }).fill('help.acme.dev');
+  await form.getByRole('button', { name: 'Add site', exact: true }).click();
+  await expect(row(page, 'help.acme.dev')).toBeVisible();
+  expect(worker.sent.at(-1)?.body).toEqual({ url: 'https://help.acme.dev', visibility: 'everyone' });
+  await expect(row(page, 'help.acme.dev').getByText(/Notes from/)).toHaveCount(0);
+
+  // « Anyone on the page », chosen, is sent and said on the row.
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  await expect(form.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
+  await writers.getByText('Anyone on the page', { exact: true }).click();
+  await expect(writers.getByRole('radio', { name: 'Anyone on the page' })).toBeChecked();
+  await form.getByRole('textbox', { name: 'Site address' }).fill('review.acme.dev');
+  await form.getByRole('button', { name: 'Add site', exact: true }).click();
+  await expect(row(page, 'review.acme.dev').getByText('Notes from anyone on the page')).toBeVisible();
+  expect(worker.sent.at(-1)?.body).toEqual({
+    url: 'https://review.acme.dev',
+    visibility: 'members',
+    writers: 'anyone',
+  });
+
+  // The next form starts from « Members only » again.
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
 });
 
 test('the menu of a row is walked with the keyboard, and what it opens gives focus back', async ({ page }) => {

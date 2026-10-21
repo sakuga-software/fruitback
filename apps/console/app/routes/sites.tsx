@@ -1,5 +1,5 @@
 import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { type Destination, STAGES, type Site, type Visibility, type Workspace, call } from '../api';
+import { type Destination, STAGES, type Site, type Visibility, type Workspace, type Writers, call } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
@@ -12,6 +12,7 @@ import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 import { siteAddress, siteLabel } from '../site-address';
+import { WritersPick } from '../writers-pick';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
@@ -19,7 +20,10 @@ const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
 const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
 
 /** What somebody is typing in the form that adds a site. */
-type Draft = { url: string; visibility: Visibility };
+type Draft = { url: string; visibility: Visibility; writers: Writers };
+
+/** A new site: read by its members, and « Members only » (FRU-330), as the worker makes it. */
+const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' };
 
 /** What is open under the row of a site: one thing at a time, on one row at a time. */
 type Under = { site: string; what: 'install' | 'previews' | 'remove' };
@@ -41,7 +45,7 @@ export default function Sites() {
   const [adding, setAdding] = useState(false);
   // What is typed in the form that adds a site is kept here, above every state of the list: the
   // form goes when the list is read again, and what somebody typed must not go with it.
-  const [draft, setDraft] = useState<Draft>({ url: '', visibility: 'members' });
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [stuck, setStuck] = useState<{ site: string; problem: string } | undefined>();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
@@ -237,7 +241,7 @@ function AddSite({
   onCancel?: () => void;
 }) {
   useLocale();
-  const { url, visibility } = draft;
+  const { url, visibility, writers } = draft;
   const [problem, setProblem] = useState<string | undefined>();
 
   async function add(event: FormEvent) {
@@ -247,9 +251,14 @@ function AddSite({
     // of the console: a field of type url stopped the form with the bubble of the browser (FRU-167).
     const address = siteAddress(url);
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
-    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url: address, visibility });
+    // `writers` is sent for a site that its members read only: it decides nothing on the other one.
+    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, {
+      url: address,
+      visibility,
+      ...(visibility === 'members' ? { writers } : {}),
+    });
     if (!added.ok) return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
-    onDraft({ url: '', visibility: 'members' });
+    onDraft(EMPTY_DRAFT);
     onAdded(added.data);
   }
 
@@ -285,6 +294,11 @@ function AddSite({
             detail: t('A public way to report a problem on a live site.'),
           },
         ]}
+      />
+      <WritersPick
+        visibility={visibility}
+        value={writers}
+        onChange={(chosen) => onDraft({ ...draft, writers: chosen })}
       />
       {onCancel === undefined ? null : (
         <div>
@@ -404,6 +418,11 @@ function SiteRows({
               ? t('Members of {workspace}', { workspace: workspace.name })
               : t('Everyone who visits')}
           </span>
+          {/* FRU-330: the row says the exception only. « Members only » is the default of a new site,
+              and a worker of before, which sends no `writers`, says nothing it could be wrong about. */}
+          {site.visibility === 'members' && site.writers === 'anyone' ? (
+            <span className="block text-hint leading-[inherit] text-muted">{t('Notes from anyone on the page')}</span>
+          ) : null}
         </td>
         {/* The cells that can hold hidden words hold them: with no anchor, they widen the page at 390 px. */}
         <td className="relative">
