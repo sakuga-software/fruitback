@@ -267,8 +267,8 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     assert.deepEqual(unedged, ['seeded', 'green', 'ripening']);
   });
 
-  it('keeps the red of the widget as its accent, in the light scheme (FRU-292)', () => {
-    // The extension has an accent of its own (#c2410c). The widget lies on the page of a host and keeps its red.
+  it('keeps the red of the widget as its accent, in the light scheme (FRU-292, FRU-372)', () => {
+    // The red of the console, which the extension paints too since FRU-372.
     assert.equal(light['color-accent'], '#dd2c27');
   });
 

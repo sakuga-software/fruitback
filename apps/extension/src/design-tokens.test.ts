@@ -11,10 +11,8 @@ import { describe, it } from 'node:test';
  * widget is the one source of the statuses: the console copies them too, and
  * `apps/console/app/tokens.test.ts` compares its copy. This file reads both
  * texts and compares each shared token, in the light scheme and in the dark scheme. The accent is
- * not shared: the extension paints its pages in #c2410c, the widget keeps its red #dd2c27 on the
- * page of a host. Each accent is checked against its own value, and the two must differ, so that
- * going back to one accent is a decision written here and not an accident. Then the test measures
- * each pair of text and background that the pages paint.
+ * shared since FRU-372: the red #dd2c27 of the console and of the widget, after the orange #c2410c
+ * of FRU-292. Then the test measures each pair of text and background that the pages paint.
  */
 
 const sheet = readFileSync(new URL('../entrypoints/popup/style.css', import.meta.url), 'utf8');
@@ -52,6 +50,10 @@ const COPIES = {
   'stage-ripening': 'stage-ripening',
   'stage-ripe': 'stage-ripe',
   'stage-composted': 'stage-composted',
+  // One accent everywhere since FRU-372: the red of the console and of the widget, in both schemes.
+  accent: 'color-accent',
+  'accent-strong': 'color-accent-strong',
+  'on-accent': 'color-on-accent',
 } as const;
 
 /** The shadows and the radii that both surfaces draw, by the same value. */
@@ -64,8 +66,9 @@ const SHAPES = {
   'radius-pill': 'radius-pill',
 } as const;
 
-/** The accent of each surface, in the light scheme (FRU-292). */
-const ACCENTS = { extension: '#c2410c', widget: '#dd2c27' } as const;
+/** The one accent of the extension, the widget and the console, in the light scheme (FRU-372). */
+const ACCENT = '#dd2c27';
+const consoleSheet = readFileSync(new URL('../../../apps/console/app/app.css', import.meta.url), 'utf8');
 
 type Scheme = Record<string, string>;
 
@@ -163,7 +166,7 @@ const PAIRS = [
   { foreground: 'text', background: 'selection', minimum: 4.5, where: 'a selected text' },
   { foreground: 'on-tile', background: 'tile-on', minimum: 4.5, where: 'the initial of a site that is on' },
   // The page of the extension (FRU-301).
-  { foreground: 'accent', background: 'alert-surface', minimum: 4.5, where: 'no access' },
+  { foreground: 'alert-text', background: 'alert-surface', minimum: 4.5, where: 'no access' },
   // The chosen row of the table is on the sunken surface since FRU-334, under its bar of the accent.
   { foreground: 'text', background: 'surface-sunken', minimum: 4.5, where: 'the chosen row of the table' },
   { foreground: 'accent', background: 'surface-sunken', minimum: 3, where: 'the bar of the chosen row' },
@@ -241,13 +244,14 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
     ]);
   });
 
-  it('gives each surface its own accent (FRU-292)', () => {
-    assert.equal(ours.light.accent, ACCENTS.extension);
-    assert.equal(theirs.light['color-accent'], ACCENTS.widget);
-    assert.notEqual(ours.light.accent, theirs.light['color-accent']);
-    // The accent is not in the shared list: a shared accent would make the test above pass by accident.
-    const shared: readonly string[] = Object.values(COPIES);
-    assert.ok(!shared.some((token) => token.startsWith('color-accent') || token === 'color-on-accent'));
+  it('paints the red of the console as its accent, as the widget does (FRU-372)', () => {
+    assert.equal(ours.light.accent, ACCENT);
+    assert.equal(theirs.light['color-accent'], ACCENT);
+    assert.match(consoleSheet, new RegExp(`--accent:\\s*${ACCENT};`));
+    // The control: the orange of before, left on the extension side, is a difference.
+    assert.deepEqual(sharedDifferences({ ...ours.light, accent: '#c2410c' }, theirs.light), [
+      '--accent is #c2410c, color-accent of the widget is #dd2c27',
+    ]);
   });
 
   it('writes no colour outside the tokens, but the drop of the mark', () => {
@@ -257,7 +261,7 @@ describe('the tokens of the popup and of the options page (FRU-170, FRU-292, FRU
     ].map(([colour]) => colour.toLowerCase());
 
     // The drop beside the name: the accent of the light scheme, in both schemes.
-    assert.deepEqual(written, [`%23${ACCENTS.extension.slice(1)}`]);
+    assert.deepEqual(written, [`%23${ACCENT.slice(1)}`]);
   });
 
   it('holds no stone grey and no brown of FRU-292, in the extension or in the widget (FRU-334)', () => {

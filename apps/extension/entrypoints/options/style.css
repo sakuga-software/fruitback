@@ -408,8 +408,9 @@ button.rule-open:focus-visible {
   font-weight: 600;
 }
 
+/* The title of a problem, as in an alert of the kit: the red accent is 4.30:1 on its tint (FRU-372). */
 .panel-state[data-state='no-access'] .panel-state-title {
-  color: var(--accent);
+  color: var(--alert-text);
 }
 
 .panel-state-text {
