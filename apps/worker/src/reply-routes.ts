@@ -402,6 +402,8 @@ export async function postStatus(
 
       const answer = await store.setStatus?.({ issue: found.id, clientId }, chosen, target);
       if (answer === undefined) break;
+      // Removed, hidden or moved by the console between the read above and the write (heavy review of #492).
+      if (answer === 'status-changed') return json(409, { error: 'status-changed' }, corsHeaders);
       await invalidatePages(kv, [url]);
       // The stage the store answers now, for the list and the counts of the console (FRU-237).
       const verdicts = route.policy.showComments && (await takesChecks(store, target));

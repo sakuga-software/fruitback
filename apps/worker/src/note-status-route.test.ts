@@ -232,3 +232,30 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
     assert.deepEqual(await pin(world, site, tokens.bob, store), [NEW, `own:${NEW}`]);
   });
 });
+
+describe('the status of a note, written under the lock of its site (FRU-367, heavy review of #492)', () => {
+  it('writes nothing for a status removed or hidden since the route read it, and takes the stage of the row now', async () => {
+    const { world, store, workspace, site, note } = await aNote();
+    const target = { issue: note, clientId: site };
+    const before = () => rowsOf(world.database, `SELECT stage, status_key FROM seeds`);
+
+    // Removed by the console after the route read it: the route still holds what it read.
+    assert.equal(await store.setStatus?.(target, { key: 'gone', stage: TODO as never }, undefined), 'status-changed');
+    // Hidden after the route read it.
+    assert.equal(await store.setStatus?.(target, { key: 'parked', stage: TODO as never }, undefined), 'status-changed');
+    assert.deepEqual(await before(), [{ stage: NEW, status_key: null }]);
+
+    // Moved to another stage after the route read it: the note takes the stage of the row, not the
+    // one the route read, so its status and its stage agree.
+    const team = { name: null, color: null, textColor: null, position: 0, origin: 'team' as const, hidden: false };
+    await world.accounts.putSiteStatus(workspace, site, {
+      source: 'own',
+      key: 'waiting',
+      stage: DONE as never,
+      ...team,
+    });
+    const set = await store.setStatus?.(target, { key: 'waiting', stage: TODO as never }, undefined);
+    assert.deepEqual(set, { stage: DONE, page: PAGE });
+    assert.deepEqual(await before(), [{ stage: DONE, status_key: 'waiting' }]);
+  });
+});

@@ -324,6 +324,10 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   `status_key`; or `own:<key>`, a status the team added and did not hide. The note takes its stage,
   in one statement (`setStatus` of the store), then in the index of the notes, and its page is read
   again.
+- **The status is read again under the lock of its site**, in the transaction that writes the note
+  (heavy review of #492): the console takes that lock to remove a status or move its stage (FRU-366).
+  A status removed or hidden since the route read it answers `409 status-changed` and writes nothing;
+  one whose stage moved gives the note the stage of its row now.
 - **A note of a tracker is refused** (`statuses-not-taken`): `setStatus` is a verb of the worker's
   store only, and the routed store asks the store of the site (`statusesFor`).
 - **« Still wrong » keeps its effect**, and writes `status_key` NULL with the first stage: the note

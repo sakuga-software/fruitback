@@ -2,7 +2,8 @@ import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { seed_comments, seeds } from './postgres-schema.ts';
+import { seed_comments, seeds, sites, statuses } from './postgres-schema.ts';
+import { OWN_SOURCE } from './site-statuses.ts';
 import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, stageOf, threadsOf, toSeedIssue } from './seed-rows.ts';
 import { checkText, replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
@@ -212,24 +213,42 @@ export function createPostgresSeedStore(database: Database): SeedStore {
     // FRU-367: the status of a note, and its stage with it, in one statement. The route says which
     // status, of this site, and who may; the store writes it and answers what it wrote.
     setStatus: (target, status) =>
-      through('keep the status', async ({ run }) => {
-        const id = Number(target.issue);
-        if (!Number.isSafeInteger(id)) return undefined;
-        const [row] = await run((db) =>
-          db
-            .update(seeds)
-            .set({ status_key: status.key, stage: status.stage, updated_at: Date.now() })
+      through('keep the status', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id) || target.clientId === undefined) return undefined;
+          // The site, shared: the console takes it for update to remove a status or move its stage
+          // (FRU-366), so the status read below cannot change before this note is written (heavy
+          // review of #492).
+          const [site] = await tx
+            .select({ id: sites.id })
+            .from(sites)
+            .where(eq(sites.id, target.clientId))
+            .for('share');
+          if (site === undefined) return undefined;
+          // The status again, under that lock: a built-in one has the stage of its key, and a row of
+          // its own only to rename, colour or hide it; one the team added has the stage of its row.
+          const [row] = await tx
+            .select({ stage: statuses.stage, hidden: statuses.hidden })
+            .from(statuses)
             .where(
               and(
-                eq(seeds.id, id),
-                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+                eq(statuses.site_id, target.clientId),
+                eq(statuses.source, OWN_SOURCE),
+                eq(statuses.key, status.key ?? status.stage),
               ),
-            )
-            .returning({ stage: seeds.stage, page: seeds.page_url }),
-        );
+            );
+          if (row?.hidden === true || (status.key !== null && row === undefined)) return 'status-changed' as const;
+          const stage = status.key === null ? status.stage : stageOf(row?.stage ?? status.stage);
+          const [note] = await tx
+            .update(seeds)
+            .set({ status_key: status.key, stage, updated_at: Date.now() })
+            .where(and(eq(seeds.id, id), eq(seeds.client_id, target.clientId)))
+            .returning({ stage: seeds.stage, page: seeds.page_url });
 
-        return row === undefined ? undefined : { stage: stageOf(row.stage), page: row.page };
-      }),
+          return note === undefined ? undefined : { stage: stageOf(note.stage), page: note.page };
+        }),
+      ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.
     // The rows are read and deleted in one transaction, and the replies go with their note: the
     // foreign key deletes them.

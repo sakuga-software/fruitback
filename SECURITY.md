@@ -1625,7 +1625,8 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
   else of the workspace is `403`, no session is `401`, and nothing is written.
   test:`refuses a member who did not leave the note, and a request with no session, and changes nothing`.
 - **The status is one of the site's, of the worker's store**: a built-in one, or one the team added
-  and did not hide (`409 status-hidden`). A status of a tracker (`400 not-own`), and a note of a
+  and did not hide (`409 status-hidden`), read again under the lock of the site when the note is
+  written (`409 status-changed` if the console removed or hid it in between). A status of a tracker (`400 not-own`), and a note of a
   tracker (`403 statuses-not-taken`), change in the tracker.
   test:`refuses a status the site does not have, a hidden one, one of a tracker, and a value that is no status`,
   test:`refuses the note of a tracker: its status changes in the tracker`.
