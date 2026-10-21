@@ -96,7 +96,7 @@ describe('the images that ci.yml builds', () => {
     assert.deepEqual(jobs.changes?.outputs, { images: '${{ steps.changes.outputs.images }}' });
     assert.equal(jobs.image?.needs, 'changes');
     // A `changes` that wrote nothing must not skip the job: only an explicit `false` does.
-    assert.equal(jobs.image?.if, "needs.changes.outputs.images != 'false'");
+    assert.equal(jobs.image?.if, "${{ !cancelled() && needs.changes.outputs.images != 'false' }}");
     assert.equal(bake?.run, 'docker buildx bake --file docker-bake.hcl --load ci');
     // A run of ci.yml reads the cache and never writes it: a pull request could write layers that
     // the next build reads.

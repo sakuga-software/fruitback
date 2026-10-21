@@ -346,8 +346,9 @@ jobs:
     # runs when a pull request changes a file of its images, or a file its steps read (`changes`).
     name: docker image
     needs: changes
-    # Skipped only on a `false` that `changes` wrote: an empty output builds (raised in review).
-    if: needs.changes.outputs.images != 'false'
+    # Skipped only on a `false` that `changes` wrote: an empty output builds, and so does a `changes`
+    # that failed, which a condition with no function of status would skip (raised in review).
+    if: ${{ !cancelled() && needs.changes.outputs.images != 'false' }}
     runs-on: ubuntu-latest
     # FRU-344. The cache of the layers is in the registry. This job reads it; `layer-cache` of
     # release-image.yml writes it, after this workflow passed on `main` (`docker-bake.hcl`).
