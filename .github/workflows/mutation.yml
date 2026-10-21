@@ -15,6 +15,11 @@ name: Mutation
 # On a pull request the mutation reports and does not block: a line that is not held is a
 # `::warning::`, and a job that fails or runs out of time does not fail the run. On `main`, on the
 # schedule and by hand, both still fail. See conventions.md.
+#
+# A job of a pull request that does not mutate its package in full is incremental (FRU-341): it
+# starts from the newest report of its file on the base branch, else on `main`, and runs again only
+# the mutants whose code or tests changed. A full run starts from nothing, and its reports are where
+# the next pull requests start.
 on:
   pull_request:
   schedule:
@@ -71,6 +76,10 @@ jobs:
     # One file of the worker: 60 minutes for the 215 mutants of clients.ts on 2026-10-20, its dry
     # run of 7 minutes included. See conventions.md.
     timeout-minutes: 150
+    # The report an incremental job starts from is an artifact of an earlier run.
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -101,8 +110,22 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm install --frozen-lockfile --ignore-workspace --dir tools/mutation
 
+      # FRU-341. The newest report of this file on the base branch, else on `main`. With none, the
+      # file is not written, and StrykerJS mutates the whole file. A full run takes none.
+      - name: Take the report to start from
+        if: matrix.incremental
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          ARTIFACT: ${{ matrix.artifact }}
+          PACKAGE: ${{ matrix.package }}
+          BASE: ${{ github.base_ref }}
+        run: node tools/mutation/reference.ts "$ARTIFACT" "$PACKAGE/reports/stryker-incremental.json" "$BASE" main
+
       # `inPlace`: the guard tests of the worker read files of the root, and a sandbox would move
-      # them out of reach. This checkout is thrown away after the job.
+      # them out of reach. This checkout is thrown away after the job. `--incremental` reads the
+      # report of the step above: when that file is missing, every mutant of the file runs.
       # 3 runners on the 4 vCPU of the job, not 4: with 4, mutants that are killed late run out of
       # their budget and count as killed by a timeout, survivors included (FRU-345, conventions.md).
       - name: Mutate
@@ -110,7 +133,7 @@ jobs:
         working-directory: ${{ matrix.package }}
         env:
           MUTATE: ${{ matrix.file }}
-        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 3 --fileLogLevel info
+        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --incremental --incrementalFile reports/stryker-incremental.json --concurrency 3 --fileLogLevel info
 
       # The line of the file. The line of the package needs every file: `line` holds it.
       - name: Hold the line

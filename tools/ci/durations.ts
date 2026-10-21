@@ -112,6 +112,18 @@ export function summary(name: string, measures: Measure[], counts: string[]): st
   ].join('\n');
 }
 
+/**
+ * How many mutant results an incremental run took from the report it started from (FRU-341), from
+ * the line « Result: 812 of 829 mutant result(s) are reused. » of StrykerJS 10. The count may be
+ * coloured. A run that started from no report has no such line.
+ */
+export function reusedOf(log: string): { reused: number; mutants: number } | undefined {
+  // oxlint-disable-next-line no-control-regex -- the colour codes of chalk around the count
+  const line = /(\d+)(?:\u001b\[[\d;]*m)* of (\d+) mutant result\(s\) are reused/.exec(log);
+
+  return line === null ? undefined : { reused: Number(line[1]), mutants: Number(line[2]) };
+}
+
 /** What `--stryker <package>` reads. A file that is missing is not measured. */
 export function strykerOf(dir: string): { measure: Measure; counts: string[] } {
   const read = (file: string) => (existsSync(join(dir, file)) ? readFileSync(join(dir, file), 'utf8') : undefined);
@@ -128,6 +140,8 @@ export function strykerOf(dir: string): { measure: Measure; counts: string[] } {
   } else if (dry?.seconds !== undefined) {
     counts.push(`${dry.tests} test files`);
   }
+  const reused = log === undefined ? undefined : reusedOf(log);
+  if (reused !== undefined) counts.push(`${reused.reused} of ${reused.mutants} results reused`);
   let why: string | undefined;
   if (dry === undefined) why = `no stryker.log in ${dir}, which \`--fileLogLevel info\` writes`;
   else if (dry.seconds === undefined) {

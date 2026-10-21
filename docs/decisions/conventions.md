@@ -275,6 +275,18 @@ write <package> <mutation.json>` prints it from the report of a full run.
   its file was not measured. The summary
   of the job still gives the score against the line. On `main`, on the schedule and by hand, a line
   that is not held fails the run. `mutation.test.ts` holds both.
+- **A job of a pull request is incremental** (FRU-341). Unless its package is mutated in full, it
+  starts from the newest report of its file on the base branch of the pull request, else on `main`
+  (`tools/mutation/reference.ts`), and StrykerJS runs again only a mutant whose code changed, a killed
+  mutant whose killing test file changed or no longer reaches it, and another mutant that a new or
+  changed test file reaches. A test file counts as changed when any byte of it changed: under vitest
+  StrykerJS would see only the lines of each test, and miss a helper changed above them, so the step
+  takes such a file out of the report. It takes the result of every other mutant from that report, so the score
+  is still that of the whole file. With no report, or one it cannot read, the job mutates the whole
+  file, as before. A full run takes no report: the Monday run measures every mutant again, and its
+  reports are where the pull requests of the week start. What StrykerJS does not see is a change to a
+  file that is neither the mutated file nor a test file (a fixture, `app.ts`) that makes a test stop
+  killing a mutant it still reaches: the Monday run measures it.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
 - **A long job writes its durations, and warns past 60 % of its limit** (FRU-343). The dry run of
   the worker went from 1 min 07 to 9 min 29 in eight days, and no one saw it until the full run ran
