@@ -191,7 +191,11 @@ export function createPostgresSeedStore(database: Database): SeedStore {
           if (note === undefined) return undefined;
           const now = Date.now();
           if (check.verdict === 'wrong') {
-            await tx.update(seeds).set({ stage: DEFAULT_SEED_STAGE, updated_at: now }).where(eq(seeds.id, id));
+            // FRU-367: back to the built-in status of the first stage, so its status and its stage agree.
+            await tx
+              .update(seeds)
+              .set({ stage: DEFAULT_SEED_STAGE, status_key: null, updated_at: now })
+              .where(eq(seeds.id, id));
           }
           const [row] = await tx
             .insert(seed_comments)
@@ -205,6 +209,27 @@ export function createPostgresSeedStore(database: Database): SeedStore {
           };
         }),
       ),
+    // FRU-367: the status of a note, and its stage with it, in one statement. The route says which
+    // status, of this site, and who may; the store writes it and answers what it wrote.
+    setStatus: (target, status) =>
+      through('keep the status', async ({ run }) => {
+        const id = Number(target.issue);
+        if (!Number.isSafeInteger(id)) return undefined;
+        const [row] = await run((db) =>
+          db
+            .update(seeds)
+            .set({ status_key: status.key, stage: status.stage, updated_at: Date.now() })
+            .where(
+              and(
+                eq(seeds.id, id),
+                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+              ),
+            )
+            .returning({ stage: seeds.stage, page: seeds.page_url }),
+        );
+
+        return row === undefined ? undefined : { stage: stageOf(row.stage), page: row.page };
+      }),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.
     // The rows are read and deleted in one transaction, and the replies go with their note: the
     // foreign key deletes them.

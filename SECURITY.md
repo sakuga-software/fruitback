@@ -1617,6 +1617,23 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
   the colours of its statuses, and the status of each note, as it already gives the name of a
   state (`stateName`). A team that names a status writes for whoever reads the site.
 
+### The status of a note that the worker keeps (FRU-367)
+
+- **`POST /feedback/<id>/status?client=<site>` takes the rights of a verdict** (FRU-294): a session
+  of the extension, read again in the store, of a person who reads the site now; and of them, the
+  person who left the note (the index keeps their account) or a role with `manage-sites`. Anybody
+  else of the workspace is `403`, no session is `401`, and nothing is written.
+  test:`refuses a member who did not leave the note, and a request with no session, and changes nothing`.
+- **The status is one of the site's, of the worker's store**: a built-in one, or one the team added
+  and did not hide (`409 status-hidden`). A status of a tracker (`400 not-own`), and a note of a
+  tracker (`403 statuses-not-taken`), change in the tracker.
+  test:`refuses a status the site does not have, a hidden one, one of a tracker, and a value that is no status`,
+  test:`refuses the note of a tracker: its status changes in the tracker`.
+- **The note takes the stage of its status**, in the store and in the index of the notes, and the
+  page is read again (`invalidatePages`). « Still wrong » still reopens the note: it goes back to the
+  built-in status of the first stage.
+  test:`keeps the effect of « Still wrong »: the note goes back to the first stage, in its built-in status`.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

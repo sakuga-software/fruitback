@@ -14,7 +14,9 @@ import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
 import { checkedOf } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type CheckVerdict, type SeedStore, StoreError, takesChecks, takesReplies } from './store.ts';
+import { type CheckVerdict, type SeedStore, StoreError, takesChecks, takesReplies, takesStatuses } from './store.ts';
+import { OWN_SOURCE, isBuiltIn, readSiteStatus } from './site-statuses.ts';
+import { DEFAULT_SEED_STAGE, type SeedStage } from '@fruitback/shared';
 
 /**
  * The routes that write under a note (FRU-363), out of `app.ts` so that a review reads them in one
@@ -285,6 +287,131 @@ export async function postCheck(
         // and the guards above read it there. A verdict that failed is not refused on its retry.
         await kv.set(lock, '0', 1).catch(() => undefined);
       }
+    }
+
+    return json(404, { error: 'not-found' }, corsHeaders);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+    throw error;
+  }
+}
+
+/** `POST /feedback/<id>/status`: the status of a note that the worker keeps (FRU-367). */
+export const STATUS_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/status$/;
+
+/**
+ * `POST /feedback/<id>/status?client=<site>` with `{ url, status: 'own:<key>' }` (FRU-367).
+ *
+ * Puts a note that the worker keeps in a status of its site, and the note takes the stage of that
+ * status: `statusOf` draws a note by its status only when the two agree.
+ *
+ * - **Who.** As for a verdict (FRU-294): a session of the extension, read again in the store, of a
+ *   person who reads the site now; and of them, the person who left the note or a role that manages
+ *   the sites. Anybody else of the workspace: `403`.
+ * - **Which status.** A key of the `statuses` of the read: `own:<stage>` for a built-in status, or
+ *   `own:<key>` for a status the team added to this site. A hidden one is not offered, and refused
+ *   (`409 status-hidden`). A status of a tracker changes in the tracker (`400 not-own`), and so does
+ *   a note of a tracker (`403 statuses-not-taken`).
+ */
+export async function postStatus(
+  request: Request,
+  issue: string,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  context: {
+    accounts: AccountStore | undefined;
+    noteIndex: NoteIndex | undefined;
+    context: RequestContext;
+  },
+  checks: CallerChecks,
+): Promise<Response> {
+  const { routeFor, sessionWrites, writerIn, hidesTracker } = checks;
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return json(400, { error: 'invalid-json' }, corsHeaders);
+  }
+  const { url: requested, status: asked } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<
+    string,
+    unknown
+  >;
+  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
+  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
+  const prefix = `${OWN_SOURCE}:`;
+  if (typeof asked !== 'string') return json(400, { error: 'invalid-status' }, corsHeaders);
+  if (!asked.startsWith(prefix)) return json(400, { error: 'not-own' }, corsHeaders);
+  const key = asked.slice(prefix.length);
+  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_SEED_STAGE }).ok) {
+    return json(400, { error: 'invalid-status' }, corsHeaders);
+  }
+
+  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  try {
+    const workspace = route.client?.workspace;
+    const { accounts } = context;
+    const session = await sessionWrites(request, config, context.context);
+    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
+      return json(401, { error: 'identity-required' }, corsHeaders);
+    }
+    const account = await writerIn(request, config, context.context, workspace, clientId);
+    const reach = await accounts.reach(workspace, session.subject);
+    if (account === undefined) {
+      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
+
+      return reach === undefined || suspended
+        ? json(401, { error: 'identity-required' }, corsHeaders)
+        : json(403, { error: 'not-allowed' }, corsHeaders);
+    }
+
+    // The status, among those of this site: a built-in one, or one the team added. Read now, in the store.
+    const rows = (await accounts.siteStatuses(workspace, clientId)) ?? [];
+    const row = rows.find((one) => one.source === OWN_SOURCE && one.key === key);
+    if (row?.hidden === true) return json(409, { error: 'status-hidden' }, corsHeaders);
+    // A built-in status writes no key: a note with none is in the built-in status of its stage.
+    let chosen: { key: string | null; stage: SeedStage };
+    if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as SeedStage };
+    else if (row !== undefined) chosen = { key, stage: row.stage };
+    else return json(400, { error: 'unknown-status' }, corsHeaders);
+
+    const hidden = await hidesTracker(request, config, route.policy);
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    for (const target of targets) {
+      // Read now in the store, never in the cache: the author and the place are the store's.
+      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
+        hidden ? each.seed.id === issue : each.id === issue,
+      );
+      if (found === undefined) continue;
+
+      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
+      const manages = reach !== undefined && can(reach.role, 'manage-sites');
+      if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
+      if (!(await takesStatuses(store, target))) return json(403, { error: 'statuses-not-taken' }, corsHeaders);
+
+      const answer = await store.setStatus?.({ issue: found.id, clientId }, chosen, target);
+      if (answer === undefined) break;
+      await invalidatePages(kv, [url]);
+      // The stage the store answers now, for the list and the counts of the console (FRU-237).
+      const verdicts = route.policy.showComments && (await takesChecks(store, target));
+      await indexed(context.noteIndex, (index) =>
+        index.refresh(workspace, clientId, placeOf(target), [{ ...found, stage: answer.stage }], Date.now(), {
+          verdicts,
+        }),
+      );
+
+      return json(200, { status: asked, stage: answer.stage }, corsHeaders);
     }
 
     return json(404, { error: 'not-found' }, corsHeaders);

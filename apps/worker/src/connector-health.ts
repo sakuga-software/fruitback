@@ -102,5 +102,14 @@ export function watchedStore(
               (store.check as NonNullable<SeedStore['check']>)(target, check, client, policy),
             ),
         }),
+    ...(store.setStatus === undefined
+      ? {}
+      : {
+          setStatus: (target, status, client) =>
+            watched(client?.connector, () =>
+              (store.setStatus as NonNullable<SeedStore['setStatus']>)(target, status, client),
+            ),
+        }),
+    ...(store.statusesFor === undefined ? {} : { statusesFor: store.statusesFor }),
   };
 }
