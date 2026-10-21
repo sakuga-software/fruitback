@@ -10,8 +10,9 @@ below follow them. Built: the contract (FRU-364), and the table, its migration a
 
 ### The rules, in short
 
-- **The five stages stay the contract, unchanged.** A status is always attached to one of `seeded`,
-  `green`, `ripening`, `ripe` and `composted`. The stage keeps the meaning of the lifecycle: it drives
+- **The five stages stay the contract.** Their names are generic since FRU-355
+  ([stage-names.md](stage-names.md)). A status is always attached to one of `new`,
+  `todo`, `progress`, `done` and `closed`. The stage keeps the meaning of the lifecycle: it drives
   the filters, the counts, the « looks fixed » check and the fallback. A connector never adds a stage.
 - **A status is data that the team configures, never a constant in a published type.** It has a key,
   a name, a stage, a background colour and a text colour. It travels in the read envelope, next to
@@ -48,7 +49,7 @@ Measured on `main` at a00f5d57, 2026-10-21.
 | `apps/console/app/routes/connector-linear.tsx` | The screen of FRU-102: one row per state of the teams that sites send to, with a select of the stage.                                                                                               |
 | `apps/worker/src/github.ts`                    | Three stages from `state` and `state_reason` (FRU-32). Labels are used only as the read filter.                                                                                                     |
 | `apps/worker/src/rest-connector.ts`            | **Sends only.** The notes stay in the worker, and the body of the receiver's answer is not read (FRU-122). A REST site is read from the worker's own store.                                         |
-| `apps/worker/src/seeds-postgres.ts`            | The worker's own store: a `stage` column. **No route changes it**, except the « not fixed » verdict, which sets it back to `seeded`.                                                                |
+| `apps/worker/src/seeds-postgres.ts`            | The worker's own store: a `stage` column. **No route changes it**, except the « not fixed » verdict, which sets it back to `new`.                                                                   |
 | `apps/extension/src/site-notes.ts`             | The extension draws statuses itself, from copies of the stage tokens that `design-tokens.test.ts` compares with `theme.ts`. Its `PanelNote` carries no `stateName`: it always shows the stage word. |
 
 So half of the ticket is already there: Linear states are read, named, and re-attached to a stage
@@ -168,7 +169,7 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
   no other kind.
 - Four fixed keys: `open`, `closed:completed`, `closed:not_planned`, `closed:duplicate`. A close with
   no reason is `closed:completed`, as today. `reopened` is an open issue. Stages as FRU-32:
-  `seeded`, `ripe`, `composted`, `composted`. The team can rename, recolour and re-stage them.
+  `new`, `done`, `closed`, `closed`. The team can rename, recolour and re-stage them.
 - **Labels are not statuses.** FRU-32 already refused them: « a label a team has to remember to apply
   is a state the connector invents ». An issue can carry several labels, and two status labels on one
   issue have no answer. Decision 4: no labels, four fixed statuses (FRU-369).
@@ -194,7 +195,7 @@ projects: read` permission of the GitHub App (every installation must approve th
 
 - This is where « add a status » means something. A Linear or GitHub state is added at the tracker,
   and Fruitback reads it; inventing one here would be a state the tracker does not have.
-- Five built-in statuses, one per stage, with the keys `seeded` … `composted`: a site whose team never
+- Five built-in statuses, one per stage, with the keys `new` … `closed`: a site whose team never
   opens the screen sees exactly what it sees now.
 - `seeds.status_key`, nullable. `null` is the built-in status of the note's `stage`.
 - A note needs a way to change status, which does not exist today: a select in the list of notes of

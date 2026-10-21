@@ -269,7 +269,7 @@ open composer and its note` fails without the check, 3 runs out of 3.
   `--line-control`, the edge of a secondary button and of a key, whose label says what it is.
 - **The muted text is `#6b6b74`**, the console's: 5.28:1 on white, 4.80:1 on the sunken surface.
 - **A drop is written black on new, to do and in progress, white on done and closed, and has an
-  edge** (FRU-334): `--on-stage-seeded`, `--on-stage-green`, `--on-stage-ripening` and
+  edge** (FRU-334): `--on-stage-new`, `--on-stage-todo`, `--on-stage-progress` and
   `--stage-edge` are copies of the widget, and the edge, 3.42:1 on white, is what draws a light
   drop. The detached notes of the panel take `--unplaced`, a grey, where they took the brown of
   « closed ».
@@ -559,7 +559,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 
 ### The rules, in short
 
-- **A note is to check when the worker says so**: `ripe`, `mine: true`, and no `checked` (FRU-294).
+- **A note is to check when the worker says so**: `done`, `mine: true`, and no `checked` (FRU-294).
   It sits in « Ready to check · {n} », between « Leave feedback » and the tabs, and not in « Done ».
 - **« Fixed by {name} · {age}»** names the author of the newest reply of the note, as the store
   keeps it; with none, « Marked done · {age} », from `updatedAt`.

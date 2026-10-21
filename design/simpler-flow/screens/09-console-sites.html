@@ -96,7 +96,7 @@ button{cursor:pointer}
                       <span style="display: flex; align-items: center; gap: 10px">
                         <span class="num" style="width: 22px; text-align: right; font-weight: 600">{{ site.total }}</span>
                         <span role="img" aria-label="{{ site.label }}" style="display: flex; gap: 2px; width: 128px; height: 8px; border-radius: 999px; overflow: hidden">
-                          <span style="flex: {{ site.seeded }}; background: #dd2c27"></span><span style="flex: {{ site.green }}; background: #2563eb"></span><span style="flex: {{ site.ripening }}; background: #f59e0b"></span><span style="flex: {{ site.ripe }}; background: #15803d"></span><span style="flex: {{ site.composted }}; background: #64748b"></span>
+                          <span style="flex: {{ site.new }}; background: #dd2c27"></span><span style="flex: {{ site.todo }}; background: #2563eb"></span><span style="flex: {{ site.progress }}; background: #f59e0b"></span><span style="flex: {{ site.done }}; background: #15803d"></span><span style="flex: {{ site.closed }}; background: #64748b"></span>
                         </span>
                       </span>
                     </sc-if>
@@ -171,7 +171,7 @@ class Component extends DCLogic {
         total: total,
         hasNotes: total > 0,
         empty: total === 0,
-        seeded: s.n[0], green: s.n[1], ripening: s.n[2], ripe: s.n[3], composted: s.n[4],
+        new: s.n[0], todo: s.n[1], progress: s.n[2], done: s.n[3], closed: s.n[4],
         label: total + ' notes: ' + s.n[0] + ' new, ' + s.n[1] + ' to do, ' + s.n[2] + ' in progress, ' + s.n[3] + ' done, ' + s.n[4] + ' closed',
         menuLabel: 'More for ' + s.address
       };

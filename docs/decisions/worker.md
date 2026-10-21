@@ -654,9 +654,9 @@ any store` asks it of every spec rather than of Linear.
   `STORE_SPECS`, and the configuration around it.
 - **What did not project was the vocabulary.** There are five `SeedStage` values because Linear has five
   state types. GitHub has `open` and `closed`, plus a `state_reason` on a close. Three stages come out
-  of that honestly: `open` is `seeded`; closed `not_planned` or `duplicate` is `composted`; any other
-  close is `ripe`, a close with no reason included, because those predate `state_reason` and meant
-  done. The ticket also offered dedicated labels for `green` and `ripening`. Not taken: a label a team
+  of that honestly: `open` is `new`; closed `not_planned` or `duplicate` is `closed`; any other
+  close is `done`, a close with no reason included, because those predate `state_reason` and meant
+  done. The ticket also offered dedicated labels for `todo` and `progress`. Not taken: a label a team
   has to remember to apply is a state the connector invents.
 - **So a store declares the stages it reports, and the panel offers only those.** `stages` travels on
   every read, pins or none. Derived from the pins on screen instead, an empty page, or a page whose
@@ -2397,7 +2397,7 @@ ticket removes; it adds no route and no table.
   same fixture.
 - **`packages/shared/src/linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
   Linear's workflow states out of it, FRU-24 took the words a human reads, and this ticket took the
-  codec. What was left — a label, a ripeness, and the shape of what a read answers — names no
+  codec. What was left — a label, a stage, and the shape of what a read answers — names no
   provider at all. `apps/worker/src/linear.ts` keeps its name: over there, a team really is Linear's.
 - **Nothing outside the package had to change**, because every consumer imports through the
   `@fruitback/shared` barrel rather than from a file. That is the property that made the rename cost
@@ -3372,7 +3372,7 @@ replies, and on a public site mounted by the extension with no session, only the
 - **Who: the author the index keeps, or `manage-sites`** (arbitration of 2026-10-20, option A). The
   author is `NoteIndex.authors`, the account of a member that a session of the extension planted;
   nothing that the page or the seed claims.
-- **The stage is read for the request, never from the cache**, and must be `ripe`. The cache of the
+- **The stage is read for the request, never from the cache**, and must be `done`. The cache of the
   page is emptied after the verdict, and the index gets the stage that the store answered.
 - **One verdict at a time on a note** (heavy review): the guards read the store, then the store
   writes, and two requests can pass the guards together. A key of the `kv` (`incr`, `CHECK_LOCK_MS`)
@@ -3393,7 +3393,7 @@ replies, and on a public site mounted by the extension with no session, only the
   console shows, or « Fruitback » with none; for a role with `see-tracker` only (`destinationFor`).
   A first destination with no label gives no field: absent, never a guess.
 - **`toCheck` is read from the index** (`NoteIndex.toCheck`): rows of the account (`author_kind =
-'member'`), at `ripe`, whose `confirmed` is not true. For the session of an account only.
+'member'`), at `done`, whose `confirmed` is not true. For the session of an account only.
 - **`confirmed` is written by `refresh`** from the replies of the read (`checkedOf`), **only where a
   verdict can be given** (`verdicts`: the read shows the replies and `takesChecks` of the place).
   Elsewhere it is emptied, and `toCheck` counts `confirmed = false` only: a count that nobody can

@@ -167,7 +167,7 @@ contribution we expect most often.
    keeps the note. Parse every row the service returns; never trust it.
 6. Add your store to `apps/worker/src/store-conformance.test.ts`, the suite every store passes: a seed
    read back unchanged, a page kept apart from the same page with a query string, one client kept from
-   another, a client routed to the tenant its configuration names, an unknown state drawn as `seeded`,
+   another, a client routed to the tenant its configuration names, an unknown state drawn as `new`,
    replies oldest first and capped, and an error, an unreadable answer or an unreachable provider
    answered as `502 store-unavailable`. A remote store runs against a double of the service that keeps
    what it receives.
