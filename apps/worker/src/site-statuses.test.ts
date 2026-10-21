@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { readSiteStatus } from './site-statuses.ts';
+import { SEED_STAGES } from '@fruitback/shared';
+import { type SiteStatus, envelopeStatuses, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
 
 /** What the console of FRU-366 may write for one status of a site (FRU-365). */
 
@@ -108,5 +109,58 @@ describe('a status of a site, as a write holds it (FRU-365)', () => {
     for (const value of [null, undefined, 'In Review', [REVIEW], 3]) {
       assert.deepEqual(readSiteStatus(value), { ok: false, refusal: 'not-a-status' }, String(value));
     }
+  });
+});
+
+describe('the built-in statuses, the origin, and the statuses of a read (FRU-366)', () => {
+  const [first, , , done] = SEED_STAGES;
+
+  it('calls built-in a status of the worker store whose key is a stage, and nothing else', () => {
+    assert.equal(isBuiltIn('own', done as string), true);
+    assert.equal(isBuiltIn('own', 'waiting'), false);
+    assert.equal(isBuiltIn('con_linear', done as string), false, 'a state of a tracker is never built in');
+  });
+
+  it('gives the origin from the source and the key, never from the request', () => {
+    assert.equal(originOf('own', 'waiting'), 'team');
+    assert.equal(originOf('own', first as string), 'tracker');
+    assert.equal(originOf('con_linear', 'st_1'), 'tracker');
+  });
+
+  it('lists the rows of a site first, each with a text colour, then the built-in statuses no row changed', () => {
+    const row = (more: Partial<SiteStatus>): SiteStatus => ({
+      source: 'own',
+      key: 'waiting',
+      name: null,
+      stage: first as SiteStatus['stage'],
+      color: null,
+      textColor: null,
+      position: 0,
+      origin: 'team',
+      hidden: false,
+      ...more,
+    });
+    const listed = envelopeStatuses([
+      row({ name: 'Waiting', color: '#5560c4' }),
+      row({ source: 'con_linear', key: 'st_1', color: '#f3bb3d', textColor: '#000000', origin: 'tracker' }),
+      row({ key: done as string, name: 'Shipped', stage: done as SiteStatus['stage'], origin: 'tracker' }),
+    ]);
+
+    assert.deepEqual(listed.slice(0, 3), [
+      // No text colour: the one readableTextColor gives, white on #5560c4.
+      { key: 'own:waiting', name: 'Waiting', stage: first, color: '#5560c4', textColor: '#ffffff' },
+      // A text colour the team chose is kept.
+      { key: 'con_linear:st_1', name: '', stage: first, color: '#f3bb3d', textColor: '#000000' },
+      // No colour: no text colour either, the widget draws the stage.
+      { key: `own:${done}`, name: 'Shipped', stage: done },
+    ]);
+    assert.deepEqual(
+      listed.slice(3).map((status) => status.key),
+      SEED_STAGES.filter((stage) => stage !== done).map((stage) => `own:${stage}`),
+    );
+    assert.deepEqual(
+      envelopeStatuses([]),
+      SEED_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
+    );
   });
 });

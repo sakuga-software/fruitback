@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { SiteStatus } from './site-statuses.ts';
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 
@@ -410,6 +411,54 @@ export type AccountStore = {
   addSite(workspace: string, site: { origin: string; visibility: Visibility; writers?: Writers }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
+  /**
+   * The statuses of a site (FRU-366), ordered by `position`, then source and key. `undefined` when the
+   * site is not of this workspace.
+   */
+  siteStatuses(workspace: string, site: string): Promise<SiteStatus[] | undefined>;
+  /**
+   * Adds a status to a site, or changes the one of that source and key: its name, stage, colours,
+   * position and whether it is hidden. Its `origin` is written once, when it is added. A status the
+   * team added to the worker's store that changes stage takes its notes to that stage, in the same
+   * transaction. `pages`: the pages of the notes it moved, whose cached reads are now wrong.
+   * `too-many`: the site holds `MAX_STATUSES` already, and nothing changes.
+   */
+  putSiteStatus(
+    workspace: string,
+    site: string,
+    status: SiteStatus,
+  ): Promise<{ saved: true; pages: string[] } | { saved: false; reason: 'not-found' | 'too-many' }>;
+  /**
+   * The order of the statuses of a site: each one named takes its place in the list as its
+   * `position`. `unknown-status`: one of them is no status of the site, and nothing changes.
+   */
+  orderSiteStatuses(
+    workspace: string,
+    site: string,
+    order: readonly { source: string; key: string }[],
+  ): Promise<'saved' | 'not-found' | 'unknown-status'>;
+  /**
+   * Removes a status of a site. The notes that the worker keeps in it move first to `moveTo`, a key of
+   * the worker's store (a built-in status, or another the team added), and take its stage. `pages`:
+   * the pages of the notes it moved, whose cached reads are now wrong.
+   *
+   * - `in-use`: notes are in it and no `moveTo` says where they go. Nothing changes.
+   * - `invalid-target`: `moveTo` is no status of the worker's store for this site, or the one removed,
+   *   or it is given for a status that holds no note of its own.
+   *
+   * A state of a tracker, or a built-in status, holds no note of its own: removing its row brings back
+   * what the tracker or the worker says of it.
+   */
+  removeSiteStatus(
+    workspace: string,
+    site: string,
+    status: { source: string; key: string },
+    moveTo: string | undefined,
+  ): Promise<
+    | { removed: true; moved: number; pages: string[] }
+    | { removed: false; reason: 'not-found' | 'invalid-target' }
+    | { removed: false; reason: 'in-use'; notes: number }
+  >;
   /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
   addConnector(
     workspace: string,

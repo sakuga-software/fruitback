@@ -1,3 +1,4 @@
+import { OWN_SOURCE } from './site-statuses.ts';
 import {
   DEFAULT_SEED_STAGE,
   SEED_STAGES,
@@ -22,7 +23,15 @@ import type { ForgetSelector } from './store.ts';
 export const COMMENTS_PER_ISSUE = 20;
 
 /** A note, as both databases hand it over. `updatedAt` is an ISO date. */
-export type SeedRow = { id: number; page_url: string; stage: string; seed: string; updatedAt: string };
+export type SeedRow = {
+  id: number;
+  page_url: string;
+  stage: string;
+  /** The status of the note in its site (FRU-365). NULL or absent: the built-in status of its stage. */
+  status_key?: string | null;
+  seed: string;
+  updatedAt: string;
+};
 
 /** A reply, as both databases hand it over, the newest first for one note. */
 export type CommentRow = { id: number; seed_id: number; author: string | null; body: string; createdAt: string };
@@ -77,6 +86,8 @@ export function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): 
     // Nobody named the states of this store: they are the stages. An empty name makes the widget
     // write the stage in the words of its catalog, in the language of the reader (FRU-114).
     stateName: '',
+    // FRU-366: its status in the `statuses` of the read, which always lists the built-in ones.
+    status: `${OWN_SOURCE}:${row.status_key ?? stageOf(row.stage)}`,
     updatedAt: row.updatedAt,
     ...(comments === undefined ? {} : { comments }),
     seed: seed.data,

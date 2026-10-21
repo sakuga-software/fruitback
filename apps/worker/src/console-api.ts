@@ -54,6 +54,9 @@ import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel 
 import type { Kv } from './kv.ts';
 import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
 import { seal } from './secrets.ts';
+import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
+import { invalidatePages } from './note-helpers.ts';
+import { DEFAULT_SEED_STAGE, MAX_STATUSES } from '@fruitback/shared';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
@@ -149,6 +152,26 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
   });
+}
+
+/**
+ * The statuses an order names, as `{ source, key }`, or `undefined` for a list that holds anything
+ * else, or one status twice: the same status in two places is no order (FRU-366).
+ */
+function statusIdsOf(asked: readonly unknown[]): { source: string; key: string }[] | undefined {
+  const order: { source: string; key: string }[] = [];
+  const seen = new Set<string>();
+  for (const each of asked) {
+    const entry = typeof each === 'object' && each !== null ? (each as Record<string, unknown>) : undefined;
+    const read = readSiteStatus({ source: entry?.source, key: entry?.key, stage: DEFAULT_SEED_STAGE });
+    if (!read.ok) return undefined;
+    const id = JSON.stringify([read.status.source, read.status.key]);
+    if (seen.has(id)) return undefined;
+    seen.add(id);
+    order.push({ source: read.status.source, key: read.status.key });
+  }
+
+  return order;
 }
 
 async function readBody(request: Request): Promise<Record<string, unknown> | undefined> {
@@ -717,6 +740,83 @@ export async function handleConsoleApi(
     const set = await context.accounts.setDestinations(workspaceId as string, places[1] as string, kept);
 
     return set ? json(200, { destinations: kept }, headers) : json(404, { error: 'not-found' }, headers);
+  }
+
+  // The statuses of a site (FRU-366): read, add or change, order, remove. `manage-sites`, the role
+  // that already chooses where the notes of a site go. docs/decisions/statuses.md is the model.
+  const statusPath =
+    /^\/sites\/([A-Za-z0-9_-]+)\/statuses(?:\/(order)|\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9_:-]{1,64}))?$/.exec(rest);
+  if (statusPath !== null) {
+    if (!allowed('manage-sites')) return forbidden();
+    const site = statusPath[1] as string;
+    const notFound = () => json(404, { error: 'not-found' }, headers);
+
+    // GET and POST on the list: every status of the site, or one status added or changed. POST, as
+    // every write of the console: its CORS allows GET, POST and DELETE (console-cors.ts).
+    if (statusPath[2] === undefined && statusPath[3] === undefined) {
+      if (request.method === 'GET') {
+        const listed = await context.accounts.siteStatuses(workspaceId as string, site);
+
+        return listed === undefined ? notFound() : json(200, { statuses: listed }, headers);
+      }
+      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+      const body = await readBody(request);
+      const read = readSiteStatus(body === undefined ? undefined : { ...body, origin: 'tracker' });
+      if (!read.ok) return json(400, { error: 'invalid-status', refusal: read.refusal }, headers);
+      const status = { ...read.status, origin: originOf(read.status.source, read.status.key) };
+      // A built-in status is the status of its stage: the notes with no status of their own are in it.
+      if (isBuiltIn(status.source, status.key) && status.stage !== status.key) {
+        return json(400, { error: 'invalid-status', refusal: 'built-in-stage' }, headers);
+      }
+      // A status comes from the worker's store or from a connector this site sends to: a state of
+      // another tracker is a state that no note of this site can be in.
+      const current = (await context.accounts.sites(workspaceId as string)).find((one) => one.id === site);
+      if (current === undefined) return notFound();
+      if (status.source !== OWN_SOURCE && !current.destinations.some((place) => place.connector === status.source)) {
+        return json(400, { error: 'invalid-status', refusal: 'unknown-source' }, headers);
+      }
+      const saved = await context.accounts.putSiteStatus(workspaceId as string, site, status);
+      if (!saved.saved && saved.reason === 'not-found') return notFound();
+      if (!saved.saved) return json(409, { error: 'too-many-statuses', max: MAX_STATUSES }, headers);
+      // The notes it moved changed stage: their pages read again (balanced review of #487).
+      if (context.kv !== undefined) await invalidatePages(context.kv, saved.pages);
+
+      return json(200, { status }, headers);
+    }
+
+    // POST …/statuses/order: each status named takes its place in the list.
+    if (statusPath[2] === 'order') {
+      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+      const asked = (await readBody(request))?.order;
+      const order = Array.isArray(asked) && asked.length <= MAX_STATUSES ? statusIdsOf(asked) : undefined;
+      if (order === undefined) return json(400, { error: 'invalid-order', max: MAX_STATUSES }, headers);
+      const ordered = await context.accounts.orderSiteStatuses(workspaceId as string, site, order);
+      if (ordered === 'not-found') return notFound();
+      if (ordered === 'unknown-status') return json(400, { error: 'unknown-status' }, headers);
+
+      return json(200, { order }, headers);
+    }
+
+    // DELETE …/statuses/<source>/<key>?moveTo=<key>: the notes in it go to `moveTo` first.
+    if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
+    // An empty `moveTo`, as a form with nothing chosen sends it, is no `moveTo` (balanced review of #487).
+    const moveTo = new URL(request.url).searchParams.get('moveTo') || undefined;
+    const removed = await context.accounts.removeSiteStatus(
+      workspaceId as string,
+      site,
+      { source: statusPath[3] as string, key: statusPath[4] as string },
+      moveTo,
+    );
+    if (removed.removed) {
+      // The notes it moved changed status and stage: their pages read again (balanced review of #487).
+      if (context.kv !== undefined) await invalidatePages(context.kv, removed.pages);
+
+      return json(200, { moved: removed.moved }, headers);
+    }
+    if (removed.reason === 'in-use') return json(409, { error: 'status-in-use', notes: removed.notes }, headers);
+    if (removed.reason === 'invalid-target') return json(400, { error: 'invalid-target' }, headers);
+
+    return notFound();
   }
 
   // The domains a workspace proves it owns, to cover the previews of a site (FRU-103). An admin's

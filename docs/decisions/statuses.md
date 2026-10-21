@@ -3,8 +3,8 @@
 FRU-352 asks for three things: statuses a team adds, statuses read from the tracker (Linear, GitHub,
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
-below follow them. Built: the contract (FRU-364), and the table, its migration and the text colour
-(FRU-365). The rest is FRU-366 to FRU-371.
+below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), and the API
+of the console with the statuses in the read (FRU-366). The rest is FRU-367 to FRU-371.
 
 ## Statuses
 
@@ -59,18 +59,18 @@ receiver to say anything at all.
 
 One table, `statuses`, in the worker's PostgreSQL:
 
-| Column       | Type                   | Meaning                                                                                                      |
-| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `site_id`    | text, not null         | The site. Cascade on delete, like `site_destinations`.                                                       |
-| `source`     | text, not null         | Where the state comes from: the id of the connector of a destination, or `own` for the worker's store.       |
-| `key`        | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).     |
-| `name`       | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                  |
-| `stage`      | text, not null         | One of the five.                                                                                             |
-| `color`      | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies. |
-| `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                       |
-| `position`   | integer, not null      | The order on the board.                                                                                      |
-| `origin`     | `tracker` or `team`    | `tracker`: read from the provider, cannot be deleted here. `team`: added in the console.                     |
-| `hidden`     | boolean, default false | A tracker state the team does not want in the filters.                                                       |
+| Column       | Type                   | Meaning                                                                                                                                                  |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site_id`    | text, not null         | The site. Cascade on delete, like `site_destinations`.                                                                                                   |
+| `source`     | text, not null         | Where the state comes from: the id of the connector of a destination, or `own` for the worker's store.                                                   |
+| `key`        | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).                                                 |
+| `name`       | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                                                              |
+| `stage`      | text, not null         | One of the five.                                                                                                                                         |
+| `color`      | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies.                                             |
+| `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                                                                   |
+| `position`   | integer, not null      | The order on the board.                                                                                                                                  |
+| `origin`     | `tracker` or `team`    | `tracker`: a state of the provider, or a built-in status; removing its row gives back what the tracker or the worker says. `team`: added in the console. |
+| `hidden`     | boolean, default false | Not offered as a choice in the console or the extension. The read still names it (FRU-366).                                                              |
 
 The primary key is `(site_id, source, key)`. An entry exists only when the team changed something
 or added a status: a tracker state with no row takes the tracker's name, the stage of its type and
@@ -243,6 +243,52 @@ Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Ad
   go through `t`, and every new sentence has its French.
 - A board in `design/` should come first: the screen is new.
 
+### The API of the console, and the read (FRU-366)
+
+Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites`:
+
+| Route                                      | What it does                                                                                                    |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `GET …/statuses`                           | The rows of the site, by `position`, then source and key.                                                       |
+| `POST …/statuses`                          | Adds a status, or changes the one of that source and key. `readSiteStatus` first; the worker sets `origin`.     |
+| `POST …/statuses/order`                    | `{ order: [{ source, key }] }`: each one takes its place. One unknown, or one twice: nothing changes.           |
+| `DELETE …/statuses/<source>/<key>?moveTo=` | Removes it. Its notes go to `moveTo` first; with notes and no `moveTo`: `409 status-in-use`, with their number. |
+
+- **POST, not PUT**: the CORS of the console allows `GET`, `POST` and `DELETE` (`console-cors.ts`),
+  as every other write of the console.
+- **A built-in status keeps its stage** (`400 built-in-stage`): a note with no `status_key` is in the
+  built-in status of its stage, so moving the status would draw that note with another stage.
+- **A status the team added takes its notes with it** when it changes stage, in the same transaction:
+  `statusOf` draws a note by its status only when the two agree.
+- **A note that a status moves takes its new stage in the index of the notes too**, in the same
+  transaction (`restageIndex`, found in the heavy review of #487). The index learns a stage from a
+  read of the page (FRU-237), so a note on a page nobody opens again would keep its old stage in the
+  list and the counts of the console.
+- **A source is `own` or a connector the site sends to** (`400 unknown-source`).
+- **`MAX_STATUSES` rows per site** (`409 too-many-statuses`), what a reader keeps of one read.
+- **`moveTo` is a key of the worker's store**: a built-in status (the notes then have no
+  `status_key`, and its stage) or another status the team added. A state of a tracker, or a built-in
+  status, holds no note of its own: removing its row brings back what the tracker or the worker says,
+  and a `moveTo` there is refused.
+
+`GET /feedback` now carries `statuses`, asked at each request and never in the cached answer:
+
+- **The rows of the site, then the five built-in statuses that no row changed**, always: a site of
+  the environment, or a read that cannot reach the database of the accounts, gets the five only, and
+  each pin keeps its stage. The failure is written in the log, never in the answer.
+- **A colour with no text colour gets the one `readableTextColor` computes**, on `STATUS_INK`, the
+  ink of `theme.ts`, so a widget that does not compute it still writes a text over 4.5:1.
+- **A note the worker keeps says `status: own:<status_key, or its stage>`.** The notes of Linear and
+  GitHub say theirs with FRU-368 and FRU-369; until then they have none, and `statusOf` draws their
+  stage, as before.
+- **`hidden` is not in the read.** A hidden status is one the console and the extension do not offer
+  as a choice (the status of a note, FRU-367; the screen, FRU-371). The notes already in it keep its
+  name and colour, which they would lose if the read left it out, and the filters of the widget are
+  by stage. The contract has no field for it (FRU-364), and needs none.
+- **A change shows at the next read**: the list is asked at each request, and the pages of the notes
+  that a removal or a change of stage moved are invalidated in the read cache (`invalidatePages`,
+  found in the balanced review of #487), so their next read asks the store.
+
 ### The colours
 
 - The defaults stay those of FRU-334, in `theme.ts`, and a host can still set `--fruitback-stage-*`.
@@ -272,8 +318,8 @@ Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Ad
   sweeps every 97th colour of the cube: the worst answer is 4.50007:1 (the ink on `#5385ae`), and the
   worst black 4.67:1.
 - **The refusal is `readSiteStatus` of `apps/worker/src/site-statuses.ts`**: a text colour with no
-  background colour, or under 4.5:1 on it, is refused, never corrected. FRU-366 calls it on every
-  write.
+  background colour, or under 4.5:1 on it, is refused, never corrected. The routes of FRU-366 call it
+  on every write.
 
 ### Migration
 

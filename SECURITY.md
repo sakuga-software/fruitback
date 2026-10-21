@@ -1589,6 +1589,28 @@ workspace they called, and in no other one`.
 agent, and lists it with the session`. The user agent is kept beside it only when the operator
   keeps addresses (`FRUITBACK_AUTH_TRACK_IP`), as before.
 
+### The statuses of a site (FRU-366)
+
+- **Only a role with `manage-sites`** (an owner or an admin) lists, adds, changes, orders or removes
+  the statuses of a site: `GET`, `POST /console/workspaces/<id>/sites/<site>/statuses`,
+  `POST …/statuses/order`, `DELETE …/statuses/<source>/<key>`. A member or a guest is `403`, and a
+  site of another workspace answers `404`, like one that does not exist, with nothing written.
+  test:`answers a site of another workspace as one that does not exist, and refuses a member who does not set sites`,
+  test:`answers a site of another workspace as none, and writes nothing there`.
+- **A colour reaches a style, so it is `#rrggbb` and nothing else**, checked by the worker on every
+  write (`readSiteStatus`) and by every reader of the answer (`offeredStatuses` of `shared`): no
+  `var(…)`, no `url(…)`, no named colour. A text colour that the team chose under 4.5:1 on its
+  background, or with no background, is refused, never corrected; one the team did not choose is
+  computed by `readableTextColor`. test:`refuses what a status cannot be, and says why`.
+- **A status comes from the worker's store or from a connector the site sends to.** A source that is
+  not one of them is refused (`unknown-source`): a site cannot name the states of another tracker.
+- **A status that holds notes is not removed until the request says where they go**
+  (`409 status-in-use`, with their number), and they go to a status of the same site only, in the
+  transaction that removes it. test:`moves the notes of a status before it goes, and only those of its site`.
+- **What a reader of the site learns.** `GET /feedback` gives every reader of the site the names and
+  the colours of its statuses, and the status of each note, as it already gives the name of a
+  state (`stateName`). A team that names a status writes for whoever reads the site.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

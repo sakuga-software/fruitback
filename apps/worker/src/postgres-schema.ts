@@ -243,7 +243,8 @@ export const statuses = pgTable(
     color: text('color'),
     text_color: text('text_color'),
     position: integer('position').notNull().default(0),
-    // `tracker`: a state read from the provider, which the console cannot delete. `team`: added.
+    // `tracker`: a state of the provider, or a built-in status; removing its row gives it back what the
+    // tracker or the worker says, and deletes no state. `team`: added in the console (FRU-366).
     origin: text('origin').notNull().default('tracker'),
     hidden: boolean('hidden').notNull().default(false),
   },
