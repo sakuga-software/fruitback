@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 /**
  * Where the mutation run of a file starts on a pull request (FRU-341).
@@ -50,6 +50,30 @@ export function pick(artifacts: Artifact[], repositoryId: number, branches: stri
   return undefined;
 }
 
+/** The part of a report of StrykerJS that `coarsen` reads. */
+export type Report = { testFiles?: Record<string, { source?: string }> } & Record<string, unknown>;
+
+/**
+ * The report without each test file whose source changed since it was written, or is gone.
+ *
+ * StrykerJS tells a changed test by its place in the file. Under vitest each test has one, so a
+ * change outside every test, to a helper or a `beforeEach` at the top of the file, would change no
+ * test, and a killed mutant would keep a result that the new file might not give. A test file that is
+ * not in the report is new to StrykerJS: each of its tests is added, a mutant it killed runs again,
+ * and so does a mutant it reaches. So a test file that changed at all counts as a new one, as under
+ * `tap`, where a test is a whole file.
+ */
+export function coarsen(
+  report: Report,
+  read: (file: string) => string | undefined,
+): { report: Report; dropped: string[] } {
+  const testFiles = report.testFiles ?? {};
+  const dropped = Object.keys(testFiles).filter((file) => read(file) !== testFiles[file]?.source);
+  const kept = Object.fromEntries(Object.entries(testFiles).filter(([file]) => !dropped.includes(file)));
+
+  return { report: { ...report, testFiles: kept }, dropped: dropped.sort() };
+}
+
 /** The branches to read, in order, without an empty one or a repeat. */
 export function branchesOf(names: string[]): string[] {
   return [...new Set(names.filter((name) => name !== ''))];
@@ -92,11 +116,18 @@ function main([name = '', destination = '', ...names]: string[]): void {
   try {
     const zip = join(scratch, 'report.zip');
     writeFileSync(zip, gh(['api', `repos/${repository}/actions/artifacts/${chosen.id}/zip`]));
-    const report = execFileSync('unzip', ['-p', zip, 'mutation.json'], { maxBuffer: 512 * 1024 * 1024 });
+    const raw = execFileSync('unzip', ['-p', zip, 'mutation.json'], { maxBuffer: 512 * 1024 * 1024 });
     // A report that is not JSON stops here, and not in StrykerJS after the dry run.
-    JSON.parse(report.toString('utf8'));
+    const parsed = JSON.parse(raw.toString('utf8')) as Report;
+    // The names of the report are relative to the package, which holds `reports/`.
+    const pkg = resolve(dirname(destination), '..');
+    const { report, dropped } = coarsen(parsed, (file) =>
+      existsSync(join(pkg, file)) ? readFileSync(join(pkg, file), 'utf8') : undefined,
+    );
     mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, report);
+    writeFileSync(destination, JSON.stringify(report));
+    if (dropped.length > 0)
+      say(`Test files that changed since that report, run as new: ${dropped.map((file) => `\`${file}\``).join(', ')}.`);
   } catch (error) {
     // A report that cannot be read is no report: the whole file runs, as with none.
     rmSync(destination, { force: true });

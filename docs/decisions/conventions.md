@@ -279,7 +279,9 @@ write <package> <mutation.json>` prints it from the report of a full run.
   starts from the newest report of its file on the base branch of the pull request, else on `main`
   (`tools/mutation/reference.ts`), and StrykerJS runs again only a mutant whose code changed, a killed
   mutant whose killing test file changed or no longer reaches it, and another mutant that a new or
-  changed test file reaches. It takes the result of every other mutant from that report, so the score
+  changed test file reaches. A test file counts as changed when any byte of it changed: under vitest
+  StrykerJS would see only the lines of each test, and miss a helper changed above them, so the step
+  takes such a file out of the report. It takes the result of every other mutant from that report, so the score
   is still that of the whole file. With no report, or one it cannot read, the job mutates the whole
   file, as before. A full run takes no report: the Monday run measures every mutant again, and its
   reports are where the pull requests of the week start. What StrykerJS does not see is a change to a

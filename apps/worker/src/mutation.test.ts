@@ -13,7 +13,7 @@ import {
   regressions,
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
-import { type Artifact, branchesOf, pick } from '../../../tools/mutation/reference.ts';
+import { type Artifact, branchesOf, coarsen, pick } from '../../../tools/mutation/reference.ts';
 import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
@@ -497,6 +497,33 @@ describe('the report a mutation job of a pull request starts from', () => {
       pick([artifact(8, 'main', '2026-10-01T03:40:00Z', { workflow_run: null })], REPOSITORY, ['main']),
       undefined,
     );
+  });
+
+  /**
+   * Under vitest a test has a place, and StrykerJS calls a test changed only when its lines changed.
+   * A helper changed above every test would then keep the old results: a test file that changed at
+   * all is taken out of the report, so each of its tests is new.
+   */
+  it('takes out of the report each test file that changed or is gone, and keeps the others', () => {
+    const report = {
+      files: { 'src/a.ts': { source: 'a' } },
+      testFiles: {
+        'src/same.test.ts': { source: 'same' },
+        'src/helper-changed.test.ts': { source: 'const helper = 1;\nit("x")' },
+        'src/gone.test.ts': { source: 'gone' },
+      },
+    };
+    const now: Record<string, string> = {
+      'src/same.test.ts': 'same',
+      'src/helper-changed.test.ts': 'const helper = 2;\nit("x")',
+    };
+    const { report: kept, dropped } = coarsen(report, (file) => now[file]);
+
+    assert.deepEqual(dropped, ['src/gone.test.ts', 'src/helper-changed.test.ts']);
+    assert.deepEqual(Object.keys(kept.testFiles ?? {}), ['src/same.test.ts']);
+    // The mutants and their sources are left as they are: StrykerJS diffs those itself.
+    assert.deepEqual(kept.files, report.files);
+    assert.deepEqual(coarsen({ files: {} }, () => undefined).dropped, []);
   });
 
   it('reads the base branch, then main, once each', () => {
