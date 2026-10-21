@@ -52,7 +52,9 @@ export const OPAQUE_TYPE = 'application/octet-stream';
 
 /** The kind of a type, as a sender declares it. Parameters (`; charset=…`) and case do not count. */
 export function attachmentKindOf(type: string | null | undefined): AttachmentKind {
-  const bare = (type ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
+  // `null` and `undefined` become words that no kind lists. A limit of 1 keeps what comes before
+  // the first `;`, and `join` turns it into a string.
+  const bare = String(type).split(';', 1).join().trim().toLowerCase();
   for (const kind of ['image', 'pdf', 'text'] as const) {
     if (ATTACHMENT_TYPES[kind].includes(bare)) return kind;
   }

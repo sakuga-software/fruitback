@@ -34,6 +34,7 @@ const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value
   message: 'expected an ISO 8601 timestamp',
 });
 
+// Stryker disable BlockStatement: an empty catch returns `undefined`, which `refine` refuses as it refuses `false`. The range is the whole declaration, because a directive cannot lead a `catch`.
 const httpUrl = z.string().refine(
   (value) => {
     try {
@@ -45,6 +46,8 @@ const httpUrl = z.string().refine(
   },
   { message: 'expected an absolute http(s) URL' },
 );
+
+// Stryker restore BlockStatement
 
 /**
  * Where the pin sits, as a share of the **document** box (not the viewport) so it survives a
@@ -208,7 +211,12 @@ export function parseSeed(value: unknown): SeedParseResult {
   }
 
   const version = value.v;
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+  if (
+    !Number.isInteger(version) ||
+    // Stryker disable next-line ConditionalExpression: `Number.isInteger` above refused a value that is not a number already. This narrows `unknown` for TypeScript.
+    typeof version !== 'number' ||
+    version < 1
+  ) {
     return { ok: false, reason: 'invalid', message: 'missing or malformed seed version' };
   }
   if (version > SEED_VERSION) {
@@ -225,11 +233,14 @@ export function parseSeed(value: unknown): SeedParseResult {
 
 /** Cheap `kind` check, so an unrelated JSON block reports `not-found` rather than `invalid`. */
 function isSeedShaped(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && (value as Record<string, unknown>).kind === SEED_KIND;
+  // A string or a number has no `kind` either; only `null` and `undefined` need the `?.`.
+  return (value as { kind?: unknown } | null | undefined)?.kind === SEED_KIND;
 }
 
 function formatIssues(error: z.ZodError): string {
-  return error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ');
+  // `isSeedShaped` lets only an object through, and no rule of `seedSchema` sits on the object itself,
+  // so every issue has a path.
+  return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
 }
 
 /**

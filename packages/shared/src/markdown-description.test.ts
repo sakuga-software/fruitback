@@ -6,6 +6,7 @@ import {
   buildIssueDescription,
   buildIssueMetadata,
   buildIssueTitle,
+  buildSeedBlock,
   pageQueryTerm,
   parseSeedFromDescription,
   teamWords,
@@ -339,5 +340,85 @@ describe('the language of a description (FRU-39)', () => {
 
   it('is the English caption that `SEED_BLOCK_CAPTION` names', () => {
     assert.equal(SEED_BLOCK_CAPTION, teamWords('en').caption);
+  });
+});
+
+describe('the sections of a description, exactly (FRU-377)', () => {
+  it('trims the note, joins the lines of the metadata, and leaves out an empty note', () => {
+    const seed = minimalSeedFixture({ note: '\n  Le bouton déborde.  \n' });
+    const metadata = buildIssueMetadata(seed).join('\n');
+    const tail = `${metadata}\n\n${SEED_BLOCK_CAPTION}\n\n${buildSeedBlock(seed)}\n`;
+
+    assert.equal(buildIssueDescription(seed), `Le bouton déborde.\n\n${tail}`);
+    assert.equal(
+      buildIssueDescription({ ...seed, note: '   ' }),
+      tail.replace(buildSeedBlock(seed), buildSeedBlock({ ...seed, note: '   ' })),
+    );
+  });
+});
+
+describe('a title, word by word (FRU-377)', () => {
+  it('makes one space of each run of white space in the note', () => {
+    assert.equal(buildIssueTitle(minimalSeedFixture({ note: 'Le  bouton\t\tdéborde' })), 'Le bouton déborde');
+  });
+
+  it('leaves no space before the ellipsis when it cuts without a word break', () => {
+    // The space at 3 is not past 60 % of 5, so the cut keeps it, and the end of the cut is trimmed.
+    assert.equal(buildIssueTitle(minimalSeedFixture({ note: 'abc defg' }), { maxLength: 5 }), 'abc…');
+  });
+});
+
+describe('the fences of a description (FRU-377)', () => {
+  const seed = seedFixture();
+  const payload = JSON.stringify(seed, null, 2);
+  const seedBlock = ['```json', payload, '```'].join('\n');
+
+  it('finds the seed in a fence indented by up to three spaces', () => {
+    assert.deepEqual(parsedSeed(`  \`\`\`json\n${payload}\n   \`\`\``), seed);
+  });
+
+  it('closes a fence on a run followed by spaces', () => {
+    assert.deepEqual(parsedSeed(`\`\`\`json\n${payload}\n\`\`\`   \n\nA reply.`), seed);
+  });
+
+  it('closes a fence on a run of its own character only, as long as it at least', () => {
+    // Each block above the seed holds a run that must not close it. If it did, the rest of the
+    // block would open a new one, and swallow the seed.
+    const shorter = ['````md', '```', '````'].join('\n');
+    const other = ['~~~', '```', '~~~'].join('\n');
+    const withInfo = ['```', '```js', '```'].join('\n');
+
+    for (const above of [shorter, other, withInfo]) {
+      assert.deepEqual(parsedSeed(`${above}\n\n${seedBlock}`), seed, above);
+    }
+  });
+
+  it('opens a fence only at the start of a line', () => {
+    assert.deepEqual(parsedSeed(`Quote code with \`\`\` around it.\n\n${seedBlock}`), seed);
+  });
+
+  it('survives the old Mac line ending, a carriage return alone', () => {
+    assert.deepEqual(parsedSeed(withSeedBlock(seedBlock).replace(/\n/g, '\r')), seed);
+  });
+
+  it('survives a no-break space that an editor left in the block', () => {
+    assert.deepEqual(parsedSeed(['```json', '\u00a0', payload, '```'].join('\n')), seed);
+  });
+
+  it('answers the first seed it can read, whatever a later block holds', () => {
+    const newer = ['```json', JSON.stringify({ ...seed, v: SEED_VERSION + 1 }), '```'].join('\n');
+
+    assert.deepEqual(parsedSeed(`${seedBlock}\n\n${newer}`), seed);
+  });
+
+  it('keeps a real failure over a later block that is not a seed', () => {
+    const newer = ['```json', JSON.stringify({ ...seed, v: SEED_VERSION + 1 }), '```'].join('\n');
+    const unrelated = ['```json', '{ "unrelated": true }', '```'].join('\n');
+
+    assert.deepEqual(parseSeedFromDescription(`${newer}\n\n${unrelated}`), {
+      ok: false,
+      reason: 'unsupported-version',
+      version: SEED_VERSION + 1,
+    });
   });
 });
