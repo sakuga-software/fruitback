@@ -148,11 +148,37 @@ export function isAttachmentId(value: string): boolean {
   return ID.test(value);
 }
 
-/** The id that a path names, or `undefined`: `/attachments/att_…` and nothing after it. */
+/** The id of a picture of FRU-44, which the migration `0021` kept 7 days for a note on its way. */
+const LEGACY_ID = /^shot_[0-9a-f]{32}$/;
+
+/**
+ * The id that a path names, or `undefined`: `/attachments/att_…` and nothing after it. A picture of
+ * before (`shot_…`) is named too: a delivery that waits carries it (`legacyFileOf`).
+ */
 export function attachmentIdOf(pathname: string): string | undefined {
   const id = pathname.startsWith(`${ATTACHMENTS_PATH}/`) ? pathname.slice(ATTACHMENTS_PATH.length + 1) : '';
 
-  return ID.test(id) ? id : undefined;
+  return ID.test(id) || LEGACY_ID.test(id) ? id : undefined;
+}
+
+/**
+ * The picture of before that a seed names, or `undefined` (arbitration of 2026-10-21, #427).
+ *
+ * Before FRU-331 the widget wrote the address of the picture, `…/screenshot/shot_…`, in the seed. A
+ * note of then that is still on its way (a delivery that waits, a note kept in a tab) is delivered
+ * with its picture while the migration keeps it: 7 days after the migration.
+ */
+export function legacyFileOf(seed: { screenshot?: { url?: string | undefined } | undefined }): string | undefined {
+  const url = seed.screenshot?.url;
+  if (url === undefined) return undefined;
+  try {
+    const { pathname } = new URL(url);
+    const id = pathname.slice(pathname.lastIndexOf('/') + 1);
+
+    return pathname.endsWith(`/screenshot/${id}`) && LEGACY_ID.test(id) ? id : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

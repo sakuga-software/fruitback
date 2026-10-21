@@ -195,8 +195,9 @@ the account of the member who left a note, and that is what says who may give a 
   no file. **Nobody reads a file in Fruitback**: no route shows one to a member, a guest or a page.
   Who reads it after is who reads the ticket in the tracker, and the receiver of the REST address.
   Deleting the workspace deletes the files that wait. The table is still named `screenshots`; the
-  pictures of before FRU-331 went with the migration when a note that the worker keeps named them,
-  and the others end 7 days after they came.
+  pictures of before FRU-331 went with the migration when their note was delivered (a note that the
+  worker keeps names them, and no delivery waits for them); the others end 7 days after the
+  migration, and a note still on its way is delivered with its picture until then.
 
 - **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.

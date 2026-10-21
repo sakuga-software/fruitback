@@ -4000,6 +4000,11 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   issue only in passing; its limit of size is not written there. A first note with a file on a real
   workspace is the measurement this lacks.
 - **The rows of before** named no note: the note named `GET /screenshot/<id>`, which is gone. The
-  migration deletes the ones that a note kept by the worker names (`seeds.seed` holds the id) and that
-  no waiting delivery names, and ends the others 7 days after they came. A row named only by an issue
-  of Linear cannot be told from a row of a note that never went: both end with the 7 days.
+  migration deletes only the rows whose note is delivered: a note kept by the worker names them
+  (`seeds.seed` holds the id) and no waiting delivery does. Every other row ends 7 days after the
+  migration, whatever its age, and stays deliverable until then (arbitration of 2026-10-21 on the
+  `lite` of #427, which found that the first version deleted the rows older than 7 days, a waiting
+  delivery's included): `withSignedFiles` carries the picture that the seed of a waiting delivery
+  names, and `legacyFileOf` in `postFeedback` the picture of a note of before sent again by a widget.
+  A row named only by an issue of Linear cannot be told from a row of a note that never went: both
+  end with the 7 days.

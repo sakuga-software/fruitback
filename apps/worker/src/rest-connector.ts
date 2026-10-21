@@ -3,7 +3,7 @@ import { BlockList, isIP } from 'node:net';
 import type { Seed } from '@fruitback/shared';
 import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
-import { type AttachmentStore, SIGNED_URL_MS, signedAttachmentPath } from './attachments.ts';
+import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
 
 /**
  * An address that receives each note of a site (FRU-122).
@@ -341,12 +341,25 @@ export async function withSignedFiles(
   } catch {
     return { body, files: [] };
   }
-  if (!Array.isArray(parsed.attachments)) return { body, files: [] };
+  // A delivery of before FRU-331 names its picture in its seed, not in a list: it carries it while the
+  // migration keeps it, and gives it to its note so the signed read answers it.
+  const legacy = parsed.seed === undefined ? undefined : legacyFileOf(parsed.seed);
+  const listed = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+  if (listed.length === 0 && legacy === undefined) return { body, files: [] };
+  if (legacy !== undefined && attachments !== undefined && publicUrl !== undefined) {
+    const found = await attachments.get(legacy, now);
+    if (found !== undefined && found.workspace === parsed.workspace) {
+      const taken = await attachments.claim([legacy], parsed.seed.id, now);
+      if (taken.length === 1)
+        listed.push({ id: legacy, name: found.name, type: found.type, size: found.content.byteLength });
+    }
+  }
+  if (listed.length === 0) return { body, files: [] };
 
   const expires = Math.floor((now + SIGNED_URL_MS) / 1_000);
   const sent: SentAttachment[] = [];
   const files: string[] = [];
-  for (const kept of parsed.attachments) {
+  for (const kept of listed) {
     if (attachments === undefined || publicUrl === undefined) break;
     const found = await attachments.get(kept.id, now);
     if (found === undefined) continue;

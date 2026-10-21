@@ -88,6 +88,7 @@ import {
   attachmentIdOf,
   attachmentIdsOf,
   attachmentName,
+  legacyFileOf,
   checkAttachment,
   maxBytesFor,
   newAttachmentId,
@@ -2103,10 +2104,14 @@ async function postFeedback(
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
 
   try {
+    // A note of before FRU-331, sent again, names its picture in its seed: it goes with it while the
+    // migration keeps it, and the note is never refused for it.
+    const legacy = await legacyAttachment(request, config, context, store, route, target, attributed, attachmentIds);
+    const named = legacy === undefined ? attachmentIds : [...attachmentIds, legacy];
     const taken =
-      attachmentIds.length === 0
+      named.length === 0
         ? undefined
-        : await takeFiles(request, config, context, store, route, target, attributed.id, clientId, attachmentIds);
+        : await takeFiles(request, config, context, store, route, target, attributed.id, clientId, named);
     if (taken !== undefined && !taken.ok) return json(taken.status, taken.body, corsHeaders);
     const { files: answered, ...issue } = await store.create(
       attributed,
@@ -2191,7 +2196,8 @@ async function takeFiles(
       file === undefined ||
       file.account !== account ||
       file.workspace !== workspace ||
-      file.site !== site ||
+      // A picture of before FRU-250 names no site: its workspace and its sender decide.
+      (file.site !== '' && file.site !== site) ||
       (file.seed !== undefined && file.seed !== seed)
     );
   });
@@ -2214,6 +2220,35 @@ async function takeFiles(
     store: files,
     files: claimed.map((file) => ({ id: file.id, name: file.name, type: file.type, content: file.content })),
   };
+}
+
+/**
+ * The picture of before FRU-331 that a seed names, when it is still in transit and this note may take
+ * it (its sender, its workspace, a store that takes files), or `undefined`. Never a refusal: a note
+ * whose picture is gone goes without it, as it would have before.
+ */
+async function legacyAttachment(
+  request: Request,
+  config: Served,
+  context: RequestContext | undefined,
+  store: SeedStore,
+  route: Extract<ClientResolution, { ok: true }>,
+  target: ClientConfig | undefined,
+  seed: Seed,
+  named: readonly string[],
+): Promise<string | undefined> {
+  const id = legacyFileOf(seed);
+  const workspace = route.client?.workspace;
+  if (id === undefined || named.includes(id) || named.length >= MAX_ATTACHMENTS_PER_NOTE) return undefined;
+  const files = context?.attachments ?? attachmentStoreFor(config);
+  if (files === undefined || context === undefined || workspace === undefined) return undefined;
+  const found = await files.get(id, Date.now());
+  if (found === undefined || found.workspace !== workspace) return undefined;
+  if (found.seed !== undefined && found.seed !== seed.id) return undefined;
+  if (!(await takesAttachments(store, target))) return undefined;
+  const account = await writerIn(request, config, context, workspace, seed.client?.id);
+
+  return account === found.account ? id : undefined;
 }
 
 /**

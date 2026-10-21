@@ -33,6 +33,7 @@ import {
 import { DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { SIGNED_URL_MS, createMemoryAttachmentStore, verifiesSignedRead } from './attachments.ts';
+import { withSignedFiles } from './rest-connector.ts';
 import { DELIVERY_PASS_MS } from './server.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
@@ -1119,5 +1120,71 @@ describe('the files of a note, with its delivery (FRU-331)', () => {
     assert.equal(later.got.length, 1);
     assert.equal('attachments' in (JSON.parse(later.got[0]?.body ?? '{}') as object), false, 'the file is gone');
     assert.equal(attachments.size(), 0, 'the pass swept it');
+  });
+});
+
+describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10-21)', () => {
+  const LEGACY = `shot_${'e'.repeat(32)}`;
+  const body = (workspace: string) =>
+    JSON.stringify({
+      version: 1,
+      event: 'note.created',
+      workspace,
+      site: { id: 's' },
+      identifier: 'FB-1',
+      seed: { ...seedFixture({ id: 'sd_waiting' }), screenshot: { url: `https://w.test/screenshot/${LEGACY}` } },
+    });
+
+  it('carries the picture that its seed names, while the migration keeps it, and gives it to its note', async () => {
+    const attachments = createMemoryAttachmentStore();
+    const now = Date.now();
+    await attachments.put({
+      id: LEGACY,
+      workspace: 'ws_acme',
+      account: 'acc_alice',
+      site: '',
+      name: 'screenshot.png',
+      type: 'image/png',
+      content: new Uint8Array([1, 2]),
+      createdAt: now - 9 * 24 * 60 * 60 * 1_000,
+      expiresAt: now + 60_000,
+    });
+    const signed = await withSignedFiles(body('ws_acme'), {
+      attachments,
+      publicUrl: 'https://api.fruitback.test',
+      secretsKey: SECRETS_KEY,
+      now,
+    });
+
+    assert.deepEqual(signed.files, [LEGACY]);
+    const sent = JSON.parse(signed.body) as { attachments: { name: string; url: string }[] };
+    assert.equal(sent.attachments[0]?.name, 'screenshot.png');
+    assert.ok(verifiesSignedRead(SECRETS_KEY, LEGACY, new URL(sent.attachments[0]?.url ?? '').searchParams, now));
+    assert.equal((await attachments.get(LEGACY, now))?.seed, 'sd_waiting', 'the signed read answers a file of a note');
+
+    // The controls: another workspace, and a picture that is gone, leave the body as it was.
+    assert.equal(
+      (
+        await withSignedFiles(body('ws_other'), {
+          attachments,
+          publicUrl: 'https://a.test',
+          secretsKey: SECRETS_KEY,
+          now,
+        })
+      ).body,
+      body('ws_other'),
+    );
+    const none = createMemoryAttachmentStore();
+    assert.equal(
+      (
+        await withSignedFiles(body('ws_acme'), {
+          attachments: none,
+          publicUrl: 'https://a.test',
+          secretsKey: SECRETS_KEY,
+          now,
+        })
+      ).body,
+      body('ws_acme'),
+    );
   });
 });

@@ -596,6 +596,74 @@ describe('the files of a note, sent with it (FRU-331)', () => {
   });
 });
 
+describe('a note of before FRU-331, with its picture (arbitration of 2026-10-21)', () => {
+  const LEGACY = `shot_${'d'.repeat(32)}`;
+  const withPicture = (site: string) => ({
+    ...noteOf(site, 'sd_of_before'),
+    screenshot: { url: `${WORKER}/screenshot/${LEGACY}`, width: 1, height: 1 },
+  });
+  async function aPictureOf(
+    env: World,
+    account: string,
+    workspace: string,
+    site: string,
+    attachments: AttachmentStore,
+  ) {
+    await attachments.put({
+      id: LEGACY,
+      workspace,
+      account,
+      // A picture of before FRU-250 names no site.
+      site: '',
+      name: 'screenshot.png',
+      type: 'image/png',
+      content: PNG,
+      createdAt: Date.now() - 60_000,
+      expiresAt: Date.now() + TRANSIT_MS,
+    });
+    void env;
+    void site;
+  }
+
+  it('goes with its note while the migration keeps it, for its sender', async () => {
+    const env = await envWith();
+    const { alice, acme, alice_token, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    const { store, received } = trackerDouble();
+    await aPictureOf(env, alice.id, acme.id, site, attachments);
+
+    const sent = await post(env, { attachments, store }, alice_token, withPicture(site), []);
+    assert.equal(sent.status, 201, await sent.clone().text());
+    assert.deepEqual(
+      received[0]?.files.map((file) => file.id),
+      [LEGACY],
+    );
+    assert.equal(attachments.size(), 0);
+  });
+
+  it('never refuses the note: the picture of another person, or one that is gone, stays out of it', async () => {
+    const env = await envWith();
+    const { acme, alice_token, site } = await setUp(env);
+    const attachments = createMemoryAttachmentStore();
+    const { store, received } = trackerDouble();
+    await aPictureOf(env, 'acc_somebody_else', acme.id, site, attachments);
+
+    const sent = await post(env, { attachments, store }, alice_token, withPicture(site), []);
+    assert.equal(sent.status, 201);
+    assert.deepEqual(received[0]?.files, []);
+    assert.equal(attachments.size(), 1, 'the picture of another person is not taken');
+    // Gone: the note goes, as before FRU-331.
+    const gone = await post(
+      env,
+      { attachments: createMemoryAttachmentStore(), store },
+      alice_token,
+      withPicture(site),
+      [],
+    );
+    assert.equal(gone.status, 201);
+  });
+});
+
 describe('the signed read of a file, for the receiver of a delivery (FRU-331)', () => {
   async function aFileOfANote() {
     const env = await envWith({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
@@ -744,38 +812,55 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(await store.get('att_2', 2_000), undefined);
     });
 
-    it('migrates the pictures of before: the ones a kept note names go, the others end 7 days after they came', async () => {
+    it('migrates the pictures of before: a delivered one goes, a waiting one and an orphan stay 7 days from the migration', async () => {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0020_workspace_keeps_owner'));
-      const now = Date.now();
       const day = 24 * 60 * 60 * 1_000;
+      const now = Date.now();
+      const id = (n: string) => `shot_${n.repeat(32)}`;
       for (const statement of [
         `INSERT INTO organization (id, name, slug, "createdAt") VALUES ('ws_acme', 'Acme', 'ws_acme', now())`,
+        // Delivered: a note that the worker keeps names it, and no delivery waits for it.
+        // Waiting: a delivery that waits names it. It came 8 days ago: the control, which the first
+        // version of the migration deleted for its age, and which must stay deliverable.
+        // Orphan: nothing names it, a note kept in a tab or a note that went to Linear.
         `INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
-           ('shot_kept', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - day}),
-           ('shot_waiting', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - day}),
-           ('shot_recent', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - day}),
-           ('shot_old', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 8 * day})`,
+           ('${id('a')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - day}),
+           ('${id('b')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 8 * day}),
+           ('${id('c')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 2 * day})`,
         `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES
-           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/shot_kept"}}', 1, 1),
-           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/shot_waiting"}}', 1, 1)`,
+           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1),
+           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}', 1, 1)`,
         `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES ('con_1', 'ws_acme', 'rest', 'REST', 'x', 1)`,
         `INSERT INTO deliveries (id, connector_id, body, created_at) VALUES
-           ('dlv_1', 'con_1', '{"seed":{"screenshot":{"url":"https://w.test/screenshot/shot_waiting"}}}', 1)`,
+           ('dlv_1', 'con_1', '{"seed":{"id":"sd_b","screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}}', 1)`,
       ]) {
         await rowsOf(database, statement);
       }
 
+      const before = Date.now();
       await migrate(database);
+      const after = Date.now();
 
-      const rows = await rowsOf(database, 'SELECT id, expires_at, name, content_type FROM screenshots ORDER BY id');
-      assert.deepEqual(
-        rows.map((row) => [row.id, Number(row.expires_at), row.name, row.content_type]),
-        [
-          ['shot_recent', now - day + 7 * day, 'screenshot.png', 'image/png'],
-          ['shot_waiting', now - day + 7 * day, 'screenshot.png', 'image/png'],
-        ],
+      const rows = await rowsOf(
+        database,
+        'SELECT id, expires_at, name, content_type, seed_id FROM screenshots ORDER BY id',
       );
+      assert.deepEqual(
+        rows.map((row) => [row.id, row.name, row.content_type, row.seed_id]),
+        [
+          [id('b'), 'screenshot.png', 'image/png', null],
+          [id('c'), 'screenshot.png', 'image/png', null],
+        ],
+        'the delivered picture went, the waiting one and the orphan stayed',
+      );
+      for (const row of rows) {
+        const end = Number(row.expires_at);
+        assert.ok(
+          end >= before + 7 * day && end <= after + 7 * day,
+          `${String(row.id)} ends 7 days after the migration`,
+        );
+      }
     });
   });
 }

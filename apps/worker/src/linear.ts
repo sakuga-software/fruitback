@@ -357,9 +357,19 @@ async function attachFiles(
       const created = await graphql<CreateAttachmentResult>(config, CREATE_ATTACHMENT_MUTATION, {
         input: { issueId, title: file.name, url: file.assetUrl, subtitle: ATTACHMENT_SUBTITLE },
       });
-      (created.attachmentCreate.success ? sent : lost).push(file.id);
+      if (created.attachmentCreate.success) {
+        sent.push(file.id);
+        continue;
+      }
+      console.error('[fruitback] Linear did not attach a file of a note', issueId);
+      lost.push(file.id);
     } catch (error) {
-      if (!(error instanceof StoreError)) console.error('[fruitback] a file of a note was not attached', error);
+      // Said in the log with the words of Linear: the widget is told how many were lost, not why.
+      console.error(
+        '[fruitback] Linear did not attach a file of a note',
+        issueId,
+        error instanceof StoreError ? error.message : error,
+      );
       lost.push(file.id);
     }
   }

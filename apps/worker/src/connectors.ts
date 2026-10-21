@@ -144,9 +144,11 @@ export function createConnectorStores(
     if (kept.kind === 'rest') {
       const receiving = receivingStore(own, accounts, connector, now);
       if (filesReachable) return receiving;
+      // Takes no file, and never queues one: the route refuses files before it (`409`), and a call
+      // that would still bring some sends the note alone, with no file said to wait (raised in review).
       const { attachments: _files, ...noFiles } = receiving;
 
-      return noFiles;
+      return { ...noFiles, create: (seed, client, policy) => receiving.create(seed, client, policy) };
     }
 
     // A token of OAuth near its end is refreshed here.
