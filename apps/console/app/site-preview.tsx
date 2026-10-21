@@ -1,6 +1,7 @@
-import { type RefObject, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from 'react';
 import { type Refusal, refusalOf } from './frame-refusal';
 import { DESK, scaleOf } from './preview-scale';
+import { PreviewScene } from './preview-scene';
 import { msg, t } from './i18n';
 import { siteLabel } from './site-address';
 import { BrowserFrame, LinkButton } from './ui';
@@ -12,7 +13,8 @@ import { useLocale } from './use-locale';
  * The browser of the person loads the site in a frame. The console asks the site for nothing: no
  * server request goes there, so the console cannot read a refusal (`frame-refusal.ts` says what a
  * browser lets it know). The caption says what a blank frame means, and offers the address in place
- * of the frame: the domain, the icon of the site when it gives one, and why.
+ * of the frame: the domain, the icon of the site when it gives one, and why. From there « Show an
+ * example » shows the example page of before (`preview-scene.tsx`), a picture, as a last resort.
  *
  * The frame is sandboxed: the site runs its scripts and keeps its session, but cannot take the tab
  * away from the console. Its referrer is not sent.
@@ -70,41 +72,69 @@ export function SitePreview({ origin }: { origin: string }) {
   // The domain alone, where a sentence names the site: `staging.acme.dev`, or `localhost:3000`.
   const host = new URL(origin).host;
   const [box, scale] = useScale();
+  // The example page of before (FRU-242), on demand, for a site that cannot show: not kept.
+  const [example, setExample] = useState(false);
 
   const ask = (hidden: boolean) => {
     remember(origin, hidden);
     setAsked(hidden);
   };
 
-  const caption =
-    refusal === undefined ? (
+  // What the frame shows: the site, its address (with why), or the example page.
+  let view: 'live' | 'address' | 'example' = 'live';
+  if (refusal !== undefined) view = example ? 'example' : 'address';
+
+  let caption: ReactNode;
+  let page: ReactNode;
+  if (view === 'live') {
+    caption = (
       <>
         {t('Your site, as it is now. A blank frame or an error means your site refuses to show inside another page.')}{' '}
         <LinkButton space="flush" onClick={() => ask(true)}>
           {t('Show its address instead')}
         </LinkButton>
       </>
-    ) : undefined;
+    );
+    page = (
+      <iframe
+        src={`${origin}/`}
+        title={t('{site}, live', { site: host })}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+        referrerPolicy="no-referrer"
+        className="site-preview__frame"
+        style={
+          scale === 1
+            ? undefined
+            : { width: DESK, height: HEIGHT / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }
+        }
+      />
+    );
+  } else if (view === 'example') {
+    caption = (
+      <>
+        {t('An example page. Pins show the same way on your site.')}{' '}
+        <LinkButton space="flush" onClick={() => setExample(false)}>
+          {t('Show its address instead')}
+        </LinkButton>
+      </>
+    );
+    page = <PreviewScene launch={t('Leave feedback')} hint={t('Click Leave feedback, then any part of the page.')} />;
+  } else {
+    page = (
+      <Refused
+        origin={origin}
+        host={host}
+        refusal={refusal ?? 'asked'}
+        onShow={() => ask(false)}
+        onExample={() => setExample(true)}
+      />
+    );
+  }
 
   return (
     <BrowserFrame address={label} caption={caption}>
       <div ref={box} className="site-preview">
-        {refusal === undefined ? (
-          <iframe
-            src={`${origin}/`}
-            title={t('{site}, live', { site: host })}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            className="site-preview__frame"
-            style={
-              scale === 1
-                ? undefined
-                : { width: DESK, height: HEIGHT / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }
-            }
-          />
-        ) : (
-          <Refused origin={origin} host={host} refusal={refusal} onShow={() => ask(false)} />
-        )}
+        {page}
       </div>
     </BrowserFrame>
   );
@@ -126,11 +156,14 @@ function Refused({
   host,
   refusal,
   onShow,
+  onExample,
 }: {
   origin: string;
   host: string;
   refusal: Refusal;
   onShow: () => void;
+  /** Shows the example page in place of the address. */
+  onExample: () => void;
 }) {
   useLocale();
   // The icon comes from the site, in the browser of the person, as the frame would: https only.
@@ -161,6 +194,9 @@ function Refused({
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
         <LinkButton space="flush" href={origin} newTab>
           {t('Open {site} in a new tab', { site: host })}
+        </LinkButton>
+        <LinkButton space="flush" onClick={onExample}>
+          {t('Show an example')}
         </LinkButton>
         {refusal === 'asked' ? (
           <LinkButton space="flush" onClick={onShow}>

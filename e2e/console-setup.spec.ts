@@ -700,11 +700,49 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       'https://staging.acme.dev',
     );
     expect(await violations(page)).toEqual([]);
+
+    // « Show an example »: the example page of before, a picture, as a last resort (FRU-354).
+    await preview.getByRole('button', { name: 'Show an example' }).click();
+    const scene = preview.locator('.scene');
+    await expect(scene).toBeVisible();
+    await expect(scene).toHaveAttribute('aria-hidden', 'true');
+    expect(await scene.evaluate((element) => (element as HTMLElement).inert)).toBe(true);
+    await expect(preview.locator('.scene__hint')).toHaveText('Click Leave feedback, then any part of the page.');
+    await expect(preview).toContainText('An example page. Pins show the same way on your site.');
+    await expect(preview.locator('.site-preview__host')).toHaveCount(0);
+    expect(await violations(page)).toEqual([]);
+    await preview.getByRole('button', { name: 'Show its address instead' }).click();
+    await expect(scene).toHaveCount(0);
+    await expect(preview.locator('.site-preview__host')).toHaveText('staging.acme.dev');
+
+    // The address is kept for the site; the example is not.
     await page.reload();
     await expect(preview.locator('.site-preview__host')).toHaveText('staging.acme.dev');
     await expect(preview.locator('iframe')).toHaveCount(0);
     await preview.getByRole('button', { name: 'Show the live page' }).click();
     await expect(preview.locator('iframe')).toBeVisible();
+  });
+
+  test('a site that cannot show offers the example page, in French at 390 px', async ({ browser }) => {
+    const context = await browser.newContext({ locale: 'fr-FR', viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    await stubWorker(page, { as: 'sited', locale: 'fr' });
+    await page.goto(`${CONSOLE}/setup`);
+    const preview = page.getByRole('region', { name: 'Aperçu de votre site' });
+    // A phone lays the site out at the width of the frame: no scale.
+    const frame = preview.locator('iframe');
+    await expect(frame).toHaveAttribute('title', 'staging.acme.dev, en direct');
+    expect(await frame.evaluate((element) => (element as HTMLIFrameElement).style.transform)).toBe('');
+    await preview.getByRole('button', { name: 'Afficher son adresse à la place' }).click();
+    await expect(preview).toContainText('Beaucoup de sites refusent de s’afficher dans une autre page');
+    await preview.getByRole('button', { name: 'Voir un exemple' }).click();
+    await expect(preview.locator('.scene__hint')).toHaveText(
+      'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
+    );
+    await expect(preview).toContainText('Une page d’exemple. Les pins s’affichent de la même façon sur votre site.');
+    expect(await sideScroll(page)).toBe(0);
+    expect(await violations(page)).toEqual([]);
+    await context.close();
   });
 
   test('the setup ends by itself at the first note: the step and the conclusion', async ({ page }) => {

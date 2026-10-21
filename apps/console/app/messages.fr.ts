@@ -648,6 +648,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'C’est l’adresse de la console elle-même : elle ne peut pas s’afficher en elle-même.',
   'Open {site} in a new tab': 'Ouvrir {site} dans un nouvel onglet',
   'Show the live page': 'Afficher la page en direct',
+  'Show an example': 'Voir un exemple',
+  // The example page of before (FRU-242), on demand when the site cannot show (FRU-354).
+  'An example page. Pins show the same way on your site.':
+    'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
+  'Leave feedback': 'Laisser une note',
+  'Click Leave feedback, then any part of the page.':
+    'Cliquez sur Laisser une note, puis sur n’importe quelle partie de la page.',
   'Use one, or both.': 'Utilisez l’un, ou les deux.',
   'Browser extension': 'Extension de navigateur',
   "Nothing to deploy. Right for a client's site you cannot touch.":

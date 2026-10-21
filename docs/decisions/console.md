@@ -177,7 +177,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   shows, and its `location`, `origin`, `length` and resource timing read the same. So the caption
   says what a blank frame means, and « Show its address instead » gives the domain, the icon of the
   site (`/favicon.ico`, https only, a letter when it fails) and why; the choice is kept for that
-  origin in `localStorage`. What the two addresses alone tell is shown with no frame
+  origin in `localStorage`. From there « Show an example » shows the example page of before
+  (`preview-scene.tsx`, asked by Mathieu on 2026-10-21), `aria-hidden` and `inert`, captioned « An
+  example page »; it is not kept. **Its colours are the example site's, in `preview-scene.css`, and
+  are no tokens**: nothing of the console takes them. What the two addresses alone tell is shown with no frame
   (`frame-refusal.ts`): an `http` site in an `https` console (mixed content, except a host of this
   machine), and the console itself. The policy of the image allows it: `frame-src https: http:` and
   `img-src https:` (SECURITY.md).
