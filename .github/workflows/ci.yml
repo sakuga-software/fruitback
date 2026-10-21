@@ -32,6 +32,8 @@ jobs:
     # One job per Nx target, so a red check names what broke without opening the logs.
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
+    # FRU-343. `test` took 5 to 8 minutes in October 2026: `durations.ts` warns past 12.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +45,10 @@ jobs:
       FRUITBACK_MIGRATIONS_BASE: HEAD^1
 
     steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +96,14 @@ jobs:
           test "$(node -p 'navigator.language')" = fr-FR
           pnpm exec nx run-many -t test --skip-nx-cache
 
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: ${{ matrix.target }}
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 20
+
   e2e-shard:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. The
     # suite runs in three parts side by side, each on four workers (FRU-268): on one runner it took 6
@@ -117,6 +131,10 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -165,6 +183,14 @@ jobs:
             test-results/
           retention-days: 7
 
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: e2e ${{ matrix.shard }}
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 15
+
   e2e:
     # The check that a pull request reads, under the name it had before the suite was cut in two
     # (FRU-268). It fails when a part failed, was cancelled, or did not run.
@@ -204,6 +230,10 @@ jobs:
           --health-retries 30
 
     steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -238,6 +268,14 @@ jobs:
           FRUITBACK_TEST_DATABASE_URL: postgres://postgres:ci-not-a-real-password@127.0.0.1:5432/fruitback
         run: pnpm --filter @fruitback/worker test:postgres
 
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: postgres
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 10
+
   dependencies:
     # FRU-143. The scan of the image reads the packages that a file of the image names. The worker is
     # one bundle: `pg` and its packages are inside server.mjs, and no file names them. So the lockfile
@@ -271,8 +309,14 @@ jobs:
     # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
     name: docker image
     runs-on: ubuntu-latest
+    # FRU-343. It took 3 to 5 minutes in October 2026: `durations.ts` warns past 9.
+    timeout-minutes: 15
 
     steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -756,6 +800,14 @@ jobs:
       - name: Worker logs, if the compose run failed
         if: failure()
         run: docker compose --project-directory "$RUNNER_TEMP/compose" logs --no-color || true
+
+      # FRU-343. What the job took, against its `timeout-minutes`: a warning past 60 %, never a failure.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: docker image
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 15
 
   zizmor:
     # The workflows hold the token that publishes the image, so they are audited like code (FRU-70).
