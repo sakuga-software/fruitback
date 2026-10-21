@@ -234,6 +234,28 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.equal(hidden(), false);
   });
 
+  it('hides the selector in a thread by default, shows it with the option of init, and with showSelectors (FRU-349)', async () => {
+    const selectorOf = async (options: { showSelectors?: boolean }) => {
+      const page = mounted();
+      const widget = widgetOn(page, { transport: worker({}).transport, ...options });
+      await widget.refresh();
+      widget.focusNote('seed-1');
+      const text = () => shadowOf(page).querySelector('.fruitback-thread-selector')?.textContent ?? null;
+
+      return { widget, text };
+    };
+
+    const hidden = await selectorOf({});
+    assert.equal(hidden.text(), null);
+    hidden.widget.showSelectors(true);
+    assert.equal(hidden.text(), ANCHOR.selector);
+    hidden.widget.showSelectors(false);
+    assert.equal(hidden.text(), null);
+
+    const shown = await selectorOf({ showSelectors: true });
+    assert.equal(shown.text(), ANCHOR.selector);
+  });
+
   it('sends a reply by the path of the thread, then reads again', async () => {
     const { requests, transport } = worker({ canReply: true });
     const widget = widgetOn(mounted(), { transport });

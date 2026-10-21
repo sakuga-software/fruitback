@@ -403,3 +403,15 @@ describe('the messages of the sign-in (FRU-315)', () => {
     });
   });
 });
+
+describe('the message of « Show CSS selectors » (FRU-349)', () => {
+  it('reads a boolean and nothing else, and carries no other field', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors', shown: true, extra: 1 }), {
+      channel: CHANNEL,
+      kind: 'selectors',
+      shown: true,
+    });
+    assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors', shown: 'true' }), undefined);
+    assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors' }), undefined);
+  });
+});

@@ -14,18 +14,19 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const ADDRESS =
   'https://staging.acme.dev/fr/produits/categorie/cafe-en-grains/espresso-italien-torrefaction-artisanale-250g?utm_source=newsletter&utm_campaign=rentree-2026';
 
-async function mount(page: Page, testCase: string): Promise<void> {
+async function mount(page: Page, testCase: string, extra: { showSelectors?: boolean } = {}): Promise<void> {
   await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
-    (endpoint) =>
-      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
-        endpoint,
-        clientId: 'playground',
-        locale: 'en-US',
-      }),
-    WORKER_ORIGIN,
+    ({ endpoint, extra }) => {
+      const scope = globalThis as unknown as {
+        Fruitback: { init(options: Record<string, unknown>): unknown };
+        fruitbackWidget: unknown;
+      };
+      scope.fruitbackWidget = scope.Fruitback.init({ endpoint, clientId: 'playground', locale: 'en-US', ...extra });
+    },
+    { endpoint: WORKER_ORIGIN, extra },
   );
 }
 
@@ -136,13 +137,42 @@ async function theNoteOfTheMockUp(page: Page): Promise<void> {
   });
 }
 
+test('the bubble hides the CSS selector by default, and shows it when the host asks (FRU-349)', async ({ page }) => {
+  await theNoteOfTheMockUp(page);
+  await mount(page, 'thread-selectors');
+  await plant(page, 'The selector is for a developer.');
+
+  const badge = page.getByRole('button', { name: /^Note 1, in progress: The selector is for/ });
+  await badge.click();
+  const thread = page.getByRole('dialog', { name: 'Note 1', exact: true });
+  await expect(thread).toBeVisible();
+  // The component and the file stay; the selector is not drawn.
+  await expect(page.locator('.fruitback-thread-component')).toHaveText('<HeroBanner> · src/components/Hero.tsx:42');
+  await expect(page.locator('.fruitback-thread-selector')).toHaveCount(0);
+
+  // `showSelectors`, as the extension says « Show CSS selectors »: the open thread is drawn again.
+  await page.evaluate(() =>
+    (globalThis as unknown as { fruitbackWidget: { showSelectors(on: boolean): void } }).fruitbackWidget.showSelectors(
+      true,
+    ),
+  );
+  await expect(page.locator('.fruitback-thread-selector')).toHaveText(/card-espresso/);
+  await page.evaluate(() =>
+    (globalThis as unknown as { fruitbackWidget: { showSelectors(on: boolean): void } }).fruitbackWidget.showSelectors(
+      false,
+    ),
+  );
+  await expect(page.locator('.fruitback-thread-selector')).toHaveCount(0);
+});
+
 test('the bubble of a note has the measures of the mock-up, and opens beside its drop (FRU-256, FRU-304)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await theNoteOfTheMockUp(page);
-  await mount(page, 'thread-measures');
+  // The selector is shown on request only (FRU-349): this test measures its line too.
+  await mount(page, 'thread-measures', { showSelectors: true });
   await plant(page, 'The button is hard to read on the green. Could it take the cream of the logo, with dark text?');
 
   const badge = page.getByRole('button', { name: /^Note 1, in progress: The button is hard/ });

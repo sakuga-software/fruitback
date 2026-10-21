@@ -531,12 +531,12 @@ describe('createOverlay', () => {
     assert.equal(thread.querySelector('form, textarea, input') === null, true);
   });
 
-  it('shows the selector, then the component and the file, and the selector alone without them (FRU-256, FRU-304)', () => {
+  it('shows the selector when asked, then the component and the file, and the selector alone without them (FRU-256, FRU-304, FRU-349)', () => {
     const lineFor = (source: SeedIssue['seed']['source']) => {
       const page = mountWithCta();
       const issue = issueOnCta();
       const { source: _dropped, ...seed } = issue.seed;
-      overlay = createOverlay({ document: page.document });
+      overlay = createOverlay({ document: page.document, showSelectors: true });
       overlay.render([{ ...issue, seed: source === undefined ? seed : { ...seed, source } }]);
       (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
       // The selector the note carries, always first.
@@ -563,6 +563,62 @@ describe('createOverlay', () => {
     assert.equal(lineFor({ line: 42 }), null);
     // As text: a name is whatever the page called its component.
     assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<<img src=x onerror=alert(1)>>');
+  });
+
+  it('hides the selector by default, and keeps the component and the file (FRU-349)', () => {
+    const page = mountWithCta();
+    const issue = issueOnCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issue]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    assert.equal(thread.querySelector('.fruitback-thread-selector'), null);
+    assert.doesNotMatch(thread.textContent ?? '', /checkout-cta"\]/);
+    assert.equal(
+      thread.querySelector('.fruitback-thread-source > .fruitback-thread-component')?.textContent,
+      '<CheckoutCta> · src/components/checkout-cta.tsx:42',
+    );
+    // The note keeps it: only the thread hides it.
+    assert.equal(issue.seed.anchor.selector, '[data-testid="checkout-cta"]');
+  });
+
+  it('draws no empty box for a note with no source while the selector is hidden (FRU-349)', () => {
+    const page = mountWithCta();
+    const issue = issueOnCta();
+    const { source: _dropped, ...seed } = issue.seed;
+    overlay = createOverlay({ document: page.document });
+    overlay.render([{ ...issue, seed }]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    assert.equal(page.document.querySelector('.fruitback-thread-source'), null);
+  });
+
+  it('shows and hides the selector of the open thread, and a reply being typed keeps its text (FRU-349)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({
+      document: page.document,
+      reply: { allowed: () => true, send: () => new Promise(() => undefined) },
+    });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    const selector = () => page.document.querySelector('.fruitback-thread-selector')?.textContent ?? null;
+    const field = () => page.document.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+
+    assert.equal(selector(), null);
+    const typing = field();
+    assert.ok(typing !== null, 'the thread has a field to reply');
+    typing.value = 'Je regarde';
+    typing.dispatchEvent(new (page.document.defaultView as unknown as typeof globalThis).Event('input'));
+    typing.focus();
+
+    overlay.showSelectors(true);
+    assert.equal(selector(), '[data-testid="checkout-cta"]');
+    assert.equal(field()?.value, 'Je regarde');
+
+    overlay.showSelectors(false);
+    assert.equal(selector(), null);
+    assert.equal(field()?.value, 'Je regarde');
   });
 
   it('opens the thread on the badge: the note, the state and the way to Linear', () => {

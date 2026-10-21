@@ -3,6 +3,7 @@ import {
   type BridgeMessage,
   NOTES_NAME_KEY,
   type RelayRequestMessage,
+  SHOW_SELECTORS_KEY,
   parseBridgeMessage,
   parseRelayResponse,
   relayRefusal,
@@ -72,6 +73,7 @@ export default defineContentScript({
 
         return typeof stored === 'string' ? stored : undefined;
       },
+      readShowSelectors: async () => (await browser.storage.local.get(SHOW_SELECTORS_KEY))[SHOW_SELECTORS_KEY] === true,
       readSignedOut: async (site) => {
         const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
 
@@ -178,7 +180,10 @@ export default defineContentScript({
       const keys = Object.keys(changes);
       if (
         area === 'local' &&
-        (changes.sites !== undefined || changes[LANGUAGE_KEY] !== undefined || touchesARefreshToken(keys))
+        (changes.sites !== undefined ||
+          changes[LANGUAGE_KEY] !== undefined ||
+          changes[SHOW_SELECTORS_KEY] !== undefined ||
+          touchesARefreshToken(keys))
       ) {
         void apply();
       }

@@ -178,6 +178,12 @@ export type FruitbackOptions = {
    * reporter typed and kept on this site wins. Never sent unless a note is.
    */
   reporterName?: string;
+  /**
+   * Show the CSS selector of the element in the thread of a pin (FRU-349). Off by default: the note
+   * and the issue in the tracker keep the selector, and only the thread hides it. A developer who
+   * wants it on screen turns it on here, or later with `showSelectors`.
+   */
+  showSelectors?: boolean;
   document?: Document;
 };
 
@@ -254,6 +260,11 @@ export type Fruitback = {
    * The notes are still read, and every list still has them.
    */
   showPins(shown: boolean): void;
+  /**
+   * Shows or hides the CSS selector in the thread of a pin (FRU-349), as the `showSelectors` option
+   * does at `init`: « Show CSS selectors » of the extension. An open thread is drawn again.
+   */
+  showSelectors(shown: boolean): void;
   /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
@@ -419,6 +430,7 @@ export function init(options: FruitbackOptions): Fruitback {
     translator,
     host: host.root,
     dock: host.dock,
+    showSelectors: options.showSelectors === true,
     // A draft has no stage yet, so no stage the reporter hid can hide it.
     shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
     isDraft,
@@ -956,6 +968,7 @@ export function init(options: FruitbackOptions): Fruitback {
     focusNote: (id) => overlay.select(id),
     markNote: (id) => overlay.mark(id),
     showPins: (shown) => overlay.showPins(shown),
+    showSelectors: (shown) => overlay.showSelectors(shown),
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.seed.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

@@ -483,6 +483,7 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
   await expect(prefs.locator('.pref-title')).toHaveText([
     'Open notes in the sidebar',
     'Name on my notes',
+    'Show CSS selectors',
     'Leave feedback shortcut',
     'Keep my rules in the account of this browser',
   ]);
@@ -512,6 +513,45 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
   await prefs.getByRole('switch', { name: 'Open notes in the sidebar' }).click();
   await site.bringToFront();
   await expect.poll(behaviour).toBe(false);
+});
+
+test('« Show CSS selectors »: off, the thread of a pin hides the selector; on, it shows it without building the widget again (FRU-349)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const site = await extension.context.newPage();
+  await openBareSite(site, 'prefs-selectors');
+  await site.locator('[data-fruitback-host-launch]').click();
+  await site.locator('[data-testid="card-latte"] .add').click();
+  await site.getByPlaceholder('What should change?').fill('Le sélecteur est pour un développeur.');
+  await site.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await site.locator('.fruitback-pin-badge').click();
+  await expect(site.locator('.fruitback-thread')).toBeVisible();
+  await expect(site.locator('.fruitback-thread-component')).toBeVisible();
+  await expect(site.locator('.fruitback-thread-selector')).toHaveCount(0);
+
+  const page = await extension.context.newPage();
+  await openPage(page, extension.id);
+  const selectors = page.locator('section#prefs').getByRole('switch', { name: 'Show CSS selectors' });
+  await expect(selectors).toHaveAttribute('aria-checked', 'false');
+  await selectors.click();
+  await expect
+    .poll(() => extension.worker.evaluate(async () => (await chrome.storage.local.get('showSelectors')).showSelectors))
+    .toBe(true);
+
+  // The open thread is drawn again with the selector: the same thread, not a widget built again.
+  await site.bringToFront();
+  await expect(site.locator('.fruitback-thread-selector')).toHaveText(/\S/);
+  await expect(site.locator('.fruitback-thread')).toBeVisible();
+
+  await page.bringToFront();
+  await selectors.click();
+  await expect
+    .poll(() => extension.worker.evaluate(async () => (await chrome.storage.local.get('showSelectors')).showSelectors))
+    .toBeUndefined();
+  await site.bringToFront();
+  await expect(site.locator('.fruitback-thread-selector')).toHaveCount(0);
 });
 
 test('a pairing link says « Paired » once it paired, and « already paired » only to a browser paired before (FRU-289)', async ({

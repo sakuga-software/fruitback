@@ -41,7 +41,7 @@ import { cloudEndpoint } from '../../src/popup-state.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
 import { touchesARefreshToken } from '../../src/session-storage.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
-import { NOTES_NAME_KEY } from '../../src/protocol.ts';
+import { NOTES_NAME_KEY, SHOW_SELECTORS_KEY } from '../../src/protocol.ts';
 import { PANEL_ON_CLICK_KEY } from '../../src/side-panel.ts';
 
 /**
@@ -674,7 +674,12 @@ function logout(endpoint: string, out: HTMLButtonElement): void {
 
 /** « Preferences » (FRU-302): the panel on the icon, the name, the shortcut, the copy of the rules. */
 async function preferences(): Promise<HTMLElement> {
-  const stored = await browser.storage.local.get([PANEL_ON_CLICK_KEY, NOTES_NAME_KEY, SYNC_SETTING]);
+  const stored = await browser.storage.local.get([
+    PANEL_ON_CLICK_KEY,
+    NOTES_NAME_KEY,
+    SYNC_SETTING,
+    SHOW_SELECTORS_KEY,
+  ]);
   const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
   // Firefox 137 opens its own page. Chromium browsers have one, at an address the extension may open.
   // An older Firefox has neither, so the row says where to look.
@@ -697,6 +702,10 @@ async function preferences(): Promise<HTMLElement> {
     ...(onShortcut === undefined ? {} : { onShortcut }),
     synced: stored[SYNC_SETTING] === true,
     onSynced: (on) => browser.storage.local.set({ [SYNC_SETTING]: on }),
+    selectors: stored[SHOW_SELECTORS_KEY] === true,
+    // Absent is off: turning it off removes the key rather than keeping a `false`.
+    onSelectors: (on) =>
+      on ? browser.storage.local.set({ [SHOW_SELECTORS_KEY]: true }) : browser.storage.local.remove(SHOW_SELECTORS_KEY),
   });
 }
 
