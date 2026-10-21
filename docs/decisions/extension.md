@@ -691,7 +691,11 @@ a change when the account refuses one of them, and marks only those as known`. O
 - **A capture over the limit of an image (10 MB) goes as a JPEG of quality 0.85**, `page.jpg` or
   `area.jpg`: a PNG of a whole page of a 5K screen can pass it. A JPEG still over it is answered
   as too large, with its size and no bytes, and the composer says « Too large » rather than « not
-  taken ». The size of a PNG of a real 5K page, and of its JPEG, is not measured.
+  taken ». The three hops of that answer are `captureAnswerOf` of `src/capture.ts` (the background),
+  then `captureResponseOf` (the bridge) and `pictureOfAnswer` (the page world) of
+  `src/capture-answer.ts`, which reaches no module of the session; and
+  `capture-composer.test.ts` runs them, from a tab over the limit to « Too large » in the composer.
+  The size of a PNG of a real 5K page, and of its JPEG, is not measured.
 - **The picture of the element of FRU-44 is gone from the extension**: its route, `POST /screenshot`,
   answered an address that Fruitback served, and Fruitback serves no file now. `captureScreenshot`
   stays a seam of the widget for a site that stores its own pictures.

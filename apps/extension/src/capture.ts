@@ -132,3 +132,20 @@ export function pixelsOf(
 
   return { left, top, width: right - left, height: bottom - top };
 }
+
+/**
+ * The first of the three hops of the answer to a capture (FRU-332): the background answers
+ * `captureAnswerOf`, then `capture-answer.ts` holds the two others. `capture-composer.test.ts` runs
+ * the three.
+ */
+
+/** The answer of the background to the content script: a picture, a capture said too large, or nothing. */
+export function captureAnswerOf(taken: CapturedFile | TooLargeCapture | undefined): {
+  picture?: CapturedFile;
+  tooLarge?: TooLargeCapture['tooLarge'];
+} {
+  if (taken === undefined) return {};
+  if ('tooLarge' in taken) return { tooLarge: taken.tooLarge };
+
+  return { picture: taken };
+}

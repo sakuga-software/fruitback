@@ -1,6 +1,7 @@
 import { init } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, type CaptureResponseMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { createRelayTransport, randomId } from '../src/relay-transport.ts';
+import { pictureOfAnswer } from '../src/capture-answer.ts';
 import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
@@ -75,7 +76,7 @@ export default defineContentScript({
         }, CAPTURE_TIMEOUT_MS);
         pictures.set(id, (answer) => {
           clearTimeout(timer);
-          resolve(answer.picture ?? tooLargeOf(answer.tooLarge));
+          resolve(pictureOfAnswer(answer));
         });
         window.postMessage(
           {
@@ -359,18 +360,3 @@ export default defineContentScript({
     window.postMessage({ channel: CHANNEL, kind: 'ready' }, '*');
   },
 });
-
-/**
- * A capture the background said is over the limit of the worker, as a file the composer refuses as
- * too large (`refusalBefore` reads its size): it has no bytes, and is never sent.
- */
-function tooLargeOf(large: CaptureResponseMessage['tooLarge']): CaptureResponseMessage['picture'] {
-  if (large === undefined) return undefined;
-
-  return {
-    name: large.name,
-    type: large.name.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
-    size: large.size,
-    base64: '',
-  };
-}

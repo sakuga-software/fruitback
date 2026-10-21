@@ -15,6 +15,7 @@ import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 import { randomId } from '../src/relay-transport.ts';
+import { captureResponseOf } from '../src/capture-answer.ts';
 import {
   PANEL_EVENT_TYPE,
   type TabCommandAnswer,
@@ -143,19 +144,7 @@ export default defineContentScript({
         void browser.runtime
           .sendMessage(message)
           .catch(() => undefined)
-          .then((answer: unknown) => {
-            const parsed = parseBridgeMessage({
-              ...(typeof answer === 'object' ? answer : {}),
-              channel: CHANNEL,
-              kind: 'capture-response',
-              id: message.id,
-            });
-            post(
-              parsed?.kind === 'capture-response'
-                ? parsed
-                : { channel: CHANNEL, kind: 'capture-response', id: message.id },
-            );
-          });
+          .then((answer: unknown) => post(captureResponseOf(answer, message.id)));
       }
     });
 

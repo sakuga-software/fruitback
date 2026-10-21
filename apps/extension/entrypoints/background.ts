@@ -21,7 +21,7 @@ import {
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
-import { type CaptureArea, bytesOf, createCapture, pixelsOf } from '../src/capture.ts';
+import { type CaptureArea, bytesOf, captureAnswerOf, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
@@ -547,14 +547,6 @@ async function send(request: RelayRequest): Promise<RelayResponse> {
   });
 
   return { ok: response.ok, status: response.status, body: await response.text() };
-}
-
-/** The answer to the content script: a picture, a capture said too large, or nothing. */
-function captureAnswerOf(taken: Awaited<ReturnType<ReturnType<typeof createCapture>>>) {
-  if (taken === undefined) return {};
-  if ('tooLarge' in taken) return { tooLarge: taken.tooLarge };
-
-  return { picture: taken };
 }
 
 /** The same picture as a JPEG of quality 0.85, for a PNG over the limit of the worker (FRU-332). */
