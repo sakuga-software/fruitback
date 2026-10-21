@@ -699,11 +699,22 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return transaction(async (db) => {
         // WARNING: the unique constraint decides, not a read before the write. Two callbacks at the same
         // moment for two workspaces make one connector.
-        const made = await db
-          .insert(connectors)
-          .values({ id, workspace_id: workspace, kind: 'github', label, sealed, created_at: now, installation })
-          .onConflictDoNothing({ target: connectors.installation })
-          .returning({ id: connectors.id });
+        const insert = () =>
+          db
+            .insert(connectors)
+            .values({ id, workspace_id: workspace, kind: 'github', label, sealed, created_at: now, installation })
+            .onConflictDoNothing({ target: connectors.installation })
+            .returning({ id: connectors.id });
+        let made = await insert();
+        if (made.length === 0) {
+          // The connector that held the installation can be removed between the insert and this read.
+          // Then the installation is free, and it is not « elsewhere »: insert again, once.
+          const holders = await db
+            .select({ id: connectors.id })
+            .from(connectors)
+            .where(eq(connectors.installation, installation));
+          if (holders.length === 0) made = await insert();
+        }
         if (made.length === 1) {
           const connector: Connector = {
             id,
