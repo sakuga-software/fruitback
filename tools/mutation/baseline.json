@@ -32,8 +32,8 @@
         "mutants": 185
       },
       "src/identity.ts": {
-        "score": 96.95,
-        "mutants": 164
+        "score": 100,
+        "mutants": 157
       },
       "src/kv.ts": {
         "score": 100,
