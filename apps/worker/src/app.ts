@@ -3,14 +3,12 @@ import {
   SEED_STAGES,
   type Seed,
   type SeedIssue,
-  canonicalizePageUrl,
   parseSeed,
   type SeedReporter,
 } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
-  type ClientDestination,
   type ClientPolicy,
   type ClientResolution,
   normalizeClientId,
@@ -55,9 +53,9 @@ import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, checkReplyLimit, maxBatch } from './rate-limit.ts';
-import { cached, invalidate } from './cache.ts';
+import { cached } from './cache.ts';
 import { type Kv, KvError } from './kv.ts';
-import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
+import { type Channel, type NoteIndex } from './notes-index.ts';
 import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
 import { sessionStillValid } from './session-check.ts';
 import { ATTACHMENTS_PATH, attachmentIdsOf } from './attachments.ts';
@@ -72,6 +70,19 @@ import {
   revokeSession,
 } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
+import {
+  batchOffer,
+  canonicalSeed,
+  canonicalizeRequestedPage,
+  indexed,
+  invalidatePages,
+  noteEntry,
+  optionalReporter,
+  placeOf,
+  placedAt,
+  routingFailure,
+  withoutTracker,
+} from './note-helpers.ts';
 
 import {
   accountStoreFor,
@@ -111,18 +122,6 @@ export {
  * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
  * socket, and keeps the door open if this ever moves to another runtime.
  */
-
-/** The client as it routes when its notes go to this place, and not to its first one. */
-function placedAt(client: ClientConfig, place: ClientDestination): ClientConfig {
-  const { teamId: _team, projectId: _project, ...rest } = client;
-
-  return {
-    ...rest,
-    connector: place.connector,
-    ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
-    ...(place.projectId === undefined ? {} : { projectId: place.projectId }),
-  };
-}
 
 /**
  * Whether the caller is a person who may see the tracker of this client (FRU-123).
@@ -206,24 +205,6 @@ async function notesOfReader(
 
     return new Set();
   }
-}
-
-/**
- * A note as a guest reads it (FRU-250): no reference in the tracker, no address of the issue, and no
- * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
- */
-function withoutTracker<
-  T extends { id: string; identifier: string; url?: string; attachments?: SeedIssue['attachments'] },
->(issue: T, seed: string): T {
-  const { url: _url, attachments, ...rest } = issue;
-
-  // The address of a file is the tracker's (FRU-331): a guest reads its name only.
-  return {
-    ...rest,
-    ...(attachments === undefined ? {} : { attachments: attachments.map(({ name }) => ({ name })) }),
-    id: seed,
-    identifier: seed,
-  } as T;
 }
 
 /**
@@ -1157,48 +1138,6 @@ async function handleSession(
 }
 
 /**
- * Writes to the index of the notes, and never fails the request for it (FRU-237). The note is in its
- * store by then: a `502` would have the widget send it a second time. A row that is missing is
- * written again by the next read of its page.
- */
-async function indexed(index: NoteIndex | undefined, work: (index: NoteIndex) => Promise<void>): Promise<void> {
-  if (index === undefined) return;
-  try {
-    await work(index);
-  } catch (error) {
-    console.error(
-      `[fruitback] the index of the notes was not written: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/** The row of the index of one note this worker just planted. */
-function noteEntry(
-  workspace: string,
-  site: string,
-  seed: Seed,
-  channel: Channel,
-  target: ClientConfig | undefined,
-  issue: CreatedIssue,
-): NoteEntry {
-  return {
-    workspace,
-    site,
-    seed,
-    channel,
-    author: authorOf(seed, channel === 'extension'),
-    place: placeOf(target),
-    issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
-    stage: 'seeded',
-  };
-}
-
-/** Where a note of this target goes, as the index says it. */
-function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
-  return target?.connector === undefined ? { kind: 'fruitback' } : { kind: 'connector', connector: target.connector };
-}
-
-/**
  * The account of a session of the extension, when it is a session of `workspace` and that account
  * reads `site` there now (FRU-44, FRU-250): a member, and a guest only on a site shared with them.
  * `site` undefined: a thing of the workspace that names no site, which a guest does not read.
@@ -1484,21 +1423,6 @@ async function attributionFor(
   };
 }
 
-/** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
-function optionalReporter(reporter: SeedReporter | undefined): { reporter?: SeedReporter } {
-  return reporter === undefined ? {} : { reporter };
-}
-
-/** 400 when the caller has to say who they are, 403 when they said something they may not claim. */
-function routingFailure(
-  resolution: Extract<ClientResolution, { ok: false }>,
-  headers: Record<string, string>,
-): Response {
-  const status = resolution.reason === 'origin-not-allowed-for-client' ? 403 : 400;
-
-  return json(status, { error: resolution.reason }, headers);
-}
-
 /**
  * The read path: every seed planted on one page, with the Linear state that gives the pin its
  * colour. This is what lets a client come back to the page and see their own notes again.
@@ -1686,21 +1610,6 @@ async function endedSession(
   return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
 }
 
-/**
- * Canonicalized server-side for the same reason the write path does it: the filter matches this
- * exact string inside the description, so a caller that skipped normalization would find nothing.
- */
-function canonicalizeRequestedPage(requested: string): string | null {
-  try {
-    const url = new URL(requested);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-
-    return canonicalizePageUrl(url);
-  } catch {
-    return null;
-  }
-}
-
 async function postFeedback(
   request: Request,
   config: Served,
@@ -1824,23 +1733,6 @@ async function postFeedback(
 }
 
 /**
- * Re-canonicalized server-side. The read path finds seeds by matching this URL inside the
- * description, so a client that skipped normalization would plant a pin nobody can find again.
- *
- * The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
- * label the read filters on, so a padded id here means an issue nobody can query back.
- */
-function canonicalSeed(seed: Seed): Seed {
-  const clientId = normalizeClientId(seed.client?.id);
-
-  return {
-    ...seed,
-    page: { ...seed.page, url: canonicalizePageUrl(seed.page.url) },
-    ...(seed.client !== undefined && clientId !== undefined ? { client: { ...seed.client, id: clientId } } : {}),
-  };
-}
-
-/**
  * FRU-123: a member chose where the note goes. The name is in the query, and the body stays the
  * seed: the relay of the extension carries a query and no other header. Absent, the note goes to
  * the first place of the site. `null`: a name the site does not have, or a caller who may not see
@@ -1860,31 +1752,6 @@ async function chosenPlace(
   }
 
   return placedAt(route.client, place);
-}
-
-/** The page just changed, so every cached answer for it is wrong, for every client. */
-async function invalidatePages(kv: Kv, urls: readonly string[]): Promise<void> {
-  for (const url of new Set(urls)) {
-    try {
-      await invalidate(kv, url);
-    } catch (error) {
-      if (!(error instanceof KvError)) throw error;
-      // The issue exists now. A 502 here tells the widget to retry, and the retry plants the note a
-      // second time. The cost of answering 201 is a pin that shows up one TTL late.
-      console.error(`[fruitback] cache not invalidated after a write: ${error.message}`);
-    }
-  }
-}
-
-/**
- * What a worker takes in one request (FRU-124), in the envelope of `GET /feedback` as `stages` is:
- * the most notes, and the most bytes of the body. Absent where the limit of a minute is too low for
- * a batch: the widget then sends its notes one by one, and never sends an array.
- */
-function batchOffer(config: WorkerConfig): { batch?: { max: number; maxBytes: number } } {
-  const max = maxBatch(config.rateLimitPerMinute);
-
-  return max === 0 ? {} : { batch: { max, maxBytes: MAX_BODY_BYTES } };
 }
 
 /** How long a seed that was kept answers its issue again, for a widget that sends it twice. */
