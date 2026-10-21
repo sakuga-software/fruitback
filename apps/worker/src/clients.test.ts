@@ -53,6 +53,66 @@ describe('readClientMap', () => {
     }
   });
 
+  it('reads a repository only as one owner and one name, the whole value', () => {
+    assert.equal(readClientMap(JSON.stringify({ acme: { repository: 'acme-co/site_1.web' } })).ok, true);
+    // A path, two names, or a prefix or a suffix around them, would reach another endpoint.
+    for (const repository of [
+      'acme/site/issues',
+      'x/acme/site',
+      'acme/site ',
+      ' acme/site',
+      'acme',
+      '/site',
+      'acme/',
+    ]) {
+      assert.equal(
+        readClientMap(JSON.stringify({ acme: { repository } })).ok,
+        false,
+        `« ${repository} » should be refused`,
+      );
+    }
+  });
+
+  it('reads an identity secret of 32 characters or more, and no shorter one', () => {
+    for (const identitySecret of ['s'.repeat(32), 's'.repeat(64)]) {
+      assert.equal(readClientMap(JSON.stringify({ acme: { identitySecret } })).ok, true);
+    }
+    assert.equal(readClientMap(JSON.stringify({ acme: { identitySecret: 's'.repeat(31) } })).ok, false);
+  });
+
+  it('reads sites, a workspace, and a team and a project, each of any length but zero', () => {
+    const result = readClientMap(
+      JSON.stringify({
+        acme: { teamId: 't', projectId: 'p', workspace: 'w', origins: ['https://one.test', 'https://two.test'] },
+      }),
+    );
+
+    assert.ok(result.ok);
+    assert.deepEqual(result.clients?.acme, {
+      teamId: 't',
+      projectId: 'p',
+      workspace: 'w',
+      origins: ['https://one.test', 'https://two.test'],
+    });
+    for (const client of [{ teamId: '' }, { projectId: '' }, { workspace: '' }, { origins: [''] }]) {
+      assert.equal(
+        readClientMap(JSON.stringify({ acme: client })).ok,
+        false,
+        `${JSON.stringify(client)} should be refused`,
+      );
+    }
+  });
+
+  it('says why it refuses a map: not JSON, no client, or the first field that is wrong', () => {
+    assert.deepEqual(readClientMap('{ not json'), { ok: false, reason: 'not valid JSON' });
+    assert.deepEqual(readClientMap('{}'), { ok: false, reason: 'no client in the map' });
+
+    const short = readClientMap(JSON.stringify({ acme: { identitySecret: 'short' } }));
+
+    assert.equal(short.ok, false);
+    assert.match(short.ok ? '' : short.reason, /32/);
+  });
+
   it('reads the connector of a client, of any length but zero', () => {
     const result = readClientMap(JSON.stringify({ acme: { connector: 'con_0123456789abcdef' } }));
 
@@ -178,6 +238,48 @@ describe('resolveClient', () => {
     });
 
     assert.ok(resolved.ok);
+  });
+});
+
+describe('resolveClient, on a worker that opens sessions', () => {
+  const CLIENTS = { site: { workspace: 'ws_1' }, loose: {} };
+  const resolve = (clientId: string, more: { sessionSecret?: string } = {}) =>
+    resolveClient({ clients: CLIENTS, clientId, origin: null, fallback: FALLBACK, ...more });
+
+  it('opens sessions for a client of a workspace, with the key of the worker', () => {
+    const resolved = resolve('site', { sessionSecret: 'key' });
+
+    assert.ok(resolved.ok);
+    assert.deepEqual(resolved.policy.sessions, { secret: 'key', workspace: 'ws_1' });
+  });
+
+  it('opens none for a client outside a workspace, nor on a worker with no key', () => {
+    const loose = resolve('loose', { sessionSecret: 'key' });
+    const keyless = resolve('site');
+
+    assert.ok(loose.ok && keyless.ok);
+    assert.equal(loose.policy.sessions, undefined);
+    assert.equal(keyless.policy.sessions, undefined);
+  });
+
+  it('asks whether an account reaches the site, for the workspace and the site of the client', async () => {
+    const asked: string[][] = [];
+    const resolved = resolveClient({
+      clients: CLIENTS,
+      clientId: 'site',
+      origin: null,
+      fallback: FALLBACK,
+      sessionSecret: 'key',
+      sessionReaches: async (workspace, site, account) => {
+        asked.push([workspace, site, account]);
+
+        return true;
+      },
+    });
+
+    assert.ok(resolved.ok);
+    assert.equal(await resolved.policy.sessions?.reaches?.('acct_1'), true);
+    assert.deepEqual(asked, [['ws_1', 'site', 'acct_1']]);
   });
 });
 

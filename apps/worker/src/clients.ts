@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import { isExtensionOrigin } from './cors.ts';
-import {
-  CLIENT_MAP_EMPTY,
-  CLIENT_MAP_INVALID_SHAPE,
-  CLIENT_MAP_NOT_JSON,
-  READ_CHOSEN_IN_CONSOLE_NOTICE,
-  publicReadNotice,
-} from './messages.ts';
+import { CLIENT_MAP_EMPTY, CLIENT_MAP_NOT_JSON, READ_CHOSEN_IN_CONSOLE_NOTICE, publicReadNotice } from './messages.ts';
 
 /**
  * One worker, several client sites (FRU-15).
@@ -253,7 +247,8 @@ export function readClientMap(value: string | undefined): ClientMapResult {
   }
 
   const result = clientMapSchema.safeParse(parsed);
-  if (!result.success) return { ok: false, reason: result.error.issues[0]?.message ?? CLIENT_MAP_INVALID_SHAPE };
+  // A parse that fails has one issue at least, and the first one is the reason.
+  if (!result.success) return { ok: false, reason: result.error.issues[0]!.message };
   if (Object.keys(result.data).length === 0) return { ok: false, reason: CLIENT_MAP_EMPTY };
 
   return { ok: true, clients: result.data };

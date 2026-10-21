@@ -30,7 +30,6 @@ export function publicReadNotice(open: string[]): string {
 }
 
 export const CLIENT_MAP_NOT_JSON = 'not valid JSON';
-export const CLIENT_MAP_INVALID_SHAPE = 'invalid shape';
 export const CLIENT_MAP_EMPTY = 'no client in the map';
 
 // store-config.ts
