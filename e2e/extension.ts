@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
+import {
+  type BrowserContext,
+  type Locator,
+  type Page,
+  type Worker,
+  test as base,
+  chromium,
+  expect,
+} from '@playwright/test';
 import { WORKER_ORIGIN, caseOf, hydrated } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -176,6 +184,37 @@ export async function openPopup(extension: LoadedExtension, site: Page, _origin 
   await expect(popup.getByRole('status').filter({ hasText: /^(Loading…|Chargement…)$/ })).toHaveCount(0);
 
   return popup;
+}
+
+/**
+ * What Playwright says when the page of a call closes under it. `TargetClosedError` is not in its
+ * public API, so the message is what is read.
+ */
+const TARGET_CLOSED = /Target page, context or browser has been closed/;
+
+/**
+ * A click in the popup that closes it (FRU-375): the side panel, « Leave feedback ».
+ *
+ * The popup calls `window.close()` when the click is done. When that is fast (the side panel is
+ * already open, so `sidePanel.open` answers at once), the popup closes before Playwright has the
+ * answer to its click, and `click()` rejects with « Target page, context or browser has been
+ * closed ». That error, on a popup that is closed, is the expected end here. Any other error is
+ * thrown, even when the popup is closed: a click that missed must not pass because the popup went
+ * for another reason. A popup that stays open fails too. `click-that-closes-popup.spec.ts` tests it.
+ */
+export async function clickThatClosesPopup(popup: Page, target: Locator): Promise<void> {
+  const closed = popup.waitForEvent('close');
+  try {
+    await target.click();
+  } catch (error) {
+    const closedUnderTheClick = popup.isClosed() && error instanceof Error && TARGET_CLOSED.test(error.message);
+    if (!closedUnderTheClick) {
+      // The wait for `close` rejects when the test ends: nobody awaits it now.
+      closed.catch(() => undefined);
+      throw error;
+    }
+  }
+  await closed;
 }
 
 /** A pairing code for the workspace of the worker of the suite: see `mintPairing`. */

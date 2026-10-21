@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect } from '@playwright/test';
-import { type LoadedExtension, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { type LoadedExtension, clickThatClosesPopup, mintPairing, openBareSite, openPopup, test } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -179,21 +179,18 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   // `e2e/side-panel.spec.ts` reads the panel.
   const panels = () =>
     extension.worker.evaluate(async () => (await chrome.runtime.getContexts({ contextTypes: ['SIDE_PANEL'] })).length);
-  await popup.locator('.site-lines .kit-row').last().click();
-  await expect.poll(() => popup.isClosed()).toBe(true);
+  await clickThatClosesPopup(popup, popup.locator('.site-lines .kit-row').last());
   await expect.poll(panels).toBe(1);
 
-  // « Show all notes in a sidebar » opens it too.
+  // « Show all notes in a sidebar » opens it too. The panel is open already: the popup closes at once.
   popup = await reopen(extension, page);
-  await popup.getByRole('button', { name: 'Show all notes in a sidebar' }).click();
-  await expect.poll(() => popup.isClosed()).toBe(true);
+  await clickThatClosesPopup(popup, popup.getByRole('button', { name: 'Show all notes in a sidebar' }));
   await expect.poll(panels).toBe(1);
 
   // « Leave feedback »: the widget waits for an element.
   popup = await reopen(extension, page);
-  await popup.getByRole('button', { name: 'Leave feedback' }).click();
+  await clickThatClosesPopup(popup, popup.getByRole('button', { name: 'Leave feedback' }));
   await expect(page.locator('[data-fruitback-capturing]')).toHaveCount(1);
-  await expect.poll(() => popup.isClosed()).toBe(true);
   await page.keyboard.press('Escape');
 
   // A note being written: « Leave feedback » takes nothing from it, and the popup stays and says why.

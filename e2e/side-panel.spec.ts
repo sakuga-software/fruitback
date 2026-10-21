@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { type Page, expect } from '@playwright/test';
-import { type LoadedExtension, PLAYGROUND_ORIGIN, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import {
+  type LoadedExtension,
+  PLAYGROUND_ORIGIN,
+  clickThatClosesPopup,
+  mintPairing,
+  openBareSite,
+  openPopup,
+  test,
+} from './extension.ts';
 import { pinFor } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -185,10 +193,10 @@ test('a click in the popup opens the panel on the tab, and the panel follows the
     );
   expect(await panels()).toEqual([]);
 
-  await popup
-    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
-    .click();
-  await expect.poll(() => popup.isClosed()).toBe(true);
+  await clickThatClosesPopup(
+    popup,
+    popup.getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ }),
+  );
   await expect.poll(panels).toEqual([`chrome-extension://${extension.id}/sidepanel.html`]);
 
   // The panel names the site of the tab.
