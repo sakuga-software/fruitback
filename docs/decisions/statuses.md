@@ -1,12 +1,13 @@
 # Statuses: added, read from the tracker, and coloured
 
 FRU-352 asks for three things: statuses a team adds, statuses read from the tracker (Linear, GitHub,
-REST), and colours a team chooses. This page is the framing, written before any code. **Nothing here
-is built yet.** The five questions at the end wait for Mathieu, and the sub-tickets wait for his answers.
+REST), and colours a team chooses. This page was the framing, written before any code (#446).
+Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
+below follow them. The contract is built (FRU-364); the rest is FRU-365 to FRU-371.
 
 ## Statuses
 
-### The rules, in short (proposed)
+### The rules, in short
 
 - **The five stages stay the contract, unchanged.** A status is always attached to one of `seeded`,
   `green`, `ripening`, `ripe` and `composted`. The stage keeps the meaning of the lifecycle: it drives
@@ -17,15 +18,18 @@ is built yet.** The five questions at the end wait for Mathieu, and the sub-tick
 - **Every new field is optional, and every reader is tolerant.** A widget from before ignores the
   fields and draws the stage as today. A widget from after, read by a worker from before, gets no
   list and draws the stage as today.
-- **A colour is `#rrggbb`, checked on write by the worker and on read by the widget.** Nothing else
-  reaches `style.setProperty`.
+- **A colour is `#rrggbb`, checked on write by the worker and on read by `offeredStatuses`.**
+  Nothing else reaches `style.setProperty`. A text colour travels only with a background colour.
 - **The text on a status reaches 4.5:1.** By default it is computed. A text colour that the team
   chooses below 4.5:1 is refused on save.
 - **The name is always shown next to the colour.** A status is never said by its colour alone, as
   the stage colours already are not.
-- **A status is configured per connector, and the worker's own store counts as one connector per
-  workspace.** The states belong to the tracker, and a site reads the states of the tracker its
-  notes go to (FRU-201).
+- **A status is configured per site** (decision 2). The list a site starts from is the states of the
+  tracker its destination names — the connector and the team chosen for the site (FRU-123) — or the
+  five built-in statuses of the worker's store for a site with no destination. The team then renames,
+  recolours, re-stages or adds, for that site only.
+- **The stage of an issue wins over its status.** `statusOf` gives a status only when it belongs to
+  the issue's stage, so an old and a new widget never draw two stages from one answer.
 
 ### What exists today
 
@@ -54,60 +58,75 @@ receiver to say anything at all.
 
 One table, `statuses`, in the worker's PostgreSQL:
 
-| Column         | Type                   | Meaning                                                                                                      |
-| -------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `workspace_id` | text, not null         | The workspace. Cascade on delete, like `connectors`.                                                         |
-| `connector_id` | text, null             | The connector. `null` is the store of the worker (PostgreSQL, or GitHub) for this workspace.                 |
-| `key`          | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).     |
-| `name`         | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                  |
-| `stage`        | text, not null         | One of the five.                                                                                             |
-| `color`        | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies. |
-| `text_color`   | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                       |
-| `position`     | integer, not null      | The order on the board.                                                                                      |
-| `origin`       | `tracker` or `team`    | `tracker`: read from the provider, cannot be deleted here. `team`: added in the console.                     |
-| `hidden`       | boolean, default false | A tracker state the team does not want in the filters.                                                       |
+| Column       | Type                   | Meaning                                                                                                      |
+| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `site_id`    | text, not null         | The site. Cascade on delete, like `site_destinations`.                                                       |
+| `source`     | text, not null         | Where the state comes from: the id of the connector of a destination, or `own` for the worker's store.       |
+| `key`        | text, not null         | The id of the state at the tracker (Linear state id), a fixed key (GitHub), or a slug (own store, REST).     |
+| `name`       | text, null             | The name the team gives. `null` keeps the tracker's name, or the catalog word of the stage.                  |
+| `stage`      | text, not null         | One of the five.                                                                                             |
+| `color`      | text, null             | `#rrggbb`. `null` is the stage colour of FRU-334, so a host override of `--fruitback-stage-*` still applies. |
+| `text_color` | text, null             | `#rrggbb`. `null` is computed (see the colours below).                                                       |
+| `position`   | integer, not null      | The order on the board.                                                                                      |
+| `origin`     | `tracker` or `team`    | `tracker`: read from the provider, cannot be deleted here. `team`: added in the console.                     |
+| `hidden`     | boolean, default false | A tracker state the team does not want in the filters.                                                       |
 
-The primary key is `(workspace_id, connector_id, key)`. An entry exists only when the team changed
-something or added a status: a tracker state with no row takes the tracker's name, the stage of its
-type and the stage colour, exactly as today. Bounded per connector, like the 200 exceptions now.
+The primary key is `(site_id, source, key)`. An entry exists only when the team changed something
+or added a status: a tracker state with no row takes the tracker's name, the stage of its type and
+the stage colour, exactly as today. At most `MAX_STATUSES` (200) per site, which is also what a
+reader keeps of one read.
 
-A table rather than a bigger `connectors.settings` JSON, because the worker's own store has no row in
-`connectors`, and because a status of the own store is referenced by notes (`seeds.status_key`).
+Per site, as decided: two sites that send to the same Linear team can show « In Review » in two
+colours. A site's list is computed from its destinations (`site_destinations`, FRU-123): when a
+destination changes connector or team, the rows of the old `source` stay, unused, so going back
+restores them. A table rather than a bigger `connectors.settings` JSON, because the settings are per
+site now, and because a status of the own store is referenced by notes (`seeds.status_key`).
 
 ### The contract
 
-Two optional fields, both in the read envelope:
+Two optional fields, both in the read envelope. Built in `packages/shared/src/issue.ts` (FRU-364):
 
 ```ts
-// GET /feedback, next to `stages`
-statuses?: {
-  key: string;          // unique in this answer: `<connector>:<key>`, see below
-  name: string;         // what the team or the tracker calls it; empty means the catalog word
+// GET /feedback, next to `stages`: read with offeredStatuses(body.statuses)
+statuses?: SeedStatus[];   // seedStatusSchema
+type SeedStatus = {
+  key: string;             // 1 to 200 characters, unique in this answer: `<source>:<key>`
+  name: string;            // what the team or the tracker calls it; empty means the catalog word
   stage: SeedStage;
-  color?: string;       // #rrggbb; absent means the token of the stage
-  textColor?: string;   // #rrggbb; absent means the token of the stage
-}[];
+  color?: string;          // STATUS_COLOR, #rrggbb; absent means the token of the stage
+  textColor?: string;      // STATUS_COLOR; only with `color`
+};
 
-// on each SeedIssue
-status?: string;        // a key of `statuses`
+// on each SeedIssue (seedIssueSchema)
+status?: string;           // a key of `statuses`; statusOf(issue, statuses) resolves it
 ```
 
-- **The key is qualified by the connector.** A site read in several places (FRU-201) gets the
-  statuses of each, and two Linear workspaces can each have a state named « In Review ».
+- **The key is qualified by its source.** A site read in several places (FRU-201) gets the statuses
+  of each, and two Linear workspaces can each have a state named « In Review ».
 - **`stage` stays required on every issue.** An old widget reads nothing else, and a new widget falls
   back to it when `status` is absent or names no entry of the list.
 - **`stateName` stays.** An old widget shows it; the worker fills it with the name of the status.
-- **`offeredStatuses(value)` in `shared`**, tolerant like `offeredStages`: a value that is not an
-  array is no list; an entry with a bad stage is dropped; a colour that is not `#rrggbb` is dropped
-  from its entry, which then takes the stage colour. It never throws.
+- **`offeredStatuses(value)` in `shared`**, tolerant like `offeredStages`, and it never throws:
+  - a value that is not an array is no list, and every pin keeps its stage colour;
+  - an entry with no key, with a stage outside the five, or with a key already seen is dropped: the
+    first wins;
+  - a colour that is not `#rrggbb` is dropped from its entry, which then takes the stage colour;
+  - a text colour with no background colour is dropped: its contrast was measured on a background
+    the entry no longer has;
+  - the first `MAX_STATUSES` entries are kept.
+- **`statusOf(issue, statuses)`** gives the status of an issue, or `undefined` to draw its stage:
+  when `status` is absent, names no entry, or names an entry of another stage.
+- **`status` on an issue is strict** (1 to 200 characters), like `url`. Only the worker parses an
+  issue with `seedIssueSchema`, and it parses the ones it builds. The widget reads the answer with a
+  cast, so the tolerance it needs is in the two readers above.
 - **`SEED_VERSION` stays at 2.** Nothing changes in the seed or in the description block, so the
   round trip is untouched.
 
 **This amends one rule of [contract.md](contract.md):** « the contract holds no colour » (FRU-24).
 That rule was written against a colour **fixed in a published type**, which nobody downstream could
 change. A colour that a team typed in its console and that the worker sends with the read is data,
-like `stateName`. The schema holds the field, never a value. The rule should be rewritten to say so
-in the same pull request as the contract change. This is question 1.
+like `stateName`. The schema holds the field, never a value. Decision 1 took it, and FRU-364
+rewrote the rule in [contract.md](contract.md) to « no fixed colour in the contract ».
 
 | Widget \ worker | Before                         | After                                                                               |
 | --------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
@@ -115,7 +134,9 @@ in the same pull request as the contract change. This is question 1.
 | After           | no `statuses`: draws the stage | draws the status colour and text colour; filters stay by stage                      |
 
 The widget script served at `/v/<version>/` is immutable and cached a year, so old widgets stay on
-host pages for a long time: the first row is not hypothetical.
+host pages for a long time: the first row is not hypothetical. `embed-statuses.test.ts` holds it:
+the widget of today, which reads neither field, draws a read that carries them exactly as one that
+does not — the same Shadow root markup, the same `pageNotes()`, with a control that the pins are drawn.
 
 ### Reading each provider
 
@@ -129,23 +150,25 @@ host pages for a long time: the first row is not hypothetical.
   console the next time its page opens, and on a pin as soon as an issue is in it: an unknown id
   takes the stage of its type and the stage colour, as today. Nothing is cached that could go stale
   except the team's own rows.
-- Stage by type, as `STAGE_BY_STATE_TYPE` does now; the team's row overrides it (FRU-102).
-- Colour: the stage colour by default. A switch per connector, « Use Linear's colours », takes
-  `state.color` for every state with no colour of the team. This is question 3.
+- Stage by type, as `STAGE_BY_STATE_TYPE` does now; the site's row overrides it (FRU-102 did it
+  per connector).
+- Colour: the stage colour of FRU-334 by default (decision 3). A switch per site, « Use Linear's
+  colours », off by default, takes `state.color` for every state with no colour of the team
+  (FRU-368).
 
 **GitHub** (REST issues, API 2022-11-28):
 
 - **GitHub is not a connector of a workspace.** It is the store of a whole worker
   (`FRUITBACK_STORE=github`), and `CONNECTOR_KINDS` holds only `linear` and `rest`. Its statuses are
-  therefore the rows with `connector_id` `null`, like the worker's own PostgreSQL store, and on a
-  worker whose store is GitHub the « Fruitback statuses » screen shows these four instead of the five
-  built-in ones, with no « Add a status ».
+  therefore the rows with the source `own`, like the worker's own PostgreSQL store, and on a worker
+  whose store is GitHub the statuses screen of a site shows these four instead of the five built-in
+  ones, with no « Add a status ».
 - Four fixed keys: `open`, `closed:completed`, `closed:not_planned`, `closed:duplicate`. A close with
   no reason is `closed:completed`, as today. `reopened` is an open issue. Stages as FRU-32:
   `seeded`, `ripe`, `composted`, `composted`. The team can rename, recolour and re-stage them.
 - **Labels are not statuses.** FRU-32 already refused them: « a label a team has to remember to apply
   is a state the connector invents ». An issue can carry several labels, and two status labels on one
-  issue have no answer. This is question 4.
+  issue have no answer. Decision 4: no labels, four fixed statuses (FRU-369).
 - What is honest at GitHub is the **Status field of a Project v2**: a single select, with a name and
   one of eight colour names (`GRAY` … `PURPLE`). It is GraphQL only, needs the `Organization
 projects: read` permission of the GitHub App (every installation must approve the change), and the
@@ -162,13 +185,13 @@ projects: read` permission of the GitHub App (every installation must approve th
   `POST /connectors/<id>/status` with `{ identifier, status }`, signed with the same HMAC secret, and
   declares its list either in the console or once with `PUT /connectors/<id>/statuses`. That is a new
   surface open to the internet, so it is a ticket of its own, critical, and only if a receiver asks.
-  This is question 5.
+  Decision 5: not now. No ticket exists for it.
 
 **The worker's own store** (sites with no destination, and REST sites):
 
 - This is where « add a status » means something. A Linear or GitHub state is added at the tracker,
   and Fruitback reads it; inventing one here would be a state the tracker does not have.
-- Five built-in statuses, one per stage, with the keys `seeded` … `composted`: a workspace that never
+- Five built-in statuses, one per stage, with the keys `seeded` … `composted`: a site whose team never
   opens the screen sees exactly what it sees now.
 - `seeds.status_key`, nullable. `null` is the built-in status of the note's `stage`.
 - A note needs a way to change status, which does not exist today: a select in the list of notes of
@@ -177,17 +200,17 @@ projects: read` permission of the GitHub App (every installation must approve th
 
 ### The console
 
-One screen per connector, which replaces the table of FRU-102, and one for the worker's own store,
-under the workspace settings:
+One screen per site (decision 2), under the site, which takes over the table of FRU-102 from the
+connector's page (FRU-371):
 
 ```
-Workspace › Connectors › Linear (acme)                                        [ Save ]
+Workspace › Sites › staging.acme.com › Statuses                               [ Save ]
 ─────────────────────────────────────────────────────────────────────────────────────
 Statuses
-These are the states of the Linear teams your sites send to. Each one belongs to a
-stage, which decides the filters and the counts.
+These are the states of the Linear team this site sends to (Acme · Web). Each one
+belongs to a stage, which decides the filters and the counts.
 
-[x] Use Linear's colours                                    (Reset to defaults)
+[ ] Use Linear's colours                                    (Reset to defaults)
 
  Preview        Name (Linear)      Name shown       Stage          Colour      Text
  ─────────────  ─────────────────  ───────────────  ─────────────  ──────────  ───────────────
@@ -203,7 +226,7 @@ stage, which decides the filters and the counts.
 ```
 
 ```
-Workspace › Statuses of Fruitback                                    [ Add a status ]
+Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Add a status ]
  Preview        Name             Stage          Colour      Text         Notes
  (3) New        New              New       ▾    default     Auto           12
  (3) Waiting    Waiting client   To do     ▾    #7dd3fc ▣   Auto  10.63:1   3   [Delete]
@@ -213,7 +236,8 @@ Workspace › Statuses of Fruitback                                    [ Add a s
 - The preview is a real pin and a real list row, drawn with the widget's styles.
 - Delete a status of the team: its notes move to the built-in status of its stage, and the dialog
   says how many.
-- `manage-workspace`, like FRU-102. The words go through `t`, and every new sentence has its French.
+- `manage-sites`, the role that already chooses a site's destination; FRU-366 confirms it. The words
+  go through `t`, and every new sentence has its French.
 - A board in `design/` should come first: the screen is new.
 
 ### The colours
@@ -238,16 +262,19 @@ Workspace › Statuses of Fruitback                                    [ Add a s
   colour keeps that edge, in the light and the dark scheme.
 - The function lives in `shared`: it is pure, and the worker (to refuse a save), the console (to show
   the ratio) and the widget (to draw) must compute the same thing. It holds the algorithm, and the
-  three candidate colours as arguments, not a palette.
+  three candidate colours as arguments, not a palette. It lands with its first user, the refusal on
+  save of FRU-366, not with FRU-364: a published function nobody calls yet is one more thing to keep.
 
 ### Migration
 
-1. **Contract first, published before anything sends the fields.** `statuses`, `status`,
-   `offeredStatuses`, the text colour function, and the rewritten FRU-24 rule.
-2. **Database, additive.** Create `statuses`; add `seeds.status_key`, nullable. Copy every
-   `connectors.settings.stages[stateId]` into a row `(workspace, connector, stateId, stage)`. Keep the
-   JSON field one release and read the table first; drop it in a later migration. Nothing is
-   rewritten in place, so a rollback of the worker reads the JSON it left.
+1. **Contract first, published before anything sends the fields** (FRU-364). `statuses`, `status`,
+   `offeredStatuses`, `statusOf`, and the rewritten FRU-24 rule.
+2. **Database, additive** (FRU-365). Create `statuses`; add `seeds.status_key`, nullable. The FRU-102
+   exceptions were per connector: copy each `connectors.settings.stages[stateId]` into a row
+   `(site, connector, stateId, stage)` **for every site whose destination is that connector**, so
+   each site keeps what its connector showed. Keep the JSON field one release and read the table
+   first; drop it in a later migration. Nothing is rewritten in place, so a rollback of the worker
+   reads the JSON it left.
 3. **Worker** sends `statuses` and `status`. An old widget ignores them.
 4. **Widget, extension, console** read them. Their copies of the tokens do not change.
 
@@ -263,8 +290,10 @@ the widgets cached on host pages and for self-hosted workers.
   next field: the amended FRU-24 rule must still refuse a constant in a type.
 - **A Linear state changes with no webhook.** The cost is a console page that shows the old list
   until it is opened again. A pin is never wrong, because the state comes with the issue.
-- **Several connectors on one site.** Keys are qualified by the connector; a list for one site can
+- **Several destinations on one site.** Keys are qualified by their source; a list for one site can
   hold twenty statuses. The filters stay on five stages so that the panel does not grow with them.
+- **Per site means the same state configured twice.** Two sites on one Linear team are set apart.
+  The screen can offer « Copy from another site » later; nothing in the model stops it.
 - **Who changes a status in the own store.** A new write on notes: `manage-feedback`, audited like
   the other writes of the console. Two people changing one note: last write wins, as for the verdict.
 - **Translations.** A status the team names is shown as typed, like `stateName` now. A built-in
@@ -276,36 +305,32 @@ the widgets cached on host pages and for self-hosted workers.
 
 ### Sub-tickets
 
-| #   | Ticket                                                                                                                                                | Critical | Why                                   |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------- |
-| 1   | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, the text colour function and its tests; rewrite the FRU-24 rule in contract.md. | **Yes**  | Public contract                       |
-| 2   | Worker: table `statuses`, `seeds.status_key`, copy of the FRU-102 exceptions, read of the table first. SECURITY.md line on colours.                   | **Yes**  | Data migration                        |
-| 3   | Worker: console API to read and write the statuses of a connector and of the own store (`manage-workspace`), with the 4.5:1 refusal.                  | **Yes**  | New writes, roles                     |
-| 4   | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours ».                                                                 | No       | Read path only                        |
-| 5   | Worker, GitHub: the four fixed statuses, renamable and recolourable.                                                                                  | No       | Read path only                        |
-| 6   | Worker, own store: the five built-in statuses, the statuses of the team, and the route that changes the status of a note.                             | **Yes**  | Writes a note, and its stage with it  |
-| 7   | Widget: pin, thread, list and export draw the status; fallback to the stage; contrast tests. `/tfp`.                                                  | No       | Display; the fallback is covered by 1 |
-| 8   | Extension: carry `status` (and `stateName`) in `PanelNote`; side panel and popup draw the status. `/tfp`.                                             | No       | Display                               |
-| 9   | Console: board in `design/`, then the statuses screen of a connector and of the own store, the status select in the list of notes. `/tfp`.            | No       | Display, behind the routes of 3 and 6 |
-| 10  | Later, on demand: REST receiver reports a status (signed inbound route).                                                                              | **Yes**  | New route open to the internet        |
-| 11  | Later, on demand: GitHub Project v2 Status field.                                                                                                     | No       | App permission change, GraphQL        |
+Created by the orchestrator after the decisions, children of FRU-352.
 
-Order: 1, then 2, then 3 to 6 in any order, then 7 to 9. 10 and 11 wait for a request.
+| Ticket  | What                                                                                                                                        | Critical | Why                                  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------ |
+| FRU-364 | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, `statusOf`; the FRU-24 rule in contract.md; this page.                | **Yes**  | Public contract                      |
+| FRU-365 | Worker: the table of statuses per site, `seeds.status_key`, the copy of the FRU-102 exceptions to every site of their connector.            | **Yes**  | Data migration                       |
+| FRU-366 | Worker: console API to read, add, change and order the statuses of a site, with the 4.5:1 refusal and the text colour function in `shared`. | **Yes**  | New writes, roles                    |
+| FRU-367 | Worker, notes kept in Fruitback: the five built-in statuses, and the route that changes the status of a note.                               | **Yes**  | Writes a note, and its stage with it |
+| FRU-368 | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours » per site.                                              | No       | Read path only                       |
+| FRU-369 | Worker, GitHub: the four fixed statuses, renamable and recolourable per site.                                                               | No       | Read path only                       |
+| FRU-370 | Widget and extension draw the name and the colour of the status, with the stage as fallback; `PanelNote` carries them. `/tfp`.              | No       | Display; the fallback is FRU-364's   |
+| FRU-371 | Console: the board in `design/`, then the statuses screen of a site and the status select in the list of notes. `/tfp`.                     | No       | Display, behind FRU-366 and FRU-367  |
 
-### Questions for Mathieu
+Order: FRU-364, then FRU-365, then FRU-366 to FRU-369 in any order, then FRU-370 and FRU-371. The
+REST inbound route and the GitHub Project Status field have no ticket: decisions 5 and 4 left them out.
 
-1. **Can the read carry a colour and a name chosen by the team?** It means rewriting the FRU-24 rule
-   from « no colour in the contract » to « no colour **constant** in the contract ». Recommendation:
-   yes. The other way is to send only a status key and let each surface ask the console for colours,
-   which is a second request on every page and a second cache to keep in step.
-2. **Per connector, or per site?** The ticket says « per site or per workspace ». Recommendation: per
-   connector (and the own store per workspace), because the states are the tracker's and every site
-   that sends to it sees the same board. A per-site override can come later if a client asks for it.
-3. **Default colours: FRU-334, or the tracker's?** Recommendation: FRU-334 by default, so every site
-   looks like Fruitback, and one switch per connector, « Use Linear's colours », off by default.
-4. **GitHub labels as statuses?** Recommendation: no, as FRU-32 decided. Four fixed GitHub statuses
-   now, and the Status field of a GitHub Project later if a client asks.
-5. **REST: is « the receiver says the status » wanted now?** It needs a signed inbound route, a new
-   surface open to the internet. Recommendation: not now. A REST site gets the statuses of the
-   worker's own store, which the team sets and changes in the console; the inbound route is a
-   critical ticket of its own when a receiver needs it.
+### The decisions
+
+Mathieu, 2026-10-21, in a comment on FRU-352. Each answers a question of #446; the recommendation of
+the framing follows in brackets when the answer differs from it.
+
+1. **The read carries the colour and the name a team chose**, as data of the site. The FRU-24 rule
+   becomes « no fixed colour in the contract ».
+2. **Per site, not per connector.** The statuses depend on the destination chosen in the connector.
+   (The framing recommended per connector, so that every site on one team shares one board. Per site
+   lets two clients of one team look different, at the cost of setting each site.)
+3. **The colours of FRU-334 by default.** The tracker's colours are an option, off by default.
+4. **No GitHub labels as statuses.** Four fixed statuses.
+5. **No inbound REST route for now.** A REST site uses the statuses of the worker's store.

@@ -5,9 +5,12 @@ import {
   FRUITBACK_LABEL,
   SEED_STAGES,
   buildIssueLabels,
+  MAX_STATUSES,
   offeredStages,
+  offeredStatuses,
   seedCommentSchema,
   seedIssueSchema,
+  statusOf,
 } from './issue.ts';
 import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
 
@@ -113,3 +116,111 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
     assert.equal(seedCommentSchema.safeParse({ ...comment, id: '' }).success, false);
   });
 });
+
+describe('the statuses of a read (FRU-364)', () => {
+  const doing = { key: 'linear:st_1', name: 'In Review', stage: 'ripening', color: '#7dd3fc', textColor: '#18181b' };
+
+  it('reads an issue with no status, as every worker before FRU-364 sends it', () => {
+    const issue = { ...seedIssueFixtureLike(), stage: 'ripe', stateName: 'Done' };
+    const parsed = seedIssueSchema.parse(issue);
+
+    assert.deepEqual(parsed, issue);
+    assert.equal('status' in parsed, false, 'no default fills the field in');
+  });
+
+  it('reads an issue that names its status, and refuses an empty key', () => {
+    const issue = { ...seedIssueFixtureLike(), status: 'linear:st_1' };
+
+    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+    assert.equal(seedIssueSchema.safeParse({ ...issue, status: '' }).success, false);
+  });
+
+  it('gives no status for a read with no list, or with something else than a list', () => {
+    for (const value of [undefined, null, 'linear:st_1', {}, 3]) {
+      assert.deepEqual(offeredStatuses(value), [], JSON.stringify(value));
+    }
+  });
+
+  it('keeps a status as the worker sent it', () => {
+    assert.deepEqual(offeredStatuses([doing]), [doing]);
+    assert.deepEqual(offeredStatuses([{ key: 'own:seeded', name: '', stage: 'seeded' }]), [
+      { key: 'own:seeded', name: '', stage: 'seeded' },
+    ]);
+  });
+
+  it('drops an entry with no key, a stage outside the five, or a key already seen', () => {
+    const kept = offeredStatuses([
+      null,
+      'linear:st_1',
+      { name: 'No key', stage: 'seeded' },
+      { key: '', name: 'Empty key', stage: 'seeded' },
+      { key: 'x', name: 'Blue', stage: 'blue' },
+      doing,
+      { ...doing, name: 'Second with the same key' },
+    ]);
+
+    assert.deepEqual(kept, [doing]);
+  });
+
+  it('drops a colour that is not #rrggbb, and keeps the rest of its entry', () => {
+    for (const color of [
+      'red',
+      '#fff',
+      'var(--fruitback-stage-ripe)',
+      'url(https://x.test/a.png)',
+      '#7dd3fcff',
+      '#7dd3fc;',
+      7,
+    ]) {
+      assert.deepEqual(
+        offeredStatuses([{ ...doing, color }]),
+        [{ key: doing.key, name: doing.name, stage: doing.stage }],
+        String(color),
+      );
+    }
+    assert.deepEqual(offeredStatuses([{ ...doing, textColor: 'black' }]), [
+      { key: doing.key, name: doing.name, stage: doing.stage, color: doing.color },
+    ]);
+  });
+
+  it('drops a text colour that has no background colour to be read on', () => {
+    const { color: _none, ...noBackground } = doing;
+
+    assert.deepEqual(offeredStatuses([noBackground]), [{ key: doing.key, name: doing.name, stage: doing.stage }]);
+  });
+
+  it(`keeps the first ${MAX_STATUSES} statuses of a read`, () => {
+    const many = Array.from({ length: MAX_STATUSES + 5 }, (_, index) => ({
+      key: `k${index}`,
+      name: '',
+      stage: 'seeded',
+    }));
+    const kept = offeredStatuses(many);
+
+    assert.equal(kept.length, MAX_STATUSES);
+    assert.equal(kept.at(-1)?.key, `k${MAX_STATUSES - 1}`);
+  });
+
+  it('gives the status of an issue only when it is in the list and of the same stage', () => {
+    const statuses = offeredStatuses([doing]);
+
+    assert.deepEqual(statusOf({ stage: 'ripening', status: doing.key }, statuses), doing);
+    assert.equal(statusOf({ stage: 'ripening' }, statuses), undefined, 'no status: the stage');
+    assert.equal(statusOf({ stage: 'ripening', status: 'linear:gone' }, statuses), undefined, 'unknown key: the stage');
+    // The stage is what an old widget draws. A new one must not draw another stage from the same answer.
+    assert.equal(statusOf({ stage: 'ripe', status: doing.key }, statuses), undefined, 'other stage: the stage');
+  });
+});
+
+/** A valid issue with no field of FRU-364. */
+function seedIssueFixtureLike() {
+  return {
+    id: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
+    identifier: 'FRU-2',
+    title: 'Le bouton est trop petit',
+    stage: 'ripening',
+    stateName: 'In Review',
+    updatedAt: '2026-10-21T10:00:00.000Z',
+    seed: seedFixture(),
+  };
+}

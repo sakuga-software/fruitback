@@ -8,9 +8,16 @@ first publish made it expensive.
 
 ### The rules, in short
 
-- **The contract holds the vocabulary and nothing a human reads** (FRU-24). No emoji, no English
-  label, no colour: those are rendering decisions, and a published type is the one place they can
-  never be changed or translated downstream.
+- **The contract holds the vocabulary and no fixed value a human reads** (FRU-24, FRU-364). No
+  emoji, no English label, no fixed colour: those are rendering decisions, and a published type is
+  the one place they can never be changed or translated downstream. A name or a colour that a team
+  chose for its site may travel as **data** in the read envelope (`statuses`): the schema holds the
+  field, never a value. See [statuses.md](statuses.md).
+- **A status belongs to a stage, and the stage wins** (FRU-364). `statuses` and `status` are
+  read-envelope fields, so `SEED_VERSION` does not move. `offeredStatuses` reads the list
+  tolerantly and keeps only `#rrggbb` colours; `statusOf` gives an issue its status only when that
+  status has the issue's stage, so a widget that reads only `stage` draws what one that reads the
+  status draws.
 - **A store can report only some stages, and says which** (FRU-32). `SeedStore.stages` travels as
   `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
@@ -43,7 +50,7 @@ first publish made it expensive.
   what makes the Linear `description: { contains: … }` filter work.
 - Pin colour comes from a `SeedStage`, and the widget never stores a status of its own — it renders
   the one the store reports.
-- **The contract holds the vocabulary and nothing a human reads** (FRU-24). `SEED_STAGE_STYLES` used
+- **The contract holds the vocabulary and no fixed value a human reads** (FRU-24). `SEED_STAGE_STYLES` used
   to sit in `shared` carrying an `emoji`, a `label` and a `color` per stage — a published type nobody
   downstream could change, holding three decisions that were never the contract's:
   - `color` was already dead, moved to the widget's `--fruitback-stage-*` tokens by FRU-35 and read
