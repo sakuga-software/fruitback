@@ -199,8 +199,12 @@ write <package> <mutation.json>` prints it from the report of a full run.
   and a fixture, are not mapped: the Monday run measures them. The diff is taken from
   `github.event.pull_request.base.sha`, on a checkout with all its history, and `mutation.test.ts`
   fails on another value: the head, for one, would mutate nothing and pass. A full run happens every Monday,
-  by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow,
-  a `stryker.config.json`, or `tools/mutation/`.
+  by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow
+  or `tools/mutation/` for both packages, the `stryker.config.json` of a package for that package alone.
+- **Each file is mutated by a job of its own** (FRU-336). The `plan` job lists them with
+  `tools/mutation/scope.ts`, with no install. Each job holds the line of its file. On a full run, the
+  `line` job of a package holds the line of the package on the reports of all its jobs, and fails when
+  a file that has a line was not measured. `ratchet.ts write` takes a package once for each report.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
 - **Never run it on a tree you care about.** `inPlace` rewrites the source files and puts them back
   at the end. A run that is killed leaves them mutated.
@@ -240,16 +244,32 @@ write <package> <mutation.json>` prints it from the report of a full run.
   2 minutes 32, then 4 minutes 17 once `main` held the PostgreSQL tests of #138, installs included.
   A pull request that changes every file of the worker scope takes the full run, about 10 minutes.
   That is over the five minutes a required check may cost here. A red job says which file lost what.
-- **The dry run of the worker has 15 minutes, not the 5 of StrykerJS** (`dryRunTimeoutMinutes`).
+- **The dry run of the worker has 30 minutes, not the 5 of StrykerJS** (`dryRunTimeoutMinutes`).
   The dry run is the whole suite of the worker, one file at a time, with coverage. Measured in CI:
   84 files in 3 minutes 51 seconds on 2026-10-14 at 09:56 (run 38545506665); the same day at 21:44
   and at 22:55 (runs 38642556303 and 38650887857) the suite had grown, and the dry run stopped at 5
-  minutes, « Initial test run timed out! », with no mutant run. 15 leaves room for the suite to grow.
+  minutes, « Initial test run timed out! », with no mutant run. It was then 15, and 30 since FRU-336:
+  9 minutes 29 on 2026-10-20, and each job of the matrix makes its own dry run.
 - **The job has 150 minutes, not 60** (`timeout-minutes`). The full run of the worker, on a pull
   request that changes how mutation runs, mutated 879 mutants in 8 files on 2026-10-14 (run
   38653521349): its dry run took 4 minutes 47, and the job was cancelled at 60 minutes, before the
   report. The weekly full run of both packages took 18 minutes on 2026-10-12. The suite became slower
   in two days, and why is not measured yet.
+- **One job a file, because one job for the worker ran out of 150 minutes** (FRU-336). Measured in
+  CI, the dry run of the worker: 51 test files in 1 minute 07 on 2026-10-12 at 03:48 (run 38201186488),
+  61 in 2 minutes 34 that evening, 79 in 4 minutes 30 on 10-14, 87 in 6 minutes 41 on 10-17, 91 in
+  7 minutes 32 on 10-19 (run 39195470365), 103 in 9 minutes 29 on 10-20. One head varies by a minute
+  and a half from one runner to the next. No commit did it alone, and no test waits on a real delay:
+  the step of 10-12 is better-auth on PGlite (#188, #191: `auth-organization.test.ts` takes 10 seconds
+  on its own, the slowest file), and #341 moved the last SQLite tests to PGlite on 10-17. A process
+  that starts PGlite takes about 1 second before its first test (0.7 for PGlite, measured on a Mac),
+  and half the test files of the worker start one. A mutant runs every test file that reaches it, and
+  a route test reaches every file of the scope: on 10-20 the median mutant of `clients.ts` was
+  reached by 8 files, and its static ones by 103. The full run of the worker then ran out of 150
+  minutes, on `main` on 10-19 and on #418 and #427, with no report. `clients.ts` alone, its 215 mutants,
+  took 60 minutes on 10-20 (run 39517181686). Leaving tests out of the run would be faster, and
+  this convention refuses it. An incremental run needs a full run to start from, and none finished.
+  So each file has a job, under the same 150 minutes.
 - **The ratchet was planted in CI, twice** (#150). Two tests of `seed.test.ts` deleted, and no source
   file changed: the job mutated `seed.ts` because its test changed, measured 67.27 under its line of
   72.12, and failed. Before that, one test of `identity.test.ts` deleted: the job mutated
