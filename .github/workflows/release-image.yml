@@ -12,7 +12,8 @@ on:
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` gets the permissions that write to the registry and sign
-# (FRU-70): `check` runs a build, QEMU and Trivy, and none of them needs to publish.
+# (FRU-70): `check` runs a build, QEMU and Trivy, and none of them needs to publish. `layer-cache`
+# writes to the registry too, but no image: the cache of the layers that ci.yml builds (FRU-344).
 permissions:
   contents: read
 
@@ -34,6 +35,49 @@ jobs:
   ci:
     name: ci
     uses: $/.github/workflows/ci.yml
+    # The job `docker image` of ci.yml reads the cache of its layers in the registry (FRU-344). A
+    # called workflow gets no permission that its caller does not give.
+    permissions:
+      contents: read
+      packages: read
+
+  # FRU-344. The layers of the four images of ci.yml, written to `fruitback-buildcache` once this
+  # commit passed CI. Every run of ci.yml reads them, and none writes them: a pull request could
+  # otherwise write layers that the next build reads. No image is pushed.
+  layer-cache:
+    name: layer cache
+    needs: ci
+    # `main` alone: a run by hand from another branch would write layers of code that nobody merged,
+    # and the pull requests read them. A tag needs no cache of its own. Raised in review.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The token of this job can write to the registry, and nothing here runs git after the checkout.
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write the cache of the layers of the images of ci.yml
+        env:
+          CACHE_REPO: ghcr.io/${{ github.repository_owner }}/fruitback-buildcache
+          CACHE_WRITE: 'true'
+        run: docker buildx bake --file docker-bake.hcl ci
 
   # Every architecture that gets published is booted and scanned here first, and that is one job per
   # architecture rather than one for the native one. An arm64-only failure — the base image, the

@@ -311,10 +311,50 @@ jobs:
         # The lockfile is enough: nothing is installed.
         run: pnpm audit --prod
 
-  image:
-    # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
-    name: docker image
+  changes:
+    # FRU-344. Whether a pull request can change an image: `tools/ci/changes.ts` reads the files of
+    # the merge commit against the head of its base. A push, a merge queue and a release build them.
+    name: changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      images: ${{ steps.changes.outputs.images }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job reaches the remote after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+          # The merge commit and its first parent, the head of the base.
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Choose whether to build the images
+        id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+        run: node tools/ci/changes.ts "$EVENT" >> "$GITHUB_OUTPUT"
+
+  image:
+    # Dokploy builds this same Dockerfile on push, so a broken one must fail here first. FRU-344: it
+    # runs when a pull request changes a file of its images, or a file its steps read (`changes`).
+    name: docker image
+    needs: changes
+    # Skipped only on a `false` that `changes` wrote: an empty output builds, and so does a `changes`
+    # that failed, which a condition with no function of status would skip (raised in review).
+    if: ${{ !cancelled() && needs.changes.outputs.images != 'false' }}
+    runs-on: ubuntu-latest
+    # FRU-344. The cache of the layers is in the registry. This job reads it; `layer-cache` of
+    # release-image.yml writes it, after this workflow passed on `main` (`docker-bake.hcl`).
+    permissions:
+      contents: read
+      packages: read
     # FRU-343. It took 3 to 5 minutes in October 2026: `durations.ts` warns past 9.
     timeout-minutes: 15
 
@@ -332,16 +372,20 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build the worker image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          context: .
-          file: apps/worker/Dockerfile
-          push: false
-          load: true
-          tags: fruitback-worker:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # FRU-344. The worker, the demonstration, the console and the console of the Cloud, side by
+      # side: one after the other they took 2 to 3 minutes. `--file`: without it, bake reads
+      # docker-compose.yml too, and stops on its variables.
+      - name: Build the four images
+        env:
+          CACHE_REPO: ghcr.io/${{ github.repository_owner }}/fruitback-buildcache
+        run: docker buildx bake --file docker-bake.hcl --load ci
 
       - name: Boot it with no database, and find it refused
         # FRU-225. A worker keeps everything in PostgreSQL, so the image with no FRUITBACK_DATABASE_URL
@@ -580,18 +624,6 @@ jobs:
           WORKER_IMAGE: fruitback-worker:ci
         run: sh apps/worker/cloud/restore-drill.sh
 
-      - name: Build the image of the public demonstration
-        # FRU-79. Dokploy builds this Dockerfile on push too. It is not published anywhere.
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: apps/playground/Dockerfile
-          push: false
-          load: true
-          tags: fruitback-playground:ci
-          cache-from: type=gha,scope=playground
-          cache-to: type=gha,mode=max,scope=playground
-
       - name: Boot the demonstration, and check that it answers for its own host only
         run: |
           docker run -d --name playground -p 5177:5177 \
@@ -604,18 +636,6 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: demo.fruitback.com' http://127.0.0.1:5177/)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:5177/)" = 403
           docker rm -f playground
-
-      - name: Build the image of the console
-        # FRU-222. The image that is published: built with no address of a worker in it.
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: apps/console/Dockerfile
-          push: false
-          load: true
-          tags: fruitback-console:ci
-          cache-from: type=gha,scope=console
-          cache-to: type=gha,mode=max,scope=console
 
       - name: Boot the console for two workers, and check what each serves
         # One image, any instance: the address of the worker is given when the container starts. Each
@@ -710,20 +730,9 @@ jobs:
           refused -e "FRUITBACK_API=javascript:alert(1)"
           refused -e "FRUITBACK_API=$(printf 'https://a.example\nhttps://b.example')"
 
-      - name: Build the console as the Cloud does, and check that it starts with no variable
+      - name: Boot the console as the Cloud builds it, and check that it starts with no variable
         # FRU-99, kept by FRU-222. Dokploy builds this Dockerfile for app.fruitback.com with the
         # address as a build argument and gives the container no variable: that must still serve.
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: apps/console/Dockerfile
-          push: false
-          load: true
-          tags: fruitback-console:cloud
-          build-args: VITE_FRUITBACK_API=https://api.fruitback.example
-          cache-from: type=gha,scope=console
-
-      - name: Boot the console of the Cloud
         run: |
           set -euo pipefail
           docker run -d --name console-cloud -p 8082:80 fruitback-console:cloud
