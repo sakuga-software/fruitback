@@ -111,14 +111,14 @@ async function plantOn(page: Page, selector: string, note: string): Promise<void
  * is rewritten here: the note « Note N of eight » gets the Nth state below.
  */
 const EIGHT = [
-  ['seeded', 'New'],
-  ['green', 'To do'],
-  ['ripening', 'In progress'],
-  ['ripe', 'Done'],
-  ['composted', 'Closed'],
-  ['seeded', 'New'],
-  ['green', 'To do'],
-  ['ripening', 'In progress'],
+  ['new', 'New'],
+  ['todo', 'To do'],
+  ['progress', 'In progress'],
+  ['done', 'Done'],
+  ['closed', 'Closed'],
+  ['new', 'New'],
+  ['todo', 'To do'],
+  ['progress', 'In progress'],
 ] as const;
 
 async function statesOfTheMockUp(page: Page): Promise<void> {
@@ -330,19 +330,19 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
     'font-weight': '600',
     'padding-left': '10px',
   });
-  expect(await read('[data-fruitback-chip="seeded"]', ['border-top-color', 'background-color'])).toMatchObject({
+  expect(await read('[data-fruitback-chip="new"]', ['border-top-color', 'background-color'])).toMatchObject({
     'border-top-color': 'rgb(228, 228, 231)',
     'background-color': 'rgb(255, 255, 255)',
   });
   // Its own box, not the one it is turned in: a drop of 9 px, at 45°.
-  expect(await read('[data-fruitback-chip="ripening"] .fruitback-sidebar-dot', ['background-color'])).toMatchObject({
+  expect(await read('[data-fruitback-chip="progress"] .fruitback-sidebar-dot', ['background-color'])).toMatchObject({
     width: 12.7,
     height: 12.7,
     'background-color': 'rgb(243, 187, 61)',
   });
   expect(
     await page
-      .locator('[data-fruitback-chip="ripening"] .fruitback-sidebar-dot')
+      .locator('[data-fruitback-chip="progress"] .fruitback-sidebar-dot')
       .evaluate((node) => [getComputedStyle(node).width, getComputedStyle(node).height]),
   ).toEqual(['9px', '9px']);
   expect(await read('[data-fruitback-chip="all"] .fruitback-sidebar-count', ['color', 'font-weight'])).toMatchObject({

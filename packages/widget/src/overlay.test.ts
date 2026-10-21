@@ -61,27 +61,27 @@ describe('createOverlay', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
 
-    overlay.render([issueOnCta({ stage: 'ripe', stateName: 'Done' })]);
+    overlay.render([issueOnCta({ stage: 'done', stateName: 'Done' })]);
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.dataset.fruitbackStage, 'ripe');
+    assert.equal(pin.dataset.fruitbackStage, 'done');
     // The token, not the hexadecimal (FRU-35). What the pin actually renders is asserted end to
     // end in `e2e/overlay.spec.ts`, which reads the computed colour in a real browser — the only
     // place a `var()` can be resolved at all.
-    assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
+    assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
   });
 
   it('draws a note kept for later as a neutral pin that says it is not sent (FRU-124)', () => {
     const page = mountWithCta();
     // As `embed.ts` builds it: no issue yet, so no address of an issue.
     const { url: _none, ...draft } = issueOnCta({ id: 'draft:sd_kept' });
-    const sent = issueOnCta({ id: 'issue_sent', stage: 'ripe' });
+    const sent = issueOnCta({ id: 'issue_sent', stage: 'done' });
     overlay = createOverlay({ document: page.document, isDraft: (issue) => issue === draft });
     overlay.render([sent, draft]);
 
     const [first, second] = [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')];
     // The control: the same seed, sent, wears its stage.
-    assert.equal(first?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
+    assert.equal(first?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
     assert.equal(first?.dataset.fruitbackDraft, undefined);
     assert.equal(second?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-color-text-muted)');
     assert.equal(second?.dataset.fruitbackDraft, '');
@@ -142,13 +142,13 @@ describe('createOverlay', () => {
     const page = mountWithCta();
     const hidden = new Set<string>();
     overlay = createOverlay({ document: page.document, shouldShow: (issue) => !hidden.has(issue.id) });
-    const note = (n: number, stage: 'seeded' | 'ripening' | 'ripe') =>
+    const note = (n: number, stage: 'new' | 'progress' | 'done') =>
       seedIssueFixture({
         id: `issue_${n}`,
         stage,
         seed: { ...issueOnCta().seed, id: `sd_${n}`, note: `Note text ${n}` },
       });
-    const issues = [note(1, 'seeded'), note(2, 'ripening'), note(3, 'ripe')];
+    const issues = [note(1, 'new'), note(2, 'progress'), note(3, 'done')];
     overlay.render(issues);
 
     const badges = () => [...page.document.querySelectorAll<HTMLElement>('.fruitback-pin-badge')];
@@ -402,7 +402,7 @@ describe('createOverlay', () => {
     // empty span — a thread whose top row is just a close button. Raised in review.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
-    overlay.render([issueOnCta({ stateName: '', stage: 'ripening' })]);
+    overlay.render([issueOnCta({ stateName: '', stage: 'progress' })]);
 
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
@@ -416,7 +416,7 @@ describe('createOverlay', () => {
     // Raised in review on FRU-24.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
-    overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
+    overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'closed' })]);
 
     const badge = page.document.querySelector('.fruitback-pin-badge');
     // « Closed · the note », as the mock-up writes it (FRU-304).
@@ -445,7 +445,7 @@ describe('createOverlay', () => {
     // column, and the contract's stage vocabulary is not a substitute for it.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
-    overlay.render([issueOnCta({ stateName: 'In Progress', stage: 'ripening' })]);
+    overlay.render([issueOnCta({ stateName: 'In Progress', stage: 'progress' })]);
 
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
@@ -829,16 +829,16 @@ describe('showing only some pins', () => {
       shouldShow: (issue) => !hidden.includes(issue.stage),
     });
 
-    overlay.render([issueOnCta({ stage: 'ripe' }), issueOnCta({ stage: 'seeded' })]);
+    overlay.render([issueOnCta({ stage: 'done' }), issueOnCta({ stage: 'new' })]);
     assert.equal(page.document.querySelectorAll('[data-fruitback-pin]').length, 2);
 
-    hidden = ['ripe'];
+    hidden = ['done'];
     overlay.refilter();
 
     const stages = [...page.document.querySelectorAll('[data-fruitback-pin]')].map(
       (pin) => (pin as HTMLElement).dataset.fruitbackStage,
     );
-    assert.deepEqual(stages, ['seeded']);
+    assert.deepEqual(stages, ['new']);
 
     // And back again, from the issues it kept rather than from a request.
     hidden = [];

@@ -3,7 +3,7 @@ import type { Connector, Site, Stage } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import type { Listed } from '../listed';
-import { LinkButton, type Status } from '../ui';
+import { LinkButton } from '../ui';
 import { useLocale } from '../use-locale';
 
 /**
@@ -32,20 +32,11 @@ export const KEY_PROBLEMS: Record<string, string> = {
 
 /** The names of the five stages, as the widget shows them on a pin. */
 export const STAGE_NAMES: Record<Stage, string> = {
-  seeded: msg('New'),
-  green: msg('To do'),
-  ripening: msg('In progress'),
-  ripe: msg('Done'),
-  composted: msg('Closed'),
-};
-
-/** The status of the kit that draws a stage: the worker keeps the names of before the mockup. */
-export const STAGE_STATUS: Record<Stage, Status> = {
-  seeded: 'new',
-  green: 'todo',
-  ripening: 'progress',
-  ripe: 'done',
-  composted: 'closed',
+  new: msg('New'),
+  todo: msg('To do'),
+  progress: msg('In progress'),
+  done: msg('Done'),
+  closed: msg('Closed'),
 };
 
 /**

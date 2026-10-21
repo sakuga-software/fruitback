@@ -159,10 +159,10 @@ describe('where the setup takes a person (FRU-239)', () => {
   });
 
   it('sees a first note by a count of the index, or by the day of a last note, and not on a worker of before', () => {
-    const none = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
+    const none = { new: 0, todo: 0, progress: 0, done: 0, closed: 0 };
     assert.equal(noted(site), false);
     assert.equal(noted({ ...site, notes: none }), false);
-    assert.equal(noted({ ...site, notes: { ...none, ripe: 1 } }), true);
+    assert.equal(noted({ ...site, notes: { ...none, done: 1 } }), true);
     assert.equal(noted({ ...site, lastNoteAt: '2026-10-14T08:00:00.000Z' }), true);
   });
 

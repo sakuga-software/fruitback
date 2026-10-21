@@ -107,7 +107,7 @@ const EXCERPT_MAX_LENGTH = 90;
  * The chips of the board, in its order (FRU-308): « All », then a status each. « Closed » is not on
  * the board: its chip shows only while a note of the page is closed, or while it is the one chosen.
  */
-const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 type Stage = (typeof STAGES)[number];
 type Chosen = 'all' | Stage;
 
@@ -491,7 +491,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       const number = found.filter((entry) => name === 'all' || entry.issue.stage === name).length;
       button.setAttribute('aria-pressed', String(name === chosen));
       // « Closed » is not on the board: shown while a note of the page is closed, or while chosen.
-      button.hidden = name === 'composted' && number === 0 && chosen !== 'composted';
+      button.hidden = name === 'closed' && number === 0 && chosen !== 'closed';
       count.textContent = failing || !known ? '' : String(number);
       // « All 4 », with its space: two spans read as one word, « All4 », in an accessible name.
       button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${number}`);

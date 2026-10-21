@@ -96,7 +96,7 @@ describe('the tokens of the console (FRU-232)', () => {
     const widget = readFileSync(new URL('../../../packages/widget/src/theme.ts', import.meta.url), 'utf8');
     const light = widget.slice(0, widget.indexOf('@media'));
     const ofTheWidget = (name: string) => new RegExp(`--fruitback-${name}:\\s*([^;]+);`).exec(light)?.[1];
-    const STAGES = { new: 'seeded', todo: 'green', progress: 'ripening', done: 'ripe', closed: 'composted' };
+    const STAGES = { new: 'new', todo: 'todo', progress: 'progress', done: 'done', closed: 'closed' };
     const differences = (read: (name: string) => string | undefined) => [
       ...Object.entries(STAGES)
         .filter(([status, stage]) => read(`--color-status-${status}`) !== ofTheWidget(`stage-${stage}`))
@@ -105,7 +105,7 @@ describe('the tokens of the console (FRU-232)', () => {
     ];
 
     assert.deepEqual(differences(token), []);
-    assert.equal(ofTheWidget('stage-ripe'), '#5560c4', 'the stages of the widget were not read');
+    assert.equal(ofTheWidget('stage-done'), '#5560c4', 'the stages of the widget were not read');
     // The control: the red « new » of 2026-10-13, left in the console, is a difference.
     assert.deepEqual(
       differences((name) => (name === '--color-status-new' ? '#dd2c27' : token(name))),

@@ -571,24 +571,24 @@ button.search-chip .kit-drop[data-size='mark'] {
   box-shadow: 0 0 0 1px var(--stage-edge);
 }
 
-.kit-drop[data-hollow='true'][data-stage='seeded'] {
-  color: var(--stage-seeded);
+.kit-drop[data-hollow='true'][data-stage='new'] {
+  color: var(--stage-new);
 }
 
-.kit-drop[data-hollow='true'][data-stage='green'] {
-  color: var(--stage-green);
+.kit-drop[data-hollow='true'][data-stage='todo'] {
+  color: var(--stage-todo);
 }
 
-.kit-drop[data-hollow='true'][data-stage='ripening'] {
-  color: var(--stage-ripening);
+.kit-drop[data-hollow='true'][data-stage='progress'] {
+  color: var(--stage-progress);
 }
 
-.kit-drop[data-hollow='true'][data-stage='ripe'] {
-  color: var(--stage-ripe);
+.kit-drop[data-hollow='true'][data-stage='done'] {
+  color: var(--stage-done);
 }
 
-.kit-drop[data-hollow='true'][data-stage='composted'] {
-  color: var(--stage-composted);
+.kit-drop[data-hollow='true'][data-stage='closed'] {
+  color: var(--stage-closed);
 }
 
 .site-row-links {

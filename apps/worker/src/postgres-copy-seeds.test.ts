@@ -180,7 +180,7 @@ for (const subject of SUBJECTS) {
         // The five stages came through, and the text of a seed is the text of the file.
         assert.deepEqual(
           (await rowsOf(database, 'SELECT stage FROM seeds ORDER BY id')).map((row) => row.stage),
-          [...SEED_STAGES, 'seeded'],
+          [...SEED_STAGES, 'new'],
         );
         const file = new DatabaseSync(seedsPath, { readOnly: true });
         const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
@@ -258,9 +258,9 @@ for (const subject of SUBJECTS) {
             )
           ).json()) as { issues: { identifier: string; stage: string; seed: { note: string } }[] };
         assert.deepEqual((await read(PAGES[0] ?? '')).issues.map((issue) => [issue.identifier, issue.stage]).sort(), [
-          ['FB-1', 'seeded'],
-          ['FB-2', 'green'],
-          ['FB-5', 'composted'],
+          ['FB-1', 'new'],
+          ['FB-2', 'todo'],
+          ['FB-5', 'closed'],
         ]);
         assert.deepEqual((await read(PAGES[1] ?? '')).issues.map((issue) => issue.identifier).sort(), ['FB-3', 'FB-7']);
       });

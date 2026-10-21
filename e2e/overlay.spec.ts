@@ -123,12 +123,12 @@ test('each of the five statuses has the colour Mathieu chose, written black on t
   });
   expect(drawn).toEqual({
     // The three light fills are written black: 9.90:1, 12.78:1 and 10.11:1 (FRU-334).
-    seeded: status('rgb(190, 194, 200)', 'seeded', black),
-    green: status('rgb(217, 219, 223)', 'green', black),
-    ripening: status('rgb(243, 187, 61)', 'ripening', black),
+    new: status('rgb(190, 194, 200)', 'new', black),
+    todo: status('rgb(217, 219, 223)', 'todo', black),
+    progress: status('rgb(243, 187, 61)', 'progress', black),
     // Blueberry and cherry hold white: 5.45:1 and 7.02:1.
-    ripe: status('rgb(85, 96, 196)', 'ripe'),
-    composted: status('rgb(165, 42, 58)', 'composted'),
+    done: status('rgb(85, 96, 196)', 'done'),
+    closed: status('rgb(165, 42, 58)', 'closed'),
   });
 });
 

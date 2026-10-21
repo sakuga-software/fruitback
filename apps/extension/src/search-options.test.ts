@@ -22,7 +22,7 @@ afterEach(() => setLanguage('en'));
 const NOW = Date.parse('2026-10-20T12:00:00Z');
 
 const note = (fields: Partial<PanelNote> & { id: string }): PanelNote => ({
-  stage: 'seeded',
+  stage: 'new',
   note: '29 € for the Mocha, the price list says 27 €.',
   createdAt: '2026-10-19T12:00:00Z',
   updatedAt: '2026-10-19T12:00:00Z',
@@ -33,16 +33,16 @@ const note = (fields: Partial<PanelNote> & { id: string }): PanelNote => ({
 });
 
 const NOTES: PanelNote[] = [
-  note({ id: 'a', number: 1, stage: 'ripening', note: 'The Add button is almost invisible.' }),
-  note({ id: 'b', number: 2, stage: 'green', note: 'Could the title mention the Café de Bordeaux?' }),
-  note({ id: 'c', number: 3, stage: 'seeded', author: 'Léa' }),
-  note({ id: 'd', number: 4, stage: 'ripening', note: 'The promo code should be AUTUMN10.', placement: 'detached' }),
+  note({ id: 'a', number: 1, stage: 'progress', note: 'The Add button is almost invisible.' }),
+  note({ id: 'b', number: 2, stage: 'todo', note: 'Could the title mention the Café de Bordeaux?' }),
+  note({ id: 'c', number: 3, stage: 'new', author: 'Léa' }),
+  note({ id: 'd', number: 4, stage: 'progress', note: 'The promo code should be AUTUMN10.', placement: 'detached' }),
 ];
 
 const siteNote = (fields: Partial<SiteNote> & { seed: string }): SiteNote => ({
   excerpt: 'The email field is too short on mobile.',
   page: { url: 'https://staging.acme.dev/subscriptions', path: '/subscriptions' },
-  stage: 'ripening',
+  stage: 'progress',
   createdAt: '2026-10-18T12:00:00Z',
   ...fields,
 });
@@ -133,7 +133,7 @@ describe('« This page » (FRU-307)', () => {
   });
 
   it('filters by a chip, and counts what the search found', () => {
-    const { root, calls } = draw({ stage: 'ripening', q: 'the' });
+    const { root, calls } = draw({ stage: 'progress', q: 'the' });
 
     assert.deepEqual(rows(root), ['a']);
     assert.equal(root.querySelector('.search-detached-card')?.getAttribute('data-note'), 'd');
@@ -146,7 +146,7 @@ describe('« This page » (FRU-307)', () => {
       ['All 4 false', 'New 1 false', 'To do 1 false', 'In progress 2 true', 'Done 0 false'],
     );
     chips[2]?.click();
-    assert.deepEqual(calls, ['stage:green']);
+    assert.deepEqual(calls, ['stage:todo']);
   });
 
   it('sends what is typed in the search', () => {
@@ -179,12 +179,12 @@ describe('« Whole site » (FRU-307)', () => {
     siteNote({ seed: 's1', reference: 'FRU-128', referenceUrl: 'https://linear.app/acme/issue/FRU-128' }),
     siteNote({
       seed: 's2',
-      stage: 'green',
+      stage: 'todo',
       excerpt: 'Could the title mention that the coffee is roasted in Bordeaux, and since when the house',
       page: { url: 'https://staging.acme.dev/', path: '/' },
       author: 'Camille',
     }),
-    siteNote({ seed: 's3', stage: 'ripe', mine: true, page: { url: 'https://staging.acme.dev/cart', path: '/cart' } }),
+    siteNote({ seed: 's3', stage: 'done', mine: true, page: { url: 'https://staging.acme.dev/cart', path: '/cart' } }),
   ];
 
   it('names the two scopes with their counts', () => {
@@ -220,7 +220,7 @@ describe('« Whole site » (FRU-307)', () => {
   });
 
   it('opens a note from its row, filters it by a chip, and counts what was read', () => {
-    const { root, calls } = draw({ scope: 'site', stage: 'ripe', site: { q: '', notes: SITE, total: 3 } });
+    const { root, calls } = draw({ scope: 'site', stage: 'done', site: { q: '', notes: SITE, total: 3 } });
     assert.deepEqual(rows(root), ['s3']);
     const counts = [...root.querySelectorAll('.search-chip-count')].map((count) => count.textContent);
     assert.deepEqual(counts, ['3', '0', '1', '1', '1']);
@@ -278,12 +278,12 @@ describe('« Whole site » (FRU-307)', () => {
 
 describe('the helpers of the search (FRU-307)', () => {
   it('counts every note in All, and Closed in no chip of its own', () => {
-    assert.deepEqual(countsOf([{ stage: 'composted' }, { stage: 'ripe' }, { stage: 'ripe' }]), {
+    assert.deepEqual(countsOf([{ stage: 'closed' }, { stage: 'done' }, { stage: 'done' }]), {
       all: 3,
-      seeded: 0,
-      green: 0,
-      ripening: 0,
-      ripe: 2,
+      new: 0,
+      todo: 0,
+      progress: 0,
+      done: 2,
     });
   });
 

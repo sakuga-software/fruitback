@@ -1249,7 +1249,7 @@ const STYLES = `
   height: 10px;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: var(--fruitback-stage-seeded);
+  background: var(--fruitback-stage-new);
   box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge);
 }
 /* What the note points at, in the mono of a selector, on one line. */
@@ -1493,9 +1493,9 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   /* The colour of « new », through the variable every pin is painted with. */
-  --fruitback-pin-color: var(--fruitback-stage-seeded);
+  --fruitback-pin-color: var(--fruitback-stage-new);
   background: var(--fruitback-pin-color);
-  color: var(--fruitback-color-on-stage-seeded, var(--fruitback-color-on-stage));
+  color: var(--fruitback-color-on-stage-new, var(--fruitback-color-on-stage));
   font: 700 12px/1 var(--fruitback-font-sans);
   box-shadow: 0 0 0 1px var(--fruitback-color-stage-edge), var(--fruitback-shadow-sm);
 }

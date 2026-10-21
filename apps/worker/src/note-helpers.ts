@@ -78,7 +78,7 @@ export function noteEntry(
     author: authorOf(seed, channel === 'extension'),
     place: placeOf(target),
     issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
-    stage: 'seeded',
+    stage: 'new',
   };
 }
 

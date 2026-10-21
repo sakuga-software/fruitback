@@ -169,7 +169,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
           return { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() };
         }),
       ),
-    // A verdict (FRU-294): « wrong » puts the note back to `seeded`, and the reply is written in the
+    // A verdict (FRU-294): « wrong » puts the note back to `new`, and the reply is written in the
     // same transaction. Both, or neither.
     check: (target, check, _client, policy) =>
       through('keep the verdict', ({ transaction }) =>

@@ -120,7 +120,7 @@ const ACCOUNT = {
       origin: 'https://staging.acme.dev',
       visibility: 'members',
       workspace: 'ws_1',
-      notes: { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 },
+      notes: { new: 3, todo: 2, progress: 4, done: 2, closed: 1 },
     },
     { id: 'site_2', origin: 'https://client.fr', visibility: 'everyone', workspace: 'ws_2' },
   ],
@@ -170,13 +170,13 @@ describe('the sites of every workspace of an account (FRU-254)', () => {
 
   it('keeps the counts of a site when they are five whole numbers, and only then', () => {
     const [first, second] = parseWorkspaceSites(ACCOUNT)?.sites ?? [];
-    assert.deepEqual(first?.notes, { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 });
+    assert.deepEqual(first?.notes, { new: 3, todo: 2, progress: 4, done: 2, closed: 1 });
     assert.equal(second?.notes, undefined);
     for (const notes of [
-      { seeded: 3, green: 2, ripening: 4, ripe: 2 },
-      { seeded: -1, green: 2, ripening: 4, ripe: 2, composted: 1 },
-      { seeded: 1.5, green: 2, ripening: 4, ripe: 2, composted: 1 },
-      { seeded: '3', green: 2, ripening: 4, ripe: 2, composted: 1 },
+      { new: 3, todo: 2, progress: 4, done: 2 },
+      { new: -1, todo: 2, progress: 4, done: 2, closed: 1 },
+      { new: 1.5, todo: 2, progress: 4, done: 2, closed: 1 },
+      { new: '3', todo: 2, progress: 4, done: 2, closed: 1 },
     ]) {
       const site = { ...ACCOUNT.sites[0], notes };
       assert.equal(

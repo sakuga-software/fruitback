@@ -127,10 +127,10 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     ...fields,
   });
   const NOTES: PanelNote[] = [
-    note({ id: 'b', number: 3, stage: 'green', note: 'Could the title mention Bordeaux?', mine: true }),
-    note({ id: 'a', number: 4, stage: 'seeded', author: 'Léa', createdAt: '2026-10-20T11:20:00Z' }),
-    note({ id: 'c', number: 1, stage: 'ripe', canReply: false }),
-    note({ id: 'd', number: 2, stage: 'ripening' }),
+    note({ id: 'b', number: 3, stage: 'todo', note: 'Could the title mention Bordeaux?', mine: true }),
+    note({ id: 'a', number: 4, stage: 'new', author: 'Léa', createdAt: '2026-10-20T11:20:00Z' }),
+    note({ id: 'c', number: 1, stage: 'done', canReply: false }),
+    note({ id: 'd', number: 2, stage: 'progress' }),
   ];
   const handlers = (): Omit<PanelOptions, 'state' | 'tab'> & { calls: string[] } => {
     const calls: string[] = [];
@@ -262,11 +262,11 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
       root.querySelector('li[data-note="d"] .panel-row-meta')?.textContent,
       'In progress · Anonymous · yesterday',
     );
-    assert.equal(third?.querySelector('.kit-drop')?.getAttribute('data-stage'), 'green');
+    assert.equal(third?.querySelector('.kit-drop')?.getAttribute('data-stage'), 'todo');
   });
 
   it('lists done and closed notes under « Done »', () => {
-    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done' });
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished' });
 
     assert.deepEqual(
       [...root.querySelectorAll('li[data-note]')].map((row) => row.getAttribute('data-note')),
@@ -302,7 +302,7 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
   });
 
   it('offers no « Reply » on a note the reader may not reply to', () => {
-    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'done', open: 'c' });
+    const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished', open: 'c' });
 
     assert.deepEqual(
       [...root.querySelectorAll('li[data-note="c"] .panel-row-links button')].map((link) => link.textContent),
@@ -397,7 +397,7 @@ describe('« Ready to check » (FRU-300)', () => {
     ...base,
     id: 'r1',
     number: 1,
-    stage: 'ripe',
+    stage: 'done',
     mine: true,
     replies: [{ author: 'Sakuga team', body: 'Fixed in the last deploy.', createdAt: '2026-10-20T10:00:00Z' }],
   };
@@ -406,21 +406,21 @@ describe('« Ready to check » (FRU-300)', () => {
     ...base,
     id: 'r2',
     number: 2,
-    stage: 'ripe',
+    stage: 'done',
     mine: true,
     note: 'The Add button.',
     replies: [{ author: 'Sakuga team', body: 'Typed on a page.', createdAt: '2026-10-20T11:00:00Z', fromPage: true }],
   };
-  const OTHERS: PanelNote = { ...base, id: 'o1', number: 3, stage: 'ripe', note: 'Somebody else’s.' };
+  const OTHERS: PanelNote = { ...base, id: 'o1', number: 3, stage: 'done', note: 'Somebody else’s.' };
   const CHECKED: PanelNote = {
     ...base,
     id: 'c1',
     number: 4,
-    stage: 'ripe',
+    stage: 'done',
     mine: true,
     checked: { by: 'Camille Durand', at: '2026-10-20T11:59:30Z' },
   };
-  const OPEN: PanelNote = { ...base, id: 'n1', number: 5, stage: 'seeded', mine: true, note: 'Reopened one.' };
+  const OPEN: PanelNote = { ...base, id: 'n1', number: 5, stage: 'new', mine: true, note: 'Reopened one.' };
   const calls: string[] = [];
   const options = (extra: Partial<PanelOptions> = {}): PanelOptions => ({
     state: { kind: 'on', host: 'staging.acme.dev', notes: [READY, NOBODY, OTHERS, CHECKED, OPEN] },
@@ -503,7 +503,7 @@ describe('« Ready to check » (FRU-300)', () => {
   });
 
   it('says « Checked by you » in Done, and « Reopened by you » in Open', () => {
-    const done = panelPage(page(), options({ tab: 'done' }));
+    const done = panelPage(page(), options({ tab: 'finished' }));
     assert.equal(
       done.querySelector('li[data-note="c1"] .panel-row-meta')?.textContent,
       'Done · Checked by you · just now',
@@ -549,12 +549,12 @@ describe('the tab of a note, and its age', () => {
         canReply: false,
         placement: 'found',
       });
-    assert.deepEqual((['seeded', 'green', 'ripening', 'ripe', 'composted'] as const).map(of), [
+    assert.deepEqual((['new', 'todo', 'progress', 'done', 'closed'] as const).map(of), [
       'open',
       'open',
       'open',
-      'done',
-      'done',
+      'finished',
+      'finished',
     ]);
   });
 
@@ -580,7 +580,7 @@ describe('the host the panel shows', () => {
 describe('what the panel does with an answer of the widget (raised in review)', () => {
   const NOTE: PanelNote = {
     id: 'n1',
-    stage: 'green',
+    stage: 'todo',
     note: 'A note',
     createdAt: '2026-10-20T10:00:00Z',
     updatedAt: '2026-10-20T10:00:00Z',

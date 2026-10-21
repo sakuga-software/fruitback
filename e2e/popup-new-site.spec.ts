@@ -107,7 +107,7 @@ async function sitesRoute(
         ...site,
         destination: { label: 'Linear · Northwind' },
         toCheck: 2,
-        notes: { seeded: 1, green: 1, ripening: 1, ripe: 2, composted: 0 },
+        notes: { new: 1, todo: 1, progress: 1, done: 2, closed: 0 },
       });
 
       return route.fulfill({ status: 201, json: { site } });

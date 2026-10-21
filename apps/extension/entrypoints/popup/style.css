@@ -66,9 +66,9 @@
   /* The ring of a drop, and the number on done and closed: white. */
   --on-stage: #fff;
   /* The number on new, to do and in progress, the three light fills (FRU-334): black. */
-  --on-stage-seeded: #18181b;
-  --on-stage-green: #18181b;
-  --on-stage-ripening: #18181b;
+  --on-stage-new: #18181b;
+  --on-stage-todo: #18181b;
+  --on-stage-progress: #18181b;
   /* The edge of every drop: 3.42:1 on white, 5.18:1 on the dark surface (FRU-334). */
   --stage-edge: #8a8a93;
   /* A note whose element is gone: a neutral grey, no longer the brown of « closed » (FRU-334). */
@@ -76,11 +76,11 @@
   /* The knob of a switch, on the accent and on the grey of off. */
   --knob: #fff;
   /* The five statuses of a note, as the widget draws them on the page (FRU-334). */
-  --stage-seeded: #bec2c8;
-  --stage-green: #d9dbdf;
-  --stage-ripening: #f3bb3d;
-  --stage-ripe: #5560c4;
-  --stage-composted: #a52a3a;
+  --stage-new: #bec2c8;
+  --stage-todo: #d9dbdf;
+  --stage-progress: #f3bb3d;
+  --stage-done: #5560c4;
+  --stage-closed: #a52a3a;
   /* The tab that is chosen; the popup; the side panel. */
   --shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);
   --shadow-popup: 0 8px 28px rgba(24, 24, 27, 0.14);

@@ -73,13 +73,13 @@ async function anInstance() {
   const [kept] = await rowsOf(
     on.database,
     `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
-       VALUES ('${site.id}', 'https://staging.beta.dev/', 'seeded', '{"id":"sd_1","note":"${NOTE_TEXT}"}', 1, 1)
+       VALUES ('${site.id}', 'https://staging.beta.dev/', 'new', '{"id":"sd_1","note":"${NOTE_TEXT}"}', 1, 1)
      RETURNING id`,
   );
   await rowsOf(
     on.database,
     `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
-       VALUES ('${site.id}', 'sd_1', '${beta}', 'https://staging.beta.dev/', '${NOTE_TEXT.slice(0, 64)}', 'ripe', 'visitor', 'connector', '${connector.id}', 'FB-${kept?.id}', 1, 1)`,
+       VALUES ('${site.id}', 'sd_1', '${beta}', 'https://staging.beta.dev/', '${NOTE_TEXT.slice(0, 64)}', 'done', 'visitor', 'connector', '${connector.id}', 'FB-${kept?.id}', 1, 1)`,
   );
   await rowsOf(
     on.database,
@@ -306,7 +306,7 @@ describe('what the administrator reads (FRU-261)', () => {
     assert.deepEqual(first.owners, [{ id: bob.id, email: 'bob@beta.dev' }]);
     assert.equal(first.members, 2);
     assert.equal(first.sites, 1);
-    assert.equal(first.notes.ripe, 1);
+    assert.equal(first.notes.done, 1);
     assert.equal(first.pendingDeliveries, 1);
     assert.deepEqual(
       first.destinations.map((each: { id: string }) => each.id),
@@ -357,7 +357,7 @@ describe('what the administrator reads (FRU-261)', () => {
         origin: 'https://staging.beta.dev',
         visibility: 'members',
         destinations: [{ connector: connector.id, label: 'REST API · Hook of Beta' }],
-        notes: { ...body.sites[0].notes, ripe: 1 },
+        notes: { ...body.sites[0].notes, done: 1 },
       },
     ]);
     assert.deepEqual(
@@ -565,7 +565,7 @@ async function notesOfTheInstance() {
     const [row] = await rowsOf(
       on.database,
       `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
-         VALUES ('${site}', 'https://${site}.test/', 'seeded', '${JSON.stringify({ id: seed, note })}', 1, 1)
+         VALUES ('${site}', 'https://${site}.test/', 'new', '${JSON.stringify({ id: seed, note })}', 1, 1)
        RETURNING id`,
     );
 
@@ -579,7 +579,7 @@ async function notesOfTheInstance() {
     author: { kind: 'visitor' as const },
     place,
     issue: { identifier: reference, url: `https://tracker.test/${reference}` },
-    stage: 'seeded' as const,
+    stage: 'new' as const,
   });
 
   const keptNote = LONG('The note that Beta keeps');

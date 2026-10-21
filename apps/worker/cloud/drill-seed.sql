@@ -44,11 +44,11 @@ INSERT INTO site_destinations (site_id, position, connector_id, team_id, project
 -- hidden, a status of the worker's own store added by the team, with a text colour it chose, and one
 -- of another site. Five rows, a count no other table has.
 INSERT INTO statuses (site_id, source, key, name, stage, color, text_color, position, origin, hidden) VALUES
-  ('site_drill1', 'con_drill1', 'st_review', 'In Review', 'ripening', '#7dd3fc', NULL, 2, 'tracker', false),
-  ('site_drill1', 'con_drill1', 'st_wontfix', NULL, 'composted', NULL, NULL, 5, 'tracker', true),
-  ('site_drill1', 'own', 'waiting', 'Waiting for the client', 'green', '#5560c4', '#ffffff', 1, 'team', false),
-  ('site_drill1', 'own', 'ripe', 'Shipped', 'ripe', NULL, NULL, 3, 'tracker', false),
-  ('site_drill2', 'con_drill1', 'st_review', NULL, 'ripe', NULL, NULL, 0, 'tracker', false);
+  ('site_drill1', 'con_drill1', 'st_review', 'In Review', 'progress', '#7dd3fc', NULL, 2, 'tracker', false),
+  ('site_drill1', 'con_drill1', 'st_wontfix', NULL, 'closed', NULL, NULL, 5, 'tracker', true),
+  ('site_drill1', 'own', 'waiting', 'Waiting for the client', 'todo', '#5560c4', '#ffffff', 1, 'team', false),
+  ('site_drill1', 'own', 'done', 'Shipped', 'done', NULL, NULL, 3, 'tracker', false),
+  ('site_drill2', 'con_drill1', 'st_review', NULL, 'done', NULL, NULL, 0, 'tracker', false);
 
 -- The domains of a workspace (FRU-103): one never proven, one proven that covers the previews of a
 -- site, one whose proof is lost, and three more so the count is no other table's.
@@ -111,9 +111,9 @@ INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, 
 -- sequence at 1 would give the next note the number of one that exists. Three notes and two replies.
 -- The second note is in a status of its site (FRU-365); the others are drawn by their stage.
 INSERT INTO seeds (id, client_id, page_url, stage, status_key, seed, created_at, updated_at) VALUES
-  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'seeded', NULL, '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
-  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'ripe', 'ripe', '{"id":"sd_drill2","note":"Done."}', 2, 3),
-  (7, NULL, 'https://staging.acme.dev/', 'seeded', NULL, '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
+  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'new', NULL, '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
+  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'done', 'done', '{"id":"sd_drill2","note":"Done."}', 2, 3),
+  (7, NULL, 'https://staging.acme.dev/', 'new', NULL, '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
 SELECT setval(pg_get_serial_sequence('seeds', 'id'), 7);
 
 INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES
@@ -127,8 +127,8 @@ INSERT INTO kv (key, value, expires_at) VALUES
 
 -- The index of the notes (FRU-237): a note that went to a connector, and one the worker keeps.
 INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, channel, author_kind, author_account_id, place, connector_id, reference, reference_url, created_at, checked_at) VALUES
-  ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'seeded', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
-  ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'ripe', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);
+  ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'new', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
+  ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'done', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);
 
 -- The day a member was last seen in the workspace (FRU-249).
 INSERT INTO last_seen (member_id, day) VALUES

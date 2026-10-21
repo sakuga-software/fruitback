@@ -81,7 +81,7 @@ const FIRST: Note[] = [
     excerpt: 'The order form rejects postcodes with a space.',
     page: page('https://support.acme.dev/contact'),
     site: { id: 's3' },
-    stage: 'seeded',
+    stage: 'new',
     author: { kind: 'anonymous' },
     place: REST,
     delivery: { id: 'd1', state: 'waiting' },
@@ -92,7 +92,7 @@ const FIRST: Note[] = [
     excerpt: 'The headline runs to three lines on a phone. Can it be shorter?',
     page: page('https://staging.acme.dev/'),
     site: { id: 's1' },
-    stage: 'seeded',
+    stage: 'new',
     author: { kind: 'you', name: 'Ana' },
     seed: 'seed-n2',
     place: LINEAR,
@@ -105,7 +105,7 @@ const FIRST: Note[] = [
     excerpt: 'The returns policy says "recieve".',
     page: page('https://acme.dev/help/returns'),
     site: { id: 's2' },
-    stage: 'green',
+    stage: 'todo',
     author: { kind: 'anonymous' },
     place: LINEAR,
     ref: 'ACM-149',
@@ -117,7 +117,7 @@ const FIRST: Note[] = [
     excerpt: 'The chat bubble covers the send button on a phone.',
     page: page('https://support.acme.dev/'),
     site: { id: 's3' },
-    stage: 'ripe',
+    stage: 'done',
     author: { kind: 'member', name: 'Léa Martin' },
     place: REST,
     createdAt: since(26 * 60),
@@ -127,7 +127,7 @@ const FIRST: Note[] = [
     excerpt: 'The button is hard to read on the green. Could it take the cream',
     page: page('https://staging.acme.dev/'),
     site: { id: 's1' },
-    stage: 'ripening',
+    stage: 'progress',
     author: { kind: 'guest', name: 'Camille Durand' },
     place: LINEAR,
     ref: 'ACM-142',
@@ -139,7 +139,7 @@ const FIRST: Note[] = [
     excerpt: 'The yearly toggle goes back to monthly on reload.',
     page: page('https://staging.acme.dev/pricing'),
     site: { id: 's1' },
-    stage: 'green',
+    stage: 'todo',
     author: { kind: 'admin', name: 'Marc Petit' },
     place: LINEAR,
     ref: 'ACM-139',
@@ -151,7 +151,7 @@ const FIRST: Note[] = [
     excerpt: 'The checkout button sits under the cookie banner.',
     page: page('https://acme.dev/checkout'),
     site: { id: 's2' },
-    stage: 'ripening',
+    stage: 'progress',
     author: { kind: 'verified' },
     place: { kind: 'fruitback' },
     createdAt: since(4 * 24 * 60 + 60),
@@ -161,7 +161,7 @@ const FIRST: Note[] = [
     excerpt: 'The mug is cut off at the top on every tile of this row.',
     page: page('https://staging.acme.dev/shop'),
     site: { id: 's1' },
-    stage: 'ripe',
+    stage: 'done',
     author: { kind: 'member', name: 'Léa Martin' },
     place: LINEAR,
     ref: 'ACM-120',
@@ -176,7 +176,7 @@ const SECOND: Note[] = [
     ...(FIRST[3] as Note),
     id: 'n10',
     excerpt: 'The contact form says nothing after it is sent.',
-    stage: 'green',
+    stage: 'todo',
     // The worker stopped trying to deliver this one (FRU-122).
     delivery: { id: 'd10', state: 'gave-up' },
     createdAt: since(9 * 24 * 60),
@@ -516,7 +516,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   // The status.
   await page.getByRole('button', { name: /Any status/ }).click();
   await page.getByRole('option', { name: 'Done', exact: true }).click();
-  await expect(page).toHaveURL(/[?&]stage=ripe(&|$)/);
+  await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
   await expect(rows(page)).toHaveCount(3);
 
   // The search waits 300 ms after the last key, and reads once. The clock of the page is held while
@@ -531,7 +531,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await expect(rows(page)).toHaveCount(1);
   expect(worker.asked.length).toBe(before + 1);
-  expect(worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+  expect(worker.asked.at(-1)).toEqual({ stage: 'done', q: 'mug' });
 
   // A key typed while the search is written in the address stays in the field (FRU-279).
   await search(page).fill('');
@@ -542,7 +542,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(search(page)).toHaveValue('mug');
   // The address is written before the read leaves: the read comes from an effect of the next render.
   // So wait for the read itself, and only one made after the keys (FRU-327).
-  await expect.poll(() => worker.asked.slice(typed).at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+  await expect.poll(() => worker.asked.slice(typed).at(-1)).toEqual({ stage: 'done', q: 'mug' });
 
   // « Only my notes ».
   const mine = page.getByRole('checkbox', { name: 'Only my notes' });
@@ -565,7 +565,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await page.getByRole('button', { name: /Any status/ }).click();
   await page.getByRole('option', { name: 'Done', exact: true }).click();
-  await expect(page).toHaveURL(/[?&]stage=ripe(&|$)/);
+  await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
   await expect(rows(page)).toHaveCount(1);
 
   // A reload keeps it all.
@@ -573,7 +573,7 @@ test('each filter writes the address and reads again, and a reload keeps the vie
   await expect(rows(page)).toHaveCount(1);
   await expect(search(page)).toHaveValue('mug');
   await expect(page.getByRole('button', { name: /Done/ }).first()).toBeVisible();
-  expect(worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+  expect(worker.asked.at(-1)).toEqual({ stage: 'done', q: 'mug' });
 });
 
 test('a list chosen while the search waits its 300 ms is kept when the search lands', async ({ page }) => {
@@ -586,8 +586,8 @@ test('a list chosen while the search waits its 300 ms is kept when the search la
   await page.getByRole('option', { name: 'Done', exact: true }).click();
   await expect(page).toHaveURL(/[?&]q=mug(&|$)/);
   await page.waitForTimeout(400);
-  await expect(page).toHaveURL(/[?&]stage=ripe(&|$)/);
-  await expect.poll(() => worker.asked.at(-1)).toEqual({ stage: 'ripe', q: 'mug' });
+  await expect(page).toHaveURL(/[?&]stage=done(&|$)/);
+  await expect.poll(() => worker.asked.at(-1)).toEqual({ stage: 'done', q: 'mug' });
 });
 
 test('the pages go forward with the cursor and come back, « Previous » off on the first one', async ({ page }) => {
@@ -731,7 +731,7 @@ test('while a filter is read, the rows stay and nothing a pointer can reach move
   worker.read = 'waits';
   await page.getByRole('button', { name: /Any status/ }).click();
   await page.getByRole('option', { name: 'New', exact: true }).click();
-  await expect(page).toHaveURL(/stage=seeded/);
+  await expect(page).toHaveURL(/stage=new/);
   await page.waitForTimeout(300);
   // The answer is held: the eight rows are still there, and nothing moved.
   await expect(rows(page)).toHaveCount(8);

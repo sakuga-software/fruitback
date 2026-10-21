@@ -317,11 +317,11 @@ function Notes({ notes }: { notes: StageCounts }) {
   const count = (stage: (typeof STAGES)[number]) => notes[stage] ?? 0;
   const values = {
     count: totalOf(notes),
-    new: count('seeded'),
-    todo: count('green'),
-    progress: count('ripening'),
-    done: count('ripe'),
-    closed: count('composted'),
+    new: count('new'),
+    todo: count('todo'),
+    progress: count('progress'),
+    done: count('done'),
+    closed: count('closed'),
   };
   const label =
     values.count === 1

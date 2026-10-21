@@ -17,14 +17,14 @@ test('the settings open from the floating button and survive a reload', async ({
   await page.getByLabel('Open Fruitback settings').click();
   await expect(page.locator(panel)).toBeVisible();
 
-  const closed = page.locator('[name="stage-composted"]');
+  const closed = page.locator('[name="stage-closed"]');
   await expect(closed).toBeChecked();
   await closed.uncheck();
 
   await page.reload();
   await page.getByLabel('Open Fruitback settings').click();
 
-  await expect(page.locator('[name="stage-composted"]')).not.toBeChecked();
+  await expect(page.locator('[name="stage-closed"]')).not.toBeChecked();
 });
 
 test('the panel holds no field to type in (FRU-89)', async ({ page }) => {
@@ -84,7 +84,7 @@ test('the panel belongs to the widget, so the page cannot restyle it', async ({ 
   });
   expect(ofThePage).toEqual({ outline: '8px', margin: '40px' });
 
-  const ofThePanel = await page.locator('[name="stage-ripe"]').evaluate(styles);
+  const ofThePanel = await page.locator('[name="stage-done"]').evaluate(styles);
   expect(ofThePanel.outline).not.toBe('8px');
   expect(ofThePanel.margin).not.toBe('40px');
 });
@@ -132,12 +132,12 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
 
   // The box of a status is drawn as a chip since FRU-305: the chip is what must be drawn, with the
   // drop of its colour, while its box stays checkable over it.
-  const chip = page.locator('.fruitback-config-chip').filter({ has: page.locator('[name="stage-ripe"]') });
+  const chip = page.locator('.fruitback-config-chip').filter({ has: page.locator('[name="stage-done"]') });
   await expect(chip).toBeVisible();
   expect(await chip.locator('.fruitback-config-chip-drop').evaluate((node) => (node as HTMLElement).offsetWidth)).toBe(
     9,
   );
-  await expect(page.locator('[name="stage-ripe"]')).toBeChecked();
+  await expect(page.locator('[name="stage-done"]')).toBeChecked();
 
   // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
   // from the gear's own size cannot know that, and it covered the label.
@@ -202,10 +202,10 @@ test('the settings have the chips and the switches of the mock-up of 2026-10-20 
   // A click on the chip is a click on its box: the status is hidden, and the chip turns white.
   const closed = root.locator(chip).filter({ hasText: 'Closed' });
   await closed.click();
-  await expect(page.locator('[name="stage-composted"]')).not.toBeChecked();
+  await expect(page.locator('[name="stage-closed"]')).not.toBeChecked();
   expect(await closed.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe('rgb(255, 255, 255)');
   await closed.click();
-  await expect(page.locator('[name="stage-composted"]')).toBeChecked();
+  await expect(page.locator('[name="stage-closed"]')).toBeChecked();
 
   // The switches: 36 × 20, a role that says on and off, the whole row of 44 px toggles them.
   const hide = page.getByRole('switch', { name: 'Hide resolved feedback' });

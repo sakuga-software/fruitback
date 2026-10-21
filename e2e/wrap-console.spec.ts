@@ -41,7 +41,7 @@ async function longData(page: Page, locale: 'en' | 'fr'): Promise<void> {
             path: '/checkout/payment-method/confirmation',
           },
           site: { id: 's1' },
-          stage: 'ripening',
+          stage: 'progress',
           author: { kind: 'anonymous' },
           place: { kind: 'fruitback' },
           createdAt: '2026-10-13T08:00:00.000Z',

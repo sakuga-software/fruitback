@@ -15,7 +15,7 @@ afterEach(() => {
   for (const undo of cleanup.splice(0)) undo();
 });
 
-function note(id: string, text: string, stage: FeedbackEntry['issue']['stage'] = 'seeded'): FeedbackEntry['issue'] {
+function note(id: string, text: string, stage: FeedbackEntry['issue']['stage'] = 'new'): FeedbackEntry['issue'] {
   return seedIssueFixture({
     identifier: id.toUpperCase(),
     stage,
@@ -72,7 +72,7 @@ const rowOf = (item: HTMLElement) => [
 describe('the list of every note of the page (FRU-129, FRU-308)', () => {
   it('lists each note with its status, its identifier, when, its note, who wrote it and its replies', () => {
     const { sidebar, root, items, chipNames } = mount([
-      { issue: note('a', 'The price should say per month.\nSecond line', 'ripening'), placement: 'found', number: 1 },
+      { issue: note('a', 'The price should say per month.\nSecond line', 'progress'), placement: 'found', number: 1 },
       { issue: note('b', 'Wrong colour'), placement: 'found', number: 2 },
     ]);
     sidebar.open();
@@ -103,7 +103,7 @@ describe('the list of every note of the page (FRU-129, FRU-308)', () => {
     const { sidebar, root, chipNames, chosen } = mount([
       { issue: note('a', 'Found'), placement: 'found', number: 1 },
       { issue: note('b', 'By position'), placement: 'approximate', number: 2 },
-      { issue: note('c', 'Gone', 'ripening'), placement: 'detached', number: 3 },
+      { issue: note('c', 'Gone', 'progress'), placement: 'detached', number: 3 },
     ]);
     sidebar.open();
 
@@ -194,14 +194,14 @@ describe('the search and the chips of the list (FRU-308)', () => {
   const eight = (): SidebarEntry[] =>
     (
       [
-        ['a', 'seeded', 'The mug is too small'],
-        ['b', 'green', 'Wrong colour on the button'],
-        ['c', 'ripening', 'The price should say per month'],
-        ['d', 'ripe', 'Typo in the footer'],
-        ['e', 'seeded', 'The MUG photo is blurred'],
-        ['f', 'composted', 'Not a bug'],
-        ['g', 'ripening', 'Logo too big'],
-        ['h', 'green', 'Add a mug size'],
+        ['a', 'new', 'The mug is too small'],
+        ['b', 'todo', 'Wrong colour on the button'],
+        ['c', 'progress', 'The price should say per month'],
+        ['d', 'done', 'Typo in the footer'],
+        ['e', 'new', 'The MUG photo is blurred'],
+        ['f', 'closed', 'Not a bug'],
+        ['g', 'progress', 'Logo too big'],
+        ['h', 'todo', 'Add a mug size'],
       ] as const
     ).map(([id, stage, text], index) => ({ issue: note(id, text, stage), placement: 'found', number: index + 1 }));
   const ids = (items: HTMLElement[]) => items.map((item) => item.dataset.fruitbackNote).join('');
@@ -222,9 +222,9 @@ describe('the search and the chips of the list (FRU-308)', () => {
     );
     assert.equal(ids(items()), 'abcdefgh');
 
-    chip('ripening').click();
+    chip('progress').click();
     assert.equal(ids(items()), 'cg');
-    assert.equal(chip('ripening').getAttribute('aria-pressed'), 'true');
+    assert.equal(chip('progress').getAttribute('aria-pressed'), 'true');
     assert.equal(chip('all').getAttribute('aria-pressed'), 'false');
     // The rows keep the number of their pin, whatever the chip.
     assert.deepEqual(
@@ -237,11 +237,11 @@ describe('the search and the chips of the list (FRU-308)', () => {
   });
 
   it('has no chip « Closed » while no note of the page is closed', () => {
-    const { sidebar, chipNames, chip } = mount(eight().filter((entry) => entry.issue.stage !== 'composted'));
+    const { sidebar, chipNames, chip } = mount(eight().filter((entry) => entry.issue.stage !== 'closed'));
     sidebar.open();
 
     assert.deepEqual(chipNames(), ['All 7', 'New 2', 'To do 2', 'In progress 2', 'Done 1']);
-    assert.equal(chip('composted').hidden, true);
+    assert.equal(chip('closed').hidden, true);
   });
 
   it('searches the whole text of the notes and their identifier, whatever the case, and the chips count what it found', () => {
@@ -259,7 +259,7 @@ describe('the search and the chips of the list (FRU-308)', () => {
     assert.equal(root.querySelector('.fruitback-sidebar-scope')?.textContent, 'This page · 8');
 
     // A search and a chip together.
-    chip('green').click();
+    chip('todo').click();
     assert.equal(ids(items()), 'h');
     // The identifier of the store.
     chip('all').click();
@@ -300,15 +300,15 @@ describe('the search and the chips of the list (FRU-308)', () => {
   it('filters the detached notes too', () => {
     const { sidebar, root, chip, type } = mount([
       { issue: note('a', 'Found'), placement: 'found', number: 1 },
-      { issue: note('c', 'Gone banner', 'ripening'), placement: 'detached' },
+      { issue: note('c', 'Gone banner', 'progress'), placement: 'detached' },
     ]);
     sidebar.open();
     const unplaced = root.querySelector('[data-fruitback-unplaced]') as HTMLElement;
     assert.equal(unplaced.hidden, false);
 
-    chip('seeded').click();
+    chip('new').click();
     assert.equal(unplaced.hidden, true);
-    chip('ripening').click();
+    chip('progress').click();
     assert.equal(unplaced.hidden, false);
     type('found');
     assert.equal(unplaced.hidden, true);

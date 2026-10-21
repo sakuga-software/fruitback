@@ -146,7 +146,7 @@ async function indexedAuthorOf(
  * - **Who.** A session of the extension, read again in the store as for every write (2026-10-14),
  *   of a person who reads the site now. And of them, the person who left the note (the index keeps
  *   their account) or a role that manages the sites. Anybody else of the workspace: `403`.
- * - **When.** Only on a note that its store says is `ripe` now (`409 not-done`), and not confirmed
+ * - **When.** Only on a note that its store says is `done` now (`409 not-done`), and not confirmed
  *   already (`409 already-checked`).
  */
 export async function postCheck(
@@ -231,7 +231,7 @@ export async function postCheck(
       const manages = reach !== undefined && can(reach.role, 'manage-sites');
       if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
       if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
-      if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
+      if (found.stage !== 'done') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
       if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
       // No count of its own, as for the reply of a member (FRU-257): only a member gives a verdict,
       // and the limit of all requests applies above.
@@ -247,7 +247,7 @@ export async function postCheck(
           (each) => each.id === found.id,
         );
         if (now === undefined) break;
-        if (now.stage !== 'ripe') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
+        if (now.stage !== 'done') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
         if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
         const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
         const membership = memberships.find((each) => each.workspace.id === workspace);

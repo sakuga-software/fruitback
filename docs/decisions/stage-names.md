@@ -1,35 +1,32 @@
 # Stage names: from the orchard to plain words
 
-FRU-355 asks to remove `seeded`, `ripening` and the other fruit words everywhere, and to use generic
-terms. This page is the framing, written before any code. Nothing here is decided until Mathieu
-answers _The questions_ at the end.
+FRU-355 asked to remove `seeded`, `ripening` and the other fruit words everywhere, and to use generic
+terms. This page was the framing (#482). Mathieu answered its six questions on 2026-10-21: they are
+_The decisions_ at the end, and the rules below follow them.
 
 ## Stage names
 
-### The rules, in short (proposed)
+### The rules, in short
 
-- **The five stages become `new`, `todo`, `progress`, `done` and `closed`.** One lowercase word
-  each, the words of the labels of FRU-334, and the keys the console kit already uses.
-- **Only the names change.** Five stages, the same order, the same meaning, the same colours.
-  `stage` stays the name of the field, and `seed` stays the name of a note's payload (see question 2).
-- **Every reader accepts both names, for good.** `normalizeStage` in `shared` maps an old name to its
-  new one. It is one table of five lines, and it is what lets a widget, an extension, a console and a
-  worker of different versions read each other.
-- **A writer writes the old names until the switch, and the new ones after.** The switch is one
-  release, never the same release that teaches the readers.
-- **The read is versioned.** A new reader asks for the new names with `?contract=3`. A worker sends
-  the new names only to a reader that asked, and the old names to every other one.
-- **A host's old CSS token still works.** `--fruitback-stage-seeded` is an alias of
-  `--fruitback-stage-new`, and `theme: { 'stage-seeded': … }` is still accepted.
-- **The database is migrated in two steps, and each one rolls back without SQL.** See _The
-  migration_.
+- **The five stages are `new`, `todo`, `progress`, `done` and `closed`** (FRU-355). One lowercase word
+  each: the words of the labels of FRU-334, and the keys the console kit already used.
+- **Only the names changed.** Five stages, the same order, the same meaning, the same colours.
+  `stage` is still the name of the field, and `seed` the name of a note's payload (decision 2).
+- **The old names are gone everywhere, at once, with no compatibility** (decisions 3 and 4). No
+  reader maps an old name, the worker translates nothing, the read carries no version, and no CSS
+  token keeps an alias. An old name is now what any unknown stage is.
+- **The stored names were renamed by `0026_stage_names`**, an UPDATE written by hand into the empty
+  file of `drizzle-kit generate --custom`. No CHECK names a stage: the check is `SEED_STAGES`, in code.
+- **A migration that ran is history.** `0025_site_statuses` still says `IN ('seeded', …)`, and its
+  test still plants the old names: it is what that migration read.
+- **`@fruitback/shared` and `@fruitback/widget` are 0.3.0** (decision 5): a published type lost five
+  values.
 - **This amends one rule of [statuses.md](statuses.md):** « the five stages stay the contract,
-  unchanged ». Their number, order and meaning stay; their names change, in PR 5. That page is
-  edited by FRU-365 now, so it is amended then, not here.
+  unchanged ». Their number, order and meaning stay; their names changed.
 
-### What exists today
+### What there was
 
-Measured on `main` at 29e58161, 2026-10-21, with `git grep -P`. A hit is one of `seeded`,
+Measured on `main` at 29e58161, 2026-10-21, before the rename, with `git grep -P`. A hit is one of `seeded`,
 `ripening`, `ripe` or `composted` as a whole word, or `green` in a form that is a stage (quoted, a
 key, a token, a message key). « green » as in « the CI is green » is not counted.
 
@@ -56,10 +53,10 @@ key, a token, a message key). « green » as in « the CI is green » is not cou
 do, In progress, Done and Closed (FRU-334), from `messages.ts`, `connector-parts.tsx` and the
 extension's catalog. So FRU-355 changes identifiers, data and documents, not what a person reads.
 
-What each kind of hit costs depends on whether it crosses a boundary between two programs that can
-be of different versions:
+Each kind of hit, and whether it crosses a boundary between two programs of different versions. The
+framing planned a compatibility for each crossing; decisions 3 and 4 dropped them all (below).
 
-| What                                                                                           | Crosses a version boundary                                                | Cost of a rename                       |
+| What                                                                                           | Crosses a version boundary                                                | What the framing planned               |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------------------------------------- |
 | `SEED_STAGES`, `SeedStage`, `DEFAULT_SEED_STAGE` in `packages/shared/src/issue.ts`             | Yes: `@fruitback/shared` 0.2.0 is published                               | A breaking change, so 0.3.0            |
 | `stage` on each issue, and `stages`, in `GET /feedback`                                        | Yes: widget ↔ worker. The widget at `/v/<version>/` is cached a year      | Versioned read (below)                 |
@@ -95,8 +92,8 @@ Three facts that the plan below rests on, each measured:
 | `ripe`      | `done`     | Done            | `completed`             | closed, completed                |
 | `composted` | `closed`   | Closed          | `canceled`, `duplicate` | closed, not planned or duplicate |
 
-The starting proposal was `new`, `todo`, `in_progress`, `done`, `closed`. This page proposes
-`progress` instead of `in_progress`:
+The starting proposal was `new`, `todo`, `in_progress`, `done`, `closed`. The framing proposed
+`progress` instead of `in_progress`, and decision 1 took it:
 
 - **One word goes everywhere unchanged.** A stage name is a JS key (`notes.progress`), a CSS token
   (`--fruitback-stage-progress`), a message key, an attribute value and a URL parameter.
@@ -114,121 +111,70 @@ The other four are kept, with two notes:
   already says Closed, and `done` is next to it, so the pair reads right.
 - `done` is also the id of the « Done » tab of the extension's side panel, which holds `done` and
   `closed`. The rename makes `note.stage === 'done'` and `tab === 'done'` mean two things in one
-  file (`side-panel.ts`). The tab becomes `finished` in the same PR.
+  file (`side-panel.ts`). The tab is `finished` in the code now (decision 6).
 
 Rejected: Linear's own types (`backlog`, `unstarted`, `started`, `completed`, `canceled`). They are
 one provider's words, which FRU-23 took out of the contract, and they are not the labels.
 
-### Compatibility
+### No compatibility, on purpose
 
-| Reader \ writer           | Old (writes and sends old names)                                    | New (writes new names, sends new names only when asked) |
-| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
-| Old widget, old extension | today                                                               | asks nothing, so receives the old names: today          |
-| New widget, new extension | asks `contract=3`, is ignored, gets the old names: `normalizeStage` | asks `contract=3`, gets the new names                   |
-| New console               | reads both keys of the counts                                       | reads the new keys                                      |
+Fruitback has no users yet (2026-10-13). Decisions 3 and 4 trade the compatibility the framing
+planned for one change made once. What that leaves, read from the code and not measured in a
+browser:
 
-- **`normalizeStage(value: unknown): SeedStage | undefined`** in `shared`, built on
-  `LEGACY_STAGE_NAMES`, the table of the five old names and their new ones. `offeredStages` and
-  `offeredStatuses` call it, so a list of old names is
-  read as the new ones. Every reader goes through it: the widget's read and its `localStorage`, the
-  extension, the console, the worker's input (`?stage=`, the console's settings, the statuses API)
-  and the worker's rows.
-- **Readers keep the table for good**, not for one release. It is five lines, and the widget of a
-  host page that never updates its snippet is still on the old names.
-- **The worker accepts the old names in input for one release after the switch**, as asked. A
-  request with an old name then gets `400 invalid-stage`, like any unknown stage. The old names stay
-  only in the read path above and in the translation of the answer.
-- **The contract has a version.** `CONTRACT_VERSION = 3` in `shared`, sent as `?contract=3` on
-  `GET /feedback` and `GET /session/notes`. The read envelope answers `contract: 3` when it used the
-  new names, so a new reader knows which ones it got without guessing from the values. `3` and not
-  `1`, because `SEED_VERSION` is 2 and one number per contract reads better than two that drift.
-  `SEED_VERSION` itself stays at 2: the seed does not change.
-- **The worker's translation of an answer is one function**, at the edge of the read
-  (`legacyAnswer`), so no store, connector or route knows the old names.
-- **`@fruitback/shared` and `@fruitback/widget` go to 0.3.0.** `SeedStage` loses the old names, a
-  break for a TypeScript consumer; `LEGACY_STAGE_NAMES` stays exported, marked `@deprecated`.
+| Who                                                       | What happens after the change                                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A widget of before, cached at `/v/0.2.0-…/`               | It receives `new`, `todo`…: `var(--fruitback-stage-new)` is not one of its tokens, so its pins have no fill colour. |
+| The `hiddenStages` a widget kept in `localStorage`        | `isStage` drops the old names on read: the filters of the panel come back to « everything shown ».                  |
+| A host that set `theme: { 'stage-seeded': … }`            | `applyTheme` ignores an unknown token, as for any other name: the default colour shows.                             |
+| An extension of before, on a worker of after              | Its counts and chips read keys that are no longer sent: they show nothing until it updates.                         |
+| The console, one image, and the worker, another (FRU-222) | Released with the same tag. Between the two deploys, the counts of the sites read zero.                             |
+| The read cache (`CACHE_TTL_MS`, 15 s)                     | An answer of before can be served for 15 s after the deploy.                                                        |
 
-### The CSS tokens
-
-- The widget declares the new tokens with the old one as their fallback:
-  `--fruitback-stage-new: var(--fruitback-stage-seeded, #bec2c8);`. The old token is declared
-  nowhere, so it is unset unless a host sets it, and then it wins over the default.
-- A host that sets the new token wins over everything. A host that sets both gets the new one.
-- `THEME_TOKENS` keeps `stage-seeded` … and `color-on-stage-seeded` …, and `applyTheme` writes an old
-  name under its new one. `missingStageTokens` checks the new names.
-- The extension and the console keep copies of the tokens: they take the new names only, since no
-  host sets them. `design-tokens.test.ts` compares the new names.
-- [install.md](../install.md) lists the new names and says the old ones still work.
-- **Not measured yet.** That the fallback resolves a token set by `applyTheme` and one inherited
-  from the host page is how custom properties are specified, not something run here. PR 3 proves
-  both in a browser before it says so.
-- Removing the aliases is a later, separate decision, measured: a worker can count the reads that do
-  not send `contract=3`.
+None of these loses a note: a pin with no colour is still drawn, and every count comes back with the
+next read.
 
 ### The migration
 
-Two releases. Each one rolls back to the one before it with no SQL, because the one before it reads
-everything the one after it writes.
+`0026_stage_names`, after `0025_site_statuses` of #473:
 
-1. **Release N, expand.** The readers learn both names (`normalizeStage`, the `contract=3` read,
-   the CSS aliases). The worker still **writes** the old names, and its queries on a stage match both
-   (`stage = ANY($1)`, the old and the new name): the rows of a release N+1 rolled back are new. No
-   migration.
-   - Roll back to N-1: nothing to do. The database holds only old names.
-2. **Release N+1, switch.** The worker writes the new names, and migration `00xx_stage_names` rewrites
-   the rows in one transaction:
-   - `UPDATE seeds SET stage = CASE stage WHEN 'seeded' THEN 'new' … END WHERE stage IN (…)`, the same
-     on `note_index` and `statuses`;
-   - the values of `connectors.settings -> 'stages'` (kept one release by FRU-365);
-   - the keys of the built-in statuses of the source `own`, in `statuses.key` and `seeds.status_key`.
+- `seeds.stage`, `note_index.stage` and `statuses.stage`: an UPDATE with a CASE, only on the rows that
+  hold an old name.
+- `connectors.settings`, the JSON text where FRU-102 kept a stage per Linear state: only a value that
+  is JSON and whose `stages` is an object is read, with CASE nested as in `0025`. Inside `stages`, a
+  string that is an old name changes; every other key and value stays.
+- No status key is renamed: no code writes a built-in status of the source `own` yet (FRU-367).
+- It can run twice. `stage-names-migration.test.ts` starts from a database migrated through `0025` and
+  filled with old names, and proves the rename, a second run, and the rollback.
 
-   It adds no column and drops nothing. It is idempotent: a row already new is not touched.
-   - Roll back to N: redeploy N. N reads the new names. **No SQL.**
-   - Roll back to N-1 (two steps, never planned): run the reverse `UPDATE`, which is written in this
-     page's PR for N+1 and run in its migration test, then redeploy N-1.
+**Rollback.** The worker of before reads only old names, so a rollback of the image needs the data
+back first: run `REVERSE_SQL` of `stage-names-migration.test.ts` (the same UPDATE, the other way),
+then start the image of before. The test runs that SQL. One value does not round-trip: a Linear
+exception that was already `done` in `connectors.settings` comes back `ripe`, which names the same
+stage.
 
-3. **Release N+2, contract.** The worker stops accepting the old names in its input, and its queries
-   match only the new name. The readers keep `normalizeStage`.
+### The PRs
 
-Fruitback has no users yet (2026-10-13), so N and N+1 may ship a day apart. They stay two releases:
-a self-hosted worker and a widget on a host page do not upgrade together.
+| PR            | What                                                                                                           | Critical |
+| ------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
+| #482          | The framing.                                                                                                   | No       |
+| The rename    | Contract, migration, worker, widget, extension, console, their tests and specs, and this page, in one PR.      | **Yes**  |
+| The documents | The other pages of `docs/`, `design/`, the Markdown at the root and the issue template. Stacked on the rename. | No       |
 
-The `IN ('seeded', …)` of `0024_site_statuses.sql` (FRU-365) is history: a migration that ran is
-never edited.
+One PR for the code, because the contract cannot change without its readers: `SeedStage` is a type,
+so a contract renamed alone fails the typecheck of every package that reads it, and `main` would be
+red until the last of them merged.
 
-### The order of the PRs
+### The decisions
 
-| #   | What                                                                                                                                                                                   | Critical | Why                                      |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------- |
-| 0   | This page.                                                                                                                                                                             | No       | Documentation                            |
-| —   | **FRU-365 merges first** (fru-statuses). It adds `statuses.stage` and the source `own`.                                                                                                | —        | —                                        |
-| 1   | `shared`: `CONTRACT_VERSION`, `normalizeStage`, `LEGACY_STAGE_NAMES`; `offeredStages` and `offeredStatuses` read both. `SEED_STAGES` unchanged.                                        | **Yes**  | Public contract                          |
-| 2   | Worker, release N: `normalizeStage` on every input and every row; queries on both names; `?contract=3` and `legacyAnswer` on `/feedback` and `/session/notes`. Still writes old names. | **Yes**  | Read path of every client, rollback base |
-| 3   | Widget: CSS aliases, `applyTheme` on old names, `?contract=3`, `hiddenStages` normalized. `/tfp`: a host that sets `--fruitback-stage-seeded` still colours its pins.                  | **Yes**  | A host's tokens and a reader's filters   |
-| 4   | Extension and console read both names, take the new tokens, send `contract=3`. `/tfp`.                                                                                                 | No       | Display, behind 2                        |
-| —   | **Release N.**                                                                                                                                                                         | —        | —                                        |
-| 5   | `shared` 0.3.0: `SEED_STAGES` takes the new names. Worker, release N+1: writes them, the migration, the reverse SQL in its test, `STAGE_BY_STATE_TYPE`, GitHub.                        | **Yes**  | Data migration, public contract          |
-| 6   | Names that cross nothing: message keys, `STAGE_STATUS` removed, `data-stage`, tests, e2e, `drill-seed.sql`, docs, `design/`, the issue template, comments (« how ripe a pin looks »).  | No       | Text, no boundary                        |
-| —   | **Release N+1.** Then, one release later, PR 7: the worker refuses old names in input (N+2).                                                                                           | **Yes**  | Narrows an input                         |
+Mathieu, 2026-10-21, in a comment on FRU-355. Each answers a question of #482; the recommendation of
+the framing follows in brackets when the answer differs from it.
 
-PR 6 is the biggest (about 700 of the 896 hits) and the least risky. It can be cut by package.
-A guard test lands with it: no stage word outside `LEGACY_STAGE_NAMES`, its tests and the migrations,
-proved on a planted `'ripe'`.
-
-### The questions
-
-1. **`progress` or `in_progress`?** _Recommendation: `progress`._ One word in every syntax, and the
-   console kit already uses it.
-2. **Does « etc. » include `seed`?** `seed` is the payload of a note: `SeedIssue`, `SEED_VERSION`,
-   the `seeds` table, the description block of every Linear issue, about 4,800 hits in 284 files.
-   _Recommendation: no, not in FRU-355._ It is the name of a data structure, not a status, and
-   renaming it touches the issues already written at the trackers. A separate ticket if wanted.
-3. **How long does the worker translate the answer for an old widget?** _Recommendation: until a
-   measure says no read comes without `contract=3`_, not a fixed number of releases. The widget at
-   `/v/<version>/` is cached a year, and translating costs one function.
-4. **Two releases, N and N+1, even with no users?** _Recommendation: yes._ The cost is one more
-   tag; the gain is a rollback with no SQL, and a self-hosted worker that can be upgraded alone.
-5. **`@fruitback/shared` and `@fruitback/widget` to 0.3.0?** _Recommendation: yes_, in PR 5: a
-   published type loses five values.
-6. **Rename the extension's « Done » tab to `finished`** so that `done` names one thing?
-   _Recommendation: yes_, in PR 6; the label « Done » does not change.
+1. **`progress`**, not `in_progress`.
+2. **`seed` is not renamed here.** A ticket of its own, for a name that fits better.
+3. **The change is made now**, while there are no users: no time when the worker translates for an
+   old widget. (The framing recommended translating until a measure showed no old reader.)
+4. **One change, in one release**, not a release N then N+1. (The framing recommended two releases,
+   for a rollback with no SQL.)
+5. **Yes**: `@fruitback/shared` and `@fruitback/widget` go to 0.3.0.
+6. **Yes**: the « Done » tab of the extension is `finished` in the code; its label does not change.

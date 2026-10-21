@@ -396,7 +396,7 @@ describe('GET /feedback', () => {
         id: `issue_${seed.id}`,
         identifier: 'SKG-901',
         url: 'https://linear.app/sakuga-software/issue/SKG-901',
-        stage: 'ripening',
+        stage: 'progress',
         stateName: 'In Progress',
         updatedAt: '2026-08-05T10:00:00.000Z',
       },
@@ -412,14 +412,14 @@ describe('GET /feedback', () => {
 
     const partial: SeedStore = {
       name: 'partial',
-      stages: ['seeded', 'ripe'],
+      stages: ['new', 'done'],
       scope: () => 'partial',
       create: async () => ({ id: 'x', identifier: 'X-1' }),
       findForPage: async () => [],
     };
     const response = await get(`/feedback?url=${encodeURIComponent(PAGE)}`, { store: partial });
 
-    assert.deepEqual(((await response.json()) as { stages?: unknown }).stages, ['seeded', 'ripe']);
+    assert.deepEqual(((await response.json()) as { stages?: unknown }).stages, ['new', 'done']);
   });
 
   it('asks Linear for the team and that exact page, and for no label', async () => {

@@ -65,10 +65,10 @@ describe('applyTheme', () => {
   it('writes the tokens a host asked for', () => {
     const element = host();
 
-    applyTheme(element, { 'color-accent': '#0055ff', 'stage-ripe': 'rebeccapurple' });
+    applyTheme(element, { 'color-accent': '#0055ff', 'stage-done': 'rebeccapurple' });
 
     assert.equal(element.style.getPropertyValue('--fruitback-color-accent'), '#0055ff');
-    assert.equal(element.style.getPropertyValue('--fruitback-stage-ripe'), 'rebeccapurple');
+    assert.equal(element.style.getPropertyValue('--fruitback-stage-done'), 'rebeccapurple');
   });
 
   it('ignores a name it does not know, rather than writing it', () => {

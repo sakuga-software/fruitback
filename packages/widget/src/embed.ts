@@ -1013,7 +1013,7 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     pageCounts() {
       if (readState !== 'read') return undefined;
-      const counts: PageCounts = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
+      const counts: PageCounts = { new: 0, todo: 0, progress: 0, done: 0, closed: 0 };
       for (const { issue } of entries()) {
         if (config.get().hiddenStages.includes(issue.stage)) continue;
         counts[issue.stage] += 1;
@@ -1409,7 +1409,7 @@ function draftIssue(draft: Draft): SeedIssue {
     id: `${DRAFT_PREFIX}${draft.seed.id}`,
     identifier: draft.seed.id,
     title: '',
-    stage: 'seeded',
+    stage: 'new',
     stateName: '',
     updatedAt: draft.seed.createdAt,
     seed: draft.seed,

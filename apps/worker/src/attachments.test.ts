@@ -71,7 +71,7 @@ function trackerDouble(options: { takes?: boolean; fails?: boolean; loses?: bool
         identifier: `TRK-${n}`,
         url: `https://tracker.test/TRK-${n}`,
         title: seed.note,
-        stage: 'seeded',
+        stage: 'new',
         stateName: 'Todo',
         updatedAt: '2026-10-21T00:00:00.000Z',
         attachments: files.map((file) => ({ name: file.name, url: `https://tracker.test/files/${file.name}` })),
@@ -995,7 +995,7 @@ for (const [index, { label, open, skip }] of DATABASES.entries()) {
            ('${id('b')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 8 * day}),
            ('${id('c')}', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, ${now - 2 * day})`,
         `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES
-           ('site_1', 'https://acme.dev/', 'seeded', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1)`,
+           ('site_1', 'https://acme.dev/', 'new', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1)`,
         `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES ('con_1', 'ws_acme', 'rest', 'REST', 'x', 1)`,
         `INSERT INTO deliveries (id, connector_id, body, created_at) VALUES
            ('dlv_1', 'con_1', '{"seed":{"id":"sd_b","screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}}', 1)`,

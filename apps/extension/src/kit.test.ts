@@ -138,15 +138,15 @@ describe('the kit of the extension (FRU-293)', () => {
 
   it('draws a drop of a status as a mark, or as a pin with its number', () => {
     const document = page();
-    const mark = statusDrop(document, { stage: 'ripe' });
+    const mark = statusDrop(document, { stage: 'done' });
     assert.equal(mark.dataset.size, 'mark');
-    assert.equal(mark.dataset.stage, 'ripe');
+    assert.equal(mark.dataset.stage, 'done');
     assert.equal(mark.textContent, '');
     assert.equal(mark.getAttribute('aria-hidden'), 'true');
-    const pin = statusDrop(document, { stage: 'ripening', number: 3 });
+    const pin = statusDrop(document, { stage: 'progress', number: 3 });
     assert.equal(pin.dataset.size, 'list');
     assert.equal(pin.textContent, '3');
-    assert.equal(statusDrop(document, { stage: 'seeded', number: 1, size: 'page' }).dataset.size, 'page');
+    assert.equal(statusDrop(document, { stage: 'new', number: 1, size: 'page' }).dataset.size, 'page');
   });
 
   it('makes a row one button, named by its words, the chevron left out', () => {
@@ -155,7 +155,7 @@ describe('the kit of the extension (FRU-293)', () => {
     const row = listRow(document, {
       title: '2 fixes to check',
       subtitle: 'Marked done by the team',
-      stage: 'ripe',
+      stage: 'done',
       onClick: () => (opened += 1),
     });
     isNativeButton(row);

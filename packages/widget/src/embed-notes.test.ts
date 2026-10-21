@@ -20,7 +20,7 @@ const ANCHOR = {
 const MINE = seedIssueFixture({
   id: 'issue_1',
   identifier: 'FB-1',
-  stage: 'green',
+  stage: 'todo',
   mine: true,
   comments: [{ id: 'c0', body: 'Planned.', createdAt: '2026-10-19T16:00:00.000Z', author: 'Marc' }],
   seed: seedFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
@@ -28,7 +28,7 @@ const MINE = seedIssueFixture({
 const CLOSED = seedIssueFixture({
   id: 'issue_2',
   identifier: 'FB-2',
-  stage: 'composted',
+  stage: 'closed',
   seed: seedFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR, reporter: { name: 'Léa' } }),
 });
 
@@ -87,7 +87,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.deepEqual(notes?.[0], {
       id: 'seed-1',
       number: 1,
-      stage: 'green',
+      stage: 'todo',
       note: 'Could the title mention Bordeaux?',
       mine: true,
       createdAt: MINE.seed.createdAt,
@@ -154,7 +154,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     // The read of the mount and the refresh: each is a change.
     assert.ok(changes.length > 0 && changes.every((change) => change.kind === 'list'), 'a read is a change');
 
-    (shadowOf(page).querySelector('[name="stage-composted"]') as HTMLInputElement).click();
+    (shadowOf(page).querySelector('[name="stage-closed"]') as HTMLInputElement).click();
     assert.deepEqual(
       widget.pageNotes()?.map((note) => note.id),
       ['seed-1'],
@@ -343,7 +343,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
 
   it('gives who confirmed a done note', async () => {
     const page = mounted();
-    const confirmed = { ...CLOSED, stage: 'ripe' as const, checked: { by: 'Camille', at: '2026-10-20T10:00:00.000Z' } };
+    const confirmed = { ...CLOSED, stage: 'done' as const, checked: { by: 'Camille', at: '2026-10-20T10:00:00.000Z' } };
     const transport = async (request: TransportRequest): Promise<TransportResponse> => ({
       ok: true,
       status: 200,

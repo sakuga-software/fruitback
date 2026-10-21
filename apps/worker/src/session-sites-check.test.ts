@@ -196,7 +196,7 @@ describe('the fixes to check, in GET /session/sites (FRU-295)', () => {
     assert.equal(refused.status, 403);
 
     const [listed] = await sitesOf(world, bobs);
-    assert.equal(listed?.notes?.ripe, 1, 'the note is done in the index');
+    assert.equal(listed?.notes?.done, 1, 'the note is done in the index');
     assert.equal(listed?.toCheck, 0);
   });
 

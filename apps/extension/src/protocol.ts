@@ -294,7 +294,7 @@ export const TAB_COMMANDS = [
 ] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 
-const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 export type PageCounts = Record<(typeof STAGES)[number], number>;
 
 /** Why a widget gave no notes (FRU-299). */

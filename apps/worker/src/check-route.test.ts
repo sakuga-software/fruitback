@@ -120,10 +120,10 @@ describe('a verdict on a note the team marked done (FRU-294)', () => {
     const written = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: member });
 
     assert.equal(written.status, 201, JSON.stringify(written.body));
-    assert.equal(written.body.stage, 'ripe');
+    assert.equal(written.body.stage, 'done');
     assert.equal(written.body.comment.body, '**Bob Durand** via Fruitback · member of Acme\nChecked: looks fixed');
     const [issue] = await read(world, site.id, member);
-    assert.equal(issue?.stage, 'ripe');
+    assert.equal(issue?.stage, 'done');
     assert.equal(issue?.checked?.by, 'Bob Durand');
     assert.equal(issue?.checked?.at, written.body.comment.createdAt);
   });
@@ -140,13 +140,13 @@ describe('a verdict on a note the team marked done (FRU-294)', () => {
     );
 
     assert.equal(written.status, 201, JSON.stringify(written.body));
-    assert.equal(written.body.stage, 'seeded');
+    assert.equal(written.body.stage, 'new');
     assert.equal(
       written.body.comment.body,
       '**Bob Durand** via Fruitback · member of Acme\nReopened: still wrong\n\n> The button is still grey.',
     );
     const [issue] = await read(world, site.id, member);
-    assert.equal(issue?.stage, 'seeded');
+    assert.equal(issue?.stage, 'new');
     assert.equal('checked' in (issue ?? {}), false);
   });
 
@@ -154,13 +154,13 @@ describe('a verdict on a note the team marked done (FRU-294)', () => {
     const { world, workspace, site, member, note } = await aDoneNote();
     await read(world, site.id, member);
     const before = (await world.context.noteIndex?.summary(workspace))?.get(site.id)?.notes;
-    assert.equal(before?.ripe, 1);
+    assert.equal(before?.done, 1);
 
     assert.equal((await check(world, site.id, note.id, { verdict: 'wrong' }, { token: member })).status, 201);
 
     const after = (await world.context.noteIndex?.summary(workspace))?.get(site.id)?.notes;
-    assert.equal(after?.ripe, 0);
-    assert.equal(after?.seeded, 1);
+    assert.equal(after?.done, 0);
+    assert.equal(after?.new, 1);
   });
 
   it('answers 409 on a note that is not done, and on a note confirmed already, and writes nothing', async () => {
@@ -179,7 +179,7 @@ describe('a verdict on a note the team marked done (FRU-294)', () => {
       assert.equal(again.body.error, 'already-checked');
     }
     const [issue] = await read(world, site.id, member);
-    assert.equal(issue?.stage, 'ripe');
+    assert.equal(issue?.stage, 'done');
     assert.equal(issue?.comments?.length, 1);
   });
 

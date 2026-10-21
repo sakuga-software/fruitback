@@ -53,9 +53,9 @@ describe('a command of the popup to the widget of its tab (FRU-254)', () => {
   });
 
   it('reads an answer field by field', () => {
-    const counts = { seeded: 1, green: 0, ripening: 2, ripe: 0, composted: 3 };
+    const counts = { new: 1, todo: 0, progress: 2, done: 0, closed: 3 };
     assert.deepEqual(parseAnswer({ done: true, counts }), { done: true, counts });
-    assert.deepEqual(parseAnswer({ done: true, counts: { ...counts, ripe: -1 } }), { done: true });
+    assert.deepEqual(parseAnswer({ done: true, counts: { ...counts, done: -1 } }), { done: true });
     assert.deepEqual(parseAnswer({ done: 'yes' }), { done: false });
     // Busy: the widget is there and said no. Never with a done.
     assert.deepEqual(parseAnswer({ done: false, busy: true }), { done: false, busy: true });
@@ -95,7 +95,7 @@ describe('the commands of the side panel (FRU-299)', () => {
   const NOTE = {
     id: 'seed-1',
     number: 3,
-    stage: 'green',
+    stage: 'todo',
     note: 'Could the title mention Bordeaux?',
     author: 'Léa',
     mine: true,

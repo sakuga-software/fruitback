@@ -267,17 +267,15 @@ describe('reading pins', () => {
 
   it('offers in the settings only the stages the worker reports (FRU-32)', async () => {
     const page = mountWithCta();
-    stubReads(
-      () => new Response(JSON.stringify({ issues: [], stages: ['seeded', 'ripe', 'composted'] }), { status: 200 }),
-    );
+    stubReads(() => new Response(JSON.stringify({ issues: [], stages: ['new', 'done', 'closed'] }), { status: 200 }));
 
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
     await widget.refresh();
 
     const box = (stage: string) =>
       shadowOf(page).querySelector(`[name="stage-${stage}"]`)?.closest('label') as HTMLLabelElement;
-    assert.equal(box('green').hidden, true);
-    assert.equal(box('ripe').hidden, false);
+    assert.equal(box('todo').hidden, true);
+    assert.equal(box('done').hidden, false);
 
     widget.destroy();
   });
@@ -289,7 +287,7 @@ describe('reading pins', () => {
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
     await widget.refresh();
 
-    const box = shadowOf(page).querySelector('[name="stage-green"]')?.closest('label') as HTMLLabelElement;
+    const box = shadowOf(page).querySelector('[name="stage-todo"]')?.closest('label') as HTMLLabelElement;
     assert.equal(box.hidden, false);
 
     widget.destroy();
@@ -415,7 +413,7 @@ describe('reading pins', () => {
       ...onCta(),
       id: 'closed',
       identifier: 'FB-2',
-      stage: 'composted',
+      stage: 'closed',
       stateName: 'Closed',
     });
     const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1' }, closed]));
@@ -428,7 +426,7 @@ describe('reading pins', () => {
     assert.match(both, /^## 2\. FB-2 — Closed$/m);
     assert.match(both, /^# Feedback on /m);
 
-    (shadowOf(page).querySelector('[name="stage-composted"]') as HTMLInputElement).click();
+    (shadowOf(page).querySelector('[name="stage-closed"]') as HTMLInputElement).click();
 
     assert.doesNotMatch(widget.feedbackAsText(), /FB-2/);
     assert.match(widget.feedbackAsText(), /^## 1\. FB-1 — /m);
@@ -439,19 +437,19 @@ describe('reading pins', () => {
 
   it('counts the notes the page shows by stage, from the last read, and nothing before one (FRU-254)', async () => {
     const page = mountWithCta();
-    const closed = seedIssueFixture({ ...onCta(), id: 'closed', identifier: 'FB-2', stage: 'composted' });
-    const fresh = seedIssueFixture({ ...onCta(), id: 'fresh', identifier: 'FB-3', stage: 'seeded' });
-    const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1', stage: 'ripening' }, closed, fresh]));
+    const closed = seedIssueFixture({ ...onCta(), id: 'closed', identifier: 'FB-2', stage: 'closed' });
+    const fresh = seedIssueFixture({ ...onCta(), id: 'fresh', identifier: 'FB-3', stage: 'new' });
+    const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1', stage: 'progress' }, closed, fresh]));
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme', locale: 'en' });
 
     assert.equal(widget.pageCounts(), undefined, 'a count before any read says there is no note');
     await widget.refresh();
     const before = reads.length;
-    assert.deepEqual(widget.pageCounts(), { seeded: 1, green: 0, ripening: 1, ripe: 0, composted: 1 });
+    assert.deepEqual(widget.pageCounts(), { new: 1, todo: 0, progress: 1, done: 0, closed: 1 });
 
     // A stage the reporter hid is not on the page, so it is not counted.
-    (shadowOf(page).querySelector('[name="stage-composted"]') as HTMLInputElement).click();
-    assert.deepEqual(widget.pageCounts(), { seeded: 1, green: 0, ripening: 1, ripe: 0, composted: 0 });
+    (shadowOf(page).querySelector('[name="stage-closed"]') as HTMLInputElement).click();
+    assert.deepEqual(widget.pageCounts(), { new: 1, todo: 0, progress: 1, done: 0, closed: 0 });
     assert.equal(reads.length, before, 'a count cost a request');
 
     widget.destroy();

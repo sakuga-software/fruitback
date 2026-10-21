@@ -410,7 +410,7 @@ describe('a note through a github connector (FRU-359)', () => {
     assert.deepEqual(first?.stages, [...GITHUB_STAGES]);
     assert.deepEqual(
       first?.issues.map((issue) => [issue.identifier, issue.stage]),
-      [['#1', 'seeded']],
+      [['#1', 'new']],
     );
 
     const issue = github.issues.get('acme/web')?.[0] as Issue;
@@ -418,12 +418,12 @@ describe('a note through a github connector (FRU-359)', () => {
     issue.state_reason = 'not_planned';
     assert.deepEqual(
       (await site?.read())?.issues.map((each) => each.stage),
-      ['composted'],
+      ['closed'],
     );
     issue.state_reason = 'completed';
     assert.deepEqual(
       (await site?.read())?.issues.map((each) => each.stage),
-      ['ripe'],
+      ['done'],
     );
   });
 

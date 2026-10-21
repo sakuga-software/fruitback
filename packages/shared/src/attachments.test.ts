@@ -63,7 +63,7 @@ describe('the files of a note (FRU-331)', () => {
       id: 'i',
       identifier: 'X-1',
       title: 't',
-      stage: 'seeded',
+      stage: 'new',
       stateName: '',
       updatedAt: '',
       attachments: [{ name: 'a.png' }],

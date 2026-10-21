@@ -112,13 +112,13 @@ function decodePart(part: string | undefined): Record<string, unknown> {
 
 describe('stageForGithubIssue', () => {
   it('projects the two states and the reason for a close', () => {
-    assert.equal(stageForGithubIssue('open', null), 'seeded');
-    assert.equal(stageForGithubIssue('open', 'reopened'), 'seeded');
-    assert.equal(stageForGithubIssue('closed', 'completed'), 'ripe');
+    assert.equal(stageForGithubIssue('open', null), 'new');
+    assert.equal(stageForGithubIssue('open', 'reopened'), 'new');
+    assert.equal(stageForGithubIssue('closed', 'completed'), 'done');
     // Closed before GitHub had state_reason. Closed then meant done.
-    assert.equal(stageForGithubIssue('closed', null), 'ripe');
-    assert.equal(stageForGithubIssue('closed', 'not_planned'), 'composted');
-    assert.equal(stageForGithubIssue('closed', 'duplicate'), 'composted');
+    assert.equal(stageForGithubIssue('closed', null), 'done');
+    assert.equal(stageForGithubIssue('closed', 'not_planned'), 'closed');
+    assert.equal(stageForGithubIssue('closed', 'duplicate'), 'closed');
   });
 
   it('draws a state it does not know at the default of the contract', () => {
@@ -436,7 +436,7 @@ describe('findForPage', () => {
       identifier: '#12',
       url: 'https://github.com/acme/site/issues/12',
       title: 'Le bouton est trop petit',
-      stage: 'seeded',
+      stage: 'new',
       stateName: 'Open',
       updatedAt: '2026-09-14T10:00:00Z',
       comments: [],
@@ -558,7 +558,7 @@ describe('findForPage', () => {
   it('names a closed issue by the reason it was closed', async () => {
     const { issues } = readWith([row({ state: 'closed', state_reason: 'not_planned' })]);
 
-    assert.partialDeepStrictEqual((await issues)[0], { stage: 'composted', stateName: 'Not planned' });
+    assert.partialDeepStrictEqual((await issues)[0], { stage: 'closed', stateName: 'Not planned' });
   });
 
   it('returns the newest twenty comments, oldest first', async () => {

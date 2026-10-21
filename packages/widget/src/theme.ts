@@ -33,7 +33,7 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * again, and the five stages take the colours Mathieu chose: grey for new, a lighter grey for to do,
  * mango for in progress, blueberry for done, cherry for closed. The first three are written black,
  * the last two white. The tables of old and new values are in docs/decisions/widget.md. The names
- * of the stages do not change: they are the contract.
+ * of the stages are those words since FRU-355, and they are the contract.
  *
  * **This file is the one source of the statuses.** The extension copies them in
  * apps/extension/entrypoints/popup/style.css and the console in apps/console/app/app.css, because a
@@ -65,9 +65,9 @@ export const THEME_TOKENS = [
   'color-on-accent',
   'color-on-chip',
   'color-on-stage',
-  'color-on-stage-seeded',
-  'color-on-stage-green',
-  'color-on-stage-ripening',
+  'color-on-stage-new',
+  'color-on-stage-todo',
+  'color-on-stage-progress',
   'color-stage-edge',
   'color-on-warning',
   'color-surface',
@@ -86,11 +86,11 @@ export const THEME_TOKENS = [
   'color-success',
   'color-warning',
   'color-unplaced',
-  'stage-seeded',
-  'stage-green',
-  'stage-ripening',
-  'stage-ripe',
-  'stage-composted',
+  'stage-new',
+  'stage-todo',
+  'stage-progress',
+  'stage-done',
+  'stage-closed',
   'shadow-xs',
   'shadow-sm',
   'shadow-md',
@@ -191,9 +191,9 @@ export const THEME_STYLES = `
     New, to do and in progress are light fills, and Mathieu writes them black (FRU-334). The ink of
     the palette: 9.90:1 on the grey of new, 12.78:1 on the grey of to do, 10.11:1 on the mango.
   */
-  --fruitback-color-on-stage-seeded: #18181b;
-  --fruitback-color-on-stage-green: #18181b;
-  --fruitback-color-on-stage-ripening: #18181b;
+  --fruitback-color-on-stage-new: #18181b;
+  --fruitback-color-on-stage-todo: #18181b;
+  --fruitback-color-on-stage-progress: #18181b;
   /*
     The edge of a drop (FRU-334): one pixel around every pin and every mark of a status. The grey of
     new is 1.79:1 on white, the grey of to do 1.39:1 and the mango 1.75:1: a light pin on a white
@@ -243,14 +243,14 @@ export const THEME_STYLES = `
 
   /*
     The five statuses of FRU-334, chosen by Mathieu on 2026-10-21: new, to do, in progress, done,
-    closed. The names are the stages of the contract, which do not change. A status is never said by
+    closed. The names are the stages of the contract (FRU-355). A status is never said by
     its colour alone: the list names it, a thread names it, a pin carries a number.
   */
-  --fruitback-stage-seeded: #bec2c8;
-  --fruitback-stage-green: #d9dbdf;
-  --fruitback-stage-ripening: #f3bb3d;
-  --fruitback-stage-ripe: #5560c4;
-  --fruitback-stage-composted: #a52a3a;
+  --fruitback-stage-new: #bec2c8;
+  --fruitback-stage-todo: #d9dbdf;
+  --fruitback-stage-progress: #f3bb3d;
+  --fruitback-stage-done: #5560c4;
+  --fruitback-stage-closed: #a52a3a;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
   --fruitback-shadow-xs: 0 1px 3px rgba(24, 24, 27, 0.15);

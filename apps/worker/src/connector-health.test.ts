@@ -287,14 +287,14 @@ describe('the store that notes its connector', () => {
   });
 
   it('keeps the name, the stages and the scope of the store it watches', () => {
-    const store = { name: 'fake', stages: ['seeded'], scope: () => 'a-scope' } as unknown as SeedStore;
+    const store = { name: 'fake', stages: ['new'], scope: () => 'a-scope' } as unknown as SeedStore;
     const watched = watchedStore(
       store,
       accountsThat(async () => {}),
     );
 
     assert.equal(watched.name, 'fake');
-    assert.deepEqual(watched.stages, ['seeded']);
+    assert.deepEqual(watched.stages, ['new']);
     assert.equal(watched.scope(undefined), 'a-scope');
   });
 

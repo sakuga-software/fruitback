@@ -238,11 +238,11 @@ export const ENGLISH = {
   'export.picture': 'Picture: {url}',
   'export.reply': 'Reply from {author}',
 
-  'stage.seeded': 'New',
-  'stage.green': 'To do',
-  'stage.ripening': 'In progress',
-  'stage.ripe': 'Done',
-  'stage.composted': 'Closed',
+  'stage.new': 'New',
+  'stage.todo': 'To do',
+  'stage.progress': 'In progress',
+  'stage.done': 'Done',
+  'stage.closed': 'Closed',
 } as const satisfies Record<string, string | PluralMessage> & Record<`stage.${SeedStage}`, string>;
 
 export type MessageKey = keyof typeof ENGLISH;

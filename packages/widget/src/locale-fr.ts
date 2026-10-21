@@ -173,9 +173,9 @@ export const FRENCH: Catalog = {
   'export.picture': 'Image : {url}',
   'export.reply': 'Réponse de {author}',
 
-  'stage.seeded': 'Nouveau',
-  'stage.green': 'À faire',
-  'stage.ripening': 'En cours',
-  'stage.ripe': 'Terminé',
-  'stage.composted': 'Fermé',
+  'stage.new': 'Nouveau',
+  'stage.todo': 'À faire',
+  'stage.progress': 'En cours',
+  'stage.done': 'Terminé',
+  'stage.closed': 'Fermé',
 };
