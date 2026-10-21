@@ -93,7 +93,7 @@ function colourCell(s, kind, useTracker) {
   if (s.color) return `<span class="sw" style="background:${s.color}"></span><code>${s.color}</code>`;
   if (useTracker && s.trackerColor)
     return `<span class="sw" style="background:${s.trackerColor}"></span>${t("Linear's colour", 'Couleur de Linear')}`;
-  return `<span class="sw" style="background:${STAGES[s.stage].color}"></span>${t('Colour of the stage', 'Couleur de l’étape')}`;
+  return `<span class="sw" style="background:${STAGES[s.stage].color}"></span>${t('Colour of the stage', 'Couleur de la phase')}`;
 }
 
 // One row of the list. `opts.open`: what is open under the row (an editor, a confirmation).
@@ -215,7 +215,7 @@ function editor(s, kind, v) {
         </label>
         <fieldset class="field">
           <legend>${t('Colour', 'Couleur')}</legend>
-          ${radio(t('Colour of the stage', 'Couleur de l’étape'), v.bgMode === 'stage', `<span class="sw" style="background:${STAGES[v.stage].color}"></span>`)}
+          ${radio(t('Colour of the stage', 'Couleur de la phase'), v.bgMode === 'stage', `<span class="sw" style="background:${STAGES[v.stage].color}"></span>`)}
           ${kind === 'linear' ? radio(t("Linear's colour", 'Couleur de Linear'), v.bgMode === 'tracker', `<span class="sw" style="background:${s.trackerColor}"></span>`) : ''}
           ${radio(t('Your colour', 'Votre couleur'), v.bgMode === 'own')}
           ${v.bgMode === 'own' ? hexField('bg-' + (s.key ?? 'new'), bg, false) : ''}
