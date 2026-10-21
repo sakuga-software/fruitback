@@ -72,8 +72,11 @@ export function changedSince(base: string, cwd?: string): string[] {
     .filter((line) => line !== '');
 }
 
-/** One job of the matrix: one file of one package. */
-export type Job = { package: string; file: string; artifact: string };
+/**
+ * One job of the matrix: one file of one package. `incremental` is false when the package is mutated
+ * in full: that run measures every mutant again, and its report is where the next ones start (FRU-341).
+ */
+export type Job = { package: string; file: string; artifact: string; incremental: boolean };
 
 /** The name of the artifact of a job. `--` parts the package from the file, and neither holds it. */
 export function artifactOf(pkg: string, file: string): string {
@@ -85,8 +88,8 @@ export function artifactOf(pkg: string, file: string): string {
 /** The jobs for what each package mutates, one per file, and the packages mutated in full. */
 export function plan(chosen: { pkg: string; mutate: string[]; full: boolean }[]): { jobs: Job[]; full: string[] } {
   return {
-    jobs: chosen.flatMap(({ pkg, mutate }) =>
-      mutate.map((file) => ({ package: pkg, file, artifact: artifactOf(pkg, file) })),
+    jobs: chosen.flatMap(({ pkg, mutate, full }) =>
+      mutate.map((file) => ({ package: pkg, file, artifact: artifactOf(pkg, file), incremental: !full })),
     ),
     full: chosen.filter(({ full, mutate }) => full && mutate.length > 0).map(({ pkg }) => pkg),
   };
