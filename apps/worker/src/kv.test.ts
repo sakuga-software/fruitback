@@ -244,6 +244,19 @@ describe('the memory Kv, bounded', () => {
     assert.equal(kv.size(), 4);
   });
 
+  it('drops an expired entry that a read asks for, without waiting for the sweep (FRU-345)', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    // The first call sweeps, at 0: the next sweep is due at 1 000.
+    await kv.set('short', 'answer', 10);
+    await kv.set('long', 'answer', 600_000);
+
+    clock = 500;
+    assert.equal(await kv.get('short'), undefined);
+
+    assert.equal(kv.size(), 1);
+  });
+
   it('sweeps at the instant the second ends, not one millisecond later', async () => {
     let clock = 0;
     const kv = createMemoryKv({ now: () => clock });

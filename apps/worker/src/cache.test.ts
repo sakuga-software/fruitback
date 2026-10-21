@@ -242,6 +242,31 @@ describe('cached', () => {
     assert.equal(await cached(broken, PAGE, 'k', async () => 'second'), 'second');
   });
 
+  it('does not let a load that settles drop the newer load of the same key', async () => {
+    // `resetCacheState` forgets a load that still runs, and the next read starts a newer one. When the
+    // older load settles, the newer one stays in flight, and a read that comes then joins it (FRU-345).
+    const down = async () => {
+      throw new KvError('the store is down');
+    };
+    const broken: Kv = { ...kv, get: down, set: down, incr: down };
+    const first = held('first');
+    const second = held('second');
+
+    const older = cached(broken, PAGE, 'k', first.load);
+    await settle();
+    resetCacheState();
+    const newer = cached(broken, PAGE, 'k', second.load);
+    await settle();
+    first.release();
+    assert.equal(await older, 'first');
+    await settle();
+
+    const joining = cached(broken, PAGE, 'k', async () => 'a third load');
+    second.release();
+    assert.equal(await joining, 'second');
+    assert.equal(await newer, 'second');
+  });
+
   it('does not share a load between two pages, nor between two keys, when the Kv does not answer', async () => {
     const down = async () => {
       throw new KvError('the store is down');
