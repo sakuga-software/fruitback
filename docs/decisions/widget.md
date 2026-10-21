@@ -1401,6 +1401,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **A host that signs in keeps its own offer.** With `onSignIn` (the extension), the widget closes
   nothing: a refused read there is a session that ended, and `signedOut` offers the sign-in.
 - **What is written stays**, as for FRU-315: a draft stays in its store, an open composer stays open.
+  **A text written before comes back in a composer only once a read said that a note can be sent**
+  (raised in review): `restoreTyping` waits for a read that is not stale, and does nothing while the
+  notes are closed. The text waits in its store, and comes back when the site opens again.
   `embed-closed.test.ts` holds each rule; each was planted out and seen red.
 
 ## A session of the host that ended (FRU-315)

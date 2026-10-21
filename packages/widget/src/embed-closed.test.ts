@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { init } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { canonicalizePageUrl } from '@fruitback/shared';
+import { createTypingStore } from './typing.ts';
 
 /**
  * A site whose notes are « Members only » (FRU-330), for a reader with no session: the read says
@@ -48,6 +50,9 @@ async function widgetOn(page: MountedPage, options: Partial<Parameters<typeof in
 
   return { widget, root, launch: root.querySelector('.fruitback-launch') as HTMLButtonElement };
 }
+
+/** What the choice of an element does after it, a moment later. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 const REFUSED = { error: 'identity-required', reason: 'identity-required' };
 
@@ -115,5 +120,32 @@ describe('a site whose notes are « Members only », for a reader with no sessio
     const { launch } = await widgetOn(mounted(), { transport, onSignIn: () => {} });
 
     assert.equal(launch.hasAttribute('aria-disabled'), false);
+  });
+
+  /**
+   * Raised in review. Choosing the element of the text is what reopens its composer (FRU-311): with
+   * the guard out, the widget chooses it here, and this test fails (seen red). The text coming back
+   * once the site opens is the restore of FRU-311, which the e2e of the typing holds.
+   */
+  it('opens no composer on a text written before, and keeps the text in its store', async () => {
+    const page = mounted();
+    const typing = createTypingStore({ storage: page.view.sessionStorage, key: 'fruitback:config:typing' });
+    const place = {
+      page: canonicalizePageUrl(page.view.location.href),
+      anchor: {
+        selector: '[data-testid="cta"]',
+        tag: 'button',
+        text: 'Commander',
+        bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+      },
+    };
+    typing.write(place, 'Le prix est coupé sur un téléphone.');
+    const { transport } = worker({ status: 401, body: { ...REFUSED, canWrite: false } });
+    const { root } = await widgetOn(page, { transport });
+    await settle();
+
+    const field = root.querySelector('textarea');
+    assert.equal(field === null || field.closest('[hidden]') !== null, true, 'a composer opened');
+    assert.equal(typing.latest(place.page)?.text, 'Le prix est coupé sur un téléphone.');
   });
 });

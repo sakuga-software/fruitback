@@ -436,6 +436,8 @@ export function init(options: FruitbackOptions): Fruitback {
   const readerIdentity: ReaderIdentity = { identified: false, canReply: false, canWrite: true };
   /** The launch button offers no note (FRU-330): see `closeNotesIfRefused`. */
   let notesClosed = false;
+  /** A read answered or failed, so `notesClosed` says what the worker said (FRU-330). */
+  let writesKnown = false;
   // FRU-299: a list outside the page, told when to read the notes again. A listener that throws is
   // the list's problem, never the page's.
   const notesWatchers = new Set<(change: NotesChange) => void>();
@@ -475,6 +477,8 @@ export function init(options: FruitbackOptions): Fruitback {
     lastReadAt = Date.now();
 
     return reader().then((outcome) => {
+      // A stale read touched nothing, and says nothing of who writes either.
+      if (outcome !== 'stale') writesKnown = true;
       closeNotesIfRefused();
       if (outcome === 'read') {
         readState = 'read';
@@ -539,6 +543,10 @@ export function init(options: FruitbackOptions): Fruitback {
   function restoreTyping(): void {
     const here = canonicalizePageUrl(view.location.href);
     if (restoredOn === here) return;
+    // FRU-330: a text comes back in a composer only where a note can be sent. The first read says
+    // it; until then, and while the worker takes no note here, the text waits in its store, and
+    // comes back if the site opens again. Not marked as restored, so a later read asks again.
+    if (!writesKnown || notesClosed) return;
     if (!composer.element.hidden || host.capturing() || overlay.threadOpen()) return;
     if (linkedNote(view.location.hash) !== undefined) return;
     const latest = typing.latest(here);

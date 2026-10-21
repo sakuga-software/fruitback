@@ -302,18 +302,23 @@ async function expectNoCredentialReadable(page: Page, tokens: StoredToken[]): Pr
   expect(chromeStorage).toBe('undefined');
 }
 
-test('private mode on a worker that wants a session: the popup says why the page shows no note (FRU-66)', async ({
+test('private mode on a site whose notes are « Members only »: the widget offers no note, and the popup says why (FRU-66, FRU-330)', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private-authenticated');
-  // The widget mounts and looks ready. Its reads answer 401, and nothing on the page says so.
-  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+  // The site of this worker is read by its members, and takes their notes only: the default of a
+  // site since FRU-330. Its reads answer 401 with `canWrite: false`, and the widget offers no note.
+  const closed = page.getByRole('button', { name: 'Notes from members only' });
+  await expect(closed).toBeVisible();
+  await expect(closed).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(0);
 
   const popup = await openPopup(extension, page);
 
-  await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
+  await expect(popup.getByText(/takes notes from its members only, and private mode carries no session/)).toBeVisible();
+  await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
   // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
   // pairs through the same field, which is the control for this absence.
   await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
@@ -342,7 +347,10 @@ test('private mode on a worker that answers anyone: the popup says nothing about
   await popup.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
   await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
+  await expect(popup.getByText(/takes notes from its members only/)).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
+  // The control of the closed button above: a site that everyone reads offers a note.
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
 });
 
 test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
@@ -534,7 +542,9 @@ test('the popup, the options page and the mounted widget speak the language of t
   await setUp.getByRole('button', { name: 'Save' }).click();
   await expect(setUp.getByText('On · playground', { exact: false })).toBeVisible();
   await setUp.close();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  // The site of this worker takes the notes of its members only (FRU-330), so private mode offers
+  // none: the launch button says so, in the language of the account.
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
 
   // The worker of the session says the account reads French. The E2E workers keep no accounts, so
   // the answer of that one route is given here; the popup asks it with its real session.
@@ -556,7 +566,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   await learner.close();
 
   // The open tab gets the widget again, in French, with no reload.
-  await expect(page.getByRole('button', { name: 'Laisser une note' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Notes des membres seulement' })).toBeVisible();
 
   const popup = await openPopup(extension, page);
   await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
@@ -574,7 +584,7 @@ test('the popup, the options page and the mounted widget speak the language of t
   // English again with no reload.
   await popup.getByRole('button', { name: 'Se déconnecter' }).click();
   await expect.poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({});
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Notes from members only' })).toBeVisible();
   await popup.close();
   const after = await openPopup(extension, page);
   await expect(after.getByText('On · playground', { exact: false })).toBeVisible();
