@@ -799,7 +799,8 @@ export async function handleConsoleApi(
 
     // DELETE …/statuses/<source>/<key>?moveTo=<key>: the notes in it go to `moveTo` first.
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
-    const moveTo = new URL(request.url).searchParams.get('moveTo') ?? undefined;
+    // An empty `moveTo`, as a form with nothing chosen sends it, is no `moveTo` (balanced review of #487).
+    const moveTo = new URL(request.url).searchParams.get('moveTo') || undefined;
     const removed = await context.accounts.removeSiteStatus(
       workspaceId as string,
       site,

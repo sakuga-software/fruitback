@@ -162,6 +162,9 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
 
     const refused = await callOn(team, 'DELETE', path(workspace, site, '/own/waiting'), { token });
     assert.deepEqual([refused.status, await refused.json()], [409, { error: 'status-in-use', notes: 2 }]);
+    // An empty `moveTo` is none: the same answer, not `invalid-target`.
+    const empty = await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo='), { token });
+    assert.deepEqual([empty.status, await empty.json()], [409, { error: 'status-in-use', notes: 2 }]);
     const nowhere = await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo=gone'), { token });
     assert.deepEqual([nowhere.status, await nowhere.json()], [400, { error: 'invalid-target' }]);
 
@@ -214,6 +217,30 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
 
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: DONE } });
     assert.deepEqual(await pins(), [[DONE, 'own:parked']]);
+  });
+
+  it('gives the list of the statuses changed at the next read, while the notes of the page are still in the cache', async () => {
+    // Asked in the balanced review of #487: `statuses` is never in the cached answer. A rename moves no
+    // note, so nothing invalidates the page, and the list must change all the same.
+    const { team, token, workspace, site } = await acme();
+    await plant(team, site, DONE as string, null, 'seed-1');
+    const first = await read(team, site);
+    assert.equal(first.statuses.find((status) => status.key === `own:${DONE}`)?.name, '');
+
+    await callOn(team, 'POST', path(workspace, site), {
+      token,
+      body: { source: 'own', key: DONE, name: 'Shipped', stage: DONE, color: '#5560c4' },
+    });
+    const second = await read(team, site);
+
+    assert.deepEqual(second.statuses[0], {
+      key: `own:${DONE}`,
+      name: 'Shipped',
+      stage: DONE,
+      color: '#5560c4',
+      textColor: '#ffffff',
+    });
+    assert.deepEqual(second.issues, first.issues, 'the notes came from the same cached answer');
   });
 
   it('takes the notes of a status the team added to the stage it moves to', async () => {
