@@ -132,7 +132,8 @@ export async function verifyIdentityToken(
   if (claims === undefined) return refuse('malformed');
 
   if (!filled(claims.sub)) return refuse('invalid-claims');
-  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return refuse('invalid-claims');
+  // `Number.isFinite` refuses a value that is not a number too: a string, `null`, an absent `exp`.
+  if (!Number.isFinite(claims.exp)) return refuse('invalid-claims');
   // `scope` of a token signed by a site is the site's own claim, as JWTs often carry one: it is not
   // read, and does not refuse the token (raised in review). Only `scope: 'account'` with no workspace
   // says a session of an account (FRU-238), and only a caller that verified with the worker key reads it.
@@ -184,6 +185,7 @@ function filled(claim: unknown): claim is string {
   return typeof claim === 'string' && claim.length > 0;
 }
 
+// Stryker disable BlockStatement: an empty catch returns `undefined`, as this one does. The range is the whole function, because a directive cannot lead a `catch`.
 function readJson<T>(segment: string): T | undefined {
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(base64UrlDecode(segment)));
@@ -193,6 +195,7 @@ function readJson<T>(segment: string): T | undefined {
     return undefined;
   }
 }
+// Stryker restore BlockStatement
 
 async function hmac(signingInput: string, secret: string): Promise<ArrayBuffer> {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
