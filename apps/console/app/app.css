@@ -134,10 +134,23 @@
 
 html,
 body {
+  /*
+    The rule of the text (FRU-350), the same as the widget's and the extension's. Content wraps
+    anywhere, so a host, an address or a long word never runs past its box. A label never breaks
+    inside its words: the rule under this one keeps a button, a switch, a tab and a key on one line.
+  */
+  overflow-wrap: anywhere;
   background: var(--color-page);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+button,
+[role='switch'],
+[role='tab'],
+kbd {
+  white-space: nowrap;
 }
 
 ::selection {

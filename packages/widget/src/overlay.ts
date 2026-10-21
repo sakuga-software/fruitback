@@ -1472,11 +1472,15 @@ const STYLES = `
   padding-block: 14px 12px;
   padding-inline: 16px 14px;
   border-bottom: 1px solid var(--fruitback-color-border);
+  /* A long state takes the first line, and the age and the way out go under it (FRU-350). */
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 .fruitback-thread-stage {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex: 1 1 8em;
   min-width: 0;
   font-weight: 600;
   font-size: 13px;

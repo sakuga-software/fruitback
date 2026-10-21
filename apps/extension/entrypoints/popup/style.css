@@ -147,6 +147,21 @@
   color: var(--text);
 }
 
+/*
+  The rule of the text (FRU-350), the same as the widget's. Content wraps anywhere, so a host, a
+  worker or a long word never runs past its box; every page of the extension loads this sheet first.
+  A label never breaks inside its words: a button (below), a switch, a tab and a key stay on one line.
+*/
+body {
+  overflow-wrap: anywhere;
+}
+
+[role='switch'],
+[role='tab'],
+kbd {
+  white-space: nowrap;
+}
+
 body {
   margin: 0;
   min-width: 280px;

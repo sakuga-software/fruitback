@@ -80,6 +80,15 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     values. `all: initial` stops inheritance too: an element with no rule of its own painted black at
     16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (FRU-51).
     `contrast.test.ts` compares tokens and cannot see it.
+  - **The text has one rule, in the reset** (FRU-350): the reset declares `overflow-wrap` and
+    `white-space` as `inherit`, `:host` gives `overflow-wrap: anywhere`, and `button`, `[role=switch]`,
+    `[role=tab]` and `kbd` take `white-space: nowrap`. Content wraps anywhere, so an address, a file
+    path or a long word stays in its box; a label never breaks inside its words. A button that holds a
+    note (a row of the list, a detached note) says `white-space: normal` in its own module. An
+    identifier is a label too. The extension (`popup/style.css`) and the console (`app.css`) write the
+    same rule on `body`. `e2e/wrap-widget.spec.ts`, `wrap-extension.spec.ts` and `wrap-console.spec.ts`
+    measure each surface at 320, 390 and 1280 px, in English and in French, with long data, through
+    `e2e/overflow.ts`; `overflow.spec.ts` plants each fault it must find.
 
 ### The reasons, and the history
 
