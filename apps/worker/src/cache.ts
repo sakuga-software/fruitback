@@ -106,6 +106,8 @@ function versionKey(page: string): string {
 }
 
 /** Test seam: forget the loads in flight. The answers live in the `Kv`. */
+// Stryker disable next-line BlockStatement: a test seam that no request reaches, left out of the score by Mathieu's decision (FRU-347).
 export function resetCacheState(): void {
+  // Stryker disable next-line CallExpression: the same test seam.
   inFlight.clear();
 }

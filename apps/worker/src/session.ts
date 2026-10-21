@@ -1,4 +1,5 @@
 import { type IdentityClaims, signIdentityToken } from './identity.ts';
+import { ACCOUNT_SESSION_WITH_WORKSPACE, END_SESSIONS_OF_NOBODY } from './messages.ts';
 
 /**
  * A durable identity for the extension's reviewer (FRU-42).
@@ -131,7 +132,7 @@ export function namedSessionsOf(of: SessionsOf): { subject: string | undefined; 
   const subject = of.subject || undefined;
   const workspace = of.workspace || undefined;
   if (subject === undefined && workspace === undefined) {
-    throw new Error('endSessionsOf names neither a person nor a workspace: it would end every session of the worker');
+    throw new Error(END_SESSIONS_OF_NOBODY);
   }
 
   return { subject, workspace };
@@ -387,7 +388,7 @@ export async function mintAccessToken(
 ): Promise<string> {
   // A session of an account names no workspace: one that said both would be read as either.
   if (identity.account === true && identity.workspace !== undefined) {
-    throw new Error('a session of an account names no workspace');
+    throw new Error(ACCOUNT_SESSION_WITH_WORKSPACE);
   }
   const seconds = Math.floor(now / 1000);
   // The claims go through `JSON.stringify`, which leaves out a key whose value is `undefined`: the

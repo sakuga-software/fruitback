@@ -13,11 +13,13 @@ import { pathToFileURL } from 'node:url';
  *   pnpm install --frozen-lockfile --ignore-workspace --dir tools/mutation
  *   node tools/mutation-study/count.ts [--json] <source file>…
  *
- * `--json` prints each mutant (file, function, mutator, line, replacement) instead of the tables.
+ * `--json` prints each mutant (file, function, mutator, line, replacement) instead of the tables. A
+ * mutant that a `// Stryker disable` comment covers is `Ignored`: StrykerJS reports it and leaves it out
+ * of the score, so the tables count it apart.
  */
 
 type Location = { start: { line: number; column: number }; end: { line: number; column: number } };
-type Mutant = { fileName: string; mutatorName: string; replacement: string; location: Location };
+type Mutant = { fileName: string; mutatorName: string; replacement: string; location: Location; status?: string };
 type Node = {
   type: string;
   loc?: { start: { line: number; column: number }; end: { line: number; column: number } };
@@ -137,7 +139,7 @@ async function main(args: string[]) {
     ignorers: [],
   });
 
-  const rows: { file: string; fn: string; mutator: string; line: number; replacement: string }[] = [];
+  const rows: { file: string; fn: string; mutator: string; line: number; replacement: string; ignored: boolean }[] = [];
   for (const { name, content } of input) {
     const lineStarts = [0];
     for (let at = content.indexOf('\n'); at >= 0; at = content.indexOf('\n', at + 1)) lineStarts.push(at + 1);
@@ -154,6 +156,7 @@ async function main(args: string[]) {
         mutator: mutant.mutatorName,
         line,
         replacement: mutant.replacement,
+        ignored: mutant.status === 'Ignored',
       });
     }
   }
@@ -167,9 +170,15 @@ async function main(args: string[]) {
     for (const row of within) count.set(key(row), (count.get(key(row)) ?? 0) + 1);
     return [...count].sort((a, b) => b[1] - a[1]);
   };
+  const ignored = rows.filter((row) => row.ignored);
+  const counted = rows.filter((row) => !row.ignored);
   console.log(`| File | Mutants |\n| --- | --- |`);
-  for (const [file, n] of tally((row) => row.file, rows)) console.log(`| \`${file}\` | ${n} |`);
-  console.log(`| **Total** | **${rows.length}** |\n`);
+  for (const [file, n] of tally((row) => row.file, counted)) console.log(`| \`${file}\` | ${n} |`);
+  console.log(`| **Total** | **${counted.length}** |\n`);
+  if (ignored.length > 0) {
+    console.log(`Ignored by a \`// Stryker disable\` comment, out of the score: ${ignored.length}.\n`);
+  }
+  rows.splice(0, rows.length, ...counted);
   console.log(`| Mutator | Mutants |\n| --- | --- |`);
   for (const [mutator, n] of tally((row) => row.mutator, rows)) console.log(`| ${mutator} | ${n} |`);
   console.log(`\n| File | Function | Mutants |\n| --- | --- | --- |`);

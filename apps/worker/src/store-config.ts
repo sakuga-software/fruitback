@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import type { SeedStore } from './store.ts';
+import {
+  FAKE_LINEAR_LOST_TO_PRODUCTION,
+  FAKE_LINEAR_SELECTED_MEMORY,
+  fakeLinearChangedNothing,
+  fakeLinearLostToExplicit,
+} from './messages.ts';
 
 /**
  * Which store this process runs on, and who validates its configuration (FRU-33).
@@ -159,9 +165,7 @@ export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
   const explicit = explicitStore(env);
 
   // Explicit first: when both are set it is the one that decided, and production is beside the point.
-  return explicit !== undefined
-    ? `FRUITBACK_STORE=${explicit} was set explicitly`
-    : 'this process runs with NODE_ENV=production';
+  return explicit !== undefined ? fakeLinearLostToExplicit(explicit) : FAKE_LINEAR_LOST_TO_PRODUCTION;
 }
 
 /**
@@ -195,7 +199,5 @@ export function fakeLinearDeprecationNotice(env: StoreEnv): string | undefined {
   // entitled to make: with `NODE_ENV=production` the explicit `memory` is refused by
   // `readStoreConfig`, so that line printed directly above a boot failure saying the opposite.
   // Whether the store survives is the next line's business. Raised in review.
-  return explicit !== undefined
-    ? `FRUITBACK_STORE=${explicit} is set explicitly, so the flag changed nothing and the line can go`
-    : 'it is what selected the in-memory store here. Set FRUITBACK_STORE=memory instead';
+  return explicit !== undefined ? fakeLinearChangedNothing(explicit) : FAKE_LINEAR_SELECTED_MEMORY;
 }
