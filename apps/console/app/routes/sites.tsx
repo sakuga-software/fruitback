@@ -1,4 +1,5 @@
 import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { type Destination, STAGES, type Site, type Visibility, type Workspace, type Writers, call } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
@@ -377,6 +378,7 @@ function SiteRows({
   previews,
 }: SiteRowsProps) {
   useLocale();
+  const navigate = useNavigate();
   const more = useRef<HTMLSpanElement>(null);
   const host = siteLabel(site.origin);
   // Every role puts Fruitback on a site with its own browser. The rest is of who manages the sites.
@@ -384,6 +386,8 @@ function SiteRows({
     { id: 'install', label: t('Install') },
     ...(manages
       ? [
+          // The statuses of the site have a page of their own (FRU-371), not a panel under the row.
+          { id: 'statuses', label: t('Statuses') },
           { id: 'previews', label: t('Preview builds') },
           { id: 'remove', label: t('Remove'), danger: true },
         ]
@@ -445,7 +449,11 @@ function SiteRows({
               trigger="icon"
               triggerLabel={t('More for {site}', { site: host })}
               items={items}
-              onAction={(id) => onUnder(id as Under['what'])}
+              onAction={(id) =>
+                id === 'statuses'
+                  ? navigate(`/w/${workspace.id}/sites/${site.id}/statuses`)
+                  : onUnder(id as Under['what'])
+              }
             >
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 <circle cx="5" cy="12" r="1.8" fill="currentColor" />

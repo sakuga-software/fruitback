@@ -779,6 +779,66 @@ textarea {
   height: 11px;
 }
 
+/* A field whose value cannot be kept (FRU-371): a thicker edge of the strong red, and the reason under it. */
+.kit-field .input[aria-invalid='true'] {
+  border-color: var(--color-accent-strong);
+  box-shadow: 0 0 0 1px var(--color-accent-strong);
+}
+
+.kit-field [data-slot='field-error'] {
+  color: var(--color-accent-strong);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+.kit-field[data-code='true'] .input {
+  font-family: var(--font-mono);
+}
+
+/*
+  A status as the widget draws it (FRU-371): the drop of 28 px with its white ring and its edge, and the
+  chip of its name. The colours are data of the site, given in a style by the screen; the edge keeps a
+  light colour visible on white (FRU-334).
+*/
+.kit-pin {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-page);
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 0 0 1px var(--color-status-edge);
+  font-size: var(--text-tiny);
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(-45deg);
+}
+
+.kit-pin > span {
+  transform: rotate(45deg);
+}
+
+.kit-status-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 9px;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--color-status-edge);
+  font-size: var(--text-hint);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.kit-swatch {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px var(--color-status-edge);
+}
+
 .kit-success {
   display: flex;
   align-items: center;

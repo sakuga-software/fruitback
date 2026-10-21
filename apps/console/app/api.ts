@@ -125,8 +125,11 @@ export type Me = { account: Account; workspaces: Workspace[]; instanceAdmin?: bo
 
 export type Answer<T> =
   | { ok: true; data: T }
-  /** `field`: the field of the request the worker refused, when it names one (`invalid-request`). */
-  | { ok: false; status: number; error: string; field?: string };
+  /**
+   * `field`: the field of the request the worker refused, when it names one (`invalid-request`).
+   * `notes`: how many notes are in a status the worker would not remove (`status-in-use`, FRU-366).
+   */
+  | { ok: false; status: number; error: string; field?: string; notes?: number };
 
 /** Whether the worker sends mail: `email` in what it says of better-auth. `undefined`: not asked yet. */
 let mails: boolean | undefined;
@@ -191,7 +194,12 @@ export function onSignedOut(listener: SignedOutListener): () => void {
 async function answer<T>(response: Response | undefined, workspace?: string): Promise<Answer<T>> {
   if (response === undefined) return UNREACHABLE;
   if (response.status === 204) return { ok: true, data: undefined as T };
-  const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown; field?: unknown } & T;
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: unknown;
+    code?: unknown;
+    field?: unknown;
+    notes?: unknown;
+  } & T;
   // A refusal of the worker names itself in `error`, and one of better-auth in `code` (FRU-209):
   // without the second, no sentence a screen holds for a code of better-auth was ever shown.
   const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
@@ -207,6 +215,7 @@ async function answer<T>(response: Response | undefined, workspace?: string): Pr
     status: response.status,
     error: named ?? 'unknown',
     ...(typeof body.field === 'string' ? { field: body.field } : {}),
+    ...(typeof body.notes === 'number' ? { notes: body.notes } : {}),
   };
 }
 

@@ -650,7 +650,8 @@ test('the menu of a row is walked with the keyboard, and what it opens gives foc
   await button.focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'More for https://staging.acme.dev' });
-  await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Preview builds', 'Remove']);
+  // « Statuses » leads to the page of the statuses of the site (FRU-371).
+  await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Statuses', 'Preview builds', 'Remove']);
   await expect(menu.getByRole('menuitem', { name: 'Install' })).toBeFocused();
   await page.waitForTimeout(250);
   const opened = await new AxeBuilder({ page }).include('.kit-menu').analyze();

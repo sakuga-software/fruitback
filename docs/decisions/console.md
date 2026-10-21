@@ -305,6 +305,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   they widen the page at 390 px. The card and the alert are sized by their content (`box-content`),
   as the mockup sizes them: 640 px and 760 px inside their padding. `e2e/console-sites.spec.ts` holds
   the three states, the counts, the form, the menu, the roles, 390 px and axe.
+- **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
+  from « Statuses » in the menu of a site row, for an owner or an admin. It is the board
+  `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Two things of the kit
+  came with it: `Field` takes `error` (the sentence a field is described by, `aria-invalid`) and
+  `inputRef`, so a refused press gives focus to the field it names; and `.kit-pin`,
+  `.kit-status-chip` and `.kit-swatch` in `app.css` draw a status as the widget does. Its colours
+  are data of the site, given in a style; the colours of the stages are read from the tokens, so no
+  value is written twice. `e2e/console-statuses.spec.ts` holds it at 1440 px in English and 390 px in
+  French, with axe.
 - **The Notes page lists the index of the notes, never their text** (FRU-245, `routes/notes.tsx`,
   read from the route of FRU-244). A note is its first 64 characters (Q6: all that Fruitback keeps
   of the text), cut to two lines, with its page and « Show on the page » (`<page>#fruitback-note=<id>`,

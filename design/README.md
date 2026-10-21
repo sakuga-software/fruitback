@@ -31,6 +31,19 @@ draws no dark theme.
 | 17 to 20 the instance of a self-host | Instance, workspaces, users, notes                      | FRU-260 to FRU-263                          |
 | The frame of a workspace             | The dark rail, the workspace switcher                   | FRU-234                                     |
 
+## The statuses of a site (FRU-371, 2026-10-21)
+
+`site-statuses/site-statuses.html` is the board of the statuses screen of a site (FRU-352,
+[statuses.md](../docs/decisions/statuses.md)): the list, adding, editing with the preview and the
+contrast, ordering by keyboard, deleting an empty status and one that holds notes, a Linear site
+with « Use Linear's colours », a GitHub site, and 390 px. Frames at 1440 px are in English, at
+390 px in French, and the board ends with its open questions and every text in both languages.
+It is drawn on the tokens of the console below, with the stage names of #486. `tools/build.mjs`
+writes it (edit the script, not the HTML); `shots/` holds a picture of each frame.
+The orchestrator validated it on 2026-10-21 with its eleven recommendations; the screen
+(`apps/console/app/routes/site-statuses.tsx`) follows it, except the Linear part (frames H and N),
+which waits for FRU-368, and the grip of frame A: the order is the two buttons alone.
+
 ## The export of 2026-10-07
 
 `fruitback-design-export.html` is the export of the Claude Design project « Application overlay
