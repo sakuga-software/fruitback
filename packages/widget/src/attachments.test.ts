@@ -404,7 +404,12 @@ describe('a file on its way, and the note that names it (FRU-332)', () => {
       { id: 'old' },
     ]);
     assert.deepEqual(places, [{ id: 'linear', canAttach: true }, { id: 'kept', canAttach: false }, { id: 'old' }]);
-    const reader = (canAttach: boolean | undefined) => ({ identified: false, canReply: false, canAttach });
+    const reader = (canAttach: boolean | undefined) => ({
+      identified: false,
+      canReply: false,
+      canWrite: true,
+      canAttach,
+    });
     assert.equal(attachOffer(reader(true), places, 'kept'), 'no-tracker');
     assert.equal(attachOffer(reader(false), places, 'linear'), 'offered');
     assert.equal(attachOffer(reader(true), places, 'old'), 'offered');
