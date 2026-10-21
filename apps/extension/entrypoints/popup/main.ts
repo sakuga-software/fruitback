@@ -882,13 +882,15 @@ function pairedRow(endpoint: string, identity: SessionIdentity): HTMLElement {
 function pairedFoot(endpoint: string, identity: SessionIdentity): HTMLElement {
   const foot = element('div', '', 'popup-foot');
   foot.classList.add('popup-foot-account');
-  const name = identity.name?.trim() || identity.email?.trim();
+  // The rule of the row (FRU-289): « Paired as » a name, never as an address. With no name, « Paired »
+  // and the address beside it.
+  const name = identity.name?.trim();
+  const email = identity.email?.trim();
+  let who = t('Paired');
+  if (name !== undefined && name !== '') who = t('Paired as {identity}', { identity: name });
+  else if (email !== undefined && email !== '') who = `${who} · ${email}`;
   foot.append(
-    element(
-      'span',
-      name === undefined || name === '' ? t('Paired') : t('Paired as {identity}', { identity: name }),
-      'who',
-    ),
+    element('span', who, 'who'),
     logOut(
       endpoint,
       linkButton(document, t('Log out'), () => undefined),
