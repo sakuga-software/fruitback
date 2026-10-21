@@ -1447,7 +1447,8 @@ const STYLES = `
 .fruitback-composer-place input { -webkit-appearance: radio; }
 /* A name comes from a tracker and can be one long word. */
 .fruitback-composer-place span, .fruitback-composer-identify { overflow-wrap: anywhere; }
-.fruitback-composer-identify { text-align: start; }
+/* A button that holds a name: its words wrap, against the rule of the labels (FRU-350). */
+.fruitback-composer-identify { text-align: start; white-space: normal; }
 /* Always in the tree, because a live region that was hidden announces nothing. Empty, it takes no room. */
 .fruitback-composer-notice { font-size: 12px; color: var(--fruitback-color-accent); }
 .fruitback-composer-notice:empty { display: none; }
@@ -1535,8 +1536,12 @@ const STYLES = `
 }
 .fruitback-composer-status { flex: 1 1 100%; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-status:empty { display: none; }
-/* « Lands in Linear as a new issue »: where the note goes, before the buttons. */
-.fruitback-composer-lands { flex: 1; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/*
+  « Lands in Linear as a new issue »: where the note goes, before the buttons. At least 4.5em wide
+  (FRU-350): beside the buttons, which stay on one line, its words wrap; with less room than that,
+  they take a line of their own above them, never a column of letters beside them.
+*/
+.fruitback-composer-lands { flex: 1 1 0; min-width: min(4.5em, 100%); font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-lands[hidden] { display: none; }
 .fruitback-composer-send { order: 1; }
 .fruitback-composer-foot > .fruitback-composer-ghost:not(.fruitback-composer-keep) { order: 2; }

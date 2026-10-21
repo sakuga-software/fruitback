@@ -216,10 +216,14 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
     /0px 10px 30px 0px$|^rgba?\(0, 0, 0, 0\.18\) 0px 10px 30px 0px/,
   );
   // The head: the state behind its drop, since when, the identifier in a chip, and the cross.
-  expect(await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'gap'])).toMatchObject({
+  // The head wraps a long state onto a line of its own, 6 px above the rest (FRU-350).
+  expect(
+    await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'column-gap', 'row-gap']),
+  ).toMatchObject({
     padding: '14px 14px 12px 16px',
     'border-bottom-width': '1px',
-    gap: '10px',
+    'column-gap': '10px',
+    'row-gap': '6px',
   });
   expect(await read('.fruitback-thread-stage', ['font-size', 'font-weight', 'gap'])).toMatchObject({
     'font-size': '13px',

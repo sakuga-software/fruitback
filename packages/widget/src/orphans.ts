@@ -341,6 +341,8 @@ const STYLES = `
   font: inherit;
   color: inherit;
   text-align: start;
+  /* A button that holds a note: its words wrap, against the rule of the labels (FRU-350). */
+  white-space: normal;
   cursor: pointer;
 }
 .fruitback-orphans-link {

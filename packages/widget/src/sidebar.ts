@@ -971,6 +971,8 @@ const STYLES = `
   color: var(--fruitback-color-text);
   font: inherit;
   text-align: start;
+  /* A button that holds a note: its words wrap, against the rule of the labels (FRU-350). */
+  white-space: normal;
   cursor: pointer;
 }
 .fruitback-sidebar-item:hover { background: var(--fruitback-color-surface-raised); }
@@ -1003,7 +1005,8 @@ const STYLES = `
 .fruitback-sidebar-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fruitback-sidebar-top { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.5; }
 .fruitback-sidebar-status { font-weight: 600; letter-spacing: -0.006em; }
-.fruitback-sidebar-id { color: var(--fruitback-color-text-muted); }
+/* An identifier is a label: DEV-002 never breaks at its dash (FRU-350). */
+.fruitback-sidebar-id { color: var(--fruitback-color-text-muted); white-space: nowrap; }
 .fruitback-sidebar-age { margin-inline-start: auto; color: var(--fruitback-color-text-muted); white-space: nowrap; }
 /* Two lines at most: the whole note is in its thread. */
 .fruitback-sidebar-note {
@@ -1052,6 +1055,7 @@ const STYLES = `
   color: var(--fruitback-color-text);
   font: inherit;
   text-align: start;
+  white-space: normal;
   cursor: pointer;
 }
 .fruitback-sidebar-lost:hover { background: var(--fruitback-color-surface-raised); }

@@ -756,13 +756,26 @@ const STYLES = `
   since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
   anywhere. Measured in Chromium before this was written (FRU-36).
 */
-*:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; }
+*:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; overflow-wrap: inherit; white-space: inherit; }
 /*
   all:initial also stops inheritance. Without the three inherit values above, an element with no colour
   rule of its own is black at 16px: the launch label on a chip, and the thread and the panel on a dark
   surface, where axe measured 1.2 to 1 (FRU-51). The host gives the first values to inherit.
+
+  The two wrap values inherit for the same reason (FRU-350). Without them every element starts at
+  overflow-wrap:normal: an address or a long name with no space ran out of its box wherever a rule
+  of the parent had asked for anywhere, and a nowrap on a button stopped at the span of its words.
 */
-:host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); }
+:host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); overflow-wrap: anywhere; }
+/*
+  The rule of the text, in two halves (FRU-350). Content wraps anywhere, so an address, a file path
+  or a long word never runs past its box: :host above gives it to every element. A label never
+  breaks inside its words: a button, a switch, a tab and a key stay on one line, and what they hold
+  inherits it. The few buttons that hold a note, the rows of a list, say white-space: normal in their
+  own module. A field keeps the line breaks its writer typed, as the browser draws it.
+*/
+button, [role='switch'], [role='tab'], kbd { white-space: nowrap; }
+textarea { white-space: pre-wrap; }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
