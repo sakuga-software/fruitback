@@ -30,10 +30,12 @@ function mounted(): MountedPage {
 
 /** A worker whose read answers `status` and `body`, which the test can change between two reads. */
 function worker(first: { status: number; body: Record<string, unknown> | string }) {
-  const answer = { ...first };
+  const answer: { status: number; body: Record<string, unknown> | string; down?: boolean } = { ...first };
   const requests: TransportRequest[] = [];
   const transport = async (request: TransportRequest): Promise<TransportResponse> => {
     requests.push(request);
+    // The network is down: what `fetch` does, a rejection with no status.
+    if (answer.down === true) throw new TypeError('Failed to fetch');
     const body = typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body);
 
     return { ok: answer.status >= 200 && answer.status < 300, status: answer.status, body };
@@ -147,5 +149,33 @@ describe('a site whose notes are « Members only », for a reader with no sessio
     const field = root.querySelector('textarea');
     assert.equal(field === null || field.closest('[hidden]') !== null, true, 'a composer opened');
     assert.equal(typing.latest(place.page)?.text, 'Le prix est coupé sur un téléphone.');
+  });
+
+  /**
+   * Raised in the balanced review: a 401 that closed, then a network failure. The failure says
+   * nothing of who writes, so the button stays as the worker last said; it is not frozen either:
+   * the read that follows by itself (the network back, FRU-316) opens it when the worker says so.
+   */
+  it('is not frozen by a network failure: the next read that answers opens the button again', async () => {
+    const page = mounted();
+    const { answer, requests, transport } = worker({ status: 401, body: { ...REFUSED, canWrite: false } });
+    const { launch } = await widgetOn(page, { transport });
+    assert.equal(launch.getAttribute('aria-disabled'), 'true');
+
+    answer.down = true;
+    page.view.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('online'));
+    await settle();
+    assert.equal(launch.getAttribute('aria-disabled'), 'true', 'a failure of the network opened the button');
+
+    // The site was opened to anyone meanwhile; the network comes back, and the widget reads again.
+    const before = requests.length;
+    answer.down = false;
+    answer.body = REFUSED;
+    page.view.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('online'));
+    await settle();
+
+    assert.ok(requests.length > before, 'the widget did not read again when the network came back');
+    assert.equal(launch.hasAttribute('aria-disabled'), false);
+    assert.equal(launch.textContent, 'Leave feedback');
   });
 });
