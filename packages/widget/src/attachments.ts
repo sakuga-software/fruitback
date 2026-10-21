@@ -44,9 +44,6 @@ export type AttachRefusal =
 /** What the worker said of the files of this reader, at the last read. */
 export type AttachOffer = 'offered' | 'no-tracker' | 'none';
 
-/** The images that « Image » offers on the disk: the two the ticket names. */
-export const IMAGE_ACCEPT = 'image/png,image/jpeg';
-
 /** What the widget refuses before it sends anything: the worker checks it again. */
 export function refusalBefore(
   file: { type: string; size: number },

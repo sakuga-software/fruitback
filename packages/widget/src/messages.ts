@@ -58,10 +58,13 @@ export const ENGLISH = {
 
   // FRU-332: the files of a note. The worker takes them only when the note goes to a tracker.
   'composer.attach': 'Attachments',
-  'composer.attachPage': 'Capture the page',
+  'composer.attachMenu': 'Attach',
+  'composer.attachFile': 'Add an attachment',
   'composer.attachArea': 'Capture an area',
-  'composer.attachImage': 'Image',
-  'composer.attachFile': 'File',
+  'composer.attachPage': 'Capture the whole page',
+  'composer.attachDrop': 'Drag and drop',
+  'composer.attachDropHere': 'Drop your files here',
+  'composer.attachDropChoose': 'Choose a file',
   // Said in place of the four ways, when the note stays in Fruitback (`canAttach: false`).
   'composer.attachNoTracker': 'This note stays in Fruitback, with no tracker: it takes no file.',
   'composer.attachRemove': 'Remove {name}',

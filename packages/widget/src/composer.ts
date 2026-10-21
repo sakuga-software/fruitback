@@ -6,7 +6,6 @@ import { type MessageKey, type Translator, createTranslator, languageOf } from '
 import {
   type AttachOffer,
   type AttachRefusal,
-  IMAGE_ACCEPT,
   type PickedFile,
   readPicked,
   readableSize,
@@ -313,11 +312,15 @@ export function createComposer(options: ComposerOptions): Composer {
   const attach = root.querySelector('[data-fruitback-attach]') as HTMLElement;
   const attachLabel = root.querySelector('[data-fruitback-attach-label]') as HTMLElement;
   const attachWays = root.querySelector('[data-fruitback-attach-ways]') as HTMLElement;
+  const attachTrigger = root.querySelector('[data-fruitback-attach-trigger]') as HTMLButtonElement;
+  const attachMenu = root.querySelector('[data-fruitback-attach-menu]') as HTMLElement;
   const attachPage = root.querySelector('[data-fruitback-attach-page]') as HTMLButtonElement;
   const attachArea = root.querySelector('[data-fruitback-attach-area]') as HTMLButtonElement;
-  const attachImage = root.querySelector('[data-fruitback-attach-image]') as HTMLButtonElement;
   const attachFile = root.querySelector('[data-fruitback-attach-file]') as HTMLButtonElement;
-  const imageInput = root.querySelector('[data-fruitback-attach-image-input]') as HTMLInputElement;
+  const attachDrop = root.querySelector('[data-fruitback-attach-drop]') as HTMLButtonElement;
+  const dropZone = root.querySelector('[data-fruitback-attach-dropzone]') as HTMLElement;
+  const dropWords = root.querySelector('[data-fruitback-attach-dropzone-words]') as HTMLElement;
+  const dropChoose = root.querySelector('[data-fruitback-attach-dropzone-choose]') as HTMLButtonElement;
   const fileInput = root.querySelector('[data-fruitback-attach-file-input]') as HTMLInputElement;
   const attachNone = root.querySelector('[data-fruitback-attach-none]') as HTMLElement;
   const attachList = root.querySelector('[data-fruitback-attach-list]') as HTMLElement;
@@ -351,12 +354,14 @@ export function createComposer(options: ComposerOptions): Composer {
   signIn.textContent = t.text('composer.signIn');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
   attachLabel.textContent = t.text('composer.attach');
+  attachTrigger.append(document.createTextNode(t.text('composer.attachMenu')), createIcon(document, 'chevron'));
   attachPage.textContent = t.text('composer.attachPage');
   attachArea.textContent = t.text('composer.attachArea');
-  attachImage.textContent = t.text('composer.attachImage');
   attachFile.textContent = t.text('composer.attachFile');
+  attachDrop.textContent = t.text('composer.attachDrop');
+  dropWords.textContent = t.text('composer.attachDropHere');
+  dropChoose.textContent = t.text('composer.attachDropChoose');
   attachNone.textContent = t.text('composer.attachNoTracker');
-  imageInput.accept = IMAGE_ACCEPT;
 
   /** Whether « Keep for later » is offered at this open. A note with files is sent, never kept. */
   let keepOffered = false;
@@ -372,11 +377,15 @@ export function createComposer(options: ComposerOptions): Composer {
     attachWays.hidden = offer !== 'offered';
     attachNone.hidden = offer !== 'no-tracker';
     const captures = seam?.captures() === true;
-    attachPage.hidden = !captures;
-    attachArea.hidden = !captures;
+    (attachPage.parentElement as HTMLElement).hidden = !captures;
+    (attachArea.parentElement as HTMLElement).hidden = !captures;
     const full = held.filter((each) => each.state !== 'refused').length >= MAX_FILES;
-    for (const way of [attachPage, attachArea, attachImage, attachFile])
+    for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
       way.setAttribute('aria-disabled', String(full));
+    if (full || offer !== 'offered') {
+      closeAttachMenu(false);
+      dropZone.hidden = true;
+    }
     keep.hidden = !keepOffered || held.length > 0;
 
     const hadFocus = attachList.contains(deepActiveElement(document));
@@ -407,7 +416,7 @@ export function createComposer(options: ComposerOptions): Composer {
         return item;
       }),
     );
-    if (hadFocus) (attachList.querySelector('button') ?? attachFile).focus();
+    if (hadFocus) (attachList.querySelector('button') ?? attachTrigger).focus();
   }
 
   /** What a line of the list says under the name: why it did not go, or its size. */
@@ -450,8 +459,36 @@ export function createComposer(options: ComposerOptions): Composer {
     drawAttachments();
   }
 
+  /** The ways of the menu that are shown now, in their order. */
+  function menuItems(): HTMLButtonElement[] {
+    return [attachFile, attachArea, attachPage, attachDrop].filter(
+      (item) => !(item.parentElement as HTMLElement).hidden,
+    );
+  }
+
+  /**
+   * « Attach » opens a menu of the ways to join a file (FRU-351): the arrows go from one to the next,
+   * Home and End to the ends, Enter or Space takes one, Esc closes it and gives the focus back to
+   * « Attach », Tab closes it and goes on.
+   */
+  function openAttachMenu(focus: 'first' | 'last'): void {
+    if (attachTrigger.getAttribute('aria-disabled') === 'true' || attachTrigger.disabled) return;
+    attachMenu.hidden = false;
+    attachTrigger.setAttribute('aria-expanded', 'true');
+    const items = menuItems();
+    (focus === 'first' ? items[0] : items[items.length - 1])?.focus();
+  }
+
+  function closeAttachMenu(refocus: boolean): void {
+    if (attachMenu.hidden) return;
+    attachMenu.hidden = true;
+    attachTrigger.setAttribute('aria-expanded', 'false');
+    if (refocus) attachTrigger.focus();
+  }
+
   async function capture(kind: 'page' | 'area', from: HTMLButtonElement): Promise<void> {
     if (seam === undefined || from.getAttribute('aria-disabled') === 'true') return;
+    closeAttachMenu(false);
     const mine = session;
     const taken = await seam.capture(kind).catch(() => undefined);
     if (mine !== session) return;
@@ -474,6 +511,11 @@ export function createComposer(options: ComposerOptions): Composer {
     const files = [...(input.files ?? [])];
     // Emptied, so the same file chosen again is a change.
     input.value = '';
+    await joinFiles(files, mine);
+  }
+
+  /** Reads and joins the files the person chose or dropped, one by one, for this open only. */
+  async function joinFiles(files: readonly File[], mine: number): Promise<void> {
     for (const file of files) {
       let read: PickedFile;
       try {
@@ -512,7 +554,9 @@ export function createComposer(options: ComposerOptions): Composer {
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'sent' || next === 'kept';
     keep.disabled = send.disabled;
-    for (const way of [attachPage, attachArea, attachImage, attachFile]) way.disabled = next === 'sending';
+    for (const way of [attachTrigger, attachPage, attachArea, attachFile, attachDrop, dropChoose])
+      way.disabled = next === 'sending';
+    if (next === 'sending') closeAttachMenu(false);
     field.readOnly = next === 'sending';
     // A failure is a card of its own above the foot (FRU-305): « Did not go through », then what to
     // do. The sentence is the one of its cause (FRU-156).
@@ -665,6 +709,8 @@ export function createComposer(options: ComposerOptions): Composer {
     showPicture();
     askForNameOrNot();
     held = [];
+    closeAttachMenu(false);
+    dropZone.hidden = true;
     keepOffered = options.keep?.offered() === true;
     showRememberedName();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
@@ -877,15 +923,89 @@ export function createComposer(options: ComposerOptions): Composer {
     drawAttachments();
   });
   const stopFollowingOffer = seam?.subscribe(drawAttachments);
-  attachPage.addEventListener('click', () => void capture('page', attachPage));
-  attachArea.addEventListener('click', () => void capture('area', attachArea));
-  attachImage.addEventListener('click', () => {
-    if (attachImage.getAttribute('aria-disabled') !== 'true') imageInput.click();
+  attachPage.addEventListener('click', () => void capture('page', attachTrigger));
+  attachArea.addEventListener('click', () => void capture('area', attachTrigger));
+  attachDrop.addEventListener('click', () => {
+    if (attachDrop.getAttribute('aria-disabled') === 'true') return;
+    closeAttachMenu(false);
+    dropZone.hidden = false;
+    dropZone.focus();
+  });
+  dropChoose.addEventListener('click', () => {
+    if (dropChoose.getAttribute('aria-disabled') !== 'true') fileInput.click();
+  });
+  dropZone.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    dropZone.hidden = true;
+    attachTrigger.focus();
+  });
+  for (const type of ['dragenter', 'dragover'] as const) {
+    dropZone.addEventListener(type, (event) => {
+      event.preventDefault();
+      dropZone.toggleAttribute('data-fruitback-dragging', true);
+    });
+  }
+  dropZone.addEventListener('dragleave', () => dropZone.toggleAttribute('data-fruitback-dragging', false));
+  dropZone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dropZone.toggleAttribute('data-fruitback-dragging', false);
+    if (dropZone.getAttribute('aria-disabled') === 'true') return;
+    const files = [...((event as DragEvent).dataTransfer?.files ?? [])];
+    if (files.length === 0) return;
+    dropZone.hidden = true;
+    void joinFiles(files, session).then(() => attachTrigger.focus());
+  });
+  attachTrigger.addEventListener('click', () => {
+    if (attachMenu.hidden) openAttachMenu('first');
+    else closeAttachMenu(true);
+  });
+  attachTrigger.addEventListener('keydown', (event) => {
+    const key = (event as KeyboardEvent).key;
+    if (key !== 'ArrowDown' && key !== 'ArrowUp') return;
+    event.preventDefault();
+    openAttachMenu(key === 'ArrowDown' ? 'first' : 'last');
+  });
+  attachMenu.addEventListener('keydown', (event) => {
+    const key = (event as KeyboardEvent).key;
+    const items = menuItems();
+    const at = items.indexOf(deepActiveElement(document) as HTMLButtonElement);
+    if (key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeAttachMenu(true);
+
+      return;
+    }
+    if (key === 'Tab') {
+      closeAttachMenu(false);
+
+      return;
+    }
+    const next: Record<string, number> = {
+      ArrowDown: (at + 1) % items.length,
+      ArrowUp: (at - 1 + items.length) % items.length,
+      Home: 0,
+      End: items.length - 1,
+    };
+    if (next[key] === undefined) return;
+    event.preventDefault();
+    items[next[key]]?.focus();
   });
   attachFile.addEventListener('click', () => {
-    if (attachFile.getAttribute('aria-disabled') !== 'true') fileInput.click();
+    if (attachFile.getAttribute('aria-disabled') === 'true') return;
+    closeAttachMenu(true);
+    fileInput.click();
   });
-  imageInput.addEventListener('change', () => void pickFrom(imageInput));
+  // A click out of the menu closes it, as Esc does, and leaves the focus where the click put it.
+  function onMenuOutside(event: Event): void {
+    if (attachMenu.hidden) return;
+    const path = event.composedPath();
+    if (path.includes(attachMenu) || path.includes(attachTrigger)) return;
+    closeAttachMenu(false);
+  }
+  document.addEventListener('click', onMenuOutside, true);
   fileInput.addEventListener('change', () => void pickFrom(fileInput));
   attachList.addEventListener('click', (event) => {
     const button = (event.target as Element).closest?.('[data-fruitback-file-remove]') as HTMLElement | null;
@@ -930,6 +1050,7 @@ export function createComposer(options: ComposerOptions): Composer {
     destroy() {
       if (closing !== 0) view?.clearTimeout(closing);
       document.removeEventListener('click', onDocumentClick, true);
+      document.removeEventListener('click', onMenuOutside, true);
       focus.destroy();
       stopFollowingPlaces?.();
       stopFollowingOffer?.();
@@ -1019,12 +1140,18 @@ const TEMPLATE = `
     <div data-fruitback-attach class="fruitback-composer-attach" role="group" aria-labelledby="fruitback-composer-attach-label" hidden>
       <span data-fruitback-attach-label id="fruitback-composer-attach-label" class="fruitback-composer-label"></span>
       <div data-fruitback-attach-ways class="fruitback-composer-attach-ways">
-        <button type="button" data-fruitback-attach-page class="fruitback-composer-attach-way"></button>
-        <button type="button" data-fruitback-attach-area class="fruitback-composer-attach-way"></button>
-        <button type="button" data-fruitback-attach-image class="fruitback-composer-attach-way"></button>
-        <button type="button" data-fruitback-attach-file class="fruitback-composer-attach-way"></button>
-        <input data-fruitback-attach-image-input type="file" tabindex="-1" aria-hidden="true" hidden />
+        <button type="button" data-fruitback-attach-trigger class="fruitback-composer-attach-way fruitback-composer-attach-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="fruitback-composer-attach-menu"></button>
+        <ul data-fruitback-attach-menu id="fruitback-composer-attach-menu" class="fruitback-composer-attach-menu" role="menu" aria-labelledby="fruitback-composer-attach-label" hidden>
+          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-file class="fruitback-composer-attach-item"></button></li>
+          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-area class="fruitback-composer-attach-item"></button></li>
+          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-page class="fruitback-composer-attach-item"></button></li>
+          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-drop class="fruitback-composer-attach-item"></button></li>
+        </ul>
         <input data-fruitback-attach-file-input type="file" multiple tabindex="-1" aria-hidden="true" hidden />
+      </div>
+      <div data-fruitback-attach-dropzone class="fruitback-composer-dropzone" tabindex="-1" role="group" aria-labelledby="fruitback-composer-dropzone-words" hidden>
+        <p data-fruitback-attach-dropzone-words id="fruitback-composer-dropzone-words" class="fruitback-composer-dropzone-words"></p>
+        <button type="button" data-fruitback-attach-dropzone-choose class="fruitback-composer-attach-way"></button>
       </div>
       <p data-fruitback-attach-none class="fruitback-composer-attach-none" hidden></p>
       <ul data-fruitback-attach-list class="fruitback-composer-files" hidden></ul>
@@ -1209,6 +1336,58 @@ const STYLES = `
 .fruitback-composer-attach-way:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-composer-attach-way[disabled], .fruitback-composer-attach-way[aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .fruitback-composer-attach-none { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/*
+  « Attach » and its menu (FRU-351). The menu opens under the button in the flow of the composer, not
+  over it: on a phone the composer is a sheet, and a menu laid over it was cut by its foot.
+*/
+.fruitback-composer-attach-ways { flex-direction: column; align-items: flex-start; }
+.fruitback-composer-attach-trigger { display: inline-flex; align-items: center; gap: 4px; }
+.fruitback-composer-attach-trigger .fruitback-icon { width: 14px; height: 14px; }
+.fruitback-composer-attach-trigger[aria-expanded="true"] .fruitback-icon { transform: rotate(180deg); }
+.fruitback-composer-attach-menu {
+  box-sizing: border-box;
+  min-width: 220px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-xl);
+}
+.fruitback-composer-attach-menu li { display: block; list-style: none; margin: 0; padding: 0; }
+.fruitback-composer-attach-menu[hidden], .fruitback-composer-attach-menu li[hidden], .fruitback-composer-dropzone[hidden] { display: none; }
+.fruitback-composer-attach-item {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--fruitback-radius-sm);
+  background: transparent;
+  color: var(--fruitback-color-text);
+  font: 500 13px/1.3 var(--fruitback-font-sans);
+  text-align: start;
+  cursor: pointer;
+}
+.fruitback-composer-attach-item:hover:not([aria-disabled="true"]), .fruitback-composer-attach-item:focus-visible { background: var(--fruitback-color-surface-sunken); }
+.fruitback-composer-attach-item:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -2px; }
+.fruitback-composer-attach-item[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.fruitback-composer-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 2px dashed var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-sunken);
+  text-align: center;
+}
+.fruitback-composer-dropzone:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+.fruitback-composer-dropzone[data-fruitback-dragging] { border-color: var(--fruitback-color-accent); }
+.fruitback-composer-dropzone-words { margin: 0; font-size: 13px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-files { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .fruitback-composer-file {
   display: flex;
