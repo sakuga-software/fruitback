@@ -184,6 +184,12 @@ How this repository is formatted, tested and documented, and which test holds ea
   10.0.0 found no test under vitest 5.0.5, so every mutant survived (6.82 on `cache.ts`), and it
   loads vitest from `tools/mutation` while the tests import the one of the workspace.
   `mutation.test.ts` fails when the two differ.
+- **`pnpm audit --prod` reads vitest as a production dependency of the worker.** better-auth 1.7.7
+  names vitest as an optional peer, and pnpm links it once vitest is in the workspace: the job
+  `dependencies` then failed on vite 8.2.1 and source-map-js 1.2.1. An override `'-'` does not cut a
+  peer (measured), so the lockfile moved both to their fixed versions, 8.3.4 and 1.2.2, inside the
+  ranges that the console and the playground already declare. An advisory of vitest itself fails
+  that job too.
 - **The runner of StrykerJS sets `pool: 'threads'` and one worker**, and keeps `isolate`: each test
   file still starts its own instances. The whole suite passes that way (measured on 2026-10-21), and
   `pglite-isolation.test.ts` holds the pool and `isolate` of the config.
