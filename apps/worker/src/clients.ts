@@ -146,6 +146,9 @@ export type ReadAccess = 'public' | 'authenticated';
  */
 export type WriteAccess = 'public' | 'authenticated';
 
+/** How a worker with no `FRUITBACK_CLIENTS` is named where a list names clients. */
+const SINGLE_CLIENT = '<single client>';
+
 /**
  * Clients that could never be read, because they ask for a verified reader and have no key to
  * verify one with.
@@ -167,7 +170,7 @@ export function unreadableClients(options: {
   const { read, clients, identitySecret, sessions = false } = options;
 
   if (clients === undefined) {
-    return read === 'authenticated' && identitySecret === undefined ? ['<single client>'] : [];
+    return read === 'authenticated' && identitySecret === undefined ? [SINGLE_CLIENT] : [];
   }
 
   return Object.entries(clients)
@@ -182,11 +185,7 @@ export function unreadableClients(options: {
 
 /** The workspaces the clients of this map belong to, each once. */
 export function workspacesOf(clients: ClientMap | undefined): string[] {
-  if (clients === undefined) return [];
-
-  return [
-    ...new Set(Object.values(clients).flatMap((client) => (client.workspace === undefined ? [] : [client.workspace]))),
-  ];
+  return [...new Set(Object.values(clients ?? {}).flatMap((client) => client.workspace ?? []))];
 }
 
 /**
@@ -198,7 +197,7 @@ export function workspacesOf(clients: ClientMap | undefined): string[] {
 export function openReadClients(options: { read: ReadAccess; clients: ClientMap | undefined }): string[] {
   const { read, clients } = options;
 
-  if (clients === undefined) return read === 'public' ? ['<single client>'] : [];
+  if (clients === undefined) return read === 'public' ? [SINGLE_CLIENT] : [];
 
   return Object.entries(clients)
     .filter(([, client]) => (client.read ?? read) === 'public')
@@ -244,7 +243,7 @@ export type ClientMapResult = { ok: true; clients: ClientMap | undefined } | { o
  * pooling every client into one team, which is exactly the failure this file exists to prevent.
  */
 export function readClientMap(value: string | undefined): ClientMapResult {
-  if (value === undefined || value.trim() === '') return { ok: true, clients: undefined };
+  if (!value?.trim()) return { ok: true, clients: undefined };
 
   let parsed: unknown;
   try {
@@ -346,9 +345,7 @@ export type ResolveClientOptions = {
  * cache key alike.
  */
 export function normalizeClientId(value: string | null | undefined): string | undefined {
-  const trimmed = value?.trim();
-
-  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+  return value?.trim() || undefined;
 }
 
 export function resolveClient({
@@ -417,7 +414,5 @@ export function resolveClient({
 
 /** Every origin any client may be embedded on — the allowlist a multi-tenant worker actually serves. */
 export function originsFromClients(clients: ClientMap | undefined): string[] {
-  if (clients === undefined) return [];
-
-  return [...new Set(Object.values(clients).flatMap((client) => client.origins ?? []))];
+  return [...new Set(Object.values(clients ?? {}).flatMap((client) => client.origins ?? []))];
 }

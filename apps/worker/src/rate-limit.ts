@@ -108,12 +108,11 @@ export function resolveClientIp(
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
 
-  // No proxy in front, or a direct hit: the socket peer is the truth.
-  if (trustedHops === 0 || chain.length === 0) return socketAddress || 'unknown';
+  // `trustedHops` is a whole number, 0 or more (`env.ts`). With no proxy in front, a direct hit, or a
+  // chain shorter than the trusted hop count, there is no entry at that place: the request did not
+  // come through the expected path, and the socket peer is the truth rather than a caller-supplied
+  // entry.
+  const entry = trustedHops > 0 ? chain[chain.length - trustedHops] : undefined;
 
-  // A chain shorter than the trusted hop count means the request did not come through the expected
-  // path. Fall back to the socket peer rather than trusting a caller-supplied entry.
-  if (chain.length < trustedHops) return socketAddress || 'unknown';
-
-  return chain[chain.length - trustedHops] ?? socketAddress ?? 'unknown';
+  return entry ?? (socketAddress || 'unknown');
 }

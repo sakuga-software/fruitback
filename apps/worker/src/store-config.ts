@@ -118,14 +118,18 @@ export const DEFAULT_STORE_PROVIDER = 'postgres';
  * says something at boot: see `fakeLinearDeprecationNotice` and `fakeLinearIgnoredReason`.
  */
 export function storeProviderFor(env: StoreEnv): string {
-  const explicit = env.FRUITBACK_STORE?.trim();
-
-  if (explicit !== undefined && explicit !== '') return explicit;
+  const explicit = explicitStore(env);
+  if (explicit !== undefined) return explicit;
 
   // The production guard is applied to the sugar **here**, so the flag *degrades* to the real store
   // rather than refusing to boot. An explicit `FRUITBACK_STORE=memory` gets no such treatment — see
   // `readStoreConfig`, and `fakeLinearIgnoredReason` for why the two differ.
   return asksForFakeLinear(env) && env.NODE_ENV !== 'production' ? MEMORY_PROVIDER : DEFAULT_STORE_PROVIDER;
+}
+
+/** `FRUITBACK_STORE` as an operator set it: trimmed, and `undefined` when it is unset or blank. */
+function explicitStore(env: StoreEnv): string | undefined {
+  return env.FRUITBACK_STORE?.trim() || undefined;
 }
 
 /** Not exported: `stores.ts` finds the in-memory store by asking the registry, not by its name. */
@@ -152,10 +156,10 @@ function asksForFakeLinear(env: StoreEnv): boolean {
 export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
   if (!asksForFakeLinear(env) || storeProviderFor(env) === MEMORY_PROVIDER) return undefined;
 
-  const explicit = env.FRUITBACK_STORE?.trim();
+  const explicit = explicitStore(env);
 
   // Explicit first: when both are set it is the one that decided, and production is beside the point.
-  return explicit !== undefined && explicit !== ''
+  return explicit !== undefined
     ? `FRUITBACK_STORE=${explicit} was set explicitly`
     : 'this process runs with NODE_ENV=production';
 }
@@ -184,14 +188,14 @@ export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
 export function fakeLinearDeprecationNotice(env: StoreEnv): string | undefined {
   if (!asksForFakeLinear(env) || storeProviderFor(env) !== MEMORY_PROVIDER) return undefined;
 
-  const explicit = env.FRUITBACK_STORE?.trim();
+  const explicit = explicitStore(env);
 
   // **The explicit branch says nothing about what is selected**, only that the flag decided nothing.
   // It used to read "already selects that store", which is the one claim this function is not
   // entitled to make: with `NODE_ENV=production` the explicit `memory` is refused by
   // `readStoreConfig`, so that line printed directly above a boot failure saying the opposite.
   // Whether the store survives is the next line's business. Raised in review.
-  return explicit !== undefined && explicit !== ''
+  return explicit !== undefined
     ? `FRUITBACK_STORE=${explicit} is set explicitly, so the flag changed nothing and the line can go`
     : 'it is what selected the in-memory store here. Set FRUITBACK_STORE=memory instead';
 }
