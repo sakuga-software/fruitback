@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'vitest';
 
@@ -9,10 +10,13 @@ import { describe, it } from 'vitest';
  * An old name in a string, a message key or a CSS token is a stage that nothing reads any more: a pin
  * with no colour, a filter that hides nothing. Prose and comments are not read; the migrations are
  * history, and the two tests of the migrations plant the old names on purpose.
+ *
+ * The files are the ones git lists, tracked or new, never one it ignores. A mutation run of StrykerJS
+ * keeps copies of the sources in `.stryker-tmp/backup-*` (`inPlace`), which a walk of the folders read
+ * as code; the copies of the two tests of the migrations then failed its dry run (FRU-355).
  */
 
 const SEARCHED = ['apps/', 'packages/', 'e2e/'];
-const SKIPPED_FOLDERS = new Set(['node_modules', 'dist', '.output', '.wxt', 'drizzle', 'coverage', 'test-results']);
 const EXTENSIONS = /\.(ts|tsx|css|sql|html|mjs|js)$/;
 const HISTORY = new Set([
   'apps/worker/src/stage-names.test.ts',
@@ -34,17 +38,33 @@ function oldNamesIn(text: string): string[] {
   return [...text.matchAll(OLD_NAME)].map((match) => match[0]);
 }
 
-/** The files of the code under `folder`, as paths from the repository. */
-function filesUnder(folder: string): string[] {
-  const base = fileURLToPath(new URL(`../../../${folder}`, import.meta.url));
-  const walk = (directory: string): string[] =>
-    readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-      if (entry.isDirectory()) return SKIPPED_FOLDERS.has(entry.name) ? [] : walk(join(directory, entry.name));
+/**
+ * The files of the code that git lists under the searched folders, tracked or new, as paths from the
+ * repository. What git ignores is not code: `node_modules`, a build, `.stryker-tmp`, `reports`. The
+ * migrations are history: a migration that ran is never edited.
+ */
+function codeFiles(): string[] {
+  const listed = execFileSync(
+    'git',
+    [
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '--full-name',
+      '-z',
+      '--',
+      ...SEARCHED.map((folder) => `:(top)${folder}`),
+    ],
+    { cwd: dirname(fileURLToPath(import.meta.url)), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
 
-      return EXTENSIONS.test(entry.name) ? [join(directory, entry.name)] : [];
-    });
-
-  return walk(base).map((file) => `${folder}${relative(base, file)}`);
+  return [...new Set(listed.split('\0'))].filter(
+    (file) =>
+      EXTENSIONS.test(file) &&
+      !file.split('/').includes('drizzle') &&
+      existsSync(fileURLToPath(new URL(`../../../${file}`, import.meta.url))),
+  );
 }
 
 function textOf(file: string): string {
@@ -62,7 +82,7 @@ describe('the old names of the stages (FRU-355)', () => {
   });
 
   it('are in no file of the code', () => {
-    const files = SEARCHED.flatMap(filesUnder);
+    const files = codeFiles();
     assert.ok(files.length > 500, `read ${files.length} files: the walk found less code than there is`);
 
     const found = files
