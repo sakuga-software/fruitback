@@ -21,7 +21,13 @@ import { readStoreConfig } from './stores.ts';
  * the sites of two workspaces in one database, `forget`, a batch, and the rows it does not trust.
  */
 
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
+const POLICY: ClientPolicy = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+};
 const SITE = 'https://preview.shared.test';
 const PAGE = canonicalizePageUrl(`${SITE}/pricing`);
 

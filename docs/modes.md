@@ -46,8 +46,12 @@ signed-in reader only, and private mode carries no session.` On a site that ever
 A credential is a credential in every mode: somebody holding a valid token reads that worker with
 `curl` too. That is what the token is for. The row above is about the callers who have none.
 
-**A site that only members read still takes a note from anybody** (FRU-224). Only the read asks for a
-session: its sender cannot read the note back, and the members find it.
+**A site that only members read takes a note from its members only, unless it says « Anyone on the
+page »** (FRU-330). « Who can leave a note » is a setting of such a site, and « Members only » is the
+default of a new one: a note with no session answers `401`, and the widget offers none. With
+« Anyone on the page », a note with no session is kept: its sender cannot read it back, and the
+members find it. Every site made before FRU-330 has that value. **Private mode carries no session**,
+so a site that a reviewer opens in private mode must say « Anyone on the page ».
 
 So:
 
@@ -96,7 +100,10 @@ where a site is made. Self-hosted, it is one compose file — [self-hosting.md](
 A site read by members under private mode is worth spelling out: the widget the extension mounts
 sends no token, so the read answers `401` and the page shows no pins — the same page as a worker that
 is down. The popup tells the two apart: it asks the worker the same read, and on a `401` it says that
-the worker wants a session that private mode does not carry.
+the worker wants a session that private mode does not carry. On a site whose notes are « Members
+only » (FRU-330), the default of a new site, the widget offers no note either: the refusal of the
+read says `canWrite: false`. Such a site must say « Anyone on the page » to take the notes of a
+private-mode reviewer, and is still read by members only.
 
 **One instance serves team mode for several clients, grouped in workspaces** (FRU-95). A session
 belongs to the workspace it was connected for, and reads and writes on the sites of that workspace

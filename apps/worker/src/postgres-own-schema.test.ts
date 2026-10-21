@@ -36,7 +36,13 @@ import { StoreError } from './store.ts';
  * writes nowhere else.
  */
 
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
+const POLICY: ClientPolicy = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+};
 const SCHEMA = 'fruitback';
 const { opening } = databasesOfACase();
 

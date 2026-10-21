@@ -179,6 +179,8 @@ for (const { label, open, skip } of DATABASES) {
           workspaceId: 'ws_acme',
           origin: 'https://acme.dev',
           visibility: 'members',
+          // A site of before takes notes from anybody, as it did (FRU-330).
+          writers: 'anyone',
           destinations: [{ connector: 'con_linear', teamId: 'team-design', label: 'Linear · Design' }],
         },
       ]);

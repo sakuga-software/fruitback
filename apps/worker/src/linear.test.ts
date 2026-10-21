@@ -103,7 +103,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       { issue: 'issue_1', clientId: 'acme' },
       { verdict: 'wrong', author: CHECKER },
       undefined,
-      { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' },
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
     );
 
     assert.deepEqual(
@@ -123,7 +123,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
       { issue: 'issue_1', clientId: 'acme' },
       { verdict: 'fixed', author: CHECKER },
       undefined,
-      { showComments: true, identitySecret: undefined, read: 'public', locale: 'fr' },
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'fr' },
     );
 
     assert.deepEqual(
@@ -143,6 +143,7 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
         showComments: true,
         identitySecret: undefined,
         read: 'public',
+        write: 'public',
         locale: 'en',
       }) ?? Promise.resolve(),
     );

@@ -89,6 +89,9 @@ export const sites = pgTable(
     connector_id: text('connector_id'),
     team_id: text('team_id'),
     project_id: text('project_id'),
+    // FRU-330: `0021` adds the column with `anyone`, the value of every site that exists then, and
+    // `0022` makes `members` the default of the next one. `addSite` writes the value in any case.
+    writers: text('writers').notNull().default('members'),
   },
   (table) => [
     foreignKey({

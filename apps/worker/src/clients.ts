@@ -126,11 +126,25 @@ export type ClientDestination = {
  * `destinations` is not in the schema: the environment cannot write it. Only the accounts do, for a
  * site of a workspace, and the first one is also the `connector` and the team of the client.
  */
-export type ClientConfig = z.infer<typeof clientSchema> & { destinations?: readonly ClientDestination[] };
+export type ClientConfig = z.infer<typeof clientSchema> & {
+  destinations?: readonly ClientDestination[];
+  /**
+   * Who may write on this client (FRU-330): a note, a batch, a reply. Not in the schema either: only
+   * a site of a workspace says it, from its `writers`. Absent: `public`, what a note always was.
+   */
+  write?: WriteAccess;
+};
 export type ClientMap = Record<string, ClientConfig>;
 
 /** Who may read a client's pins. See `read` on the client, and `FRUITBACK_READ` for the fallback. */
 export type ReadAccess = 'public' | 'authenticated';
+
+/**
+ * Who may write on a client (FRU-330). `authenticated`: a session of somebody who reads the site,
+ * verified with the worker key. A token that a site signs is not one: it names nobody of the
+ * workspace. `public`: anybody, and a note with no token is a claim.
+ */
+export type WriteAccess = 'public' | 'authenticated';
 
 /**
  * Clients that could never be read, because they ask for a verified reader and have no key to
@@ -262,6 +276,8 @@ export type ClientPolicy = {
   identitySecret: string | undefined;
   /** Who may read this client's pins (FRU-40). `authenticated` answers 401 without a valid token. */
   read: ReadAccess;
+  /** Who may write on this client (FRU-330). `authenticated` answers 401 without a session. */
+  write: WriteAccess;
   /**
    * The language the issue description is written in (FRU-39), for the team that triages it.
    *
@@ -378,6 +394,8 @@ export function resolveClient({
       // Inherited, unlike `identitySecret`: this is a posture, not a key. `unreadableClients`
       // is what stops the inheritance from producing a client nobody can ever read.
       read: client.read ?? fallback.read,
+      // Never inherited: only a site of a workspace closes its writes (FRU-330).
+      write: client.write ?? 'public',
       locale: fallback.locale,
       ...(sessionSecret !== undefined && client.workspace !== undefined
         ? {

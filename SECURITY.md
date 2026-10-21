@@ -905,14 +905,35 @@ test:`keeps the name the visitor typed, and never says the worker verified it`. 
 and plants none`. As above, `Origin` binds a claim to a site and authenticates nobody: a request
 that is not from a browser sends the one it wants, or none.
 
-**The visibility of a site decides who reads it, and not who writes on it.** On a site read by
-`members`, a read with no session answers `401`
-(test:`reads no note: the worker asks for a session, and says so`). **A note sent with no session is
-still kept there**, as a claim, as on every site: its sender cannot read it back, and the members
-find it, in the worker or in the tracker of the site
-(test:`still takes a note sent with no session, which its sender cannot read back`). This is what
-the worker did before FRU-224, measured there, and not a choice made there. A team that wants
-notes from its members only has no setting for it today.
+**The visibility of a site decides who reads it; on a site that its members read, « Who can leave a
+note » decides who writes on it** (FRU-330, the decision of Mathieu of 2026-10-20 on FRU-286). On a
+site read by `members`, a read with no session answers `401`
+(test:`reads no note: the worker asks for a session, and says so`). Such a site has one of two values:
+
+- **« Members only » (`writers: members`), the default of every new site.** A note, a batch of notes
+  and a reply from the page answer `401` with no session, with the body of a refused read
+  (`identity-required`), and nothing is written
+  (test:`refuses a note and a batch sent with no session where its notes are « Members only », with the answer of a refused read`,
+  test:`refuses a reply from the page sent with no session where its notes are « Members only »`).
+  The session is one that the worker key signed, of somebody who reads the site, read again in the
+  store: the relay of the extension carries it
+  (test:`takes the note of a member, sent by the relay with their session, where its notes are « Members only »`).
+  A token that a site signs is no session, and is refused for a write where a read takes it
+  (test:`takes no token that a site signs as a session, and sees it taken when the check is out`).
+  The refusal of a read says `canWrite: false`, so the widget offers no note that would be refused:
+  one bit, which a page could learn from a `POST` anyway. `POST /screenshot` asked for a session of
+  the workspace on every site already (FRU-44), and still does
+  (test:`is refused with no session, whoever may leave a note, and kept for a member`).
+- **« Anyone on the page » (`writers: anyone`): a note sent with no session is kept there**, as a
+  claim, as on every site that everyone reads: its sender cannot read it back, and the members find
+  it, in the worker or in the tracker of the site
+  (test:`still takes a note sent with no session, which its sender cannot read back, where anyone on the page leaves one`).
+  The migration `0021` gave this value to every site made before FRU-330, which is what the worker
+  did for them then (test:`gives « anyone » to every site of before, and « members » to a site made after`).
+
+The field decides nothing on a site that everyone reads: it takes a note from anybody
+(test:`leaves a note: the field decides nothing on a site that everyone reads`). A console that does
+not send the field changes no site: a site that is added again keeps the value it had.
 
 **With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
 of that file, and the worker refuses to start with both. The database holds what the file holds:

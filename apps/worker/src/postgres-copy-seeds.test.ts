@@ -35,7 +35,13 @@ import { createPairing, redeemPairing } from './session.ts';
  */
 
 const run = promisify(execFile);
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
+const POLICY: ClientPolicy = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+};
 const SITE = 'https://staging.acme.test';
 const PAGES = ['/pricing', '/checkout'].map((path) => canonicalizePageUrl(`${SITE}${path}`));
 

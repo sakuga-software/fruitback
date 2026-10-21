@@ -345,6 +345,33 @@ async function signsNotes(request: Request, policy: ClientPolicy): Promise<boole
 }
 
 /**
+ * Whether the worker would take a note of this caller on this client (FRU-330), as `attributionFor`
+ * decides it: always on a client that anybody writes on, and with a session only on a site whose
+ * notes are « Members only ». The read says it with `canWrite: false`, so the widget offers no note
+ * that the worker would refuse.
+ *
+ * WARNING: one bit, as `signsNotes`.
+ */
+async function writesHere(request: Request, policy: ClientPolicy): Promise<boolean> {
+  if (policy.write === 'public') return true;
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return false;
+
+  return writesWith(policy, await verifyForClient(token, policy));
+}
+
+/**
+ * Whether a caller with this verified token may write on this client (FRU-330). On a site whose
+ * notes are « Members only », a session of the worker only: a token that a site signs verifies, and
+ * names nobody of the workspace. The note, the batch, the reply and the read answer this one rule.
+ */
+export function writesWith(policy: Pick<ClientPolicy, 'write'>, verified: Verified | undefined): boolean {
+  if (policy.write === 'public') return true;
+
+  return verified?.ok === true && verified.session === true;
+}
+
+/**
  * One pass over the notes that wait to be sent to the address a workspace connected (FRU-122).
  *
  * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
@@ -901,6 +928,8 @@ async function replyAuthorFor(
   const verified = await verifyForClient(token, policy);
   if (verified === undefined) return { ok: false, status: 401, reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, status: 401, reason: verified.reason };
+  // FRU-330: a site whose notes are « Members only » takes a reply of a session only, as a note.
+  if (!writesWith(policy, verified)) return { ok: false, status: 401, reason: 'session-required' };
   // A token that the site signed names a person of the site, not of the workspace: the worker
   // vouches for no membership, so the text says « not verified » with the name the site gave.
   if (verified.session !== true || accounts === undefined || workspace === undefined) {
@@ -1372,6 +1401,7 @@ async function memberOf(
     showComments: false,
     identitySecret: undefined,
     read: 'authenticated',
+    write: 'public',
     locale: config.teamLocale,
     sessions: { secret: config.identitySecret, workspace, reaches },
   });
@@ -1581,6 +1611,8 @@ function routeFor(request: Request, config: Served, clientId: string | undefined
       identitySecret: config.identitySecret,
       showComments: config.showComments,
       read: config.read,
+      // A worker of one client has no site of a workspace: anybody writes there (FRU-330).
+      write: 'public',
       locale: config.teamLocale,
     },
     ...(hasSessions(config) && config.identitySecret !== undefined ? { sessionSecret: config.identitySecret } : {}),
@@ -1648,7 +1680,7 @@ function ofASite(verified: Extract<IdentityResult, { ok: true }>): Verified {
  * (FRU-123). A site signs its own tokens and can write any claim in them, a workspace included: what
  * says that a caller is a person of the workspace is the key, never a claim.
  */
-type Verified = IdentityResult & { session?: true };
+export type Verified = IdentityResult & { session?: true };
 
 /**
  * Whether this caller may read this client's pins (FRU-40).
@@ -1692,16 +1724,25 @@ async function attributionFor(
   policy: ClientPolicy,
   claimed: SeedReporter | undefined,
 ): Promise<
-  { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean } | { ok: false; reason: string }
+  | { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean }
+  | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
 > {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) {
+    // FRU-330: a site whose notes are « Members only » refuses a note with no session, with the
+    // answer of a read that it refuses.
+    if (policy.write === 'authenticated') {
+      return { ok: false, error: 'identity-required', reason: 'identity-required' };
+    }
+
     return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script', account: false };
   }
 
   const verified = await verifyForClient(token, policy);
-  if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
-  if (!verified.ok) return { ok: false, reason: verified.reason };
+  if (verified === undefined) return { ok: false, error: 'invalid-identity', reason: 'identity-not-configured' };
+  if (!verified.ok) return { ok: false, error: 'invalid-identity', reason: verified.reason };
+  // A token that a site signs names nobody of the workspace: it is no session (FRU-330).
+  if (!writesWith(policy, verified)) return { ok: false, error: 'identity-required', reason: 'session-required' };
 
   // FRU-237: a session of the workspace is an extension. A token the site signed is its own page.
   return {
@@ -1765,7 +1806,11 @@ async function getFeedback(
   // request, which is the exact leak this ticket exists to close.
   const allowed = await authorizeRead(request, route.policy);
   if (!allowed.ok) {
-    return json(401, { error: 'identity-required', reason: allowed.reason }, corsHeaders);
+    // FRU-330: the refusal of a read says whether a note would be refused too, so the widget of a
+    // visitor offers none. Absent: the worker takes a note here.
+    const closed = (await writesHere(request, route.policy)) ? {} : { canWrite: false };
+
+    return json(401, { error: 'identity-required', reason: allowed.reason, ...closed }, corsHeaders);
   }
 
   try {
@@ -1858,6 +1903,8 @@ async function getFeedback(
         // FRU-257: whether this reader may write a reply here. A reader of a site that not everybody
         // reads is one the worker let in above. Never in the cached answer: it is the reader's.
         ...(route.policy.showComments && (await takesReplies(store, route.client)) ? { canReply: true } : {}),
+        // FRU-330: absent where this reader may leave a note, as on every worker of before.
+        ...((await writesHere(request, route.policy)) ? {} : { canWrite: false }),
         ...batchOffer(config),
       },
       // No browser cache, deliberately. The read cache above is what protects the Linear
@@ -1951,7 +1998,7 @@ async function postFeedback(
   // and only a token this worker checked can put it back.
   const identity = await attributionFor(request, route.policy, seed.reporter);
   if (!identity.ok) {
-    return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
+    return json(401, { error: identity.error, reason: identity.reason }, corsHeaders);
   }
   // A note signed by a session of an account is a write: the session is read again (FRU-238).
   const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;
@@ -2191,7 +2238,7 @@ async function postBatch(
   let account = false;
   for (const seed of seeds) {
     const identity = await attributionFor(request, route.policy, seed.reporter);
-    if (!identity.ok) return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
+    if (!identity.ok) return json(401, { error: identity.error, reason: identity.reason }, corsHeaders);
     attributed.push({ ...seed, ...optionalReporter(identity.reporter) });
     channel = identity.channel;
     account = identity.account;

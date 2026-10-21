@@ -1,0 +1,1 @@
+ALTER TABLE "sites" ADD COLUMN "writers" text DEFAULT 'anyone' NOT NULL;

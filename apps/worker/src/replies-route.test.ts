@@ -18,7 +18,13 @@ import { seedFixture } from '@fruitback/shared/seed.fixture';
 
 const open = worlds();
 const PAGE = 'https://acme.dev/pricing';
-const POLICY = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' } as const;
+const POLICY = {
+  showComments: true,
+  identitySecret: undefined,
+  read: 'public',
+  write: 'public',
+  locale: 'en',
+} as const;
 
 afterEach(() => resetMemoryLinear());
 

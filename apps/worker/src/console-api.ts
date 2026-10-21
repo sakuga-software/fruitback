@@ -21,8 +21,10 @@ import {
   MAX_DOMAINS,
   type Site,
   VISIBILITIES,
+  WRITERS,
   type Workspace,
   type Visibility,
+  type Writers,
   can,
   destinationId,
   siteOrigin,
@@ -161,11 +163,16 @@ function visibilityOf(value: unknown): Visibility | undefined {
   return (VISIBILITIES as readonly unknown[]).includes(value) ? (value as Visibility) : undefined;
 }
 
+function writersOf(value: unknown): Writers | undefined {
+  return (WRITERS as readonly unknown[]).includes(value) ? (value as Writers) : undefined;
+}
+
 /** The fields of a site the console shows, and the client id a script tag names. */
 type SiteView = {
   id: string;
   origin: string;
   visibility: Visibility;
+  writers: Writers;
   destination?: Destination;
   destinations?: Destination[];
 };
@@ -183,6 +190,7 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     id: site.id,
     origin: site.origin,
     visibility: site.visibility,
+    writers: site.writers,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
 }
@@ -576,8 +584,15 @@ export async function handleConsoleApi(
     if (origin === undefined) return json(400, { error: 'invalid-url' }, headers);
     const visibility = visibilityOf(body?.visibility ?? 'members');
     if (visibility === undefined) return json(400, { error: 'invalid-visibility' }, headers);
+    // FRU-330: absent, a new site is « Members only » and a site that exists keeps what it had.
+    const writers = body?.writers === undefined ? undefined : writersOf(body.writers);
+    if (body?.writers !== undefined && writers === undefined) return json(400, { error: 'invalid-writers' }, headers);
 
-    const site = await context.accounts.addSite(workspaceId as string, { origin, visibility });
+    const site = await context.accounts.addSite(workspaceId as string, {
+      origin,
+      visibility,
+      ...(writers === undefined ? {} : { writers }),
+    });
 
     // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.
     return json(

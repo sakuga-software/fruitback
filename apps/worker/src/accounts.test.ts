@@ -70,12 +70,32 @@ describe('the words people paste', () => {
 
   it('turns a site into a client of its workspace, read by members or by everyone', () => {
     const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [] };
-    assert.deepEqual(clientOf({ ...site, visibility: 'members' }), {
+    assert.deepEqual(clientOf({ ...site, visibility: 'members', writers: 'anyone' }), {
       workspace: 'ws_1',
       origins: ['https://acme.dev'],
       read: 'authenticated',
+      write: 'public',
     });
-    assert.equal(clientOf({ ...site, visibility: 'everyone' }).read, 'public');
+    assert.equal(clientOf({ ...site, visibility: 'everyone', writers: 'anyone' }).read, 'public');
+  });
+
+  it('closes the writes of a site only where its members read it and its notes are « Members only » (FRU-330)', () => {
+    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [] };
+    const table = (['members', 'everyone'] as const).flatMap((visibility) =>
+      (['members', 'anyone'] as const).map((writers) => [
+        visibility,
+        writers,
+        clientOf({ ...site, visibility, writers }).write,
+      ]),
+    );
+
+    assert.deepEqual(table, [
+      ['members', 'members', 'authenticated'],
+      ['members', 'anyone', 'public'],
+      // A site that everyone reads takes a note from anybody, whatever the field says.
+      ['everyone', 'members', 'public'],
+      ['everyone', 'anyone', 'public'],
+    ]);
   });
 });
 

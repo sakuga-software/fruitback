@@ -15,7 +15,9 @@ import {
   type Site,
   VISIBILITIES,
   type Visibility,
+  WRITERS,
   type Workspace,
+  type Writers,
   DEFAULT_CONNECTOR_SETTINGS,
   readConnectorSettings,
 } from './accounts.ts';
@@ -61,11 +63,14 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
     return undefined;
   }
   if (visibility === undefined) return undefined;
+  // A value that is not one of the two is no site, as for the visibility: it opens nothing (FRU-330).
+  if (!(WRITERS as readonly unknown[]).includes(row.writers)) return undefined;
+  const writers = row.writers as Writers;
 
-  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility, destinations };
+  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility, writers, destinations };
 }
 
-export const SITE_COLUMNS = 'id, workspace_id, origin, visibility';
+export const SITE_COLUMNS = 'id, workspace_id, origin, visibility, writers';
 
 export const DOMAIN_COLUMNS =
   'id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id';

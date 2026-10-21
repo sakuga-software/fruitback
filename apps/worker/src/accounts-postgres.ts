@@ -14,6 +14,7 @@ import {
 import {
   type AccountStore,
   DEFAULT_CONNECTOR_SETTINGS,
+  DEFAULT_WRITERS,
   type SharedSite,
   type Site,
   type WorkspaceSuspension,
@@ -91,6 +92,7 @@ const SITE_WITH_DESTINATION = {
   workspace_id: sites.workspace_id,
   origin: sites.origin,
   visibility: sites.visibility,
+  writers: sites.writers,
   connector_id: site_destinations.connector_id,
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
@@ -564,23 +566,35 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
-    async addSite(workspace, { origin, visibility }) {
+    async addSite(workspace, { origin, visibility, writers }) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
-      // the destinations it had, so the statement that writes it reads them too.
+      // the destinations it had, so the statement that writes it reads them too. It keeps who writes
+      // there too, unless the caller says (FRU-330): a console of before closes nothing.
       const rows = await run((db) => {
         const site = db.$with('site').as(
           db
             .insert(sites)
-            .values({ id: newId('site'), workspace_id: workspace, origin, visibility, created_at: Date.now() })
+            .values({
+              id: newId('site'),
+              workspace_id: workspace,
+              origin,
+              visibility,
+              writers: writers ?? DEFAULT_WRITERS,
+              created_at: Date.now(),
+            })
             .onConflictDoUpdate({
               target: [sites.workspace_id, sites.origin],
-              set: { visibility: sql`excluded.visibility` },
+              set: {
+                visibility: sql`excluded.visibility`,
+                ...(writers === undefined ? {} : { writers }),
+              },
             })
             .returning({
               id: sites.id,
               workspace_id: sites.workspace_id,
               origin: sites.origin,
               visibility: sites.visibility,
+              writers: sites.writers,
             }),
         );
 
@@ -591,6 +605,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             workspace_id: site.workspace_id,
             origin: site.origin,
             visibility: site.visibility,
+            writers: site.writers,
             connector_id: site_destinations.connector_id,
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,

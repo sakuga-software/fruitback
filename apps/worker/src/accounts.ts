@@ -138,6 +138,22 @@ export const VISIBILITIES = ['members', 'everyone'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
 /**
+ * Who may leave a note on a site (FRU-330, the decision of Mathieu of 2026-10-20 on FRU-286).
+ *
+ * - `members`, « Members only »: on a site that its members read, a note, a reply and a picture need
+ *   a session of somebody who reads the site. The default of a new site.
+ * - `anyone`, « Anyone on the page »: a note with no session is kept, as a claim. Every site made
+ *   before FRU-330 has this value: the migration `0021` gives it.
+ *
+ * It decides nothing on a site that everyone reads: such a site takes a note from anybody.
+ */
+export const WRITERS = ['members', 'anyone'] as const;
+export type Writers = (typeof WRITERS)[number];
+
+/** What a new site takes when nobody chose (FRU-330): closed. */
+export const DEFAULT_WRITERS: Writers = 'members';
+
+/**
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
  * teams, so `teamId` is required for one. An address that only receives has none (FRU-122).
  */
@@ -160,6 +176,8 @@ export type Site = {
   workspaceId: string;
   origin: string;
   visibility: Visibility;
+  /** Who may leave a note (FRU-330). It decides only on a site that `members` read. */
+  writers: Writers;
   /**
    * Where the notes of this site can go, in the order an admin gave (FRU-123). The first one is
    * where a note goes when nobody chose. Empty: the notes stay in the worker's own store.
@@ -379,7 +397,12 @@ export type AccountStore = {
   markSeen(workspace: string, account: string, day: string): Promise<void>;
   /** The day each member of a workspace was last seen there, by account id. A member never seen is not in it. */
   lastSeen(workspace: string): Promise<Record<string, string>>;
-  addSite(workspace: string, site: { origin: string; visibility: Visibility }): Promise<Site>;
+  /**
+   * A new site, or the site of that address again with the visibility asked for last. `writers`
+   * absent: `DEFAULT_WRITERS` for a new site, and what it was for a site that exists (FRU-330), so a
+   * caller that does not know the field opens nothing and closes nothing.
+   */
+  addSite(workspace: string, site: { origin: string; visibility: Visibility; writers?: Writers }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
   /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
@@ -495,6 +518,8 @@ export function clientOf(site: Site): ClientMap[string] {
     workspace: site.workspaceId,
     origins: [site.origin],
     read: site.visibility === 'members' ? 'authenticated' : 'public',
+    // FRU-330: « Members only » closes the writes of a site that its members read, and only there.
+    write: site.visibility === 'members' && site.writers === 'members' ? 'authenticated' : 'public',
     // The first place is where the client routes, as when a site had one destination.
     ...(first === undefined
       ? {}
