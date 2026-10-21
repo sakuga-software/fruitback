@@ -1,9 +1,11 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { SEED_STAGES } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
+import { GITHUB_STAGES } from './github.ts';
 import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
@@ -260,6 +262,21 @@ describe('the stages a read reports, for a site that sends to the tracker of its
     ]);
     // A site with no destination is read in the store of the worker: its three.
     assert.deepEqual(await stagesOf('https://plain.acme.dev', plain.id), ['green', 'ripe', 'composted']);
+  });
+
+  // No connector of a workspace says three stages yet, so a fake one stands for GitHub (FRU-357).
+  it('are the three of a connector like GitHub, on a worker whose own store says five', async () => {
+    const own = { name: 'five-stages', stages: SEED_STAGES } as unknown as SeedStore;
+    const github = { name: 'github', stages: GITHUB_STAGES } as unknown as SeedStore;
+    const routed = createRoutedStore(own, async () => github);
+
+    assert.deepEqual(await routed.stagesFor?.({ connector: 'conn_github', workspace: 'ws' } as ClientConfig), [
+      ...GITHUB_STAGES,
+    ]);
+    assert.deepEqual(await routed.stagesFor?.({} as ClientConfig), [...SEED_STAGES]);
+    assert.deepEqual(await createRoutedStore({ name: 'any' } as SeedStore, async () => github).stagesFor?.(undefined), [
+      ...SEED_STAGES,
+    ]);
   });
 });
 
