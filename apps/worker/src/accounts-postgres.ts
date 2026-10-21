@@ -13,6 +13,7 @@ import {
 } from './account-rows.ts';
 import {
   type AccountStore,
+  type Connector,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_WRITERS,
   type SharedSite,
@@ -688,6 +689,57 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return rows.flatMap((row) => connectorOf(row) ?? []);
+    },
+
+    async attachInstallation(workspace, { label, sealed, installation }) {
+      given(installation, 'attachInstallation: installation');
+      const id = newId('con');
+      const now = Date.now();
+
+      return transaction(async (db) => {
+        // WARNING: the unique constraint decides, not a read before the write. Two callbacks at the same
+        // moment for two workspaces make one connector.
+        const made = await db
+          .insert(connectors)
+          .values({ id, workspace_id: workspace, kind: 'github', label, sealed, created_at: now, installation })
+          .onConflictDoNothing({ target: connectors.installation })
+          .returning({ id: connectors.id });
+        if (made.length === 1) {
+          const connector: Connector = {
+            id,
+            workspaceId: workspace,
+            kind: 'github',
+            label,
+            createdAt: new Date(now).toISOString(),
+            settings: DEFAULT_CONNECTOR_SETTINGS,
+          };
+
+          return { connector, created: true };
+        }
+        const [held] = await db
+          .update(connectors)
+          .set({ label, sealed })
+          .where(
+            and(
+              eq(connectors.installation, installation),
+              eq(connectors.workspace_id, workspace),
+              eq(connectors.kind, 'github'),
+            ),
+          )
+          .returning({
+            id: connectors.id,
+            workspace_id: connectors.workspace_id,
+            kind: connectors.kind,
+            label: connectors.label,
+            created_at: connectors.created_at,
+            attention: connectors.attention,
+            attention_at: connectors.attention_at,
+            settings: connectors.settings,
+          });
+        const connector = connectorOf(held);
+
+        return connector === undefined ? undefined : { connector, created: false };
+      });
     },
 
     async removeConnector(workspace, connector) {

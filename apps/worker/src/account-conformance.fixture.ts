@@ -341,6 +341,54 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.sealedKey(connector.id))?.sealed, 'sealed-2');
   });
 
+  it('attaches one installation to one workspace, and again to the same one keeps its connector (FRU-360)', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+
+    const first = await store.attachInstallation(acme.id, {
+      label: 'GitHub App · acme',
+      sealed: 's1',
+      installation: 'f7',
+    });
+    assert.equal(first?.created, true);
+    assert.equal(first?.connector.kind, 'github');
+    assert.deepEqual(await store.connectors(acme.id), [first?.connector]);
+
+    assert.equal(
+      await store.attachInstallation(globex.id, { label: 'GitHub App · acme', sealed: 's2', installation: 'f7' }),
+      undefined,
+    );
+    assert.deepEqual(await store.connectors(globex.id), []);
+    assert.equal((await store.sealedKey(first?.connector.id as string))?.sealed, 's1');
+
+    const again = await store.attachInstallation(acme.id, {
+      label: 'GitHub App · Acme',
+      sealed: 's3',
+      installation: 'f7',
+    });
+    assert.equal(again?.created, false);
+    assert.equal(again?.connector.id, first?.connector.id);
+    assert.equal(again?.connector.label, 'GitHub App · Acme');
+    assert.equal((await store.sealedKey(first?.connector.id as string))?.sealed, 's3');
+
+    const other = await store.attachInstallation(acme.id, {
+      label: 'GitHub App · labs',
+      sealed: 's4',
+      installation: 'f8',
+    });
+    assert.equal(other?.created, true);
+    assert.equal((await store.connectors(acme.id)).length, 2);
+
+    // A connector that goes frees its installation.
+    assert.equal(await store.removeConnector(acme.id, first?.connector.id as string), true);
+    const moved = await store.attachInstallation(globex.id, {
+      label: 'GitHub App · acme',
+      sealed: 's5',
+      installation: 'f7',
+    });
+    assert.equal(moved?.created, true);
+  });
+
   it('keeps the settings of a connector, set from its own workspace only', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);

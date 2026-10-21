@@ -76,7 +76,10 @@ store it is configured with:
 
 On the Cloud, a workspace can connect **its own GitHub** (FRU-359): an organisation installs the
 GitHub App of Fruitback, and each site sends its notes to one of its repositories, as issues. The
-worker keeps the id of the installation, and no key and no token of GitHub.
+worker keeps the id of the installation, and no key and no token of GitHub. When a person installs
+the App (FRU-360), GitHub gives the worker a token of that person for a moment. The worker uses it
+once, to read which installations the person reaches. It keeps no copy of it and writes it in no
+log.
 
 On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
 in the worker and a copy is posted to that address, whole and signed. Who runs that address decides

@@ -4093,7 +4093,7 @@ the mechanism, `SECURITY.md` (« The GitHub App key ») says what the key reache
   `GitHub · owner/name`. Nothing asks GitHub when a destination is set.
 - `POST …/connectors` refuses the kind `github` (`400 invalid-connector`). FRU-360 writes the
   connector, with `sealInstallation`, after it checks that the installation is of the person who
-  connects.
+  connects: « The installation of the GitHub App on a workspace (FRU-360) » below.
 - The routes `…/teams`, `…/states` and `…/settings` answer `404` for a `github` connector. The
   console shows its connector with no settings until a ticket adds them.
 
@@ -4104,3 +4104,77 @@ the mechanism, `SECURITY.md` (« The GitHub App key ») says what the key reache
   machine (`github-connector.test.ts`). That the answer of `access_tokens` lists `repositories` with
   their `full_name` is the documentation's example: a first note on a real installation is the
   measurement this lacks.
+
+## The installation of the GitHub App on a workspace (FRU-360)
+
+`github-app-flow.ts` is the flow, `oauth-flow.ts` the parts it shares with Linear's (FRU-134), and
+`SECURITY.md` (« The GitHub App, installed on a workspace ») says what it protects.
+
+### The rules, in short
+
+- **The flow is Linear's.** `POST /console/workspaces/<id>/connectors/github/start`, for an owner or
+  an admin, answers `201 { url }`: a ticket for `GET /auth/github-app/start`, good for a minute and
+  spent once. That navigation sets the cookie `fruitback_github_app_state` on the path of the
+  callback, then answers `302` to `https://github.com/apps/<slug>/installations/new?state=<state>`.
+  The POST cannot answer the address of GitHub itself: a call of the console from its own origin
+  cannot set a cookie of the worker that the way back carries.
+- **The slug is GitHub's** (`GET /app` with the JWT of the App), asked once for the process. A start
+  that cannot read it goes back with `failed`, and the next start asks again.
+- **The way back is refused unless its `state` is the one of the cookie**, issued by this worker in
+  the last ten minutes and not spent. Then the role (`manage-workspace`) and the suspension of the
+  workspace are read again, the `code` is changed for a user token at
+  `https://github.com/login/oauth/access_token` (client id, client secret, code, `redirect_uri`),
+  and every page of `GET /user/installations` is read with that token, until `total_count`. **The
+  `installation_id` is attached only if it is in that list.** No PKCE: `installations/new` takes no
+  `code_challenge`.
+- **The user token serves that check only.** No row, log or answer holds it, and its
+  refresh token is not read. The client secret goes to the exchange only.
+- **One installation feeds one workspace.** `connectors.installation` holds
+  `installationFingerprint`, an HMAC-SHA256 of the id with `FRUITBACK_SECRETS_KEY`, under a unique
+  constraint (migration `0024_github_installation`). `attachInstallation` inserts with
+  `ON CONFLICT DO NOTHING`, so two callbacks at the same moment make one connector. An installation
+  that another workspace holds answers `elsewhere`, and frees itself when that connector goes.
+- **To install again on the same workspace keeps the connector**, its id and its destinations: the
+  label and the sealed id are written again. GitHub sends `setup_action=update` for an organisation
+  that has the App already, and the worker treats it as `install`. Another installation is a second
+  connector beside the first, as two Linear connectors are.
+- **The way back says one word** to `/w/<id>/connectors?github=`: `connected`, `requested` (an
+  owner of the organisation must approve, and nothing is written), `elsewhere`, `refused` (the person
+  does not reach the installation), `forbidden`, `suspended`, or `failed` (GitHub said nothing usable).
+  A `state` that is not this browser's goes back to `/`, with no workspace named.
+- **`GET …/connectors` answers `githubApp: true`** where the worker has the App, a secrets key, a
+  public address and a Kv, as it answers `linearOAuth`. The console offers the installation only then.
+- **The routes of a Linear connector stay Linear's.** `…/teams`, `…/states` and `…/settings` answer
+  `404` for a `github` connector, the answer of a connector that does not exist, and
+  `POST …/connectors` refuses `kind: 'github'`: the installation is the only way to make one.
+
+### The guards, each planted out
+
+`github-app-flow.test.ts` plays GitHub on a port of the machine. It gives two installations a page,
+so a second page exists. Each line was planted in the code, and the test named went red:
+
+- No check against `/user/installations`: « refuses the installation of another client ».
+- The first page only: « attaches an installation that the person reaches, found on the second page ».
+- The `state` not compared with the cookie: « refuses a callback with no state, from another
+  browser ».
+- The role not read again: « asks the role again on the way back ».
+- The user token in the label of the connector, or in the Kv: « keeps neither the user token nor its
+  refresh token ».
+- The fingerprint with the workspace in it: « refuses an installation that another workspace holds ».
+- `…/teams` served for a `github` connector: « answers 404 for its teams, its states and its settings ».
+- `attachInstallation` without the workspace in its update: the conformance case of the accounts.
+
+### What was not measured
+
+- **That GitHub sends the `state` back on the way back of an installation.** The documentation says
+  that the `state` of the installation address « return[s] people back to that state after they
+  install, authenticate, or accept updates » (« Sharing your GitHub App »), and it does not say how.
+  Measured on 2026-10-21: `GET https://github.com/apps/fruitback-app/installations/new?state=…`
+  with no session answers `302` to the sign-in, with the `state` in `return_to`. The first real
+  installation is the measurement this lacks. If GitHub drops it, every way back is refused: the flow
+  fails closed, and never falls back to the cookie alone, which would let a page post the code and
+  the installation of an attacker into the browser of a victim.
+- **The pages of `/user/installations`.** The worker reads `total_count`, not the `Link` header, and
+  stops at 100 pages of 100. The fake gives two a page to prove the second page is read.
+- **No real installation.** The routes and the fields are the ones of the REST documentation,
+  version 2022-11-28, and of « Generating a user access token for a GitHub App ».

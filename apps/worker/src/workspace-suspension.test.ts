@@ -721,6 +721,8 @@ const CONSOLE_WRITES: readonly Write[] = [
   },
   // No application of Linear on this worker: the route answers after the guard that it has none.
   { method: 'POST', rest: () => '/connectors/linear/oauth', status: 404 },
+  // No GitHub App on this worker either (FRU-360).
+  { method: 'POST', rest: () => '/connectors/github/start', status: 404 },
   { method: 'POST', rest: (fx) => `/connectors/${fx.rest}/deliveries/${fx.delivery}/retry`, status: 204 },
   {
     method: 'POST',

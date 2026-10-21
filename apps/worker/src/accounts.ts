@@ -416,6 +416,17 @@ export type AccountStore = {
     connector: { kind: ConnectorKind; label: string; sealed: string },
   ): Promise<Connector>;
   connectors(workspace: string): Promise<Connector[]>;
+  /**
+   * The `github` connector of an installation for this workspace (FRU-360). `installation` is its
+   * fingerprint. A new installation makes a connector. An installation that this workspace holds
+   * already keeps its connector and its id, and takes `label` and `sealed`.
+   *
+   * `undefined`: a connector of another workspace holds the installation, and nothing changes.
+   */
+  attachInstallation(
+    workspace: string,
+    connector: { label: string; sealed: string; installation: string },
+  ): Promise<{ connector: Connector; created: boolean } | undefined>;
   /** Removes the connector. Its sites lose their destination, and their notes stay in the worker again. */
   removeConnector(workspace: string, connector: string): Promise<boolean>;
   /** Replaces what a connector keeps sealed: a refreshed token takes the place of the one it spent. */

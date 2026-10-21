@@ -14,6 +14,8 @@ import { handleConsoleConnect } from './connect-routes.ts';
 import type { CorsDecision } from './cors.ts';
 import { instanceFactsOf } from './instance-admin.ts';
 import { type Kv, KvError } from './kv.ts';
+import { handleGithubAppFlow } from './github-app-flow.ts';
+import type { GithubApp } from './github-connector.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { withoutAddress } from './postgres.ts';
@@ -38,10 +40,12 @@ export type ConsoleSeams = {
   noteIndex: NoteIndex | undefined;
   /** The CORS decision of the console for this request, already allowed. */
   cors: CorsDecision;
+  /** The GitHub App of the workspace connectors (FRU-359), when this worker has one. */
+  githubApp?: GithubApp;
 };
 
 export async function handleConsole(request: Request, pathname: string, seams: ConsoleSeams): Promise<Response> {
-  const { served, context, accounts, kv, noteIndex, cors } = seams;
+  const { served, context, accounts, kv, noteIndex, cors, githubApp } = seams;
   const sessions = context.sessionStore ?? sessionStoreFor(served);
   if (sessions === undefined || served.identitySecret === undefined)
     return json(404, { error: 'not-found' }, cors.headers);
@@ -121,6 +125,24 @@ export async function handleConsole(request: Request, pathname: string, seams: C
       if (viaLinear !== undefined) return viaLinear;
     }
 
+    // The installation of the GitHub App on a workspace (FRU-360). Navigations too.
+    if (
+      githubApp !== undefined &&
+      served.publicUrl !== undefined &&
+      served.consoleUrl !== undefined &&
+      served.secretsKey !== undefined
+    ) {
+      const viaGithub = await handleGithubAppFlow(request, pathname, {
+        app: githubApp,
+        publicUrl: served.publicUrl,
+        consoleUrl: served.consoleUrl,
+        accounts,
+        kv,
+        secretsKey: served.secretsKey,
+      });
+      if (viaGithub !== undefined) return viaGithub;
+    }
+
     // The extension asks, the console approves (FRU-238): a request, and the browsers of the account.
     const connect = context.connectStore ?? connectStoreFor(served);
     if (auth !== undefined && served.consoleUrl !== undefined && connect !== undefined) {
@@ -148,6 +170,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
         kv,
         ...(noteIndex === undefined ? {} : { noteIndex }),
         ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
+        ...(githubApp === undefined ? {} : { githubApp }),
         ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
         ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
         // The administrator of the instance (FRU-261): the database of the accounts, and this configuration.

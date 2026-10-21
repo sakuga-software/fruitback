@@ -48,6 +48,10 @@ const instant = (name: string) => bigint(name, { mode: 'number' });
 /**
  * `sealed` is the key encrypted with `FRUITBACK_SECRETS_KEY`: a copy of the database is not a set of
  * working keys. `attention` NULL: the last answer of the tracker was not a refusal.
+ *
+ * `installation` is the fingerprint of the installation of a `github` connector (FRU-360,
+ * `installationFingerprint`), and NULL for every other kind. Its unique constraint makes one installation
+ * feed one connector of the whole instance.
  */
 export const connectors = pgTable(
   'connectors',
@@ -62,8 +66,10 @@ export const connectors = pgTable(
     attention_at: instant('attention_at'),
     // What a workspace sets on the connector (FRU-102), as JSON: `connectorSettingsOf` reads it.
     settings: text('settings').notNull().default('{}'),
+    installation: text('installation'),
   },
   (table) => [
+    unique('connectors_installation_key').on(table.installation),
     foreignKey({
       name: 'connectors_workspace_id_fkey',
       columns: [table.workspace_id],

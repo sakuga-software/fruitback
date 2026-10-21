@@ -1,4 +1,4 @@
-import { type KeyObject, createHash } from 'node:crypto';
+import { type KeyObject, createHash, createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { REPOSITORY_PATTERN } from './clients.ts';
 import {
@@ -72,16 +72,46 @@ export class GithubRepositoryRefused extends StoreError {}
 /** GitHub knows no such installation: the organisation removed the App. The connector needs a new one. */
 export class GithubInstallationGone extends StoreError {}
 
+/** An installation of the App that a person reaches, as `GET /user/installations` lists it (FRU-360). */
+export type ReachedInstallation = { id: number; account: string };
+
 /** The App of the worker, and its tokens, for the life of the process. */
 export type GithubApp = {
   /** A token of `installation` that reaches `repository` and no other repository. */
   token(installation: number, repository: string): Promise<string>;
   drop(installation: number, repository: string, token: string): void;
+  /** The slug of the App, from `GET /app`. It is asked once for the process. */
+  slug(): Promise<string>;
+  /**
+   * The user token for the `code` of a person who installed the App (FRU-360). `undefined`: GitHub
+   * gave none. The client secret goes to this one call, and the caller keeps the token nowhere.
+   */
+  userToken(code: string, redirectUri: string): Promise<string | undefined>;
+  /**
+   * `installation` among the installations that the person of `userToken` reaches, every page read,
+   * or `undefined` when it is not one of them. It throws a `StoreError` when GitHub does not answer.
+   */
+  reachedBy(userToken: string, installation: number): Promise<ReachedInstallation | undefined>;
   /** For the tests: a GitHub on a port of the machine. */
   readonly api?: string;
 };
 
-export type GithubAppOptions = { now?: () => number; api?: string };
+/** `web` is the host of `/login/oauth/access_token`: `github.com`, not the host of the API. */
+export type GithubAppOptions = { now?: () => number; api?: string; web?: string };
+
+const GITHUB_WEB = 'https://github.com';
+const CALL_TIMEOUT_MS = 10_000;
+/** The most that GitHub gives in one page. */
+const PER_PAGE = 100;
+/** 10,000 installations. A person who reaches more is not a case this worker serves. */
+const MAX_PAGES = 100;
+
+const appSchema = z.object({ slug: z.string().regex(/^[a-z0-9-]{1,100}$/) });
+const userTokenSchema = z.object({ access_token: z.string().min(1) });
+const installationsSchema = z.object({
+  total_count: z.number().int().nonnegative(),
+  installations: z.array(z.object({ id: z.number().int().positive(), account: z.object({ login: z.string() }) })),
+});
 
 const tokenSchema = accessTokenSchema.extend({
   repositories: z.array(z.object({ full_name: z.string() })).optional(),
@@ -130,10 +160,66 @@ export function createGithubApp(config: GithubConnectorConfig, options: GithubAp
     return { token: issued.data.token, expiresAt };
   }
 
+  let slug: Promise<string> | undefined;
+  async function askSlug(): Promise<string> {
+    const parsed = appSchema.safeParse(
+      await githubFetch('/app', { token: signAppJwt(config.appId, config.privateKey, now()) }, api),
+    );
+    if (!parsed.success) throw new StoreError('GitHub returned no slug for the App');
+
+    return parsed.data.slug;
+  }
+
+  async function userToken(code: string, redirectUri: string): Promise<string | undefined> {
+    const response = await fetch(`${options.web ?? GITHUB_WEB}/login/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }).toString(),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    }).catch(() => undefined);
+    // GitHub answers a code it refuses with `200` and an `error` field.
+    const parsed = response?.ok ? userTokenSchema.safeParse(await response.json().catch(() => null)) : undefined;
+
+    return parsed?.success ? parsed.data.access_token : undefined;
+  }
+
+  async function reachedBy(token: string, installation: number): Promise<ReachedInstallation | undefined> {
+    let seen = 0;
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const parsed = installationsSchema.safeParse(
+        await githubFetch(`/user/installations?per_page=${PER_PAGE}&page=${page}`, { token }, api),
+      );
+      if (!parsed.success) throw new StoreError('GitHub returned no list of installations');
+      const found = parsed.data.installations.find((each) => each.id === installation);
+      if (found !== undefined) return { id: found.id, account: found.account.login };
+      seen += parsed.data.installations.length;
+      // The count, not the size of a page: GitHub can give fewer than `per_page` before the end.
+      if (parsed.data.installations.length === 0 || seen >= parsed.data.total_count) return undefined;
+    }
+
+    return undefined;
+  }
+
   return {
     token: (installation, repository) =>
       tokens.get(keyOf(installation, repository), () => mint(installation, repository)),
     drop: (installation, repository, token) => tokens.drop(keyOf(installation, repository), token),
+    slug() {
+      // A failure is not kept: the next start asks again.
+      slug ??= askSlug().catch((error: unknown) => {
+        slug = undefined;
+        throw error;
+      });
+
+      return slug;
+    },
+    userToken,
+    reachedBy,
     ...(api === undefined ? {} : { api }),
   };
 }
@@ -163,6 +249,14 @@ export function sealInstallation(installation: number, secretsKey: string): stri
   if (!Number.isSafeInteger(installation) || installation < 1) throw new RangeError('not an installation id');
 
   return seal(String(installation), secretsKey);
+}
+
+/**
+ * What says that two connectors hold the same installation (FRU-360): an HMAC of its id, keyed by
+ * `FRUITBACK_SECRETS_KEY`. The id stays sealed, and the column can still be unique.
+ */
+export function installationFingerprint(installation: number, secretsKey: string): string {
+  return createHmac('sha256', secretsKey).update(`github-installation\n${installation}`).digest('hex');
 }
 
 /** The installation of a `github` connector. It throws a `StoreError` for a value that does not open. */

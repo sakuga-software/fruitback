@@ -217,9 +217,9 @@ the issues of each client, and read their metadata. What holds it:
 - A repository that the installation does not cover (GitHub answers `403`, `404` or `422` for the
   token, `403` or `404` for the issue) makes the connector « Needs attention ». The worker then asks
   no token for another repository. A rate limit of GitHub is not a refusal, and changes nothing.
-- The installation of the App is the client's consent, given on GitHub. **The worker does not check
-  yet that an installation is of the workspace that names it**: FRU-360 adds that check, with the
-  flow that attaches an installation. Until then, only the code of the worker attaches one.
+- The installation of the App is the client's consent, given on GitHub. The worker attaches an
+  installation to a workspace only when the person who comes back from GitHub reaches it, and one
+  installation feeds one workspace: « The GitHub App, installed on a workspace » below.
 
 If the key leaks:
 
@@ -1422,6 +1422,37 @@ by consent at Linear, and no personal key is typed.
   new pair is written before it is used. A refresh that Linear refuses answers `502`: the note stays
   in the widget, and the workspace connects Linear again.
 - Disconnecting revokes the token at Linear, and removes the connector whatever Linear answers.
+
+### The GitHub App, installed on a workspace (FRU-360)
+
+Where the worker has the App of the connectors (`FRUITBACK_GITHUB_CONNECTOR`), an owner or an admin
+of a workspace installs it on GitHub, and GitHub sends the person back to
+`/auth/github-app/callback` with an `installation_id`, a `setup_action` and a `code`.
+
+- **The `installation_id` of the way back is what the browser says.** Anybody can write the id of
+  another client's installation there. The worker changes the `code` for a user token of the person,
+  reads every page of `GET /user/installations` with it, and attaches the id only if it is in that
+  list. An id that is not in it attaches nothing, and the worker asks no token of that installation.
+  The condition: GitHub lists for a person only the installations that the person can reach.
+- **One installation feeds one workspace.** The connector keeps an HMAC of the id, keyed by
+  `FRUITBACK_SECRETS_KEY`, in a column with a unique constraint. A second workspace that comes back with
+  an installation that another workspace holds gets nothing. The first workspace keeps it until it
+  removes its connector. The condition: a member of the organisation on GitHub who reaches the
+  installation, and who installs it first in their own workspace, holds it. The owners of the
+  organisation see the App and its repositories in their settings, and can remove it.
+- **The user token is used for this check only.** The worker sends it to `GET /user/installations`
+  and to no other route, keeps it nowhere, writes it in no log, and does not keep the refresh token
+  that GitHub gives with it. The client secret goes to the exchange of the code only. The worker
+  does not revoke the token: that call sends the token and the secret to another route. Keep
+  « Expire user authorization tokens » on in the settings of the App, so the token ends in eight
+  hours. With that setting off, the token stays valid until the person revokes the App.
+- **The flow is bound to the browser, as Linear's is.** It starts with a ticket that only an owner
+  or an admin gets, spent once and good for a minute. The `state` is bound to the browser that
+  started by a `SameSite=Lax` cookie, issued by this worker, spent once, and good for ten minutes. A
+  way back with no `state` is refused. The role and the suspension of the workspace are read again
+  when GitHub sends the person back.
+- An installation that an owner of the organisation must approve (`setup_action=request`) writes
+  nothing. The workspace installs again after the approval.
 
 ### An address that receives the notes (FRU-122)
 

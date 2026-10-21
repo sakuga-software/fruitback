@@ -169,6 +169,13 @@
       "when": 1792569378354,
       "tag": "0023_attachments_in_transit",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792581591441,
+      "tag": "0024_github_installation",
+      "breakpoints": true
     }
   ]
 }
