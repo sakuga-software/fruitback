@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { SEED_STAGES } from '@fruitback/shared';
-import { type SiteStatus, envelopeStatuses, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
+import {
+  type SiteStatus,
+  envelopeStatuses,
+  isBuiltIn,
+  originOf,
+  readSiteStatus,
+  withoutTrackerStatus,
+} from './site-statuses.ts';
 
 /** What the console of FRU-366 may write for one status of a site (FRU-365). */
 
@@ -225,5 +232,18 @@ describe('the states of a tracker in the statuses of a read (FRU-368)', () => {
       statuses.map((status) => status.key),
       ['con_linear:state_done', ...SEED_STAGES.map((stage) => `own:${stage}`)],
     );
+  });
+});
+
+describe('what a reader the tracker is hidden from reads of a status (FRU-368)', () => {
+  type Note = { id: string; status?: string };
+
+  it("keeps a status of the worker's store, and takes away the state of a tracker, whose key is the tracker's", () => {
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'a', status: 'own:waiting' }), {
+      id: 'a',
+      status: 'own:waiting',
+    });
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'b', status: 'con_linear:state_todo' }), { id: 'b' });
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'c' }), { id: 'c' });
   });
 });

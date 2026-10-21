@@ -348,8 +348,8 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   minutes, `tracker-states.ts`), and the first read after that asks Linear again. The statuses page
   of the console reads them fresh and keeps what it read: opening it shows a change at once. A team
   that Linear does not answer for gives no status to the read, and its pins keep their stage. What is
-  kept carries the exceptions of the connector, so a change of them lets the states of its teams go
-  (`forgetTrackerStates`): the next read takes the new stage for the pins and their statuses alike.
+  kept is Linear's alone, the stage of each type: the exceptions of the connector are applied at each
+  read, so a change of them is never left in the `Kv` by a read that was on its way.
 - **Two routes of the console, `manage-sites` like the others**: `GET …/statuses/tracker`, the states
   of each Linear team of the site with their stage and their colour, and the switch; `POST
 …/statuses/settings`, `{ trackerColours }`. A team Linear did not answer for says

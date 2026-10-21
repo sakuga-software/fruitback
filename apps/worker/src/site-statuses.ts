@@ -3,6 +3,7 @@ import {
   MIN_TEXT_CONTRAST,
   SEED_STAGES,
   STATUS_COLOR,
+  type SeedIssue,
   type SeedStage,
   type SeedStatus,
   contrastRatio,
@@ -209,4 +210,16 @@ export function envelopeStatuses(
   }));
 
   return [...listed, ...tracked, ...builtIn];
+}
+
+/**
+ * A note as a reader the tracker is hidden from reads it (FRU-250, FRU-368): a status of the worker's
+ * store stays, a state of a tracker goes, as its key holds the tracker's id. The read gives such a reader
+ * the statuses of the worker's store only.
+ */
+export function withoutTrackerStatus<T extends Pick<SeedIssue, 'status'>>(issue: T): T {
+  if (issue.status === undefined || issue.status.startsWith(`${OWN_SOURCE}:`)) return issue;
+  const { status: _status, ...rest } = issue;
+
+  return rest as T;
 }

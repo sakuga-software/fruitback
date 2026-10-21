@@ -65,6 +65,20 @@ describe('the states of the trackers of a site (FRU-368)', () => {
     assert.deepEqual(await trackerSourcesOf(kv, store, CLIENT), [{ source: 'con_linear', states: STATES }]);
   });
 
+  it('keeps what Linear says, and gives a state the exception of its connector at each read', async () => {
+    const kv = createMemoryKv();
+    const { store, asked } = counted();
+    let exceptions: Record<string, 'done'> = {};
+    const exceptionsOf = async () => exceptions;
+
+    assert.equal((await trackerSourcesOf(kv, store, CLIENT, exceptionsOf))[0]?.states[0]?.stage, 'todo');
+    exceptions = { state_todo: 'done' };
+    // From what is kept, with no new read of Linear: the exception is applied after the Kv.
+    assert.equal((await trackerSourcesOf(kv, store, CLIENT, exceptionsOf))[0]?.states[0]?.stage, 'done');
+    assert.deepEqual(asked, ['con_linear', 'con_rest', 'con_rest']);
+    assert.equal(JSON.parse((await kv.get(trackerStatesKey('con_linear', 'team_design'))) ?? '[]')[0].stage, 'todo');
+  });
+
   it('leaves out a tracker that does not answer, and keeps nothing of it', async () => {
     const kv = createMemoryKv();
     const { store } = counted(() => Promise.reject(new Error('Linear is down')));

@@ -3,6 +3,7 @@ import type { ClientConfig } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import { placedAt } from './note-helpers.ts';
 import type { TrackerSource } from './site-statuses.ts';
+import type { StageExceptions } from './linear.ts';
 import type { SeedStore, TrackerState } from './store.ts';
 
 /**
@@ -13,6 +14,10 @@ import type { SeedStore, TrackerState } from './store.ts';
  * that asks Linear again. The statuses page of the console reads them fresh and writes them here, so a
  * change shows on the pins as soon as somebody opens it. A tracker that does not answer takes nothing
  * from the read: its pins keep their stage, as before. docs/decisions/statuses.md, « Linear ».
+ *
+ * What is kept is what the tracker says: the stage of each state's type. The exceptions of the
+ * connector (FRU-102) are applied after, at each read, so a change of them is never left behind in the
+ * `Kv` by a read that was on its way (heavy review of pull request 494).
  */
 
 /** How long the states of one team are kept before they are read again. */
@@ -33,24 +38,6 @@ export async function rememberTrackerStates(
   if (kv === undefined) return;
   try {
     await kv.set(trackerStatesKey(connector, team), JSON.stringify(states), TRACKER_STATES_TTL_MS);
-  } catch (error) {
-    if (!(error instanceof KvError)) throw error;
-  }
-}
-
-/**
- * Lets the states of one team go, so the next read asks the tracker again: what the read keeps carries
- * the exceptions of the connector, which have just changed. A `Kv` has no delete: an empty value is no
- * list of states, and it ends at once.
- */
-export async function forgetTrackerStates(
-  kv: Kv | undefined,
-  connector: string,
-  team: string | undefined,
-): Promise<void> {
-  if (kv === undefined) return;
-  try {
-    await kv.set(trackerStatesKey(connector, team), '', 1);
   } catch (error) {
     if (!(error instanceof KvError)) throw error;
   }
@@ -87,6 +74,8 @@ export async function trackerSourcesOf(
   kv: Kv | undefined,
   store: SeedStore,
   client: ClientConfig | undefined,
+  /** The exceptions of a connector, read at this request. */
+  exceptionsOf: (connector: string) => Promise<StageExceptions> = async () => ({}),
 ): Promise<TrackerSource[]> {
   if (client === undefined || store.trackerStatesFor === undefined) return [];
   const seen = new Set<string>();
@@ -106,14 +95,26 @@ export async function trackerSourcesOf(
       } catch (error) {
         if (!(error instanceof KvError)) throw error;
       }
+      const excepted = async (states: readonly TrackerState[]): Promise<TrackerSource> => {
+        const exceptions = await exceptionsOf(place.connector);
+
+        return {
+          source: place.connector,
+          states: states.map((state) =>
+            Object.hasOwn(exceptions, state.id)
+              ? { ...state, stage: exceptions[state.id] as TrackerState['stage'] }
+              : state,
+          ),
+        };
+      };
       const kept = statesOf(hit);
-      if (kept !== undefined) return { source: place.connector, states: kept };
+      if (kept !== undefined) return excepted(kept);
       try {
         const states = await store.trackerStatesFor?.(placedAt(client, place));
         if (states === undefined) return undefined;
         await rememberTrackerStates(kv, place.connector, place.teamId, states);
 
-        return { source: place.connector, states };
+        return await excepted(states);
       } catch (error) {
         console.error(
           `[fruitback] the states of a tracker did not answer: ${error instanceof Error ? error.message : String(error)}`,

@@ -989,12 +989,14 @@ export function createLinearStore(
       createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>
       fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
-    // FRU-368: the states of the team of the client, each with its stage, as the statuses of a site.
+    // FRU-368: the states of the team of the client, as Linear says them: the stage of their type. The
+    // exceptions of the connector are applied by the read, at each request (`trackerSourcesOf`), so
+    // what is kept of a team holds nothing that a change of the settings could leave behind.
     trackerStates: async (client) =>
       (await listLinearStates(config.apiKey, [linearRoutingFor(config, client).teamId])).map((state) => ({
         id: state.id,
         name: state.name,
-        stage: Object.hasOwn(stages, state.id) ? (stages[state.id] as SeedStage) : state.stage,
+        stage: state.stage,
         ...(state.color === undefined ? {} : { color: state.color }),
       })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
