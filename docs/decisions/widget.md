@@ -212,12 +212,15 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `color-chip`                  | `#44403c`           | `#3f3f46`                 |
   | `color-success`               | `#4e7d2a`           | `#15803d`                 |
   | `color-warning`               | `#8d6e63`           | `#b45309` (not drawn)     |
-  | `stage-new`, new              | `#6a7950`           | `#dd2c27`                 |
-  | `stage-todo`, to do           | `#56802e`           | `#2563eb`                 |
-  | `stage-progress`, in progress | `#ac5f00`           | `#f59e0b`, written in ink |
-  | `stage-done`, done            | `#8c1d40`           | `#15803d`                 |
-  | `stage-closed`, closed        | `#8d6e63`           | `#64748b`                 |
+  | `stage-seeded`, new           | `#6a7950`           | `#dd2c27`                 |
+  | `stage-green`, to do          | `#56802e`           | `#2563eb`                 |
+  | `stage-ripening`, in progress | `#ac5f00`           | `#f59e0b`, written in ink |
+  | `stage-ripe`, done            | `#8c1d40`           | `#15803d`                 |
+  | `stage-composted`, closed     | `#8d6e63`           | `#64748b`                 |
   | `shadow-sm`, `shadow-xl`      | tinted `28, 25, 23` | tinted `24, 24, 27`       |
+
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
 
   New tokens, each a value of the mock-up that a screen of FRU-252 to FRU-259 paints:
   `color-accent-strong` (`#b91c1c`), `color-surface-sunken` (`#f4f4f5`), `color-on-stage-progress`
@@ -270,13 +273,17 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `color-on-ink-muted`          | `#a1a1aa`                 | `#d6d3d1`               |
   | `color-success`               | `#15803d`                 | `#3f6421`               |
   | `color-unplaced`              | `#d97706`                 | `#8d6e63`               |
-  | `stage-new`, new              | `#dd2c27`                 | `#6a7950`               |
-  | `stage-todo`, to do           | `#2563eb`                 | `#56802e`               |
-  | `stage-progress`, in progress | `#f59e0b`, written in ink | `#ac5f00`, in white     |
-  | `stage-done`, done            | `#15803d`                 | `#dd2c27`               |
-  | `stage-closed`, closed        | `#64748b`                 | `#8d6e63`               |
+  | `stage-seeded`, new           | `#dd2c27`                 | `#6a7950`               |
+  | `stage-green`, to do          | `#2563eb`                 | `#56802e`               |
+  | `stage-ripening`, in progress | `#f59e0b`, written in ink | `#ac5f00`, in white     |
+  | `stage-ripe`, done            | `#15803d`                 | `#dd2c27`               |
+  | `stage-composted`, closed     | `#64748b`                 | `#8d6e63`               |
   | `shadow-xs`                   | `rgba(24, 24, 27, .12)`   | `rgba(28, 25, 23, .15)` |
   | `shadow-sm`, `shadow-xl`      | tinted `24, 24, 27`       | tinted `28, 25, 23`     |
+
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
   - **The muted text is one step darker than the mock-up.** Its `#78716c` is 4.40:1 on the sunken
     surface, where the open note of the list writes its byline. `#756e69` is 4.59:1 there and
     4.98:1 on the surface: the smallest step that holds 4.5:1 everywhere it is painted.
@@ -301,11 +308,11 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
   | Token                         | 2026-10-20 (FRU-292) | 2026-10-21 (FRU-334)               |
   | ----------------------------- | -------------------- | ---------------------------------- |
-  | `stage-new`, new              | `#6a7950`, white     | `#bec2c8`, black (9.90:1)          |
-  | `stage-todo`, to do           | `#56802e`, white     | `#d9dbdf`, black (12.78:1)         |
-  | `stage-progress`, in progress | `#ac5f00`, white     | `#f3bb3d` (mango), black (10.11:1) |
-  | `stage-done`, done            | `#dd2c27`, white     | `#5560c4` (blueberry), white 5.45  |
-  | `stage-closed`, closed        | `#8d6e63`, white     | `#a52a3a` (cherry), white 7.02     |
+  | `stage-seeded`, new           | `#6a7950`, white     | `#bec2c8`, black (9.90:1)          |
+  | `stage-green`, to do          | `#56802e`, white     | `#d9dbdf`, black (12.78:1)         |
+  | `stage-ripening`, in progress | `#ac5f00`, white     | `#f3bb3d` (mango), black (10.11:1) |
+  | `stage-ripe`, done            | `#dd2c27`, white     | `#5560c4` (blueberry), white 5.45  |
+  | `stage-composted`, closed     | `#8d6e63`, white     | `#a52a3a` (cherry), white 7.02     |
   | `color-stage-edge` (new)      | —                    | `#8a8a93`                          |
   | `color-unplaced`              | `#8d6e63`            | `#71717a`                          |
   | `color-text`, `color-ink`     | `#1c1917`            | `#18181b`                          |
@@ -320,6 +327,10 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `color-on-ink-muted`          | `#d6d3d1`            | `#d4d4d8`                          |
   | `color-success`               | `#3f6421`            | `#15803d`                          |
   | `shadow-xs`, `-sm`, `-xl`     | tinted `28, 25, 23`  | tinted `24, 24, 27`                |
+
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
   - **Black on new, to do and in progress, white on done and closed**, as Mathieu's table says.
     `color-on-stage-new` and `color-on-stage-todo` are new, beside `color-on-stage-progress`;
     `onStageToken` reads them, and `color-on-stage` stays the white of the two others and of the
@@ -1116,13 +1127,16 @@ nothing for the frame around the element.
 
 **Contrast**, measured with the WCAG 2.2 formula on the default tokens:
 
-| Pair                                    | Where                         | Light        | Dark |
-| --------------------------------------- | ----------------------------- | ------------ | ---- |
-| `on-accent` on `accent`                 | launch and send labels        | 4.23         | 4.23 |
-| `accent` on `surface-raised`            | failed status                 | 4.16         | 3.73 |
-| `accent` on `surface`                   | detached-note links           | 4.23         | 4.14 |
-| `warning` on `surface`                  | approximate-position warning  | 4.62         | 3.78 |
-| `on-stage` on new, todo, progress, done | the `≈` on an approximate pin | 2.28 to 4.23 | same |
+| Pair                                        | Where                         | Light        | Dark |
+| ------------------------------------------- | ----------------------------- | ------------ | ---- |
+| `on-accent` on `accent`                     | launch and send labels        | 4.23         | 4.23 |
+| `accent` on `surface-raised`                | failed status                 | 4.16         | 3.73 |
+| `accent` on `surface`                       | detached-note links           | 4.23         | 4.14 |
+| `warning` on `surface`                      | approximate-position warning  | 4.62         | 3.78 |
+| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin | 2.28 to 4.23 | same |
+
+Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+`new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
 
 Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
 
@@ -1170,14 +1184,17 @@ its contrast.
 **The decision came with FRU-93, and the list is empty.** The palette is the one a Claude Design
 mock-up proposed, taken because every value measured above 4.5:1 with white text:
 
-| Token            | Before    | White on it | After     | White on it |
-| ---------------- | --------- | ----------- | --------- | ----------- |
-| `color-accent`   | `#e53935` | 4.23        | `#dd2c27` | 4.70        |
-| `stage-new`      | `#a3b18a` | 2.28        | `#6a7950` | 4.70        |
-| `stage-todo`     | `#7cb342` | 2.50        | `#56802e` | 4.64        |
-| `stage-progress` | `#fb8c00` | 2.37        | `#ac5f00` | 4.78        |
-| `stage-done`     | `#e53935` | 4.23        | `#8c1d40` | 8.88        |
-| `stage-closed`   | `#8d6e63` | 4.62        | unchanged | 4.62        |
+| Token             | Before    | White on it | After     | White on it |
+| ----------------- | --------- | ----------- | --------- | ----------- |
+| `color-accent`    | `#e53935` | 4.23        | `#dd2c27` | 4.70        |
+| `stage-seeded`    | `#a3b18a` | 2.28        | `#6a7950` | 4.70        |
+| `stage-green`     | `#7cb342` | 2.50        | `#56802e` | 4.64        |
+| `stage-ripening`  | `#fb8c00` | 2.37        | `#ac5f00` | 4.78        |
+| `stage-ripe`      | `#e53935` | 4.23        | `#8c1d40` | 8.88        |
+| `stage-composted` | `#8d6e63` | 4.62        | unchanged | 4.62        |
+
+Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+`new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
 
 As text on the two light surfaces, the accent measures 4.70 and 4.63.
 
