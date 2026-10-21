@@ -16,7 +16,7 @@ import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 import { WORKER, type World, memberOf, shareWith, signInTo, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
-import { DATABASES, databasesOfACase } from './auth.fixture.ts';
+import { DATABASES, MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresAttachmentStore } from './attachments-postgres.ts';
@@ -911,7 +911,9 @@ describe('what SECURITY.md and docs/privacy.md say of the files (FRU-331)', () =
 
 const { opening } = databasesOfACase();
 
-for (const { label, open, skip } of DATABASES) {
+for (const [index, { label, open, skip }] of DATABASES.entries()) {
+  // A case on the store takes a migrated database (FRU-339); the case on migration 0021 starts empty.
+  const openMigrated = MIGRATED_DATABASES[index]?.open ?? open;
   describe(`the files in transit in the database, on ${label} (FRU-331)`, { skip }, () => {
     const file = (id: string, more: Partial<Parameters<AttachmentStore['put']>[0]> = {}) => ({
       id,
@@ -927,7 +929,7 @@ for (const { label, open, skip } of DATABASES) {
     });
 
     it('keeps the bytes to the byte, reads nothing past its end, and sweeps it', async () => {
-      const database = await opening(open);
+      const database = await opening(openMigrated);
       const store = createPostgresAttachmentStore(database);
       assert.equal(await store.get('att_0', 0), undefined);
       await rowsOf(
@@ -949,7 +951,7 @@ for (const { label, open, skip } of DATABASES) {
     });
 
     it('gives a file to one note only, and brings its end closer, never further', async () => {
-      const database = await opening(open);
+      const database = await opening(openMigrated);
       const store = createPostgresAttachmentStore(database);
       await store.get('att_0', 0);
       await rowsOf(
