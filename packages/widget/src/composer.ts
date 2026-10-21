@@ -1253,7 +1253,8 @@ const STYLES = `
 .fruitback-composer-place input { -webkit-appearance: radio; }
 /* A name comes from a tracker and can be one long word. */
 .fruitback-composer-place span, .fruitback-composer-identify { overflow-wrap: anywhere; }
-.fruitback-composer-identify { text-align: start; }
+/* A button that holds a name: its words wrap, against the rule of the labels (FRU-350). */
+.fruitback-composer-identify { text-align: start; white-space: normal; }
 /* Always in the tree, because a live region that was hidden announces nothing. Empty, it takes no room. */
 .fruitback-composer-notice { font-size: 12px; color: var(--fruitback-color-accent); }
 .fruitback-composer-notice:empty { display: none; }

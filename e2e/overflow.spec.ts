@@ -15,10 +15,13 @@ test('overflows names each planted fault, and lets a rail of tabs and a table sc
       <div style="width:200px;overflow:hidden"><span style="display:block;width:400px">Clipped by its box at the right edge</span></div>
     </body>`);
   const planted = await overflows(page);
-  expect(planted.some((fault) => fault.startsWith('cut') && fault.includes('p'))).toBe(true);
-  expect(planted.some((fault) => fault.startsWith('past the screen'))).toBe(true);
-  expect(planted.some((fault) => fault.startsWith('squeezed'))).toBe(true);
-  expect(planted.some((fault) => fault.startsWith('past its box'))).toBe(true);
+  // Each fault names its element and its first words: a check that matched any fault would prove nothing.
+  const found = (start: string, element: string) =>
+    planted.some((fault) => fault.startsWith(start) && fault.includes(`: ${element}`));
+  expect(found('cut', 'p « https://preview-branch'), planted.join('\n')).toBe(true);
+  expect(found('past the screen', 'div « Past the screen »'), planted.join('\n')).toBe(true);
+  expect(found('squeezed', 'span « Squeezed into a column'), planted.join('\n')).toBe(true);
+  expect(found('past its box', 'span « Clipped by its box'), planted.join('\n')).toBe(true);
   expect(planted.some((fault) => fault.startsWith('the page scrolls sideways'))).toBe(true);
 
   await page.setContent(`

@@ -1480,7 +1480,7 @@ const STYLES = `
   display: flex;
   align-items: center;
   gap: 7px;
-  flex: 1 1 8em;
+  flex: 1 1 auto;
   min-width: 0;
   font-weight: 600;
   font-size: 13px;
