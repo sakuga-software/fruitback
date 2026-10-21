@@ -357,3 +357,40 @@ describe('the configuration of the mutation job', () => {
     assert.match(String(hold?.run), /ratchet\.ts check "\$PACKAGE" reports\/\*\/mutation\.json --full/);
   });
 });
+
+/**
+ * A pull request does not wait on mutation (Mathieu, 2026-10-21): its jobs report, and a line that
+ * is not held is a warning. `main`, the schedule and a run by hand are still held to the line.
+ */
+describe('what the mutation of a pull request blocks', () => {
+  type Step = { id?: string; name?: string; if?: string; run?: string; 'continue-on-error'?: unknown };
+  type Job = { 'continue-on-error'?: unknown; steps: Step[] };
+  const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
+    jobs: Record<string, Job>;
+  };
+  const ON_A_PULL_REQUEST = "${{ github.event_name == 'pull_request' }}";
+
+  it('lets a job of a pull request fail without failing the run, and no other', () => {
+    for (const name of ['mutation', 'line']) {
+      assert.equal(jobs[name]?.['continue-on-error'], ON_A_PULL_REQUEST, name);
+    }
+    assert.equal(jobs.plan?.['continue-on-error'], undefined, 'a plan that fails mutates nothing');
+  });
+
+  it('turns a line that is not held into a warning on a pull request, and a failure elsewhere', () => {
+    for (const name of ['mutation', 'line']) {
+      const steps = jobs[name]?.steps ?? [];
+      const hold = steps.find((step) => step.id === 'hold');
+      const say = steps.find((step) => step.if === "steps.hold.outcome == 'failure'");
+
+      assert.match(String(hold?.run), /ratchet\.ts check /, name);
+      assert.equal(hold?.['continue-on-error'], ON_A_PULL_REQUEST, name);
+      assert.match(String(say?.run), /^echo "::warning title=mutation::/, name);
+      assert.equal(
+        steps.indexOf(say as Step),
+        steps.indexOf(hold as Step) + 1,
+        `${name}: the warning follows the line`,
+      );
+    }
+  });
+});

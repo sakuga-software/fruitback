@@ -11,6 +11,10 @@ name: Mutation
 # Each file is mutated by a job of its own (FRU-336): the 8 files of the worker in one job ran out
 # of its 150 minutes from 2026-10-19. `plan` lists the jobs, and `line` holds the line of a package
 # on a full run, from the reports of all its jobs. See conventions.md.
+#
+# On a pull request the mutation reports and does not block: a line that is not held is a
+# `::warning::`, and a job that fails or runs out of time does not fail the run. On `main`, on the
+# schedule and by hand, both still fail. See conventions.md.
 on:
   pull_request:
   schedule:
@@ -62,6 +66,8 @@ jobs:
     needs: plan
     if: needs.plan.outputs.count != '0'
     runs-on: ubuntu-latest
+    # Blocking on `main`, on the schedule and by hand; a report only on a pull request.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     # One file of the worker: 60 minutes for the 215 mutants of clients.ts on 2026-10-20, its dry
     # run of 7 minutes included. See conventions.md.
     timeout-minutes: 150
@@ -105,12 +111,21 @@ jobs:
 
       # The line of the file. The line of the package needs every file: `line` holds it.
       - name: Hold the line
+        id: hold
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           PACKAGE: ${{ matrix.package }}
         run: |
           set -o pipefail
           node tools/mutation/ratchet.ts check "$PACKAGE" "$PACKAGE/reports/mutation/mutation.json" |
             tee -a "$GITHUB_STEP_SUMMARY"
+
+      # A pull request goes on with a line that is not held, and says so where it is read.
+      - name: Say that the line of the file is not held
+        if: steps.hold.outcome == 'failure'
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: echo "::warning title=mutation::$PACKAGE scores under its line (see the summary of this job). This does not block a pull request; it fails on main."
 
       - name: Keep the report
         if: always()
@@ -138,6 +153,8 @@ jobs:
     needs: [plan, mutation]
     if: needs.plan.outputs.full != '[]'
     runs-on: ubuntu-latest
+    # Blocking on `main`, on the schedule and by hand; a report only on a pull request.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -169,9 +186,18 @@ jobs:
           path: reports
 
       - name: Hold the line of the package
+        id: hold
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           PACKAGE: ${{ matrix.package }}
         run: |
           set -o pipefail
           node tools/mutation/ratchet.ts check "$PACKAGE" reports/*/mutation.json --full |
             tee -a "$GITHUB_STEP_SUMMARY"
+
+      # A pull request goes on with a line that is not held, and says so where it is read.
+      - name: Say that the line of the package is not held
+        if: steps.hold.outcome == 'failure'
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: echo "::warning title=mutation::$PACKAGE scores under its line (see the summary of this job). This does not block a pull request; it fails on main."
