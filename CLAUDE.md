@@ -53,6 +53,7 @@ pnpm exec vitest run src/cache.test.ts       # one file of the worker, from apps
 | `apps/worker`: a route, a store, identity, a session        | [worker.md](docs/decisions/worker.md)                     |
 | `apps/console`, a screen that has a board in `design/`      | [console.md](docs/decisions/console.md)                   |
 | a status of a pin, its colour, a state read from a tracker  | [statuses.md](docs/decisions/statuses.md)                 |
+| the name of a stage, a `--fruitback-stage-*` token          | [stage-names.md](docs/decisions/stage-names.md)           |
 | the Dockerfile, a workflow, `docker-compose.yml`, the guide | [image.md](docs/decisions/image.md)                       |
 | `apps/playground`, a spec in `e2e/`                         | [dev-loop.md](docs/decisions/dev-loop.md)                 |
 | Nx, formatting, a guard test, a document, the Linear MCP    | [conventions.md](docs/decisions/conventions.md)           |
