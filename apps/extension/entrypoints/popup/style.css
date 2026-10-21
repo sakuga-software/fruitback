@@ -1,7 +1,7 @@
 /*
   The tokens of the extension. The greys, the statuses, the shadows and the radii are those of the
-  widget (packages/widget/src/theme.ts), which are the zinc of the console since FRU-334; the
-  accent is the extension's own (#c2410c), where the widget keeps its red: one accent per surface.
+  widget (packages/widget/src/theme.ts), which are the zinc of the console since FRU-334, and so is
+  the accent since FRU-372: the red #dd2c27 of the console and of the widget, one accent everywhere.
   A stylesheet of an extension page cannot import the widget, so the shared values are copied here,
   and src/design-tokens.test.ts compares each one with the widget and measures each pair of text and
   background. The options page loads this file first.
@@ -31,8 +31,9 @@
   --line-control: #a1a1aa;
   /* The search field of the page, and a switch that is off. */
   --line-soft: #d4d4d8;
-  --accent: #c2410c;
-  --accent-strong: #9a3412;
+  /* The red of the console and of the widget (FRU-372): white on it 4.70:1, on the strong one 6.47:1. */
+  --accent: #dd2c27;
+  --accent-strong: #b91c1c;
   --on-accent: #fff;
   --chip: #3f3f46;
   --on-chip: #fff;
@@ -46,14 +47,14 @@
     A problem and its remedy: the tint of the accent, kept because it says a problem in the colour
     of the extension (FRU-334 moves the row that is chosen to --surface-sunken).
   */
-  --alert-surface: #fff7ed;
-  --alert-line: #fdba74;
-  --alert-text: #9a3412;
+  --alert-surface: #fef2f2;
+  --alert-line: #fca5a5;
+  --alert-text: #b91c1c;
   /* The block « Ready to check »: the raised grey, under a line of the accent. */
   --ready-surface: #fafafa;
-  --ready-line: #fed7aa;
+  --ready-line: #fecaca;
   --ready-divider: #e4e4e7;
-  --selection: #fed7aa;
+  --selection: #fecaca;
   /* The tile of a site that is on. */
   --tile-on: #2f4f3a;
   --on-tile: #fff;
@@ -101,9 +102,9 @@
 
 /*
   No mock-up draws a dark scheme. This one is derived: the zinc scale of the widget from its other
-  end (900, 800, 700), an orange lighter than the accent under dark text, every pair measured by
-  the test. The brown fills of before (#431407, #2a1d14) are the greys of the scale now (FRU-334):
-  a problem keeps its line and its title in the orange.
+  end (900, 800, 700), and the dark accent of the widget (FRU-372): a red lighter than the accent,
+  under dark text, every pair measured by the test. The brown fills of before (#431407, #2a1d14) are
+  the greys of the scale now (FRU-334): a problem keeps its line and its title in the red.
 */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -119,20 +120,23 @@
     --line-strong: #8a8a93;
     --line-control: #71717a;
     --line-soft: #52525b;
-    /* No orange holds white text at 4.5:1 and is also readable on a dark surface: a lighter fill with dark text on it. */
-    --accent: #fb923c;
-    --accent-strong: #fdba74;
+    /*
+      No red holds white text at 4.5:1 and is also readable as a link on a dark surface: #dd2c27 is
+      3.44:1 on #18181b. The dark accent of the widget, a lighter fill with dark text on it.
+    */
+    --accent: #ec6a65;
+    --accent-strong: #f08a85;
     --on-accent: #18181b;
     --chip: #52525b;
     --success: #4ade80;
     --success-line: #4ade80;
     --alert-surface: #27272a;
-    --alert-line: #9a3412;
-    --alert-text: #fdba74;
+    --alert-line: #991b1b;
+    --alert-text: #f08a85;
     --ready-surface: #1f1f23;
-    --ready-line: #7c2d12;
+    --ready-line: #7f1d1d;
     --ready-divider: #3f3f46;
-    --selection: #7c2d12;
+    --selection: #7f1d1d;
     --avatar-surface: #3f3f46;
     --on-avatar: #f4f4f5;
     --alert-body: #d4d4d8;
@@ -175,7 +179,7 @@ h1::before {
   flex: none;
   width: 14px;
   height: 14px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z' fill='%23c2410c'/%3E%3C/svg%3E")
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z' fill='%23dd2c27'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
 

@@ -255,10 +255,10 @@ open composer and its note` fails without the check, 3 runs out of 3.
 
 - **The tokens are those of the widget** (FRU-292, FRU-334): the zinc greys of the console, the five
   statuses Mathieu chose on 2026-10-21, the shadows and the radii (`packages/widget/src/theme.ts`), and
-  **an accent of the extension's own**: `#c2410c`, `#9a3412` under the pointer, white on it at
-  5.18:1. The widget keeps its red `#dd2c27` on the page of a host. One accent per surface was
-  decided by the orchestrator on 2026-10-20, from the mock-up; Mathieu may go back to one accent,
-  which is a change of one line in `style.css` and of `ACCENTS` in the test.
+  **the accent** since FRU-372: the red `#dd2c27` of the console and of the widget, `#b91c1c` under
+  the pointer, white on it at 4.70:1. In the dark scheme it is the dark accent of the widget,
+  `#ec6a65` under dark text: `#dd2c27` is 3.44:1 as a link on `#18181b`, under the 4.5:1 of text.
+  Mathieu chose one accent everywhere on 2026-10-21, after the orange `#c2410c` of FRU-292.
 - **The tokens of the screens to come are declared now**, so that a screen takes a value and never
   writes one: `--surface-warm`, `--line-row`, `--line-control`, `--line-soft`, `--ink`,
   `--on-ink-muted`, `--success-line`, the three of an alert, the three of « Ready to check »,

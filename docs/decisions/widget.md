@@ -241,7 +241,10 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   red `#dd2c27` on the page of a host, the extension paints its own pages in `#c2410c`. The greys,
   the statuses, the shadows and the radii are shared, and `apps/extension/src/design-tokens.test.ts`
   compares them; the accent is checked against its own value on each side. Going back to one accent
-  is a change of one line, and of that test. The values are read in the CSS of the mock-up:
+  is a change of one line, and of that test. **FRU-372 went back to one accent** (Mathieu,
+  2026-10-21): the extension paints the red of the widget and of the console, the dark accent
+  `#ec6a65` in the dark scheme, and the test compares the accent like the greys. The values of
+  FRU-292 are read in the CSS of the mock-up:
 
   | Token                         | 2026-10-13 (FRU-233)      | 2026-10-20 (FRU-292)    |
   | ----------------------------- | ------------------------- | ----------------------- |

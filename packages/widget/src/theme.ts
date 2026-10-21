@@ -40,8 +40,9 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * stylesheet cannot import this module. apps/extension/src/design-tokens.test.ts and
  * apps/console/app/tokens.test.ts read this file and fail when a copy differs.
  *
- * **One accent per surface** (FRU-292). The widget keeps the red #dd2c27; the extension paints its
- * own pages in #c2410c. The greys, the statuses, the shadows and the radii are shared, and
+ * **One accent everywhere** (FRU-372). The red #dd2c27 is the accent of the widget, of the console
+ * and of the extension, which painted its pages in the orange #c2410c from FRU-292 to FRU-372. The
+ * accent, the greys, the statuses, the shadows and the radii are shared, and
  * apps/extension/src/design-tokens.test.ts compares them.
  *
  * One thing does move, by 4 pixels: the thread's shadow was `0 10px 34px rgba(0, 0, 0, 0.18)` and the
@@ -169,8 +170,7 @@ export function missingStageTokens(): SeedStage[] {
 export const THEME_STYLES = `
 :host {
   /*
-    The accent of the widget. The extension has an accent of its own (#c2410c, FRU-292): one accent per
-    surface, so the widget keeps the red that lies on the host's page.
+    The accent of the widget, of the console and of the extension since FRU-372: one red everywhere.
   */
   --fruitback-color-accent: #dd2c27;
   /* A main button under the pointer, and the launch button while it is pressed. White on it is 6.47:1. */
