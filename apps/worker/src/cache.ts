@@ -68,6 +68,7 @@ export async function cached<T>(kv: Kv, page: string, key: string, load: () => P
 async function readThrough<T>(kv: Kv, entryKey: string, load: () => Promise<T>): Promise<T> {
   const hit = await ignoreKvError(kv.get(entryKey));
 
+  // Stryker disable next-line ConditionalExpression: equivalent mutant: `JSON.parse(undefined)` throws, and the catch reads it as a miss, as the original does. Left out of the score by Mathieu's decision (FRU-345).
   if (hit !== undefined) {
     try {
       return JSON.parse(hit) as T;

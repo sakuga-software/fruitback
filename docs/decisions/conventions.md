@@ -358,6 +358,26 @@ write <package> <mutation.json>` prints it from the report of a full run.
   lowest that these mutants allow**: the lines of FRU-172 are written from a full run with those
   eight counted as survivors. Do not write a line from one run that scored higher on a timeout.
   The three timeouts of `clients.ts` did not move in three runs, and count as killed.
+- **3 runners of StrykerJS on the 4 vCPU of a job, not 4** (`--concurrency 3`, FRU-345). A mutant has
+  a budget: 1.5 × the net time of the files that reach it, + 5 s, + the overhead of the whole dry
+  run (35 to 63 s in CI, one process start for each of about 105 files). The dry run measures the
+  net time alone, and with 4 runners the mutants run 4 at a time on 4 vCPU: a mutant whose killer
+  comes late runs out of its budget. Then StrykerJS kills the process tree of the runner and starts
+  another, and the whole budget is spent, 5 to 9 minutes in CI. Those timeouts were not hangs: the
+  same 44 mutants of `cache.ts` gave no timeout on a Mac (2 runners) nor in a container of 2 or 1.5
+  CPU, and 9 to 14 in CI. With 4 runners, 48 mutants timed out in each of three full runs (#418,
+  #439, and 55 in #436). Measured on the same sources in one run (39597957606), 4 runners against 3:
+  - timeouts: `clients.ts` 17 to 4, `identity.ts` 8 to 3, `cache.ts` 9 to 0, `kv.ts` 2 to 1;
+  - time: the Mutate step over the dry run of the same job went from 8.5 to 9.5 (`clients.ts`),
+    6.6 to 7.3, 5.4 to 5.7 and 5.0 to 5.0. 3 runners cost up to 12 % more, within the spread of one
+    runner to the next (`cache.ts` took 22 to 50 minutes on 4 runners for the same mutants).
+    Six of those timeouts then survived: they were holes that a timeout counted as killed. #464 kills
+    five with a test. The sixth, `if (hit !== undefined)` in `cache.ts`, is equivalent and disabled.
+    **The budget is not tuned:** a higher `timeoutFactor` or `timeoutMS` lets a late kill run longer, so
+    the job is longer; a lower one counts more survivors as killed. `--test-timeout` of `node --test` is
+    not set: it would turn a hang that waits into a failed test, killed and not timed out. A loop in
+    the mutated code stays a timeout whatever the budget: StrykerJS stops it at 100 times the hits of
+    the dry run (`hitLimit`).
 - **The run of a package uses the tests of that package only.** A survivor of `packages/shared` may be
   killed by a test of the worker or of the widget. The contract is tested where it is written, so the
   survivor is still a hole there.
@@ -447,5 +467,4 @@ reaches.
   the first file that runs. Making those constants lazy would change code for the tool's sake, and the
   cut already limits them to the killers.
 - **Not measured:** an order of `tap.testFiles` that puts the unit test first. The runner takes the
-  order of `glob`, which does not promise one. Nor a lower `--concurrency`, which would make fewer
-  timeouts and a longer job.
+  order of `glob`, which does not promise one. A lower `--concurrency` is measured above (FRU-345).
