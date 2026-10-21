@@ -70,6 +70,10 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
+      # FRU-343. The last step reads it to write what the job took.
+      - name: Note when the job starts
+        run: echo "JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,7 +101,7 @@ jobs:
         working-directory: ${{ matrix.package }}
         env:
           MUTATE: ${{ matrix.file }}
-        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 4
+        run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 4 --fileLogLevel info
 
       # The line of the file. The line of the package needs every file: `line` holds it.
       - name: Hold the line
@@ -116,6 +120,16 @@ jobs:
           path: ${{ matrix.package }}/reports/mutation/
           retention-days: 30
           if-no-files-found: error
+
+      # FRU-343. What the job and its dry run took, against `timeout-minutes` and `dryRunTimeoutMinutes`:
+      # a warning past 60 %, never a failure. `--fileLogLevel info` above writes the log it reads.
+      - name: Write the durations
+        if: always()
+        continue-on-error: true
+        env:
+          NAME: mutation ${{ matrix.package }} ${{ matrix.file }}
+          PACKAGE: ${{ matrix.package }}
+        run: node tools/ci/durations.ts --name "$NAME" --timeout 150 --stryker "$PACKAGE"
 
   # Runs only when every job of `mutation` passed: a job that failed or ran out of time has failed
   # the run already.
