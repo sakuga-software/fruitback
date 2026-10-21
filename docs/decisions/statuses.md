@@ -3,7 +3,8 @@
 FRU-352 asks for three things: statuses a team adds, statuses read from the tracker (Linear, GitHub,
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
-below follow them. The contract is built (FRU-364); the rest is FRU-365 to FRU-371.
+below follow them. Built: the contract (FRU-364), and the table, its migration and the text colour
+(FRU-365). The rest is FRU-366 to FRU-371.
 
 ## Statuses
 
@@ -158,11 +159,13 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
 
 **GitHub** (REST issues, API 2022-11-28):
 
-- **GitHub is not a connector of a workspace.** It is the store of a whole worker
-  (`FRUITBACK_STORE=github`), and `CONNECTOR_KINDS` holds only `linear` and `rest`. Its statuses are
-  therefore the rows with the source `own`, like the worker's own PostgreSQL store, and on a worker
-  whose store is GitHub the statuses screen of a site shows these four instead of the five built-in
-  ones, with no « Add a status ».
+- **GitHub is a connector of a workspace since FRU-359 and FRU-360** (`CONNECTOR_KINDS` holds
+  `linear`, `rest` and `github`), and it can still be the store of a whole worker
+  (`FRUITBACK_STORE=github`). A site that sends to a GitHub connector has rows with that connector
+  as their source, like Linear; a worker whose own store is GitHub has rows with the source `own`.
+  Either way its statuses screen shows these four instead of the five built-in ones, with no « Add a
+  status ». The copy of `0025_site_statuses` takes Linear connectors only: FRU-102 set exceptions on
+  no other kind.
 - Four fixed keys: `open`, `closed:completed`, `closed:not_planned`, `closed:duplicate`. A close with
   no reason is `closed:completed`, as today. `reopened` is an open issue. Stages as FRU-32:
   `seeded`, `ripe`, `composted`, `composted`. The team can rename, recolour and re-stage them.
@@ -260,21 +263,34 @@ Workspace › Sites › preview.acme.com › Statuses (kept in Fruitback)   [ Ad
 - **The pin on the host page is a non-text mark** (SC 1.4.11, 3:1). No colour can reach 3:1 on
   every page a host draws, which is why `--fruitback-color-stage-edge` draws its outline. A custom
   colour keeps that edge, in the light and the dark scheme.
-- The function lives in `shared`: it is pure, and the worker (to refuse a save), the console (to show
-  the ratio) and the widget (to draw) must compute the same thing. It holds the algorithm, and the
-  three candidate colours as arguments, not a palette. It lands with its first user, the refusal on
-  save of FRU-366, not with FRU-364: a published function nobody calls yet is one more thing to keep.
+- The function lives in `shared` (`contrast.ts`, FRU-365): `contrastRatio`, `readableTextColor` and
+  `MIN_TEXT_CONTRAST`. It is pure, and the worker (to refuse a save), the console (to show the ratio)
+  and the widget (to draw) must compute the same thing. It holds the algorithm and no palette: the
+  ink is an argument, and black and white are the only colours it names.
+- **The last step is always black.** Where neither the ink nor white reaches 4.5:1, white is under
+  4.5:1, and the better of black and white is never under 4.58:1: so black is. `contrast.test.ts`
+  sweeps every 97th colour of the cube: the worst answer is 4.50007:1 (the ink on `#5385ae`), and the
+  worst black 4.67:1.
+- **The refusal is `readSiteStatus` of `apps/worker/src/site-statuses.ts`**: a text colour with no
+  background colour, or under 4.5:1 on it, is refused, never corrected. FRU-366 calls it on every
+  write.
 
 ### Migration
 
 1. **Contract first, published before anything sends the fields** (FRU-364). `statuses`, `status`,
    `offeredStatuses`, `statusOf`, and the rewritten FRU-24 rule.
-2. **Database, additive** (FRU-365). Create `statuses`; add `seeds.status_key`, nullable. The FRU-102
-   exceptions were per connector: copy each `connectors.settings.stages[stateId]` into a row
-   `(site, connector, stateId, stage)` **for every site whose destination is that connector**, so
-   each site keeps what its connector showed. Keep the JSON field one release and read the table
-   first; drop it in a later migration. Nothing is rewritten in place, so a rollback of the worker
-   reads the JSON it left.
+2. **Database, additive** (FRU-365, `drizzle/0025_site_statuses.sql`). Create `statuses`; add
+   `seeds.status_key`, nullable. The FRU-102 exceptions were per connector: copy each
+   `connectors.settings.stages[stateId]` into a row `(site, connector, stateId, stage)` **for every
+   site whose destination is that connector**, so each site keeps what its connector showed.
+   drizzle-kit wrote every statement but that INSERT, and the header of the file says so. It keeps
+   only what `readConnectorSettings` keeps (a Linear connector, an id of 1 to 64 of
+   `[A-Za-z0-9_-]`, one of the five stages), and settings that are not JSON copy nothing
+   (`pg_input_is_valid`, PostgreSQL 16 and later; the image and CI run 17).
+   `site-statuses-migration.test.ts` starts from an empty database and holds each case; it fails
+   with the INSERT taken out. The JSON field stays one release; the Linear read takes the table
+   first in FRU-368, and a later migration drops the field. Nothing is rewritten in place, so a
+   rollback of the worker reads the JSON it left.
 3. **Worker** sends `statuses` and `status`. An old widget ignores them.
 4. **Widget, extension, console** read them. Their copies of the tokens do not change.
 

@@ -7,7 +7,7 @@ import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
-import { deliveries, email_links, pairings, seed_comments, seeds, site_destinations } from './postgres-schema.ts';
+import { deliveries, email_links, pairings, seed_comments, site_destinations } from './postgres-schema.ts';
 
 /**
  * The `user_version` of each file of the last worker that wrote one: the one version this command
@@ -460,6 +460,20 @@ export type SeedsCopyInput = {
   database: Database;
   dryRun: boolean;
 };
+
+/**
+ * `seeds` as a seeds file holds it: FRU-365 added `status_key`, which no file holds. A note copied
+ * here keeps it NULL, the built-in status of its stage, as every note of before.
+ */
+const seeds = pgTable('seeds', {
+  id: bigint('id', { mode: 'number' }).primaryKey(),
+  client_id: text('client_id'),
+  page_url: text('page_url').notNull(),
+  stage: text('stage').notNull(),
+  seed: text('seed').notNull(),
+  created_at: instant('created_at').notNull(),
+  updated_at: instant('updated_at').notNull(),
+});
 
 /** The two tables of the file, with the table of the database each one goes to. */
 const SEED_TABLES = [

@@ -17,6 +17,10 @@
       "src/attachments.ts": {
         "score": 92.5,
         "mutants": 40
+      },
+      "src/contrast.ts": {
+        "score": 93.33,
+        "mutants": 30
       }
     }
   },
