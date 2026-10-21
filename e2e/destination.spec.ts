@@ -118,7 +118,14 @@ test('a reader the worker offers no place gets the composer with no line, and a 
   await expect(gone).toHaveCount(1);
   await expect(gone).toBeEmpty();
   await expect(gone).toBeHidden();
-  const plain = await composer(page).boundingBox();
+  // Above the foot: the foot may wrap onto a second row with the fonts of a machine (FRU-350), and
+  // it holds the line of where the note lands only when there is no choice of place.
+  const aboveFoot = () =>
+    composer(page).evaluate(
+      (node) =>
+        node.querySelector('.fruitback-composer-foot')!.getBoundingClientRect().top - node.getBoundingClientRect().top,
+    );
+  const plain = { height: await aboveFoot() };
   await page.keyboard.press('Escape');
 
   // One place is no choice either.
@@ -127,7 +134,7 @@ test('a reader the worker offers no place gets the composer with no line, and a 
   await mount(page, 'destination-none');
   await compose(page, 'card-espresso');
   await expect(composer(page).locator('[data-fruitback-destination]')).toBeHidden();
-  expect((await composer(page).boundingBox())?.height).toBe(plain?.height);
+  expect(await aboveFoot()).toBe(plain.height);
   await page.keyboard.press('Escape');
 
   // Two places: the line is there, folded, on the first one.
@@ -138,9 +145,9 @@ test('a reader the worker offers no place gets the composer with no line, and a 
   await expect(line(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(places(page)).toBeHidden();
   // One line of small text more than the composer of everybody else, and nothing else.
-  const withLine = (await composer(page).boundingBox())?.height ?? 0;
-  expect(withLine - (plain?.height ?? 0)).toBeGreaterThan(10);
-  expect(withLine - (plain?.height ?? 0)).toBeLessThan(40);
+  const withLine = await aboveFoot();
+  expect(withLine - plain.height).toBeGreaterThan(10);
+  expect(withLine - plain.height).toBeLessThan(40);
 });
 
 test('a member chooses a place with the keyboard, the note goes there, and the next note starts there', async ({

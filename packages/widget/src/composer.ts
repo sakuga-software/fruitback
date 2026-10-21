@@ -1342,8 +1342,12 @@ const STYLES = `
 }
 .fruitback-composer-status { flex: 1 1 100%; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-status:empty { display: none; }
-/* « Lands in Linear as a new issue »: where the note goes, before the buttons. */
-.fruitback-composer-lands { flex: 1; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+/*
+  « Lands in Linear as a new issue »: where the note goes, before the buttons. At least 4.5em wide
+  (FRU-350): beside the buttons, which stay on one line, its words wrap; with less room than that,
+  they take a line of their own above them, never a column of letters beside them.
+*/
+.fruitback-composer-lands { flex: 1 1 0; min-width: min(4.5em, 100%); font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-lands[hidden] { display: none; }
 .fruitback-composer-send { order: 1; }
 .fruitback-composer-foot > .fruitback-composer-ghost:not(.fruitback-composer-keep) { order: 2; }
