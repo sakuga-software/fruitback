@@ -49,7 +49,6 @@ describe('durations.ts', () => {
     const lines = warnings('mutation apps/worker src/clients.ts', [
       { what: 'Job', took: 95 * 60, limit: 150 * 60 },
       { what: 'Dry run', took: 5 * 60 + 36, limit: 30 * 60 },
-      { what: 'Nothing', took: undefined, limit: 60 },
     ]);
 
     assert.deepEqual(lines, [
@@ -66,9 +65,9 @@ describe('durations.ts', () => {
     assert.equal(format(42), '42 s');
     assert.deepEqual(dryRunOf('INFO DryRunExecutor Starting initial test run (tap test runner)'), {
       seconds: undefined,
-      ended: false,
+      started: true,
     });
-    assert.deepEqual(dryRunOf(''), { seconds: undefined, ended: true });
+    assert.deepEqual(dryRunOf(''), { seconds: undefined, started: false });
   });
 
   it('reads the dry run, the mutants and the test files of a package, and its dryRunTimeoutMinutes', () => {
@@ -95,11 +94,44 @@ describe('durations.ts', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-    // A job that stopped before StrykerJS wrote anything is not measured, and does not throw.
-    assert.deepEqual(strykerOf(join(tmpdir(), 'fruitback-durations-absent')), {
-      measure: { what: 'Dry run', took: undefined, limit: STRYKER_DRY_RUN_MINUTES * 60 },
+    // A job that stopped before StrykerJS wrote anything is not measured, says why, and does not throw.
+    const absent = join(tmpdir(), 'fruitback-durations-absent');
+    assert.deepEqual(strykerOf(absent), {
+      measure: {
+        what: 'Dry run',
+        took: undefined,
+        limit: STRYKER_DRY_RUN_MINUTES * 60,
+        why: `no stryker.log in ${absent}, which \`--fileLogLevel info\` writes`,
+      },
       counts: [],
     });
+  });
+
+  /** A measure lost in silence is the drift this file is for, unseen (raised in review). */
+  it('warns of a measure it could not take, and says why', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fruitback-durations-'));
+    try {
+      writeFileSync(join(dir, 'stryker.log'), 'INFO DryRunExecutor Starting initial test run (tap test runner)\n');
+      const dry = strykerOf(dir).measure;
+      assert.equal(dry.why, 'the dry run started and did not end');
+
+      assert.deepEqual(
+        warnings('mutation apps/worker src/kv.ts', [
+          { what: 'Job', took: undefined, limit: 9000, why: 'JOB_STARTED_AT is not set, by the first step of the job' },
+          dry,
+        ]),
+        [
+          '::warning title=mutation apps/worker src/kv.ts not measured::Job was not measured: JOB_STARTED_AT is not set, by the first step of the job.',
+          '::warning title=mutation apps/worker src/kv.ts not measured::Dry run was not measured: the dry run started and did not end.',
+        ],
+      );
+      assert.match(
+        summary('kv', [dry], []),
+        /^\| Dry run \| not measured: the dry run started and did not end \| 5 min \| {2}\|$/m,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('writes a table of each measure against its limit', () => {

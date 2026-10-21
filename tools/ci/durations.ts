@@ -26,8 +26,11 @@ export const WARN_AT = 0.6;
 /** The `dryRunTimeoutMinutes` of StrykerJS when the config does not set it. */
 export const STRYKER_DRY_RUN_MINUTES = 5;
 
-/** One duration against its limit. `took` is `undefined` when it was not measured. */
-export type Measure = { what: string; took: number | undefined; limit: number };
+/**
+ * One duration against its limit. `took` is `undefined` when it was not measured, and `why` says
+ * why: a measure lost in silence is a drift no one sees (raised in review).
+ */
+export type Measure = { what: string; took: number | undefined; limit: number; why?: string };
 
 /** Whether a duration took more than `WARN_AT` of its limit. Both in seconds. */
 export function nearLimit(took: number, limit: number): boolean {
@@ -43,7 +46,7 @@ export function format(seconds: number): string {
 }
 
 /** What StrykerJS says of its dry run, from its log. */
-export type DryRun = { seconds: number; tests: number } | { seconds: undefined; ended: boolean };
+export type DryRun = { seconds: number; tests: number } | { seconds: undefined; started: boolean };
 
 /**
  * The dry run, read from the log of StrykerJS 10:
@@ -58,7 +61,7 @@ export function dryRunOf(log: string): DryRun {
     return { seconds: (Number(done[2]) + Number(done[3])) / 1000, tests: Number(done[1]) };
   }
 
-  return { seconds: undefined, ended: !log.includes('Starting initial test run') };
+  return { seconds: undefined, started: log.includes('Starting initial test run') };
 }
 
 /** The part of a report of `mutation-testing-report-schema` that this reads. */
@@ -72,24 +75,29 @@ export function testFilesOf(report: Report): number {
   return Object.keys(report.testFiles ?? {}).length;
 }
 
-/** The lines `::warning::` for each measure past `WARN_AT` of its limit. */
+/** The lines `::warning::` for each measure past `WARN_AT` of its limit, and for each not measured. */
 export function warnings(name: string, measures: Measure[]): string[] {
-  return measures
-    .filter((measure) => measure.took !== undefined && nearLimit(measure.took, measure.limit))
-    .map(
-      ({ what, took = 0, limit }) =>
-        `::warning title=${name} nears its limit::${what} took ${format(took)}, ` +
+  return measures.flatMap(({ what, took, limit, why }) => {
+    if (took === undefined) {
+      return [`::warning title=${name} not measured::${what} was not measured: ${why ?? 'no reason read'}.`];
+    }
+    if (!nearLimit(took, limit)) return [];
+
+    return [
+      `::warning title=${name} nears its limit::${what} took ${format(took)}, ` +
         `${Math.round((took / limit) * 100)} % of its ${limit / 60} minutes. It fails at 100 %.`,
-    );
+    ];
+  });
 }
 
 /** The summary of the job, in Markdown. */
 export function summary(name: string, measures: Measure[], counts: string[]): string {
-  const rows = measures.map(({ what, took, limit }) => {
+  const rows = measures.map(({ what, took, limit, why }) => {
     const share = took === undefined ? '' : `${Math.round((took / limit) * 100)} %`;
     const flag = took !== undefined && nearLimit(took, limit) ? ', past 60 %' : '';
+    const time = took === undefined ? `not measured: ${why ?? 'no reason read'}` : format(took);
 
-    return `| ${what} | ${took === undefined ? 'not measured' : format(took)} | ${limit / 60} min | ${share}${flag} |`;
+    return `| ${what} | ${time} | ${limit / 60} min | ${share}${flag} |`;
   });
 
   return [
@@ -120,9 +128,13 @@ export function strykerOf(dir: string): { measure: Measure; counts: string[] } {
   } else if (dry?.seconds !== undefined) {
     counts.push(`${dry.tests} test files`);
   }
-  if (dry?.seconds === undefined && dry?.ended === false) counts.push('the dry run did not end');
+  let why: string | undefined;
+  if (dry === undefined) why = `no stryker.log in ${dir}, which \`--fileLogLevel info\` writes`;
+  else if (dry.seconds === undefined) {
+    why = dry.started ? 'the dry run started and did not end' : 'StrykerJS did not start its dry run';
+  }
 
-  return { measure: { what: 'Dry run', took: dry?.seconds, limit }, counts };
+  return { measure: { what: 'Dry run', took: dry?.seconds, limit, ...(why === undefined ? {} : { why }) }, counts };
 }
 
 /** `--key value` pairs. */
@@ -145,6 +157,7 @@ function main(argv: string[]): void {
       what: 'Job',
       took: Number.isFinite(started) && started > 0 ? Date.now() / 1000 - started : undefined,
       limit: Number(args.timeout) * 60,
+      why: 'JOB_STARTED_AT is not set, by the first step of the job',
     },
   ];
   const counts: string[] = [];
