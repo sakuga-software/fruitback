@@ -207,7 +207,8 @@ write <package> <mutation.json>` prints it from the report of a full run.
   a file that has a line was not measured. `ratchet.ts write` takes a package once for each report.
 - **On a pull request, mutation reports and does not block** (Mathieu, 2026-10-21). A file or a
   package under its line is a `::warning::` and a green job, and a job that fails or runs out of time
-  does not fail the run (`continue-on-error` when `github.event_name == 'pull_request'`). The summary
+  does not fail the run (`continue-on-error` when `github.event_name == 'pull_request'`), and warns that
+  its file was not measured. The summary
   of the job still gives the score against the line. On `main`, on the schedule and by hand, a line
   that is not held fails the run. `mutation.test.ts` holds both.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.

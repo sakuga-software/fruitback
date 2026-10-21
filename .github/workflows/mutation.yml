@@ -104,6 +104,7 @@ jobs:
       # `inPlace`: the guard tests of the worker read files of the root, and a sandbox would move
       # them out of reach. This checkout is thrown away after the job.
       - name: Mutate
+        id: mutate
         working-directory: ${{ matrix.package }}
         env:
           MUTATE: ${{ matrix.file }}
@@ -126,6 +127,15 @@ jobs:
         env:
           PACKAGE: ${{ matrix.package }}
         run: echo "::warning title=mutation::$PACKAGE is under its line, or a file of it was not measured (see the summary of this job). This does not block a pull request; it fails on main."
+
+      # A pull request goes on when StrykerJS failed or ran out of time too, and says so: no line
+      # was held, and the job would read as green.
+      - name: Say that the file was not measured
+        if: always() && steps.mutate.outcome != 'success'
+        env:
+          PACKAGE: ${{ matrix.package }}
+          MUTATE: ${{ matrix.file }}
+        run: echo "::warning title=mutation::$PACKAGE $MUTATE was not measured, StrykerJS stopped (see the log of the step Mutate). This does not block a pull request; it fails on main."
 
       - name: Keep the report
         if: always()

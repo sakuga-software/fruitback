@@ -393,4 +393,15 @@ describe('what the mutation of a pull request blocks', () => {
       );
     }
   });
+
+  /** A job that StrykerJS stopped holds no line: on a pull request it warns, since it reads as green. */
+  it('warns when StrykerJS did not finish, whatever stopped it', () => {
+    const steps = jobs.mutation?.steps ?? [];
+    const mutate = steps.find((step) => step.name === 'Mutate');
+    const say = steps.find((step) => step.name === 'Say that the file was not measured');
+
+    assert.equal(mutate?.id, 'mutate');
+    assert.equal(say?.if, "always() && steps.mutate.outcome != 'success'");
+    assert.match(String(say?.run), /^echo "::warning title=mutation::/);
+  });
 });
