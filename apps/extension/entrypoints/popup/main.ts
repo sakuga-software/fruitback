@@ -129,6 +129,18 @@ function typing(): boolean {
 /** The kind of the screen drawn last: a late language does not redraw a form (FRU-319). */
 let shownKind: PopupState['kind'] | undefined;
 
+/** The value of `drawn` when the last draw ended: equal to `drawn` when no draw is in flight. */
+let finished = 0;
+
+/** The screens a late language never draws again. */
+const KEEP = new Set<PopupState['kind'] | undefined>(['form', 'pair-link', 'connecting']);
+
+/** Settled when the first screen is on: a language learned before it waits for it. */
+let markFirstDrawn: () => void = () => undefined;
+const firstDrawn = new Promise<void>((resolve) => {
+  markFirstDrawn = resolve;
+});
+
 const openSettings = (): void => void browser.runtime.openOptionsPage();
 
 /** The language of the account when the extension knows it, the browser's own otherwise. */
@@ -148,11 +160,14 @@ void spoken.then(() => {
 // language of before. Not a form: a draw would lose what somebody types there. The next popup
 // reads what this one learned.
 void rememberLanguage(browser.storage.local, cloudSeams())
-  .then(() => spoken)
+  .then(() => firstDrawn)
   .then(async () => {
     const kept = await storedLanguage(browser.storage.local);
     const before = language();
-    if (shownKind === 'form' || shownKind === 'pair-link' || typing()) return;
+    // Only over a screen that is drawn and stays: no draw in flight, and none that started while the
+    // language was read (raised in review of #432). Not over a form, a pairing link, a sign-in that
+    // waits for the console (it has its own claims), or a field somebody is in.
+    if (finished !== drawn || KEEP.has(shownKind) || typing()) return;
     setLanguage(kept ?? navigator.language);
     if (language() === before) return;
     document.documentElement.lang = language();
@@ -176,6 +191,7 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
   if (app === null) return;
   clearTimeout(nextClaim);
   drawn += 1;
+  const thisDraw = drawn;
 
   const tab = await tabUnderThePopup;
   const origin = originOf(tab?.url);
@@ -223,6 +239,11 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
     await draw(state, { origin: origin ?? '', tab, link, found, offer, account, pending: pendingNow }),
   );
   shownKind = state.kind;
+  // A later draw may have started while this one awaited: it is the one that ends the run.
+  if (thisDraw === drawn) {
+    finished = thisDraw;
+    markFirstDrawn();
+  }
   if (state.kind === 'connecting' && pendingNow !== undefined) waitForTheConsole(pendingNow, state.unanswered);
 }
 
