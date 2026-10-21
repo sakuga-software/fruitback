@@ -95,7 +95,8 @@ describe('the images that ci.yml builds', () => {
 
     assert.deepEqual(jobs.changes?.outputs, { images: '${{ steps.changes.outputs.images }}' });
     assert.equal(jobs.image?.needs, 'changes');
-    assert.equal(jobs.image?.if, "needs.changes.outputs.images == 'true'");
+    // A `changes` that wrote nothing must not skip the job: only an explicit `false` does.
+    assert.equal(jobs.image?.if, "needs.changes.outputs.images != 'false'");
     assert.equal(bake?.run, 'docker buildx bake --file docker-bake.hcl --load ci');
     // A run of ci.yml reads the cache and never writes it: a pull request could write layers that
     // the next build reads.
@@ -106,6 +107,7 @@ describe('the images that ci.yml builds', () => {
     };
     const writer = release.jobs['layer-cache'];
     assert.equal(writer?.needs, 'ci', 'the cache is written from a commit that did not pass CI');
+    assert.equal(writer?.if, "github.ref == 'refs/heads/main'", 'the cache is written from a branch nobody merged');
     assert.deepEqual(writer?.permissions, { contents: 'read', packages: 'write' });
     assert.equal(writer?.steps.at(-1)?.env?.CACHE_WRITE, 'true');
     assert.equal(writer?.steps.at(-1)?.run, 'docker buildx bake --file docker-bake.hcl ci');

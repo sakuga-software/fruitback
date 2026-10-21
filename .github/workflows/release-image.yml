@@ -47,6 +47,9 @@ jobs:
   layer-cache:
     name: layer cache
     needs: ci
+    # `main` alone: a run by hand from another branch would write layers of code that nobody merged,
+    # and the pull requests read them. A tag needs no cache of its own. Raised in review.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
