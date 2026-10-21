@@ -35,53 +35,68 @@ describe('a capture too large for the worker, from the background to the compose
     // Three bytes over the limit of an image: its base64 is one group over what the bridge carries.
     const tab = new Blob([new Uint8Array(MAX_ATTACHMENT_BYTES.image + 3)], { type: 'image/png' });
     assert.ok(Math.ceil(tab.size / 3) * 4 > MAX_FILE_BASE64, 'the capture fits the bridge: no case');
-    const background = createCapture({
-      readSite: async () => TEAM,
-      ensureAccess: async () => ({ ok: true, grant: GRANT }),
-      captureTab: async () => tab,
-      crop: async () => tab,
+
+    await assertSaidTooLarge(tab, undefined);
+  });
+
+  it('is said « Too large », not « not taken », when the JPEG of the capture fails (FRU-338)', async () => {
+    const tab = new Blob([new Uint8Array(MAX_ATTACHMENT_BYTES.image + 3)], { type: 'image/png' });
+
+    await assertSaidTooLarge(tab, async () => {
+      throw new Error('no 2d context');
     });
-
-    const seam: AttachSeam = {
-      offer: () => 'offered',
-      subscribe: () => () => undefined,
-      captures: () => true,
-      async capture() {
-        const answer = captureAnswerOf(await background(undefined, 'https://acme.dev'));
-        const posted = captureResponseOf(across(answer), 'req1');
-
-        return pictureOfAnswer(across(posted) as typeof posted);
-      },
-      upload: async () => {
-        uploads += 1;
-
-        return { ok: true, id: 'att_1' };
-      },
-    };
-    let uploads = 0;
-    const window = new HappyDomWindow({ url: 'https://acme.dev/', width: 1_000, height: 1_000 });
-    const document = window.document as unknown as Document;
-    const host = document.createElement('div');
-    document.body.append(host);
-    composer = createComposer({ document, host, onSubmit: async () => true, attachments: seam });
-    composer.open(ANCHOR);
-
-    (composer.element.querySelector('[data-fruitback-attach-page]') as HTMLButtonElement).click();
-    const file = async () => {
-      for (let tries = 0; tries < 50; tries += 1) {
-        const found = composer?.element.querySelector('.fruitback-composer-file');
-        if (found !== null && found !== undefined) return found;
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-
-      return undefined;
-    };
-    const shown = await file();
-
-    assert.equal(shown?.getAttribute('data-fruitback-file'), 'refused');
-    assert.equal(shown?.querySelector('.fruitback-composer-file-name')?.textContent, 'page.png');
-    assert.match(shown?.textContent ?? '', /Too large/);
-    assert.doesNotMatch(shown?.textContent ?? '', /not taken/);
-    assert.equal(uploads, 0, 'a file too large went to the worker');
   });
 });
+
+/** Runs a capture of the page from the background to the composer, and checks the composer refuses it as too large. */
+async function assertSaidTooLarge(tab: Blob, toJpeg: ((picture: Blob) => Promise<Blob>) | undefined): Promise<void> {
+  const background = createCapture({
+    readSite: async () => TEAM,
+    ensureAccess: async () => ({ ok: true, grant: GRANT }),
+    captureTab: async () => tab,
+    crop: async () => tab,
+    ...(toJpeg === undefined ? {} : { toJpeg }),
+  });
+
+  let uploads = 0;
+  const seam: AttachSeam = {
+    offer: () => 'offered',
+    subscribe: () => () => undefined,
+    captures: () => true,
+    async capture() {
+      const answer = captureAnswerOf(await background(undefined, 'https://acme.dev'));
+      const posted = captureResponseOf(across(answer), 'req1');
+
+      return pictureOfAnswer(across(posted) as typeof posted);
+    },
+    upload: async () => {
+      uploads += 1;
+
+      return { ok: true, id: 'att_1' };
+    },
+  };
+  const window = new HappyDomWindow({ url: 'https://acme.dev/', width: 1_000, height: 1_000 });
+  const document = window.document as unknown as Document;
+  const host = document.createElement('div');
+  document.body.append(host);
+  composer = createComposer({ document, host, onSubmit: async () => true, attachments: seam });
+  composer.open(ANCHOR);
+
+  (composer.element.querySelector('[data-fruitback-attach-page]') as HTMLButtonElement).click();
+  const file = async () => {
+    for (let tries = 0; tries < 50; tries += 1) {
+      const found = composer?.element.querySelector('.fruitback-composer-file');
+      if (found !== null && found !== undefined) return found;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    return undefined;
+  };
+  const shown = await file();
+
+  assert.equal(shown?.getAttribute('data-fruitback-file'), 'refused');
+  assert.equal(shown?.querySelector('.fruitback-composer-file-name')?.textContent, 'page.png');
+  assert.match(shown?.textContent ?? '', /Too large/);
+  assert.doesNotMatch(shown?.textContent ?? '', /not taken/);
+  assert.equal(uploads, 0, 'a file too large went to the worker');
+}

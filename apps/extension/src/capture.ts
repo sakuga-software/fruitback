@@ -86,7 +86,10 @@ async function take(
   let picture = png;
   let type: CapturedFile['type'] = 'image/png';
   if (png.size > MAX_ATTACHMENT_BYTES.image && toJpeg !== undefined) {
-    picture = await toJpeg(png);
+    const jpeg = await jpegOrNothing(toJpeg, png);
+    // A JPEG that fails leaves the PNG, over the limit: it is said too large, with its size (FRU-338).
+    if (jpeg === undefined) return { tooLarge: { name, size: png.size } };
+    picture = jpeg;
     type = 'image/jpeg';
   }
   const named = type === 'image/jpeg' ? name.replace(/\.png$/, '.jpg') : name;
@@ -94,6 +97,21 @@ async function take(
   const bytes = new Uint8Array(await picture.arrayBuffer());
 
   return { name: named, type, size: bytes.byteLength, base64: base64Of(bytes) };
+}
+
+/**
+ * The JPEG of a PNG over the limit, or `undefined` when the browser fails to make it (an
+ * `OffscreenCanvas` with no 2D context, a picture it cannot decode). The PNG was taken: only its size
+ * keeps it from the note, and the widget must say that, not « not taken » (FRU-338).
+ */
+async function jpegOrNothing(toJpeg: (picture: Blob) => Promise<Blob>, png: Blob): Promise<Blob | undefined> {
+  try {
+    return await toJpeg(png);
+  } catch (error) {
+    console.warn('[fruitback] the JPEG of a capture failed', error);
+
+    return undefined;
+  }
 }
 
 /** The base64 of bytes, by pieces: a spread of megabytes into `String.fromCharCode` overflows the stack. */

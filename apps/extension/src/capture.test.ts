@@ -158,6 +158,21 @@ describe('a capture over the limit of the worker (FRU-332)', () => {
     assert.deepEqual(await capture(undefined, 'https://acme.dev'), { tooLarge: { name: 'page.png', size: LIMIT + 1 } });
   });
 
+  it('is answered as too large, with the size of the PNG, when the JPEG fails (FRU-338)', async () => {
+    for (const toJpeg of [
+      async () => {
+        throw new Error('no 2d context');
+      },
+      () => Promise.reject(new DOMException('The source image could not be decoded.', 'InvalidStateError')),
+    ]) {
+      const { capture } = harness({ captureTab: async () => huge, toJpeg });
+
+      assert.deepEqual(await capture(undefined, 'https://acme.dev'), {
+        tooLarge: { name: 'page.png', size: LIMIT + 1 },
+      });
+    }
+  });
+
   it('keeps a PNG of exactly the limit as a PNG, and makes no JPEG of it', async () => {
     let jpegs = 0;
     const { capture } = harness({
