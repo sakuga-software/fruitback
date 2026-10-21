@@ -17,7 +17,9 @@ it changes who is shown the feedback and never who may fetch it.
   its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
   reads `401`. The page shows no pin and no reason, so the popup asks the same read and says so
   (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
-  line. The probe was measured from an extension page with **no** host permission on the worker,
+  line. A `401` that also says `canWrite: false` is a site whose notes are « Members only »
+  (FRU-330): the popup says that private mode can send no note there, and how an admin opens the
+  site (« Anyone on the page »). The probe was measured from an extension page with **no** host permission on the worker,
   because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
   FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
   private-mode client can stay `public` beside a team-mode one.

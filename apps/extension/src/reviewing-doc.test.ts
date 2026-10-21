@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { READ_NEEDS_SESSION } from './read-probe.ts';
+import { NOTES_NEED_SESSION, READ_NEEDS_SESSION } from './read-probe.ts';
 import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 
 /**
@@ -130,6 +130,11 @@ describe('the guide quotes the popup this extension renders', () => {
   it('quotes the line the popup writes for a worker that wants a session (FRU-66)', () => {
     assert.ok(guide.includes(`\`${READ_NEEDS_SESSION}\``), 'the guide does not quote the line of the popup');
     assert.ok(popup.includes('READ_NEEDS_SESSION'), 'the popup no longer writes that line');
+  });
+
+  it('quotes the line the popup writes for a site whose notes are « Members only » (FRU-330)', () => {
+    assert.ok(guide.includes(`\`${NOTES_NEED_SESSION}\``), 'the guide does not quote the line of the popup');
+    assert.ok(popup.includes('NOTES_NEED_SESSION'), 'the popup no longer writes that line');
   });
 
   it('names the options page controls it walks somebody through', () => {

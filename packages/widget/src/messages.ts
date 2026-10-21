@@ -27,6 +27,10 @@ export const ENGLISH = {
   'launch.label': 'Leave feedback',
   // The launch button while the session of the extension has ended (FRU-315): it opens the sign-in.
   'launch.signIn': 'Sign in to leave notes',
+  // The launch button on a site whose notes are « Members only », for a reader with no session
+  // (FRU-330), and what a press of it says. No note starts there.
+  'launch.closed': 'Notes from members only',
+  'launch.closedSentence': 'Only members of this site leave notes here. Ask its team to invite you.',
   'widget.label': 'Fruitback feedback',
   // The banner of a capture, in the dark capsule (FRU-258, FRU-303). `capture.bannerTouch` is the
   // same sentence on a touch screen, which has no Escape key and no arrows (FRU-157): it then stands

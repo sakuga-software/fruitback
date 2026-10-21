@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
-import { MODES_GUIDE, READ_NEEDS_SESSION, probeRead } from '../../src/read-probe.ts';
+import { MODES_GUIDE, NOTES_NEED_SESSION, READ_NEEDS_SESSION, probeRead } from '../../src/read-probe.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
@@ -776,13 +776,15 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
   if (site.mode !== 'private' || !site.enabled) return line;
 
   void probeRead(site, pageUrl, { fetch: (url, init) => fetch(url, init) }).then((answer) => {
-    if (answer !== 'wants-a-session') return;
+    if (answer !== 'wants-a-session' && answer !== 'members-only') return;
 
     const guide = element('a', t('Which mode can read it'));
     guide.href = MODES_GUIDE;
     guide.target = '_blank';
     guide.rel = 'noreferrer';
-    line.append(`${t(READ_NEEDS_SESSION)} `, guide);
+    // FRU-330: a site whose notes are « Members only » refuses the notes of private mode too.
+    const sentence = answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION;
+    line.append(`${t(sentence)} `, guide);
   });
 
   return line;

@@ -130,6 +130,13 @@ with a link to [the three modes](modes.md). Private mode carries no session, so 
 worker's side: read `public` for that client, or use team mode. The popup says nothing when the
 worker is down or slow, because it did not measure why.
 
+**If a private-mode site takes no note**, the site is « Members only » (FRU-330), the default of a new
+site of the console: the popup says
+`This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.`
+The widget offers no note there. An admin of the site adds its address again on the Sites screen of
+the console with « Anyone on the page » (the site keeps its notes and its id), or the reviewer
+connects the browser and uses team mode.
+
 **A team-mode endpoint must be `https`, or loopback for the dev loop** — a session is a bearer
 credential and it does not cross plain `http`, so the popup refuses the entry rather than storing one
 that would be shown as **On** and refuse every call. **Private mode accepts plain `http://`**, and

@@ -433,7 +433,9 @@ export function init(options: FruitbackOptions): Fruitback {
   const destinations = createOfferedDestinations();
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
   // And whether it takes several notes in one request (FRU-124).
-  const readerIdentity: ReaderIdentity = { identified: false, canReply: false };
+  const readerIdentity: ReaderIdentity = { identified: false, canReply: false, canWrite: true };
+  /** The launch button offers no note (FRU-330): see `closeNotesIfRefused`. */
+  let notesClosed = false;
   // FRU-299: a list outside the page, told when to read the notes again. A listener that throws is
   // the list's problem, never the page's.
   const notesWatchers = new Set<(change: NotesChange) => void>();
@@ -473,6 +475,7 @@ export function init(options: FruitbackOptions): Fruitback {
     lastReadAt = Date.now();
 
     return reader().then((outcome) => {
+      closeNotesIfRefused();
       if (outcome === 'read') {
         readState = 'read';
         composer.identityChanged();
@@ -488,6 +491,24 @@ export function init(options: FruitbackOptions): Fruitback {
       restoreTyping();
     });
   };
+
+  /**
+   * FRU-330: on a site whose notes are « Members only », a reader with no session is offered no note.
+   * A host that signs in (the extension) offers its sign-in instead, through `signedOut`. What is
+   * being written is not touched: a draft stays in its store, and an open composer stays open.
+   */
+  function closeNotesIfRefused(): void {
+    if (options.onSignIn !== undefined) return;
+    const closed = !readerIdentity.canWrite;
+    if (closed === notesClosed) return;
+    notesClosed = closed;
+    host.closeNotes(
+      closed
+        ? { label: translator.text('launch.closed'), sentence: translator.text('launch.closedSentence') }
+        : undefined,
+    );
+    sidebar.refresh();
+  }
 
   /**
    * While no read answered for this page and the last one failed (FRU-316), read again every 30 s,
@@ -726,6 +747,8 @@ export function init(options: FruitbackOptions): Fruitback {
     below: (id) => overlay.below(id),
     // The dock stands aside while the list is open, so the list holds the way to a new note.
     leave: { label: options.label ?? translator.text('launch.label'), onLeave: () => host.start() },
+    // FRU-330: no way to a new note from the list where the worker takes none.
+    closed: () => notesClosed,
     // « Show pins on the page » (FRU-308): the switch hides them while the list is open.
     pins: { show: (on) => overlay.showPins(on) },
     readState: () => (ended ? 'signed-out' : readState),
@@ -817,6 +840,8 @@ export function init(options: FruitbackOptions): Fruitback {
       }
       // Already choosing: what was asked is on the page.
       if (host.capturing()) return true;
+      // No note can start here (FRU-330): the launch button says why.
+      if (notesClosed) return false;
       // A composer that shows « sent » or « kept » is not being written in: it closes. Any other
       // open composer holds somebody's typing.
       if (!composer.element.hidden) {
@@ -991,6 +1016,9 @@ function createReader(
       // are correct, and blanking the page because a token expired would read as "my notes are
       // gone". Same rule as an unreachable worker below.
       if (mine !== generation) return 'stale';
+      // FRU-330: a refused read says whether a note would be refused too. Only a `401` says it: a
+      // worker that is down or slow says nothing of who writes, and changes nothing.
+      if (response.status === 401) identity.canWrite = refusesNotes(response.body) ? false : true;
       if (!response.ok) return 'failed';
 
       const body = JSON.parse(response.body) as {
@@ -1000,6 +1028,7 @@ function createReader(
         identified?: unknown;
         batch?: unknown;
         canReply?: unknown;
+        canWrite?: unknown;
       };
       if (mine !== generation) return 'stale';
 
@@ -1014,6 +1043,8 @@ function createReader(
       identity.batch = offeredBatch(body.batch);
       // The same rule (FRU-257): a reader the worker no longer lets reply gets no field.
       identity.canReply = body.canReply === true;
+      // The same rule, the other way (FRU-330): only `false` takes the note away.
+      identity.canWrite = body.canWrite !== false;
       show(body.issues);
 
       return 'read';
@@ -1023,6 +1054,17 @@ function createReader(
       return mine === generation ? 'failed' : 'stale';
     }
   };
+}
+
+/** Whether the body of a refused read says `canWrite: false` (FRU-330). A body that is not JSON says nothing. */
+function refusesNotes(body: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(body);
+
+    return typeof parsed === 'object' && parsed !== null && (parsed as { canWrite?: unknown }).canWrite === false;
+  } catch {
+    return false;
+  }
 }
 
 /** `stale`: a newer read was sent, and this one touched nothing. */
@@ -1123,7 +1165,11 @@ function feedbackUrl(options: FruitbackOptions, destination: string | undefined)
 }
 
 /** What the last read of the page said of this reader. */
-type ReaderIdentity = { identified: boolean; batch?: BatchOffer | undefined; canReply: boolean };
+/**
+ * `canWrite` (FRU-330): `false` when the worker said that it takes no note of this reader here, in a
+ * read or in the refusal of one. Absent from the answer, `true`: every worker of before took notes.
+ */
+type ReaderIdentity = { identified: boolean; batch?: BatchOffer | undefined; canReply: boolean; canWrite: boolean };
 
 /**
  * A reply under a note (FRU-257), through the transport of the host like every call. The name is
