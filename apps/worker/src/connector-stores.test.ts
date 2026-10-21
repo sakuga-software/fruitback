@@ -659,6 +659,59 @@ describe('the states of Linear as the statuses of a site (FRU-368)', () => {
     );
   });
 
+  it('reads the states again once the exceptions of the connector change, so a pin and its status agree', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    assert.equal((await acme.write('Acme: one.')).status, 201);
+    // One Kv for every request of this case, as one worker has: the states are kept between reads.
+    const kv = createMemoryKv();
+    const page = 'https://staging.acme.dev/pricing';
+    const readWith = async () =>
+      (await (
+        await callOn(
+          env,
+          'GET',
+          `/feedback?url=${encodeURIComponent(page)}&client=${acme.site.id}`,
+          {
+            origin: 'https://staging.acme.dev',
+          },
+          { kv },
+        )
+      ).json()) as Read;
+    const todo = (read: Read) => read.statuses.find((one) => one.key === `${acme.connector}:state_todo`)?.stage;
+    assert.equal(todo(await readWith()), 'todo');
+
+    const set = await callOn(
+      env,
+      'POST',
+      `${acme.base}/connectors/${acme.connector}/settings`,
+      {
+        token: acme.token,
+        body: { showComments: true, stages: { state_todo: 'done' } },
+      },
+      { kv },
+    );
+    assert.equal(set.status, 200);
+    // A new note empties the cache of the page, in the Kv of this worker; the states kept for the team
+    // went with the change of the settings.
+    const seed = seedFixture();
+    const written = await callOn(
+      env,
+      'POST',
+      '/feedback',
+      {
+        origin: 'https://staging.acme.dev',
+        body: { ...seed, note: 'Acme: two.', page: { ...seed.page, url: page }, client: { id: acme.site.id } },
+      },
+      { kv },
+    );
+    assert.equal(written.status, 201, await written.clone().text());
+    const after = await readWith();
+    assert.equal(todo(after), 'done');
+    assert.deepEqual([...new Set(after.issues.map((issue) => issue.stage))], ['done']);
+  });
+
   it('says a team that Linear did not answer for, and keeps the read of the pins', async () => {
     const env = await envWith();
     linearOf({ lin_api_the_key_of_acme: 'acme' });

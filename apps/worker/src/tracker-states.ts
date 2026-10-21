@@ -38,6 +38,24 @@ export async function rememberTrackerStates(
   }
 }
 
+/**
+ * Lets the states of one team go, so the next read asks the tracker again: what the read keeps carries
+ * the exceptions of the connector, which have just changed. A `Kv` has no delete: an empty value is no
+ * list of states, and it ends at once.
+ */
+export async function forgetTrackerStates(
+  kv: Kv | undefined,
+  connector: string,
+  team: string | undefined,
+): Promise<void> {
+  if (kv === undefined) return;
+  try {
+    await kv.set(trackerStatesKey(connector, team), '', 1);
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+  }
+}
+
 /** The states a `Kv` holds, or `undefined` for none, or for a value that is not a list of states. */
 function statesOf(value: string | undefined): TrackerState[] | undefined {
   if (value === undefined) return undefined;

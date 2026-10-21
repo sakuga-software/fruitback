@@ -50,7 +50,7 @@ import { noteConnectorCall } from './connector-health.ts';
 import { type GithubApp, readGithubRepository } from './github-connector.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
-import { rememberTrackerStates } from './tracker-states.ts';
+import { forgetTrackerStates, rememberTrackerStates } from './tracker-states.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
 import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
@@ -1022,8 +1022,18 @@ export async function handleConsoleApi(
       const settings = readConnectorSettings(await readBody(request));
       if (settings === undefined) return json(400, { error: 'invalid-settings' }, headers);
       const set = await context.accounts.setConnectorSettings(workspaceId as string, id, settings);
+      if (!set) return json(404, { error: 'not-found' }, headers);
+      // FRU-368: the states kept for the read carry the exceptions of the connector. The ones of each
+      // team its sites send to are read again at the next read, so a pin and its status keep one stage
+      // (lite review of pull request 494).
+      const teams = new Set(
+        (await context.accounts.sites(workspaceId as string)).flatMap((site) =>
+          site.destinations.flatMap((place) => (place.connector === id ? [place.teamId] : [])),
+        ),
+      );
+      for (const team of teams) await forgetTrackerStates(context.kv, id, team);
 
-      return set ? json(200, { settings }, headers) : json(404, { error: 'not-found' }, headers);
+      return json(200, { settings }, headers);
     }
 
     // The states of the teams the sites of this workspace send to through this connector: those are
