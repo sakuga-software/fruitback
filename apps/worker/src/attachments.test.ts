@@ -700,7 +700,7 @@ describe('a note of before FRU-331, with its picture (arbitration of 2026-10-21)
       content: PNG,
       createdAt: Date.now() - 60_000,
       expiresAt: Date.now() + TRANSIT_MS,
-      // Migration 0021 marks every picture of before.
+      // Migration 0023 marks every picture of before.
       beforeTransit: true,
     });
     void env;
@@ -912,7 +912,7 @@ describe('what SECURITY.md and docs/privacy.md say of the files (FRU-331)', () =
 const { opening } = databasesOfACase();
 
 for (const [index, { label, open, skip }] of DATABASES.entries()) {
-  // A case on the store takes a migrated database (FRU-339); the case on migration 0021 starts empty.
+  // A case on the store takes a migrated database (FRU-339); the case on migration 0023 starts empty.
   const openMigrated = MIGRATED_DATABASES[index]?.open ?? open;
   describe(`the files in transit in the database, on ${label} (FRU-331)`, { skip }, () => {
     const file = (id: string, more: Partial<Parameters<AttachmentStore['put']>[0]> = {}) => ({
@@ -980,7 +980,7 @@ for (const [index, { label, open, skip }] of DATABASES.entries()) {
 
     it('migrates the pictures of before: it deletes none, ends each 7 days after it runs, and the sweep takes them then', async () => {
       const database = await opening(open);
-      await migrate(database, migrationsThrough('0020_workspace_keeps_owner'));
+      await migrate(database, migrationsThrough('0022_sites_writers_default'));
       const day = 24 * 60 * 60 * 1_000;
       const now = Date.now();
       const id = (n: string) => `shot_${n.repeat(32)}`;

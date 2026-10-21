@@ -417,7 +417,7 @@ export const screenshots = pgTable(
     content_type: text('content_type').notNull().default('image/png'),
     expires_at: instant('expires_at').notNull().default(0),
     seed_id: text('seed_id'),
-    // A picture of FRU-44, marked so by migration 0021: it ends 7 days after it, and counts for
+    // A picture of FRU-44, marked so by migration 0023: it ends 7 days after it, and counts for
     // nothing in what its account holds in transit (heavy review of #427). A file of FRU-331 is false.
     before_transit: boolean('before_transit').notNull().default(false),
   },

@@ -108,7 +108,7 @@ export type StoredAttachment = {
   /** The note that took it: the id the widget gave the seed. Absent until a note names it. */
   seed?: string;
   /**
-   * A picture of FRU-44, marked so by migration 0021 (`before_transit`). It counts for nothing in
+   * A picture of FRU-44, marked so by migration 0023 (`before_transit`). It counts for nothing in
    * `heldBy` (heavy review of #427). A file of FRU-331 never has it.
    */
   beforeTransit?: true;
@@ -120,7 +120,7 @@ export type AttachmentStore = {
   get(id: string, now: number): Promise<StoredAttachment | undefined>;
   /**
    * How many files, and how many bytes, an account holds now. A picture of before (`beforeTransit`)
-   * counts for nothing: migration 0021 keeps each one 7 days, and an account that had 50 would get
+   * counts for nothing: migration 0023 keeps each one 7 days, and an account that had 50 would get
    * `transit-full` for 7 days with no file sent (heavy review of #427).
    */
   heldBy(account: string, now: number): Promise<{ files: number; bytes: number }>;
@@ -203,7 +203,7 @@ export function isAttachmentId(value: string): boolean {
   return ID.test(value);
 }
 
-/** The id of a picture of FRU-44, which the migration `0021` kept 7 days for a note on its way. */
+/** The id of a picture of FRU-44, which the migration `0023` kept 7 days for a note on its way. */
 const LEGACY_ID = /^shot_[0-9a-f]{32}$/;
 
 export function isLegacyFileId(id: string): boolean {

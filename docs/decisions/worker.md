@@ -1623,13 +1623,14 @@ an earlier migration, and writes nothing`.
   session. A token that does not verify keeps its `invalid-identity`.
 - **The read says `canWrite: false` where this reader may not write**, in a `200` and in a `401`, and
   says nothing where they may: a worker of before says nothing, and the widget offers a note.
-- **`POST /screenshot` changes nothing**: it asks for a session of the workspace on every site (FRU-44).
+- **`POST /attachments` changes nothing**: it asks for a session of the workspace on every site, as
+  `POST /screenshot` did before FRU-331.
 
 ### The guards, each planted out
 
 `visitor.test.ts` takes each guard of `app.ts` out of a copy of the module, and the case that holds
 it fails: the refusal of a note with no session, `canWrite` in the refusal of a read, the check of
-`verified.session` in `writesWith`, and the session that `POST /screenshot` asks for. The account suite plants three violations of the store: a new
+`verified.session` in `writesWith`, and the session that `POST /attachments` asks for. The account suite plants three violations of the store: a new
 site opened to anyone, a site closed again when a caller names no `writers`, and a site whose
 `writers` never change. By hand, on 2026-10-21: `clientOf` without the visibility fails the table of
 `accounts.test.ts` and four cases of `visitor.test.ts`.
@@ -3982,7 +3983,7 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   file for a member or a page. A file that no note took is no file of a delivery, and answers `404`
   even signed.
 - **The table keeps its name, `screenshots`.** A rename is a prompt of `drizzle-kit` that nothing
-  answers in a script, and the name costs nothing. Its migration `0021` adds the columns, then one
+  answers in a script, and the name costs nothing. Its migration `0023` adds the columns, then one
   statement that is not generated (its header says which) changes the rows of FRU-44: each one
   ends 7 days after it, and is marked `before_transit`.
 - **A picture of before counts for nothing in what an account holds** (`heldBy`, heavy review of

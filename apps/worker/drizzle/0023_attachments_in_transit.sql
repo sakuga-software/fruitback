@@ -1,5 +1,6 @@
--- FRU-331. The table of the pictures of FRU-44 holds the files of the notes in transit, on their way
--- to the ticket of the tracker: Fruitback stores no file (decision of 2026-10-20 on FRU-198).
+-- FRU-331, after 0021 and 0022 of FRU-330. The table of the pictures of FRU-44 holds the files of
+-- the notes in transit, on their way to the ticket of the tracker: Fruitback stores no file
+-- (decision of 2026-10-20 on FRU-198).
 --
 -- drizzle-kit wrote every statement of this file but the last one, which moves no table and changes
 -- the rows that were kept before. **It deletes nothing** (arbitration of 2026-10-21 on the reviews of

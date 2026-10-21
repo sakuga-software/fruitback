@@ -922,9 +922,9 @@ site read by `members`, a read with no session answers `401`
   A token that a site signs is no session, and is refused for a write where a read takes it
   (test:`takes no token that a site signs as a session, and sees it taken when the check is out`).
   The refusal of a read says `canWrite: false`, so the widget offers no note that would be refused:
-  one bit, which a page could learn from a `POST` anyway. `POST /screenshot` asked for a session of
-  the workspace on every site already (FRU-44), and still does
-  (test:`is refused with no session, whoever may leave a note, and kept for a member`).
+  one bit, which a page could learn from a `POST` anyway. `POST /attachments`, which replaced
+  `POST /screenshot` (FRU-331), asks for a session of the workspace on every site
+  (test:`is refused with no session, whoever may leave a note, and passes the guard for a member`).
 - **« Anyone on the page » (`writers: anyone`): a note sent with no session is kept there**, as a
   claim, as on every site that everyone reads: its sender cannot read it back, and the members find
   it, in the worker or in the tracker of the site

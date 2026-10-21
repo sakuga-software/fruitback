@@ -166,7 +166,13 @@ describe('« Still wrong » in Linear (FRU-294)', () => {
 describe('the files of a note, in Linear (FRU-331)', () => {
   afterEach(() => mock.restoreAll());
 
-  const POLICY = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' } as const;
+  const POLICY = {
+    showComments: true,
+    identitySecret: undefined,
+    read: 'public',
+    write: 'public',
+    locale: 'en',
+  } as const;
   const config = { apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined };
   const files = [
     { id: 'att_1', name: 'capture.png', type: 'image/png', content: new Uint8Array([1, 2, 3]) },
