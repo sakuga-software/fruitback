@@ -205,7 +205,9 @@ export type CaptureResponseMessage = {
   channel: typeof CHANNEL;
   kind: 'capture-response';
   id: string;
-  picture?: { name: string; type: 'image/png'; size: number; base64: string };
+  picture?: { name: string; type: 'image/png' | 'image/jpeg'; size: number; base64: string };
+  /** A capture over the limit of the worker, even as a JPEG: no bytes, its name and its size. */
+  tooLarge?: { name: string; size: number };
 };
 
 /**
@@ -588,12 +590,23 @@ function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMes
   const id = parseId(data.id);
   if (id === undefined) return undefined;
   const picture = isRecord(data.picture) ? data.picture : undefined;
+  const large = isRecord(data.tooLarge) ? data.tooLarge : undefined;
+  const tooLarge =
+    large !== undefined &&
+    typeof large.name === 'string' &&
+    large.name.length > 0 &&
+    large.name.length <= 120 &&
+    typeof large.size === 'number' &&
+    Number.isSafeInteger(large.size) &&
+    large.size > 0
+      ? { name: large.name, size: large.size }
+      : undefined;
   const name = picture?.name;
   const size = picture?.size;
   const base64 = picture?.base64;
   const ok =
     picture !== undefined &&
-    picture.type === 'image/png' &&
+    (picture.type === 'image/png' || picture.type === 'image/jpeg') &&
     typeof name === 'string' &&
     name.length > 0 &&
     name.length <= 120 &&
@@ -606,7 +619,8 @@ function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMes
     channel: CHANNEL,
     kind: 'capture-response',
     id,
-    ...(ok ? { picture: { name, type: 'image/png' as const, size, base64 } } : {}),
+    ...(ok ? { picture: { name, type: picture.type as 'image/png' | 'image/jpeg', size, base64 } } : {}),
+    ...(!ok && tooLarge !== undefined ? { tooLarge } : {}),
   };
 }
 

@@ -684,8 +684,14 @@ a change when the account refuses one of them, and marks only those as known`. O
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.
 - **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
-  worker, ten seconds without an answer: the composer says « The capture was not taken », and the text
-  and the other files stay.
+  worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
+  text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a
+  JPEG of a large screen (balanced review of #433); an answer after the delay finds no request and
+  is dropped, and nothing was sent.
+- **A capture over the limit of an image (10 MB) goes as a JPEG of quality 0.85**, `page.jpg` or
+  `area.jpg`: a PNG of a whole page of a 5K screen can pass it. A JPEG still over it is answered
+  as too large, with its size and no bytes, and the composer says « Too large » rather than « not
+  taken ». The size of a PNG of a real 5K page, and of its JPEG, is not measured.
 - **The picture of the element of FRU-44 is gone from the extension**: its route, `POST /screenshot`,
   answered an address that Fruitback served, and Fruitback serves no file now. `captureScreenshot`
   stays a seam of the widget for a site that stores its own pictures.

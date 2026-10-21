@@ -309,6 +309,33 @@ describe('the answer to a capture (FRU-332)', () => {
     }
   });
 
+  it('keeps a capture as a JPEG, the fallback of a PNG over the limit', () => {
+    const jpeg = { name: 'page.jpg', type: 'image/jpeg', size: 3, base64: '/9j/' };
+    assert.deepEqual(answer(jpeg), { channel: CHANNEL, kind: 'capture-response', id: 'req1', picture: jpeg });
+  });
+
+  it('keeps a capture said too large, with its name and its size, so the widget can say why', () => {
+    const tooLarge = { name: 'page.jpg', size: 12_000_000 };
+    const said = (large: unknown) =>
+      parseBridgeMessage({ channel: CHANNEL, kind: 'capture-response', id: 'req1', tooLarge: large });
+
+    assert.deepEqual(said({ ...tooLarge, extra: 'dropped' }), {
+      channel: CHANNEL,
+      kind: 'capture-response',
+      id: 'req1',
+      tooLarge,
+    });
+    for (const large of [
+      { ...tooLarge, size: 0 },
+      { ...tooLarge, size: 1.5 },
+      { ...tooLarge, name: '' },
+      { ...tooLarge, name: 'a'.repeat(121) },
+      'big',
+    ]) {
+      assert.deepEqual(said(large), { channel: CHANNEL, kind: 'capture-response', id: 'req1' });
+    }
+  });
+
   it('reads a request of a capture with no area as the whole page, and with one as that area', () => {
     assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'capture-request', id: 'req1' }), {
       channel: CHANNEL,

@@ -210,6 +210,7 @@ export default defineBackground(() => {
       ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
       captureTab: async () => (await fetch(await browser.tabs.captureVisibleTab(windowId, { format: 'png' }))).blob(),
       crop: cropPicture,
+      toJpeg: jpegOf,
     })(area, origin);
 
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
@@ -307,9 +308,7 @@ export default defineBackground(() => {
 
         return false;
       }
-      void capture(parsed.area, senderOrigin(sender), windowId).then((picture) =>
-        sendResponse(picture === undefined ? {} : { picture }),
-      );
+      void capture(parsed.area, senderOrigin(sender), windowId).then((taken) => sendResponse(captureAnswerOf(taken)));
 
       return true;
     }
@@ -548,6 +547,26 @@ async function send(request: RelayRequest): Promise<RelayResponse> {
   });
 
   return { ok: response.ok, status: response.status, body: await response.text() };
+}
+
+/** The answer to the content script: a picture, a capture said too large, or nothing. */
+function captureAnswerOf(taken: Awaited<ReturnType<ReturnType<typeof createCapture>>>) {
+  if (taken === undefined) return {};
+  if ('tooLarge' in taken) return { tooLarge: taken.tooLarge };
+
+  return { picture: taken };
+}
+
+/** The same picture as a JPEG of quality 0.85, for a PNG over the limit of the worker (FRU-332). */
+async function jpegOf(picture: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(picture);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('no 2d context');
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  return canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
 }
 
 /** The area, cut out of the capture of the tab, as a PNG (FRU-44, FRU-332). */

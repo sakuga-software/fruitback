@@ -29,8 +29,13 @@ import {
  * The cost is that there is no `chrome.*` in here at all — hence the bridge, and hence the relay:
  * the transport this file hands the page posts a message, and the call is made where the token is.
  */
-/** How long the widget waits for a capture before it says that the capture was not taken. */
-const CAPTURE_TIMEOUT_MS = 10_000;
+/**
+ * How long the widget waits for a capture before it says that the capture was not taken. A capture
+ * can wait for the answer to a prompt of permission, then a crop and a JPEG of a large screen: ten
+ * seconds was too short for that (balanced review of #433). A late answer finds no request and is
+ * dropped.
+ */
+const CAPTURE_TIMEOUT_MS = 30_000;
 
 export default defineContentScript({
   // Registered by `background.ts` for the origins somebody turned on, never declared. See
@@ -47,12 +52,13 @@ export default defineContentScript({
 
     let widget: ReturnType<typeof init> | undefined;
     /** The captures asked for and not answered yet, by the id of the request (FRU-44). */
-    const pictures = new Map<string, (picture: CaptureResponseMessage['picture']) => void>();
+    const pictures = new Map<string, (answer: CaptureResponseMessage) => void>();
 
     /**
      * A capture of the visible page, or of an area of it, taken by the background (FRU-332): see
-     * `src/capture.ts`. Nothing comes back in ten seconds, or the background could not take it: the
-     * composer says that the capture was not taken, and the note stays.
+     * `src/capture.ts`. Nothing comes back in thirty seconds, or the background could not take it: the
+     * composer says that the capture was not taken, and the note stays. A capture over the limit of
+     * the worker comes back as a file of its size and no bytes: the composer says it is too large.
      */
     const captureVisible = (area?: {
       left: number;
@@ -67,9 +73,9 @@ export default defineContentScript({
           pictures.delete(id);
           resolve(undefined);
         }, CAPTURE_TIMEOUT_MS);
-        pictures.set(id, (picture) => {
+        pictures.set(id, (answer) => {
           clearTimeout(timer);
-          resolve(picture);
+          resolve(answer.picture ?? tooLargeOf(answer.tooLarge));
         });
         window.postMessage(
           {
@@ -271,7 +277,7 @@ export default defineContentScript({
       }
 
       if (message.kind === 'capture-response') {
-        pictures.get(message.id)?.(message.picture);
+        pictures.get(message.id)?.(message);
         pictures.delete(message.id);
 
         return;
@@ -353,3 +359,18 @@ export default defineContentScript({
     window.postMessage({ channel: CHANNEL, kind: 'ready' }, '*');
   },
 });
+
+/**
+ * A capture the background said is over the limit of the worker, as a file the composer refuses as
+ * too large (`refusalBefore` reads its size): it has no bytes, and is never sent.
+ */
+function tooLargeOf(large: CaptureResponseMessage['tooLarge']): CaptureResponseMessage['picture'] {
+  if (large === undefined) return undefined;
+
+  return {
+    name: large.name,
+    type: large.name.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
+    size: large.size,
+    base64: '',
+  };
+}

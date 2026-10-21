@@ -1,3 +1,4 @@
+import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { AccessResult } from './session.ts';
 import type { SiteConfig } from './sites.ts';
@@ -28,7 +29,13 @@ import type { SiteConfig } from './sites.ts';
 export type CaptureArea = { left: number; top: number; width: number; height: number; scale: number };
 
 /** A capture, as the widget joins it to a note. */
-export type CapturedFile = { name: string; type: 'image/png'; size: number; base64: string };
+export type CapturedFile = { name: string; type: 'image/png' | 'image/jpeg'; size: number; base64: string };
+
+/**
+ * A capture over the limit of an image of the worker (`MAX_ATTACHMENT_BYTES.image`), even as a JPEG:
+ * its name and its size, and no bytes. The widget says it is too large, rather than « not taken ».
+ */
+export type TooLargeCapture = { tooLarge: { name: string; size: number } };
 
 export type CaptureSeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
@@ -37,13 +44,18 @@ export type CaptureSeams = {
   captureTab: () => Promise<Blob>;
   /** The area of `picture`, as a PNG. */
   crop: (picture: Blob, area: CaptureArea) => Promise<Blob>;
+  /** The same picture as a JPEG, for a PNG over the limit of the worker (a page of a large screen). */
+  toJpeg?: (picture: Blob) => Promise<Blob>;
 };
 
 /** The name of a capture: a capture of the page, or of an area. */
 export const CAPTURE_NAMES = { page: 'page.png', area: 'area.png' } as const;
 
 export function createCapture(seams: CaptureSeams) {
-  return async (area: CaptureArea | undefined, origin: string | undefined): Promise<CapturedFile | undefined> => {
+  return async (
+    area: CaptureArea | undefined,
+    origin: string | undefined,
+  ): Promise<CapturedFile | TooLargeCapture | undefined> => {
     try {
       return await take(seams, area, origin);
     } catch {
@@ -53,10 +65,10 @@ export function createCapture(seams: CaptureSeams) {
 }
 
 async function take(
-  { readSite, ensureAccess, captureTab, crop }: CaptureSeams,
+  { readSite, ensureAccess, captureTab, crop, toJpeg }: CaptureSeams,
   area: CaptureArea | undefined,
   origin: string | undefined,
-): Promise<CapturedFile | undefined> {
+): Promise<CapturedFile | TooLargeCapture | undefined> {
   if (origin === undefined) return undefined;
   const site = await readSite(origin);
   if (site === undefined || !site.enabled || site.mode !== 'team') return undefined;
@@ -67,15 +79,21 @@ async function take(
   if (!access.ok) return undefined;
 
   const tab = await captureTab();
-  const picture = area === undefined ? tab : await crop(tab, area);
+  const png = area === undefined ? tab : await crop(tab, area);
+  const name = area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area;
+  // A PNG of a whole page on a large screen can pass the limit of the worker: it goes as a JPEG, and
+  // a JPEG still over it is said too large, never « not taken » (raised by the balanced of #433).
+  let picture = png;
+  let type: CapturedFile['type'] = 'image/png';
+  if (png.size > MAX_ATTACHMENT_BYTES.image && toJpeg !== undefined) {
+    picture = await toJpeg(png);
+    type = 'image/jpeg';
+  }
+  const named = type === 'image/jpeg' ? name.replace(/\.png$/, '.jpg') : name;
+  if (picture.size > MAX_ATTACHMENT_BYTES.image) return { tooLarge: { name: named, size: picture.size } };
   const bytes = new Uint8Array(await picture.arrayBuffer());
 
-  return {
-    name: area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area,
-    type: 'image/png',
-    size: bytes.byteLength,
-    base64: base64Of(bytes),
-  };
+  return { name: named, type, size: bytes.byteLength, base64: base64Of(bytes) };
 }
 
 /** The base64 of bytes, by pieces: a spread of megabytes into `String.fromCharCode` overflows the stack. */

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { type CaptureSeams, base64Of, bytesOf, createCapture, pixelsOf } from './capture.ts';
+import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -61,7 +62,8 @@ describe('a capture of the page or of an area (FRU-332)', () => {
   it('cuts the area that the person chose', async () => {
     const { capture, calls } = harness();
 
-    const taken = await capture(AREA, 'https://acme.dev');
+    const answer = await capture(AREA, 'https://acme.dev');
+    const taken = answer !== undefined && 'name' in answer ? answer : undefined;
     assert.equal(taken?.name, 'area.png');
     assert.deepEqual([...bytesOf(taken?.base64 ?? '')], [0x89, 0x50, 0x4e, 0x47, 9]);
     assert.deepEqual(calls, ['access', 'capture', 'crop']);
@@ -110,6 +112,66 @@ describe('a capture of the page or of an area (FRU-332)', () => {
     const big = new Uint8Array(200_000).map((_, index) => index % 251);
     assert.deepEqual(bytesOf(base64Of(big)), big);
     assert.equal(base64Of(new Uint8Array([0xff, 0x00, 0x7f])), '/wB/');
+  });
+});
+
+/**
+ * A capture over the limit of an image of the worker (balanced review of #433): the bridge drops a body
+ * that large, and the widget said « not taken » with no cause. It goes as a JPEG, and a JPEG still over
+ * the limit is answered as too large, with its size and no bytes.
+ */
+describe('a capture over the limit of the worker (FRU-332)', () => {
+  const LIMIT = MAX_ATTACHMENT_BYTES.image;
+  const huge = new Blob([new Uint8Array(LIMIT + 1)], { type: 'image/png' });
+  const JPEG = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 7])], { type: 'image/jpeg' });
+
+  it('goes as a JPEG when the PNG is over the limit, and the JPEG is under it', async () => {
+    const seen: number[] = [];
+    const { capture } = harness({
+      captureTab: async () => huge,
+      toJpeg: async (picture) => {
+        seen.push(picture.size);
+
+        return JPEG;
+      },
+    });
+
+    assert.deepEqual(await capture(undefined, 'https://acme.dev'), {
+      name: 'page.jpg',
+      type: 'image/jpeg',
+      size: 4,
+      base64: base64Of(new Uint8Array([0xff, 0xd8, 0xff, 7])),
+    });
+    assert.deepEqual(seen, [LIMIT + 1]);
+  });
+
+  it('is answered as too large, with its size and no bytes, when the JPEG is still over the limit', async () => {
+    const still = new Blob([new Uint8Array(LIMIT + 2)], { type: 'image/jpeg' });
+    const { capture } = harness({ crop: async () => huge, toJpeg: async () => still });
+
+    assert.deepEqual(await capture(AREA, 'https://acme.dev'), { tooLarge: { name: 'area.jpg', size: LIMIT + 2 } });
+  });
+
+  it('is answered as too large without a JPEG to fall back on', async () => {
+    const { capture } = harness({ captureTab: async () => huge });
+
+    assert.deepEqual(await capture(undefined, 'https://acme.dev'), { tooLarge: { name: 'page.png', size: LIMIT + 1 } });
+  });
+
+  it('keeps a PNG of exactly the limit as a PNG, and makes no JPEG of it', async () => {
+    let jpegs = 0;
+    const { capture } = harness({
+      captureTab: async () => new Blob([new Uint8Array(LIMIT)], { type: 'image/png' }),
+      toJpeg: async () => {
+        jpegs += 1;
+
+        return JPEG;
+      },
+    });
+    const taken = await capture(undefined, 'https://acme.dev');
+
+    assert.equal(taken !== undefined && 'type' in taken ? taken.type : undefined, 'image/png');
+    assert.equal(jpegs, 0);
   });
 });
 
