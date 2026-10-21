@@ -3,50 +3,27 @@ import {
   SEED_STAGES,
   type Seed,
   type SeedIssue,
-  canonicalizePageUrl,
   parseSeed,
   type SeedReporter,
 } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
-  type ClientDestination,
-  type ClientMap,
   type ClientPolicy,
   type ClientResolution,
   normalizeClientId,
   openReadClients,
-  originsFromClients,
   resolveClient,
 } from './clients.ts';
-import { type AccountStore, type Reach, type Role, can, readsSite } from './accounts.ts';
-import { SESSION_NOTES_PATH, handleSessionNotes } from './session-notes.ts';
-import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
-import { type Auth, authFor } from './auth.ts';
-import {
-  createWorkspaceWithPlugin,
-  handleOrganizationRoutes,
-  mailAdminInvitation,
-  oneAtATime,
-  renameWorkspaceWithPlugin,
-} from './auth-organization.ts';
+import { type AccountStore, can, readsSite } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
-import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
-import { type AdminLinks, firstAdminLines } from './first-admin.ts';
-import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
-import { handleConsoleApi } from './console-api.ts';
-import { type InstanceAdminReads, instanceFactsOf } from './instance-admin.ts';
-import { seen } from './last-seen.ts';
-import { type TxtResolver, recheckDomains } from './domain-proof.ts';
-import { handleLinearOAuth } from './linear-oauth.ts';
+import { withRenewedCookie } from './auth-routes.ts';
+import { consoleCors, isConsoleRoute } from './console-cors.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
-import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
-import { type Mailer, createTemMailer } from './mail.ts';
-import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
+import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
+import { type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import {
   type BatchAnswer,
-  type BatchMemory,
-  type CheckVerdict,
   type CreatedIssue,
   type ReplyAuthor,
   type SeedStore,
@@ -56,37 +33,63 @@ import {
   takesReplies,
 } from './store.ts';
 import { checkedOf } from './reply-text.ts';
-import { createAll } from './batch.ts';
+import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
-import { PAIR_PATH, pairPage } from './pair-page.ts';
-import { chargeRateLimit, checkRateLimit, checkReplyLimit, maxBatch } from './rate-limit.ts';
-import { cached, invalidate } from './cache.ts';
-import { type Kv, KvError, processKv } from './kv.ts';
-import { type Channel, type NoteEntry, type NoteIndex, authorOf } from './notes-index.ts';
-import {
-  postgresAccountStore,
-  postgresConnectStore,
-  postgresInstanceAdmin,
-  postgresKv,
-  postgresNoteIndex,
-  postgresAttachmentStore,
-  postgresSessionStore,
-} from './postgres-stores.ts';
-import type { ConnectStore } from './connect.ts';
-import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
+import { PAIR_PATH } from './pair-page.ts';
+import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
+import { cached } from './cache.ts';
+import { type Kv, KvError } from './kv.ts';
+import { type Channel, type NoteIndex } from './notes-index.ts';
 import { sessionStillValid } from './session-check.ts';
-import { ATTACHMENTS_PATH, type AttachmentStore, attachmentIdsOf } from './attachments.ts';
+import { ATTACHMENTS_PATH, attachmentIdsOf } from './attachments.ts';
 import { handleAttachment, legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
-import { withoutAddress } from './postgres.ts';
+import { handleConsole } from './console-routes.ts';
+import { handlePairing, handleSessionRoutes } from './session-routes.ts';
+import { CHECK_PATH, REPLY_PATH, postCheck, postReply } from './reply-routes.ts';
+import type { SessionIdentity } from './session.ts';
+import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
 import {
-  type SessionIdentity,
-  type SessionStore,
-  createPairing as openPairing,
-  redeemPairing,
-  refreshSession,
-  revokeSession,
-} from './session.ts';
+  batchOffer,
+  canonicalSeed,
+  canonicalizeRequestedPage,
+  indexed,
+  invalidatePages,
+  noteEntry,
+  optionalReporter,
+  placeOf,
+  placedAt,
+  routingFailure,
+  withoutTracker,
+} from './note-helpers.ts';
+
+import {
+  accountStoreFor,
+  attachmentStoreFor,
+  kvFor,
+  noteIndexFor,
+  sessionStoreFor,
+  storeFor,
+} from './worker-stores.ts';
+
+export type { RequestContext, Verified } from './request-context.ts';
+export { createPairingCommand } from './session-routes.ts';
+export { CHECK_LOCK_MS } from './reply-routes.ts';
+export {
+  accountStoreFor,
+  adminLinksFor,
+  announceFirstAdmin,
+  attachmentStoreFor,
+  connectStoreFor,
+  deliverPending,
+  instanceAdminFor,
+  kvFor,
+  mailerFor,
+  noteIndexFor,
+  recheckPending,
+  sessionStoreFor,
+  storeFor,
+} from './worker-stores.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
@@ -97,138 +100,6 @@ import {
  * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
  * socket, and keeps the door open if this ever moves to another runtime.
  */
-
-/**
- * Which store this process writes to (FRU-29, FRU-33).
- *
- * It was a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
- * discovered by accident — then a branch on a `fakeLinear` boolean with Linear's three credentials
- * read straight off the config. Both are gone: the provider was selected and validated at boot
- * (`stores.ts`), and this is only where it is built. SQLite (FRU-31) and GitHub (FRU-32) each
- * added an entry to the registry and nothing here.
- *
- * A dev-only store cannot win in production: `readStoreConfig` refuses it at boot rather than
- * letting the process start.
- */
-export function storeFor(config: WorkerConfig): SeedStore {
-  return config.store.create();
-}
-
-/**
- * The extension's session store, or `undefined` when this worker runs without one (FRU-42).
- *
- * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
- * never share a backend. They are in the database of the accounts (FRU-142), and in no file since
- * FRU-226.
- */
-export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresSessionStore(config.databaseUrl, config.databaseSchema);
-}
-
-/**
- * Where the requests of the extension wait for a person to approve them (FRU-238): the database of
- * the accounts, or nowhere. A worker with no accounts has nobody to approve.
- */
-export function connectStoreFor(config: WorkerConfig): ConnectStore | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresConnectStore(config.databaseUrl, config.databaseSchema);
-}
-
-/** What the links of an administrator need of this worker, or `undefined` when it signs nobody in (FRU-221). */
-export function adminLinksFor(config: WorkerConfig): AdminLinks | undefined {
-  const auth = authFor(config);
-  const accounts = accountStoreFor(config);
-  if (auth === undefined || accounts === undefined || config.consoleUrl === undefined) return undefined;
-
-  return { auth, kv: kvFor(config), owners: () => accounts.owners(), consoleUrl: config.consoleUrl };
-}
-
-/**
- * Writes the sign-in link of the first administrator in the log, on a worker that names one and whose
- * instance has no owner yet (FRU-221). `server.ts` calls it when the server listens. It never
- * rejects: the next start tries again. Its error names no token.
- */
-export async function announceFirstAdmin(
-  config: WorkerConfig,
-  log: (line: string) => void = (line) => console.log(`[fruitback] ${line}`),
-): Promise<void> {
-  const links = config.firstAdmin === undefined ? undefined : adminLinksFor(config);
-  if (config.firstAdmin === undefined || links === undefined) return;
-  try {
-    for (const line of await firstAdminLines(links, config.firstAdmin)) log(line);
-  } catch (error) {
-    console.error(
-      `[fruitback] the sign-in link of FRUITBACK_FIRST_ADMIN was not made: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */
-export function mailerFor(config: WorkerConfig): Mailer | undefined {
-  return config.mail === undefined ? undefined : createTemMailer(config.mail);
-}
-
-/** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
-export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresAccountStore(config.databaseUrl, config.databaseSchema);
-}
-
-/**
- * The configuration with the sites of every workspace as its clients, and their origins allowed.
- *
- * An empty map stays an empty map: a worker with accounts and no site yet serves no client, and an
- * `undefined` here would turn it into a single-client worker that answers anybody.
- */
-async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<Served> {
-  const clients = await accounts.clientMap();
-
-  return {
-    ...config,
-    clients,
-    allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
-    roleIn: (workspace, account) => accounts.role(workspace, account),
-    reachIn: (workspace, account) => accounts.reach(workspace, account),
-    accountActive: async (account) => {
-      const found = await accounts.account(account);
-
-      return found !== undefined && found.suspended !== true;
-    },
-    seenIn: (workspace, account) => seen(accounts, workspace, account),
-    suspendedIn: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
-  };
-}
-
-/**
- * The configuration as one request reads it: the sites of the accounts are its clients, each with
- * the places it can send to, and the role of a person in a workspace can be asked (FRU-123).
- */
-type Served = WorkerConfig & {
-  clients?: ClientMap;
-  /** Absent on a worker with no accounts: nobody is a member of anything there. */
-  roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
-  /** The role and the sites of a person in a workspace (FRU-250). Absent on a worker with no accounts. */
-  reachIn?: (workspace: string, account: string) => Promise<Reach | undefined>;
-  /**
-   * Whether an account is still there (FRU-238), and not suspended (FRU-281). Absent on a worker with
-   * no accounts.
-   */
-  accountActive?: (account: string) => Promise<boolean>;
-  /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
-  seenIn?: (workspace: string, account: string) => Promise<void>;
-  /** Whether an administrator of the instance suspended a workspace (FRU-282). Absent on a worker with no accounts. */
-  suspendedIn?: (workspace: string) => Promise<boolean>;
-};
-
-/** The client as it routes when its notes go to this place, and not to its first one. */
-function placedAt(client: ClientConfig, place: ClientDestination): ClientConfig {
-  const { teamId: _team, projectId: _project, ...rest } = client;
-
-  return {
-    ...rest,
-    connector: place.connector,
-    ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
-    ...(place.projectId === undefined ? {} : { projectId: place.projectId }),
-  };
-}
 
 /**
  * Whether the caller is a person who may see the tracker of this client (FRU-123).
@@ -315,24 +186,6 @@ async function notesOfReader(
 }
 
 /**
- * A note as a guest reads it (FRU-250): no reference in the tracker, no address of the issue, and no
- * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
- */
-function withoutTracker<
-  T extends { id: string; identifier: string; url?: string; attachments?: SeedIssue['attachments'] },
->(issue: T, seed: string): T {
-  const { url: _url, attachments, ...rest } = issue;
-
-  // The address of a file is the tracker's (FRU-331): a guest reads its name only.
-  return {
-    ...rest,
-    ...(attachments === undefined ? {} : { attachments: attachments.map(({ name }) => ({ name })) }),
-    id: seed,
-    identifier: seed,
-  } as T;
-}
-
-/**
  * Whether the worker would sign a note of this caller with an identity it verified (FRU-112).
  *
  * The widget asks for no name then: a typed one would be replaced. It is the answer `attributionFor`
@@ -373,104 +226,6 @@ export function writesWith(policy: Pick<ClientPolicy, 'write'>, verified: Verifi
   if (policy.write === 'public') return true;
 
   return verified?.ok === true && verified.session === true;
-}
-
-/**
- * One pass over the notes that wait to be sent to the address a workspace connected (FRU-122).
- *
- * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
- * socket: it reads the same configuration as a request does.
- */
-/**
- * Asks the DNS again for the proofs of the domains that were not asked for `RECHECK_MS` (FRU-103).
- * `server.ts` calls it on a timer, like `deliverPending`.
- */
-export async function recheckPending(env: WorkerEnv, resolve: TxtResolver, now?: () => number): Promise<void> {
-  const config = readConfig(env);
-  const accounts = config.ok ? accountStoreFor(config.config) : undefined;
-  if (!config.ok || accounts === undefined) return;
-
-  await recheckDomains(accounts, resolve, (now ?? Date.now)());
-}
-
-export async function deliverPending(
-  env: WorkerEnv,
-  send: Send,
-  now?: () => number,
-  /** The accounts a test opened, as `RequestContext.accounts`. Absent, the ones of the environment. */
-  held?: AccountStore,
-): Promise<void> {
-  const config = readConfig(env);
-  if (!config.ok) return;
-  const accounts = held ?? accountStoreFor(config.config);
-  if (accounts === undefined) return;
-
-  const attachments = attachmentStoreFor(config.config);
-  await deliverDue({
-    accounts,
-    secretsKey: config.config.secretsKey,
-    send,
-    ...(attachments === undefined ? {} : { attachments }),
-    ...(config.config.publicUrl === undefined ? {} : { publicUrl: config.config.publicUrl }),
-    ...(now === undefined ? {} : { now }),
-  });
-}
-
-/** What the transport knows and the request itself cannot say. */
-export type RequestContext = {
-  /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
-  clientIp: string;
-  /**
-   * The store, built **once by the transport** rather than per request.
-   *
-   * This began as `storeFor(config)` inside the two handlers, which was invisible for Linear and the
-   * in-memory one — both are stateless closures — and would have opened a SQLite connection per
-   * request the moment FRU-31 landed. A refactor that exists to let a store hold a resource must
-   * not reconstruct it on every call.
-   *
-   * Optional because `handleRequest` answers `/health` and the misconfigured diagnostic *before*
-   * there is a validated config to build a store from, so the transport cannot always have one. When
-   * it is absent the fallback builds one, which is also what a test driving this directly wants: a
-   * fresh store per case.
-   */
-  store?: SeedStore;
-  /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh file per case. */
-  sessionStore?: SessionStore;
-  /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
-  accounts?: AccountStore;
-  /** Same reason, for the requests of the extension that the console approves (FRU-238). */
-  connectStore?: ConnectStore;
-  /** What sends the sign-in links (FRU-98). A suite hands over one that keeps what it was given. */
-  mailer?: Mailer;
-  /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
-  resolveTxt?: TxtResolver;
-  /**
-   * better-auth, for a worker that has it on (FRU-147). Absent, the handler takes the one instance of
-   * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
-   */
-  auth?: Auth | Promise<Auth>;
-  /** Where the files of the notes wait for their tracker (FRU-331). A suite hands over one in memory. */
-  attachments?: AttachmentStore;
-  /**
-   * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
-   * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
-   */
-  kv?: Kv;
-  /** The index of the notes (FRU-237). A suite hands over one on PGlite. */
-  noteIndex?: NoteIndex;
-  /** What the administrator of the instance reads (FRU-261). A suite hands over one on PGlite. */
-  instanceAdmin?: InstanceAdminReads;
-};
-
-/**
- * Where this worker keeps the state of its rate limiter and of its read cache (FRU-67).
- *
- * **A worker with a database keeps it there**, so its replicas share one limit; a worker without one
- * keeps it in the memory of the process, as before. No variable chooses: the database is the one
- * store that replicas share. One instance for the process either way.
- */
-export function kvFor(config: Pick<WorkerConfig, 'databaseUrl' | 'databaseSchema'>): Kv {
-  return config.databaseUrl === undefined ? processKv() : postgresKv(config.databaseUrl, config.databaseSchema);
 }
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -620,240 +375,13 @@ async function routed(
   }
 
   if (consoleRoute && accounts !== undefined) {
-    const sessions = context.sessionStore ?? sessionStoreFor(served);
-    if (sessions === undefined || served.identitySecret === undefined)
-      return json(404, { error: 'not-found' }, cors.headers);
-    // better-auth, when it is on (FRU-147): the instance of the process, built at boot.
-    const auth = context.auth ?? authFor(served);
-    const mailer = context.mailer ?? mailerFor(served);
-
-    try {
-      // Which ways the routes of better-auth offer (FRU-135, FRU-147): the console asks before it
-      // draws a button. `betterAuth` is absent when it is off: then nobody signs in to the console.
-      // The two booleans of the path of before are gone with it (FRU-150).
-      if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
-        return json(
-          200,
-          auth === undefined
-            ? {}
-            : {
-                betterAuth: {
-                  email: mailer !== undefined,
-                  github: served.authGithub !== undefined,
-                  google: served.google !== undefined,
-                },
-              },
-          cors.headers,
-        );
-      }
-
-      // The routes of better-auth, and the worker's own beside them (FRU-147). A worker that has it
-      // off answers `404` there, as before.
-      if (isAuthRoute(pathname)) {
-        if (auth === undefined || served.consoleUrl === undefined)
-          return json(404, { error: 'not-found' }, cors.headers);
-        try {
-          const routes = {
-            auth,
-            accounts,
-            mailer,
-            kv,
-            consoleUrl: served.consoleUrl,
-            clientIp: context.clientIp,
-            trackIp: served.authTrackIp,
-          };
-          // The routes of the organization plugin first, each under its rule (FRU-149). A path of the
-          // plugin that has none answers `404` there, and never reaches the list below.
-          const answer =
-            (await handleOrganizationRoutes(request, pathname, { ...routes, sessions }, cors.headers)) ??
-            (await handleAuthRoutes(request, pathname, routes, cors.headers));
-          if (answer !== undefined) return answer;
-        } catch (error) {
-          // A `Kv` that stopped is not better-auth: it is answered above, as the limiter's outage.
-          if (error instanceof StoreError || error instanceof KvError) throw error;
-          // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
-          // a database that does not answer (FRU-144). Said in the log, with no address and no token.
-          const said = error instanceof Error ? error.message : String(error);
-          console.error(
-            `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? said : withoutAddress(said, served.databaseUrl)}`,
-          );
-
-          return json(502, { error: 'auth-unavailable' }, cors.headers);
-        }
-      }
-
-      // The way to Linear and back, for a workspace that connects it (FRU-134). Navigations too.
-      if (
-        served.linearOAuth !== undefined &&
-        served.publicUrl !== undefined &&
-        served.consoleUrl !== undefined &&
-        served.secretsKey !== undefined
-      ) {
-        const viaLinear = await handleLinearOAuth(request, pathname, {
-          oauth: served.linearOAuth,
-          publicUrl: served.publicUrl,
-          consoleUrl: served.consoleUrl,
-          accounts,
-          kv,
-          secretsKey: served.secretsKey,
-        });
-        if (viaLinear !== undefined) return viaLinear;
-      }
-
-      // The extension asks, the console approves (FRU-238): a request, and the browsers of the account.
-      const connect = context.connectStore ?? connectStoreFor(served);
-      if (auth !== undefined && served.consoleUrl !== undefined && connect !== undefined) {
-        const connected = await handleConsoleConnect(
-          request,
-          pathname,
-          {
-            connect,
-            accounts,
-            cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
-            consoleUrl: served.consoleUrl,
-          },
-          cors.headers,
-        );
-        if (connected !== undefined) return connected;
-      }
-
-      const answer = await handleConsoleApi(
-        request,
-        pathname,
-        {
-          accounts,
-          sessions,
-          ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
-          kv,
-          ...(noteIndex === undefined ? {} : { noteIndex }),
-          ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
-          ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
-          ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
-          // The administrator of the instance (FRU-261): the database of the accounts, and this configuration.
-          instance: {
-            reads: context.instanceAdmin ?? instanceAdminFor(served),
-            facts: instanceFactsOf(served, { auth: auth !== undefined, email: mailer !== undefined }),
-            // The writes in a workspace (FRU-283): one at a time with the plugin, and the message of
-            // an invitation as a member's, when this worker sends mail.
-            writes: {
-              oneAtATime,
-              ...(mailer === undefined || served.consoleUrl === undefined
-                ? {}
-                : {
-                    mailInvitation: (invitation) =>
-                      mailAdminInvitation(
-                        { kv, mailer, consoleUrl: served.consoleUrl as string, accounts },
-                        invitation,
-                      ),
-                  }),
-            },
-          },
-          // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
-          ...(auth === undefined || served.consoleUrl === undefined
-            ? {}
-            : {
-                cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
-                consoleUrl: served.consoleUrl,
-                // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
-                createWorkspace: async (each: Request, name: string) =>
-                  createWorkspaceWithPlugin(await auth, each.headers, name),
-                // And renamed by it (FRU-236).
-                renameWorkspace: async (each: Request, workspace: string, name: string) =>
-                  renameWorkspaceWithPlugin(await auth, each.headers, workspace, name),
-              }),
-        },
-        cors.headers,
-      );
-
-      return answer ?? json(404, { error: 'not-found' }, cors.headers);
-    } catch (error) {
-      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
-      // The cookie of a call of the console is read by better-auth (FRU-147): the same answer as on
-      // its own routes when it does not answer.
-      if (error instanceof AuthUnavailable) {
-        console.error(
-          `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? error.message : withoutAddress(error.message, served.databaseUrl)}`,
-        );
-
-        return json(502, { error: 'auth-unavailable' }, cors.headers);
-      }
-      throw error;
-    }
+    return handleConsole(request, pathname, { served, context, accounts, kv, noteIndex, cors });
   }
 
-  if (pairing) {
-    // It exists only where the sessions do, like the three routes below: a worker without the
-    // extension does not advertise the page.
-    if (context.sessionStore === undefined && !hasSessions(served)) {
-      return json(404, { error: 'not-found' });
-    }
-    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' });
-
-    return pairPage();
-  }
+  if (pairing) return handlePairing(request, served, context);
 
   if (session) {
-    try {
-      // FRU-306: the notes of a whole site, for the side panel. The session is read again in the store.
-      if (pathname === SESSION_NOTES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        return await handleSessionNotes(request, {
-          accounts,
-          noteIndex,
-          session: () => sessionWrites(request, served, context),
-          headers: cors.headers,
-        });
-      }
-
-      // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
-      if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        // FRU-255: the write reads the session again in the store, through `sessionWrites`, the
-        // check of every route that writes for an extension.
-        const writes = { kv, session: () => sessionWrites(request, served, context) };
-
-        return await handleSessionSites(
-          request,
-          accounts,
-          served.identitySecret,
-          cors.headers,
-          undefined,
-          noteIndex,
-          writes,
-        );
-      }
-
-      // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
-      // person can approve: accounts, a console, and the key that signs the tokens.
-      const connect = context.connectStore ?? connectStoreFor(served);
-      if (
-        accounts !== undefined &&
-        connect !== undefined &&
-        served.identitySecret !== undefined &&
-        served.consoleUrl !== undefined
-      ) {
-        const connected = await handleExtensionConnect(
-          request,
-          pathname,
-          {
-            connect,
-            accounts,
-            kv,
-            clientIp: context.clientIp,
-            secret: served.identitySecret,
-            consoleUrl: served.consoleUrl,
-          },
-          cors.headers,
-        );
-        if (connected !== undefined) return connected;
-      }
-
-      return await handleSession(request, pathname, served, context, cors.headers);
-    } catch (error) {
-      // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
-      // seed path's outage rather than as a bare `500`, so the extension can tell "retry later" from
-      // "this request was wrong" — and so the answer carries the CORS headers it needs to read it.
-      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
-      throw error;
-    }
+    return handleSessionRoutes(request, pathname, { served, context, accounts, kv, noteIndex, cors, sessionWrites });
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.
@@ -905,26 +433,46 @@ async function routed(
   }
 
   const store = storeOfRequest();
+  // The checks of the caller that the routes under a note call, which stay in this file.
+  const checks = { routeFor, replyAuthorFor, endedSession, sessionWrites, writerIn, hidesTracker, REPLY_LENGTH };
 
   if (replyTo !== undefined) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
 
-    return postReply(request, replyTo, served, watchedStore(store, accounts), kv, cors.headers, {
-      clientIp: context.clientIp,
-      accounts,
-      stillWrites: () => sessionWrites(request, served, context).then((session) => session !== undefined),
-    });
+    return postReply(
+      request,
+      replyTo,
+      served,
+      watchedStore(store, accounts),
+      kv,
+      cors.headers,
+      {
+        clientIp: context.clientIp,
+        accounts,
+        stillWrites: () => sessionWrites(request, served, context).then((session) => session !== undefined),
+      },
+      checks,
+    );
   }
 
   if (checkOf !== undefined) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
 
-    return postCheck(request, checkOf, served, watchedStore(store, accounts), kv, cors.headers, {
-      clientIp: context.clientIp,
-      accounts,
-      noteIndex,
-      context,
-    });
+    return postCheck(
+      request,
+      checkOf,
+      served,
+      watchedStore(store, accounts),
+      kv,
+      cors.headers,
+      {
+        clientIp: context.clientIp,
+        accounts,
+        noteIndex,
+        context,
+      },
+      checks,
+    );
   }
 
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
@@ -942,9 +490,6 @@ async function routed(
         context,
       );
 }
-
-/** `POST /feedback/<id>/replies`: the id of the issue of a note, as a read answers it (FRU-257). */
-const REPLY_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/replies$/;
 
 /** The longest reply, in characters. A longer one is refused, never cut. */
 export const REPLY_LENGTH = 2000;
@@ -996,429 +541,6 @@ async function replyAuthorFor(
     author: { kind: 'member', name: account.name ?? account.email, workspace: membership.workspace.name },
     account: verified.account === true,
   };
-}
-
-/**
- * `POST /feedback/<id>/replies?client=<site>` with `{ url, body, name? }` (FRU-257).
- *
- * The note must be one that a read of that page answers for that site: the id alone names an issue
- * of a tracker, which can be of another site. The reply goes to the place where the note was found,
- * and the page is read again by everybody after it.
- */
-async function postReply(
-  request: Request,
-  issue: string,
-  config: Served,
-  store: SeedStore,
-  kv: Kv,
-  corsHeaders: Record<string, string>,
-  context: { clientIp: string; accounts: AccountStore | undefined; stillWrites: () => Promise<boolean> },
-): Promise<Response> {
-  const text = await readBoundedText(request);
-  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    return json(400, { error: 'invalid-json' }, corsHeaders);
-  }
-  const {
-    url: requested,
-    body,
-    name,
-  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
-  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
-  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
-  if (typeof body !== 'string' || body.trim() === '' || [...body].length > REPLY_LENGTH) {
-    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
-  }
-  if (name !== undefined && typeof name !== 'string') return json(400, { error: 'invalid-name' }, corsHeaders);
-
-  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
-  if (!route.ok) return routingFailure(route, corsHeaders);
-
-  if (!route.policy.showComments) return json(403, { error: 'replies-not-taken' }, corsHeaders);
-
-  try {
-    // The accounts are read here: a store that does not answer is `502`, as for the reply itself.
-    const who = await replyAuthorFor(request, route.policy, route.client?.workspace, name, context.accounts);
-    if (!who.ok) return json(who.status, { error: 'identity-required', reason: who.reason }, corsHeaders);
-    if (who.account) {
-      const ended = await endedSession(context.stillWrites, corsHeaders);
-      if (ended !== undefined) return ended;
-    }
-
-    const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
-    for (const target of targets) {
-      const found = await store.findForPage({ url, clientId }, target, route.policy);
-      if (!found.some((each) => each.id === issue)) continue;
-      if (!(await takesReplies(store, target))) return json(403, { error: 'replies-not-taken' }, corsHeaders);
-      // Counted once the reply is one the worker would take: a refusal costs no reply of the minute.
-      if (who.author.kind === 'visitor' && !(await checkReplyLimit(kv, context.clientIp))) {
-        return json(429, { error: 'rate-limited' }, corsHeaders);
-      }
-      const comment = await store.reply?.({ issue, clientId }, { body, author: who.author }, target, route.policy);
-      if (comment === undefined) break;
-      await invalidatePages(kv, [url]);
-
-      return json(201, { comment }, corsHeaders);
-    }
-
-    return json(404, { error: 'not-found' }, corsHeaders);
-  } catch (error) {
-    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
-    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
-    throw error;
-  }
-}
-
-/** `POST /feedback/<id>/check`: a verdict on a note that the team marked done (FRU-294). */
-const CHECK_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/check$/;
-
-const VERDICTS: readonly CheckVerdict[] = ['fixed', 'wrong'];
-
-/** How long one verdict holds its note against a second one, at most: a worker that dies while it writes (FRU-294). */
-export const CHECK_LOCK_MS = 15_000;
-
-/**
- * The account that left a note, as the index keeps it (FRU-294). An index that does not answer is a
- * store that does not answer: `502`, and the person tries again. Never « nobody », which would refuse
- * the author as if they were somebody else.
- */
-async function indexedAuthorOf(
-  index: NoteIndex | undefined,
-  workspace: string,
-  site: string,
-  seed: string,
-): Promise<string | undefined> {
-  if (index === undefined) return undefined;
-  try {
-    return (await index.authors(workspace, site, [seed])).get(seed);
-  } catch (error) {
-    throw new StoreError(
-      `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/**
- * `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` (FRU-294).
- *
- * « Looks fixed » writes a marked reply under the note, and the note stays done. « Still wrong »
- * writes the marked reply, then reopens the note in its store. **The store stays the one source of the
- * stage and of the verdict**: nothing is kept here.
- *
- * - **Who.** A session of the extension, read again in the store as for every write (2026-10-14),
- *   of a person who reads the site now. And of them, the person who left the note (the index keeps
- *   their account) or a role that manages the sites. Anybody else of the workspace: `403`.
- * - **When.** Only on a note that its store says is `ripe` now (`409 not-done`), and not confirmed
- *   already (`409 already-checked`).
- */
-async function postCheck(
-  request: Request,
-  issue: string,
-  config: Served,
-  store: SeedStore,
-  kv: Kv,
-  corsHeaders: Record<string, string>,
-  context: {
-    clientIp: string;
-    accounts: AccountStore | undefined;
-    noteIndex: NoteIndex | undefined;
-    context: RequestContext;
-  },
-): Promise<Response> {
-  const text = await readBoundedText(request);
-  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, corsHeaders);
-  let payload: unknown;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    return json(400, { error: 'invalid-json' }, corsHeaders);
-  }
-  const {
-    url: requested,
-    verdict,
-    body,
-  } = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>;
-  const url = typeof requested === 'string' ? canonicalizeRequestedPage(requested) : null;
-  if (url === null) return json(400, { error: 'invalid-url' }, corsHeaders);
-  if (typeof verdict !== 'string' || !VERDICTS.includes(verdict as CheckVerdict)) {
-    return json(400, { error: 'invalid-verdict', verdicts: VERDICTS }, corsHeaders);
-  }
-  if (body !== undefined && (typeof body !== 'string' || [...body].length > REPLY_LENGTH)) {
-    return json(400, { error: 'invalid-reply', maxLength: REPLY_LENGTH }, corsHeaders);
-  }
-
-  const clientId = normalizeClientId(new URL(request.url).searchParams.get('client'));
-  const route = routeFor(request, config, clientId);
-  if (!route.ok) return routingFailure(route, corsHeaders);
-
-  try {
-    const workspace = route.client?.workspace;
-    const { accounts } = context;
-    // A session of the extension, still valid in the store: no token, a token of a site, a cookie of
-    // the console, a session that ended, all stop here.
-    const session = await sessionWrites(request, config, context.context);
-    if (workspace === undefined || clientId === undefined || accounts === undefined || session === undefined) {
-      return json(401, { error: 'identity-required' }, corsHeaders);
-    }
-    const account = await writerIn(request, config, context.context, workspace, clientId);
-    const reach = await accounts.reach(workspace, session.subject);
-    // A person of the workspace who does not read this site (a guest of another site): `403`. Anybody
-    // else, a workspace that is suspended included (FRU-282): `401`, as for no session.
-    if (account === undefined) {
-      const suspended = config.suspendedIn !== undefined && (await config.suspendedIn(workspace));
-
-      return reach === undefined || suspended
-        ? json(401, { error: 'identity-required' }, corsHeaders)
-        : json(403, { error: 'not-allowed' }, corsHeaders);
-    }
-    if (!route.policy.showComments) return json(403, { error: 'checks-not-taken' }, corsHeaders);
-
-    // A guest reads a note by the id the widget gave it, never by the id of the tracker (FRU-250).
-    const hidden = await hidesTracker(request, config, route.policy);
-    const places = route.client?.destinations ?? [];
-    const targets =
-      route.client === undefined || places.length < 2
-        ? [route.client]
-        : places.map((place) => placedAt(route.client as ClientConfig, place));
-    for (const target of targets) {
-      // Read now in the store, never in the cache: the stage that decides is the store's.
-      const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-        hidden ? each.seed.id === issue : each.id === issue,
-      );
-      if (found === undefined) continue;
-
-      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
-      const manages = reach !== undefined && can(reach.role, 'manage-sites');
-      if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
-      if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
-      if (found.stage !== 'ripe') return json(409, { error: 'not-done', stage: found.stage }, corsHeaders);
-      if (checkedOf(found.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
-      // No count of its own, as for the reply of a member (FRU-257): only a member gives a verdict,
-      // and the limit of all requests applies above.
-      // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
-      // and would write two verdicts. The second is refused while the first is written; after it, the
-      // read under the key sees the verdict of the first.
-      const lock = `fruitback:check:${clientId}:${found.seed.id}`;
-      if ((await kv.incr(lock, CHECK_LOCK_MS)) > 1) return json(409, { error: 'check-in-progress' }, corsHeaders);
-      try {
-        // Read again under the key: a request that read the note before another wrote its verdict
-        // takes the key after it, and must see that verdict.
-        const now = (await store.findForPage({ url, clientId }, target, route.policy)).find(
-          (each) => each.id === found.id,
-        );
-        if (now === undefined) break;
-        if (now.stage !== 'ripe') return json(409, { error: 'not-done', stage: now.stage }, corsHeaders);
-        if (checkedOf(now.comments) !== undefined) return json(409, { error: 'already-checked' }, corsHeaders);
-        const [person, memberships] = await Promise.all([accounts.account(account), accounts.memberships(account)]);
-        const membership = memberships.find((each) => each.workspace.id === workspace);
-        if (person === undefined || membership === undefined) {
-          return json(401, { error: 'identity-required' }, corsHeaders);
-        }
-        const typed = typeof body === 'string' && body.trim() !== '' ? { body } : {};
-        const answer = await store.check?.(
-          { issue: found.id, clientId },
-          {
-            verdict: verdict as CheckVerdict,
-            author: { kind: 'member', name: person.name ?? person.email, workspace: membership.workspace.name },
-            ...typed,
-          },
-          target,
-          route.policy,
-        );
-        if (answer === undefined) break;
-        await invalidatePages(kv, [url]);
-        // The stage the store answers now, for the counts of the console and of the extension.
-        await indexed(context.noteIndex, (index) =>
-          index.refresh(
-            workspace,
-            clientId,
-            placeOf(target),
-            [{ ...now, stage: answer.stage, comments: [...(now.comments ?? []), answer.comment] }],
-            Date.now(),
-            { verdicts: true },
-          ),
-        );
-
-        return json(201, { comment: answer.comment, stage: answer.stage }, corsHeaders);
-      } finally {
-        // Freed once the store answered, whatever it said: the store holds the verdict from then on,
-        // and the guards above read it there. A verdict that failed is not refused on its retry.
-        await kv.set(lock, '0', 1).catch(() => undefined);
-      }
-    }
-
-    return json(404, { error: 'not-found' }, corsHeaders);
-  } catch (error) {
-    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
-    if (error instanceof KvError) return json(503, { error: 'limiter-unavailable' }, corsHeaders);
-    throw error;
-  }
-}
-
-/**
- * The extension's session endpoints (FRU-42).
- *
- * Three routes and no more: spend a pairing code, exchange a refresh token for an access token, and
- * end the session. Minting a code is **not** here — it is a command an operator runs on the
- * container, so that vouching for a person never becomes a network surface this worker has to
- * defend. See `main.ts`.
- *
- * All three answer `404` when no session store is configured, which is the same answer an unknown
- * path gets: a worker without the extension does not advertise that these exist.
- */
-async function handleSession(
-  request: Request,
-  pathname: string,
-  config: Served,
-  context: RequestContext,
-  headers: Record<string, string>,
-): Promise<Response> {
-  const store = context.sessionStore ?? sessionStoreFor(config);
-  // `identitySecret` is present whenever the worker keeps sessions — `readConfig` refuses the pair at boot.
-  if (store === undefined || config.identitySecret === undefined) return json(404, { error: 'not-found' }, headers);
-  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
-
-  // `readBoundedText` and not `request.text()`: it refuses a declared length over the cap before a
-  // byte is read, and cancels the stream once a chunked upload crosses it. The first version of this
-  // handler buffered the whole body and then measured `text.length` — which is UTF-16 units, not
-  // bytes, so a multibyte body passed a byte cap it had already exceeded. Raised in review.
-  const text = await readBoundedText(request);
-  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
-
-  const body = parseJsonObject(text);
-  if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
-
-  if (pathname === '/session/pair') {
-    const code = typeof body.code === 'string' ? body.code : undefined;
-    if (code === undefined) return json(400, { error: 'invalid-body' }, headers);
-
-    const redeemed = await redeemPairing(store, code, config.identitySecret);
-    // One answer for a code that never existed and one already spent: telling them apart is how a
-    // caller works out which codes exist. `session.ts` returns the same reason for both.
-    if (!redeemed.ok) return json(401, { error: redeemed.reason }, headers);
-    // A code minted for somebody who left the workspace since: the same answer, and no session stays.
-    if (!(await stillOfTheWorkspace(config, redeemed.session.identity))) {
-      await revokeSession(store, redeemed.session.refreshToken);
-
-      return json(401, { error: 'code-spent-or-expired' }, headers);
-    }
-
-    return json(200, redeemed.session, headers);
-  }
-
-  const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken : undefined;
-  if (refreshToken === undefined) return json(400, { error: 'invalid-body' }, headers);
-
-  if (pathname === '/session/refresh') {
-    const refreshed = await refreshSession(store, refreshToken, config.identitySecret);
-    // The session of somebody who is no longer of the workspace ends here (FRU-149), whatever
-    // removed them. The answer is the one of a session that ended: it says nothing of the workspace.
-    if (refreshed.ok && !(await stillOfTheWorkspace(config, refreshed.identity))) {
-      await revokeSession(store, refreshed.refreshToken);
-
-      return json(401, { error: 'session-revoked-or-expired' }, headers);
-    }
-    // An extension that refreshes for a workspace: its person is seen there today (FRU-249).
-    if (refreshed.ok && refreshed.identity.workspace !== undefined) {
-      await config.seenIn?.(refreshed.identity.workspace, refreshed.identity.subject);
-    }
-
-    return refreshed.ok
-      ? json(
-          200,
-          {
-            accessToken: refreshed.accessToken,
-            // Every refresh rotates (FRU-61), and this field is the whole of the client's half.
-            // It is named here rather than spread, so leaving it out is what this route would do by
-            // default — the rotation would work perfectly and reach nobody. A test asserts the body
-            // carries it, because `tsc` cannot: the object is built field by field.
-            refreshToken: refreshed.refreshToken,
-            expiresIn: refreshed.expiresIn,
-            identity: refreshed.identity,
-          },
-          headers,
-        )
-      : json(401, { error: refreshed.reason }, headers);
-  }
-
-  if (pathname === '/session/revoke') {
-    // `204` whether or not this call is what revoked it. A logout that reported "there was nothing
-    // to revoke" would tell a caller which refresh tokens are live.
-    await revokeSession(store, refreshToken);
-
-    return new Response(null, { status: 204, headers });
-  }
-
-  return json(404, { error: 'not-found' }, headers);
-}
-
-/** What the administrator of the instance reads (FRU-261): the database of the accounts. */
-export function instanceAdminFor(config: WorkerConfig): InstanceAdminReads | undefined {
-  return config.databaseUrl === undefined
-    ? undefined
-    : postgresInstanceAdmin(config.databaseUrl, config.databaseSchema);
-}
-
-/** Where this worker keeps the pictures of the notes: its database, or nowhere (FRU-44). */
-/** The index of the notes of a worker with a database (FRU-237), or none: `notes-index.ts`. */
-export function noteIndexFor(config: WorkerConfig): NoteIndex | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresNoteIndex(config.databaseUrl, config.databaseSchema);
-}
-
-/**
- * Writes to the index of the notes, and never fails the request for it (FRU-237). The note is in its
- * store by then: a `502` would have the widget send it a second time. A row that is missing is
- * written again by the next read of its page.
- */
-async function indexed(index: NoteIndex | undefined, work: (index: NoteIndex) => Promise<void>): Promise<void> {
-  if (index === undefined) return;
-  try {
-    await work(index);
-  } catch (error) {
-    console.error(
-      `[fruitback] the index of the notes was not written: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
-/** The row of the index of one note this worker just planted. */
-function noteEntry(
-  workspace: string,
-  site: string,
-  seed: Seed,
-  channel: Channel,
-  target: ClientConfig | undefined,
-  issue: CreatedIssue,
-): NoteEntry {
-  return {
-    workspace,
-    site,
-    seed,
-    channel,
-    author: authorOf(seed, channel === 'extension'),
-    place: placeOf(target),
-    issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
-    stage: 'seeded',
-  };
-}
-
-/** Where a note of this target goes, as the index says it. */
-function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
-  return target?.connector === undefined ? { kind: 'fruitback' } : { kind: 'connector', connector: target.connector };
-}
-
-export function attachmentStoreFor(config: WorkerConfig): AttachmentStore | undefined {
-  return config.databaseUrl === undefined
-    ? undefined
-    : postgresAttachmentStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**
@@ -1496,56 +618,6 @@ async function writerIn(
   const session = await sessionWrites(request, config, context);
 
   return session?.subject === account ? account : undefined;
-}
-
-/**
- * Whether the person of a session is still a member of the workspace it names (FRU-149).
- *
- * `verifyForClient` compares the workspace of an access token, and never a role: until a person
- * could be removed, a session of a workspace was a member of it. Now the refresh is where a session
- * that outlived its membership ends, ten minutes at most after the access token it last minted.
- * Removing a member also ends their sessions at once (`endSessionsOf`); this is the second lock, for
- * a removal that did not go through that call, and for a row somebody deleted by hand.
- *
- * `true` on a worker with no accounts, and for a session that names no workspace: nobody is a member
- * of anything there, and the operator named the person with the pairing.
- */
-async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): Promise<boolean> {
-  // A session of an account (FRU-238) lives as long as its account: it reads what the account is a
-  // member of today, and nothing when that is nothing. An account that is gone ends it here.
-  if (identity.account === true)
-    return config.accountActive !== undefined && (await config.accountActive(identity.subject));
-  if (config.roleIn === undefined || identity.workspace === undefined) return true;
-
-  return (await config.roleIn(identity.workspace, identity.subject)) !== undefined;
-}
-
-/** Mints a pairing code. Not reachable over HTTP — see `handleSession` and `main.ts`. */
-export async function createPairingCommand(
-  config: WorkerConfig,
-  identity: { subject: string; name?: string; email?: string; workspace?: string },
-  /** The store a test opened. Absent, the one of the configuration. */
-  held?: SessionStore,
-): Promise<{ code: string; expiresAt: number }> {
-  const store = held ?? sessionStoreFor(config);
-  if (store === undefined) {
-    throw new Error('FRUITBACK_DATABASE_URL is not set, so this worker keeps no sessions');
-  }
-
-  return openPairing(store, identity);
-}
-
-/** A session body is a JSON object or nothing. An array is not an object here, whatever `typeof` says. */
-function parseJsonObject(text: string): Record<string, unknown> | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -1636,13 +708,6 @@ function ofASite(verified: Extract<IdentityResult, { ok: true }>): Verified {
 }
 
 /**
- * `session` is there only for a token the worker key verified, with the workspace of the client
- * (FRU-123). A site signs its own tokens and can write any claim in them, a workspace included: what
- * says that a caller is a person of the workspace is the key, never a claim.
- */
-export type Verified = IdentityResult & { session?: true };
-
-/**
  * Whether this caller may read this client's pins (FRU-40).
  *
  * Until now `GET /feedback` answered anyone who could build the URL, so every note, its author and
@@ -1712,21 +777,6 @@ async function attributionFor(
     // A session of an account (FRU-238): `postFeedback` reads it again before it writes.
     account: verified.session === true && verified.account === true,
   };
-}
-
-/** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
-function optionalReporter(reporter: SeedReporter | undefined): { reporter?: SeedReporter } {
-  return reporter === undefined ? {} : { reporter };
-}
-
-/** 400 when the caller has to say who they are, 403 when they said something they may not claim. */
-function routingFailure(
-  resolution: Extract<ClientResolution, { ok: false }>,
-  headers: Record<string, string>,
-): Response {
-  const status = resolution.reason === 'origin-not-allowed-for-client' ? 403 : 400;
-
-  return json(status, { error: resolution.reason }, headers);
 }
 
 /**
@@ -1916,21 +966,6 @@ async function endedSession(
   return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
 }
 
-/**
- * Canonicalized server-side for the same reason the write path does it: the filter matches this
- * exact string inside the description, so a caller that skipped normalization would find nothing.
- */
-function canonicalizeRequestedPage(requested: string): string | null {
-  try {
-    const url = new URL(requested);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-
-    return canonicalizePageUrl(url);
-  } catch {
-    return null;
-  }
-}
-
 async function postFeedback(
   request: Request,
   config: Served,
@@ -2054,23 +1089,6 @@ async function postFeedback(
 }
 
 /**
- * Re-canonicalized server-side. The read path finds seeds by matching this URL inside the
- * description, so a client that skipped normalization would plant a pin nobody can find again.
- *
- * The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
- * label the read filters on, so a padded id here means an issue nobody can query back.
- */
-function canonicalSeed(seed: Seed): Seed {
-  const clientId = normalizeClientId(seed.client?.id);
-
-  return {
-    ...seed,
-    page: { ...seed.page, url: canonicalizePageUrl(seed.page.url) },
-    ...(seed.client !== undefined && clientId !== undefined ? { client: { ...seed.client, id: clientId } } : {}),
-  };
-}
-
-/**
  * FRU-123: a member chose where the note goes. The name is in the query, and the body stays the
  * seed: the relay of the extension carries a query and no other header. Absent, the note goes to
  * the first place of the site. `null`: a name the site does not have, or a caller who may not see
@@ -2090,112 +1108,6 @@ async function chosenPlace(
   }
 
   return placedAt(route.client, place);
-}
-
-/** The page just changed, so every cached answer for it is wrong, for every client. */
-async function invalidatePages(kv: Kv, urls: readonly string[]): Promise<void> {
-  for (const url of new Set(urls)) {
-    try {
-      await invalidate(kv, url);
-    } catch (error) {
-      if (!(error instanceof KvError)) throw error;
-      // The issue exists now. A 502 here tells the widget to retry, and the retry plants the note a
-      // second time. The cost of answering 201 is a pin that shows up one TTL late.
-      console.error(`[fruitback] cache not invalidated after a write: ${error.message}`);
-    }
-  }
-}
-
-/**
- * What a worker takes in one request (FRU-124), in the envelope of `GET /feedback` as `stages` is:
- * the most notes, and the most bytes of the body. Absent where the limit of a minute is too low for
- * a batch: the widget then sends its notes one by one, and never sends an array.
- */
-function batchOffer(config: WorkerConfig): { batch?: { max: number; maxBytes: number } } {
-  const max = maxBatch(config.rateLimitPerMinute);
-
-  return max === 0 ? {} : { batch: { max, maxBytes: MAX_BODY_BYTES } };
-}
-
-/** How long a seed that was kept answers its issue again, for a widget that sends it twice. */
-const SENT_TTL_MS = 10 * 60_000;
-
-function sentKey(clientId: string | undefined, seedId: string): string {
-  return `fruitback:sent:${JSON.stringify([clientId ?? null, seedId])}`;
-}
-
-/** How long a seed that a request is planting is held from another request. */
-const SENDING_TTL_MS = 60_000;
-
-function sendingKey(clientId: string | undefined, seedId: string): string {
-  return `fruitback:sending:${JSON.stringify([clientId ?? null, seedId])}`;
-}
-
-/**
- * Takes a seed for this request, or says that another request holds it.
- *
- * `incr` is the one atomic call of a `Kv`: the request that reads 1 holds the seed. Two attempts of
- * one batch at the same moment would both read « not kept yet », and both plant it. A `Kv` that does
- * not answer holds nothing: the seed is sent, as before this guard.
- */
-async function hold(kv: Kv, clientId: string | undefined, seedId: string): Promise<boolean> {
-  try {
-    return (await kv.incr(sendingKey(clientId, seedId), SENDING_TTL_MS)) === 1;
-  } catch {
-    return true;
-  }
-}
-
-/** Gives a seed back when it was not kept, so the next attempt can take it at once. */
-async function release(kv: Kv, clientId: string | undefined, seedId: string): Promise<void> {
-  await kv.set(sendingKey(clientId, seedId), '0', SENDING_TTL_MS).catch(() => undefined);
-}
-
-function parentKey(clientId: string | undefined, scope: string, seedId: string): string {
-  return `fruitback:batch-parent:${JSON.stringify([clientId ?? null, scope, seedId])}`;
-}
-
-/**
- * The parent of a batch, from one attempt to the next (FRU-195), in the `Kv`: one entry for each seed,
- * for as long as a seed is remembered. An attempt that sends again only some of the notes still
- * finds the parent. The place is in the key: a parent of one team is not used for another.
- *
- * WARNING: nothing throws from here. A `Kv` that does not answer costs a second parent, not a note.
- */
-function batchMemory(
-  kv: Kv,
-  store: SeedStore,
-  clientId: string | undefined,
-  target: ClientConfig | undefined,
-  seeds: readonly Seed[],
-): BatchMemory {
-  const keys = (): string[] => {
-    const scope = store.scope(target);
-
-    return seeds.map((seed) => parentKey(clientId, scope, seed.id));
-  };
-  const write = async (value: string): Promise<void> => {
-    try {
-      await Promise.all(keys().map((key) => kv.set(key, value, SENT_TTL_MS)));
-    } catch {
-      // Not remembered: the next attempt writes a parent, as before FRU-195.
-    }
-  };
-
-  return {
-    async parent() {
-      try {
-        const found = await Promise.all(keys().map((key) => kv.get(key)));
-
-        // An entry that was forgotten is empty: the `Kv` has no delete.
-        return found.find((id) => id !== undefined && id !== '');
-      } catch {
-        return undefined;
-      }
-    },
-    keepParent: (id) => write(id),
-    forgetParent: () => write(''),
-  };
 }
 
 /**
