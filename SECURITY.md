@@ -1914,7 +1914,7 @@ the database for a site with no destination.
 `POST /feedback/<id>/check?client=<site>` with `{ url, verdict: 'fixed' | 'wrong', body? }` writes a
 verdict on a note that the team marked done. « fixed » writes a marked reply under the note, which
 stays done. « wrong » writes the marked reply, then reopens the note in its store (Linear: the first
-state of the team of type `triage`, else `backlog`, else `unstarted`; the database: `seeded`, in the
+state of the team of type `triage`, else `backlog`, else `unstarted`; the database: `new`, in the
 same transaction).
 **The store is the one place that keeps the stage and the verdict**: the worker keeps no copy.
 

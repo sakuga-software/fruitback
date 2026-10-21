@@ -277,11 +277,11 @@ Sources du dépôt : console `apps/console/app/app.css` (variables HeroUI et blo
 | Bordure de contrôle | `#8a8a93` | `--field-border #8f8883` | `color-border-strong #8f8883` | `--line-strong #8f8883` | **diffère** |
 | Succès | `#15803d` | `--success #56802e` | `color-success #4e7d2a` | — | **diffère** |
 | Danger | `#dd2c27` (texte d'alerte) | `--danger #b91c1c` | — | — | **diffère** (la maquette écrit les alertes dans l'accent) |
-| Statut New | `#dd2c27` | — | `stage-seeded #6a7950` | — | **diffère** |
-| Statut To do | `#2563eb` | — | `stage-green #56802e` | — | **diffère** |
-| Statut In progress | `#f59e0b` (+ chiffre sombre) | — | `stage-ripening #ac5f00` | — | **diffère** (et le texte du pin devient sombre) |
-| Statut Done | `#15803d` | `--color-done #56802e` | `stage-ripe #8c1d40` | — | **diffère** |
-| Statut Closed | `#64748b` | — | `stage-composted #8d6e63` | — | **diffère** |
+| Statut New | `#dd2c27` | — | `stage-new #6a7950` | — | **diffère** |
+| Statut To do | `#2563eb` | — | `stage-todo #56802e` | — | **diffère** |
+| Statut In progress | `#f59e0b` (+ chiffre sombre) | — | `stage-progress #ac5f00` | — | **diffère** (et le texte du pin devient sombre) |
+| Statut Done | `#15803d` | `--color-done #56802e` | `stage-done #8c1d40` | — | **diffère** |
+| Statut Closed | `#64748b` | — | `stage-closed #8d6e63` | — | **diffère** |
 | Rail sombre (`#18181b`, `#27272a`, `#d4d4d8`, `#a1a1aa`) | oui | absent (nav claire, entrée active = carte blanche) | — | — | **nouveau** |
 | Avatar `#3f3f46` | oui | `Initial` : carré encre | `color-chip #44403c` | — | **diffère** |
 | Rayon contrôle | `6px` | `.wide-button` 6 px | `radius-sm 6px` | `--radius-control 6px` | existe |

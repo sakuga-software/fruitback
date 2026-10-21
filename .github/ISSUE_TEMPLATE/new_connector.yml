@@ -23,7 +23,7 @@ body:
     id: stages
     attributes:
       label: Which stages it can report
-      description: The widget knows five stages (seeded, green, ripening, ripe, composted). Say how the states of the store map to them. A store that reports fewer declares them in `stages`.
+      description: The widget knows five stages (new, todo, progress, done, closed). Say how the states of the store map to them. A store that reports fewer declares them in `stages`.
     validations:
       required: true
   - type: textarea

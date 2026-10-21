@@ -198,7 +198,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   greys become a neutral zinc scale, and the five « fruit » colours of the stages become five plain
   status colours. A site that already has the widget sees it at its next load: **every pin changes
   colour**, and the greys of the popover, the thread, the list and the settings turn neutral. The
-  names of the stages (`seeded`, `green`, `ripening`, `ripe`, `composted`) are the contract and do
+  names of the stages (`new`, `todo`, `progress`, `done`, `closed`) are the contract and do
   not change. The values are read in the CSS of the mock-up, never by eye:
 
   | Token                         | Before              | After                     |
@@ -219,8 +219,11 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `stage-composted`, closed     | `#8d6e63`           | `#64748b`                 |
   | `shadow-sm`, `shadow-xl`      | tinted `28, 25, 23` | tinted `24, 24, 27`       |
 
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
   New tokens, each a value of the mock-up that a screen of FRU-252 to FRU-259 paints:
-  `color-accent-strong` (`#b91c1c`), `color-surface-sunken` (`#f4f4f5`), `color-on-stage-ripening`
+  `color-accent-strong` (`#b91c1c`), `color-surface-sunken` (`#f4f4f5`), `color-on-stage-progress`
   (`#18181b`), `color-ink`, `color-on-ink`, `color-on-ink-muted` (the banner of a capture),
   `color-unplaced` (`#d97706`), `shadow-xs`, `radius-field` (8 px), `font-mono` and `ease-out`
   (`cubic-bezier(0.16, 1, 0.3, 1)`). The popover arrives on that curve in 420 ms, where it had an
@@ -277,11 +280,15 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `stage-composted`, closed     | `#64748b`                 | `#8d6e63`               |
   | `shadow-xs`                   | `rgba(24, 24, 27, .12)`   | `rgba(28, 25, 23, .15)` |
   | `shadow-sm`, `shadow-xl`      | tinted `24, 24, 27`       | tinted `28, 25, 23`     |
+
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
   - **The muted text is one step darker than the mock-up.** Its `#78716c` is 4.40:1 on the sunken
     surface, where the open note of the list writes its byline. `#756e69` is 4.59:1 there and
     4.98:1 on the surface: the smallest step that holds 4.5:1 everywhere it is painted.
   - **Every stage holds white**, from 4.62:1 (closed) to 4.78:1 (in progress), and is 4.62:1 or
-    more on the surface. `contrast.test.ts` has no known failure any more. `color-on-stage-ripening`
+    more on the surface. `contrast.test.ts` has no known failure any more. `color-on-stage-progress`
     stays, because a host may have set it, and holds white.
   - **The dark scheme is derived, and Mathieu validates it on the captures of the PR**: stone 900,
     800 and 700 (`#1c1917` surface, `#292524` raised, `#312c29` sunken, `#44403c` border), `#f5f5f4`
@@ -320,8 +327,12 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   | `color-on-ink-muted`          | `#d6d3d1`            | `#d4d4d8`                          |
   | `color-success`               | `#3f6421`            | `#15803d`                          |
   | `shadow-xs`, `-sm`, `-xl`     | tinted `28, 25, 23`  | tinted `24, 24, 27`                |
+
+  Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+  `new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
   - **Black on new, to do and in progress, white on done and closed**, as Mathieu's table says.
-    `color-on-stage-seeded` and `color-on-stage-green` are new, beside `color-on-stage-ripening`;
+    `color-on-stage-new` and `color-on-stage-todo` are new, beside `color-on-stage-progress`;
     `onStageToken` reads them, and `color-on-stage` stays the white of the two others and of the
     ring, so a host that set it keeps it. test:`writes new, to do and in progress black, and done and
 closed white (FRU-334)`.
@@ -1124,6 +1135,9 @@ nothing for the frame around the element.
 | `warning` on `surface`                      | approximate-position warning  | 4.62         | 3.78 |
 | `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin | 2.28 to 4.23 | same |
 
+Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+`new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
+
 Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
 
 | Token                        | Was              | Is        | Now measures             |
@@ -1178,6 +1192,9 @@ mock-up proposed, taken because every value measured above 4.5:1 with white text
 | `stage-ripening`  | `#fb8c00` | 2.37        | `#ac5f00` | 4.78        |
 | `stage-ripe`      | `#e53935` | 4.23        | `#8c1d40` | 8.88        |
 | `stage-composted` | `#8d6e63` | 4.62        | unchanged | 4.62        |
+
+Token names of before FRU-355 (`seeded`, `green`, `ripening`, `ripe`, `composted`): they are
+`new`, `todo`, `progress`, `done` and `closed` since, see [stage-names.md](stage-names.md).
 
 As text on the two light surfaces, the accent measures 4.70 and 4.63.
 

@@ -21,7 +21,7 @@ first publish made it expensive.
 - **A store can report only some stages, and says which** (FRU-32). `SeedStore.stages` travels as
   `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
-  the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
+  the field is absent. GitHub reports `new`, `done` and `closed`. A read-envelope field, so
   `SEED_VERSION` does not move.
 - **A read says `identified: true` to a reader whose token the worker verified** (FRU-112), and
   leaves the field out for everybody else. Only `true` is the word of the worker. It says that a note
@@ -110,5 +110,5 @@ stage, because its emoji did` could no longer hold: nothing in the orphan entry 
   before the field sends. The vocabulary stays five stages; a connector narrows what it uses, and
   never adds one.
 - The fallback for an unrecognised state stays in `shared` on purpose. A connector spelling
-  `'seeded'` itself is how the next one comes to disagree, and an unknown state must colour the pin
+  `'new'` itself is how the next one comes to disagree, and an unknown state must colour the pin
   rather than hide someone's note.
