@@ -291,7 +291,11 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
       storedIssues: [storedIssueFromSeed(seed, { attachments: { nodes: [...links, ...ours] } })],
     });
 
-    const [issue] = await createLinearStore(config).findForPage({ url: seed.page.url }, undefined, POLICY);
+    const [issue] = await createLinearStore(config).findForPage(
+      { url: seed.page.url, clientId: undefined },
+      undefined,
+      POLICY,
+    );
 
     assert.deepEqual(issue?.attachments, [
       { name: 'capture.png', url: 'https://uploads.linear.app/a/capture.png' },
