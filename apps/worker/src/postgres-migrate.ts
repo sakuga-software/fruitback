@@ -347,7 +347,8 @@ async function refuseASearchPathThatIsNotTheSchema(db: Db, schema: string): Prom
   throw new StoreError(
     `The tables of the worker are in the schema « ${schema} », and this connection would write elsewhere: ` +
       'its search path is not the one the worker set. A pooler that shares one session between clients loses it: ' +
-      'give FRUITBACK_DATABASE_URL an address that keeps a session (docs/self-hosting.md)',
+      'give FRUITBACK_DATABASE_URL an address that keeps a session, such as PgBouncer in session mode ' +
+      '(docs/self-hosting.md, « Behind a connection pooler »)',
   );
 }
 
@@ -532,22 +533,90 @@ async function warnWhenPublicIsOpen(db: Db, schema: string, warn: (line: string)
   if (row?.open === true) warn(`[fruitback] ${PUBLIC_IS_OPEN}`);
 }
 
-export async function migrate(database: Database, folder: string = migrationsFolder()): Promise<void> {
+/**
+ * What the worker says when the server ran two statements of one connection in two sessions (FRU-335).
+ *
+ * That is a pooler in transaction mode: it hands each statement out of a transaction to whichever
+ * connection of the server is free. A lock of the session then stays with a session the worker no
+ * longer has. Measured with PgBouncer 1.26.1 (docs/self-hosting.md, « Behind a connection pooler »).
+ */
+export const POOLER_IN_TRANSACTION_MODE =
+  'a connection pooler in transaction mode (PgBouncer with pool_mode = transaction) is between the worker and ' +
+  'PostgreSQL: it ran two statements of one connection of the worker in two sessions of the server, and a lock ' +
+  'of the session does not hold there. Put the pooler in session mode, then restart it: its sessions, and the ' +
+  'lock they hold, end with it (docs/self-hosting.md, « Behind a connection pooler »)';
+
+/** The session of the server that answers this statement. */
+async function sessionOf(db: Db): Promise<unknown> {
+  const [row] = rowsOf(await db.execute(sql`SELECT pg_backend_pid() AS pid`));
+
+  return row?.pid;
+}
+
+/**
+ * Refuses to go on when the statement after the lock runs in another session than the lock (FRU-335).
+ *
+ * Without a pooler, and with a pooler in session mode, one connection of the worker is one session
+ * of the server, and this never fires. A pooler in transaction mode gives another session when
+ * another client came in between, so a check that passes proves nothing: it is asked before each
+ * step, and `migrate` reads the answer of the unlock too.
+ */
+async function refuseAnotherSession(db: Db, locked: unknown): Promise<void> {
+  if ((await sessionOf(db)) === locked) return;
+
+  throw new StoreError(
+    `The lock of the migrations was taken in one session, and ${POOLER_IN_TRANSACTION_MODE}. Nothing was migrated`,
+  );
+}
+
+export async function migrate(
+  database: Database,
+  folder: string = migrationsFolder(),
+  warn: (line: string) => void = (line) => console.warn(line),
+): Promise<void> {
   refuseTwoMigrationsOfOneDate(folder);
   const { schema } = database;
   await database.alone(async (db) => {
     // One lock for the database, whatever the schema: two workers of two schemas wait for each other.
-    await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);
+    // `before` is read first (`MATERIALIZED`): whether this session held the lock before it took it.
+    const [lock] = rowsOf(
+      await db.execute(
+        sql`WITH before AS MATERIALIZED (
+              SELECT count(*) > 0 AS held FROM pg_locks
+               WHERE locktype = 'advisory' AND pid = pg_backend_pid()
+                 AND classid = 0 AND objid::bigint = ${MIGRATION_LOCK} AND objsubid = 1)
+            SELECT before.held, pg_advisory_lock(${MIGRATION_LOCK}), pg_backend_pid() AS pid FROM before`,
+      ),
+    );
+    let toldOfThePooler = false;
     try {
-      await ensureTheSchema(db, schema);
-      await refuseASearchPathThatIsNotTheSchema(db, schema);
-      await refuseTheToolOfBeforeInAnotherSchema(db, schema);
-      await adoptWhatTheHomeMadeToolMade(db, folder, schema);
-      await refuseWhatDrizzleWouldSkip(db, folder, schema);
-      await applyWhatIsNotApplied(db, folder, schema);
-      await warnWhenPublicIsOpen(db, schema, (line) => console.warn(line));
+      if (lock?.held === true) {
+        toldOfThePooler = true;
+        throw new StoreError(
+          `The session that took the lock of the migrations held it already, for another client: ${POOLER_IN_TRANSACTION_MODE}. Nothing was migrated`,
+        );
+      }
+      for (const step of [
+        () => ensureTheSchema(db, schema),
+        () => refuseASearchPathThatIsNotTheSchema(db, schema),
+        () => refuseTheToolOfBeforeInAnotherSchema(db, schema),
+        () => adoptWhatTheHomeMadeToolMade(db, folder, schema),
+        () => refuseWhatDrizzleWouldSkip(db, folder, schema),
+        () => applyWhatIsNotApplied(db, folder, schema),
+      ]) {
+        await refuseAnotherSession(db, lock?.pid).catch((error: unknown) => {
+          toldOfThePooler = true;
+          throw error;
+        });
+        await step();
+      }
+      await warnWhenPublicIsOpen(db, schema, warn);
     } finally {
-      await db.execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK})`);
+      // `false` when this statement ran in a session that does not hold the lock: another one keeps it.
+      const [unlock] = rowsOf(await db.execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK}) AS released`));
+      if (unlock?.released !== true && !toldOfThePooler) {
+        warn(`[fruitback] The lock of the migrations is still held by another session: ${POOLER_IN_TRANSACTION_MODE}`);
+      }
     }
   });
 }

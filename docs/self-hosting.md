@@ -627,11 +627,41 @@ restart while another request runs. The log of the worker that lost says one of:
 ```
 
 and, when the lock of the migrations stayed held, a read of that worker answers nothing: it waits on
-the lock (`pg_stat_activity` shows `wait_event` `advisory`), and `/health` stays `200`. The worker does
-not name the pooler: the guard of the search path (« A pooler that shares one session between
-clients loses it ») did not fire in these runs, since every connection of one worker sets the same
-path. To get out of it: put the pooler in session mode, restart PgBouncer (its connections, and the
-lock they hold, end), then the workers.
+the lock (`pg_stat_activity` shows `wait_event` `advisory`), and `/health` stays `200`. In these runs
+the worker did not name the pooler: the guard of the search path (« A pooler that shares one session
+between clients loses it ») did not fire, since every connection of one worker sets the same path.
+To get out of it: put the pooler in session mode, restart PgBouncer (its connections, and the lock
+they hold, end), then the workers.
+
+**Since FRU-335 the worker names the pooler.** `migrate` asks the server three things of the session
+that holds the lock of the migrations: whether that session held it already for another client,
+whether each step runs in that session (`pg_backend_pid()`), and whether the unlock gave it back
+(`pg_advisory_unlock` answers `false` in another session). The first two refuse before anything is
+written; the third writes a warning after the migrations. The lines start with one of:
+
+```text
+[fruitback] better-auth did not start: The session that took the lock of the migrations held it already, for another client: a connection pooler in transaction mode (PgBouncer with pool_mode = transaction) is between the worker and PostgreSQL: …
+[fruitback] better-auth did not start: The lock of the migrations was taken in one session, and a connection pooler in transaction mode (PgBouncer with pool_mode = transaction) is between the worker and PostgreSQL: …
+[fruitback] The lock of the migrations is still held by another session: a connection pooler in transaction mode (PgBouncer with pool_mode = transaction) is between the worker and PostgreSQL: …
+```
+
+and each ends with « Put the pooler in session mode, then restart it » and the name of this section.
+Without a pooler, and in session mode, a connection of the worker is one session of the server, and
+none of the three fires.
+
+Measured on 2026-10-21 with PgBouncer 1.26.1 and PostgreSQL 17, by `migrate` of the worker run twice
+at the same moment through the pooler on an empty database, ten times for each line:
+
+| Through PgBouncer         | Two workers, `public`                                                        | Two workers, schema `fruitback`                                                                                             | One worker alone                                    |
+| ------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Session mode              | 10 out of 10: both migrated, nothing said of a pooler                        | 10 out of 10: both migrated, nothing said of a pooler                                                                       | not run again                                       |
+| Transaction mode, before  | 10 out of 10 named the pooler; in 2 one of the two failed (`already exists`) | 5 out of 10 named the pooler; in 10 one of the two migrated at the same time and failed (`already exists`, `duplicate key`) | not run again                                       |
+| Transaction mode, FRU-335 | 10 out of 10: one migrated, the other refused and named the pooler           | 9 out of 10 named the pooler, 1 stopped at the guard of the search path; none migrated twice; in 3 the lock stayed held     | 20 out of 20 (both schemas): migrated, nothing said |
+
+« Before » is a first version of the change, with the second and third checks only. **One worker
+alone is not told**: with no other client, the pooler gives it the same session at each statement,
+which is what session mode does, and nothing goes wrong then. The second worker, or the next start
+while another client works, is the one that says it.
 
 **In `public`**, transaction mode failed less often in these runs: two workers started 4 times out of
 4, and one read once waited without an answer after both restarted. Not supported either: the lock
