@@ -19,7 +19,7 @@ const EXTENSION_SCHEMES = ['chrome-extension:', 'moz-extension:', 'safari-web-ex
  * is.
  */
 export function isExtensionOrigin(origin: string): boolean {
-  return EXTENSION_SCHEMES.some((scheme) => origin.startsWith(`${scheme}//`));
+  return EXTENSION_SCHEMES.some((prefix) => origin.startsWith(`${prefix}//`));
 }
 
 export type CorsDecision = {

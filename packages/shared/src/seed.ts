@@ -274,7 +274,7 @@ export function canonicalizePageUrl(input: string | URL, options: { keepSearch?:
 
   if (keepSearch) {
     for (const key of [...url.searchParams.keys()]) {
-      if (TRACKING_PARAMS.some((pattern) => pattern.test(key))) {
+      if (TRACKING_PARAMS.some((rule) => rule.test(key))) {
         url.searchParams.delete(key);
       }
     }
