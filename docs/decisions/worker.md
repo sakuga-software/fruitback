@@ -32,12 +32,28 @@ connector's environment, and what a second connector with no markdown body actua
   opens during an outage is one anybody can open. `/health` never touches the `Kv`, because a
   readiness probe that depends on the `Kv` takes every replica out at once. A failed invalidation after
   a write is the opposite call — the issue exists, and a `502` would have the widget plant it twice.
+- **`app.ts` keeps the request and every check of its caller, and each group of routes has its own
+  module** (FRU-363). `app.ts` holds `handleRequest`, `routed` (the delivery loop, `/health`, CORS,
+  the method, the limit, then the dispatch), the checks of the caller (`verifyForClient`, `routeFor`,
+  `writesWith`, `memberOf`, `sessionWrites`, `writerIn`, `attributionFor`, `replyAuthorFor`,
+  `endedSession`…), and `GET` and `POST /feedback`. The console is in `console-routes.ts`, `/pair` and
+  `/session/` in `session-routes.ts`, the replies and the verdicts under a note in `reply-routes.ts`,
+  the files in `attachment-routes.ts`. **A module of routes gets the checks of the caller from
+  `app.ts` in its seams, never through an import of `app.ts`**: a test that plants a change in a copy
+  of `app.ts` (`mutatedModule`) then reaches the routes of the module too. What a request reads is in
+  `request-context.ts`, what the worker opens in `worker-stores.ts`, and the helpers of the notes,
+  which check nobody, in `note-helpers.ts`.
 
 ### The reasons, and the history
 
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
-  behaviour in `app.ts` so it stays testable without opening a socket.
+  behaviour in `app.ts` and its modules of routes, so it stays testable without opening a socket.
+- **`app.ts` was 108 KB, and no review read it** (FRU-363, after #427). Its routes moved, unchanged
+  and with no test changed, into one module for each group. `GET` and `POST /feedback` stay in
+  `app.ts`: `visitor.test.ts` and `connect-routes.test.ts` plant changes in their bodies there. To move
+  them, those tests have to plant their change in a module that `app.ts` imports, which is a change of
+  the tests of its own.
 - The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
   `/health`, not as an opaque Linear error per request.
 - `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
@@ -312,7 +328,7 @@ degradation the ticket asked to have written down rather than discovered.
   twice: `seed.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
 - **A parent whose sub-issues Linear all refused is kept, and used again** (FRU-195). The request
   answers `502` and the parent stays in the team with no sub-issue. The worker remembers it in the
-  `Kv` for the ten minutes of a seed, by seed and by place (`batchMemory` in `app.ts`), and the next
+  `Kv` for the ten minutes of a seed, by seed and by place (`batchMemory` in `batch.ts`), and the next
   attempt for one of those notes writes its sub-issues under it: one parent for a batch, not one for
   each attempt. The note of a `207` that is sent again goes under the same parent too. **The worker
   archives nothing and changes nothing in the workspace of a team**: it calls `issueCreate` and no
@@ -2065,9 +2081,9 @@ may change, and who », says what is protected; this section says how to change 
   `afterRemoveMember` calls it, `auth-organization.ts` calls it after `leave` (which runs no hook in
   1.7.7), `DELETE /console/workspaces/<id>` calls it for the workspace, and the hook
   `user.delete.after` for an account. Then `/session/refresh` and `/session/pair` read the
-  membership (`stillOfTheWorkspace` in `app.ts`), for a removal that called nothing. A new way to
-  remove a member calls `endSessionsOf`; the second lock is not a reason to skip it, because it acts
-  ten minutes later.
+  membership (`stillOfTheWorkspace` in `session-routes.ts`), for a removal that called nothing. A new
+  way to remove a member calls `endSessionsOf`; the second lock is not a reason to skip it, because
+  it acts ten minutes later.
 - **A workspace is made and deleted by the routes of the worker**, `POST /console/workspaces` and
   `DELETE /console/workspaces/<id>`. The first calls the plugin in the process, for somebody
   of the cookie. The second does not use
@@ -2493,7 +2509,7 @@ ticket removes; it adds no route and no table.
 - **A `200` from `/session/refresh` with no `refreshToken` is not a success.** Taking it leaves a
   spent token in storage under a working access token, and the session dies when the grace runs out
   with nothing to explain it. Both call sites require the field; `parseIssued` stays tolerant.
-- **`app.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
+- **`session-routes.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
   Leaving it out is what the route would do by default: the rotation works, the store holds the
   successor, and the client keeps sending a token the worker retired. `tsc` cannot see it and the
   extension's tests cannot either — they fake the worker. `session-routes.test.ts` asserts the body.
@@ -2533,7 +2549,7 @@ ticket removes; it adds no route and no table.
   the signature, on the read and on the write. `pair --workspace` names it, and it travels through
   every rotation.
 - **With `FRUITBACK_DATABASE_URL` (FRU-141), the sites are the clients**
-  (FRU-96). `withSites` in `app.ts` reads
+  (FRU-96). `withSites` in `request-context.ts` reads
   them from the accounts on every request and lays them over the configuration as its client map
   and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
   empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
