@@ -61,7 +61,15 @@ type Worker = {
 
 async function workerWith(
   page: Page,
-  options: { role?: Role; locale?: 'en' | 'fr'; site?: unknown; connectors?: unknown[]; rows?: Row[] } = {},
+  options: {
+    role?: Role;
+    locale?: 'en' | 'fr';
+    site?: unknown;
+    connectors?: unknown[];
+    rows?: Row[];
+    /** What `GET …/statuses/tracker` answers (FRU-368). */
+    tracker?: unknown;
+  } = {},
 ): Promise<Worker> {
   const worker: Worker = { sent: [], rows: [...(options.rows ?? ROWS)] };
   const answer = (pathname: string, route: Route) => {
@@ -71,6 +79,8 @@ async function workerWith(
       return route.fulfill({ json: { connectors: options.connectors ?? [], available: true } });
     if (!pathname.startsWith(STATUSES)) return undefined;
     const path = `${pathname}${new URL(request.url()).search}`;
+    if (pathname === `${STATUSES}/tracker`)
+      return route.fulfill({ json: options.tracker ?? { trackerColours: false, trackers: [] } });
     if (method === 'GET') return route.fulfill({ json: { statuses: worker.rows } });
     const body = method === 'POST' ? request.postDataJSON() : undefined;
     worker.sent.push({ method, path, body });
@@ -83,7 +93,7 @@ async function workerWith(
 
       return route.fulfill(answered);
     }
-    if (pathname === `${STATUSES}/order`) return route.fulfill({ json: body });
+    if (pathname === `${STATUSES}/order` || pathname === `${STATUSES}/settings`) return route.fulfill({ json: body });
     const kept = body as Row;
     const write = () => {
       worker.rows = [...worker.rows.filter((each) => each.key !== kept.key || each.source !== kept.source), kept];
@@ -382,7 +392,7 @@ test('a status that holds notes asks where they go, the built-in of its stage fi
   );
 });
 
-test('a site that sends to GitHub shows its four states, and one that sends to Linear says where its states are set', async ({
+test('a site that sends to GitHub shows its four states, beside a Linear list that could not be read', async ({
   page,
 }) => {
   const github = { connector: 'g1', label: 'GitHub · acme/website' };
@@ -406,12 +416,9 @@ test('a site that sends to GitHub shows its four states, and one that sends to L
   await expect(item(page, 'closed:completed')).toContainText('In GitHub: Closed as completed');
   await expect(item(page, 'closed:not_planned').getByRole('button', { name: /^Delete/ })).toHaveCount(0);
 
+  // With no state of Linear read (the stub answers none), the Linear list says so (FRU-368).
   const linearSection = page.getByRole('region', { name: 'Linear · Acme web' });
-  await expect(linearSection).toContainText('Choose the stage of each one on the panel of Linear, in Connectors.');
-  await expect(linearSection.getByRole('link', { name: 'Open Connectors' })).toHaveAttribute(
-    'href',
-    '/w/w1/connectors',
-  );
+  await expect(linearSection.getByRole('alert')).toContainText('Fruitback could not read the states of Linear.');
 
   // A GitHub state is re-staged; its row says its source.
   await item(page, 'open').getByRole('button', { name: 'Edit Open' }).click();
@@ -458,4 +465,110 @@ test('only an owner or an admin sets the statuses, and the menu of a site leads 
   await expect(page.locator('main')).toContainText(
     'Only an owner or an admin of the workspace sets the statuses of a site.',
   );
+});
+
+/** A site that sends to Linear (FRU-368), and the states of its team as the worker reads them. */
+const LINEAR_PLACE = { connector: 'l1', teamId: 't1', label: 'Linear · Acme web' };
+const LINEAR_SITE = { ...SITE, destination: LINEAR_PLACE, destinations: [LINEAR_PLACE] };
+const LINEAR_CONNECTORS = [{ id: 'l1', kind: 'linear', label: 'Linear', createdAt: '2026-10-01T00:00:00Z' }];
+const STATES = [
+  { id: 'b1', name: 'Backlog', type: 'backlog', stage: 'new', color: '#bec2c8' },
+  { id: 't1', name: 'Todo', type: 'unstarted', stage: 'todo', color: '#e2e2e2' },
+  { id: 'p1', name: 'In Progress', type: 'started', stage: 'progress', color: '#f2c94c' },
+  { id: 'r1', name: 'In Review', type: 'started', stage: 'progress', color: '#0f783c' },
+  { id: 'd1', name: 'Done', type: 'completed', stage: 'done', color: '#5e6ad2' },
+  { id: 'c1', name: 'Canceled', type: 'canceled', stage: 'closed', color: '#95a2b3' },
+];
+
+test('a site that sends to Linear lists the states of its team, takes their colours when asked, and re-stages one', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, {
+    site: LINEAR_SITE,
+    connectors: LINEAR_CONNECTORS,
+    rows: [row({ source: 'l1', key: 't1', stage: 'todo', name: 'To do', position: 1 })],
+    tracker: { trackerColours: false, trackers: [{ ...LINEAR_PLACE, states: STATES }] },
+  });
+  await open(page);
+
+  const section = page.getByRole('region', { name: 'Linear · Acme web' });
+  await expect(section.locator('ol > li')).toHaveCount(6);
+  await expect(item(page, 'b1')).toContainText('In Linear: Backlog');
+  await expect(item(page, 'b1')).toContainText('Colour of the stage');
+  // A state renamed by the site can be reset; no state of Linear is deleted here.
+  await expect(item(page, 't1')).toContainText('In Linear: Todo');
+  await expect(item(page, 't1').getByRole('button', { name: 'Reset To do' })).toBeVisible();
+  await expect(section.getByRole('button', { name: /^Delete/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add a status' })).toHaveCount(0);
+  await expectNoViolation(page, 'Linear, the colours of the stages');
+
+  // « Use Linear's colours »: written at once, and the states take Linear's colours.
+  const toggle = section.getByRole('switch', { name: "Use Linear's colours" });
+  await expect(toggle).not.toBeChecked();
+  await section.getByText("Use Linear's colours", { exact: true }).click();
+  await expect(toggle).toBeChecked();
+  expect(worker.sent.at(-1)).toEqual({ method: 'POST', path: `${STATUSES}/settings`, body: { trackerColours: true } });
+  await expect(item(page, 'd1')).toContainText("Linear's colour");
+  // Linear's Done takes white, 4.70:1 (statuses.md, « The colours »).
+  await expect(item(page, 'd1')).toContainText('Auto · 4.70:1');
+  await expectNoViolation(page, "Linear, Linear's colours");
+
+  // In Review moves to Done, for this site.
+  await item(page, 'r1').getByRole('button', { name: 'Edit In Review' }).click();
+  const editor = page.getByRole('region', { name: 'Edit In Review' });
+  await expect(editor.getByRole('textbox', { name: 'Name' })).toHaveAttribute('placeholder', 'In Review');
+  await expect(editor.getByText('Empty: the name in Linear, « In Review ».')).toBeVisible();
+  await expect(editor.getByText("Linear's colour", { exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: /Stage/ }).click();
+  await page.getByRole('option', { name: 'Done' }).click();
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toHaveCount(0);
+  expect(worker.sent.at(-1)).toEqual({
+    method: 'POST',
+    path: STATUSES,
+    body: row({ source: 'l1', key: 'r1', stage: 'done', position: 3 }),
+  });
+  await expect(item(page, 'r1')).toContainText('Done');
+});
+
+test('a Linear team that the worker could not read says so, and is read again', async ({ page }) => {
+  // The console of development mounts a screen twice, so the stub answers by what Linear can do now.
+  let answers = false;
+  await workerWith(page, {
+    site: LINEAR_SITE,
+    connectors: LINEAR_CONNECTORS,
+    rows: [],
+    get tracker() {
+      return !answers
+        ? { trackerColours: false, trackers: [{ ...LINEAR_PLACE, error: 'tracker-unreachable' }] }
+        : { trackerColours: false, trackers: [{ ...LINEAR_PLACE, states: STATES }] };
+    },
+  });
+  await open(page);
+
+  const section = page.getByRole('region', { name: 'Linear · Acme web' });
+  await expect(section.getByRole('alert')).toHaveText(
+    'Fruitback could not read the states of Linear. The statuses you set are not lost.',
+  );
+  answers = true;
+  await section.getByRole('button', { name: 'Try again' }).click();
+  await expect(section.locator('ol > li')).toHaveCount(6);
+});
+
+test('at 390 px in French, Linear and its switch', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await workerWith(page, {
+    locale: 'fr',
+    site: LINEAR_SITE,
+    connectors: LINEAR_CONNECTORS,
+    rows: [],
+    tracker: { trackerColours: true, trackers: [{ ...LINEAR_PLACE, states: STATES }] },
+  });
+  await open(page);
+
+  await expect(page.getByRole('switch', { name: 'Utiliser les couleurs de Linear' })).toBeChecked();
+  await expect(item(page, 'd1')).toContainText('Couleur de Linear');
+  await expect(item(page, 'd1')).toContainText('Dans Linear : Done');
+  expect(await sideScroll(page)).toBe(0);
+  await expectNoViolation(page, 'Linear at 390 px');
 });

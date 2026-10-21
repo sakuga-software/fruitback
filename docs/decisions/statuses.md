@@ -236,11 +236,12 @@ validated on 2026-10-21 with the answers below. `apps/console/app/routes/site-st
 - **« Stage » is « Phase » in French**, not « Étape », which is the step of the setup.
 - **`hidden` is not drawn**: it changes only what the status select of a note offers, which FRU-367
   brings. The status select of the list of notes is a PR of its own, after FRU-367.
-- **A Linear destination is a sentence and a link to its panel, for now.** Until FRU-368, the worker
-  reads the stage of a Linear state from `connectors.settings.stages`, which the table of FRU-102 on the
-  panel of Linear writes; a row of the site with a Linear source would change nothing a pin shows. So
-  that table stays where it is, and FRU-368 moves it here with « Use Linear's colours ». The board
-  draws that part already (frames H and N).
+- **A Linear destination is a list of the states of its team** (FRU-368), read fresh from
+  `GET …/statuses/tracker`: renamed, recoloured, moved to another stage and ordered for this site,
+  never added or deleted here. « Use Linear's colours » is the switch above the first list of Linear,
+  written at once; with it on, a state with no colour of the site's row shows « Linear's colour ». A
+  team that Linear did not answer for says so, with « Try again ». The table of FRU-102 left the panel
+  of the Linear connector, which now links to the statuses page of each site that sends there.
 - **A GitHub list is written now and shows with FRU-369**, which sends `status` on a GitHub issue.
   Until then a pin of GitHub draws its stage, as `statusOf` does for any issue with no `status`.
 

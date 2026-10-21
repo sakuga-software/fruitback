@@ -486,8 +486,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Sites sending here': 'Sites qui envoient ici',
   'No site sends its notes here yet.': 'Aucun site n’envoie encore ses notes ici.',
   'Other sites': 'Autres sites',
-  'Which Linear state gives each pin its status.': 'Quel état Linear donne son statut à chaque pin.',
-  'Status for {state}': 'Statut pour {state}',
   'Fruitback could not read the states of Linear. The statuses you set are not lost.':
     'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
@@ -503,8 +501,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Closed: 'Fermé',
   'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
   'Status of the pins': 'État des pins',
-  'The states appear here once a site sends its notes to a team.':
-    'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
   'The destinations of this site did not change. Try again.':
     'Les destinations de ce site n’ont pas changé. Réessayez.',
@@ -1017,9 +1013,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This site is not in the workspace any more.': 'Ce site n’est plus dans le workspace.',
   'The statuses did not load': 'Les statuts n’ont pas été chargés',
   'Fruitback did not answer. Your statuses are safe.': 'Fruitback n’a pas répondu. Vos statuts ne sont pas perdus.',
-  'Fruitback reads the states of Linear. Choose the stage of each one on the panel of Linear, in Connectors.':
-    'Fruitback lit les états de Linear. Choisissez la phase de chacun dans le panneau de Linear, dans Connecteurs.',
-  'Open Connectors': 'Ouvrir Connecteurs',
   'The order did not change. Try again.': 'L’ordre n’a pas changé. Réessayez.',
   '{name} is now {position} of {total}.': '{name} est maintenant en position {position} sur {total}.',
   '{name} is back to what it was.': '{name} est revenu à son état d’origine.',
@@ -1086,4 +1079,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Move them to': 'Les déplacer vers',
   'Move 1 note and delete': 'Déplacer 1 note et supprimer',
   'Move {count} notes and delete': 'Déplacer {count} notes et supprimer',
+  // FRU-368: the states of Linear on the statuses page of a site, and the panel that links there.
+  'The stage and the colour of each state of Linear are set for each site, on its statuses page.':
+    'La phase et la couleur de chaque état de Linear se règlent pour chaque site, sur sa page des statuts.',
+  'Statuses of {site}': 'Statuts de {site}',
+  'The states of the Linear team this site sends to. Rename them, recolour them, or change their stage. A state added in Linear appears here.':
+    'Les états de l’équipe Linear où ce site envoie ses notes. Renommez-les, changez leur couleur ou leur phase. Un état ajouté dans Linear apparaît ici.',
+  'A status with no colour chosen here takes its colour in Linear. Off: the colours of Fruitback.':
+    'Un statut sans couleur choisie ici prend sa couleur dans Linear. Désactivé : les couleurs de Fruitback.',
+  'In Linear: {name}': 'Dans Linear : {name}',
+  'Empty: the name in Linear, « {name} ».': 'Vide : le nom dans Linear, « {name} ».',
+  "Use Linear's colours": 'Utiliser les couleurs de Linear',
+  "Linear's colour": 'Couleur de Linear',
 };
