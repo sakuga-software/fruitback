@@ -18,6 +18,7 @@ const APP = new URL('./', import.meta.url);
 // `install-options.tsx` holds the script tag and the browser of a site, for the Sites screen (FRU-239).
 // `ago.ts` says how long ago something happened, for the Sites screen and My account (FRU-270).
 // `writers-pick.tsx` holds « Who can leave a note? », for the Sites screen and the setup (FRU-330).
+// `site-preview.tsx` holds the site itself in the preview of the setup, or why it cannot show (FRU-354).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -32,6 +33,7 @@ const screens = [
   'install-options.tsx',
   'ago.ts',
   'writers-pick.tsx',
+  'site-preview.tsx',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 

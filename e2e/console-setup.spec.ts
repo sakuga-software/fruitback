@@ -164,11 +164,12 @@ test.describe('the setup, against a worker with accounts (FRU-239)', () => {
     expect(new URL(pairing.url()).hash.slice(1)).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
     await pairing.close();
 
-    // The preview is a picture: the site of the person was asked for nothing.
-    await expect(
-      page.getByRole('region', { name: 'Preview of your site' }).getByText('staging.acme.dev'),
-    ).toBeVisible();
-    expect(toSite).toEqual([]);
+    // The preview frames the site (FRU-354): the browser asks it for its page, and for nothing else.
+    const preview = page.getByRole('region', { name: 'Preview of your site' });
+    await expect(preview.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(preview.locator('iframe')).toHaveAttribute('src', 'https://staging.acme.dev/');
+    await expect.poll(() => toSite.length).toBeGreaterThan(0);
+    expect(new Set(toSite)).toEqual(new Set(['https://staging.acme.dev/']));
     // The way on is always there: nothing tells the console that a first note came.
     await page.getByRole('link', { name: 'Open the console' }).click();
     await expect(page).toHaveURL(`${CONSOLE}/w/${workspace!.id}/sites`);
@@ -382,9 +383,15 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
 
     return route.fulfill({ status: 204 });
   });
+  // The site itself, which the preview frames (FRU-354).
+  await page
+    .context()
+    .route(/^https:\/\/[^/]*acme\.dev\//, (route) => route.fulfill({ contentType: 'text/html', body: SITE_PAGE }));
 
   return asked;
 }
+
+const SITE_PAGE = '<!doctype html><html lang="en"><title>Acme Outdoor</title><h1>Pack light, walk far.</h1></html>';
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -610,7 +617,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     expect(await violations(page)).toEqual([]);
   });
 
-  test('« Put it on the site »: the two cards, the example page, and the boxes of the mockup at 1440 px', async ({
+  test('« Put it on the site »: the two cards, the site itself, and the boxes of the mockup at 1440 px', async ({
     page,
   }) => {
     await stubWorker(page, { as: 'sited' });
@@ -660,38 +667,53 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByText('Three steps to your first note on a live page.', { exact: true })).toBeVisible();
     await expect(page.getByText(/Hosted in Europe/)).toHaveCount(0);
 
-    // The example page: the address of the site in the bar, the scene of the mockup, its caption.
+    // The site itself (FRU-354): the address in the bar, the page in a frame laid out at 1280 px and
+    // scaled down, sandboxed so that it cannot take the tab away, and with no referrer.
     const preview = page.getByRole('region', { name: 'Preview of your site' });
-    expectNear(await boxOf(preview), { x: 568, y: 113, width: 759.8, height: 698.5 }, 'preview');
-    expectNear(
-      await boxOf(preview.locator('.scene__settings')),
-      { x: 1117, y: 723, width: 36, height: 36 },
-      'settings of the picture',
+    expectNear(await boxOf(preview.locator('.kit-browser')), { x: 568, y: 113, width: 759.8, height: 665 }, 'preview');
+    const frame = preview.locator('iframe');
+    await expect(frame).toHaveAttribute('src', 'https://staging.acme.dev/');
+    await expect(frame).toHaveAttribute('title', 'staging.acme.dev, live');
+    await expect(frame).toHaveAttribute(
+      'sandbox',
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox',
     );
-    expectNear(
-      await boxOf(preview.locator('.scene__launch')),
-      { x: 1161, y: 721, width: 147.8, height: 40 },
-      'launch of the picture',
+    await expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(await frame.evaluate((element) => (element as HTMLIFrameElement).offsetWidth)).toBe(1280);
+    expectNear(await boxOf(frame), { x: 569, y: 158, width: 757.8, height: 620 }, 'the page, scaled', 3);
+    await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Pack light, walk far.' })).toBeVisible();
+    await expect(preview).toContainText(
+      'Your site, as it is now. A blank frame or an error means your site refuses to show inside another page.',
     );
-    await expect(preview.getByText('An example page. Pins show the same way on your site.')).toBeVisible();
-    await expect(preview.locator('.scene__hint')).toHaveText('Click Leave feedback, then any part of the page.');
-    // A picture: hidden from a screen reader, and nothing in it takes focus or a press.
-    const scene = preview.locator('.scene');
-    await expect(scene).toHaveAttribute('aria-hidden', 'true');
-    expect(await scene.evaluate((element) => (element as HTMLElement).inert)).toBe(true);
-    await expect(scene.locator('button, a, input, [tabindex]')).toHaveCount(0);
     expect(await violations(page)).toEqual([]);
+
+    // The address in place of the frame: the icon of the site, its domain, and why. It is kept.
+    // Under Playwright an image at `/favicon.ico` fails before any request a route sees (measured on
+    // 2026-10-21, a `/icon.png` loads): the icon is then the first letter of the domain.
+    await preview.getByRole('button', { name: 'Show its address instead' }).click();
+    await expect(frame).toHaveCount(0);
+    await expect(preview.locator('.site-preview__host')).toHaveText('staging.acme.dev');
+    await expect(preview.locator('.site-preview__letter')).toHaveText('S');
+    await expect(preview).toContainText('X-Frame-Options or Content-Security-Policy header says so');
+    await expect(preview.getByRole('link', { name: 'Open staging.acme.dev in a new tab' })).toHaveAttribute(
+      'href',
+      'https://staging.acme.dev',
+    );
+    expect(await violations(page)).toEqual([]);
+    await page.reload();
+    await expect(preview.locator('.site-preview__host')).toHaveText('staging.acme.dev');
+    await expect(preview.locator('iframe')).toHaveCount(0);
+    await preview.getByRole('button', { name: 'Show the live page' }).click();
+    await expect(preview.locator('iframe')).toBeVisible();
   });
 
-  test('the setup ends by itself at the first note: the step, the conclusion and the pin', async ({ page }) => {
+  test('the setup ends by itself at the first note: the step and the conclusion', async ({ page }) => {
     await page.clock.install();
     const asked = await stubWorker(page, { as: 'sited', notedFrom: 3 });
     const reads = () => asked.filter((each) => each === 'GET /console/workspaces/w1/sites').length;
     await page.goto(`${CONSOLE}/setup`);
     await expect(page.getByRole('heading', { name: `${CURRENT}Put it on the site` })).toBeVisible();
     await expect(page.getByText('Waiting for your first note.')).toBeVisible();
-    const preview = page.getByRole('region', { name: 'Preview of your site' });
-    await expect(preview.locator('.scene__pin')).toHaveCount(0);
 
     // Every five seconds while the tab is shown; the third read has the note.
     await page.clock.runFor(5_000);
@@ -719,11 +741,8 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       '/w/w1/connectors',
     );
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
-    // The picture has its pin and its card, and no more hint.
-    await expect(preview.locator('.scene__pin')).toHaveText('1');
-    await expect(preview.locator('.scene__note')).toContainText('New');
-    await expect(preview.locator('.scene__note')).toContainText('Marianne · just now');
-    await expect(preview.locator('.scene__hint')).toHaveCount(0);
+    // The preview stays the site itself: its pins are on the page, where the widget draws them.
+    await expect(page.getByRole('region', { name: 'Preview of your site' }).locator('iframe')).toBeVisible();
     expect(await violations(page)).toEqual([]);
 
     // Nothing is read again once the note came.

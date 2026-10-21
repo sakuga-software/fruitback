@@ -7,7 +7,7 @@ server {
 
     # The session is a cookie of the worker that no script reads. A policy that runs no other script,
     # and lets the page call one worker, is what keeps an injected script from calling with it.
-    set $csp "default-src 'self'; script-src 'self' __SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; connect-src 'self' __WORKER_ORIGIN__; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+    set $csp "default-src 'self'; script-src 'self' __SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; connect-src 'self' __WORKER_ORIGIN__; img-src 'self' data: https:; frame-src https: http:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
     # The widget's script is embedded by sites: any page may load it. This address does not change
     # when the script does, so a browser keeps it five minutes. Snippets given before FRU-106 use it.

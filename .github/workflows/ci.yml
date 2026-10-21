@@ -643,6 +643,8 @@ jobs:
             grep -q "'sha256-" "$file"
             absent "script-src[^;]*unsafe-inline" "$file"
             grep -q "frame-ancestors 'none'" "$file"
+            # FRU-354: the preview of the setup frames the site of the person, and shows its icon.
+            grep -q "img-src 'self' data: https:; frame-src https: http:;" "$file"
           done
           test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'
           test "$(curl -s http://127.0.0.1:8083/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://other.example:8443/fruitback" };'

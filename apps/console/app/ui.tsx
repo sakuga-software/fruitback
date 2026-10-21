@@ -1016,13 +1016,13 @@ type BrowserFrameProps = {
   address: string;
   /** In place of a page: why there is none yet. */
   empty?: string;
-  /** Under the frame: what the picture is. */
-  caption?: string;
-  /** The page, 620 px high. It is a picture: what it draws answers no pointer and no keyboard. */
+  /** Under the frame: what the page is. */
+  caption?: ReactNode;
+  /** The page, 620 px high. */
   children?: ReactNode;
 };
 
-/** The window of a browser, drawn: the preview of a site. */
+/** The window of a browser, drawn around the preview of a site. */
 export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
   return (
     <>

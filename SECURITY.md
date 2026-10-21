@@ -1598,6 +1598,15 @@ is a cookie of the worker that no script reads.
 - **Its `Content-Security-Policy` lets the page call one worker and run no other script**:
   `script-src 'self'` and the hashes of the inline scripts of the build, never `'unsafe-inline'`;
   `connect-src 'self'` and the origin of the worker; `frame-ancestors 'none'`; `base-uri 'none'`.
+- **The preview of the setup frames the site the person added, in their browser** (FRU-354):
+  `frame-src https: http:`, and `img-src https:` for the icon of that site. The frame is sandboxed
+  without `allow-top-navigation`, so the site cannot take the tab of the console away, and it gets
+  no referrer. The console asks the site for nothing from a server: no request of the worker goes
+  there. A script cannot read what a frame of another origin shows, and the console cannot tell a
+  site that refuses to be framed from one that shows, so the person can ask for the address in place
+  of the frame. What this widens: markup injected in the console could load an image or a frame
+  from any address. `script-src` and `connect-src` are as above, so such markup runs no script and
+  calls no other server from the console.
 - **The address of the worker is given when the container starts**, as `FRUITBACK_API`, and goes
   into that policy and into `/config.js`. It is held to the letters of an address first: a scheme,
   a host, a port, a path. Anything else stops the container before a file is written, so a value
