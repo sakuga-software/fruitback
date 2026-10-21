@@ -553,7 +553,9 @@ test('a link of the panel leads to the statuses of its site (FRU-368)', async ({
   await open(page);
   await rows(page).first().click();
   await panel(page).getByRole('link', { name: 'Statuses of https://staging.acme.dev' }).click();
-  await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/);
+  // The dev server builds the module of a screen at its first visit: measured in CI, the statuses page
+  // came 5 s after the press, past the 5 s of an expect, on a runner that had not built it yet.
+  await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
 });
 
