@@ -1,5 +1,6 @@
 import { type RefObject, useLayoutEffect, useRef, useState } from 'react';
 import { type Refusal, refusalOf } from './frame-refusal';
+import { DESK, scaleOf } from './preview-scale';
 import { msg, t } from './i18n';
 import { siteLabel } from './site-address';
 import { BrowserFrame, LinkButton } from './ui';
@@ -17,10 +18,6 @@ import { useLocale } from './use-locale';
  * away from the console. Its referrer is not sent.
  */
 
-/** The width a wide preview lays the site out at, then scales down: the site looks as on a laptop. */
-const DESK = 1280;
-/** Under this width, the site lays out at the width of the frame, as on a phone. */
-const NARROW = 600;
 /** The height of the page in the frame of the kit, `.kit-browser__page`. */
 const HEIGHT = 620;
 
@@ -44,7 +41,7 @@ function remember(origin: string, hidden: boolean): void {
   }
 }
 
-/** The scale of a frame `width` wide: 1 for a phone, under 1 for a wide frame. */
+/** The scale of the site in the frame, read again when the frame changes width (`scaleOf`). */
 function useScale(): [RefObject<HTMLDivElement | null>, number] {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -52,8 +49,7 @@ function useScale(): [RefObject<HTMLDivElement | null>, number] {
     const element = box.current;
     if (element === null) return;
     const measure = () => {
-      const width = element.clientWidth;
-      setScale(width < NARROW || width === 0 ? 1 : width / DESK);
+      setScale(scaleOf(element.clientWidth));
     };
     measure();
     const observer = new ResizeObserver(measure);
