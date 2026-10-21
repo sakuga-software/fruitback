@@ -203,6 +203,16 @@ Node 25.8.1, two workers)
   three runs and a timeout in one, as it already moved in CI.
 - **The suite itself costs the same**: the 4 files in 4.7 to 7.5 s under `node --test`, 5.5 to
   6.4 s under vitest; the whole worker in 161 to 204 s, and 135 to 250 s, as the load moved.
+- **In CI the full run of the worker gains less than on one file** (#450, run 39587729249, against
+  the full run of `main` under `tap`, run 39565743025, before FRU-347). The longest job: 32 min 30
+  (`kv.ts`) against 51 min 48 (`clients.ts`). The time of the eight jobs: 189 minutes against 233.
+  `clients.ts` and `identity.ts` take 29 minutes against 52 and 49, while `kv.ts`, `session.ts`,
+  `rate-limit.ts`, `cors.ts` and `store-config.ts` take as long as before. The dry run is 6 minutes.
+  A mutant runs only the tests that reach it, but each test file of those tests is loaded again,
+  its imports and its PGlite with it, because `isolate` holds. That load is not in the net time of
+  the tests, from which StrykerJS sets the timeout of a mutant: there were 95 timeouts against 48.
+  Each file holds its line, and a timeout counts as killed. Without the timeouts, `kv.ts` would be
+  under its line: its 19 timeouts are to be looked at before a line moves (FRU-345).
 - **The same tests pass**: the 1,942 of `node --test`, compared name by name, and the guards of this
   change. `node:test` counts a skipped
   `describe` as one test and vitest each test in it, so the skipped counts differ (145 and 568), and
