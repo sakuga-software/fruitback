@@ -2,18 +2,37 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import { parseDocument } from 'yaml';
 import {
   type Baseline,
   type Report,
   type Status,
+  expected,
   linesOf,
+  measuredTwice,
   merged,
   regressions,
   scoreOf,
+  unmeasured,
 } from '../../../tools/mutation/ratchet.ts';
-import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
+import { strykerPlugins } from '../../../tools/mutation/part-ignorer.ts';
+import {
+  type Cuts,
+  artifactOf,
+  changedSince,
+  choose,
+  cutProblems,
+  jobsOf,
+  LEFT_TO_ANOTHER_PART,
+  leftOut,
+  lengthOf,
+  PART_IGNORER,
+  partsOf,
+  plan,
+  scopeOf,
+} from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
 /**
@@ -30,6 +49,7 @@ import { apart, git } from './git.fixture.ts';
 const ROOT = new URL('../../../', import.meta.url);
 const SHARED = JSON.parse(readFileSync(new URL('packages/shared/stryker.config.json', ROOT), 'utf8')) as object;
 const WORKER = JSON.parse(readFileSync(new URL('apps/worker/stryker.config.json', ROOT), 'utf8')) as object;
+const CUTS = JSON.parse(readFileSync(new URL('tools/mutation/parts.json', ROOT), 'utf8')) as Cuts;
 
 /** A report of one file, with one mutant for each status given. */
 function report(statuses: Status[], file = 'src/seed.ts'): Report {
@@ -122,6 +142,50 @@ describe('the score of a mutation run', () => {
     assert.deepEqual(regressions(lines, merged([report(['Killed', 'Killed'])]), false), []);
   });
 
+  /**
+   * The parts of a file each measure the mutants that start in them, and list the others as ignored
+   * (FRU-340). Their reports together hold the file, and its line is held on them.
+   */
+  it('holds the line of a cut file on the reports of all its parts', () => {
+    const lines = linesOf(report(['Killed', 'Killed', 'Killed', 'Survived']));
+    const part = (owned: number[]): Report => {
+      const whole = report(['Killed', 'Killed', 'Killed', 'Survived']);
+      const file = whole.files['src/seed.ts']!;
+      file.mutants = file.mutants.map((mutant, index) =>
+        owned.includes(index) ? mutant : { ...mutant, status: 'Ignored', statusReason: LEFT_TO_ANOTHER_PART },
+      );
+      return whole;
+    };
+
+    // The first part scores 100 and the second 50: neither is the file, and both together are.
+    assert.deepEqual(linesOf(merged([part([0, 1]), part([2, 3])])), lines);
+    assert.deepEqual(regressions(lines, merged([part([0, 1]), part([2, 3])]), true), []);
+    assert.deepEqual(measuredTwice([part([0, 1]), part([2, 3])]), []);
+    // Two parts that measure the same mutant: the ignorer was not loaded.
+    assert.deepEqual(measuredTwice([part([0, 1, 2]), part([2, 3])]), [
+      'src/seed.ts:3:1 ConditionalExpression → false was measured by more than one job',
+    ]);
+  });
+
+  it('fails the line of a package when a job of the plan, a part of a file included, left no report', () => {
+    const jobs = jobsOf('apps/worker', 'src/identity.ts', [100], 212);
+    const matrix = { include: [...jobs, ...jobsOf('packages/shared', 'src/seed.ts', undefined, 0)] };
+
+    assert.deepEqual(expected(matrix, 'apps/worker'), jobs);
+    assert.deepEqual(
+      unmeasured(expected(matrix, 'apps/worker'), (artifact) => artifact.endsWith('--1-99')),
+      ['src/identity.ts lines 100-212 was not measured: mutation--apps-worker--src-identity.ts--100-212 has no report'],
+    );
+    assert.deepEqual(
+      unmeasured(expected(matrix, 'packages/shared'), () => false),
+      ['src/seed.ts was not measured: mutation--packages-shared--src-seed.ts has no report'],
+    );
+    assert.deepEqual(
+      unmeasured(jobs, () => true),
+      [],
+    );
+  });
+
   it('fails a package with no line, rather than passing it in silence', () => {
     assert.deepEqual(regressions(undefined, report(['Killed']), true), [
       'this package has no line in tools/mutation/baseline.json',
@@ -183,21 +247,116 @@ describe('what a mutation job mutates', () => {
   });
 
   it('gives each file a job of its own, with an artifact that names its package and its file', () => {
-    const { jobs, full } = plan([
+    const { jobs, full, packages } = plan([
       { pkg: 'packages/shared', mutate: ['src/seed.ts'], full: false },
       { pkg: 'apps/worker', mutate: ['src/kv.ts', 'src/cors.ts'], full: true },
       { pkg: 'apps/extension', mutate: [], full: true },
     ]);
 
+    const whole = (pkg: string, file: string, artifact: string) => ({
+      package: pkg,
+      file,
+      lines: '',
+      mutate: file,
+      last: '',
+      artifact,
+    });
     assert.deepEqual(jobs, [
-      { package: 'packages/shared', file: 'src/seed.ts', artifact: 'mutation--packages-shared--src-seed.ts' },
-      { package: 'apps/worker', file: 'src/kv.ts', artifact: 'mutation--apps-worker--src-kv.ts' },
-      { package: 'apps/worker', file: 'src/cors.ts', artifact: 'mutation--apps-worker--src-cors.ts' },
+      whole('packages/shared', 'src/seed.ts', 'mutation--packages-shared--src-seed.ts'),
+      whole('apps/worker', 'src/kv.ts', 'mutation--apps-worker--src-kv.ts'),
+      whole('apps/worker', 'src/cors.ts', 'mutation--apps-worker--src-cors.ts'),
     ]);
     // A package with nothing to mutate has no line to hold.
     assert.deepEqual(full, ['apps/worker']);
+    // The line job runs for each package that has a job, mutated in full or not.
+    assert.deepEqual(packages, ['packages/shared', 'apps/worker']);
     // The line job takes the reports of a package by this prefix: no other package may share it.
     assert.ok(!artifactOf('apps/worker-x', 'src/a.ts').startsWith('mutation--apps-worker--'));
+  });
+
+  /**
+   * A file that ran out of time in one job is cut into parts, a job each (FRU-340). StrykerJS mutates a
+   * node only when a range holds it whole, so a part runs to the end of the file, and the ignorer
+   * leaves out what starts after its last line: a node that crosses a cut belongs to the part where
+   * it starts, and none is lost. Checked with the instrumenter of StrykerJS on the four cut files of
+   * the worker on 2026-10-21: the parts held the 224, 215, 44 and 74 mutants of the whole files, each
+   * once.
+   */
+  it('cuts a file into parts that follow one another from its first line to its last', () => {
+    assert.deepEqual(partsOf('src/a.ts', [10, 20], 30), [
+      { from: 1, to: 9 },
+      { from: 10, to: 19 },
+      { from: 20, to: 30 },
+    ]);
+    assert.deepEqual(partsOf('src/a.ts', [], 30), [{ from: 1, to: 30 }]);
+    // A part with no line, or past the end, would be a job that measures nothing.
+    for (const cuts of [[1], [20, 10], [10, 10], [31], [2.5]]) {
+      assert.throws(() => partsOf('src/a.ts', cuts, 30), /src\/a\.ts: the cut at line/, JSON.stringify(cuts));
+    }
+  });
+
+  it('gives each part a job that mutates to the end of the file, and the last line it measures', () => {
+    assert.deepEqual(jobsOf('apps/worker', 'src/identity.ts', [100], 212), [
+      {
+        package: 'apps/worker',
+        file: 'src/identity.ts',
+        lines: '1-99',
+        mutate: 'src/identity.ts:1-212',
+        last: '99',
+        artifact: 'mutation--apps-worker--src-identity.ts--1-99',
+      },
+      {
+        package: 'apps/worker',
+        file: 'src/identity.ts',
+        lines: '100-212',
+        mutate: 'src/identity.ts:100-212',
+        last: '',
+        artifact: 'mutation--apps-worker--src-identity.ts--100-212',
+      },
+    ]);
+    const { jobs } = plan(
+      [{ pkg: 'apps/worker', mutate: ['src/identity.ts', 'src/cors.ts'], full: false }],
+      {
+        'apps/worker': { 'src/identity.ts': [50, 100] },
+      },
+      () => 212,
+    );
+    assert.deepEqual(
+      jobs.map((job) => job.artifact),
+      [
+        'mutation--apps-worker--src-identity.ts--1-49',
+        'mutation--apps-worker--src-identity.ts--50-99',
+        'mutation--apps-worker--src-identity.ts--100-212',
+        'mutation--apps-worker--src-cors.ts',
+      ],
+    );
+    // The line job takes the parts of a file with the reports of its package.
+    assert.ok(jobs.every((job) => job.artifact.startsWith('mutation--apps-worker--')));
+  });
+
+  it('leaves out of a part each node that starts after its last line, and nothing in a whole file', () => {
+    assert.equal(leftOut('99', 100), LEFT_TO_ANOTHER_PART);
+    assert.equal(leftOut('99', 99), undefined);
+    assert.equal(leftOut('99', 1), undefined);
+    assert.equal(leftOut('', 500), undefined);
+    assert.equal(leftOut(undefined, 500), undefined);
+    // A value that is not a line would leave nothing out, and count each mutant in two parts.
+    assert.throws(() => leftOut('abc', 1), /MUTATION_LAST_LINE/);
+    assert.throws(() => leftOut('0', 1), /MUTATION_LAST_LINE/);
+
+    const [plugin] = strykerPlugins;
+    assert.equal(plugin?.kind, 'Ignore');
+    assert.equal(plugin?.name, PART_IGNORER);
+    const before = process.env.MUTATION_LAST_LINE;
+    try {
+      process.env.MUTATION_LAST_LINE = '99';
+      assert.equal(plugin?.value.shouldIgnore({ node: { loc: { start: { line: 100 } } } }), LEFT_TO_ANOTHER_PART);
+      assert.equal(plugin?.value.shouldIgnore({ node: { loc: { start: { line: 99 } } } }), undefined);
+      assert.equal(plugin?.value.shouldIgnore({ node: { loc: null } }), undefined);
+    } finally {
+      if (before === undefined) delete process.env.MUTATION_LAST_LINE;
+      else process.env.MUTATION_LAST_LINE = before;
+    }
   });
 
   /**
@@ -281,6 +440,33 @@ describe('the configuration of the mutation job', () => {
     }
   });
 
+  /**
+   * A cut file must be in the scope, inside its lines, and in a package that loads the ignorer: without
+   * it each part would mutate to the end of the file, and count a mutant once for each part. `plan`
+   * stops on the same faults.
+   */
+  it('cuts only files of the scope, inside their lines, in a package that loads the ignorer', () => {
+    // The packages that may be cut, and the directory of each: a file is counted from there.
+    const packages: Record<string, { config: object; directory: string }> = {
+      'apps/worker': { config: WORKER, directory: fileURLToPath(new URL('../', import.meta.url)) },
+    };
+
+    assert.ok(Object.keys(CUTS['apps/worker'] ?? {}).includes('src/identity.ts'), 'identity.ts is not cut');
+    for (const [pkg, files] of Object.entries(CUTS)) {
+      const known = packages[pkg];
+      assert.ok(known !== undefined, `${pkg} is cut in parts.json: name its directory here`);
+      assert.deepEqual(cutProblems(pkg, known.config, CUTS), [], pkg);
+      for (const [file, cuts] of Object.entries(files)) {
+        assert.doesNotThrow(() => partsOf(file, cuts, lengthOf(known.directory.replace(/\/$/, ''), file)), file);
+      }
+    }
+    assert.deepEqual(cutProblems('apps/worker', { mutate: ['src/kv.ts'] }, { 'apps/worker': { 'src/a.ts': [10] } }), [
+      'apps/worker: src/a.ts is cut, and is not in its scope',
+      `apps/worker: its stryker.config.json does not list the ignorer ${PART_IGNORER}`,
+      'apps/worker: its stryker.config.json does not load tools/mutation/part-ignorer.ts',
+    ]);
+  });
+
   // The dry run of the worker is its whole suite, one file at a time: over the 5 minutes of StrykerJS
   // since 2026-10-14, 9 minutes 29 on 2026-10-20, and the run then stops with no mutant run. Each job
   // of the matrix makes its own. See conventions.md.
@@ -331,14 +517,15 @@ describe('the configuration of the mutation job', () => {
   });
 
   /**
-   * The jobs of the matrix are the ones `plan` lists, a file each, and the line of a package is held
-   * on a full run only after every one of them passed (FRU-336).
+   * The jobs of the matrix are the ones `plan` lists, a file or a part of one each, and the line of a
+   * package is held only after every one of them passed (FRU-336), on the reports of every job the plan
+   * listed (FRU-340).
    */
-  it('mutates one file a job, and holds the line of a package after all its jobs', () => {
+  it('mutates one file or one part a job, and holds the line of a package after all its jobs', () => {
     type Job = {
       needs?: string | string[];
       if?: string;
-      strategy?: { matrix?: unknown };
+      strategy?: { matrix?: { package?: unknown } | string };
       steps: { name?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> }[];
     };
     const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
@@ -349,11 +536,22 @@ describe('the configuration of the mutation job', () => {
     const take = jobs.line?.steps.find((step) => step.name === 'Take the reports of the package');
 
     assert.equal(jobs.mutation?.strategy?.matrix, '${{ fromJSON(needs.plan.outputs.matrix) }}');
-    assert.deepEqual(mutate?.env, { MUTATE: '${{ matrix.file }}' });
+    assert.deepEqual(mutate?.env, { MUTATE: '${{ matrix.mutate }}', MUTATION_LAST_LINE: '${{ matrix.last }}' });
+    assert.match(String(mutate?.run), /--mutate "\$MUTATE"/);
     assert.deepEqual(jobs.line?.needs, ['plan', 'mutation']);
+    assert.deepEqual(jobs.line?.strategy?.matrix, { package: '${{ fromJSON(needs.plan.outputs.packages) }}' });
     // `always()` would hold the line on the reports of the jobs that passed, and pass a run that failed.
     assert.ok(!String(jobs.line?.if).includes('always()'), 'the line job runs when a job of the matrix failed');
     assert.equal(take?.with?.pattern, 'mutation--${{ steps.slug.outputs.slug }}--*');
-    assert.match(String(hold?.run), /ratchet\.ts check "\$PACKAGE" reports\/\*\/mutation\.json --full/);
+    assert.match(String(hold?.run), /ratchet\.ts line "\$PACKAGE" reports "\$MATRIX" "\$FULL"/);
+    assert.deepEqual(hold?.env, {
+      PACKAGE: '${{ matrix.package }}',
+      MATRIX: '${{ needs.plan.outputs.matrix }}',
+      FULL: '${{ needs.plan.outputs.full }}',
+    });
+    // A part holds some mutants of its file only: its own job may not hold the line of the file.
+    const own = jobs.mutation?.steps.find((step) => step.name === 'Hold the line');
+    assert.match(String(own?.run), /\$\{LINES:\+--part\}/);
+    assert.equal(own?.env?.LINES, '${{ matrix.lines }}');
   });
 });

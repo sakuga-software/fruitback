@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Job } from './scope.ts';
 
 /**
  * The score of a mutation run may not go down (FRU-172).
@@ -9,16 +11,21 @@ import { readFileSync, writeFileSync } from 'node:fs';
  * scores less than its own line. The lines move up only by a commit: `write` prints them from the
  * reports of a full run.
  *
- * Each file is mutated by a job of its own (FRU-336), so a package has one report per file. `check`
- * reads them together, and a full run fails when a file that has a line was not measured.
+ * Each file is mutated by a job of its own (FRU-336), or by a job for each part of it (FRU-340), so a
+ * package has one report per job. `line` reads the reports of all the jobs of a package together, and
+ * fails when a job of the plan left no report, when two jobs measured the same mutant, and on a full
+ * run when a file that has a line was not measured. `check` holds the line of one job: a part holds
+ * only some mutants of its file, so `--part` prints its score and holds nothing.
  *
  * The score is the one Stryker reports: killed and timed out, over every mutant that was valid. A
  * mutant no test reaches counts against it, as one a test reaches and lets live.
  *
- *   node tools/mutation/ratchet.ts check <package> <mutation.json>… [--full]
+ *   node tools/mutation/ratchet.ts check <package> <mutation.json>… [--full | --part]
+ *   node tools/mutation/ratchet.ts line <package> <reports directory> <matrix> <full>
  *   node tools/mutation/ratchet.ts write <package> <mutation.json> [<package> <mutation.json> …]
  *
- * `write` takes a package once for each of its reports.
+ * `write` takes a package once for each of its reports. `line` reads the report of each job of the
+ * package in `<reports directory>/<artifact>/mutation.json`, `<matrix>` and `<full>` as `plan` prints them.
  */
 
 export type Status = 'Killed' | 'Timeout' | 'Survived' | 'NoCoverage' | 'CompileError' | 'RuntimeError' | 'Ignored';
@@ -32,7 +39,8 @@ export type Report = {
         mutatorName: string;
         replacement?: string;
         status: Status;
-        location: { start: { line: number; column: number } };
+        statusReason?: string;
+        location: { start: { line: number; column: number }; end?: { line: number; column: number } };
       }[];
     }
   >;
@@ -69,9 +77,57 @@ export function linesOf(report: Report): { score: number; files: Record<string, 
   return { score: all?.score ?? 0, files };
 }
 
-/** The reports of the jobs of one package, as one: each holds files the others do not. */
+/**
+ * The reports of the jobs of one package, as one. The parts of a file each hold the mutants that start
+ * in them, and list the others as `Ignored`, which counts for nothing: the mutants are put together.
+ */
 export function merged(reports: Report[]): Report {
-  return { files: Object.assign({}, ...reports.map((report) => report.files)) as Report['files'] };
+  const files: Report['files'] = {};
+  for (const report of reports) {
+    for (const [file, { mutants }] of Object.entries(report.files)) {
+      files[file] = { mutants: [...(files[file]?.mutants ?? []), ...mutants] };
+    }
+  }
+
+  return { files };
+}
+
+/**
+ * The mutants that more than one report measured, one sentence each. Two parts that measure the same
+ * mutant count it twice: the ignorer of `part-ignorer.ts` was not loaded, or the parts overlap.
+ */
+export function measuredTwice(reports: Report[]): string[] {
+  const seen = new Map<string, number>();
+  for (const report of reports) {
+    const keys = new Set(
+      Object.entries(report.files).flatMap(([file, { mutants }]) =>
+        mutants
+          .filter((mutant) => mutant.status !== 'Ignored')
+          .map(({ location: { start, end }, mutatorName, replacement }) => {
+            const to = end === undefined ? '' : `-${end.line}:${end.column}`;
+            return `${file}:${start.line}:${start.column}${to} ${mutatorName}${replacement === undefined ? '' : ` → ${replacement}`}`;
+          }),
+      ),
+    );
+    for (const key of keys) seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+
+  return [...seen].filter(([, count]) => count > 1).map(([key]) => `${key} was measured by more than one job`);
+}
+
+/** The jobs of the plan for one package, the parts of a file included: `line` expects a report of each. */
+export function expected(matrix: { include: Job[] }, pkg: string): Job[] {
+  return matrix.include.filter((job) => job.package === pkg);
+}
+
+/** A job of the plan that left no report, one sentence each. */
+export function unmeasured(jobs: Job[], has: (artifact: string) => boolean): string[] {
+  return jobs
+    .filter((job) => !has(job.artifact))
+    .map(
+      (job) =>
+        `${job.file}${job.lines === '' ? '' : ` lines ${job.lines}`} was not measured: ${job.artifact} has no report`,
+    );
 }
 
 /** What fails in a run, one sentence each, and nothing when the run holds every line. */
@@ -118,49 +174,76 @@ export function survivors(report: Report): string[] {
   );
 }
 
+/** The summary of a run, as Markdown, with a sentence for each thing that fails it. */
+function summary(name: string, lines: Baseline[string] | undefined, report: Report, found: string[]): string {
+  const measured = linesOf(report);
+  const rows = Object.entries(measured.files).map(
+    ([file, line]) => `| \`${file}\` | ${line.mutants} | ${line.score} | ${lines?.files[file]?.score ?? 'none'} |`,
+  );
+  const left = survivors(report);
+
+  return [
+    `### Mutation score of ${name}\n`,
+    '| File | Valid mutants | Score | Line |\n| --- | --- | --- | --- |',
+    ...rows,
+    `\nPackage: ${measured.score}, line ${lines?.score ?? 'none'}.\n`,
+    `<details><summary>${left.length} mutants no test killed</summary>\n\n\`\`\`\n${left.join('\n')}\n\`\`\`\n</details>\n`,
+    ...found.map((sentence) => `**Fails:** ${sentence}.`),
+  ].join('\n');
+}
+
 function main(argv: string[]): number {
   const [command, ...rest] = argv;
   const baselineFile = new URL('baseline.json', import.meta.url);
   const read = (path: string): Report => JSON.parse(readFileSync(path, 'utf8')) as Report;
+  const baseline = (): Baseline => JSON.parse(readFileSync(baselineFile, 'utf8')) as Baseline;
 
   if (command === 'write') {
-    const baseline = JSON.parse(readFileSync(baselineFile, 'utf8')) as Baseline;
-    // A package has a report per file: the pairs of one package are read together.
+    const lines = baseline();
+    // A package has a report per job: the pairs of one package are read together.
     const reports = new Map<string, Report[]>();
     for (let index = 0; index + 1 < rest.length; index += 2) {
       const pkg = rest[index] as string;
       reports.set(pkg, [...(reports.get(pkg) ?? []), read(rest[index + 1] as string)]);
     }
-    for (const [pkg, list] of reports) baseline[pkg] = linesOf(merged(list));
-    writeFileSync(baselineFile, `${JSON.stringify(baseline, null, 2)}\n`);
+    for (const [pkg, list] of reports) lines[pkg] = linesOf(merged(list));
+    writeFileSync(baselineFile, `${JSON.stringify(lines, null, 2)}\n`);
 
     return 0;
   }
 
-  const [name = '', ...paths] = rest.filter((arg) => arg !== '--full');
-  if (command === 'check' && paths.length > 0) {
-    const baseline = JSON.parse(readFileSync(baselineFile, 'utf8')) as Baseline;
-    const report = merged(paths.map(read));
-    const measured = linesOf(report);
-    const lines = baseline[name];
-    const found = regressions(lines, report, rest.includes('--full'));
-
-    console.log(`### Mutation score of ${name}\n`);
-    console.log('| File | Valid mutants | Score | Line |\n| --- | --- | --- | --- |');
-    for (const [file, line] of Object.entries(measured.files)) {
-      console.log(`| \`${file}\` | ${line.mutants} | ${line.score} | ${lines?.files[file]?.score ?? 'none'} |`);
-    }
-    console.log(`\nPackage: ${measured.score}, line ${lines?.score ?? 'none'}.\n`);
-    const left = survivors(report);
-    console.log(
-      `<details><summary>${left.length} mutants no test killed</summary>\n\n\`\`\`\n${left.join('\n')}\n\`\`\`\n</details>\n`,
-    );
-    for (const sentence of found) console.log(`**Fails:** ${sentence}.`);
+  if (command === 'line' && rest.length === 4) {
+    const [name, directory, matrix, full] = rest as [string, string, string, string];
+    const jobs = expected(JSON.parse(matrix) as { include: Job[] }, name);
+    const path = (artifact: string) => join(directory, artifact, 'mutation.json');
+    const reports = jobs.filter((job) => existsSync(path(job.artifact))).map((job) => read(path(job.artifact)));
+    const report = merged(reports);
+    const lines = baseline()[name];
+    const found = [
+      ...(jobs.length === 0 ? ['the plan has no job for this package'] : []),
+      ...unmeasured(jobs, (artifact) => existsSync(path(artifact))),
+      ...measuredTwice(reports),
+      ...regressions(lines, report, (JSON.parse(full) as string[]).includes(name)),
+    ];
+    console.log(summary(name, lines, report, found));
 
     return found.length === 0 ? 0 : 1;
   }
 
-  console.error('usage: ratchet.ts check <package> <mutation.json>… [--full] | write <package> <mutation.json> …');
+  const [name = '', ...paths] = rest.filter((arg) => arg !== '--full' && arg !== '--part');
+  if (command === 'check' && paths.length > 0) {
+    const report = merged(paths.map(read));
+    const lines = baseline()[name];
+    // A part holds some mutants of its file only: its score is no measure of the line of that file.
+    const found = rest.includes('--part') ? [] : regressions(lines, report, rest.includes('--full'));
+    console.log(summary(name, lines, report, found));
+
+    return found.length === 0 ? 0 : 1;
+  }
+
+  console.error(
+    'usage: ratchet.ts check <package> <mutation.json>… [--full | --part] | line <package> <directory> <matrix> <full> | write <package> <mutation.json> …',
+  );
 
   return 2;
 }

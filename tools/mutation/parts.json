@@ -1,0 +1,8 @@
+{
+  "apps/worker": {
+    "src/identity.ts": [126, 141, 159],
+    "src/clients.ts": [33, 236],
+    "src/cache.ts": [71],
+    "src/kv.ts": [67]
+  }
+}

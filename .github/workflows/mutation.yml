@@ -9,8 +9,9 @@ name: Mutation
 # because the lines depend on it.
 #
 # Each file is mutated by a job of its own (FRU-336): the 8 files of the worker in one job ran out
-# of its 150 minutes from 2026-10-19. `plan` lists the jobs, and `line` holds the line of a package
-# on a full run, from the reports of all its jobs. See conventions.md.
+# of its 150 minutes from 2026-10-19. A file that `tools/mutation/parts.json` cuts has a job for each
+# part (FRU-340): `identity.ts` alone took 81 minutes on 2026-10-21. `plan` lists the jobs, and `line`
+# holds the line of each package that has one, from the reports of all its jobs. See conventions.md.
 on:
   pull_request:
   schedule:
@@ -35,6 +36,7 @@ jobs:
       matrix: ${{ steps.scope.outputs.matrix }}
       count: ${{ steps.scope.outputs.count }}
       full: ${{ steps.scope.outputs.full }}
+      packages: ${{ steps.scope.outputs.packages }}
 
     steps:
       - name: Checkout code
@@ -58,12 +60,12 @@ jobs:
         run: node tools/mutation/scope.ts "$EVENT" "$BASE" packages/shared apps/worker >> "$GITHUB_OUTPUT"
 
   mutation:
-    name: mutation ${{ matrix.package }} ${{ matrix.file }}
+    name: mutation ${{ matrix.package }} ${{ matrix.file }}${{ matrix.lines != '' && format(' lines {0}', matrix.lines) || '' }}
     needs: plan
     if: needs.plan.outputs.count != '0'
     runs-on: ubuntu-latest
-    # One file of the worker: 60 minutes for the 215 mutants of clients.ts on 2026-10-20, its dry
-    # run of 7 minutes included. See conventions.md.
+    # One file of the worker, or one part of it: 81 minutes for the 224 mutants of identity.ts on
+    # 2026-10-21, its dry run of 10 minutes included, before it was cut. See conventions.md.
     timeout-minutes: 150
     strategy:
       fail-fast: false
@@ -92,20 +94,24 @@ jobs:
           pnpm install --frozen-lockfile --ignore-workspace --dir tools/mutation
 
       # `inPlace`: the guard tests of the worker read files of the root, and a sandbox would move
-      # them out of reach. This checkout is thrown away after the job.
+      # them out of reach. This checkout is thrown away after the job. A part mutates from its first
+      # line to the end of the file, and `part-ignorer.ts` leaves out what starts after `last`.
       - name: Mutate
         working-directory: ${{ matrix.package }}
         env:
-          MUTATE: ${{ matrix.file }}
+          MUTATE: ${{ matrix.mutate }}
+          MUTATION_LAST_LINE: ${{ matrix.last }}
         run: ../../tools/mutation/node_modules/.bin/stryker run --mutate "$MUTATE" --concurrency 4
 
-      # The line of the file. The line of the package needs every file: `line` holds it.
+      # The line of the file. A part holds some mutants of its file only, so it prints its score, and
+      # `line` holds the line of its file on the reports of all its parts, and the line of the package.
       - name: Hold the line
         env:
           PACKAGE: ${{ matrix.package }}
+          LINES: ${{ matrix.lines }}
         run: |
           set -o pipefail
-          node tools/mutation/ratchet.ts check "$PACKAGE" "$PACKAGE/reports/mutation/mutation.json" |
+          node tools/mutation/ratchet.ts check "$PACKAGE" "$PACKAGE/reports/mutation/mutation.json" ${LINES:+--part} |
             tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Keep the report
@@ -118,17 +124,18 @@ jobs:
           if-no-files-found: error
 
   # Runs only when every job of `mutation` passed: a job that failed or ran out of time has failed
-  # the run already.
+  # the run already. It runs for each package that had a job, so that the parts of a file are held
+  # together on a pull request too, and fails when a job of the plan left no report.
   line:
     name: mutation line ${{ matrix.package }}
     needs: [plan, mutation]
-    if: needs.plan.outputs.full != '[]'
+    if: needs.plan.outputs.packages != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJSON(needs.plan.outputs.full) }}
+        package: ${{ fromJSON(needs.plan.outputs.packages) }}
 
     steps:
       - name: Checkout code
@@ -154,10 +161,14 @@ jobs:
           pattern: mutation--${{ steps.slug.outputs.slug }}--*
           path: reports
 
+      # The plan says which reports there must be, a part of a file included, and which packages
+      # were mutated in full.
       - name: Hold the line of the package
         env:
           PACKAGE: ${{ matrix.package }}
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+          FULL: ${{ needs.plan.outputs.full }}
         run: |
           set -o pipefail
-          node tools/mutation/ratchet.ts check "$PACKAGE" reports/*/mutation.json --full |
+          node tools/mutation/ratchet.ts line "$PACKAGE" reports "$MATRIX" "$FULL" |
             tee -a "$GITHUB_STEP_SUMMARY"

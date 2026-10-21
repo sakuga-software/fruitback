@@ -2,7 +2,11 @@
   "$schema": "../../tools/mutation/node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "_comment": "The core of the worker: who a request is, its session, its client, its limit and its cache. docs/decisions/conventions.md says why each option is set (FRU-172). No test may read the text of a mutated file: a mutation run rewrites that text, and mutation.test.ts fails on such a test.",
   "testRunner": "tap",
-  "plugins": ["../../tools/mutation/node_modules/@stryker-mutator/tap-runner/dist/src/index.js"],
+  "plugins": [
+    "../../tools/mutation/node_modules/@stryker-mutator/tap-runner/dist/src/index.js",
+    "../../tools/mutation/part-ignorer.ts"
+  ],
+  "ignorers": ["mutation-part"],
   "tap": {
     "testFiles": ["src/**/*.test.ts"]
   },

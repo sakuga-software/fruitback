@@ -201,10 +201,17 @@ write <package> <mutation.json>` prints it from the report of a full run.
   fails on another value: the head, for one, would mutate nothing and pass. A full run happens every Monday,
   by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow
   or `tools/mutation/` for both packages, the `stryker.config.json` of a package for that package alone.
-- **Each file is mutated by a job of its own** (FRU-336). The `plan` job lists them with
-  `tools/mutation/scope.ts`, with no install. Each job holds the line of its file. On a full run, the
-  `line` job of a package holds the line of the package on the reports of all its jobs, and fails when
-  a file that has a line was not measured. `ratchet.ts write` takes a package once for each report.
+- **Each file is mutated by a job of its own** (FRU-336), **and a file that `tools/mutation/parts.json`
+  cuts by a job for each part** (FRU-340). The `plan` job lists them with `tools/mutation/scope.ts`,
+  with no install. A job of a whole file holds the line of its file. The `line` job of each package
+  that had a job holds the lines of its files, and on a full run the line of the package, on the
+  reports of all its jobs. It fails when a job of the plan, a part included, left no report, when two
+  jobs measured the same mutant, and on a full run when a file that has a line was not measured.
+  `ratchet.ts write` takes a package once for each report.
+- **A cut is the first line of a part, and is chosen by hand** from what each line cost in the last
+  full run. A cut may fall inside a function: a mutant belongs to the part that holds the line where
+  it starts. A package with cuts loads `tools/mutation/part-ignorer.ts` and lists it in `ignorers`;
+  `plan` and `mutation.test.ts` fail without it, and on a cut outside the file.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
 - **Never run it on a tree you care about.** `inPlace` rewrites the source files and puts them back
   at the end. A run that is killed leaves them mutated.
@@ -270,6 +277,23 @@ write <package> <mutation.json>` prints it from the report of a full run.
   took 60 minutes on 10-20 (run 39517181686). Leaving tests out of the run would be faster, and
   this convention refuses it. An incremental run needs a full run to start from, and none finished.
   So each file has a job, under the same 150 minutes.
+- **A file is cut by lines that `parts.json` fixes, not by the time of the last run** (FRU-340). On
+  2026-10-21 the job of `identity.ts` took 81 minutes of its 150 (run 39549806954), `clients.ts` 58,
+  `cache.ts` 50 and `kv.ts` 37, each with a dry run of 6 to 10 minutes. A cut that the plan computed
+  from the last run would move from one run to the next, and so would the jobs. The cuts were set
+  from the tests each mutant ran in that run (`testsCompleted`, about 5 seconds a test for
+  `identity.ts`), so that no part takes much more than 20 minutes, and no job more than 45. Code that
+  moves between two cuts changes how long a part takes, and not what is measured.
+  StrykerJS mutates a node only when a range of `--mutate` holds it whole (`locationIncluded` in its
+  instrumenter): two ranges that meet at a cut lose each node that crosses it, the body of
+  `verifyIdentityToken` for one, which holds 600 of the 827 tests that `identity.ts` ran. So a part
+  mutates from its first line to the end of the file, and the ignorer of `part-ignorer.ts` leaves out
+  each node that starts after its last line, its descendants with it. Checked with the instrumenter
+  of StrykerJS on 2026-10-21: the parts of `identity.ts`, `clients.ts`, `cache.ts` and `kv.ts` held
+  the 224, 215, 44 and 74 mutants of the whole files, each once. A part lists the mutants of the
+  later parts as `Ignored`, which counts for nothing. Their number does not match the mutants of the
+  next part: StrykerJS does not filter a mutant that is ignored already. So `line` checks for a report
+  of each job, and not for an ignored mutant that no part measured.
 - **The ratchet was planted in CI, twice** (#150). Two tests of `seed.test.ts` deleted, and no source
   file changed: the job mutated `seed.ts` because its test changed, measured 67.27 under its line of
   72.12, and failed. Before that, one test of `identity.test.ts` deleted: the job mutated
