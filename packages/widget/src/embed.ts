@@ -106,7 +106,7 @@ export type FruitbackOptions = {
    * scale of the screen; absent, the whole visible page. The widget is hidden while it is taken.
    *
    * The file goes to the ticket of the tracker, through the worker, which keeps it only while it
-   * travels (FRU-331). Without it, « Capture the page » and « Capture an area » are not offered. A file
+   * travels (FRU-331). Without it, « Capture an area » and « Capture the whole page » are not offered. A file
    * of the disk is offered whatever this is, when the worker takes files for this reader.
    */
   captureVisible?: (area?: CaptureArea) => Promise<PickedFile | undefined>;
@@ -625,28 +625,37 @@ export function init(options: FruitbackOptions): Fruitback {
   /**
    * A capture of the page or of an area (FRU-332). The area is chosen on the page, then the widget is
    * hidden for the time of the capture: the file shows the page, not the composer over it.
+   *
+   * FRU-351: the pins, their tooltips and the frame of the element are hidden from the start, while
+   * the area is chosen too (`data-fruitback-shooting`), so the person sees what the file will show.
+   * They come back in `finally`: after the capture, a cancel, or a capture that fails or throws.
    */
   async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | undefined> {
     const take = options.captureVisible;
     if (take === undefined) return undefined;
-    let area: CaptureArea | undefined;
-    if (kind === 'area') {
-      const chosen = await pickArea({ document, host: host.root, translator });
-      if (chosen === undefined) return 'cancelled';
-      area = { ...chosen, scale: view.devicePixelRatio || 1 };
-    }
     const container = host.root.host as HTMLElement;
-    const visibility = container.style.visibility;
-    container.style.visibility = 'hidden';
+    container.toggleAttribute('data-fruitback-shooting', true);
     try {
-      // Two frames: the page is painted without the widget before the browser takes it.
-      await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
+      let area: CaptureArea | undefined;
+      if (kind === 'area') {
+        const chosen = await pickArea({ document, host: host.root, translator });
+        if (chosen === undefined) return 'cancelled';
+        area = { ...chosen, scale: view.devicePixelRatio || 1 };
+      }
+      const visibility = container.style.visibility;
+      container.style.visibility = 'hidden';
+      try {
+        // Two frames: the page is painted without the widget before the browser takes it.
+        await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
 
-      return await take(area);
-    } catch {
-      return undefined;
+        return await take(area);
+      } catch {
+        return undefined;
+      } finally {
+        container.style.visibility = visibility;
+      }
     } finally {
-      container.style.visibility = visibility;
+      container.toggleAttribute('data-fruitback-shooting', false);
     }
   }
 

@@ -706,11 +706,20 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 
 ### The rules, in short
 
-- **Four ways, in the composer, when the worker takes files of this reader**: « Capture the page »,
-  « Capture an area » (both only with a `captureVisible` of the host), « Image » (PNG, JPEG) and
-  « File ». The worker says it on each read: `canAttach: true` offers them, `false` shows the sentence
-  that the note has no tracker and no way, absent shows nothing. A place of a member says it for
-  itself (`destinations[].canAttach`).
+- **One text button, « Attach », opens a menu of the ways to join a file** (FRU-351, decision of
+  Mathieu): « Add an attachment » (the file picker, any type), « Capture an area », « Capture the
+  whole page » (both only with a `captureVisible` of the host) and « Drag and drop », a zone where a
+  dropped file joins the note, with « Choose a file » for whoever cannot drag. The menu is a
+  `role="menu"` under a button `aria-haspopup="menu"`: the arrows open it and go round, Home and End
+  go to the ends, Enter takes a way, Esc closes it and gives the focus back to « Attach », Tab and a
+  click out close it. A capture and a file picked give the focus back to « Attach »; Esc of the drop
+  zone hides it. The worker says on each read whether files go: `canAttach: true` offers the
+  menu, `false` shows the sentence that the note has no tracker and no way, absent shows nothing. A
+  place of a member says it for itself (`destinations[].canAttach`).
+- **No pin, no tooltip, no open thread and no frame of the element on a capture** (FRU-351): from
+  the start of a capture, the area being chosen included, the host carries `data-fruitback-shooting`,
+  which hides the overlay and the highlight; they come back in a `finally`, after the capture, a
+  cancel, or a capture that fails (`e2e/attachments.spec.ts` reads the pin during each one).
 - **A file goes on its way when it is joined**, through the transport (`POST /attachments`, its bytes
   in base64 for any transport). A refusal is said under its name at once, and a file over its limit
   (`MAX_ATTACHMENT_BYTES`, the same constants as the worker) or a sixth file is refused before it is

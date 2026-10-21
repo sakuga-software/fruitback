@@ -34,7 +34,7 @@ import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type IconName = 'gear' | 'close' | 'search' | 'drop' | 'dropDashed' | 'list' | 'mark' | 'markDashed';
+export type IconName = 'gear' | 'close' | 'search' | 'drop' | 'dropDashed' | 'list' | 'mark' | 'markDashed' | 'chevron';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
@@ -71,6 +71,20 @@ const ICONS: Record<IconName, IconShape> = {
         stroke: 'currentColor',
         'stroke-width': '1.5',
         'stroke-linecap': 'round',
+      },
+    ],
+  },
+  // The fold of « Attach », that opens a menu (FRU-351). Drawn here: no path of somebody else.
+  chevron: {
+    viewBox: '0 0 16 16',
+    paths: [
+      {
+        d: 'M4 6 L8 10 L12 6',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '1.5',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
       },
     ],
   },

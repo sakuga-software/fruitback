@@ -59,12 +59,17 @@ test('a capture of the page and one of an area go through the relay to the ticke
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   const files = page.getByRole('group', { name: 'Attachments' });
-  await files.getByRole('button', { name: 'Capture the page' }).click();
+  await files.getByRole('button', { name: 'Attach' }).click();
+  await files.getByRole('menuitem', { name: 'Capture the whole page' }).click();
   await expect(page.locator('.fruitback-composer-file').first()).toHaveAttribute('data-fruitback-file', 'ready');
   await expect(page.locator('.fruitback-composer-file-name').first()).toHaveText('page.png');
 
-  // The area, with the keyboard: the area is drawn in the middle, moved, sized, and taken.
-  await files.getByRole('button', { name: 'Capture an area' }).focus();
+  // The area, with the keyboard: the menu of « Attach » (FRU-351), then the area is drawn in the
+  // middle, moved, sized, and taken.
+  await files.getByRole('button', { name: 'Attach' }).focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(files.getByRole('menuitem', { name: 'Capture an area' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Choose an area of the page' })).toBeVisible();
   await page.keyboard.press('ArrowRight');

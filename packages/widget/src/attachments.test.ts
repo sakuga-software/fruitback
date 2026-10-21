@@ -12,6 +12,7 @@ import { base64OfBytes, bytesOfBase64, fetchTransport } from './transport.ts';
 import type { TransportRequest } from './transport.ts';
 import { keyboardEventCtor, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
+import { deepActiveElement } from './focus.ts';
 
 /**
  * The files of a note, in the widget (FRU-332): the composer joins them and says why one did not go,
@@ -77,21 +78,30 @@ const files = (root: HTMLElement) =>
   ]);
 
 describe('the files of a note in the composer (FRU-332)', () => {
-  it('offers the four ways, sends a capture on its way at once, and shows its name and size', async () => {
+  it('offers the four ways in the menu of « Attach », sends a capture on its way at once, and shows its name and size', async () => {
     const { root, q, uploads, settle } = mount();
     composer?.open(ANCHOR);
-    const ways = [...root.querySelectorAll('.fruitback-composer-attach-way')].map((way) => [
+    const trigger = q<HTMLButtonElement>('[data-fruitback-attach-trigger]');
+    const menu = q<HTMLElement>('[data-fruitback-attach-menu]');
+    assert.equal(trigger.textContent, 'Attach');
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+    assert.equal(menu.hidden, true);
+    trigger.click();
+    assert.equal(menu.hidden, false);
+    assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+    const ways = [...root.querySelectorAll('[role="menuitem"]')].map((way) => [
       way.textContent,
-      (way as HTMLElement).hidden,
+      (way.parentElement as HTMLElement).hidden,
     ]);
     assert.deepEqual(ways, [
-      ['Capture the page', false],
+      ['Add an attachment', false],
       ['Capture an area', false],
-      ['Image', false],
-      ['File', false],
+      ['Capture the whole page', false],
+      ['Drag and drop', false],
     ]);
 
     q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+    assert.equal(menu.hidden, true, 'a way taken closes the menu');
     await settle();
     assert.equal(uploads.length, 1);
     assert.deepEqual(files(root), [['page.png', '0.1 kB · Sending…', 'sending']]);
@@ -205,9 +215,11 @@ describe('the files of a note in the composer (FRU-332)', () => {
     composer?.destroy();
     const noCapture = mount({ captures: () => false });
     composer?.open(ANCHOR);
-    assert.equal(noCapture.q<HTMLButtonElement>('[data-fruitback-attach-page]').hidden, true);
-    assert.equal(noCapture.q<HTMLButtonElement>('[data-fruitback-attach-area]').hidden, true);
-    assert.equal(noCapture.q<HTMLButtonElement>('[data-fruitback-attach-file]').hidden, false);
+    const shown = (selector: string) => !(noCapture.q(selector).parentElement as HTMLElement).hidden;
+    assert.equal(shown('[data-fruitback-attach-page]'), false);
+    assert.equal(shown('[data-fruitback-attach-area]'), false);
+    assert.equal(shown('[data-fruitback-attach-file]'), true);
+    assert.equal(shown('[data-fruitback-attach-drop]'), true);
   });
 
   it('keeps no note with files for later: « Keep for later » goes while a file is joined', async () => {
@@ -255,6 +267,116 @@ describe('the files of a note in the composer (FRU-332)', () => {
     q<HTMLButtonElement>('[data-fruitback-attach-area]').click();
     await settle();
     assert.deepEqual(files(root), [['area.png', 'The capture was not taken', 'refused']]);
+  });
+});
+
+describe('the menu of « Attach » (FRU-351)', () => {
+  function opened() {
+    const mounted = mount();
+    composer?.open(ANCHOR);
+    const trigger = mounted.q<HTMLButtonElement>('[data-fruitback-attach-trigger]');
+    const menu = mounted.q<HTMLElement>('[data-fruitback-attach-menu]');
+    const KeyboardEvent = keyboardEventCtor(mounted.page);
+    const press = (on: Element, key: string) =>
+      on.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    const focused = () => deepActiveElement(mounted.page.document)?.textContent;
+
+    return { ...mounted, trigger, menu, press, focused };
+  }
+
+  it('opens with the arrows on its first or last way, goes round with the arrows, Home and End, and Esc gives the focus back', () => {
+    const { trigger, menu, press, focused } = opened();
+    trigger.focus();
+    press(trigger, 'ArrowDown');
+    assert.equal(menu.hidden, false);
+    assert.equal(focused(), 'Add an attachment');
+    press(menu, 'ArrowDown');
+    assert.equal(focused(), 'Capture an area');
+    press(menu, 'End');
+    assert.equal(focused(), 'Drag and drop');
+    press(menu, 'ArrowDown');
+    assert.equal(focused(), 'Add an attachment', 'the last way goes round to the first');
+    press(menu, 'ArrowUp');
+    assert.equal(focused(), 'Drag and drop');
+    press(menu, 'Home');
+    assert.equal(focused(), 'Add an attachment');
+
+    press(menu, 'Escape');
+    assert.equal(menu.hidden, true);
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    assert.equal(focused(), 'Attach');
+    assert.equal(composer?.element.hidden, false, 'Esc of the menu closes the menu, not the composer');
+
+    press(trigger, 'ArrowUp');
+    assert.equal(focused(), 'Drag and drop', 'ArrowUp opens on the last way');
+    press(menu, 'Tab');
+    assert.equal(menu.hidden, true, 'Tab closes the menu');
+  });
+
+  it('gives the focus back to « Attach » after a capture, and skips the captures where the host takes none', async () => {
+    const { trigger, q, focused, settle } = opened();
+    trigger.click();
+    q<HTMLButtonElement>('[data-fruitback-attach-area]').click();
+    await settle();
+    assert.equal(focused(), 'Attach');
+    composer?.destroy();
+
+    const none = mount({ captures: () => false });
+    composer?.open(ANCHOR);
+    const KeyboardEvent = keyboardEventCtor(none.page);
+    const noneTrigger = none.q<HTMLButtonElement>('[data-fruitback-attach-trigger]');
+    noneTrigger.focus();
+    noneTrigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    none
+      .q('[data-fruitback-attach-menu]')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    assert.equal(deepActiveElement(none.page.document)?.textContent, 'Drag and drop', 'the captures are skipped');
+  });
+
+  it('opens no menu once the note holds the most files, and closes it at a click out of it', async () => {
+    const { trigger, menu, q, settle } = opened();
+    trigger.click();
+    assert.equal(menu.hidden, false);
+    q<HTMLElement>('[data-fruitback-note]').click();
+    assert.equal(menu.hidden, true, 'a click out of the menu closes it');
+
+    for (let n = 0; n < MAX_ATTACHMENTS_PER_NOTE; n += 1) {
+      trigger.click();
+      q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+      await settle();
+    }
+    assert.equal(trigger.getAttribute('aria-disabled'), 'true');
+    trigger.click();
+    assert.equal(menu.hidden, true);
+  });
+
+  it('shows a zone where a dropped file joins the note, and Esc hides it and gives the focus back', async () => {
+    const { trigger, q, root, page, settle, press, focused } = opened();
+    const zone = q<HTMLElement>('[data-fruitback-attach-dropzone]');
+    assert.equal(zone.hidden, true);
+    trigger.click();
+    q<HTMLButtonElement>('[data-fruitback-attach-drop]').click();
+    assert.equal(zone.hidden, false);
+    assert.equal(deepActiveElement(page.document), zone);
+    assert.equal(zone.textContent?.includes('Drop your files here'), true);
+
+    const view = page.view as unknown as { File: typeof File; Event: typeof Event };
+    const dropped = new view.File(['hello'], 'notes.txt', { type: 'text/plain' });
+    const drop = new view.Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [dropped] } });
+    zone.dispatchEvent(drop);
+    for (let tries = 0; tries < 20 && files(root).length === 0; tries += 1) await settle();
+    assert.deepEqual(
+      files(root).map(([name]) => name),
+      ['notes.txt'],
+    );
+    assert.equal(zone.hidden, true, 'the zone goes once a file is dropped');
+
+    trigger.click();
+    q<HTMLButtonElement>('[data-fruitback-attach-drop]').click();
+    press(zone, 'Escape');
+    assert.equal(zone.hidden, true);
+    assert.equal(focused(), 'Attach');
   });
 });
 

@@ -980,6 +980,14 @@ li { display: list-item; }
 }
 :host([data-fruitback-capturing]) .fruitback-dock > :not(.fruitback-banner) { display: none; }
 /*
+  FRU-351: while a capture of the page or of an area is taken, the pins, their tooltips, the open
+  thread and the frame of the element are not on the page: the file shows the page only.
+*/
+:host([data-fruitback-shooting]) .fruitback-overlay,
+:host([data-fruitback-shooting]) .fruitback-overlay *,
+:host([data-fruitback-shooting]) .fruitback-highlight,
+:host([data-fruitback-shooting]) .fruitback-highlight * { visibility: hidden !important; }
+/*
   A forced palette paints every border, a transparent one too, and drops the fills: the shape of a
   control is then a line of the system's colours, inside the border that makes its target 44 px.
 */

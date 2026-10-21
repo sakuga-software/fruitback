@@ -281,11 +281,13 @@ test('team mode: a note joins a file of the disk, and its thread says how many f
   await page.locator('[data-testid="card-latte"] .add').click();
   const files = page.getByRole('group', { name: 'Attachments' });
   await expect(files).toBeVisible();
-  await expect(files.getByRole('button', { name: 'Capture the page' })).toBeVisible();
-  await expect(files.getByRole('button', { name: 'Capture an area' })).toBeVisible();
+  // FRU-351: the ways are in the menu of « Attach ».
+  await files.getByRole('button', { name: 'Attach' }).click();
+  await expect(files.getByRole('menuitem', { name: 'Capture the whole page' })).toBeVisible();
+  await expect(files.getByRole('menuitem', { name: 'Capture an area' })).toBeVisible();
+  await page.keyboard.press('Escape');
   // The inputs of the disk are opened by their buttons, never shown (the /tfp found them drawn).
   await expect(page.locator('[data-fruitback-attach-file-input]')).toBeHidden();
-  await expect(page.locator('[data-fruitback-attach-image-input]')).toBeHidden();
   await page
     .locator('[data-fruitback-attach-file-input]')
     .setInputFiles({ name: 'log.txt', mimeType: 'text/plain', buffer: Buffer.from('une ligne de log') });
