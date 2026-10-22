@@ -7,6 +7,7 @@ import { GITHUB_STATES, createIssueStore, githubStateKey, stageForGithubIssue } 
 import { mockMethod } from './mock.fixture.ts';
 import { envelopeStatuses } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
+import { createRoutedStore } from './connectors.ts';
 import type { SeedStore } from './store.ts';
 import { callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -188,6 +189,27 @@ describe('one list of states for each connector (FRU-369, heavy review of pull r
     // So the read lists each status once.
     const keys = envelopeStatuses([], sources).map((status) => status.key);
     assert.equal(new Set(keys).size, keys.length);
+  });
+});
+
+describe('the four states reach the read through the routed store (FRU-369, lite review of 3349bccd)', () => {
+  it('gives trackerSourcesOf the four states of a GitHub connector, through createRoutedStore as GET /feedback has it', async () => {
+    // The store of a GitHub connector says `trackerStates`; the routed store asks it as `trackerStatesFor`.
+    const github = storeOf([], { statusSource: 'con_github' });
+    const routed = createRoutedStore({ name: 'own', scope: () => 'own' } as unknown as SeedStore, async () => github);
+    const client = {
+      id: 'site_1',
+      name: 'Acme',
+      origins: ['https://acme.dev'],
+      destinations: [
+        { id: 'd1', connector: 'con_github', teamId: 'acme/site' },
+        { id: 'd2', connector: 'con_github', teamId: 'acme/docs' },
+      ],
+    } as never;
+
+    const sources = await trackerSourcesOf(undefined, routed, client);
+
+    assert.deepEqual(sources, [{ source: 'con_github', states: [...GITHUB_STATES] }]);
   });
 });
 
