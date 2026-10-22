@@ -119,6 +119,7 @@ const SITE_WITH_DESTINATION = {
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
   label: site_destinations.label,
+  private: site_destinations.private,
 };
 
 /** A domain as `domainOf` reads one. */
@@ -686,6 +687,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             team_id: site_destinations.team_id,
             project_id: site_destinations.project_id,
             label: site_destinations.label,
+            private: site_destinations.private,
           })
           .from(site)
           .leftJoin(site_destinations, eq(site_destinations.site_id, site.id))
@@ -951,6 +953,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
+    async noteRepositoryPrivacy(connector, repository, isPrivate) {
+      await run((db) =>
+        db
+          .update(site_destinations)
+          .set({ private: isPrivate })
+          .where(
+            and(
+              eq(site_destinations.connector_id, connector),
+              eq(site_destinations.team_id, repository),
+              or(isNull(site_destinations.private), ne(site_destinations.private, isPrivate)),
+            ),
+          ),
+      );
+    },
+
     async addConnector(workspace, { kind, label, sealed }) {
       const id = newId('con');
       const now = Date.now();
@@ -1152,6 +1169,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             team_id: destination.teamId ?? null,
             project_id: destination.projectId ?? null,
             label: destination.label ?? null,
+            private: destination.private ?? null,
           });
         }
 

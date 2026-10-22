@@ -56,14 +56,17 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: Trac
     if (githubApp === undefined) throw new StoreError('This worker has no GitHub App to reach a repository with');
     const installation = openInstallation(sealed, secretsKey);
     // FRU-369: the issues say their status as `<connector>:<key>`, one of the four of GITHUB_STATES.
-    const base = createGithubConnectorStore(githubApp, installation, { statusSource: connector });
+    // FRU-382: what GitHub says of a repository when a note goes there, for the console's warning.
+    const privacy = (repository: string, isPrivate: boolean) =>
+      accounts.noteRepositoryPrivacy(connector, repository, isPrivate);
+    const base = createGithubConnectorStore(githubApp, installation, { statusSource: connector, privacy });
     // The stage a site gives a status wins over the one GitHub's state gives, for that site.
     const forSite = async (site: string | undefined): Promise<SeedStore> => {
       const own = await siteStages(accounts, workspace, site, connector);
 
       return own === undefined
         ? base
-        : createGithubConnectorStore(githubApp, installation, { statusSource: connector, stages: own });
+        : createGithubConnectorStore(githubApp, installation, { statusSource: connector, stages: own, privacy });
     };
 
     return {

@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { getTableColumns, getTableName, sql } from 'drizzle-orm';
-import { type PgTable, bigint, foreignKey, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
+import { type PgTable, bigint, foreignKey, index, integer, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
-import { deliveries, email_links, pairings, seed_comments, site_destinations } from './postgres-schema.ts';
+import { deliveries, email_links, pairings, seed_comments } from './postgres-schema.ts';
 
 /**
  * The `user_version` of each file of the last worker that wrote one: the one version this command
@@ -140,6 +140,19 @@ const sites = pgTable('sites', {
   connector_id: text('connector_id'),
   team_id: text('team_id'),
   project_id: text('project_id'),
+});
+
+/**
+ * `site_destinations` as `COPY_SCHEMA` has it: FRU-382 added `private`, which no file holds. A
+ * destination copied here keeps it NULL, not known, until it is written again or a note goes there.
+ */
+const site_destinations = pgTable('site_destinations', {
+  site_id: text('site_id').notNull(),
+  position: integer('position').notNull(),
+  connector_id: text('connector_id').notNull(),
+  team_id: text('team_id'),
+  project_id: text('project_id'),
+  label: text('label'),
 });
 
 /**

@@ -222,6 +222,19 @@ the issues of each client, and read their metadata. What holds it:
   it: each list mints its own, and no note, reply or label call ever gets it. The list stops at
   1000 repositories (10 pages of 100). The condition: GitHub gives an installation token only the
   permissions that it asks for.
+- **Whether the repository of a destination is public is GitHub's word, never the request's**
+  (FRU-382). When a destination is written, the worker asks a token for that repository alone with
+  `permissions: { metadata: 'read' }`, and reads `private` from `GET /repos/{owner}/{name}`. A token
+  that GitHub answers with another permission, or for another repository, is not used, and no cache
+  keeps it. When a note goes there, the token of the note reads it again, and every destination of
+  that connector to that repository takes it: a repository that turned public is said at the next
+  note. A `private` in the body of the route is not read. A GitHub that does not answer leaves it
+  unknown and writes the destination, and costs a note nothing. Every role that reads the
+  destinations of a site reads it, a member too: the console warns before an issue goes public.
+  test:`learns it when the destination is written, with a token of that repository alone that reads the metadata only`,
+  test:`writes the destination when GitHub does not say, and keeps nothing of it`,
+  test:`learns it again when a note goes: a repository that turned public is said at once`,
+  test:`costs the note nothing when GitHub does not say it then`.
 - A repository that the installation does not cover (GitHub answers `403`, `404` or `422` for the
   token, `403` or `404` for the issue) makes the connector « Needs attention ». The worker then asks
   no token for another repository. A rate limit of GitHub is not a refusal, and changes nothing.
