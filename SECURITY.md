@@ -1657,6 +1657,28 @@ statuses page, with the switch, and refuses who does not manage the sites`.
   built-in status of the first stage.
   test:`keeps the effect of « Still wrong »: the note goes back to the first stage, in its built-in status`.
 
+### The status of a note, chosen in the console (FRU-384)
+
+- **`POST /console/workspaces/<id>/notes/<note>/status` takes the rights of the route of the
+  extension** (FRU-367), with the cookie of the console: the person who left the note (the index keeps
+  their account), or a role with `manage-sites`. Anybody else of the workspace is `403 not-allowed`, a
+  site the caller does not read (a guest, FRU-250) or of another workspace is `404`, and nothing is
+  written. test:`refuses a member who did not write the note, and writes nothing`,
+  test:`answers 404 for a note of a site the caller does not read, or of another workspace`.
+- **Every check is in one transaction, the site held for update** (`setNoteStatus` of the accounts
+  store): the note of the index and its author, the status of the site (`409 status-hidden`, and
+  `409 status-changed` for one it no longer has), then the note and its stage in `seeds` and in the
+  index. A note of a tracker, even one it named `FB-<n>`, is `403 statuses-not-taken`.
+  test:`refuses a hidden status, and one the site no longer has, with the conflict the console says`,
+  test:`leaves the status of a note in a tracker to the tracker, even one it named FB-<n>`.
+- **A suspended workspace changes no status** (FRU-282): the route is a write of the console, behind
+  its one guard. The page of the note is read again (`invalidatePages`).
+  test:`lets the author put the note in a status the team added: the store, the index and the pin follow`.
+- **The list says who may change what**: `canSetStatus` on each note the worker keeps, and the
+  statuses of the worker's store of its site, hidden ones marked so, to whoever reads the list. A
+  status is no secret of the team: the widget and the extension read the same ones (FRU-366).
+  test:`lists the status of a kept note, who may change it, and the statuses of its site`.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

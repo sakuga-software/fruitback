@@ -211,6 +211,12 @@ export type ListedNote = {
   checkedAt: number;
   /** Its delivery that did not arrive, when it went to a receiving connector. */
   delivery?: { id: string; attempts: number; nextAt?: number; lastStatus?: number };
+  /**
+   * Its status, for a note the worker keeps (FRU-384): the key of the worker's store, as `seeds` holds
+   * it now, `null` for the built-in status of its stage. Absent: a note in a tracker, whose status is
+   * the tracker's.
+   */
+  kept?: { statusKey: string | null; stage: string };
 };
 
 export type NoteList = {

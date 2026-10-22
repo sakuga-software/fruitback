@@ -466,6 +466,29 @@ export type AccountStore = {
     | { removed: false; reason: 'not-found' | 'invalid-target' }
     | { removed: false; reason: 'in-use'; notes: number }
   >;
+  /**
+   * Puts a note the worker keeps in a status of its site, from the console (FRU-384): `key` is a key
+   * of the worker's store, a built-in status or one the team added, and the note takes its stage. In
+   * one transaction, with the site held: the note of the index, its author, the status and the note.
+   * `who.manages`: the caller holds `manage-sites` here; otherwise only the note's author may.
+   *
+   * - `not-found`: no such note in this site of this workspace.
+   * - `not-kept`: the note is in a tracker, whose status changes there.
+   * - `not-allowed`: the caller neither wrote it nor manages the sites.
+   * - `unknown-status`: no such status for this site. `status-hidden`: it is hidden.
+   *
+   * `page`: the page of the note, whose cached reads are now wrong.
+   */
+  setNoteStatus(
+    workspace: string,
+    site: string,
+    seed: string,
+    key: string,
+    who: { account: string; manages: boolean },
+  ): Promise<
+    | { set: true; stage: SeedStage; page: string }
+    | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'unknown-status' | 'status-hidden' }
+  >;
   /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
   addConnector(
     workspace: string,

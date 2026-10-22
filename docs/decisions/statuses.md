@@ -329,7 +329,7 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **`POST /feedback/<id>/status?client=<site>` with `{ url, status: 'own:<key>' }`**, for a note that
   the worker keeps (a site with no destination, or one that sends to an address). The rights of a
   verdict (FRU-294): the person who left the note, or a role with `manage-sites`, with a session of
-  the extension. The console's selector comes in its own pull request, with a route of the console.
+  the extension. The console's selector has a route of its own (FRU-384, below).
 - **The status is a key of the read's `statuses`**: `own:<stage>`, a built-in status, which writes no
   `status_key`; or `own:<key>`, a status the team added and did not hide. The note takes its stage,
   in one statement (`setStatus` of the store), then in the index of the notes, and its page is read
@@ -342,6 +342,24 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   store only, and the routed store asks the store of the site (`statusesFor`).
 - **« Still wrong » keeps its effect**, and writes `status_key` NULL with the first stage: the note
   goes back to the built-in status of that stage, so its status and its stage still agree.
+
+### The status of a note, from the console (FRU-384)
+
+- **A route of the console, not the one of the extension**: `POST …/notes/<note>/status` with
+  `{ status: 'own:<key>' }` and the cookie of the console. The route of FRU-367 asks for a session of
+  the extension, which the console does not hold. Same rights: the author of the note, or
+  `manage-sites`.
+- **The whole write is `setNoteStatus` of the accounts store**, one transaction with the site held
+  for update, as the statuses routes of FRU-366: the note of the index, its author, the status, then
+  `seeds` and the index. The console's routes already write `seeds` this way (`putSiteStatus`,
+  `removeSiteStatus`); the route of the extension goes through the seed store because it serves a
+  routed store per site.
+- **A status the site no longer has is `409 status-changed`**, not `400 unknown-status`: the console
+  offers only what the list read, so a key it sends that is gone was removed in between.
+- **`GET …/notes` gives the status of each note the worker keeps** (`own:<key>`, read in `seeds` for
+  the page in one statement), `canSetStatus`, and `statuses`: per site with such a note, the statuses
+  of the worker's store, hidden ones marked `hidden`. A note of a tracker gets none of the three, and
+  keeps its stage.
 
 ### Linear, built (FRU-368)
 
@@ -453,16 +471,17 @@ the widgets cached on host pages and for self-hosted workers.
 
 Created by the orchestrator after the decisions, children of FRU-352.
 
-| Ticket  | What                                                                                                                                                                         | Critical | Why                                  |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------ |
-| FRU-364 | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, `statusOf`; the FRU-24 rule in contract.md; this page.                                                 | **Yes**  | Public contract                      |
-| FRU-365 | Worker: the table of statuses per site, `seeds.status_key`, the copy of the FRU-102 exceptions to every site of their connector.                                             | **Yes**  | Data migration                       |
-| FRU-366 | Worker: console API to read, add, change and order the statuses of a site, with the 4.5:1 refusal and the text colour function in `shared`; the SECURITY.md line on colours. | **Yes**  | New writes, roles                    |
-| FRU-367 | Worker, notes kept in Fruitback: the five built-in statuses, and the route that changes the status of a note.                                                                | **Yes**  | Writes a note, and its stage with it |
-| FRU-368 | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours » per site.                                                                               | No       | Read path only                       |
-| FRU-369 | Worker, GitHub: the four fixed statuses, renamable and recolourable per site.                                                                                                | No       | Read path only                       |
-| FRU-370 | Widget and extension draw the name and the colour of the status, with the stage as fallback; `PanelNote` carries them; SECURITY.md on what reaches a style. `/tfp`.          | No       | Display; the fallback is FRU-364's   |
-| FRU-371 | Console: the board in `design/`, then the statuses screen of a site and the status select in the list of notes. `/tfp`.                                                      | No       | Display, behind FRU-366 and FRU-367  |
+| Ticket  | What                                                                                                                                                                         | Critical               | Why                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------ |
+| FRU-364 | `shared`: `statuses` and `status` in the envelope, `offeredStatuses`, `statusOf`; the FRU-24 rule in contract.md; this page.                                                 | **Yes**                | Public contract                      |
+| FRU-365 | Worker: the table of statuses per site, `seeds.status_key`, the copy of the FRU-102 exceptions to every site of their connector.                                             | **Yes**                | Data migration                       |
+| FRU-366 | Worker: console API to read, add, change and order the statuses of a site, with the 4.5:1 refusal and the text colour function in `shared`; the SECURITY.md line on colours. | **Yes**                | New writes, roles                    |
+| FRU-367 | Worker, notes kept in Fruitback: the five built-in statuses, and the route that changes the status of a note.                                                                | **Yes**                | Writes a note, and its stage with it |
+| FRU-368 | Worker, Linear: read `color`, send `statuses` and `status`, « Use Linear's colours » per site.                                                                               | No                     | Read path only                       |
+| FRU-369 | Worker, GitHub: the four fixed statuses, renamable and recolourable per site.                                                                                                | No                     | Read path only                       |
+| FRU-370 | Widget and extension draw the name and the colour of the status, with the stage as fallback; `PanelNote` carries them; SECURITY.md on what reaches a style. `/tfp`.          | No                     | Display; the fallback is FRU-364's   |
+| FRU-371 | Console: the board in `design/`, then the statuses screen of a site and the status select in the list of notes. `/tfp`.                                                      | No                     | Display, behind FRU-366 and FRU-367  |
+| FRU-384 | Worker: the route of the console that changes the status of a note, and the status in the list of notes. Then the console's select, in its own PR. `/tfp`.                   | **Yes** for the worker | A new write, roles                   |
 
 Order: FRU-364, then FRU-365, then FRU-366 to FRU-369 in any order, then FRU-370 and FRU-371. The
 REST inbound route and the GitHub Project Status field have no ticket: decisions 5 and 4 left them out.

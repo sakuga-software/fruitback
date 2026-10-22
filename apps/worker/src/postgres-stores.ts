@@ -89,6 +89,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     putSiteStatus: true,
     orderSiteStatuses: true,
     removeSiteStatus: true,
+    setNoteStatus: true,
     addConnector: true,
     connectors: true,
     attachInstallation: true,

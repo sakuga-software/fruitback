@@ -626,6 +626,7 @@ export async function handleConsoleApi(
     allowed,
     noteIndex: context.noteIndex,
     accounts: context.accounts,
+    kv: context.kv,
     now: context.now ?? Date.now(),
     headers,
   });
