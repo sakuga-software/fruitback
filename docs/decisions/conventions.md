@@ -92,14 +92,19 @@ How this repository is formatted, tested and documented, and which test holds ea
   repository. `docs-site.test.ts` fails on a guide the home page links from nowhere and on a link
   that names no file. The markdown stays the source: every other guard reads the files.
   **Its home page is the landing of `fruitback.com`** (`docs/CNAME`): `docs/index.md` takes
-  `layout: landing`, and `docs/_layouts/landing.html` draws the board « Landing » of the mock-up
-  of 2026-10-20 around it (FRU-309): the hero and the issue a note becomes, the five statuses, the
-  three modes, self-hosting, the extension, the two offers and « Where it stands ». `index.md`
-  keeps the guides. A layout is HTML, so its links name the `.html` page through `relative_url`.
+  `layout: landing`, and `docs/_layouts/landing.html` draws the mock-up « Fruitback — landing V2 »
+  around it (FRU-387, after the board « Landing » of FRU-309): the hero, without and with, how it
+  works and the five stages, the product, three cases, the connectors, the two offers, care and the
+  questions. `index.md` keeps the guides. A layout is HTML, so its links name the `.html` page through
+  `relative_url`. It needs no script: the questions are `<details>`, and the three cases sit side by
+  side rather than in tabs. The glyphs are inline SVG (icons.md), the stage colours are the widget's
+  `--fruitback-stage-*`, and the text wraps as in the console (widget.md, FRU-350).
   Say only what exists, and what `docs/` already says: a price the beta has not set is « Free during
   the beta », and the state of the images, the widget and the extension is the one of
-  `self-hosting.md`, `install.md` and `reviewing.md`. The board said « no account anywhere » and « notes in
-  SQLite »: neither is true now.
+  `self-hosting.md`, `install.md` and `reviewing.md`. The board of FRU-309 said « no account
+  anywhere » and « notes in SQLite »; V2 said Jira, Trello, GitLab and Notion, SQLite, one container,
+  a guest link, an export of the workspace, a support plan and a REST payload of its own. None of
+  those is true now, and the pull request of FRU-387 lists what was reworded.
 - **[SECURITY.md](../../SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
