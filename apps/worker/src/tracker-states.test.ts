@@ -3,7 +3,13 @@ import { describe, it } from 'vitest';
 import type { ClientConfig } from './clients.ts';
 import { createMemoryKv } from './kv.ts';
 import type { SeedStore, TrackerState } from './store.ts';
-import { TRACKER_STATES_TTL_MS, rememberTrackerStates, trackerSourcesOf, trackerStatesKey } from './tracker-states.ts';
+import {
+  TRACKER_FAILURE_TTL_MS,
+  TRACKER_STATES_TTL_MS,
+  rememberTrackerStates,
+  trackerSourcesOf,
+  trackerStatesKey,
+} from './tracker-states.ts';
 
 /** The states of the trackers of a site, read again after a while (FRU-368). */
 
@@ -79,7 +85,31 @@ describe('the states of the trackers of a site (FRU-368)', () => {
     assert.equal(JSON.parse((await kv.get(trackerStatesKey('con_linear', 'team_design'))) ?? '[]')[0].stage, 'todo');
   });
 
-  it('leaves out a tracker that does not answer, and keeps nothing of it', async () => {
+  it('asks a tracker that failed once per window, and takes its states again once it answers (FRU-381)', async () => {
+    let now = 0;
+    const kv = createMemoryKv({ now: () => now });
+    let down = true;
+    const { store, asked } = counted(() =>
+      down ? Promise.reject(new Error('Linear is down')) : Promise.resolve(STATES),
+    );
+    const linearAsked = () => asked.filter((each) => each === 'con_linear').length;
+
+    assert.deepEqual(await trackerSourcesOf(kv, store, CLIENT), []);
+    assert.equal(linearAsked(), 1);
+    // Every read of the window: the pins keep their stage, and Linear is not asked again.
+    now = TRACKER_FAILURE_TTL_MS - 1;
+    assert.deepEqual(await trackerSourcesOf(kv, store, CLIENT), []);
+    assert.deepEqual(await trackerSourcesOf(kv, store, CLIENT), []);
+    assert.equal(linearAsked(), 1);
+
+    // After the window Linear is asked again, and its answer is taken as soon as it comes back.
+    down = false;
+    now = TRACKER_FAILURE_TTL_MS + 1;
+    assert.deepEqual(await trackerSourcesOf(kv, store, CLIENT), [{ source: 'con_linear', states: STATES }]);
+    assert.equal(linearAsked(), 2);
+  });
+
+  it('leaves out a tracker that does not answer, and keeps nothing of its states', async () => {
     const kv = createMemoryKv();
     const { store } = counted(() => Promise.reject(new Error('Linear is down')));
 

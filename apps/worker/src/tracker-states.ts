@@ -23,6 +23,18 @@ import type { SeedStore, TrackerState } from './store.ts';
 /** How long the states of one team are kept before they are read again. */
 export const TRACKER_STATES_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * How long a tracker that did not answer is left alone (FRU-381): its next reads ask it nothing, and
+ * their pins keep their stage, as on the read that failed. Without it, a tracker that is down or that
+ * limits its rate is asked once more at every read of the pins, which the read cache was there to spare.
+ */
+export const TRACKER_FAILURE_TTL_MS = 60 * 1000;
+
+/** The key of a tracker that did not answer, for one team of one connector. */
+export function trackerFailureKey(connector: string, team: string | undefined): string {
+  return `fruitback:tracker-failed:${JSON.stringify([connector, team ?? null])}`;
+}
+
 /** The key of the states of one team of one connector. */
 export function trackerStatesKey(connector: string, team: string | undefined): string {
   return `fruitback:tracker-states:${JSON.stringify([connector, team ?? null])}`;
@@ -109,6 +121,15 @@ export async function trackerSourcesOf(
       };
       const kept = statesOf(hit);
       if (kept !== undefined) return excepted(kept);
+      // A tracker that failed a moment ago is not asked again until its mark ends (FRU-381).
+      const failed = trackerFailureKey(place.connector, place.teamId);
+      let marked: string | undefined;
+      try {
+        marked = await kv?.get(failed);
+      } catch (error) {
+        if (!(error instanceof KvError)) throw error;
+      }
+      if (marked !== undefined) return undefined;
       try {
         const states = await store.trackerStatesFor?.(placedAt(client, place));
         if (states === undefined) return undefined;
@@ -119,6 +140,11 @@ export async function trackerSourcesOf(
         console.error(
           `[fruitback] the states of a tracker did not answer: ${error instanceof Error ? error.message : String(error)}`,
         );
+        try {
+          await kv?.set(failed, '1', TRACKER_FAILURE_TTL_MS);
+        } catch (kvError) {
+          if (!(kvError instanceof KvError)) throw kvError;
+        }
 
         return undefined;
       }

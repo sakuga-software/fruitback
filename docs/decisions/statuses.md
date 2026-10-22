@@ -349,7 +349,10 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   of the console reads them fresh and keeps what it read: opening it shows a change at once. A team
   that Linear does not answer for gives no status to the read, and its pins keep their stage. What is
   kept is Linear's alone, the stage of each type: the exceptions of the connector are applied at each
-  read, so a change of them is never left in the `Kv` by a read that was on its way.
+  read, so a change of them is never left in the `Kv` by a read that was on its way. A team Linear did
+  not answer for is left alone for `TRACKER_FAILURE_TTL_MS` (one minute, FRU-381): the reads of that
+  minute ask Linear nothing, and their pins keep their stage, so a Linear that is down or that limits
+  its rate is asked once a minute, not once a read.
 - **Two routes of the console, `manage-sites` like the others**: `GET …/statuses/tracker`, the states
   of each Linear team of the site (named by its connector and its `teamId`, as a site can send to two
   teams of one connector) with their stage and their colour, and the switch; `POST
