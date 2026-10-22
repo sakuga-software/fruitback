@@ -238,6 +238,32 @@ export default function SiteStatuses() {
       </>
     );
 
+  const tracker = typeof read === 'string' || read.tracker === 'failed' ? undefined : read.tracker;
+  const sections = typeof read === 'string' ? [] : sectionsOf(read.site, read.connectors);
+  // The switch is the site's (FRU-368): drawn once, above the first list of Linear that was read, or
+  // above the first Linear section when none was, so it can always be turned off (lite reviews of
+  // pull request 495).
+  const isRead = (section: Section) =>
+    section.kind === 'linear' &&
+    tracker?.trackers.find((one) => one.connector === section.connector.id)?.states !== undefined;
+  const firstRead = sections.findIndex(isRead);
+  const switchAt = firstRead === -1 ? sections.findIndex((section) => section.kind === 'linear') : firstRead;
+  const setTrackerColours = async (on: boolean): Promise<string | undefined> => {
+    const set = await writeOne(() =>
+      call('POST', `${base}/sites/${encodeURIComponent(siteId)}/statuses/settings`, {
+        trackerColours: on,
+      }),
+    );
+    if (set === BUSY || !set.ok) return set === BUSY ? NOT_CHANGED : problemOf(set, STATUS_PROBLEMS, NOT_CHANGED);
+    setRead((current) =>
+      typeof current === 'string' || current.tracker === 'failed'
+        ? current
+        : { ...current, tracker: { ...current.tracker, trackerColours: on } },
+    );
+
+    return undefined;
+  };
+
   const onRows = (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) =>
     setRead((current) => (typeof current === 'string' ? current : { ...current, rows: change(current.rows) }));
 
@@ -265,7 +291,7 @@ export default function SiteStatuses() {
       ) : null}
       {typeof read === 'string' ? null : (
         <div className="flex flex-col gap-[36px]">
-          {sectionsOf(read.site, read.connectors).map((section, index, all) => {
+          {sections.map((section, index) => {
             const linear =
               section.kind === 'linear' && read.tracker !== 'failed'
                 ? read.tracker.trackers.find((each) => each.connector === section.connector.id)
@@ -277,19 +303,19 @@ export default function SiteStatuses() {
                   id={`statuses-${section.connector.id}`}
                   label={section.label}
                   onRetry={() => void load()}
+                  {...(index === switchAt && tracker !== undefined
+                    ? {
+                        colours: (
+                          <TrackerColours
+                            value={tracker.trackerColours}
+                            disabled={writing}
+                            onChange={setTrackerColours}
+                          />
+                        ),
+                      }
+                    : {})}
                 />
               );
-            const tracker = typeof read.tracker === 'string' ? undefined : read.tracker;
-            // The switch is the site's (FRU-368): it is drawn once, above the first list of Linear that
-            // was read. A team that was not read draws no list, and must not take the switch with it
-            // (lite review of pull request 495).
-            const first =
-              all.findIndex(
-                (each) =>
-                  each.kind === 'linear' &&
-                  tracker?.trackers.find((one) => one.connector === each.connector.id)?.states !== undefined,
-              ) === index;
-
             return (
               <StatusList
                 key={section.kind === 'own' ? OWN : section.connector.id}
@@ -298,26 +324,7 @@ export default function SiteStatuses() {
                 label={section.kind === 'own' ? undefined : section.label}
                 states={linear?.states ?? []}
                 trackerColours={tracker?.trackerColours === true}
-                {...(section.kind === 'linear' && first && tracker !== undefined
-                  ? {
-                      onTrackerColours: async (on: boolean) => {
-                        const set = await writeOne(() =>
-                          call('POST', `${base}/sites/${encodeURIComponent(siteId)}/statuses/settings`, {
-                            trackerColours: on,
-                          }),
-                        );
-                        if (set === BUSY || !set.ok)
-                          return set === BUSY ? NOT_CHANGED : problemOf(set, STATUS_PROBLEMS, NOT_CHANGED);
-                        setRead((current) =>
-                          typeof current === 'string' || current.tracker === 'failed'
-                            ? current
-                            : { ...current, tracker: { ...current.tracker, trackerColours: on } },
-                        );
-
-                        return undefined;
-                      },
-                    }
-                  : {})}
+                {...(index === switchAt ? { onTrackerColours: setTrackerColours } : {})}
                 rows={read.rows}
                 onRows={onRows}
                 path={`${base}/sites/${encodeURIComponent(siteId)}/statuses`}
@@ -338,14 +345,26 @@ export default function SiteStatuses() {
 }
 
 /** A Linear destination whose states the worker could not read: it says so, and reads them again. */
-function LinearUnread({ id, label, onRetry }: { id: string; label: string | undefined; onRetry: () => void }) {
+function LinearUnread({
+  id,
+  label,
+  onRetry,
+  colours,
+}: {
+  id: string;
+  label: string | undefined;
+  onRetry: () => void;
+  /** The switch of the site, when this section is where it is drawn. */
+  colours?: ReactNode;
+}) {
   useLocale();
 
   return (
     <section aria-labelledby={id} className="max-w-[760px]">
-      <h2 id={id} className="text-section font-semibold [overflow-wrap:anywhere]">
+      <h2 id={id} className="mb-[12px] text-section font-semibold [overflow-wrap:anywhere]">
         {label ?? t('Linear')}
       </h2>
+      {colours}
       <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
         <p role="alert" className="min-w-0 flex-1 text-small text-muted">
           {t('Fruitback could not read the states of Linear. The statuses you set are not lost.')}

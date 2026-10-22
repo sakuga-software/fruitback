@@ -604,6 +604,26 @@ test('the switch stays when the first Linear team of the site could not be read'
   ).toBeVisible();
 });
 
+test('the switch is drawn when no Linear team of the site could be read, so it can still be turned off', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, {
+    site: LINEAR_SITE,
+    connectors: LINEAR_CONNECTORS,
+    rows: [],
+    tracker: { trackerColours: true, trackers: [{ ...LINEAR_PLACE, error: 'tracker-unreachable' }] },
+  });
+  await open(page);
+
+  const section = page.getByRole('region', { name: 'Linear · Acme web' });
+  await expect(section.getByRole('alert')).toBeVisible();
+  const toggle = section.getByRole('switch', { name: "Use Linear's colours" });
+  await expect(toggle).toBeChecked();
+  await section.getByText("Use Linear's colours", { exact: true }).click();
+  await expect(toggle).not.toBeChecked();
+  expect(worker.sent.at(-1)).toEqual({ method: 'POST', path: `${STATUSES}/settings`, body: { trackerColours: false } });
+});
+
 test('at 390 px in French, Linear and its switch', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page, {
