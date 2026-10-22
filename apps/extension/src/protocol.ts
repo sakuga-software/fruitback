@@ -348,8 +348,9 @@ function boundedString(value: unknown, max: number): string | undefined {
 /**
  * The status of a note from the page, or nothing (FRU-370). The page writes in this world, and a
  * colour goes into a style of the panel: only `#rrggbb` is kept, as `offeredStatuses` keeps it. A
- * status of another stage than its note is dropped, as `statusOf` drops it: the stage wins. A bad
- * entry loses its status and keeps its note.
+ * status of another stage than its note is dropped, as `statusOf` drops it: the stage wins. A name
+ * is required and may be empty: an empty name is the word of the stage (FRU-364). A bad entry loses its
+ * status and keeps its note.
  */
 function parsePanelStatus(value: unknown, stage: PanelNote['stage']): PanelStatus | undefined {
   if (!isRecord(value) || value.stage !== stage) return undefined;

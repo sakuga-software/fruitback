@@ -267,12 +267,20 @@ describe('the commands of the side panel (FRU-299)', () => {
     // A text colour comes only with a colour, and only as #rrggbb.
     const noText = parsePanelNotes([{ ...NOTE, status: { ...status, textColor: 'url(y)' } }])?.[0]?.status;
     assert.deepEqual(noText, { ...kept, color: '#7c3aed' });
-    // A status of another stage, or with no name, is dropped, and the note stays: the stage wins.
+    // An empty name is a name: the word of the stage, as the contract says (FRU-364). The colour stays.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: '' } }])?.[0]?.status, {
+      name: '',
+      stage: NOTE.stage,
+      color: '#7c3aed',
+      textColor: '#ffffff',
+    });
+    // A status of another stage, or whose name is missing or too long, is dropped, and the note stays.
     // NOTE is a note to do.
     const other = 'done';
     assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, stage: other } }]), [NOTE]);
     const long = 'x'.repeat(PANEL_LIMITS.name + 1);
     assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: long } }]), [NOTE]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: undefined } }]), [NOTE]);
     assert.deepEqual(parsePanelNotes([{ ...NOTE, status: 'Done' }]), [NOTE]);
     // A word that is empty, too long or not a word is left out.
     for (const stateName of ['', long, 7]) assert.deepEqual(parsePanelNotes([{ ...NOTE, stateName }]), [NOTE]);
