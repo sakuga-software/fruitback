@@ -612,6 +612,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Ouvrez-le dans ce navigateur, et cet onglet se connecte tout seul. Le lien fonctionne une fois, pendant quinze minutes.',
   'Send again in {time}': 'Renvoyer dans {time}',
   'Send again': 'Renvoyer',
+  'Status of this note': 'Statut de cette note',
+  'This status was removed from the site since the list was read. Reload the page.':
+    'Ce statut a été retiré du site depuis la lecture de la liste. Rechargez la page.',
+  'This status is hidden now, so no note goes in it. Choose another one.':
+    'Ce statut est désormais masqué : aucune note n’y entre. Choisissez-en un autre.',
+  'Only the person who left this note, or an owner or an admin, changes its status.':
+    'Seule la personne qui a laissé cette note, ou un propriétaire ou un administrateur, change son statut.',
+  'The status of this note changes in its tracker.': 'Le statut de cette note change dans son tracker.',
+  'This note is no longer in Fruitback. Reload the page.': 'Cette note n’est plus dans Fruitback. Rechargez la page.',
+  'The status was not saved. Try again.': 'Le statut n’a pas été enregistré. Réessayez.',
   'You are signed in': 'Vous êtes connecté',
   'Your other Fruitback tab has carried on without you. You can close this one.':
     'Votre autre onglet Fruitback a continué sans vous. Vous pouvez fermer celui-ci.',

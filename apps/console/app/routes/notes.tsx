@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Connector, type Site, STAGES, type Stage, call } from '../api';
+import { type Answer, type Connector, type Site, STAGES, type Stage, call } from '../api';
 import { ago } from '../ago';
 import { type Listed, listedOf } from '../listed';
 import {
@@ -22,6 +22,7 @@ import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
 import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
+import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -55,6 +56,12 @@ export type IndexedNote = {
   url?: string;
   /** A note that an address did not take yet: `gave-up` when the worker stopped trying. */
   delivery?: { id: string; state: 'waiting' | 'gave-up' };
+  /**
+   * FRU-384: the status of a note the worker keeps (`own:<key>`), and whether this person may change
+   * it: its author, or an owner or an admin. Absent for a note of a tracker, whose status is the tracker's.
+   */
+  status?: string;
+  canSetStatus?: boolean;
   createdAt: string;
 };
 
@@ -64,6 +71,8 @@ export type NotesAnswer = {
   /** `byPlace` and `undelivered` go to whoever sees the tracker: not to a guest. */
   counts: { all: number; byPlace?: Readonly<Record<string, number>>; undelivered?: number };
   next?: string;
+  /** The statuses of the worker's store of each site with a note it keeps on this page (FRU-384). */
+  statuses?: Readonly<Record<string, StatusChoice[]>>;
 };
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
@@ -313,6 +322,10 @@ export default function Notes() {
                         site={hostOf(note.site.id)}
                         manages={manages}
                         retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
+                        statuses={shown.statuses?.[note.site.id]}
+                        choose={(status) =>
+                          call('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status })
+                        }
                         onSent={() => void read()}
                       />
                     ))}
@@ -415,6 +428,8 @@ function NoteRow({
   manages,
   retry,
   onSent,
+  statuses,
+  choose,
 }: {
   note: IndexedNote;
   /** The host of the site of the note, when the sites were read. */
@@ -422,6 +437,8 @@ function NoteRow({
   manages: boolean;
   retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
   onSent: () => void;
+  statuses: readonly StatusChoice[] | undefined;
+  choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
 }) {
   useLocale();
   const [sending, setSending] = useState(false);
@@ -458,10 +475,7 @@ function NoteRow({
         </span>
       </td>
       <td className="whitespace-nowrap">
-        <span className="inline-flex items-center gap-[8px]">
-          <StatusDot status={note.stage} size={10} />
-          {t(STAGE_NAMES[note.stage])}
-        </span>
+        <NoteStatus note={note} statuses={statuses} choose={choose} />
       </td>
       <td>
         <span className="block [overflow-wrap:anywhere]">{who}</span>
@@ -493,6 +507,84 @@ function NoteRow({
         {ago(note.createdAt)}
       </td>
     </tr>
+  );
+}
+
+/**
+ * The status of a note (FRU-384). A note the worker keeps shows its status by name; to its author, and
+ * to an owner or an admin, as a select of the site's statuses. A note of a tracker shows its stage: its
+ * status changes in the tracker.
+ *
+ * The select shows what the person chose at once. Refused, it keeps that choice and says why under
+ * it, so that nothing chosen is silently undone; saved, the row takes the stage the worker answered.
+ */
+function NoteStatus({
+  note,
+  statuses,
+  choose,
+}: {
+  note: IndexedNote;
+  statuses: readonly StatusChoice[] | undefined;
+  choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
+}) {
+  useLocale();
+  const [chosen, setChosen] = useState(note.status);
+  const [stage, setStage] = useState(note.stage);
+  const [saving, setSaving] = useState(false);
+  const [refused, setRefused] = useState<string | undefined>();
+  const stageName = (of: Stage) => t(STAGE_NAMES[of]);
+  const current = chosen === undefined ? undefined : statuses?.find((status) => status.key === chosen);
+
+  async function save(status: string) {
+    setChosen(status);
+    setSaving(true);
+    setRefused(undefined);
+    const answer = await choose(status);
+    setSaving(false);
+    if (!answer.ok) return setRefused(statusProblemOf(answer));
+    setStage(answer.data.stage);
+  }
+
+  // A note of a tracker, or a list read without the statuses of the site: the stage.
+  if (chosen === undefined || statuses === undefined || (current === undefined && note.canSetStatus !== true)) {
+    return (
+      <span className="inline-flex items-center gap-[8px]">
+        <StatusDot status={stage} size={10} />
+        {stageName(stage)}
+      </span>
+    );
+  }
+  if (note.canSetStatus !== true) {
+    return (
+      <span className="inline-flex items-center gap-[8px]">
+        <StatusDot status={current?.stage ?? stage} size={10} />
+        {current === undefined ? stageName(stage) : statusName(current, stageName)}
+      </span>
+    );
+  }
+
+  return (
+    // A fixed width: a refusal wraps under the select and never widens the column.
+    <div className="w-[200px]">
+      <Choice
+        label={t('Status of this note')}
+        labelHidden
+        compact
+        disabled={saving}
+        status={current?.stage ?? stage}
+        value={chosen}
+        onChange={(status) => void save(status)}
+        options={offeredFor(statuses, chosen).map((status) => ({
+          value: status.key,
+          label: statusName(status, stageName),
+        }))}
+      />
+      {refused === undefined ? null : (
+        <span className="block whitespace-normal">
+          <Problem>{t(refused)}</Problem>
+        </span>
+      )}
+    </div>
   );
 }
 

@@ -34,6 +34,7 @@ const screens = [
   'ago.ts',
   'writers-pick.tsx',
   'site-preview.tsx',
+  'note-status.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
