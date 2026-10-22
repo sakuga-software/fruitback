@@ -329,7 +329,8 @@ export function Field({
   );
 }
 
-export type Option = { value: string; label: string };
+/** `drop`: the drop of a status before the label, in a list that chooses one (FRU-385). */
+export type Option = { value: string; label: string; drop?: { status: Status; color?: string } };
 /** Options under a heading, like the teams of a tracker and their projects. */
 export type OptionGroup = { heading: string; options: Option[] };
 
@@ -354,7 +355,14 @@ type ChoiceProps = {
 function item(option: Option) {
   return (
     <ListBox.Item key={option.value} id={option.value} textValue={option.label}>
-      {option.label}
+      {option.drop === undefined ? (
+        option.label
+      ) : (
+        <span className="inline-flex items-center gap-[8px]">
+          <StatusDot status={option.drop.status} color={option.drop.color} />
+          {option.label}
+        </span>
+      )}
       <ListBox.ItemIndicator />
     </ListBox.Item>
   );
@@ -372,6 +380,10 @@ export function Choice({
   compact = false,
   status,
 }: ChoiceProps) {
+  // An option with its own drop shows it in the button too, as the value: the button draws no second one.
+  const chosen = options
+    .flatMap((each) => ('options' in each ? each.options : [each]))
+    .find((each) => each.value === value);
   return (
     <Select
       fullWidth
@@ -386,7 +398,7 @@ export function Choice({
     >
       <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
       <Select.Trigger>
-        {status === undefined ? null : <StatusDot status={status} />}
+        {status === undefined || chosen?.drop !== undefined ? null : <StatusDot status={status} />}
         <Select.Value />
         <Select.Indicator />
       </Select.Trigger>
@@ -598,9 +610,27 @@ const STATUS_COLOURS = {
  * The drop of a status. It is a picture for the eye only: the word of the status is always written
  * beside it, because the grey of « to do » is 1.39:1 on white and a colour alone tells nothing to many people.
  */
-export function StatusDot({ status, size = 9 }: { status: Status; size?: 9 | 10 | 11 }) {
+export function StatusDot({
+  status,
+  size = 9,
+  color,
+}: {
+  status: Status;
+  size?: 9 | 10 | 11;
+  /**
+   * The colour of a status the team gave one (FRU-385), as `#rrggbb`: the drop takes it, over the
+   * colour of its stage. The edge stays, so a light colour still shows on white (FRU-334).
+   */
+  color?: string;
+}) {
   return (
-    <span aria-hidden="true" className={`kit-drop ${STATUS_COLOURS[status]}`} data-size={size} data-status={status} />
+    <span
+      aria-hidden="true"
+      className={`kit-drop ${STATUS_COLOURS[status]}`}
+      data-size={size}
+      data-status={status}
+      {...(color === undefined ? {} : { style: { background: color } })}
+    />
   );
 }
 

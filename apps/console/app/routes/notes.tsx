@@ -557,7 +557,7 @@ function NoteStatus({
   if (note.canSetStatus !== true) {
     return (
       <span className="inline-flex items-center gap-[8px]">
-        <StatusDot status={current?.stage ?? stage} size={10} />
+        <StatusDot status={current?.stage ?? stage} size={10} color={current?.color} />
         {current === undefined ? stageName(stage) : statusName(current, stageName)}
       </span>
     );
@@ -577,6 +577,7 @@ function NoteStatus({
         options={offeredFor(statuses, chosen).map((status) => ({
           value: status.key,
           label: statusName(status, stageName),
+          drop: { status: status.stage, ...(status.color === undefined ? {} : { color: status.color }) },
         }))}
       />
       {refused === undefined ? null : (

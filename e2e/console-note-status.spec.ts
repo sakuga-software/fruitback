@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
-import { ACME, type Role, sideScroll, stubWorker } from './console-workspace.ts';
+import { ACME, type Role, painted, rgb, sideScroll, stubWorker } from './console-workspace.ts';
 
 /**
  * The status of a note in the list of the notes (FRU-384), in a browser. The worker is answered by
@@ -16,7 +16,7 @@ const AT = '2026-10-20T10:00:00.000Z';
 /** The statuses of the site: the team added « Waiting » and hid « Parked ». */
 const STATUSES = [
   { key: 'own:waiting', name: 'Waiting', stage: 'todo', color: '#2563eb', textColor: '#ffffff' },
-  { key: 'own:parked', name: 'Parked', stage: 'todo', hidden: true },
+  { key: 'own:parked', name: 'Parked', stage: 'todo', color: '#7c3aed', textColor: '#ffffff', hidden: true },
   { key: 'own:new', name: '', stage: 'new' },
   { key: 'own:todo', name: '', stage: 'todo' },
   { key: 'own:progress', name: '', stage: 'progress' },
@@ -141,6 +141,34 @@ test('the author chooses the status of a note kept in Fruitback, among the shown
   await expect(tracked.locator('td').nth(1)).toHaveText('In progress');
 
   await expectNoViolation(page, 'the list with a select');
+});
+
+test('the drop of a status takes its colour, or the one of its stage when the team gave none (FRU-385)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await open(page);
+  const mine = row(page, 'The headline');
+  const select = mine.getByRole('button', { name: /Status of this note/ });
+  const drop = select.locator('.kit-drop');
+
+  // « New » is built-in, with no colour of the team: its drop is the one of its stage.
+  await select.click();
+  const option = (name: string) => page.getByRole('option', { name, exact: true }).locator('.kit-drop');
+  const stageNew = await painted(option('New'), 'backgroundColor');
+  expect(await painted(drop, 'backgroundColor')).toEqual(stageNew);
+  expect(stageNew).not.toEqual(rgb('#2563eb'));
+  // Each status of the list has its drop: « Waiting » in its colour, « To do » in the one of its stage.
+  expect(await painted(option('Waiting'), 'backgroundColor')).toEqual(rgb('#2563eb'));
+  expect(await painted(option('To do'), 'backgroundColor')).not.toEqual(rgb('#2563eb'));
+  await page.getByRole('option', { name: 'Waiting', exact: true }).click();
+
+  // Chosen, the drop of the select takes the colour of « Waiting », and keeps its edge.
+  await expect(select).toContainText('Waiting');
+  expect(await painted(drop, 'backgroundColor')).toEqual(rgb('#2563eb'));
+  expect(await drop.evaluate((element) => getComputedStyle(element).boxShadow)).not.toBe('none');
+  // A status shown with no select, « Parked », is drawn in its colour too.
+  expect(await painted(row(page, 'The price').locator('.kit-drop'), 'backgroundColor')).toEqual(rgb('#7c3aed'));
 });
 
 for (const [error, sentence] of [
