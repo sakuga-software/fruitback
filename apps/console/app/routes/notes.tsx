@@ -31,7 +31,7 @@ export type NoteAuthor = {
 
 /** Where a note went: Fruitback, a connector (its id and its name), or a connector removed since. */
 export type NotePlace = {
-  kind: 'fruitback' | 'linear' | 'rest' | 'removed';
+  kind: 'fruitback' | 'linear' | 'rest' | 'github' | 'removed';
   connector?: string;
   label?: string;
 };

@@ -188,8 +188,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   says « Waiting for your first note. », and reads the site again every five seconds while the tab
   is shown (`useFirstNote` in `setup.tsx`; a hidden tab asks nothing, a read that fails changes
   nothing). At the first note the step is done by itself, and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
-  console » and « Connect a tracker ». The sentence says « Linear or your own API »: GitHub is no
-  source of a workspace yet (FRU-188). « Open the console » stays under the cards while the step
+  console » and « Connect a tracker ». The sentence says « a tracker or your own API »: GitHub is
+  a source only where the worker has its App (FRU-361), and the setup does not ask which. « Open the console » stays under the cards while the step
   waits, for a person who sends no note now. **Still waiting**: « Signs in with this account. No
   code to type. » (a browser is still connected from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
   its worker by that attribute only.
@@ -339,7 +339,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
   `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
-  share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
+  share). **A source that does not exist connects nothing**: Jira, GitLab, Trello,
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
   where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
   connected: a workspace can connect a second one. **« Add a source » waits for the list to be read**
@@ -357,6 +357,26 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
   times, so each button also holds the name of its source for a screen reader.
   `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+- **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
+  FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
+  Issues » is always in « Add a source », between Linear and the REST API. With `githubApp: true`,
+  « Connect » asks `POST …/connectors/github/start` and goes to the `url` it answers, as « Connect
+  Linear » does with OAuth. Without it, a disabled « Not on this Fruitback » and a line that names
+  the operator: there is no other way to connect GitHub. **Each word of the way back has its
+  sentence under the card** (`GITHUB_RETURNS`), and leaves the address after it is read;
+  `connected` opens the panel of the last GitHub connector, not of the last row, because an
+  installation again keeps its connector. **An installation from github.com comes back with no
+  `state`**: the worker sends it to `/?github=unstarted`, and the front door forwards the word to
+  the Connectors screen of the first workspace that the person manages. **A row names the account**
+  (« Installed on acme », from `GitHub App · acme`), and its state is the one of FRU-102. **A panel
+  that needs repair links to `https://github.com/apps/fruitback-app`**: the console does not know
+  the id of the installation, which the worker keeps sealed. **A site chooses a repository** from
+  `GET …/connectors/<id>/repositories`, private ones first, then the public ones under « Public
+  repositories: their issues are public »; the place is sent as `{ connector, repository }` and
+  read back from `teamId`. A place in a public repository says, under it, that each note becomes an
+  issue that anybody can read. **`setPlaces` takes the sources of the workspace**: each panel sends
+  the whole list of a site, and a GitHub place sent as a team makes the worker refuse that list.
+  `e2e/console-github.spec.ts` holds the card, every word, the panel, the bodies sent, 390 px and axe.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

@@ -26,6 +26,7 @@ export type Visibility = 'members' | 'everyone';
 export type Writers = 'members' | 'anyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
+/** A GitHub destination keeps its repository, `owner/name` in lower case, in `teamId` (FRU-359). */
 /** `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the tracker answers. */
 export type Destination = { connector: string; teamId?: string; projectId?: string; label?: string };
 /**
@@ -96,7 +97,7 @@ export function samePlace(one: Destination, other: Destination): boolean {
 export type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
 export type Connector = {
   id: string;
-  kind: 'linear' | 'rest';
+  kind: 'linear' | 'rest' | 'github';
   label: string;
   createdAt: string;
   attention?: ConnectorAttention;
@@ -120,6 +121,8 @@ export type Delivery = {
   lastError?: string;
 };
 export type Team = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
+/** A repository that the installation of a GitHub connector covers (FRU-361). A public one is read by anybody. */
+export type Repository = { fullName: string; private: boolean };
 /** `instanceAdmin`: the person administers this instance (FRU-261). Absent from a worker of before. */
 export type Me = { account: Account; workspaces: Workspace[]; instanceAdmin?: boolean };
 
@@ -706,14 +709,30 @@ export function renameWorkspace(workspace: Workspace, name: string): Promise<Ans
 
 /**
  * Sets every place a site sends to, in order (FRU-123). The label is not sent: the worker writes it.
+ *
+ * WARNING: the list holds the places of every source of the site. The worker answers the repository
+ * of a GitHub place in `teamId`, and takes it back only as `repository` (FRU-359). So `connectors`
+ * must hold every source of the workspace: a GitHub place sent as a team makes the worker refuse
+ * the whole list.
  */
-export function setPlaces(base: string, site: Site, places: readonly Destination[]): Promise<Answer<unknown>> {
+export function setPlaces(
+  base: string,
+  site: Site,
+  places: readonly Destination[],
+  connectors: readonly Pick<Connector, 'id' | 'kind'>[],
+): Promise<Answer<unknown>> {
+  const github = new Set(connectors.filter((each) => each.kind === 'github').map((each) => each.id));
+
   return call('POST', `${base}/sites/${site.id}/destinations`, {
-    destinations: places.map(({ connector, teamId, projectId }) => ({
-      connector,
-      ...(teamId === undefined ? {} : { teamId }),
-      ...(projectId === undefined ? {} : { projectId }),
-    })),
+    destinations: places.map(({ connector, teamId, projectId }) =>
+      github.has(connector) && teamId !== undefined
+        ? { connector, repository: teamId }
+        : {
+            connector,
+            ...(teamId === undefined ? {} : { teamId }),
+            ...(projectId === undefined ? {} : { projectId }),
+          },
+    ),
   });
 }
 

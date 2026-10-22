@@ -5,11 +5,12 @@ import { type Listed, known, listedOf } from '../listed';
 import { Button, LinkButton, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
-import { writeProblemOf } from '../problems';
+import { WORKSPACE_SUSPENDED, problemOf, writeProblemOf } from '../problems';
 import { useLocale } from '../use-locale';
 import { AddLinear, AddRest } from './connector-add';
+import { GithubPanel } from './connector-github';
 import { LinearPanel } from './connector-linear';
-import { KEY_PROBLEMS, KINDS, SourceMark, siteCount, sourceLine } from './connector-parts';
+import { KEY_PROBLEMS, KINDS, type PanelProps, SourceMark, siteCount, sourceLine } from './connector-parts';
 import { RestPanel } from './connector-rest';
 import { useWide } from '../wide';
 
@@ -17,16 +18,12 @@ import { useWide } from '../wide';
  * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
  * sources that are connected, the ones to add, and the panel of the source that is chosen.
  *
- * Linear connects with OAuth or an API key (FRU-121, FRU-134), and an address of the workspace's own
- * receives each note (FRU-132). The other sources are listed where the mockup puts them, and say
- * that they are not there yet: no button connects what does not exist.
+ * Linear connects with OAuth or an API key (FRU-121, FRU-134), GitHub with its App where the worker
+ * has one (FRU-361), and an address of the workspace's own receives each note (FRU-132). The other
+ * sources are listed where the mockup puts them, and say that they are not there yet: no button
+ * connects what does not exist.
  */
 const LATER = [
-  // FRU-331: the API of an issue of GitHub takes no file, so the files of a note will not go there.
-  {
-    name: 'GitHub Issues',
-    detail: msg('An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.'),
-  },
   { name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
   { name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
   { name: 'Trello', detail: msg('A card in the list you choose.') },
@@ -41,6 +38,44 @@ const LINEAR_RETURNS: Record<string, string> = {
   failed: msg('Linear was not connected. Start again from « Connect ».'),
 };
 
+/**
+ * What the way back from GitHub says, as the worker words it in the address (FRU-360). `unstarted`
+ * comes from the front door: GitHub sent the person back with no start of this browser (FRU-361).
+ */
+const GITHUB_RETURNS: Record<string, string> = {
+  requested: msg(
+    'GitHub was not connected yet: an owner of the organisation must approve the App. After the approval, connect GitHub again.',
+  ),
+  elsewhere: msg(
+    'Another workspace already receives the notes of this installation. Disconnect it there, or install the App on another account.',
+  ),
+  refused: msg(
+    'GitHub was not connected: your GitHub account does not reach this installation. Ask an owner of the organisation to connect it.',
+  ),
+  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  suspended: WORKSPACE_SUSPENDED,
+  'unauthorized-app': msg(
+    'GitHub was not connected: the GitHub App of this Fruitback is not set up correctly. Contact the operator of this Fruitback.',
+  ),
+  failed: msg('GitHub was not connected. Start again from « Connect ».'),
+  unstarted: msg(
+    'GitHub sent you back without a start from this workspace, so nothing was connected. If you installed the App on github.com, press « Connect » here and choose the same account.',
+  ),
+};
+
+/** What the start of the way to GitHub can be refused for. */
+const GITHUB_START_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  'connectors-unavailable': msg('This Fruitback has no GitHub App. Its operator must set one up.'),
+};
+
+/** The panel of each kind of source. */
+const PANELS: Record<Connector['kind'], (props: PanelProps) => ReactNode> = {
+  linear: LinearPanel,
+  rest: RestPanel,
+  github: GithubPanel,
+};
+
 /** The id of the title of the open panel. */
 const PANEL_TITLE = 'source-panel-title';
 
@@ -53,9 +88,13 @@ export default function Connectors() {
   const [available, setAvailable] = useState(true);
   // Whether this worker has a Linear application: the consent at Linear then takes the place of a key.
   const [oauth, setOauth] = useState(false);
+  // Whether this worker has the GitHub App (FRU-360): only then does « Connect » go to GitHub.
+  const [githubApp, setGithubApp] = useState(false);
   const [search, setSearch] = useSearchParams();
   const [leaving, setLeaving] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(LINEAR_RETURNS[search.get('linear') ?? '']);
+  const [githubProblem, setGithubProblem] = useState<string | undefined>(GITHUB_RETURNS[search.get('github') ?? '']);
+  const [toGithub, setToGithub] = useState(false);
   const [sites, setSites] = useState<Listed<Site>>('loading');
   // How many notes did not reach each address. An address that is not in it was not read: no list
   // is not an empty list, so its row then says « Connected » and no number.
@@ -70,7 +109,10 @@ export default function Connectors() {
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
-      call<{ connectors: Connector[]; available: boolean; linearOAuth?: boolean }>('GET', `${base}/connectors`),
+      call<{ connectors: Connector[]; available: boolean; linearOAuth?: boolean; githubApp?: boolean }>(
+        'GET',
+        `${base}/connectors`,
+      ),
       call<{ sites: Site[] }>('GET', `${base}/sites`),
     ]);
     // A failed read keeps what the screen already showed, and says it could not read.
@@ -78,6 +120,7 @@ export default function Connectors() {
       setConnectors(listed.data.connectors);
       setAvailable(listed.data.available);
       setOauth(listed.data.linearOAuth === true);
+      setGithubApp(listed.data.githubApp === true);
     }
     setUnread(!listed.ok || !placed.ok);
 
@@ -107,10 +150,13 @@ export default function Connectors() {
 
   useEffect(() => {
     void load().then((found) => {
-      // Back from Linear with a new connector: its panel opens, and the word leaves the address.
-      const word = search.get('linear');
-      if (word === null) return;
-      if (word === 'connected') setSelected(found.at(-1)?.id);
+      // Back from Linear or GitHub with a new connector: its panel opens, and the word leaves the address.
+      const linear = search.get('linear');
+      const github = search.get('github');
+      if (linear === null && github === null) return;
+      if (linear === 'connected') setSelected(found.at(-1)?.id);
+      // An installation again keeps its connector, which is then not the last of the list.
+      if (github === 'connected') setSelected(found.filter((each) => each.kind === 'github').at(-1)?.id);
       setSearch({}, { replace: true });
     });
     // Once, when the screen opens: the word in the address is read one time.
@@ -129,6 +175,18 @@ export default function Connectors() {
     );
   }
 
+  /** The worker says where to go, and the browser goes there: the installation is at GitHub. */
+  async function connectGithub() {
+    setToGithub(true);
+    setGithubProblem(undefined);
+    const asked = await call<{ url: string }>('POST', `${base}/connectors/github/start`);
+    if (asked.ok) return window.location.assign(asked.data.url);
+    setToGithub(false);
+    setGithubProblem(
+      problemOf(asked, GITHUB_START_PROBLEMS, msg('Fruitback could not start the connection to GitHub. Try again.')),
+    );
+  }
+
   const open = connectors?.find((connector) => connector.id === selected);
   const placed = known(sites);
   /** « · 3 sites », only from a list that was read. */
@@ -137,8 +195,9 @@ export default function Connectors() {
       ? ''
       : ` · ${siteCount(placed.filter((site) => placesOf(site).some((place) => place.connector === connector.id)).length)}`;
 
+  const Panel = open === undefined ? undefined : PANELS[open.kind];
   const panel =
-    open === undefined ? null : (
+    open === undefined || Panel === undefined ? null : (
       <Opened
         key={open.id}
         wide={wide}
@@ -150,33 +209,19 @@ export default function Connectors() {
           document.getElementById(rowId(open.id))?.focus();
         }}
       >
-        {open.kind === 'rest' ? (
-          <RestPanel
-            id={PANEL_TITLE}
-            base={base}
-            connector={open}
-            sites={sites}
-            manages={manages}
-            onChanged={reload}
-            onRemoved={() => {
-              setSelected(undefined);
-              void load();
-            }}
-          />
-        ) : (
-          <LinearPanel
-            id={PANEL_TITLE}
-            base={base}
-            connector={open}
-            sites={sites}
-            manages={manages}
-            onChanged={reload}
-            onRemoved={() => {
-              setSelected(undefined);
-              void load();
-            }}
-          />
-        )}
+        <Panel
+          id={PANEL_TITLE}
+          base={base}
+          connector={open}
+          connectors={connectors ?? []}
+          sites={sites}
+          manages={manages}
+          onChanged={reload}
+          onRemoved={() => {
+            setSelected(undefined);
+            void load();
+          }}
+        />
       </Opened>
     );
 
@@ -314,6 +359,41 @@ export default function Connectors() {
                   {problem === undefined ? null : (
                     <Under>
                       <Problem>{t(problem)}</Problem>
+                    </Under>
+                  )}
+                </Source>
+                {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
+                <Source
+                  name={t(KINDS.github.name)}
+                  detail={t(
+                    'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
+                  )}
+                >
+                  {githubApp ? (
+                    <Button
+                      tone="outline"
+                      inset={16}
+                      disabled={cannot || toGithub}
+                      onClick={() => void connectGithub()}
+                    >
+                      {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
+                    </Button>
+                  ) : (
+                    <>
+                      {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
+                      <Button tone="outline" inset={16} disabled>
+                        {t('Not on this Fruitback')}
+                      </Button>
+                      <Under>
+                        <p className="text-hint text-muted">
+                          {t('The operator of this Fruitback has not set up the GitHub App.')}
+                        </p>
+                      </Under>
+                    </>
+                  )}
+                  {githubProblem === undefined ? null : (
+                    <Under>
+                      <Problem>{t(githubProblem)}</Problem>
                     </Under>
                   )}
                 </Source>

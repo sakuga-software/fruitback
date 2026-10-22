@@ -36,7 +36,7 @@ function reasonOf(delivery: Delivery): string {
  * The panel of an address that receives (FRU-132): which sites send their notes there, and the notes
  * that did not arrive. A site has no team to choose here: it sends, or it does not.
  */
-export function RestPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
+export function RestPanel({ id, base, connector, connectors, sites, manages, onChanged, onRemoved }: PanelProps) {
   useLocale();
   const [late, setLate] = useState<Delivery[] | undefined>();
   // A list is written whole, from the list on the screen. A second change before the first one is
@@ -60,7 +60,12 @@ export function RestPanel({ id, base, connector, sites, manages, onChanged, onRe
     setProblem(undefined);
     // The other places of the site stay, in their order: this address is added last, or taken out.
     const others = placesOf(site).filter((each) => each.connector !== connector.id);
-    const set = await setPlaces(base, site, value === THERE ? [...others, { connector: connector.id }] : others);
+    const set = await setPlaces(
+      base,
+      site,
+      value === THERE ? [...others, { connector: connector.id }] : others,
+      connectors,
+    );
     if (!set.ok) setProblem(writeProblemOf(set, msg('The destination of this site did not change. Try again.')));
     await onChanged();
     setWriting(false);

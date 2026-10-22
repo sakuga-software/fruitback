@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
 import { t } from '../i18n';
 import { takeConnect } from '../connect-return';
@@ -15,6 +15,11 @@ import { useLocale } from '../use-locale';
 export default function Home() {
   useLocale();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
+  // GitHub sent the person back with no start of this browser (FRU-361), for example after an
+  // installation from github.com. The worker knows no workspace for it, so the Connectors screen of
+  // the first one that the person manages says what to do.
+  const unstarted = search.get('github') === 'unstarted';
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
@@ -24,6 +29,10 @@ export default function Home() {
       // A sign-in with a provider that started on « Connect this browser » goes back to its question.
       const connecting = takeConnect();
       if (connecting !== undefined) return navigate(`/connect/${connecting}`, { replace: true });
+      const manages = me.data.workspaces.find((each) => each.role === 'owner' || each.role === 'admin');
+      if (unstarted && manages !== undefined) {
+        return navigate(`/w/${manages.id}/connectors?github=unstarted`, { replace: true });
+      }
       void myInvitations().then((invitations) => {
         if (stopped) return;
         // An invitation that could not be read does not hold the front door: it is on its own page.
@@ -46,7 +55,7 @@ export default function Home() {
       stopped = true;
       stop();
     };
-  }, [navigate]);
+  }, [navigate, unstarted]);
 
   return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 }
