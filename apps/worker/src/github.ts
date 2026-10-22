@@ -15,7 +15,7 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import { type ClientConfig, type ClientPolicy, REPOSITORY_PATTERN } from './clients.ts';
-import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError, type TrackerState } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -135,6 +135,33 @@ export function stageForGithubIssue(state: string, stateReason: string | null | 
 
   return stateReason === 'not_planned' || stateReason === 'duplicate' ? 'closed' : 'done';
 }
+
+/**
+ * The status of an issue, as its key among `GITHUB_STATES` (FRU-369): what `state` and `state_reason`
+ * say. A close with no reason, from before GitHub had one, is `closed:completed`, as its stage is
+ * `done`; an issue reopened is `open`. `undefined` for a state GitHub does not have today: its pin is
+ * drawn by its stage, as before.
+ */
+export function githubStateKey(state: string, stateReason: string | null | undefined): string | undefined {
+  if (state === 'open') return 'open';
+  if (state !== 'closed') return undefined;
+
+  return stateReason === 'not_planned' || stateReason === 'duplicate' ? `closed:${stateReason}` : 'closed:completed';
+}
+
+/**
+ * The four statuses of a GitHub issue (FRU-369, decision 4: no label is a status). Their names are the
+ * words of `stateNameFor`, and their stages the ones `stageForGithubIssue` gives; a site renames,
+ * recolours or re-stages each one in its statuses, as any other.
+ */
+export const GITHUB_STATES: readonly TrackerState[] = (
+  [
+    ['open', 'open', null],
+    ['closed:completed', 'closed', 'completed'],
+    ['closed:not_planned', 'closed', 'not_planned'],
+    ['closed:duplicate', 'closed', 'duplicate'],
+  ] as const
+).map(([id, state, reason]) => ({ id, name: stateNameFor(state, reason), stage: stageForGithubIssue(state, reason) }));
 
 function stateNameFor(state: string, stateReason: string | null | undefined): string {
   if (state === 'open') return 'Open';
@@ -396,9 +423,24 @@ export type IssueStoreOptions = {
    * The token of the call is dropped before this error is thrown.
    */
   refused?: (error: GithubResponseError) => StoreError | undefined;
+  /**
+   * The connector the issues are read through (FRU-369): each issue then says its status as
+   * `<connector>:<key of GITHUB_STATES>`, and the store says the four states. The store of the worker's
+   * own environment has none, and says neither.
+   */
+  statusSource?: string;
+  /** The stage a site gives a status, by its key, over the one of `stageForGithubIssue` (FRU-369). */
+  stages?: Readonly<Record<string, SeedStage>>;
 };
 
-export function createIssueStore({ repositoryOf, tokens, api, refused }: IssueStoreOptions): SeedStore {
+export function createIssueStore({
+  repositoryOf,
+  tokens,
+  api,
+  refused,
+  statusSource,
+  stages = {},
+}: IssueStoreOptions): SeedStore {
   async function call(repository: string, path: string, init: Omit<GithubCall, 'token'> = {}): Promise<unknown> {
     const token = await tokens.get(repository);
     try {
@@ -505,6 +547,9 @@ export function createIssueStore({ repositoryOf, tokens, api, refused }: IssueSt
       return { id: String(created.data.id), identifier: `#${created.data.number}`, url: created.data.html_url };
     },
 
+    // FRU-369: the four states, for the statuses of a site that sends here. Read from no call to GitHub.
+    ...(statusSource === undefined ? {} : { trackerStates: async () => [...GITHUB_STATES] }),
+
     async findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
       const repository = repositoryOf(client);
       const labels = (query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL]).map(
@@ -519,6 +564,7 @@ export function createIssueStore({ repositoryOf, tokens, api, refused }: IssueSt
 
       // Comments are fetched only for the issues of this page, and only if the client shows them.
       const issues = await mapInBatches(matched, COMMENT_FETCHES_AT_ONCE, async ({ issue, seed }) => {
+        const key = githubStateKey(issue.state, issue.state_reason);
         const comments = policy.showComments
           ? await fetchComments(repository, issue.number, issue.comments)
           : undefined;
@@ -528,8 +574,12 @@ export function createIssueStore({ repositoryOf, tokens, api, refused }: IssueSt
           identifier: `#${issue.number}`,
           url: issue.html_url,
           title: issue.title,
-          stage: stageForGithubIssue(issue.state, issue.state_reason),
+          stage:
+            key !== undefined && Object.hasOwn(stages, key)
+              ? stages[key]
+              : stageForGithubIssue(issue.state, issue.state_reason),
           stateName: stateNameFor(issue.state, issue.state_reason),
+          ...(statusSource === undefined || key === undefined ? {} : { status: `${statusSource}:${key}` }),
           updatedAt: issue.updated_at,
           ...(comments === undefined ? {} : { comments }),
           seed,

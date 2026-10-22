@@ -52,10 +52,24 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: Trac
     };
   },
   // FRU-359: the repository is the client's, and the token of the App reaches that repository only.
-  async github({ sealed }, { secretsKey, githubApp }) {
+  async github({ connector, workspace, sealed }, { accounts, secretsKey, githubApp }) {
     if (githubApp === undefined) throw new StoreError('This worker has no GitHub App to reach a repository with');
+    const installation = openInstallation(sealed, secretsKey);
+    // FRU-369: the issues say their status as `<connector>:<key>`, one of the four of GITHUB_STATES.
+    const base = createGithubConnectorStore(githubApp, installation, { statusSource: connector });
+    // The stage a site gives a status wins over the one GitHub's state gives, for that site.
+    const forSite = async (site: string | undefined): Promise<SeedStore> => {
+      const own = await siteStages(accounts, workspace, site, connector);
 
-    return createGithubConnectorStore(githubApp, openInstallation(sealed, secretsKey));
+      return own === undefined
+        ? base
+        : createGithubConnectorStore(githubApp, installation, { statusSource: connector, stages: own });
+    };
+
+    return {
+      ...base,
+      findForPage: async (query, client, policy) => (await forSite(query.clientId)).findForPage(query, client, policy),
+    };
   },
 };
 

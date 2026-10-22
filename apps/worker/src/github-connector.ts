@@ -6,6 +6,7 @@ import {
   type InstallationToken,
   type TokenCache,
   accessTokenSchema,
+  type IssueStoreOptions,
   createIssueStore,
   createTokenCache,
   githubFetch,
@@ -354,8 +355,14 @@ export function openInstallation(sealed: string, secretsKey: string | undefined)
  * the token of the call is dropped. A `422` on an issue call is a refusal of that note, not of the
  * connector: `ensureLabel` reads its own `422`.
  */
-export function createGithubConnectorStore(app: GithubApp, installation: number): SeedStore {
+export function createGithubConnectorStore(
+  app: GithubApp,
+  installation: number,
+  /** FRU-369: the connector the statuses are named by, and the stages a site gives them. */
+  statuses: Pick<IssueStoreOptions, 'statusSource' | 'stages'> = {},
+): SeedStore {
   return createIssueStore({
+    ...statuses,
     repositoryOf: (client) => {
       const repository = client?.teamId;
       // The value comes from a row. It goes into the path of each call, so it is checked again here.
