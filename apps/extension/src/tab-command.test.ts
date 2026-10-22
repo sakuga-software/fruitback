@@ -250,6 +250,42 @@ describe('the commands of the side panel (FRU-299)', () => {
     assert.deepEqual(parsePanelNotes([{ ...NOTE, mine: 'yes' }]), [notMine]);
   });
 
+  it('keep the word of the store and the status of a note, and only a colour that is #rrggbb (FRU-370)', () => {
+    const status = { key: 'own:wait', name: 'Waiting', stage: NOTE.stage, color: '#7c3aed', textColor: '#ffffff' };
+    const kept = { name: 'Waiting', stage: NOTE.stage };
+    // The key is not kept: the panel draws nothing with it.
+    const once = parsePanelNotes([{ ...NOTE, stateName: 'In Review', status }]);
+    assert.deepEqual(once, [
+      { ...NOTE, stateName: 'In Review', status: { ...kept, color: '#7c3aed', textColor: '#ffffff' } },
+    ]);
+    // The bridge parses the notes, then the panel parses them again: the second parse keeps them.
+    assert.deepEqual(parsePanelNotes(once), once);
+    // A colour goes into a style of the panel: anything else is dropped, and the status keeps its name.
+    for (const color of ['var(--x)', 'url(x)', 'red', '#fff', '#7c3aed;x', 7]) {
+      assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, color } }])?.[0]?.status, kept, String(color));
+    }
+    // A text colour comes only with a colour, and only as #rrggbb.
+    const noText = parsePanelNotes([{ ...NOTE, status: { ...status, textColor: 'url(y)' } }])?.[0]?.status;
+    assert.deepEqual(noText, { ...kept, color: '#7c3aed' });
+    // An empty name is a name: the word of the stage, as the contract says (FRU-364). The colour stays.
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: '' } }])?.[0]?.status, {
+      name: '',
+      stage: NOTE.stage,
+      color: '#7c3aed',
+      textColor: '#ffffff',
+    });
+    // A status of another stage, or whose name is missing or too long, is dropped, and the note stays.
+    // NOTE is a note to do.
+    const other = 'done';
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, stage: other } }]), [NOTE]);
+    const long = 'x'.repeat(PANEL_LIMITS.name + 1);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: long } }]), [NOTE]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: { ...status, name: undefined } }]), [NOTE]);
+    assert.deepEqual(parsePanelNotes([{ ...NOTE, status: 'Done' }]), [NOTE]);
+    // A word that is empty, too long or not a word is left out.
+    for (const stateName of ['', long, 7]) assert.deepEqual(parsePanelNotes([{ ...NOTE, stateName }]), [NOTE]);
+  });
+
   it('refuse a list longer than a page can hold', () => {
     assert.equal(parsePanelNotes(Array.from({ length: PANEL_LIMITS.notes + 1 }, () => NOTE)), undefined);
     assert.equal(parsePanelNotes('notes'), undefined);

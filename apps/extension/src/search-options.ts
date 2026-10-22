@@ -1,5 +1,6 @@
 import { msg, t } from './i18n.ts';
 import { segmentedTabs, statusDrop, toggle } from './kit.ts';
+import { stateWord } from './note-status.ts';
 import type { PanelNote } from './protocol.ts';
 import type { SiteNote, SiteStage } from './site-notes.ts';
 
@@ -257,7 +258,7 @@ export function detachedPart(document: Document, notes: readonly PanelNote[]): H
         document,
         'p',
         'search-detached-meta',
-        t('{stage} · the element it pointed at is gone', { stage: t(STAGE_WORD[note.stage]) }),
+        t('{stage} · the element it pointed at is gone', { stage: stateWord(note, t(STAGE_WORD[note.stage])) }),
       ),
     );
     list.append(card);

@@ -14,6 +14,7 @@
  * request and the background attaches the credential, out of the page's reach.
  */
 
+import { STATUS_COLOR } from '@fruitback/shared';
 import type { TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
 
@@ -310,6 +311,13 @@ export type PanelNote = {
   id: string;
   number?: number;
   stage: (typeof STAGES)[number];
+  /** The word of its store, Linear's « In Review » (FRU-370). Left out when the store named nothing. */
+  stateName?: string;
+  /**
+   * Its status (FRU-370): the name and the colours a team chose, always of the note's stage. A colour
+   * is `#rrggbb`, and a text colour comes only with a colour. Left out, the note is drawn by its stage.
+   */
+  status?: PanelStatus;
   note: string;
   author?: string;
   mine?: true;
@@ -323,12 +331,43 @@ export type PanelNote = {
   placement: 'found' | 'approximate' | 'detached';
 };
 
+/**
+ * The status of a note, as the panel draws it (FRU-370). It keeps its stage: the notes are parsed once
+ * by the bridge and again by the panel, and the second parse checks the stage again.
+ */
+export type PanelStatus = { name: string; stage: PanelNote['stage']; color?: string; textColor?: string };
+
 /** The bounds of what a page may hand the panel: it crosses a world the page writes in. */
 export const PANEL_LIMITS = { notes: 500, replies: 200, text: 10_000, name: 200, date: 64 } as const;
 const PLACEMENTS = ['found', 'approximate', 'detached'] as const;
 
 function boundedString(value: unknown, max: number): string | undefined {
   return typeof value === 'string' && value.length <= max ? value : undefined;
+}
+
+/**
+ * The status of a note from the page, or nothing (FRU-370). The page writes in this world, and a
+ * colour goes into a style of the panel: only `#rrggbb` is kept, as `offeredStatuses` keeps it. A
+ * status of another stage than its note is dropped, as `statusOf` drops it: the stage wins. A name
+ * is required and may be empty: an empty name is the word of the stage (FRU-364). A bad entry loses its
+ * status and keeps its note.
+ */
+function parsePanelStatus(value: unknown, stage: PanelNote['stage']): PanelStatus | undefined {
+  if (!isRecord(value) || value.stage !== stage) return undefined;
+  const name = boundedString(value.name, PANEL_LIMITS.name);
+  if (name === undefined) return undefined;
+  const color = typeof value.color === 'string' && STATUS_COLOR.test(value.color) ? value.color : undefined;
+  const textColor =
+    color !== undefined && typeof value.textColor === 'string' && STATUS_COLOR.test(value.textColor)
+      ? value.textColor
+      : undefined;
+
+  return {
+    name,
+    stage,
+    ...(color === undefined ? {} : { color }),
+    ...(textColor === undefined ? {} : { textColor }),
+  };
 }
 
 /**
@@ -347,6 +386,8 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
     const createdAt = boundedString(entry.createdAt, PANEL_LIMITS.date);
     const updatedAt = boundedString(entry.updatedAt, PANEL_LIMITS.date);
     const author = entry.author === undefined ? undefined : boundedString(entry.author, PANEL_LIMITS.name);
+    // A word, or nothing: a word too long, or not a word, is left out, and the note keeps its stage word.
+    const stateName = boundedString(entry.stateName, PANEL_LIMITS.name);
     const number =
       typeof entry.number === 'number' && Number.isSafeInteger(entry.number) && entry.number > 0
         ? entry.number
@@ -385,10 +426,13 @@ export function parsePanelNotes(value: unknown): PanelNote[] | undefined {
       : undefined;
     const confirmed =
       checked?.by !== undefined && checked.at !== undefined ? { by: checked.by, at: checked.at } : undefined;
+    const status = parsePanelStatus(entry.status, stage);
     notes.push({
       id,
       ...(number === undefined ? {} : { number }),
       stage,
+      ...(stateName === undefined || stateName === '' ? {} : { stateName }),
+      ...(status === undefined ? {} : { status }),
       note,
       ...(author === undefined ? {} : { author }),
       ...(entry.mine === true ? { mine: true as const } : {}),

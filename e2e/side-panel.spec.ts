@@ -754,3 +754,75 @@ test('a new search during « Show more » draws no page of the words of before (
     .poll(async () => (await searchRows(page)).map((row) => row.note), { timeout: 10_000 })
     .toEqual(['The note of the new words']);
 });
+
+test('a row of the panel wears the colour and the name of the status its pin wears (FRU-370)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-statuses');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await popup.close();
+  const notes = [
+    { place: '[data-testid="card-latte"] .add', note: 'Status pale', name: 'Waiting for the client', color: '#fef9c3' },
+    { place: '[data-testid="card-mocha"] .add', note: 'Status dark', name: 'In review', color: '#7c3aed' },
+  ];
+  for (const { place, note } of notes) await plantOn(page, place, note);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
+
+  // The worker of the suite sends no status with a colour, and its notes no `status` (FRU-368): the
+  // read is given what a site with statuses sends. The background relays it, so the context routes it.
+  await extension.context.route(
+    (url) => url.origin === AUTHENTICATED_WORKER_ORIGIN && url.pathname === '/feedback',
+    async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      const body = (await response.json()) as { issues: { id: string; stage: string; seed: { note: string } }[] };
+      const statuses: Record<string, string>[] = [];
+      const issues = body.issues.map((issue) => {
+        const chosen = notes.find((each) => each.note === issue.seed.note);
+        if (chosen === undefined) return issue;
+        statuses.push({ key: `e2e:${issue.id}`, name: chosen.name, stage: issue.stage, color: chosen.color });
+
+        return { ...issue, status: `e2e:${issue.id}` };
+      });
+      await route.fulfill({ response, json: { ...body, issues, statuses } });
+    },
+  );
+  await page.reload();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
+  // The pins in the order of the page: the latte card, then the mocha card.
+  const pins = await page.locator('[data-fruitback-pin]').evaluateAll((all) =>
+    all.map((pin) => ({
+      stage: (pin as HTMLElement).dataset.fruitbackStage,
+      fill: getComputedStyle(pin.querySelector('.fruitback-pin-badge') as Element).backgroundColor,
+    })),
+  );
+
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
+  const drawn = () =>
+    inPanel<{ word: string; fill: string; text: string; stage: string }[]>(
+      page,
+      `[...document.querySelectorAll('li[data-note]')].map((row) => {
+        const drop = row.querySelector('.kit-drop');
+        return {
+          word: row.querySelector('.panel-row-stage')?.textContent ?? '',
+          fill: getComputedStyle(drop).backgroundColor,
+          text: getComputedStyle(drop.querySelector('.kit-drop-number')).color,
+          stage: drop.dataset.stage,
+        };
+      }).sort((a, b) => a.word.localeCompare(b.word))`,
+    ).catch(() => []);
+
+  // The violet takes white (5.70:1), the pale yellow the ink: as the pins on the page.
+  await expect.poll(drawn).toEqual([
+    { word: 'In review', fill: 'rgb(124, 58, 237)', text: 'rgb(255, 255, 255)', stage: pins[1]?.stage },
+    { word: 'Waiting for the client', fill: 'rgb(254, 249, 195)', text: 'rgb(24, 24, 27)', stage: pins[0]?.stage },
+  ]);
+});
