@@ -810,15 +810,17 @@ describe('whether the repository of a github destination is private (FRU-382)', 
       origin: 'https://x.acme.dev',
       visibility: 'everyone',
     });
+    // A body that says the repository is public: only GitHub says it (review of #509).
     const write = (repository: string) =>
       call(world, githubApp, 'POST', `${acme.base}/sites/${site.id}/destinations`, {
         token: acme.token,
-        body: { destinations: [{ connector: acme.connector.id, repository }] },
+        body: { destinations: [{ connector: acme.connector.id, repository, private: false }] },
       });
 
     // GitHub does not answer the read of the repository.
     github.answerWith((each) => (each.path === '/repos/acme/web' ? { status: 502, body: {} } : undefined));
     assert.equal((await write('acme/web')).status, 200);
+    assert.equal((await acme.accounts.sites(acme.workspace.id))[0]?.destinations[0]?.private, undefined);
     // A token with more than the metadata is not used.
     github.answerWith((each) =>
       each.path.endsWith('/access_tokens')

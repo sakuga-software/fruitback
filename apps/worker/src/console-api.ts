@@ -331,8 +331,10 @@ async function labelled(
     // console warns about a public one without the list of the repositories.
     if (connector.kind === 'github') {
       const isPrivate = await privacyOf(context, connector.id, destination.teamId);
+      // Only GitHub's word is written: whatever a destination came with is dropped here.
+      const { private: _asked, ...place } = destination;
       out.push({
-        ...destination,
+        ...place,
         label: `${KIND_NAMES.github} · ${destination.teamId ?? ''}`,
         ...(isPrivate === undefined ? {} : { private: isPrivate }),
       });
