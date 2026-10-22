@@ -65,7 +65,7 @@ const STATUS_PROBLEMS: Readonly<Record<string, string>> = {
 };
 
 /** The states of one Linear team of the site, or why there are none (FRU-368). */
-type TrackerList = { connector: string; label?: string; states?: TrackerState[]; error?: string };
+type TrackerList = { connector: string; teamId?: string; label?: string; states?: TrackerState[]; error?: string };
 
 /** What the page read: the site, the sources of the workspace, the rows of the site, and its trackers. */
 type Loaded = {
@@ -79,8 +79,20 @@ type Loaded = {
 /** A list of the page: the worker's store, or a destination of the site. */
 type Section =
   | { kind: 'own' }
-  | { kind: 'github'; connector: Connector; label: string | undefined }
-  | { kind: 'linear'; connector: Connector; label: string | undefined };
+  | { kind: 'github'; connector: Connector; teamId: string | undefined; label: string | undefined }
+  | { kind: 'linear'; connector: Connector; teamId: string | undefined; label: string | undefined };
+
+/** The key of a list of a tracker: its connector and its team, as a site can send to two teams of one. */
+function sectionKey(section: Section): string {
+  return section.kind === 'own' ? OWN : `${section.connector.id}:${section.teamId ?? ''}`;
+}
+
+/** The states the worker read for a list of Linear: the ones of its connector and of its team. */
+function trackerOf(trackers: readonly TrackerList[], section: Section): TrackerList | undefined {
+  if (section.kind !== 'linear') return undefined;
+
+  return trackers.find((one) => one.connector === section.connector.id && one.teamId === section.teamId);
+}
 
 /** The lists of a site: the worker's store when its notes stay there, then each tracker it sends to. */
 function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
@@ -92,10 +104,13 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
   const seen = new Set<string>();
   for (const place of places) {
     const connector = connectors.find((each) => each.id === place.connector);
-    if (connector === undefined || seen.has(connector.id)) continue;
-    seen.add(connector.id);
+    // One list per team: a site can send to two teams of one connector (lite review of pull request 495).
+    const key = `${place.connector}:${place.teamId ?? ''}`;
+    if (connector === undefined || seen.has(key)) continue;
+    seen.add(key);
     const kind: string = connector.kind;
-    if (kind === 'github' || kind === 'linear') sections.push({ kind, connector, label: place.label });
+    if (kind === 'github' || kind === 'linear')
+      sections.push({ kind, connector, teamId: place.teamId, label: place.label });
   }
 
   return sections;
@@ -245,7 +260,7 @@ export default function SiteStatuses() {
   // pull request 495).
   const isRead = (section: Section) =>
     section.kind === 'linear' &&
-    tracker?.trackers.find((one) => one.connector === section.connector.id)?.states !== undefined;
+    (tracker === undefined ? undefined : trackerOf(tracker.trackers, section))?.states !== undefined;
   const firstRead = sections.findIndex(isRead);
   const switchAt = firstRead === -1 ? sections.findIndex((section) => section.kind === 'linear') : firstRead;
   const setTrackerColours = async (on: boolean): Promise<string | undefined> => {
@@ -294,13 +309,13 @@ export default function SiteStatuses() {
           {sections.map((section, index) => {
             const linear =
               section.kind === 'linear' && read.tracker !== 'failed'
-                ? read.tracker.trackers.find((each) => each.connector === section.connector.id)
+                ? trackerOf(read.tracker.trackers, section)
                 : undefined;
             if (section.kind === 'linear' && linear?.states === undefined)
               return (
                 <LinearUnread
-                  key={section.connector.id}
-                  id={`statuses-${section.connector.id}`}
+                  key={sectionKey(section)}
+                  id={`statuses-${sectionKey(section)}`}
                   label={section.label}
                   onRetry={() => void load()}
                   {...(index === switchAt && tracker !== undefined
@@ -318,7 +333,8 @@ export default function SiteStatuses() {
               );
             return (
               <StatusList
-                key={section.kind === 'own' ? OWN : section.connector.id}
+                key={sectionKey(section)}
+                id={`statuses-${sectionKey(section)}`}
                 kind={section.kind}
                 source={section.kind === 'own' ? OWN : section.connector.id}
                 label={section.kind === 'own' ? undefined : section.label}
@@ -381,6 +397,8 @@ function LinearUnread({
 type Open = { key: string; what: 'edit' | 'delete' } | { key: string; what: 'move'; notes: number };
 
 type StatusListProps = {
+  /** The id of its heading, unique on the page. */
+  id: string;
   kind: ListKind;
   source: string;
   /** The words of the destination, as the worker wrote them: « GitHub · acme/website ». */
@@ -402,6 +420,7 @@ type StatusListProps = {
 
 /** The statuses of one source of the site, in their order, and what can be done to each. */
 function StatusList({
+  id,
   kind,
   source,
   label,
@@ -425,7 +444,7 @@ function StatusList({
   const list = useRef<HTMLDivElement>(null);
   // Where focus goes once the list is drawn again: a button of a row, by the key of its status.
   const [focus, setFocus] = useState<{ key: string; control: string } | undefined>();
-  const heading = `statuses-${source}`;
+  const heading = id;
 
   useEffect(() => {
     if (focus === undefined || writing) return;

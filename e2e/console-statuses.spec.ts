@@ -624,6 +624,39 @@ test('the switch is drawn when no Linear team of the site could be read, so it c
   expect(worker.sent.at(-1)).toEqual({ method: 'POST', path: `${STATUSES}/settings`, body: { trackerColours: false } });
 });
 
+test('a site that sends to two teams of one Linear connector has one list for each team', async ({ page }) => {
+  const docs = { connector: 'l1', teamId: 't2', label: 'Linear · Acme docs' };
+  await workerWith(page, {
+    site: { ...SITE, destination: LINEAR_PLACE, destinations: [LINEAR_PLACE, docs] },
+    connectors: LINEAR_CONNECTORS,
+    rows: [],
+    tracker: {
+      trackerColours: false,
+      trackers: [
+        { ...LINEAR_PLACE, states: STATES },
+        {
+          ...docs,
+          states: [
+            { id: 'x1', name: 'Inbox', type: 'triage', stage: 'new' },
+            { id: 'x2', name: 'Shipped', type: 'completed', stage: 'done' },
+          ],
+        },
+      ],
+    },
+  });
+  await open(page);
+
+  const web = page.getByRole('region', { name: 'Linear · Acme web' });
+  const team = page.getByRole('region', { name: 'Linear · Acme docs' });
+  await expect(web.locator('ol > li')).toHaveCount(6);
+  await expect(team.locator('ol > li')).toHaveCount(2);
+  await expect(team.locator('[data-status-key="x1"]')).toContainText('In Linear: Inbox');
+  await expect(web.locator('[data-status-key="x1"]')).toHaveCount(0);
+  // One switch for the site, above the first list.
+  await expect(page.getByRole('switch', { name: "Use Linear's colours" })).toHaveCount(1);
+  await expectNoViolation(page, 'two teams of one connector');
+});
+
 test('at 390 px in French, Linear and its switch', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page, {
