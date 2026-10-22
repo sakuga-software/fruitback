@@ -3,9 +3,9 @@ layout: landing
 ---
 
 <!--
-  The page around these guides is docs/_layouts/landing.html (FRU-309): the hero, how it works, the
-  modes, self-hosting, the extension and where it stands. This file keeps the guides, so that every
-  one of them is linked from the home page (docs-site.test.ts).
+  The page around these guides is docs/_layouts/landing.html (FRU-309, FRU-387): the hero, how it
+  works, the product, who it is for, the connectors, the two offers and the questions. This file keeps
+  the guides, so that every one of them is linked from the home page (docs-site.test.ts).
 -->
 
 ## The guides
@@ -24,7 +24,7 @@ layout: landing
 ## The code
 
 The source is on [GitHub](https://github.com/sakuga-software/fruitback), under the MIT licence for
-the five published packages and AGPL-3.0-only for the worker and the browser extension. The
+the five published packages and AGPL-3.0-only for the worker, the console and the browser extension. The
 [decisions](https://github.com/sakuga-software/fruitback/tree/main/docs/decisions) folder holds the
 per-ticket histories: the measurements, the first versions that failed, and the reviews that caught
 them.

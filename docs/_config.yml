@@ -6,7 +6,7 @@
 # lets one file read the same on GitHub and here, which is the rule this site had to keep — the
 # markdown stays the source, and the tests keep reading the files.
 title: Fruitback
-description: Visual feedback on a live site, without a backend to host.
+description: Visual feedback on a live site, delivered to your tracker.
 theme: jekyll-theme-primer
 
 # The decisions are the per-ticket histories, written for whoever works on this repository rather
