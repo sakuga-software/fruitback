@@ -356,6 +356,9 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   routed store per site.
 - **A status the site no longer has is `409 status-changed`**, not `400 unknown-status`: the console
   offers only what the list read, so a key it sends that is gone was removed in between.
+- **A note the worker keeps is one in Fruitback or sent on to an address** (a `rest` connector, whose
+  notes the index places at the connector, as `FB-<id>`; heavy review of #505). Its row of `seeds` must
+  be of the same site and hold the same note: a tracker can name an issue `FB-12` too.
 - **`GET …/notes` gives the status of each note the worker keeps** (`own:<key>`, read in `seeds` for
   the page in one statement), `canSetStatus`, and `statuses`: per site with such a note, the statuses
   of the worker's store, hidden ones marked `hidden`. A note of a tracker gets none of the three, and

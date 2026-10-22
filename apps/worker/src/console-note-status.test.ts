@@ -42,7 +42,7 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
  * left a note on `PAGE`, kept by the worker. The site has a status the team added, « Waiting », and a
  * hidden one, « Parked ».
  */
-async function aNote() {
+async function aNote(options: { rest?: boolean } = {}) {
   const world = await open();
   const store = createPostgresSeedStore(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
@@ -75,6 +75,11 @@ async function aNote() {
     position: 1,
     hidden: true,
   });
+  // A site that sends its notes on to an address: the worker keeps them too (FRU-367).
+  const rest = options.rest
+    ? (await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.dev', sealed: 'x' })).id
+    : undefined;
+  if (rest !== undefined) await world.accounts.setDestination(workspace, site, { connector: rest });
   const seed = seedFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
   const extension = await sessionOf(world, bob.id, workspace);
   const planted = await answerOf(
@@ -99,6 +104,7 @@ async function aNote() {
     carol,
     gina,
     extension,
+    rest,
     note: noteIdOf(site, 'sd_1'),
   };
 }
@@ -234,39 +240,63 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
   });
 
-  it('leaves the status of a note in a tracker to the tracker, even one it named FB-<n>', async () => {
-    const { world, workspace, site, alice } = await aNote();
-    const index = createPostgresNoteIndex(world.database);
-    const [{ id }] = (await rowsOf(world.database, 'SELECT id FROM seeds')) as [{ id: number }];
-    const connector = await world.accounts.addConnector(workspace, { kind: 'rest', label: 'Hook', sealed: 'x' });
-    await index.record(
-      [
-        {
-          workspace,
-          site,
-          seed: seedFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
-          channel: 'extension',
-          author: { kind: 'member', account: alice.id },
-          place: { kind: 'connector', connector: connector.id },
-          // The number of the note the worker keeps: a tracker can name an issue so.
-          issue: { identifier: `FB-${id}` },
-          stage: DEFAULT_SEED_STAGE,
-        },
-      ],
-      Date.now() + 1_000,
+  it('takes the note of a site that sends to an address: the worker keeps it too (heavy review of #505)', async () => {
+    const { world, workspace, bob, rest, note } = await aNote({ rest: true });
+    // The index says where the note went: the connector of the address, as `FB-<id>`.
+    assert.deepEqual(
+      await rowsOf(world.database, `SELECT place, connector_id, reference LIKE 'FB-%' AS kept FROM note_index`),
+      [{ place: 'connector', connector_id: rest, kept: true }],
     );
 
-    const tracked = (await listed(world, workspace, alice.token)).notes.find(
-      (one) => one.id === noteIdOf(site, 'sd_2'),
-    );
-    assert.ok(tracked !== undefined);
-    assert.equal(tracked.status, undefined);
-    assert.equal(tracked.canSetStatus, undefined);
-    assert.deepEqual(await choose(world, workspace, noteIdOf(site, 'sd_2'), 'own:waiting', alice.token), {
-      status: 403,
-      body: { error: 'statuses-not-taken' },
+    const [listedNote] = (await listed(world, workspace, bob.token)).notes;
+    assert.equal(listedNote?.status, `own:${DEFAULT_SEED_STAGE}`);
+    assert.equal(listedNote?.canSetStatus, true);
+    assert.deepEqual(await choose(world, workspace, note, 'own:waiting', bob.token), {
+      status: 200,
+      body: { status: 'own:waiting', stage: TODO },
     });
-    assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    assert.deepEqual(await stored(world), [{ stage: TODO, status_key: 'waiting' }]);
+  });
+
+  it('leaves to its tracker a note it named FB-<n>, the number of another note of the site', async () => {
+    // A tracker, and an address whose issue would name a row of the worker that is another note.
+    for (const kind of ['linear', 'rest'] as const) {
+      const { world, workspace, site, alice } = await aNote();
+      const index = createPostgresNoteIndex(world.database);
+      const [{ id }] = (await rowsOf(world.database, 'SELECT id FROM seeds')) as [{ id: number }];
+      const connector = await world.accounts.addConnector(workspace, { kind, label: 'Elsewhere', sealed: 'x' });
+      await index.record(
+        [
+          {
+            workspace,
+            site,
+            seed: seedFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
+            channel: 'extension',
+            author: { kind: 'member', account: alice.id },
+            place: { kind: 'connector', connector: connector.id },
+            // The number of the note the worker keeps: a tracker can name an issue so.
+            issue: { identifier: `FB-${id}` },
+            stage: DEFAULT_SEED_STAGE,
+          },
+        ],
+        Date.now() + 1_000,
+      );
+
+      const other = noteIdOf(site, 'sd_2');
+      const tracked = (await listed(world, workspace, alice.token)).notes.find((one) => one.id === other);
+      assert.ok(tracked !== undefined);
+      assert.equal(tracked.status, undefined);
+      assert.equal(tracked.canSetStatus, undefined);
+      assert.deepEqual(
+        await choose(world, workspace, other, 'own:waiting', alice.token),
+        {
+          status: 403,
+          body: { error: 'statuses-not-taken' },
+        },
+        kind,
+      );
+      assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    }
   });
 
   it('answers 404 for a note of a site the caller does not read, or of another workspace', async () => {

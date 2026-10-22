@@ -1668,9 +1668,12 @@ statuses page, with the switch, and refuses who does not manage the sites`.
 - **Every check is in one transaction, the site held for update** (`setNoteStatus` of the accounts
   store): the note of the index and its author, the status of the site (`409 status-hidden`, and
   `409 status-changed` for one it no longer has), then the note and its stage in `seeds` and in the
-  index. A note of a tracker, even one it named `FB-<n>`, is `403 statuses-not-taken`.
+  index. The worker keeps a note in Fruitback, or sent on to an address (a `rest` connector), as
+  `FB-<id>`; that row must be of the same site and hold the same note (the id the widget gave it), so a
+  note of a tracker, even one it named `FB-<n>`, is `403 statuses-not-taken`.
   test:`refuses a hidden status, and one the site no longer has, with the conflict the console says`,
-  test:`leaves the status of a note in a tracker to the tracker, even one it named FB-<n>`.
+  test:`takes the note of a site that sends to an address: the worker keeps it too (heavy review of #505)`,
+  test:`leaves to its tracker a note it named FB-<n>, the number of another note of the site`.
 - **A suspended workspace changes no status** (FRU-282): the route is a write of the console, behind
   its one guard. The page of the note is read again (`invalidatePages`).
   test:`lets the author put the note in a status the team added: the store, the index and the pin follow`.

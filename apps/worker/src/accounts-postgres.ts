@@ -58,7 +58,7 @@ import {
 } from './postgres-schema.ts';
 import { MAX_STATUSES, type SeedStage } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import { identifierFor, rowOfIdentifier } from './seed-rows.ts';
+import { identifierFor, isSameSeed, keptRowOf } from './seed-rows.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -905,23 +905,27 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         const [note] = await db
           .select({
             place: note_index.place,
-            connector: note_index.connector_id,
+            connectorKind: connectors.kind,
             reference: note_index.reference,
             author: note_index.author_account_id,
           })
           .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
           .where(
             and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.seed_id, seed)),
           );
         if (note === undefined) return refused('not-found');
         // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
         if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
-        // A note of the worker is `FB-<id>` there, with no connector (FRU-237).
-        const id =
-          note.place === 'fruitback' && note.connector === null && note.reference !== null
-            ? rowOfIdentifier(note.reference)
-            : undefined;
+        // In Fruitback, or sent on to an address: the worker keeps it, as `FB-<id>` (FRU-237).
+        const id = keptRowOf(note.place, note.connectorKind, note.reference);
         if (id === undefined) return refused('not-kept');
+        // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
+        const [kept] = await db
+          .select({ seed: seeds.seed })
+          .from(seeds)
+          .where(and(eq(seeds.id, id), eq(seeds.client_id, site)));
+        if (kept === undefined || !isSameSeed(kept.seed, seed)) return refused('not-kept');
 
         const [row] = await db
           .select({ stage: statuses.stage, hidden: statuses.hidden })
@@ -940,8 +944,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
           .where(and(eq(seeds.id, id), eq(seeds.client_id, site)))
           .returning({ page: seeds.page_url });
-        // The index still names a note the store no longer holds.
-        if (written === undefined) return refused('not-found');
+        if (written === undefined) return refused('not-kept');
         await restageIndex(db, site, [id], chosen.stage, now);
 
         return { set: true as const, stage: chosen.stage, page: written.page };
