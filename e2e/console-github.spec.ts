@@ -384,6 +384,28 @@ test('a member reads the warning too, and asks for no list (FRU-382)', async ({ 
   await expectNoViolation(page, 'the panel of a member');
 });
 
+test('once the list names the repository, it wins over an older word of the worker (FRU-382)', async ({ page }) => {
+  const worker = await workerWith(page);
+  // The worker last read acme/web public; GitHub's list now says it is private.
+  worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
+  worker.repositoriesWait = true;
+  const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
+  await page.route('**/console/workspaces/w1/sites', (route) =>
+    route.fulfill({
+      json: { sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destinations: [stale] }] },
+    }),
+  );
+  await openGithub(page);
+  // While the list is read, the worker's word.
+  await expect(panel(page).locator('[data-public]')).toHaveCount(1);
+
+  worker.repositoriesWait = false;
+  await page.reload();
+  await rows(page).nth(1).click();
+  await expect(panel(page).getByRole('button', { name: /Add a repository for staging\.acme\.dev/ })).toBeEnabled();
+  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
+});
+
 test('the control: with no word of the worker and no list, nothing says the repository is public (FRU-382)', async ({
   page,
 }) => {
