@@ -6,13 +6,12 @@ import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
- * A widget that does not read the statuses of FRU-364 draws a read that carries them exactly as one
- * that does not (FRU-364).
+ * The statuses of a read, drawn by the widget (FRU-364, FRU-370).
  *
- * This widget is that widget until FRU-370: it reads no `statuses` and no `status`. So the test is
- * the promise to every widget already served from `/v/<version>/`, cached a year on host pages:
- * a worker that starts sending the fields changes nothing they draw. FRU-370 makes the widget read
- * them, and then keeps this case for a read whose status it cannot use.
+ * Two promises. A read whose statuses this widget cannot use draws exactly what a read with none
+ * draws: the promise of FRU-364 to every widget already served from `/v/<version>/`, cached a year on
+ * host pages, and to every site with no statuses. A status it can use paints the pin, the list and the
+ * thread with its colour and its name, and is handed to a list outside the page (FRU-370).
  */
 
 const ENDPOINT = 'https://worker.test';
@@ -68,16 +67,22 @@ async function drawn(read: Record<string, unknown>) {
   await widget.refresh();
   const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
 
-  return { markup: root.innerHTML, notes: widget.pageNotes(), pins: root.querySelectorAll('.fruitback-pin').length };
+  return {
+    markup: root.innerHTML,
+    notes: widget.pageNotes(),
+    pins: root.querySelectorAll('.fruitback-pin').length,
+    root,
+    widget,
+  };
 }
 
-describe('a read that carries statuses, to a widget that does not read them (FRU-364)', () => {
-  it('draws the same pins, the same words and the same colours as the read without them', async () => {
+describe('a read that carries statuses (FRU-364, FRU-370)', () => {
+  it('draws a status of another stage, or a key in no list, as the read without statuses', async () => {
     const before = await drawn({ issues: [REVIEW, DONE] });
     const after = await drawn({
       issues: [
-        { ...REVIEW, status: 'linear:st_review' },
-        // A status of another stage, and a key that is in no list: still drawn by the stage.
+        // `st_done` is a status of done, and REVIEW is in progress: the stage wins.
+        { ...REVIEW, status: 'linear:st_done' },
         { ...DONE, status: 'linear:st_gone' },
       ],
       statuses: STATUSES,
@@ -96,5 +101,74 @@ describe('a read that carries statuses, to a widget that does not read them (FRU
 
       assert.equal(after.markup, before.markup, JSON.stringify(statuses));
     }
+  });
+
+  it('paints the pin with the colour of its status, and writes its text colour on it (FRU-370)', async () => {
+    const { root } = await drawn({
+      issues: [
+        { ...REVIEW, status: 'linear:st_review' },
+        { ...DONE, status: 'linear:st_done' },
+      ],
+      statuses: STATUSES,
+    });
+    const [review, done] = [...root.querySelectorAll<HTMLElement>('.fruitback-pin')];
+
+    assert.equal(review?.style.getPropertyValue('--fruitback-pin-color'), '#7dd3fc');
+    // The text colour the team chose.
+    assert.equal(review?.style.getPropertyValue('--fruitback-pin-on-color'), '#18181b');
+    assert.equal(review?.dataset.fruitbackStatus, 'linear:st_review');
+    // The stage stays the stage: the filters and the counts are by stage.
+    assert.equal(review?.dataset.fruitbackStage, 'progress');
+    assert.equal(done?.style.getPropertyValue('--fruitback-pin-color'), '#15803d');
+    // No text colour in the list: computed, white on this green (5.02:1), not the ink (3.53:1).
+    assert.equal(done?.style.getPropertyValue('--fruitback-pin-on-color'), '#ffffff');
+  });
+
+  it('keeps the token of the stage for a status with no colour, so a host that set it keeps it', async () => {
+    const { root } = await drawn({
+      issues: [{ ...REVIEW, status: 'own:progress' }],
+      statuses: [{ key: 'own:progress', name: '', stage: 'progress' }],
+    });
+    const pin = root.querySelector<HTMLElement>('.fruitback-pin');
+
+    assert.equal(pin?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-progress)');
+    assert.equal(pin?.dataset.fruitbackStatus, 'own:progress');
+  });
+
+  it('names the status in the thread, the list and the notes it gives a list outside the page', async () => {
+    const { root, notes, widget } = await drawn({
+      issues: [{ ...REVIEW, stateName: '', status: 'own:review' }],
+      statuses: [{ key: 'own:review', name: 'Waiting for the client', stage: 'progress', color: '#fde68a' }],
+    });
+
+    root.querySelector<HTMLElement>('.fruitback-pin-badge')?.click();
+    assert.equal(root.querySelector('.fruitback-thread-state')?.textContent, 'Waiting for the client');
+    assert.equal(
+      (root.querySelector('.fruitback-thread') as HTMLElement).style.getPropertyValue('--fruitback-pin-color'),
+      '#fde68a',
+    );
+
+    widget.showEveryNote();
+    assert.equal(root.querySelector('.fruitback-sidebar-status')?.textContent, 'Waiting for the client');
+    const drop = root.querySelector<HTMLElement>('.fruitback-sidebar-pin');
+    assert.equal(drop?.style.getPropertyValue('--fruitback-sidebar-stage'), '#fde68a');
+    // A light colour the team chose: the ink, computed.
+    assert.equal(drop?.style.getPropertyValue('--fruitback-sidebar-on-stage'), '#18181b');
+
+    assert.deepEqual(notes?.[0]?.status, {
+      key: 'own:review',
+      name: 'Waiting for the client',
+      stage: 'progress',
+      color: '#fde68a',
+    });
+    // The store named nothing: no word to pass on, and the side panel writes the status.
+    assert.equal(notes?.[0]?.stateName, undefined);
+  });
+
+  it('hands a list outside the page the word of the store, with no status', async () => {
+    const { notes } = await drawn({ issues: [REVIEW] });
+
+    assert.equal(notes?.[0]?.stateName, 'In Review');
+    assert.equal(notes?.[0]?.status, undefined);
   });
 });

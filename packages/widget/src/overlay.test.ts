@@ -71,6 +71,34 @@ describe('createOverlay', () => {
     assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
   });
 
+  it('paints a pin with its status, never a draft, and the stage again once the status is gone (FRU-370)', () => {
+    const page = mountWithCta();
+    const sent = issueOnCta({ id: 'issue_sent', stage: 'done', stateName: 'Done' });
+    const draft = issueOnCta({ id: 'draft:sd_kept', stage: 'done' });
+    let listed = true;
+    const shipped = { key: 'linear:st_done', name: 'Shipped', stage: 'done' as const, color: '#15803d' };
+    overlay = createOverlay({
+      document: page.document,
+      isDraft: (issue) => issue === draft,
+      // Asked for the draft too: the overlay must not take it.
+      statusOf: () => (listed ? shipped : undefined),
+    });
+    overlay.render([sent, draft]);
+
+    const pins = () => [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')];
+    assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-color'), '#15803d');
+    assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-on-color'), '#ffffff');
+    assert.match(pins()[0]?.querySelector('.fruitback-pin-badge')?.getAttribute('title') ?? '', /^Shipped · /);
+    assert.equal(pins()[1]?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-color-text-muted)');
+    assert.equal(pins()[1]?.dataset.fruitbackStatus, undefined);
+
+    listed = false;
+    overlay.render([sent, draft]);
+    assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
+    assert.equal(pins()[0]?.dataset.fruitbackStatus, undefined);
+    assert.match(pins()[0]?.querySelector('.fruitback-pin-badge')?.getAttribute('title') ?? '', /^Done · /);
+  });
+
   it('draws a note kept for later as a neutral pin that says it is not sent (FRU-124)', () => {
     const page = mountWithCta();
     // As `embed.ts` builds it: no issue yet, so no address of an issue.

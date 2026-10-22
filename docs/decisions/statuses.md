@@ -4,8 +4,9 @@ FRU-352 asks for three things: statuses a team adds, statuses read from the trac
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
 below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), the API
-of the console with the statuses in the read (FRU-366), and the screen of the statuses of a site (FRU-371). The rest is
-FRU-367 to FRU-370, and the parts of FRU-371 that wait for them.
+of the console with the statuses in the read (FRU-366), the screen of the statuses of a site (FRU-371), and
+the widget that draws them (FRU-370). The rest is FRU-367 to FRU-369, the side panel of the extension
+(FRU-370, a PR of its own), and the parts of FRU-371 that wait for them.
 
 ## Statuses
 
@@ -289,6 +290,26 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **A change shows at the next read**: the list is asked at each request, and the pages of the notes
   that a removal or a change of stage moved are invalidated in the read cache (`invalidatePages`,
   found in the balanced review of #487), so their next read asks the store.
+
+### What the widget draws (FRU-370)
+
+- **The widget reads `statuses` with `offeredStatuses`, at each read**, and an answer with no list, or
+  one it cannot use, empties it: every pin is then drawn by its stage. `statusOf` gives the status of
+  each note; a note kept for later (FRU-124) has none.
+- **The pin, the drop of its thread, the mark of a detached note and the drop of its row in the list
+  wear the colour of the status** (`status-paint.ts`). A status with no colour keeps the token of its
+  stage, so a host that set `--fruitback-stage-*` keeps it. The text on the drop is the text colour of
+  the status, or `readableTextColor` on the ink of `theme.ts`, which `status-paint.test.ts` compares.
+- **The thread, the row, the detached note and the text export say the name of the status**, then the
+  word of the store, then the word of the stage.
+- **The filters stay by stage.** The chips of the list, the settings panel and the counts are the five
+  stages; `data-fruitback-stage` stays on a pin, and `data-fruitback-status` names its status.
+- **The edge of FRU-334 is on every pin, whatever its colour.** It is drawn by the rules of the pin and
+  of the drop, never by a stage, so a light colour that a team chooses has it in both schemes.
+  `e2e/status-colours.spec.ts` measures it.
+- **`pageNotes()` gives `stateName` and `status`** to a list outside the page: the side panel of the
+  extension reads them in a PR of its own, because its parser is the edge between the page and the
+  extension.
 
 ### The colours
 

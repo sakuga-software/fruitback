@@ -1,12 +1,15 @@
 import {
   canonicalizePageUrl,
   offeredStages,
+  offeredStatuses,
+  statusOf,
   type Seed,
   type SeedComment,
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
   type SeedStage,
+  type SeedStatus,
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { captureAnchor } from './anchor.ts';
@@ -293,6 +296,17 @@ export type PageNote = {
   /** The number its pin carries. */
   number?: number;
   stage: SeedStage;
+  /**
+   * The word of its store, Linear's « In Review » (FRU-370). Left out when the store named nothing: a list
+   * writes the word of the stage.
+   */
+  stateName?: string;
+  /**
+   * Its status, from the `statuses` of the read (FRU-370): its name and the colours a team chose. Always
+   * of the note's stage. Left out, the note is drawn by its stage. A colour is `#rrggbb`, as
+   * `offeredStatuses` keeps it.
+   */
+  status?: SeedStatus;
   note: string;
   /** The name the reporter gave, if any. */
   author?: string;
@@ -425,6 +439,15 @@ export function init(options: FruitbackOptions): Fruitback {
     },
   });
 
+  /**
+   * The statuses of the last read that answered (FRU-370). A read with no list, or with one that
+   * `offeredStatuses` cannot use, empties it: every pin is then drawn by its stage.
+   */
+  let readStatuses: SeedStatus[] = [];
+  /** The status a note is drawn in, or `undefined` for its stage. A draft has none. */
+  const statusFor = (issue: SeedIssue): SeedStatus | undefined =>
+    isDraft(issue) ? undefined : statusOf(issue, readStatuses);
+
   const overlay: Overlay = createOverlay({
     document,
     translator,
@@ -434,6 +457,7 @@ export function init(options: FruitbackOptions): Fruitback {
     // A draft has no stage yet, so no stage the reporter hid can hide it.
     shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
     isDraft,
+    statusOf: statusFor,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
     // A thread opened or closed: the list marks the note that is open. It builds no row again, or
@@ -484,8 +508,9 @@ export function init(options: FruitbackOptions): Fruitback {
   });
   /** What the last read answered. The drafts of this page are drawn beside it. */
   let readIssues: SeedIssue[] = [];
-  const show = (issues: SeedIssue[]): void => {
+  const show = (issues: SeedIssue[], statuses: SeedStatus[]): void => {
     readIssues = issues;
+    readStatuses = statuses;
     const here = canonicalizePageUrl(view.location.href);
     overlay.render([
       ...issues,
@@ -789,11 +814,16 @@ export function init(options: FruitbackOptions): Fruitback {
     overlay
       .resolutions()
       .filter((resolution) => !isDraft(resolution.issue))
-      .map((resolution) => ({
-        issue: resolution.issue,
-        placement: placementOf(resolution),
-        ...(resolution.number === undefined ? {} : { number: resolution.number }),
-      }));
+      .map((resolution) => {
+        const status = statusFor(resolution.issue);
+
+        return {
+          issue: resolution.issue,
+          placement: placementOf(resolution),
+          ...(resolution.number === undefined ? {} : { number: resolution.number }),
+          ...(status === undefined ? {} : { status }),
+        };
+      });
 
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
@@ -859,7 +889,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   // A note kept, or sent: the pins of the page and the list say it at once, with no request.
   const stopFollowingDrafts = drafts.subscribe(() => {
-    show(readIssues);
+    show(readIssues, readStatuses);
     sidebar.refresh();
     tellNotes({ kind: 'list' });
   });
@@ -947,10 +977,13 @@ export function init(options: FruitbackOptions): Fruitback {
 
       return entries()
         .filter(({ issue }) => !config.get().hiddenStages.includes(issue.stage))
-        .map(({ issue, placement, number }) => ({
+        .map(({ issue, placement, number, status }) => ({
           id: issue.seed.id,
           ...(number === undefined ? {} : { number }),
           stage: issue.stage,
+          // The read is cast, not parsed: only a word is passed on.
+          ...(typeof issue.stateName === 'string' && issue.stateName !== '' ? { stateName: issue.stateName } : {}),
+          ...(status === undefined ? {} : { status }),
           note: issue.seed.note,
           ...(issue.seed.reporter?.name === undefined ? {} : { author: issue.seed.reporter.name }),
           ...(issue.mine === true ? { mine: true as const } : {}),
@@ -1074,7 +1107,7 @@ function typingPlaceOf(element: Element): TypingPlace | undefined {
  * Each call takes a generation, and only the newest may touch the screen.
  */
 function createReader(
-  show: (issues: SeedIssue[]) => void,
+  show: (issues: SeedIssue[], statuses: SeedStatus[]) => void,
   stages: OfferedStages,
   destinations: OfferedDestinations,
   identity: ReaderIdentity,
@@ -1114,6 +1147,7 @@ function createReader(
       const body = JSON.parse(response.body) as {
         issues: SeedIssue[];
         stages?: unknown;
+        statuses?: unknown;
         destinations?: unknown;
         identified?: unknown;
         batch?: unknown;
@@ -1138,7 +1172,8 @@ function createReader(
       identity.canWrite = body.canWrite !== false;
       // The same rule (FRU-332): absent, this reader sends no file; `false`, the note has no tracker.
       identity.canAttach = typeof body.canAttach === 'boolean' ? body.canAttach : undefined;
-      show(body.issues);
+      // Like the stages: an answer with no list draws every pin by its stage (FRU-370).
+      show(body.issues, offeredStatuses(body.statuses));
       onRead();
 
       return 'read';

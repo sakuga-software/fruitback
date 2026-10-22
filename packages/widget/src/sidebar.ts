@@ -4,7 +4,8 @@ import { type FeedbackEntry } from './export.ts';
 import { deepActiveElement } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
-import { onStageToken, stageToken } from './theme.ts';
+import { statusPaint, statusLabel } from './status-paint.ts';
+import { stageToken } from './theme.ts';
 
 /**
  * Every note of the page, in one list (FRU-129).
@@ -574,12 +575,16 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     return text;
   }
 
-  /** The status in the words of the store, like the thread, and the stage when it has none. */
-  function statusOf(issue: SidebarEntry['issue']): string {
-    return issue.stateName || t.stage(issue.stage);
+  /**
+   * The status in the words of the team or of the store, like the thread, and the stage when it has
+   * none (FRU-370).
+   */
+  function stateWord({ issue, status }: SidebarEntry): string {
+    return statusLabel(issue, status, t);
   }
 
-  function item({ issue, placement, number }: SidebarEntry, current: string | undefined): HTMLElement {
+  function item(entry: SidebarEntry, current: string | undefined): HTMLElement {
+    const { issue, placement, number } = entry;
     const row = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
@@ -593,8 +598,10 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const pin = document.createElement('span');
     pin.className = 'fruitback-sidebar-pin';
     pin.setAttribute('aria-hidden', 'true');
-    pin.style.setProperty('--fruitback-sidebar-stage', stageToken(issue.stage));
-    pin.style.setProperty('--fruitback-sidebar-on-stage', onStageToken(issue.stage));
+    // The colour of its status, which the pin on the page wears too (FRU-370), or of its stage.
+    const paint = statusPaint(issue, entry.status);
+    pin.style.setProperty('--fruitback-sidebar-stage', paint.fill);
+    pin.style.setProperty('--fruitback-sidebar-on-stage', paint.ink);
     const digit = document.createElement('span');
     digit.textContent = number === undefined ? '' : String(number);
     pin.append(digit);
@@ -604,7 +611,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     top.className = 'fruitback-sidebar-top';
     const status = document.createElement('span');
     status.className = 'fruitback-sidebar-status';
-    status.textContent = statusOf(issue);
+    status.textContent = stateWord(entry);
     top.append(status);
     if (issue.identifier) {
       const id = document.createElement('span');
@@ -647,7 +654,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   }
 
   /** A note whose element is gone: its words, and what became of it. It still opens its thread. */
-  function lost({ issue }: SidebarEntry, current: string | undefined): HTMLElement {
+  function lost(entry: SidebarEntry, current: string | undefined): HTMLElement {
+    const { issue } = entry;
     const row = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
@@ -658,7 +666,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const why = document.createElement('span');
     why.className = 'fruitback-sidebar-meta';
     why.textContent = [
-      statusOf(issue),
+      stateWord(entry),
       ...(issue.identifier ? [issue.identifier] : []),
       t.text('sidebar.unplacedWhy'),
     ].join(' · ');

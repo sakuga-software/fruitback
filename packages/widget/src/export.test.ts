@@ -118,6 +118,13 @@ describe('the feedback of a page as text (FRU-109)', () => {
     assert.match(unnamed, /^## 1\. FB-12 — In progress$/m);
   });
 
+  it('uses the name of its status first, as the thread does (FRU-370)', () => {
+    const status = { key: 'own:wait', name: 'Waiting for the client', stage: 'progress' as const };
+    const named = text([{ issue: note({ stateName: '', stage: 'progress' }), placement: 'found', status }]);
+
+    assert.match(named, /^## 1\. FB-12 — Waiting for the client$/m);
+  });
+
   it('says so when the page has no feedback', () => {
     assert.equal(text([]), '# Feedback on https://staging.acme.dev/pricing\n\nNo feedback on this page.\n');
   });

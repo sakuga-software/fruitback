@@ -1,5 +1,6 @@
-import type { SeedComment, SeedIssue } from '@fruitback/shared';
+import type { SeedComment, SeedIssue, SeedStatus } from '@fruitback/shared';
 import type { Translator } from './messages.ts';
+import { statusLabel } from './status-paint.ts';
 
 /**
  * The feedback of a page as plain text (FRU-109).
@@ -14,7 +15,8 @@ import type { Translator } from './messages.ts';
 
 export type FeedbackPlacement = 'found' | 'approximate' | 'detached';
 
-export type FeedbackEntry = { issue: SeedIssue; placement: FeedbackPlacement };
+/** `status`: the status of the note in its read (FRU-370), when it has one. */
+export type FeedbackEntry = { issue: SeedIssue; placement: FeedbackPlacement; status?: SeedStatus };
 
 /** How sure the place of a note is, from what the cascade answered for it. */
 export function placementOf(resolution: { strategy: string; confident: boolean }): FeedbackPlacement {
@@ -39,7 +41,7 @@ export function feedbackAsText(entries: readonly FeedbackEntry[], options: Feedb
   return `${[title, ...blocks].join('\n\n')}\n`;
 }
 
-function block({ issue, placement }: FeedbackEntry, position: number, t: Translator): string {
+function block({ issue, placement, status }: FeedbackEntry, position: number, t: Translator): string {
   const seed = issue.seed;
   const facts = [
     t.text('export.element', { element: element(issue) }),
@@ -51,7 +53,7 @@ function block({ issue, placement }: FeedbackEntry, position: number, t: Transla
   ].filter((line): line is string => line !== undefined);
 
   return [
-    `## ${position}. ${oneLine(issue.identifier)} — ${oneLine(issue.stateName || t.stage(issue.stage))}`,
+    `## ${position}. ${oneLine(issue.identifier)} — ${oneLine(statusLabel(issue, status, t))}`,
     facts.map((fact) => `- ${fact}`).join('\n'),
     seed.note.trim().length > 0 ? quote(seed.note) : t.text('thread.noNote'),
     ...(issue.comments ?? []).map((comment) => reply(comment, t)),

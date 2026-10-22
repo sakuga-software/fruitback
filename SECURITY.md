@@ -1602,6 +1602,9 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
   `var(…)`, no `url(…)`, no named colour. A text colour that the team chose under 4.5:1 on its
   background, or with no background, is refused, never corrected; one the team did not choose is
   computed by `readableTextColor`. test:`refuses what a status cannot be, and says why`.
+- **The widget writes a colour of a status into a style only as `#rrggbb`** (FRU-370). It reads the
+  list with `offeredStatuses`, and `statusPaint` checks each colour again before `style.setProperty`:
+  any other value draws the token of the stage. test:`lets nothing but #rrggbb reach a style, whoever built the status`.
 - **A status comes from the worker's store or from a connector the site sends to.** A source that is
   not one of them is refused (`unknown-source`): a site cannot name the states of another tracker.
 - **A status that holds notes is not removed until the request says where they go**

@@ -1,7 +1,7 @@
-import { type SeedBounds, type SeedComment, type SeedIssue } from '@fruitback/shared';
+import { type SeedBounds, type SeedComment, type SeedIssue, type SeedStatus } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
-import { onStageToken, stageToken } from './theme.ts';
+import { statusLabel, statusPaint } from './status-paint.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -108,6 +108,12 @@ export type OverlayOptions = {
    * tracker gave them a state, and their thread says they are not sent. Defaults to none.
    */
   isDraft?: (issue: SeedIssue) => boolean;
+  /**
+   * The status of an issue, from the `statuses` of its read (FRU-370). Its pin, its thread and its
+   * entry in the detached notes take its colour and its name. `undefined`: the stage, as before.
+   * Asked at each render. Left out: every pin is drawn by its stage.
+   */
+  statusOf?: (issue: SeedIssue) => SeedStatus | undefined;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
   /** Called when a thread opens or closes: the list of the page marks the note that is open (FRU-259). */
@@ -232,6 +238,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     host,
     ...(options.dock === undefined ? {} : { dock: options.dock }),
     translator: t,
+    statusOf: (issue) => STATUSES.get(issue),
     onSelect: (issue) => {
       const entry = placed.find((candidate) => candidate.issue.seed.id === issue.seed.id);
       if (entry !== undefined) openThread(entry);
@@ -448,9 +455,13 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       if (options.isDraft?.(issue) === true) {
         DRAFTS.add(issue);
         NUMBERS.delete(issue);
+        STATUSES.delete(issue);
       } else {
         DRAFTS.delete(issue);
         NUMBERS.set(issue, (count += 1));
+        const status = options.statusOf?.(issue);
+        if (status === undefined) STATUSES.delete(issue);
+        else STATUSES.set(issue, status);
       }
     }
 
@@ -745,9 +756,18 @@ const NUMBERS = new WeakMap<SeedIssue, number>();
 /** The issues an overlay was told are drafts. Marked on the object, which the overlay draws as it got it. */
 const DRAFTS = new WeakSet<SeedIssue>();
 
-/** The stage's token, or a neutral one for a draft: it has no state in any tracker yet (FRU-124). */
+/**
+ * The status an overlay was told each issue is in (FRU-370). Written at each draw, like the two marks
+ * above: a note whose status leaves the list is drawn by its stage again.
+ */
+const STATUSES = new WeakMap<SeedIssue, SeedStatus>();
+
+/**
+ * The colour of its status, the stage's token, or a neutral one for a draft: it has no state in any
+ * tracker yet (FRU-124).
+ */
 function pinColor(issue: SeedIssue): string {
-  return DRAFTS.has(issue) ? 'var(--fruitback-color-text-muted)' : stageToken(issue.stage);
+  return DRAFTS.has(issue) ? 'var(--fruitback-color-text-muted)' : statusPaint(issue, STATUSES.get(issue)).fill;
 }
 
 function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
@@ -758,11 +778,15 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   // dark theme, the host override and, once FRU-24 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
   pin.style.setProperty('--fruitback-pin-color', pinColor(issue));
-  // What is written on the drop: dark on the amber of « in progress », white on the others (FRU-233).
-  if (!DRAFTS.has(issue)) pin.style.setProperty('--fruitback-pin-on-color', onStageToken(issue.stage));
+  // What is written on the drop: dark on the amber of « in progress », white on the others (FRU-233),
+  // or the text colour of its status (FRU-370).
+  if (!DRAFTS.has(issue))
+    pin.style.setProperty('--fruitback-pin-on-color', statusPaint(issue, STATUSES.get(issue)).ink);
   pin.dataset.fruitbackPin = issue.seed.id;
   if (DRAFTS.has(issue)) pin.dataset.fruitbackDraft = '';
   pin.dataset.fruitbackStage = issue.stage;
+  const status = STATUSES.get(issue);
+  if (status !== undefined) pin.dataset.fruitbackStatus = status.key;
 
   const badge = document.createElement('button');
   badge.type = 'button';
@@ -958,7 +982,7 @@ function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean
 function stateLabel(issue: SeedIssue, t: Translator): string {
   if (DRAFTS.has(issue)) return t.text('thread.draft');
 
-  return issue.stateName || t.stage(issue.stage);
+  return statusLabel(issue, STATUSES.get(issue), t);
 }
 
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
