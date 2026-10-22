@@ -28,7 +28,17 @@ export type Writers = 'members' | 'anyone';
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
 /** A GitHub destination keeps its repository, `owner/name` in lower case, in `teamId` (FRU-359). */
 /** `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the tracker answers. */
-export type Destination = { connector: string; teamId?: string; projectId?: string; label?: string };
+export type Destination = {
+  connector: string;
+  teamId?: string;
+  projectId?: string;
+  label?: string;
+  /**
+   * FRU-382: whether the repository of a GitHub destination is private, as GitHub last told the
+   * worker. Absent: not known (another kind, a worker of before, or GitHub did not answer).
+   */
+  private?: boolean;
+};
 /**
  * `destinations` is every place the site can send to, in order (FRU-123): the first one is where a
  * note goes when nobody chose. `destination` is that first one, and all a worker of before sends.

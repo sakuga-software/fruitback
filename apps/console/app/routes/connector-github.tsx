@@ -136,7 +136,10 @@ export function GithubPanel({ id, base, connector, connectors, sites, manages, o
           {places.map((each, index) => {
             const own = each.connector === connector.id;
             const rest = places.filter((_, position) => position !== index);
-            const open = own && repositoryOf(each)?.private === false;
+            // FRU-382: the worker's word comes with the destination, so the warning shows at once, for
+            // every role that reads the destination, whatever the list. The list, when it is read,
+            // can only add a warning: a repository it lists as public is public now.
+            const open = own && (each.private === false || repositoryOf(each)?.private === false);
 
             return (
               <li key={`${each.connector}/${each.teamId}/${each.projectId}`}>

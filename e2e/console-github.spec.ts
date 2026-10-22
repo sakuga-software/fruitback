@@ -23,9 +23,20 @@ const REPOSITORIES = [
   { fullName: 'acme/api', private: true },
 ];
 
-/** What the worker writes beside a place, as it does for each kind. */
-function labelled(place: Place): Place & { label: string } {
-  if (place.connector === GITHUB.id) return { ...place, label: `GitHub · ${place.teamId}` };
+/**
+ * What the worker writes beside a place, as it does for each kind: for a repository, whether GitHub
+ * says it is private (FRU-382), unless `privacy` says the worker does not know it.
+ */
+function labelled(place: Place, privacy: 'known' | 'unknown' = 'known'): Place & { label: string } {
+  if (place.connector === GITHUB.id) {
+    const listed = REPOSITORIES.find((each) => each.fullName.toLowerCase() === place.teamId);
+
+    return {
+      ...place,
+      label: `GitHub · ${place.teamId}`,
+      ...(privacy === 'known' && listed !== undefined ? { private: listed.private } : {}),
+    };
+  }
 
   return { ...place, label: 'Linear · Web' };
 }
@@ -42,6 +53,12 @@ type Worker = {
   started: number;
   /** How many reads of the repositories fail before one answers. */
   silentReads: number;
+  /** FRU-382: the read of the repositories never answers, as one that is still on its way. */
+  repositoriesWait: boolean;
+  /** How many reads of the repositories the console asked for. */
+  listed: number;
+  /** Whether the worker says if each repository is private: a worker of before does not. */
+  privacy: 'known' | 'unknown';
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
@@ -53,6 +70,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     sent: [],
     started: 0,
     silentReads: 0,
+    repositoriesWait: false,
+    listed: 0,
+    privacy: 'known',
   };
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
@@ -70,7 +90,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         repository === undefined ? rest : { ...rest, teamId: repository.toLowerCase() },
       );
 
-      return json({ destinations: worker.places.map(labelled) });
+      return json({ destinations: worker.places.map((each) => labelled(each, worker.privacy)) });
     }
     if (pathname.endsWith('/connectors')) {
       return json({ connectors: worker.connectors, available: true, linearOAuth: true, githubApp: worker.githubApp });
@@ -82,12 +102,14 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
             id: 's1',
             origin: 'https://staging.acme.dev',
             visibility: 'members',
-            destinations: worker.places.map(labelled),
+            destinations: worker.places.map((each) => labelled(each, worker.privacy)),
           },
         ],
       });
     }
     if (pathname.endsWith('/g1/repositories')) {
+      worker.listed += 1;
+      if (worker.repositoriesWait) return new Promise<void>(() => {});
       if (worker.silentReads === 0) return json({ repositories: REPOSITORIES });
       worker.silentReads -= 1;
 
@@ -315,6 +337,65 @@ test('a read of the repositories that failed says so, and « Try again » reads 
   await expect(panel(page).getByRole('alert')).toHaveCount(0);
   await add.click();
   await expect(page.getByRole('option')).toHaveText(['Add a repository…', 'acme/api', 'acme/web', 'acme/Docs']);
+});
+
+/** The warning of a public repository, and its words for acme/docs. */
+const PUBLIC_DOCS = 'acme/docs is public: each note of this site becomes an issue that anybody can read.';
+
+test('the warning of a public repository shows at once, while the list of the repositories is still read (FRU-382)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
+  worker.repositoriesWait = true;
+  await openGithub(page);
+
+  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+  // The list was asked for and has not answered: the warning is the worker's word on the destination.
+  expect(worker.listed).toBeGreaterThan(0);
+  await expect(page.getByRole('option')).toHaveCount(0);
+});
+
+test('a list of the repositories that failed does not hide the warning (FRU-382)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
+  // Every read fails: a development build runs the effect twice, and a second read must not answer.
+  worker.silentReads = 100;
+  await openGithub(page);
+
+  await expect(
+    panel(page).getByText('GitHub did not answer with the repositories of this installation.'),
+  ).toBeVisible();
+  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+});
+
+test('a member reads the warning too, and asks for no list (FRU-382)', async ({ page }) => {
+  const worker = await workerWith(page, 'member');
+  worker.places = [
+    { connector: 'g1', teamId: 'acme/docs' },
+    { connector: 'g1', teamId: 'acme/web' },
+  ];
+  await openGithub(page);
+
+  // The public one only: acme/web is private.
+  await expect(panel(page).locator('[data-public]')).toHaveText([PUBLIC_DOCS]);
+  await expect(panel(page).getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
+  expect(worker.listed).toBe(0);
+  await expectNoViolation(page, 'the panel of a member');
+});
+
+test('the control: with no word of the worker and no list, nothing says the repository is public (FRU-382)', async ({
+  page,
+}) => {
+  // A worker of before says nothing of the repository, and a member reads no list: the warning
+  // above comes from the destination, not from the list.
+  const worker = await workerWith(page, 'member');
+  worker.privacy = 'unknown';
+  worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
+  await openGithub(page);
+
+  await expect(panel(page).getByText('GitHub · acme/docs', { exact: true })).toBeVisible();
+  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
 });
 
 test('the panel of Linear sends the GitHub place of a site as a repository', async ({ page }) => {
