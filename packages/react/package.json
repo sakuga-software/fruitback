@@ -2,7 +2,14 @@
   "name": "@fruitback/react",
   "version": "0.3.0",
   "description": "The Fruitback widget as a React component: <Fruitback endpoint clientId />.",
+  "homepage": "https://github.com/sakuga-software/fruitback#readme",
+  "bugs": "https://github.com/sakuga-software/fruitback/issues",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakuga-software/fruitback.git",
+    "directory": "packages/react"
+  },
   "files": [
     "dist",
     "src",

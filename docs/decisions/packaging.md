@@ -1,7 +1,8 @@
 # The published packages, and their licences
 
-Three packages, one front door, and the guard that packs all three before it believes any of them.
-Plus the licence split and the two measurements that decided how it is asserted.
+Five packages, one front door, and the guard that packs all five before it believes any of them.
+How they reach npm from a tag. Plus the licence split and the two measurements that decided how it
+is asserted.
 
 ## The published package
 
@@ -87,6 +88,50 @@ Plus the licence split and the two measurements that decided how it is asserted.
   esbuild preserves — four survive into the bundle — and **`zod` carries none**, so its notice
   reaches a consumer through `packages/widget/THIRD-PARTY-NOTICES.md` or not at all. `packages/shared`
   is compiled by `tsc` rather than bundled, keeps `zod` as an ordinary dependency, and owes nothing.
+
+## Publishing to npm (FRU-28)
+
+### The rules, in short
+
+- **A `v*` tag publishes the five packages**, from `release-npm.yml`: the job `ci` calls `ci.yml` on
+  the tagged commit, `package` packs the five with pnpm, and `publish` sends the tarballs to npm in the
+  order of their dependencies, in the environment `npm`, after a person approves. The same tag starts
+  the release of the extension and of the image: one version for everything.
+- **pnpm packs, npm publishes.** `pnpm pack` writes the version of each `workspace:*` dependency into
+  the tarball; `npm publish` of a tarball signs the provenance and speaks OIDC (trusted publishing
+  needs npm 11.5.1 or later). A version that npm already has is skipped, so a run that failed in the
+  middle runs again.
+- **The secret `NPM_TOKEN` of the environment `npm` is for the first publish only.** npm configures a
+  trusted publisher on a package that exists. After `0.3.0`, each package names
+  `release-npm.yml` as its trusted publisher, and the secret is deleted: with no token, npm uses the
+  OIDC token of the run.
+- **Each package names the repository and its directory** (`repository.url`, `repository.directory`).
+  npm refuses a provenance that names no repository, or another one. `package.test.ts` reads the
+  field back out of each tarball.
+- **A change to a published package carries a changeset.** The job `changeset` of `ci.yml`
+  (`tools/ci/changeset.ts`) fails a pull request that changes a file of `packages/*`, other than a
+  test, and adds no file to `.changeset/`. `pnpm changeset --empty` is the answer for a change that a
+  consumer cannot see.
+- **One version for the five packages and the four apps** (`fixed` in `.changeset/config.json`,
+  private packages versioned and never tagged). The tag of a release is the version of the extension,
+  and the stores and npm compare it with their manifests. A release is a pull request
+  `chore: version x.y.z` that runs `pnpm changeset version`, which writes each `CHANGELOG.md`; then a
+  tag `vx.y.z` on its merge commit.
+
+### The reasons, and what is not done
+
+- **`changeset publish` is not used.** It writes a tag for each package (`fruitback@0.3.0`,
+  `@fruitback/shared@0.3.0`) beside the `v0.3.0` that starts the three releases: two conventions of
+  tags for one release.
+- **`changesets/action` is not used either.** It opens the pull request « Version Packages » with a
+  token that writes contents and pull requests, and a title that is no Conventional Commit. The pull
+  request `chore: version` is written by hand, with `pnpm changeset version`.
+- **`0.3.0` has no `CHANGELOG.md`.** The versions up to it were moved by hand (#216, #514). The
+  release `v0.3.0` on GitHub lists its pull requests; the first changelog is the one of the next
+  version.
+- **A run that stops in the middle leaves some packages on npm.** The order puts `fruitback`, the
+  front door, last, so a consumer never installs it before what it depends on. Run the workflow
+  again: it skips what npm has.
 
 ## Licences
 

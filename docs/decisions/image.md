@@ -51,8 +51,8 @@ immutable.
   does not reach those files. **A release that fails publishes nothing and says so only in the
   Actions tab**: look at `release-image.yml` after a merge, not only at `ci.yml`.
 - **Nothing is published from a commit that did not pass `ci.yml`** (FRU-172). The `publish` job of
-  `release-image.yml`, and of `release-extension.yml`, needs a job `ci` that calls `ci.yml` on the
-  same commit. `workflows.test.ts` fails on a job that holds a write permission and does not name
+  `release-image.yml`, of `release-extension.yml` and of `release-npm.yml`, needs a job `ci` that
+  calls `ci.yml` on the same commit. `workflows.test.ts` fails on a job that holds a write permission and does not name
   that job in its own `needs`, or that holds `always()` in its `if`. A push to `main` therefore runs
   the checks twice: in `CI`, and in `Release image`.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out

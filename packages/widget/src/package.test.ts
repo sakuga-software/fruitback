@@ -304,7 +304,23 @@ describe('a consumer installing this from npm', () => {
           run('tar', ['-xzOf', join(scratch, tarball), 'package/LICENSE']),
         ]);
 
-        assert.equal((JSON.parse(manifest) as { license?: string }).license, 'MIT', `${tarball} declares no MIT`);
+        const declared = JSON.parse(manifest) as {
+          name: string;
+          license?: string;
+          repository?: { url?: string; directory?: string };
+        };
+        assert.equal(declared.license, 'MIT', `${tarball} declares no MIT`);
+        // npm signs the provenance of a package against the repository it names, and refuses the
+        // publish when the field is missing or names another one (FRU-28). The first publish of 0.3.0
+        // would have put four packages on npm and then failed on the last one.
+        assert.deepEqual(
+          [declared.repository?.url, declared.repository?.directory],
+          [
+            'git+https://github.com/sakuga-software/fruitback.git',
+            `packages/${declared.name.replace(/^@fruitback\//, '')}`,
+          ],
+          `${tarball} names no repository, or another one`,
+        );
         assert.match(licence, /^MIT License/, `${tarball} ships a LICENSE that is not the MIT text`);
       }
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "baseBranch": "main",
+  "access": "public",
+  "fixed": [
+    [
+      "fruitback",
+      "@fruitback/shared",
+      "@fruitback/widget",
+      "@fruitback/element",
+      "@fruitback/react",
+      "@fruitback/extension",
+      "@fruitback/worker",
+      "@fruitback/console",
+      "@fruitback/playground"
+    ]
+  ],
+  "linked": [],
+  "ignore": [],
+  "privatePackages": { "version": true, "tag": false },
+  "updateInternalDependencies": "patch",
+  "commit": false,
+  "changelog": "@changesets/cli/changelog"
+}

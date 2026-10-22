@@ -62,6 +62,8 @@ const DYNAMIC_READS: Record<string, string[]> = {
     'apps/*/package.json',
     'packages/*/package.json',
   ],
+  // The packages that go to npm, which the changeset check watches (FRU-28).
+  'apps/worker/src/ci-changeset.test.ts: `packages/${directory}/package.json`': ['packages/*/package.json'],
   // The test files the commands in CONTRIBUTING.md run.
   'apps/worker/src/contributing.test.ts: ../../../${dir}/${file}': ['**/*.test.ts'],
   "packages/widget/src/package.test.ts: join(root, '..', 'shared')": ['packages/shared/'],
