@@ -280,8 +280,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'L’application n’a accès à aucun dépôt de {account}. Sur GitHub, donnez-lui accès à l’un d’eux.',
   'Each note becomes an issue of the repository. Its files do not go: GitHub takes none by its API.':
     'Chaque note devient un ticket du dépôt. Ses fichiers ne partent pas : GitHub n’en prend aucun par son API.',
-  'GitHub did not answer with the repositories of this installation. Try again later.':
-    'GitHub n’a pas répondu avec les dépôts de cette installation. Réessayez plus tard.',
+  'GitHub did not answer with the repositories of this installation.':
+    'GitHub n’a pas répondu avec les dépôts de cette installation.',
   'POST each note to your own endpoint, with an address of one hour for each of its files.':
     'Chaque note envoyée en POST à votre propre adresse, avec une adresse valable une heure pour chacun de ses fichiers.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':

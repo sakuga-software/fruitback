@@ -13,7 +13,7 @@ import {
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { known } from '../listed';
-import { Chip, Choice, LinkButton, Problem, SidePanel } from '../ui';
+import { Button, Chip, Choice, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import {
@@ -55,6 +55,7 @@ export function GithubPanel({ id, base, connector, connectors, sites, manages, o
   const [repositories, setRepositories] = useState<Repository[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   const [silent, setSilent] = useState(false);
+  const [reads, setReads] = useState(0);
   // A list is written whole, from the list on the screen: see `writing` in the panel of Linear.
   const [writing, setWriting] = useState(false);
   const account = accountOf(connector);
@@ -71,8 +72,9 @@ export function GithubPanel({ id, base, connector, connectors, sites, manages, o
         void onChanged();
       },
     );
-    // `onChanged` is not a reason to ask GitHub again: the read above runs once for a connector.
-  }, [base, connector.id, manages]);
+    // `onChanged` is not a reason to ask GitHub again: the read above runs once for a connector, and
+    // again for each « Try again ».
+  }, [base, connector.id, manages, reads]);
 
   /** The repository of a place, as GitHub lists it, when the list has it. */
   const repositoryOf = (place: Destination): Repository | undefined =>
@@ -252,8 +254,11 @@ export function GithubPanel({ id, base, connector, connectors, sites, manages, o
           </p>
         )}
         {silent && connector.attention === undefined ? (
-          <div className="mt-[12px]">
-            <Problem>{t('GitHub did not answer with the repositories of this installation. Try again later.')}</Problem>
+          <div className="mt-[12px] flex flex-col items-start gap-[8px]">
+            <Problem>{t('GitHub did not answer with the repositories of this installation.')}</Problem>
+            <Button tone="outline" onClick={() => setReads((count) => count + 1)}>
+              {t('Try again')}
+            </Button>
           </div>
         ) : null}
         {problem === undefined ? null : (

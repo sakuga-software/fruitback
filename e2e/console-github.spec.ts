@@ -40,6 +40,8 @@ type Worker = {
   /** Every list of places the console sent, as it sent it. */
   sent: Place[][];
   started: number;
+  /** How many reads of the repositories fail before one answers. */
+  silentReads: number;
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
@@ -50,6 +52,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     places: [],
     sent: [],
     started: 0,
+    silentReads: 0,
   };
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
@@ -84,7 +87,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         ],
       });
     }
-    if (pathname.endsWith('/g1/repositories')) return json({ repositories: REPOSITORIES });
+    if (pathname.endsWith('/g1/repositories')) {
+      if (worker.silentReads === 0) return json({ repositories: REPOSITORIES });
+      worker.silentReads -= 1;
+
+      return json({ error: 'connector-failed' }, 502);
+    }
     if (pathname.endsWith('/c1/teams')) return json({ teams: [{ id: 't1', name: 'Web', key: 'WEB', projects: [] }] });
 
     return undefined;
@@ -102,10 +110,15 @@ const card = (page: Page) => page.locator('[data-source="GitHub Issues"]');
 const rows = (page: Page) => page.locator('button[aria-pressed]');
 const panel = (page: Page) => page.getByRole('region', { name: /^GitHub Issues · / });
 
-/** A picture for the record of the ticket. It changes nothing of the test. */
-async function picture(page: Page, name: string): Promise<void> {
+/**
+ * A picture for the record of the ticket. It changes nothing of the test.
+ *
+ * WARNING: a full page picture resizes the viewport, and the resize closes an open list. Give
+ * `fullPage: false` while a list is open.
+ */
+async function picture(page: Page, name: string, { fullPage = true } = {}): Promise<void> {
   const path = test.info().outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage: true });
+  await page.screenshot({ path, fullPage });
   await test.info().attach(name, { path, contentType: 'image/png' });
 }
 
@@ -265,7 +278,7 @@ test('a site chooses a repository, sent as a repository, and a public one says i
   // The private ones, then the public ones, each in the order of their names.
   await expect(page.getByRole('option')).toHaveText(['Add a repository…', 'acme/api', 'acme/web', 'acme/Docs']);
   await expect(page.getByText('Public repositories: their issues are public', { exact: true })).toBeVisible();
-  await picture(page, 'repository-picker');
+  await picture(page, 'repository-picker', { fullPage: false });
   await page.getByRole('option', { name: 'acme/Docs', exact: true }).click();
 
   await expect.poll(() => worker.sent).toEqual([[{ connector: 'g1', repository: 'acme/docs' }]]);
@@ -287,6 +300,21 @@ test('a site chooses a repository, sent as a repository, and a public one says i
   await expect(panel(page).getByText('GitHub · acme/web', { exact: true })).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveCount(0);
   await expectNoViolation(page, 'the panel of an installation');
+});
+
+test('a read of the repositories that failed says so, and « Try again » reads them again', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.silentReads = 1;
+  await openGithub(page);
+  await expect(panel(page).getByRole('alert')).toHaveText(
+    'GitHub did not answer with the repositories of this installation.',
+  );
+  const add = panel(page).getByRole('button', { name: /Add a repository for staging\.acme\.dev/ });
+  await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
+
+  await expect(panel(page).getByRole('alert')).toHaveCount(0);
+  await add.click();
+  await expect(page.getByRole('option')).toHaveText(['Add a repository…', 'acme/api', 'acme/web', 'acme/Docs']);
 });
 
 test('the panel of Linear sends the GitHub place of a site as a repository', async ({ page }) => {
