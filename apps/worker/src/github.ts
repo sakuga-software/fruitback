@@ -431,7 +431,15 @@ export type IssueStoreOptions = {
   statusSource?: string;
   /** The stage a site gives a status, by its key, over the one of `stageForGithubIssue` (FRU-369). */
   stages?: Readonly<Record<string, SeedStage>>;
+  /**
+   * FRU-382: told whether the repository is private, read with the token of the note once its issue
+   * is made. A repository that turned public since its destination was written is then said in the
+   * console. A read that fails is said in the log and costs the note nothing.
+   */
+  privacy?: (repository: string, isPrivate: boolean) => Promise<void>;
 };
+
+const repositoryPrivacySchema = z.object({ private: z.boolean() });
 
 export function createIssueStore({
   repositoryOf,
@@ -440,6 +448,7 @@ export function createIssueStore({
   refused,
   statusSource,
   stages = {},
+  privacy,
 }: IssueStoreOptions): SeedStore {
   async function call(repository: string, path: string, init: Omit<GithubCall, 'token'> = {}): Promise<unknown> {
     const token = await tokens.get(repository);
@@ -454,6 +463,23 @@ export function createIssueStore({
       if (instead === undefined) throw error;
       tokens.drop(repository, token);
       throw instead;
+    }
+  }
+
+  /** What GitHub says of the repository now, told to `privacy`. Nothing of it stops the note. */
+  async function notePrivacy(
+    repository: string,
+    privacy: (repository: string, isPrivate: boolean) => Promise<void>,
+  ): Promise<void> {
+    try {
+      const token = await tokens.get(repository);
+      const read = repositoryPrivacySchema.safeParse(await githubFetch(`/repos/${repository}`, { token }, api));
+      if (!read.success) throw new StoreError('GitHub returned no repository');
+      await privacy(repository, read.data.private);
+    } catch (error) {
+      console.error(
+        `[fruitback] whether a repository is private was not read again: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -543,6 +569,7 @@ export function createIssueStore({
         }),
       );
       if (!created.success) throw new StoreError('GitHub returned no issue');
+      if (privacy !== undefined) await notePrivacy(repository, privacy);
 
       return { id: String(created.data.id), identifier: `#${created.data.number}`, url: created.data.html_url };
     },

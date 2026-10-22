@@ -105,6 +105,7 @@ export function destinationOf(row: Record<string, unknown>): Destination | undef
     ...(typeof row.team_id === 'string' && row.team_id !== '' ? { teamId: row.team_id } : {}),
     ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
     ...(typeof row.label === 'string' && row.label !== '' ? { label: row.label } : {}),
+    ...(typeof row.private === 'boolean' ? { private: row.private } : {}),
   };
 }
 

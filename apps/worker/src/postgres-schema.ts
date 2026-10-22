@@ -203,6 +203,10 @@ export const site_destinations = pgTable(
     team_id: text('team_id'),
     project_id: text('project_id'),
     label: text('label'),
+    // FRU-382: whether the repository of a `github` destination is private, as GitHub last said it:
+    // learned when the destination is written, and again when a note goes there. Empty: not known
+    // (another kind of connector, or GitHub did not answer).
+    private: boolean('private'),
   },
   (table) => [
     primaryKey({ name: 'site_destinations_pkey', columns: [table.site_id, table.position] }),

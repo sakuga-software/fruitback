@@ -166,6 +166,12 @@ export type Destination = {
   projectId?: string;
   /** How a member reads this place when they choose it (FRU-123): « Linear · Design ». */
   label?: string;
+  /**
+   * FRU-382: whether the repository of a `github` destination is private, as GitHub last said it.
+   * The worker learns it when the destination is written and when a note goes there, never from a
+   * request. Absent: not known (another kind of connector, or GitHub did not answer).
+   */
+  private?: boolean;
 };
 
 /**
@@ -489,6 +495,11 @@ export type AccountStore = {
     | { set: true; stage: SeedStage; page: string }
     | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'unknown-status' | 'status-hidden' }
   >;
+  /**
+   * What GitHub said of a repository when a note went there (FRU-382): every destination of
+   * `connector` to `repository` takes it, so that a repository that turned public is said at once.
+   */
+  noteRepositoryPrivacy(connector: string, repository: string, isPrivate: boolean): Promise<void>;
   /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
   addConnector(
     workspace: string,

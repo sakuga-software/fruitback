@@ -1,0 +1,1 @@
+ALTER TABLE "site_destinations" ADD COLUMN "private" boolean;

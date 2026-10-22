@@ -102,6 +102,12 @@ export type GithubApp = {
    * cache keeps it: see `listingToken`.
    */
   repositories(installation: number): Promise<ListedRepository[]>;
+  /**
+   * Whether `repository` is private, for a destination that is written (FRU-382), with a token that
+   * reaches that repository alone and reads its metadata only. `undefined`: the installation does
+   * not cover it. It throws a `StoreError` when GitHub does not answer.
+   */
+  repository(installation: number, repository: string): Promise<ListedRepository | undefined>;
   /** For the tests: a GitHub on a port of the machine. */
   readonly api?: string;
 };
@@ -140,6 +146,8 @@ const repositoriesSchema = z.object({
 const listingTokenSchema = accessTokenSchema.extend({
   permissions: z.record(z.string(), z.string()).optional(),
 });
+
+const repositorySchema = z.object({ full_name: z.string(), private: z.boolean() });
 
 const tokenSchema = accessTokenSchema.extend({
   repositories: z.array(z.object({ full_name: z.string() })).optional(),
@@ -281,7 +289,43 @@ export function createGithubApp(config: GithubConnectorConfig, options: GithubAp
     return listed.slice(0, MAX_LISTED_REPOSITORIES);
   }
 
+  async function repository(installation: number, wanted: string): Promise<ListedRepository | undefined> {
+    const name = wanted.split('/')[1] as string;
+    let answer: unknown;
+    try {
+      answer = await githubFetch(
+        `/app/installations/${installation}/access_tokens`,
+        {
+          method: 'POST',
+          token: signAppJwt(config.appId, config.privateKey, now()),
+          body: { repositories: [name], permissions: LISTING_PERMISSIONS },
+        },
+        api,
+      );
+    } catch (error) {
+      const refusal = refusalOfMint(error);
+      if (refusal instanceof GithubRepositoryRefused) return undefined;
+      throw refusal ?? error;
+    }
+    const issued = listingTokenSchema.extend(tokenSchema.pick({ repositories: true }).shape).safeParse(answer);
+    if (!issued.success) throw new StoreError('GitHub returned no installation token');
+    const granted = Object.entries(issued.data.permissions ?? LISTING_PERMISSIONS);
+    if (granted.some(([permission, level]) => permission !== 'metadata' || level !== 'read')) {
+      throw new StoreError('GitHub gave the token of a repository more than the metadata');
+    }
+    // The installation can belong to another owner, with a repository of the same name.
+    const reached = (issued.data.repositories ?? []).map((each) => each.full_name.toLowerCase());
+    if (reached.length !== 1 || reached[0] !== wanted.toLowerCase()) return undefined;
+    const read = repositorySchema.safeParse(await githubFetch(`/repos/${wanted}`, { token: issued.data.token }, api));
+    if (!read.success || read.data.full_name.toLowerCase() !== wanted.toLowerCase()) {
+      throw new StoreError('GitHub returned no repository');
+    }
+
+    return { fullName: read.data.full_name, private: read.data.private };
+  }
+
   return {
+    repository,
     token: (installation, repository) =>
       tokens.get(keyOf(installation, repository), () => mint(installation, repository)),
     drop: (installation, repository, token) => tokens.drop(keyOf(installation, repository), token),
@@ -358,8 +402,11 @@ export function openInstallation(sealed: string, secretsKey: string | undefined)
 export function createGithubConnectorStore(
   app: GithubApp,
   installation: number,
-  /** FRU-369: the connector the statuses are named by, and the stages a site gives them. */
-  statuses: Pick<IssueStoreOptions, 'statusSource' | 'stages'> = {},
+  /**
+   * FRU-369: the connector the statuses are named by, and the stages a site gives them. FRU-382: who
+   * is told whether a repository is private, when a note goes there.
+   */
+  statuses: Pick<IssueStoreOptions, 'statusSource' | 'stages' | 'privacy'> = {},
 ): SeedStore {
   return createIssueStore({
     ...statuses,

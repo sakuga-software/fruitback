@@ -327,9 +327,17 @@ async function labelled(
       out.push({ ...destination, label: `${KIND_NAMES.rest} · ${connector.label}` });
       continue;
     }
-    // FRU-359: the repository is its own name. GitHub is asked when a note goes, not here.
+    // FRU-359: the repository is its own name. FRU-382: GitHub says whether it is private, so that the
+    // console warns about a public one without the list of the repositories.
     if (connector.kind === 'github') {
-      out.push({ ...destination, label: `${KIND_NAMES.github} · ${destination.teamId ?? ''}` });
+      const isPrivate = await privacyOf(context, connector.id, destination.teamId);
+      // Only GitHub's word is written: whatever a destination came with is dropped here.
+      const { private: _asked, ...place } = destination;
+      out.push({
+        ...place,
+        label: `${KIND_NAMES.github} · ${destination.teamId ?? ''}`,
+        ...(isPrivate === undefined ? {} : { private: isPrivate }),
+      });
       continue;
     }
 
@@ -354,6 +362,31 @@ async function labelled(
   }
 
   return out;
+}
+
+/**
+ * Whether the repository of a `github` destination is private (FRU-382), asked of GitHub with a token
+ * that reads the metadata of that repository alone. `undefined` when it is not known: no App here, an
+ * installation that does not cover it, or a GitHub that does not answer. The destination is written
+ * all the same, as before: GitHub is asked again when a note goes there.
+ */
+async function privacyOf(
+  context: ConsoleApiContext,
+  connector: string,
+  repository: string | undefined,
+): Promise<boolean | undefined> {
+  if (context.githubApp === undefined || repository === undefined) return undefined;
+  try {
+    const kept = await context.accounts.sealedKey(connector);
+    if (kept === undefined) return undefined;
+
+    return (await context.githubApp.repository(openInstallation(kept.sealed, context.secretsKey), repository))?.private;
+  } catch (error) {
+    if (!(error instanceof StoreError)) throw error;
+    console.error(`[fruitback] GitHub did not say whether a repository is private: ${error.message}`);
+
+    return undefined;
+  }
 }
 
 const CONNECTORS_UNAVAILABLE = { error: 'connectors-unavailable' } as const;

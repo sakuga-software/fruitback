@@ -63,6 +63,12 @@ type Installation = { owner: string; repositories: string[]; public?: string[] }
  */
 const APP_PERMISSIONS = { issues: 'write', metadata: 'read' };
 
+/**
+ * Each fake by its address, so that `tenant` forgets the calls of its setup: the check of each
+ * repository when its destination is written (FRU-382). The tests of a note read the calls of the note.
+ */
+const fakes = new Map<string, { forget(): void }>();
+
 async function fakeGithub(installations: Record<number, Installation>, page = 2) {
   const calls: Seen[] = [];
   const bound = new Map<string, string[]>();
@@ -71,6 +77,8 @@ async function fakeGithub(installations: Record<number, Installation>, page = 2)
   const issues = new Map<string, Issue[]>();
   const labels = new Map<string, Set<string>>();
   let minted = 0;
+  /** The tokens given since the last `forget`, in order. */
+  const given: string[] = [];
   let override: Override = () => undefined;
 
   async function answer(call: Seen): Promise<{ status: number; body: unknown; headers?: Record<string, string> }> {
@@ -102,6 +110,7 @@ async function fakeGithub(installations: Record<number, Installation>, page = 2)
         names.map((name) => `${installation.owner}/${name}`),
       );
       permitted.set(token, permissions ?? APP_PERMISSIONS);
+      given.push(token);
       installationOf.set(token, Number(mint[1]));
 
       return {
@@ -129,12 +138,19 @@ async function fakeGithub(installations: Record<number, Installation>, page = 2)
       return { status: 200, body: { total_count: all.length, repositories: all.slice((at - 1) * size, at * size) } };
     }
 
-    const scoped = /^\/repos\/([^/]+\/[^/]+)\/(.*)$/.exec(call.path);
+    const scoped = /^\/repos\/([^/]+\/[^/]+)(?:\/(.*))?$/.exec(call.path);
     if (scoped === null) return { status: 404, body: { message: 'Not Found' } };
     const repository = scoped[1] as string;
     const reach = bound.get(call.authorization.replace(/^Bearer /, '')) ?? [];
     if (!reach.includes(repository)) return { status: 404, body: { message: 'Not Found' } };
-    const rest = scoped[2] as string;
+    const rest = scoped[2] ?? '';
+    // FRU-382: the repository itself, which any token that reaches it reads (its metadata).
+    if (rest === '' && call.method === 'GET') {
+      const owner = Object.values(installations).find((each) => each.owner === repository.split('/')[0]);
+      const name = repository.split('/')[1] as string;
+
+      return { status: 200, body: { full_name: repository, private: !(owner?.public ?? []).includes(name) } };
+    }
     // A token with the metadata only reads the repository, and writes nothing in it.
     const may = permitted.get(call.authorization.replace(/^Bearer /, '')) ?? {};
     if (rest.startsWith('issues') || rest.startsWith('labels')) {
@@ -210,6 +226,13 @@ async function fakeGithub(installations: Record<number, Installation>, page = 2)
   servers.push(server);
   const api = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
+  fakes.set(api, {
+    forget: () => {
+      calls.length = 0;
+      given.length = 0;
+    },
+  });
+
   return {
     api,
     calls,
@@ -225,7 +248,7 @@ async function fakeGithub(installations: Record<number, Installation>, page = 2)
     /** The calls of the list of the repositories of an installation. */
     listings: () => calls.filter((call) => call.path === '/installation/repositories'),
     /** The token that GitHub gave to each mint, in order. */
-    minted: () => [...permitted.keys()],
+    minted: () => [...given],
     /** Which repositories a token of a call reaches. */
     reach: (call: Seen) => bound.get(call.authorization.replace(/^Bearer /, '')) ?? [],
     answerWith(changed: Override) {
@@ -287,6 +310,7 @@ async function tenant(world: World, githubApp: GithubApp, installation: number, 
   }
   const attention = async () =>
     (await accounts.connectors(workspace.id)).find((each) => each.id === connector.id)?.attention?.reason;
+  fakes.get(githubApp.api ?? '')?.forget();
 
   return { accounts, workspace, connector, base, token, sites, attention };
 }
@@ -713,6 +737,141 @@ describe('the repositories of a github connector, for a destination (FRU-361)', 
 
     assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
     assert.equal(await acme.attention(), 'key-lacks-access');
+  });
+});
+
+/** The destinations of a site, as `GET …/sites` answers them to `token`. */
+async function destinationsSeen(world: World, githubApp: GithubApp, base: string, token: string) {
+  const answer = await call(world, githubApp, 'GET', `${base}/sites`, { token });
+  assert.equal(answer.status, 200, await answer.clone().text());
+
+  return ((await answer.json()) as { sites: { destinations?: Record<string, unknown>[] }[] }).sites.map(
+    (site) => site.destinations,
+  );
+}
+
+describe('whether the repository of a github destination is private (FRU-382)', () => {
+  it('learns it when the destination is written, with a token of that repository alone that reads the metadata only', async () => {
+    const { world, github, githubApp } = await worldWithGithub({
+      7: { owner: 'acme', repositories: ['web', 'docs'], public: ['docs'] },
+    });
+    const acme = await tenant(world, githubApp, 7, []);
+    const site = await acme.accounts.addSite(acme.workspace.id, {
+      origin: 'https://x.acme.dev',
+      visibility: 'everyone',
+    });
+
+    const set = await call(world, githubApp, 'POST', `${acme.base}/sites/${site.id}/destinations`, {
+      token: acme.token,
+      // What a request says of it is not read: GitHub says it.
+      body: {
+        destinations: [
+          { connector: acme.connector.id, repository: 'acme/web', private: false },
+          { connector: acme.connector.id, repository: 'acme/docs' },
+        ],
+      },
+    });
+
+    assert.equal(set.status, 200, await set.clone().text());
+    assert.deepEqual(
+      ((await set.json()) as { destinations: { private?: boolean }[] }).destinations.map((each) => each.private),
+      [true, false],
+    );
+    // The body whole: the repository, and the metadata only.
+    assert.deepEqual(
+      github.mints().map((mint) => mint.body),
+      [
+        { repositories: ['web'], permissions: { metadata: 'read' } },
+        { repositories: ['docs'], permissions: { metadata: 'read' } },
+      ],
+    );
+    for (const each of github.calls.filter((one) => one.path.startsWith('/repos/'))) {
+      assert.deepEqual(github.reach(each), [each.path.slice('/repos/'.length)]);
+    }
+
+    // A member reads it with the destinations, as an owner does; a guest reads no destination.
+    const member = await signInTo(world, 'member@acme.dev');
+    await memberOf(world, acme.workspace.id, member.id, 'member');
+    for (const token of [acme.token, member.token]) {
+      assert.deepEqual(
+        (await destinationsSeen(world, githubApp, acme.base, token)).map((places) => places?.map((one) => one.private)),
+        [[true, false]],
+      );
+    }
+    const guest = await signInTo(world, 'guest@client.fr');
+    await memberOf(world, acme.workspace.id, guest.id, 'guest');
+    assert.deepEqual(await destinationsSeen(world, githubApp, acme.base, guest.token), []);
+  });
+
+  it('writes the destination when GitHub does not say, and keeps nothing of it', async () => {
+    const { world, github, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 7, []);
+    const site = await acme.accounts.addSite(acme.workspace.id, {
+      origin: 'https://x.acme.dev',
+      visibility: 'everyone',
+    });
+    // A body that says the repository is public: only GitHub says it (review of #509).
+    const write = (repository: string) =>
+      call(world, githubApp, 'POST', `${acme.base}/sites/${site.id}/destinations`, {
+        token: acme.token,
+        body: { destinations: [{ connector: acme.connector.id, repository, private: false }] },
+      });
+
+    // GitHub does not answer the read of the repository.
+    github.answerWith((each) => (each.path === '/repos/acme/web' ? { status: 502, body: {} } : undefined));
+    assert.equal((await write('acme/web')).status, 200);
+    assert.equal((await acme.accounts.sites(acme.workspace.id))[0]?.destinations[0]?.private, undefined);
+    // A token with more than the metadata is not used.
+    github.answerWith((each) =>
+      each.path.endsWith('/access_tokens')
+        ? {
+            status: 201,
+            body: {
+              token: 'ghs_wide',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+              permissions: { metadata: 'read', issues: 'write' },
+              repositories: [{ name: 'web', full_name: 'acme/web' }],
+            },
+          }
+        : undefined,
+    );
+    assert.equal((await write('acme/web')).status, 200);
+    assert.equal(github.calls.filter((each) => each.authorization === 'Bearer ghs_wide').length, 0);
+    // A repository that the installation does not cover: GitHub is asked again when a note goes.
+    github.answerWith(() => undefined);
+    assert.equal((await write('acme/gone')).status, 200);
+
+    const [kept] = await acme.accounts.sites(acme.workspace.id);
+    assert.deepEqual(kept?.destinations, [
+      { connector: acme.connector.id, teamId: 'acme/gone', label: 'GitHub · acme/gone' },
+    ]);
+  });
+
+  it('learns it again when a note goes: a repository that turned public is said at once', async () => {
+    const installation: Installation = { owner: 'acme', repositories: ['web'] };
+    const { world, github, githubApp } = await worldWithGithub({ 7: installation });
+    const acme = await tenant(world, githubApp, 7, ['acme/web']);
+    const privacy = async () => (await acme.accounts.sites(acme.workspace.id))[0]?.destinations[0]?.private;
+    assert.equal(await privacy(), true);
+
+    installation.public = ['web'];
+    assert.equal((await acme.sites[0]?.write('Now in the open.'))?.status, 201);
+
+    assert.equal(await privacy(), false);
+    // Read with the token of the note: it reaches that repository alone.
+    const read = github.calls.find((each) => each.path === '/repos/acme/web');
+    assert.ok(read !== undefined);
+    assert.deepEqual(github.reach(read), ['acme/web']);
+  });
+
+  it('costs the note nothing when GitHub does not say it then', async () => {
+    const { world, github, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 7, ['acme/web']);
+    github.answerWith((each) => (each.path === '/repos/acme/web' ? { status: 500, body: {} } : undefined));
+
+    assert.equal((await acme.sites[0]?.write('Still delivered.'))?.status, 201);
+    assert.equal(github.issues.get('acme/web')?.length, 1);
+    assert.equal((await acme.accounts.sites(acme.workspace.id))[0]?.destinations[0]?.private, true);
   });
 });
 
