@@ -132,7 +132,9 @@ jobs:
         run: |
           set -euo pipefail
           for prefix in fruitback-shared fruitback-widget fruitback-element fruitback-react fruitback; do
-            tarball=$(find tarballs -maxdepth 1 -name "$prefix-[0-9]*.tgz" | head -n 1)
+            # `./` first: npm reads `tarballs/x.tgz` as the GitHub repository `tarballs/x.tgz` and asks git
+            # for it. The run of v0.3.0 failed on that, before it published anything.
+            tarball=$(find ./tarballs -maxdepth 1 -name "$prefix-[0-9]*.tgz" | head -n 1)
             if [ -z "$tarball" ]; then
               echo "no tarball for $prefix" >&2
               exit 1
