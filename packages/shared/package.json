@@ -2,7 +2,14 @@
   "name": "@fruitback/shared",
   "version": "0.3.0",
   "description": "The Fruitback seed contract — the payload the widget writes and the worker stores.",
+  "homepage": "https://github.com/sakuga-software/fruitback#readme",
+  "bugs": "https://github.com/sakuga-software/fruitback/issues",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakuga-software/fruitback.git",
+    "directory": "packages/shared"
+  },
   "files": [
     "dist",
     "src",

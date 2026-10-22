@@ -23,10 +23,12 @@ Please do not open a public issue for a vulnerability once the repository is pub
 
 ## What is supported
 
-Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.3.0` and
-**unpublished**; the worker image on GHCR is the only distributed artefact. There is no supported
-version policy to state, and pretending otherwise would be the first thing in this file that is not
-true.
+Since `0.3.0`, the five packages of `packages/*` (`fruitback`, `@fruitback/shared`, `@fruitback/widget`,
+`@fruitback/element`, `@fruitback/react`) are on npm, beside the worker image on GHCR. `release-npm.yml`
+publishes them from a `v*` tag, after `ci.yml` passed on that commit and a person approved the run. Each
+tarball carries a provenance attestation that names the commit and the run that built it: `npm audit
+signatures` checks it. A version on npm is never replaced: a fix is a new version. **Only the latest
+version gets a fix.**
 
 `0.x` means the contract can change. Pin a digest rather than a tag if you need a build that cannot
 move under you: no tag is immutable, `sha-<commit>` included, because rebuilding the same commit

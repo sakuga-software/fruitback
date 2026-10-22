@@ -2,7 +2,14 @@
   "name": "@fruitback/element",
   "version": "0.3.0",
   "description": "The Fruitback widget as a custom element: <fruitback-widget endpoint client-id>.",
+  "homepage": "https://github.com/sakuga-software/fruitback#readme",
+  "bugs": "https://github.com/sakuga-software/fruitback/issues",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakuga-software/fruitback.git",
+    "directory": "packages/element"
+  },
   "files": [
     "dist",
     "src",

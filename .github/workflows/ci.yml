@@ -341,6 +341,34 @@ jobs:
           EVENT: ${{ github.event_name }}
         run: node tools/ci/changes.ts "$EVENT" >> "$GITHUB_OUTPUT"
 
+  changeset:
+    # FRU-28. A pull request that changes a package that goes to npm carries a changeset:
+    # `tools/ci/changeset.ts` reads the files of the merge commit against the head of its base.
+    name: changeset
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job reaches the remote after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+          # The merge commit and its first parent, the head of the base.
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: A change to a published package carries a changeset
+        env:
+          EVENT: ${{ github.event_name }}
+        run: node tools/ci/changeset.ts "$EVENT"
+
   image:
     # Dokploy builds this same Dockerfile on push, so a broken one must fail here first. FRU-344: it
     # runs when a pull request changes a file of its images, or a file its steps read (`changes`).
