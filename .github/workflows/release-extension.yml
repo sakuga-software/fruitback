@@ -23,6 +23,11 @@ jobs:
   ci:
     name: ci
     uses: $/.github/workflows/ci.yml
+    # The job `docker image` of ci.yml reads the cache of its layers in the registry (FRU-344). A
+    # called workflow gets no permission that its caller does not give, and the run does not start.
+    permissions:
+      contents: read
+      packages: read
 
   package:
     name: package

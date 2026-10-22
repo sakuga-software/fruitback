@@ -209,6 +209,65 @@ export function pullRequestFilters(source: string): string[] | undefined {
 /** A job that calls `ci.yml` of this repository, in either form of a local reference. */
 const CALLS_CI = /^[.$]\/\.github\/workflows\/ci\.yml$/;
 
+/** `none`, `read`, `write`: a scope is granted when its level is at least the one asked. */
+const LEVELS: Record<string, number> = { none: 0, read: 1, write: 2 };
+
+/** A grant of every scope at once. */
+const ALL_LEVELS: Record<string, number> = { 'read-all': 1, 'write-all': 2 };
+
+/** The scopes of one `permissions` node, with `read-all` and `write-all` as the scope `all`. */
+function grantOf(document: ReturnType<typeof parseDocument>, written: unknown): Record<string, number> | undefined {
+  const granted = isAlias(written) ? written.resolve(document) : written;
+  if (granted === undefined || granted === null) return undefined;
+  if (isScalar(granted)) return { all: ALL_LEVELS[String(granted.value)] ?? 0 };
+  if (!isMap(granted)) return {};
+
+  return Object.fromEntries(
+    granted.items.flatMap((pair) =>
+      isScalar(pair.key) && isScalar(pair.value)
+        ? [[String(pair.key.value), LEVELS[String(pair.value.value)] ?? 0]]
+        : [],
+    ),
+  );
+}
+
+/**
+ * The permissions that a job which calls `ci.yml` does not give it, as `job: scope`.
+ *
+ * A called workflow gets no permission that its caller does not give. If one of its jobs asks for
+ * more, GitHub does not start the run: no job, no log, only `startup_failure`. On 2026-10-22 `ci.yml`
+ * asked for `packages: read` (FRU-344). The call of `release-image.yml` gave it, and the call of
+ * `release-extension.yml` did not: no release of the extension started (FRU-383).
+ */
+export function ciCallsShortOfPermissions(source: string, ci: string): string[] {
+  const called = parseDocument(ci);
+  const asked: Record<string, number> = {};
+  const ask = (grant: Record<string, number> | undefined) => {
+    for (const [scope, level] of Object.entries(grant ?? {})) asked[scope] = Math.max(asked[scope] ?? 0, level);
+  };
+  ask(grantOf(called, called.get('permissions', true)));
+  const calledJobs = called.get('jobs', true);
+  if (isMap(calledJobs)) {
+    for (const pair of calledJobs.items)
+      if (isMap(pair.value)) ask(grantOf(called, pair.value.get('permissions', true)));
+  }
+
+  const document = parseDocument(source);
+  const byDefault = grantOf(document, document.get('permissions', true));
+  const jobs = document.get('jobs', true);
+  if (!isMap(jobs)) return [];
+
+  return jobs.items.flatMap((pair) => {
+    if (!isScalar(pair.key) || !isMap(pair.value) || !CALLS_CI.test(String(pair.value.get('uses') ?? ''))) return [];
+    const job = String(pair.key.value);
+    const given = grantOf(document, pair.value.get('permissions', true)) ?? byDefault ?? {};
+
+    return Object.entries(asked)
+      .filter(([scope, level]) => level > 0 && Math.max(given[scope] ?? 0, given.all ?? 0) < level)
+      .map(([scope]) => `${job}: ${scope}`);
+  });
+}
+
 /** The functions that let a job run after a job it needs has failed or was cancelled. */
 const RUNS_AFTER_A_FAILURE = /\b(?:always|failure|cancelled)\s*\(/;
 
@@ -469,6 +528,51 @@ describe('the GitHub workflows', () => {
     // A workflow that cannot be called fails the release at its start, after the merge. Fail here.
     const on = parseDocument(readFileSync(new URL('ci.yml', WORKFLOWS), 'utf8')).get('on', true);
     assert.ok(isMap(on) && on.has('workflow_call'), 'ci.yml does not declare workflow_call');
+  });
+
+  it('give each call of ci.yml every permission that ci.yml asks for', () => {
+    const ci = readFileSync(new URL('ci.yml', WORKFLOWS), 'utf8');
+    const callers = workflows().filter(({ source }) => /workflows\/ci\.yml/.test(source));
+    // An absence needs a control: the two releases call ci.yml, and are read before none is reported.
+    assert.ok(callers.length >= 2, `only ${callers.length} workflows call ci.yml`);
+
+    const short = callers.flatMap(({ file, source }) =>
+      ciCallsShortOfPermissions(source, ci).map((missing) => `${file}: ${missing}`),
+    );
+
+    assert.deepEqual(
+      short,
+      [],
+      'these calls of ci.yml do not give a permission that it asks for: GitHub does not start them',
+    );
+  });
+
+  it('read the permissions of a call of ci.yml whatever shape they are written in', () => {
+    const ci =
+      'permissions:\n  contents: read\njobs:\n  image:\n    permissions:\n      contents: read\n      packages: read\n';
+    const caller = (grant: string, top = 'permissions:\n  contents: read\n') =>
+      `${top}jobs:\n  ci:\n    uses: $/.github/workflows/ci.yml\n${grant}`;
+
+    assert.deepEqual(ciCallsShortOfPermissions(caller(''), ci), ['ci: packages']);
+    assert.deepEqual(ciCallsShortOfPermissions(caller('    permissions:\n      contents: read\n'), ci), [
+      'ci: packages',
+    ]);
+    assert.deepEqual(
+      ciCallsShortOfPermissions(caller('    permissions:\n      contents: read\n      packages: read\n'), ci),
+      [],
+    );
+    // A write grants a read, and so does a grant of every scope.
+    assert.deepEqual(
+      ciCallsShortOfPermissions(caller('    permissions:\n      contents: write\n      packages: write\n'), ci),
+      [],
+    );
+    assert.deepEqual(ciCallsShortOfPermissions(caller('    permissions: read-all\n'), ci), []);
+    assert.deepEqual(ciCallsShortOfPermissions(caller('', 'permissions: read-all\n'), ci), []);
+    // `./` is the other form of a local call.
+    assert.deepEqual(
+      ciCallsShortOfPermissions('jobs:\n  ci:\n    uses: ./.github/workflows/ci.yml\n    permissions: {}\n', ci),
+      ['ci: contents', 'ci: packages'],
+    );
   });
 
   it('read what a job that writes waits for, whatever shape it is written in', () => {
