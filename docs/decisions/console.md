@@ -375,8 +375,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the id of the installation, which the worker keeps sealed. **A site chooses a repository** from
   `GET …/connectors/<id>/repositories`, private ones first, then the public ones under « Public
   repositories: their issues are public »; the place is sent as `{ connector, repository }` and
-  read back from `teamId`. A place in a public repository says, under it, that each note becomes an
-  issue that anybody can read. **`setPlaces` takes the sources of the workspace**: each panel sends
+  read back from `teamId`. **A place in a public repository says, under it, that each note becomes an
+  issue that anybody can read, from the worker's word on the destination** (FRU-382): `private`
+  comes with each destination of `GET …/sites`, so the warning shows as the panel opens, while the
+  list is read, when it failed, and to a member, who reads no list. Once the list names the
+  repository, it wins either way: it is GitHub's word now, and the worker's can be older. A destination with no word (a worker of before, a
+  GitHub that did not answer) warns only from the list. **`setPlaces` takes the sources of the workspace**: each panel sends
   the whole list of a site, and a GitHub place sent as a team makes the worker refuse that list.
   `e2e/console-github.spec.ts` holds the card, every word, the panel, the bodies sent, 390 px and axe.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
