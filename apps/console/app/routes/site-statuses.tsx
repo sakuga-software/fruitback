@@ -18,6 +18,7 @@ import {
   isChanged,
   isDeletable,
   keyFor,
+  listOf,
   moved,
   ratioOf,
   reads,
@@ -104,13 +105,23 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
   const seen = new Set<string>();
   for (const place of places) {
     const connector = connectors.find((each) => each.id === place.connector);
-    // One list per team: a site can send to two teams of one connector (lite review of pull request 495).
-    const key = `${place.connector}:${place.teamId ?? ''}`;
-    if (connector === undefined || seen.has(key)) continue;
-    seen.add(key);
+    if (connector === undefined) continue;
+    // One list per team of Linear, one per connector of GitHub (FRU-369): `listOf`.
+    const list = listOf(connector.kind, place.connector, place.teamId);
+    if (seen.has(list.key)) continue;
+    seen.add(list.key);
     const kind: string = connector.kind;
-    if (kind === 'github' || kind === 'linear')
-      sections.push({ kind, connector, teamId: place.teamId, label: place.label });
+    if (kind === 'linear') sections.push({ kind, connector, teamId: list.teamId, label: place.label });
+    // A list of GitHub is its connector's, and says every repository of it the site sends to: the label
+    // of one would name the others wrongly. One repository keeps the label the worker gave its place.
+    if (kind === 'github') {
+      const repositories = places.filter((each) => each.connector === place.connector);
+      const label =
+        repositories.length < 2
+          ? place.label
+          : `GitHub · ${repositories.map((each) => each.teamId ?? each.connector).join(', ')}`;
+      sections.push({ kind, connector, teamId: undefined, label });
+    }
   }
 
   return sections;

@@ -454,6 +454,27 @@ test('a site that sends to GitHub shows its four states, beside a Linear list th
   await expectNoViolation(page, 'GitHub and Linear');
 });
 
+test('a site that sends to two repositories of one GitHub connector has one list of its four states (FRU-369)', async ({
+  page,
+}) => {
+  const site = { connector: 'g1', teamId: 'acme/website', label: 'GitHub · acme/website' };
+  const docs = { connector: 'g1', teamId: 'acme/docs', label: 'GitHub · acme/docs' };
+  await workerWith(page, {
+    site: { ...SITE, destinations: [site, docs], destination: site },
+    connectors: [{ id: 'g1', kind: 'github', label: 'acme', createdAt: '2026-10-01T00:00:00Z' }],
+    rows: [],
+  });
+  await open(page);
+
+  // One list, named by both repositories, and the four states once: never two identical lists.
+  const list = page.getByRole('region', { name: 'GitHub · acme/website, acme/docs' });
+  await expect(list.locator('ol > li')).toHaveCount(4);
+  await expect(page.getByRole('region', { name: 'GitHub · acme/website', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'GitHub · acme/docs', exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-status-key="closed:duplicate"]')).toHaveCount(1);
+  await expectNoViolation(page, 'two repositories of one GitHub connector');
+});
+
 test('at 390 px in French: one card per status, no sideways scroll, and the words of the phase', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await workerWith(page, { locale: 'fr' });
