@@ -274,6 +274,20 @@ the store. So:
 - Give the service account access to this one publisher only. If a key leaks, delete it in Google
   Cloud or on AMO, then put a new one in the environment.
 
+### Who can publish the packages on npm
+
+`release-npm.yml` publishes the five packages of `packages/*` (FRU-28). A version on npm reaches every
+site that installs the widget from it. **No npm token exists**: npm trusts the OIDC token of a run,
+and only for these conditions, which each package names as its trusted publisher:
+
+- the repository `sakuga-software/fruitback`, the workflow `release-npm.yml`, the environment `npm`;
+- the job `publish` reaches that environment only after a person of the environment approves the
+  run, and only after the job that calls `ci.yml` passed on that commit;
+- a run that does not come from a `v*` tag only packs (`--dry-run`): it publishes nothing.
+
+So who can publish is who can push a `v*` tag **and** approve the environment `npm`. A person of the
+org `@fruitback` on npm can still publish by hand, with their own two-factor authentication.
+
 ### The rate limit is counted in the database
 
 `RATE_LIMIT_PER_MINUTE` (20 by default) was held in memory, per container, on a worker with no

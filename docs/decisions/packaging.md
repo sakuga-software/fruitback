@@ -101,10 +101,11 @@ is asserted.
   the tarball; `npm publish` of a tarball signs the provenance and speaks OIDC (trusted publishing
   needs npm 11.5.1 or later). A version that npm already has is skipped, so a run that failed in the
   middle runs again.
-- **The secret `NPM_TOKEN` of the environment `npm` is for the first publish only.** npm configures a
-  trusted publisher on a package that exists. After `0.3.0`, each package names
-  `release-npm.yml` as its trusted publisher, and the secret is deleted: with no token, npm uses the
-  OIDC token of the run.
+- **No npm token exists.** Each package names `release-npm.yml` of this repository, in the environment
+  `npm`, as its trusted publisher, and npm takes the OIDC token of the run in place of a token. npm
+  configures a trusted publisher only on a package that exists: a new package is first published
+  once by hand as `0.0.0-stage`, a placeholder, then `npm trust github` names the workflow. The
+  steps are below, under « A new package on npm ».
 - **Each package names the repository and its directory** (`repository.url`, `repository.directory`).
   npm refuses a provenance that names no repository, or another one. `package.test.ts` reads the
   field back out of each tarball.
@@ -117,6 +118,23 @@ is asserted.
   and the stores and npm compare it with their manifests. A release is a pull request
   `chore: version x.y.z` that runs `pnpm changeset version`, which writes each `CHANGELOG.md`; then a
   tag `vx.y.z` on its merge commit.
+
+### A new package on npm
+
+Somebody with the right to publish in the org `@fruitback`, on their own machine, with npm 11.15 or
+later and two-factor authentication, does it once for each new package:
+
+```bash
+npm login
+mkdir /tmp/placeholder && cd /tmp/placeholder
+npm init --yes --scope=@fruitback   # then set "name", "version": "0.0.0-stage", "license": "MIT"
+npm publish --access public          # the placeholder: it makes the package exist
+npm trust github @fruitback/<name> --file release-npm.yml --repository sakuga-software/fruitback \
+  --environment npm --allow-publish
+```
+
+The trusted publisher must publish within 2 days, or npm forgets it: push the tag before then. Since
+`0.3.0`, `@sakuga-software/boo` is published the same way.
 
 ### The reasons, and what is not done
 
