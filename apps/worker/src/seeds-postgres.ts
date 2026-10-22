@@ -2,7 +2,8 @@ import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { seed_comments, seeds } from './postgres-schema.ts';
+import { seed_comments, seeds, sites, statuses } from './postgres-schema.ts';
+import { OWN_SOURCE } from './site-statuses.ts';
 import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, stageOf, threadsOf, toSeedIssue } from './seed-rows.ts';
 import { checkText, replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
@@ -191,7 +192,11 @@ export function createPostgresSeedStore(database: Database): SeedStore {
           if (note === undefined) return undefined;
           const now = Date.now();
           if (check.verdict === 'wrong') {
-            await tx.update(seeds).set({ stage: DEFAULT_SEED_STAGE, updated_at: now }).where(eq(seeds.id, id));
+            // FRU-367: back to the built-in status of the first stage, so its status and its stage agree.
+            await tx
+              .update(seeds)
+              .set({ stage: DEFAULT_SEED_STAGE, status_key: null, updated_at: now })
+              .where(eq(seeds.id, id));
           }
           const [row] = await tx
             .insert(seed_comments)
@@ -203,6 +208,45 @@ export function createPostgresSeedStore(database: Database): SeedStore {
             comment: { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() },
             stage: check.verdict === 'wrong' ? DEFAULT_SEED_STAGE : stageOf(note.stage),
           };
+        }),
+      ),
+    // FRU-367: the status of a note, and its stage with it, in one statement. The route says which
+    // status, of this site, and who may; the store writes it and answers what it wrote.
+    setStatus: (target, status) =>
+      through('keep the status', ({ transaction }) =>
+        transaction(async (tx) => {
+          const id = Number(target.issue);
+          if (!Number.isSafeInteger(id) || target.clientId === undefined) return undefined;
+          // The site, shared: the console takes it for update to remove a status or move its stage
+          // (FRU-366), so the status read below cannot change before this note is written (heavy
+          // review of #492).
+          const [site] = await tx
+            .select({ id: sites.id })
+            .from(sites)
+            .where(eq(sites.id, target.clientId))
+            .for('share');
+          if (site === undefined) return undefined;
+          // The status again, under that lock: a built-in one has the stage of its key, and a row of
+          // its own only to rename, colour or hide it; one the team added has the stage of its row.
+          const [row] = await tx
+            .select({ stage: statuses.stage, hidden: statuses.hidden })
+            .from(statuses)
+            .where(
+              and(
+                eq(statuses.site_id, target.clientId),
+                eq(statuses.source, OWN_SOURCE),
+                eq(statuses.key, status.key ?? status.stage),
+              ),
+            );
+          if (row?.hidden === true || (status.key !== null && row === undefined)) return 'status-changed' as const;
+          const stage = status.key === null ? status.stage : stageOf(row?.stage ?? status.stage);
+          const [note] = await tx
+            .update(seeds)
+            .set({ status_key: status.key, stage, updated_at: Date.now() })
+            .where(and(eq(seeds.id, id), eq(seeds.client_id, target.clientId)))
+            .returning({ stage: seeds.stage, page: seeds.page_url });
+
+          return note === undefined ? undefined : { stage: stageOf(note.stage), page: note.page };
         }),
       ),
     // The notes of the whole instance, whatever their site: the command of whoever runs the worker.

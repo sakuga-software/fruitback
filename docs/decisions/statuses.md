@@ -4,9 +4,9 @@ FRU-352 asks for three things: statuses a team adds, statuses read from the trac
 REST), and colours a team chooses. This page was the framing, written before any code (#446).
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
 below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), the API
-of the console with the statuses in the read (FRU-366), the screen of the statuses of a site (FRU-371), and
-the widget and the side panel of the extension that draw them (FRU-370). The rest is FRU-367 to FRU-369,
-and the parts of FRU-371 that wait for them.
+of the console with the statuses in the read (FRU-366), the status of a note (FRU-367), the screen of the
+statuses of a site (FRU-371), and the widget and the side panel of the extension that draw them (FRU-370).
+The rest is FRU-368 and FRU-369, and the parts of FRU-371 that wait for them.
 
 ## Statuses
 
@@ -313,6 +313,25 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   stage there, because the bridge parses the notes and the panel parses them again. A row of the panel
   wears the colour and the name of its status (`note-status.ts`), and its tabs stay by stage.
   `e2e/side-panel.spec.ts` measures a row against its pin.
+
+### The status of a note (FRU-367)
+
+- **`POST /feedback/<id>/status?client=<site>` with `{ url, status: 'own:<key>' }`**, for a note that
+  the worker keeps (a site with no destination, or one that sends to an address). The rights of a
+  verdict (FRU-294): the person who left the note, or a role with `manage-sites`, with a session of
+  the extension. The console's selector comes in its own pull request, with a route of the console.
+- **The status is a key of the read's `statuses`**: `own:<stage>`, a built-in status, which writes no
+  `status_key`; or `own:<key>`, a status the team added and did not hide. The note takes its stage,
+  in one statement (`setStatus` of the store), then in the index of the notes, and its page is read
+  again.
+- **The status is read again under the lock of its site**, in the transaction that writes the note
+  (heavy review of #492): the console takes that lock to remove a status or move its stage (FRU-366).
+  A status removed or hidden since the route read it answers `409 status-changed` and writes nothing;
+  one whose stage moved gives the note the stage of its row now.
+- **A note of a tracker is refused** (`statuses-not-taken`): `setStatus` is a verb of the worker's
+  store only, and the routed store asks the store of the site (`statusesFor`).
+- **« Still wrong » keeps its effect**, and writes `status_key` NULL with the first stage: the note
+  goes back to the built-in status of that stage, so its status and its stage still agree.
 
 ### The colours
 

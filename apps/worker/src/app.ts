@@ -26,7 +26,7 @@ import { ATTACHMENTS_PATH } from './attachments.ts';
 import { handleAttachment } from './attachment-routes.ts';
 import { handleConsole } from './console-routes.ts';
 import { handlePairing, handleSessionRoutes } from './session-routes.ts';
-import { CHECK_PATH, REPLY_PATH, postCheck, postReply } from './reply-routes.ts';
+import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus } from './reply-routes.ts';
 import { getFeedback, postFeedback } from './feedback-routes.ts';
 import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
@@ -413,7 +413,8 @@ async function routed(
 
   const replyTo = REPLY_PATH.exec(pathname)?.[1];
   const checkOf = CHECK_PATH.exec(pathname)?.[1];
-  if (pathname !== '/feedback' && replyTo === undefined && checkOf === undefined) {
+  const statusOfNote = STATUS_PATH.exec(pathname)?.[1];
+  if (pathname !== '/feedback' && replyTo === undefined && checkOf === undefined && statusOfNote === undefined) {
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
@@ -452,6 +453,22 @@ async function routed(
         accounts,
         stillWrites: () => sessionWrites(request, served, context).then((session) => session !== undefined),
       },
+      checks,
+    );
+  }
+
+  // FRU-367: the status of a note that the worker keeps.
+  if (statusOfNote !== undefined) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, cors.headers);
+
+    return postStatus(
+      request,
+      statusOfNote,
+      served,
+      watchedStore(store, accounts),
+      kv,
+      cors.headers,
+      { accounts, noteIndex, context },
       checks,
     );
   }

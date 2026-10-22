@@ -165,6 +165,20 @@ export type SeedStore = {
   ): Promise<CheckAnswer | undefined>;
   /** Whether the store of this client takes a verdict, for a store that routes by client. */
   checksFor?(client: ClientConfig | undefined): Promise<boolean>;
+  /**
+   * Puts a note in a status of its site (FRU-367): `key` is the key of the status in the worker's
+   * store, `null` for the built-in status of `stage`, and the note takes the stage of that status.
+   * The answer is the stage of the note now, and its page. `status-changed`: the status is gone or
+   * hidden since the caller read it, and nothing is written. `undefined`: this store holds no such
+   * note for this client. Absent: the status of a note is its tracker's, and changes there.
+   */
+  setStatus?(
+    target: ReplyTarget,
+    status: { key: string | null; stage: SeedStage },
+    client: ClientConfig | undefined,
+  ): Promise<{ stage: SeedStage; page: string } | 'status-changed' | undefined>;
+  /** Whether the store of this client takes a status, for a store that routes by client. */
+  statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
 };
 
 /** What a person says of a note that the team marked done (FRU-294). */
@@ -201,6 +215,11 @@ export async function takesAttachments(store: SeedStore, client: ClientConfig | 
 /** Whether a store takes a reply for this client. */
 export async function takesReplies(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.repliesFor === undefined ? store.reply !== undefined : store.repliesFor(client);
+}
+
+/** Whether a store sets the status of a note for this client (FRU-367): only the worker's own store does. */
+export async function takesStatuses(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+  return store.statusesFor === undefined ? store.setStatus !== undefined : store.statusesFor(client);
 }
 
 /**

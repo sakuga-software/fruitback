@@ -6,7 +6,7 @@ import { type GithubApp, createGithubConnectorStore, openInstallation } from './
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
-import { type SeedStore, StoreError, takesAttachments, takesChecks, takesReplies } from './store.ts';
+import { type SeedStore, StoreError, takesAttachments, takesChecks, takesStatuses, takesReplies } from './store.ts';
 
 /**
  * The store of a request on a worker whose workspaces connect their own trackers (FRU-121).
@@ -212,6 +212,8 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     ...(base.forget === undefined ? {} : { forget: base.forget }),
     repliesFor: async (client) => takesReplies(await pick(client), client),
     checksFor: async (client) => takesChecks(await pick(client), client),
+    // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
+    statusesFor: async (client) => takesStatuses(await pick(client), client),
     async reply(target, reply, client, policy) {
       const store = await pick(client);
       if (store.reply === undefined) throw new StoreError('The store of this site takes no reply');
@@ -223,6 +225,12 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
       if (store.check === undefined) throw new StoreError('The store of this site takes no verdict');
 
       return store.check(target, check, client, policy);
+    },
+    async setStatus(target, status, client) {
+      const store = await pick(client);
+      if (store.setStatus === undefined) throw new StoreError('The store of this site takes no status');
+
+      return store.setStatus(target, status, client);
     },
   };
 }
