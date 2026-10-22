@@ -728,6 +728,29 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return removed.length === 1;
     },
 
+    async siteTrackerColours(workspace, site) {
+      return run(async (db) => {
+        const rows = await db
+          .select({ on: sites.tracker_colours })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)));
+
+        return rows[0]?.on;
+      });
+    },
+
+    async setSiteTrackerColours(workspace, site, on) {
+      return run(async (db) => {
+        const set = await db
+          .update(sites)
+          .set({ tracker_colours: on })
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+          .returning({ id: sites.id });
+
+        return set.length === 1;
+      });
+    },
+
     async siteStatuses(workspace, site) {
       return run(async (db) => {
         const owned = await db

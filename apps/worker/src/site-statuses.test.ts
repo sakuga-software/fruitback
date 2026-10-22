@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { SEED_STAGES } from '@fruitback/shared';
-import { type SiteStatus, envelopeStatuses, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
+import {
+  type SiteStatus,
+  envelopeStatuses,
+  isBuiltIn,
+  originOf,
+  readSiteStatus,
+  withoutTrackerStatus,
+} from './site-statuses.ts';
 
 /** What the console of FRU-366 may write for one status of a site (FRU-365). */
 
@@ -162,5 +169,81 @@ describe('the built-in statuses, the origin, and the statuses of a read (FRU-366
       envelopeStatuses([]),
       SEED_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
     );
+  });
+});
+
+describe('the states of a tracker in the statuses of a read (FRU-368)', () => {
+  const STATES = [
+    { id: 'state_backlog', name: 'Backlog', stage: 'new' as const, color: '#bec2c8' },
+    { id: 'state_done', name: 'Done', stage: 'done' as const, color: '#5e6ad2' },
+    { id: 'state_odd', name: 'Odd', stage: 'todo' as const },
+  ];
+  const row = (fields: Partial<SiteStatus> & Pick<SiteStatus, 'key' | 'stage'>): SiteStatus => ({
+    source: 'con_linear',
+    name: null,
+    color: null,
+    textColor: null,
+    position: 0,
+    origin: 'tracker',
+    hidden: false,
+    ...fields,
+  });
+  const tracked = (statuses: ReturnType<typeof envelopeStatuses>) =>
+    statuses.filter((status) => status.key.startsWith('con_linear:'));
+
+  it('lists each state under its connector, with its name and stage, and the colour of its stage by default', () => {
+    assert.deepEqual(tracked(envelopeStatuses([], [{ source: 'con_linear', states: STATES }])), [
+      { key: 'con_linear:state_backlog', name: 'Backlog', stage: 'new' },
+      { key: 'con_linear:state_done', name: 'Done', stage: 'done' },
+      { key: 'con_linear:state_odd', name: 'Odd', stage: 'todo' },
+    ]);
+  });
+
+  it("takes the tracker's colours when the site asks, with a text that reads on them", () => {
+    assert.deepEqual(tracked(envelopeStatuses([], [{ source: 'con_linear', states: STATES }], true)), [
+      { key: 'con_linear:state_backlog', name: 'Backlog', stage: 'new', color: '#bec2c8', textColor: '#18181b' },
+      // Linear's Done: white, 4.70:1 (statuses.md, « The colours »).
+      { key: 'con_linear:state_done', name: 'Done', stage: 'done', color: '#5e6ad2', textColor: '#ffffff' },
+      // A state with no colour of its own keeps the colour of its stage.
+      { key: 'con_linear:state_odd', name: 'Odd', stage: 'todo' },
+    ]);
+  });
+
+  it('gives the row of the site the last word, at its place, and keeps a row of a state that is gone', () => {
+    const rows = [
+      row({ key: 'state_done', name: 'Shipped', stage: 'closed', color: '#a52a3a', position: 0 }),
+      row({ key: 'state_backlog', stage: 'todo', position: 1 }),
+      row({ key: 'state_gone', name: 'Gone', stage: 'todo', position: 2 }),
+    ];
+
+    assert.deepEqual(tracked(envelopeStatuses(rows, [{ source: 'con_linear', states: STATES }], true)), [
+      { key: 'con_linear:state_gone', name: 'Gone', stage: 'todo' },
+      { key: 'con_linear:state_done', name: 'Shipped', stage: 'closed', color: '#a52a3a', textColor: '#ffffff' },
+      // A row with no colour of its own takes the tracker's, since the site asked for it.
+      { key: 'con_linear:state_backlog', name: 'Backlog', stage: 'todo', color: '#bec2c8', textColor: '#18181b' },
+      { key: 'con_linear:state_odd', name: 'Odd', stage: 'todo' },
+    ]);
+  });
+
+  it('still says the five built-in statuses, and no state of a tracker that did not answer', () => {
+    const statuses = envelopeStatuses([row({ key: 'state_done', stage: 'done' })], []);
+
+    assert.deepEqual(
+      statuses.map((status) => status.key),
+      ['con_linear:state_done', ...SEED_STAGES.map((stage) => `own:${stage}`)],
+    );
+  });
+});
+
+describe('what a reader the tracker is hidden from reads of a status (FRU-368)', () => {
+  type Note = { id: string; status?: string };
+
+  it("keeps a status of the worker's store, and takes away the state of a tracker, whose key is the tracker's", () => {
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'a', status: 'own:waiting' }), {
+      id: 'a',
+      status: 'own:waiting',
+    });
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'b', status: 'con_linear:state_todo' }), { id: 'b' });
+    assert.deepEqual(withoutTrackerStatus<Note>({ id: 'c' }), { id: 'c' });
   });
 });

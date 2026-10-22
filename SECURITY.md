@@ -1616,6 +1616,16 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
 - **What a reader of the site learns.** `GET /feedback` gives every reader of the site the names and
   the colours of its statuses, and the status of each note, as it already gives the name of a
   state (`stateName`). A team that names a status writes for whoever reads the site.
+- **The states of Linear, and the switch of their colours** (FRU-368): `GET …/statuses/tracker` and
+  `POST …/statuses/settings` are `manage-sites` too, and a site of another workspace answers `404`.
+  The states are those of the teams the site sends to, read with the key of the connector of the
+  workspace: no other team is asked. A colour Linear gives reaches a style only when it is `#rrggbb`
+  (`listLinearStates`); « orange » is dropped. The read of a site gives each reader the names and
+  colours of the states of its Linear team, as it gives `stateName`, except a reader the tracker is
+  hidden from (a guest, FRU-250): the key of such a status holds the id of the state at Linear, so that
+  reader gets the statuses of the worker's store only, and no `status` of a tracker on a note
+  (`withoutTrackerStatus`). test:`lists the states for the
+statuses page, with the switch, and refuses who does not manage the sites`.
 
 ### The status of a note that the worker keeps (FRU-367)
 

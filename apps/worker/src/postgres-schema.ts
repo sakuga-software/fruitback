@@ -98,6 +98,9 @@ export const sites = pgTable(
     // FRU-330: `0021` adds the column with `anyone`, the value of every site that exists then, and
     // `0022` makes `members` the default of the next one. `addSite` writes the value in any case.
     writers: text('writers').notNull().default('members'),
+    // FRU-368: the states of the site's tracker take the tracker's colours. Off by default (decision 3
+    // of docs/decisions/statuses.md): the colours of the stages, which a host can still set.
+    tracker_colours: boolean('tracker_colours').notNull().default(false),
   },
   (table) => [
     foreignKey({

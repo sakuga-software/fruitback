@@ -179,7 +179,22 @@ export type SeedStore = {
   ): Promise<{ stage: SeedStage; page: string } | 'status-changed' | undefined>;
   /** Whether the store of this client takes a status, for a store that routes by client. */
   statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
+  /**
+   * The states of the tracker where this client's notes are (FRU-368), each with the stage the store
+   * gives it: what the statuses of a site list for that source. Absent: the store has no states of
+   * its own to say (the worker's store, GitHub, an address). It throws `StoreError` when the tracker
+   * did not answer.
+   */
+  trackerStates?(client: ClientConfig | undefined): Promise<TrackerState[]>;
+  /** The states of the store of this client, for a store that routes by client. `undefined`: none. */
+  trackerStatesFor?(client: ClientConfig | undefined): Promise<TrackerState[] | undefined>;
 };
+
+/**
+ * A state of a tracker (FRU-368): its id there, its name, the stage the store gives it (its type, or
+ * an exception of its connector), and the colour the tracker draws it with, as `#rrggbb`.
+ */
+export type TrackerState = { id: string; name: string; stage: SeedStage; color?: string };
 
 /** What a person says of a note that the team marked done (FRU-294). */
 export type CheckVerdict = 'fixed' | 'wrong';

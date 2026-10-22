@@ -50,13 +50,14 @@ import { noteConnectorCall } from './connector-health.ts';
 import { type GithubApp, readGithubRepository } from './github-connector.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
+import { rememberTrackerStates } from './tracker-states.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
 import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
 import { seal } from './secrets.ts';
 import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
 import { invalidatePages } from './note-helpers.ts';
-import { DEFAULT_SEED_STAGE, MAX_STATUSES } from '@fruitback/shared';
+import { DEFAULT_SEED_STAGE, MAX_STATUSES, type SeedStage } from '@fruitback/shared';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
@@ -745,7 +746,9 @@ export async function handleConsoleApi(
   // The statuses of a site (FRU-366): read, add or change, order, remove. `manage-sites`, the role
   // that already chooses where the notes of a site go. docs/decisions/statuses.md is the model.
   const statusPath =
-    /^\/sites\/([A-Za-z0-9_-]+)\/statuses(?:\/(order)|\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9_:-]{1,64}))?$/.exec(rest);
+    /^\/sites\/([A-Za-z0-9_-]+)\/statuses(?:\/(order|tracker|settings)|\/([A-Za-z0-9_-]{1,64})\/([A-Za-z0-9_:-]{1,64}))?$/.exec(
+      rest,
+    );
   if (statusPath !== null) {
     if (!allowed('manage-sites')) return forbidden();
     const site = statusPath[1] as string;
@@ -782,6 +785,79 @@ export async function handleConsoleApi(
       if (context.kv !== undefined) await invalidatePages(context.kv, saved.pages);
 
       return json(200, { status }, headers);
+    }
+
+    // FRU-368: GET …/statuses/tracker, the states of each Linear team the site sends to, read now, each
+    // with the stage its connector gives it (its type, or an exception of FRU-102), and its colour at
+    // Linear; and the switch of the site. A team that did not answer says so, the others are listed.
+    // What is read is kept for the read of the pins (`rememberTrackerStates`): opening the page is
+    // what shows a change made at Linear at once.
+    if (statusPath[2] === 'tracker') {
+      if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+      const current = (await context.accounts.sites(workspaceId as string)).find((one) => one.id === site);
+      const trackerColours = await context.accounts.siteTrackerColours(workspaceId as string, site);
+      if (current === undefined || trackerColours === undefined) return notFound();
+      const trackers = [];
+      for (const place of current.destinations) {
+        const kept = await context.accounts.sealedKey(place.connector);
+        if (kept === undefined || kept.workspaceId !== workspaceId || kept.kind !== 'linear') continue;
+        // The team says which of two places of one connector a list is (lite review of pull request 495).
+        const named = {
+          connector: place.connector,
+          ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
+          ...(place.label === undefined ? {} : { label: place.label }),
+        };
+        if (context.secretsKey === undefined || place.teamId === undefined) {
+          trackers.push({ ...named, error: 'tracker-unreachable' });
+          continue;
+        }
+        const team = place.teamId;
+        try {
+          const read = await askLinear(context, place.connector, kept.sealed, (authorization) =>
+            listLinearStates(authorization, [team]),
+          );
+          const states = read.map((state) => ({
+            id: state.id,
+            name: state.name,
+            type: state.type,
+            stage: Object.hasOwn(kept.settings.stages, state.id)
+              ? (kept.settings.stages[state.id] as SeedStage)
+              : state.stage,
+            ...(state.color === undefined ? {} : { color: state.color }),
+          }));
+          // What is kept is Linear's alone, the stage of each type: the read applies the exceptions.
+          await rememberTrackerStates(
+            context.kv,
+            place.connector,
+            team,
+            read.map((state) => ({
+              id: state.id,
+              name: state.name,
+              stage: state.stage,
+              ...(state.color === undefined ? {} : { color: state.color }),
+            })),
+          );
+          trackers.push({ ...named, states });
+        } catch (error) {
+          if (
+            !(error instanceof StoreError || error instanceof LinearKeyRefused || error instanceof LinearKeyForbidden)
+          )
+            throw error;
+          trackers.push({ ...named, error: 'tracker-unreachable' });
+        }
+      }
+
+      return json(200, { trackerColours, trackers }, headers);
+    }
+
+    // FRU-368: POST …/statuses/settings, `{ trackerColours }`: the switch of the site.
+    if (statusPath[2] === 'settings') {
+      if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+      const asked = (await readBody(request))?.trackerColours;
+      if (typeof asked !== 'boolean') return json(400, { error: 'invalid-settings' }, headers);
+      const set = await context.accounts.setSiteTrackerColours(workspaceId as string, site, asked);
+
+      return set ? json(200, { trackerColours: asked }, headers) : notFound();
     }
 
     // POST …/statuses/order: each status named takes its place in the list.
@@ -957,8 +1033,9 @@ export async function handleConsoleApi(
       const settings = readConnectorSettings(await readBody(request));
       if (settings === undefined) return json(400, { error: 'invalid-settings' }, headers);
       const set = await context.accounts.setConnectorSettings(workspaceId as string, id, settings);
+      if (!set) return json(404, { error: 'not-found' }, headers);
 
-      return set ? json(200, { settings }, headers) : json(404, { error: 'not-found' }, headers);
+      return json(200, { settings }, headers);
     }
 
     // The states of the teams the sites of this workspace send to through this connector: those are

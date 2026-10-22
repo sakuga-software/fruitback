@@ -33,7 +33,9 @@ import {
   takesReplies,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
-import { type SiteStatus, envelopeStatuses } from './site-statuses.ts';
+import { OWN_SOURCE, type SiteStatus, envelopeStatuses, withoutTrackerStatus } from './site-statuses.ts';
+import { trackerSourcesOf } from './tracker-states.ts';
+import type { StageExceptions } from './linear.ts';
 import type { AccountStore } from './accounts.ts';
 
 /**
@@ -146,7 +148,7 @@ export async function getFeedback(
         ...(own.has(issue.seed.id) ? { mine: true as const } : {}),
       };
 
-      return hidden ? withoutTracker(marked, issue.seed.id) : marked;
+      return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.seed.id)) : marked;
     });
 
     // The stages of the trackers that answered, in the order of `SEED_STAGES` (FRU-188). A site read in
@@ -159,7 +161,20 @@ export async function getFeedback(
     // FRU-366: the statuses of the site, which `status` on each note names. Asked at each request, and
     // never in the cached answer: a change in the console shows at the next read. A read that cannot
     // reach them keeps its pins, with the built-in statuses only, which draw each pin by its stage.
-    const statuses = envelopeStatuses(await statusesOfSite(context?.accounts, route.client?.workspace, clientId));
+    // FRU-368: the states of the trackers of the site are statuses too, in the trackers' colours when
+    // the site turned its switch on.
+    // A reader the tracker is hidden from gets no id of the tracker (FRU-250): the statuses of the
+    // worker's store only, and none of a tracker (heavy review of pull request 494).
+    const [rows, trackers, trackerColours] = await Promise.all([
+      statusesOfSite(context?.accounts, route.client?.workspace, clientId),
+      hidden
+        ? []
+        : trackerSourcesOf(kv, store, route.client, (connector) => exceptionsOf(context?.accounts, connector)),
+      trackerColoursOf(context?.accounts, route.client?.workspace, clientId),
+    ]);
+    const statuses = hidden
+      ? envelopeStatuses(rows.filter((row) => row.source === OWN_SOURCE))
+      : envelopeStatuses(rows, trackers, trackerColours);
 
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
@@ -516,6 +531,38 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
     status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
+}
+
+/** The stages a connector gives some states (FRU-102), read at this request. None when it cannot say. */
+async function exceptionsOf(accounts: AccountStore | undefined, connector: string): Promise<StageExceptions> {
+  if (accounts === undefined) return {};
+  try {
+    return (await accounts.sealedKey(connector))?.settings.stages ?? {};
+  } catch (error) {
+    console.error(
+      `[fruitback] the settings of a connector did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return {};
+  }
+}
+
+/** Whether a site draws its tracker's states in the tracker's colours (FRU-368). Off when it cannot say. */
+async function trackerColoursOf(
+  accounts: AccountStore | undefined,
+  workspace: string | undefined,
+  site: string | undefined,
+): Promise<boolean> {
+  if (accounts === undefined || workspace === undefined || site === undefined) return false;
+  try {
+    return (await accounts.siteTrackerColours(workspace, site)) === true;
+  } catch (error) {
+    console.error(
+      `[fruitback] the colours of a site did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return false;
+  }
 }
 
 /** The rows of the statuses of a site of a workspace, or none: a site of the environment has no row. */
