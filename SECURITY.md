@@ -214,6 +214,14 @@ the issues of each client, and read their metadata. What holds it:
   in memory until five minutes before its end, by installation and repository: a token of one
   repository is never used for another. GitHub says which repository the token reaches, and a token
   that does not name the repository of the destination alone is not used.
+- **One token reaches every repository of an installation: the token of the list** (FRU-361).
+  The console lists the repositories of an installation for an owner or an admin who chooses a
+  destination (`GET …/connectors/<id>/repositories`). That token asks for `permissions: { metadata:
+'read' }` and nothing else, so it reads the names and the visibility of the repositories, and
+  writes nothing. A token that GitHub answers with another permission is not used. No cache keeps
+  it: each list mints its own, and no note, reply or label call ever gets it. The list stops at
+  1000 repositories (10 pages of 100). The condition: GitHub gives an installation token only the
+  permissions that it asks for.
 - A repository that the installation does not cover (GitHub answers `403`, `404` or `422` for the
   token, `403` or `404` for the issue) makes the connector « Needs attention ». The worker then asks
   no token for another repository. A rate limit of GitHub is not a refusal, and changes nothing.
@@ -1457,6 +1465,9 @@ of a workspace installs it on GitHub, and GitHub sends the person back to
   when GitHub sends the person back.
 - An installation that an owner of the organisation must approve (`setup_action=request`) writes
   nothing. The workspace installs again after the approval.
+- A way back with no `state` of this browser, for example after an installation from github.com,
+  attaches nothing and goes to the console with `?github=unstarted` (FRU-361). The console then says
+  to start from « Connect GitHub » of a workspace.
 
 ### An address that receives the notes (FRU-122)
 

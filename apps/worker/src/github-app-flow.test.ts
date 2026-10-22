@@ -510,17 +510,32 @@ describe('the state of the flow, and the person who comes back (FRU-360)', () =>
     const forged = await setup.call('GET', `/auth/github-app/callback?${query}&state=${left.state}`, {
       cookie: 'fruitback_github_app_state=another-state-of-the-attacker',
     });
+    // FRU-361: the console says to start from a workspace, as after an installation from github.com.
     for (const answer of [none, stranger, forged]) {
       assert.equal(answer.status, 302);
-      assert.equal(answer.headers.get('Location'), `${CONSOLE}/`);
+      assert.equal(answer.headers.get('Location'), `${CONSOLE}/?github=unstarted`);
     }
     assert.deepEqual(setup.github.exchanges(), [], 'the code was not spent for them');
 
     // The control: this browser, with its state, attaches it. Then the same state is spent.
     assert.equal(word(await comeBack(setup, left, 'alice', 7)), 'connected');
     const replay = await comeBack(setup, left, 'alice', 7);
-    assert.equal(replay.headers.get('Location'), `${CONSOLE}/`);
+    assert.equal(replay.headers.get('Location'), `${CONSOLE}/?github=unstarted`);
     assert.equal(setup.github.exchanges().length, 1);
+  });
+
+  it('sends an installation from github.com, with no flow of this browser, to the console with « unstarted » (FRU-361)', async () => {
+    const setup = await setUp({ alice: [7] }, { 7: 'acme' });
+    const acme = await workspaceOf(setup.world, 'Acme');
+    const direct = await setup.call(
+      'GET',
+      `/auth/github-app/callback?code=${setup.github.codeOf('alice')}&installation_id=7&setup_action=install`,
+    );
+
+    assert.equal(direct.status, 302);
+    assert.equal(direct.headers.get('Location'), `${CONSOLE}/?github=unstarted`);
+    assert.deepEqual(await setup.world.accounts.connectors(acme.workspace.id), []);
+    assert.deepEqual(setup.github.exchanges(), []);
   });
 
   it('spends a ticket once, and refuses a state that ended', async () => {
@@ -532,7 +547,7 @@ describe('the state of the flow, and the person who comes back (FRU-360)', () =>
 
     setup.clock.now += STATE_TTL_MS + 1_000;
     const late = await comeBack(setup, left, 'alice', 7);
-    assert.equal(late.headers.get('Location'), `${CONSOLE}/`);
+    assert.equal(late.headers.get('Location'), `${CONSOLE}/?github=unstarted`);
     assert.deepEqual(await setup.world.accounts.connectors(acme.workspace.id), []);
     assert.deepEqual(setup.github.exchanges(), []);
   });

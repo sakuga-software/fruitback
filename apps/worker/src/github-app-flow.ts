@@ -54,7 +54,9 @@ export async function githubAppTicket(
  * - `elsewhere`: another workspace holds this installation.
  * - `refused`: the person does not reach this installation.
  * - `forbidden`, `suspended`: the role or the workspace changed during the flow.
- * - `failed`: anything else. GitHub said nothing usable, or the flow is not one of this browser.
+ * - `failed`: anything else. GitHub said nothing usable.
+ * - `unstarted`: the way back has no `state` of this browser (FRU-361), for example after an
+ *   installation from github.com. It goes to `/`, because no workspace is known.
  */
 type Word =
   | 'connected'
@@ -64,11 +66,13 @@ type Word =
   | 'forbidden'
   | 'suspended'
   | 'unauthorized-app'
-  | 'failed';
+  | 'failed'
+  | 'unstarted';
 
 /** Back to the connectors of the workspace, with a word. Nothing of GitHub is echoed. */
 function back(context: GithubAppFlowContext, workspace: string | undefined, word: Word): Response {
-  const where = workspace === undefined ? '/' : `/w/${workspace}/connectors?github=${word}`;
+  const root = word === 'unstarted' ? `/?github=${word}` : '/';
+  const where = workspace === undefined ? root : `/w/${workspace}/connectors?github=${word}`;
 
   return redirect(`${context.consoleUrl}${where}`, [stateCookie(STATE_COOKIE, GITHUB_APP_CALLBACK, '', 0)]);
 }
@@ -103,7 +107,7 @@ async function callback(request: Request, context: GithubAppFlowContext): Promis
   const params = new URL(request.url).searchParams;
   const kept = await spendState(request, context.kv, { cookie: STATE_COOKIE, prefix: STATES });
   if (typeof kept?.workspace !== 'string' || typeof kept.account !== 'string')
-    return back(context, undefined, 'failed');
+    return back(context, undefined, 'unstarted');
   const { workspace, account } = kept as { workspace: string; account: string };
 
   // An organisation that asks its owners to approve sends the person back with no installation yet.

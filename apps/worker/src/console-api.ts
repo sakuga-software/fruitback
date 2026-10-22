@@ -47,7 +47,7 @@ import {
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
-import { type GithubApp, readGithubRepository } from './github-connector.ts';
+import { type GithubApp, openInstallation, readGithubRepository } from './github-connector.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
@@ -268,6 +268,37 @@ async function askLinear<T>(
     await noteConnectorCall(context.accounts, connector, error, clock);
     throw error;
   }
+}
+
+/**
+ * The repositories of the installation of a `github` connector (FRU-361). An installation that GitHub
+ * does not know makes the connector need attention, as a note does (FRU-359).
+ *
+ * A list that GitHub answers ends only a `connection-ended`: it says that the installation exists,
+ * and nothing of the repository of each destination.
+ */
+async function listRepositories(
+  context: ConsoleApiContext,
+  workspace: string,
+  connector: string,
+  sealed: string,
+): Promise<{ fullName: string; private: boolean }[]> {
+  const moment = context.now;
+  const clock = moment === undefined ? undefined : () => moment;
+  const app = context.githubApp as GithubApp;
+  let repositories: { fullName: string; private: boolean }[];
+  try {
+    repositories = await app.repositories(openInstallation(sealed, context.secretsKey));
+  } catch (error) {
+    await noteConnectorCall(context.accounts, connector, error, clock);
+    throw error;
+  }
+  const held = await context.accounts.connectors(workspace);
+  if (held.find((each) => each.id === connector)?.attention?.reason === 'connection-ended') {
+    await noteConnectorCall(context.accounts, connector, undefined, clock);
+  }
+
+  return repositories;
 }
 
 /**
@@ -976,6 +1007,28 @@ export async function handleConsoleApi(
     const states = await askLinear(context, id, kept.sealed, (authorization) => listLinearStates(authorization, teams));
 
     return json(200, { states, settings: kept.settings }, headers);
+  }
+
+  // FRU-361: the repositories of a `github` connector, for the person who chooses a destination.
+  const listed = /^\/connectors\/([A-Za-z0-9_-]+)\/repositories$/.exec(rest);
+  if (listed !== null) {
+    const id = listed[1] as string;
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+    const kept = await context.accounts.sealedKey(id);
+    // A connector of another workspace, or of another kind, answers like one that does not exist.
+    if (kept === undefined || kept.workspaceId !== workspaceId || kept.kind !== 'github') {
+      return json(404, { error: 'not-found' }, headers);
+    }
+    if (context.githubApp === undefined || context.secretsKey === undefined) {
+      return json(404, CONNECTORS_UNAVAILABLE, headers);
+    }
+
+    return json(
+      200,
+      { repositories: await listRepositories(context, workspaceId as string, id, kept.sealed) },
+      headers,
+    );
   }
 
   const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);

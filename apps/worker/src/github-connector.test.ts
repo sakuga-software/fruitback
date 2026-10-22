@@ -4,11 +4,12 @@ import { type IncomingMessage, type ServerResponse, createServer } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import { afterAll, describe, it } from 'vitest';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { type CallOptions, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
+import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { GITHUB_STAGES, readRsaPrivateKey } from './github.ts';
 import {
   type GithubApp,
+  MAX_LISTED_REPOSITORIES,
   createGithubApp,
   openInstallation,
   readGithubRepository,
@@ -52,9 +53,21 @@ afterAll(() => {
   for (const server of servers) server.close();
 });
 
-async function fakeGithub(installations: Record<number, { owner: string; repositories: string[] }>) {
+/** `public`: the repositories that anybody reads. The others are private. */
+type Installation = { owner: string; repositories: string[]; public?: string[] };
+
+/**
+ * What GitHub gives a token that asks for no permission: the permissions of the App. `page`: the
+ * repositories of one page of `/installation/repositories`, fewer than GitHub gives, so a second
+ * page exists.
+ */
+const APP_PERMISSIONS = { issues: 'write', metadata: 'read' };
+
+async function fakeGithub(installations: Record<number, Installation>, page = 2) {
   const calls: Seen[] = [];
   const bound = new Map<string, string[]>();
+  const permitted = new Map<string, Record<string, string>>();
+  const installationOf = new Map<string, number>();
   const issues = new Map<string, Issue[]>();
   const labels = new Map<string, Set<string>>();
   let minted = 0;
@@ -83,19 +96,37 @@ async function fakeGithub(installations: Record<number, { owner: string; reposit
       }
       minted += 1;
       const token = `ghs_${minted}`;
+      const permissions = (call.body as { permissions?: Record<string, string> } | undefined)?.permissions;
       bound.set(
         token,
         names.map((name) => `${installation.owner}/${name}`),
       );
+      permitted.set(token, permissions ?? APP_PERMISSIONS);
+      installationOf.set(token, Number(mint[1]));
 
       return {
         status: 201,
         body: {
           token,
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          permissions: permissions ?? APP_PERMISSIONS,
           repositories: names.map((name) => ({ name, full_name: `${installation.owner}/${name}` })),
         },
       };
+    }
+
+    if (call.path === '/installation/repositories' && call.method === 'GET') {
+      const token = call.authorization.replace(/^Bearer /, '');
+      const installation = installations[installationOf.get(token) ?? 0];
+      if (installation === undefined) return { status: 401, body: { message: 'Bad credentials' } };
+      const all = (bound.get(token) ?? []).map((fullName) => ({
+        full_name: fullName,
+        private: !(installation.public ?? []).includes(fullName.split('/')[1] as string),
+      }));
+      const size = Math.min(page, Number(call.query.get('per_page') ?? '30'));
+      const at = Number(call.query.get('page') ?? '1');
+
+      return { status: 200, body: { total_count: all.length, repositories: all.slice((at - 1) * size, at * size) } };
     }
 
     const scoped = /^\/repos\/([^/]+\/[^/]+)\/(.*)$/.exec(call.path);
@@ -104,6 +135,13 @@ async function fakeGithub(installations: Record<number, { owner: string; reposit
     const reach = bound.get(call.authorization.replace(/^Bearer /, '')) ?? [];
     if (!reach.includes(repository)) return { status: 404, body: { message: 'Not Found' } };
     const rest = scoped[2] as string;
+    // A token with the metadata only reads the repository, and writes nothing in it.
+    const may = permitted.get(call.authorization.replace(/^Bearer /, '')) ?? {};
+    if (rest.startsWith('issues') || rest.startsWith('labels')) {
+      if (may.issues === undefined || (call.method !== 'GET' && may.issues !== 'write')) {
+        return { status: 403, body: { message: 'Resource not accessible by integration' } };
+      }
+    }
 
     if (rest === 'labels' && call.method === 'POST') {
       const kept = labels.get(repository) ?? new Set<string>();
@@ -184,6 +222,10 @@ async function fakeGithub(installations: Record<number, { owner: string; reposit
     /** The repositories each call outside the mints went to. */
     repositories: () =>
       calls.filter((call) => call.path.startsWith('/repos/')).map((call) => call.path.split('/').slice(2, 4).join('/')),
+    /** The calls of the list of the repositories of an installation. */
+    listings: () => calls.filter((call) => call.path === '/installation/repositories'),
+    /** The token that GitHub gave to each mint, in order. */
+    minted: () => [...permitted.keys()],
     /** Which repositories a token of a call reaches. */
     reach: (call: Seen) => bound.get(call.authorization.replace(/^Bearer /, '')) ?? [],
     answerWith(changed: Override) {
@@ -249,9 +291,9 @@ async function tenant(world: World, githubApp: GithubApp, installation: number, 
   return { accounts, workspace, connector, base, token, sites, attention };
 }
 
-async function worldWithGithub(installations: Record<number, { owner: string; repositories: string[] }>) {
+async function worldWithGithub(installations: Record<number, Installation>, page?: number) {
   const world = await opened({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
-  const github = await fakeGithub(installations);
+  const github = await fakeGithub(installations, page);
   const githubApp = createGithubApp(APP, { api: github.api });
 
   return { world, github, githubApp };
@@ -519,6 +561,158 @@ describe('the destination of a github connector, in the console (FRU-359)', () =
     assert.equal(readGithubRepository('a/b.c_d-e'), 'a/b.c_d-e');
     assert.equal(readGithubRepository('a/..'), undefined);
     assert.equal(readGithubRepository('a/b/c'), undefined);
+  });
+});
+
+/** `GET …/connectors/<id>/repositories`, as the console asks it. */
+async function listed(world: World, githubApp: GithubApp, base: string, connector: string, token: string) {
+  return call(world, githubApp, 'GET', `${base}/connectors/${connector}/repositories`, { token });
+}
+
+describe('the repositories of a github connector, for a destination (FRU-361)', () => {
+  it('lists every page, with a token that asks for the metadata only and for no repository', async () => {
+    const { world, github, githubApp } = await worldWithGithub({
+      7: { owner: 'acme', repositories: ['web', 'api', 'docs', 'site', 'blog'], public: ['site'] },
+    });
+    const acme = await tenant(world, githubApp, 7, []);
+
+    const answer = await listed(world, githubApp, acme.base, acme.connector.id, acme.token);
+    assert.equal(answer.status, 200, await answer.clone().text());
+    assert.deepEqual(await answer.json(), {
+      repositories: [
+        { fullName: 'acme/web', private: true },
+        { fullName: 'acme/api', private: true },
+        { fullName: 'acme/docs', private: true },
+        { fullName: 'acme/site', private: false },
+        { fullName: 'acme/blog', private: true },
+      ],
+    });
+    // The body whole: no `repositories` beside the permission, and no other permission.
+    assert.deepEqual(github.mints(), [{ installation: '7', body: { permissions: { metadata: 'read' } } }]);
+    assert.deepEqual(
+      github.listings().map((each) => each.query.get('page')),
+      ['1', '2', '3'],
+    );
+  });
+
+  it('stops at MAX_LISTED_REPOSITORIES, and asks no page after', async () => {
+    const names = Array.from({ length: MAX_LISTED_REPOSITORIES + 5 }, (_, index) => `repo-${index}`);
+    const { world, github, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: names } }, 100);
+    const acme = await tenant(world, githubApp, 7, []);
+
+    const answer = await listed(world, githubApp, acme.base, acme.connector.id, acme.token);
+    const { repositories } = (await answer.json()) as { repositories: unknown[] };
+    assert.equal(repositories.length, MAX_LISTED_REPOSITORIES);
+    assert.equal(github.listings().length, MAX_LISTED_REPOSITORIES / 100);
+  });
+
+  it('never gives the token of the list to an issue: a note asks its own, for its repository', async () => {
+    const { world, github, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web', 'api'] } });
+    const acme = await tenant(world, githubApp, 7, ['acme/web']);
+
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
+    const [listing] = github.minted();
+    assert.equal((await acme.sites[0]?.write('After the list.'))?.status, 201);
+
+    assert.deepEqual(
+      github.mints().map((mint) => mint.body),
+      [{ permissions: { metadata: 'read' } }, { repositories: ['web'] }],
+    );
+    const repositoryCalls = github.calls.filter((each) => each.path.startsWith('/repos/'));
+    assert.ok(repositoryCalls.length > 0, 'the control: the calls of the note are read');
+    for (const each of repositoryCalls) {
+      assert.notEqual(each.authorization, `Bearer ${listing}`);
+      assert.deepEqual(github.reach(each), ['acme/web']);
+    }
+    // And the list again mints again: no cache holds its token.
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
+    assert.equal(github.mints().length, 3);
+  });
+
+  it('refuses a token that GitHub gives with more than the metadata, and lists nothing with it', async () => {
+    const { world, github, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 7, []);
+    github.answerWith((each) =>
+      each.path.endsWith('/access_tokens')
+        ? {
+            status: 201,
+            body: {
+              token: 'ghs_wide',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+              permissions: { metadata: 'read', issues: 'write' },
+            },
+          }
+        : undefined,
+    );
+
+    const answer = await listed(world, githubApp, acme.base, acme.connector.id, acme.token);
+    assert.equal(answer.status, 502);
+    assert.deepEqual(github.listings(), []);
+    // The control: the same answer with the metadata alone lists.
+    github.answerWith(() => undefined);
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
+  });
+
+  it('answers an owner or an admin, and refuses a member', async () => {
+    const { world, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 7, []);
+    const admin = await signInTo(world, 'admin@acme.dev');
+    await memberOf(world, acme.workspace.id, admin.id, 'admin');
+    const member = await signInTo(world, 'member@acme.dev');
+    await memberOf(world, acme.workspace.id, member.id, 'member');
+
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, admin.token)).status, 200);
+    const refused = await listed(world, githubApp, acme.base, acme.connector.id, member.token);
+    assert.equal(refused.status, 403);
+  });
+
+  it('answers 404 for a connector of another workspace, of another kind, or that does not exist', async () => {
+    const { world, github, githubApp } = await worldWithGithub({
+      7: { owner: 'acme', repositories: ['web'] },
+      8: { owner: 'globex', repositories: ['secret'] },
+    });
+    const acme = await tenant(world, githubApp, 7, []);
+    const globex = await tenant(world, githubApp, 8, []);
+    const linear = await acme.accounts.addConnector(acme.workspace.id, {
+      kind: 'linear',
+      label: 'Linear',
+      sealed: 'not-opened',
+    });
+
+    const unknown = await listed(world, githubApp, acme.base, 'con_nobody', acme.token);
+    assert.equal(unknown.status, 404);
+    const expected = await unknown.json();
+    for (const id of [globex.connector.id, linear.id]) {
+      const answer = await listed(world, githubApp, acme.base, id, acme.token);
+      assert.equal(answer.status, 404);
+      assert.deepEqual(await answer.json(), expected);
+    }
+    assert.deepEqual(github.mints(), [], 'no token of the installation of globex');
+    // The control: globex lists its own.
+    assert.equal((await listed(world, githubApp, globex.base, globex.connector.id, globex.token)).status, 200);
+  });
+
+  it('says the connection ended for an installation that is gone, and a list that comes back ends it', async () => {
+    const installations: Record<number, Installation> = { 7: { owner: 'acme', repositories: ['web'] } };
+    const { world, githubApp } = await worldWithGithub(installations);
+    const acme = await tenant(world, githubApp, 99, []);
+
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 502);
+    assert.equal(await acme.attention(), 'connection-ended');
+
+    installations[99] = { owner: 'acme', repositories: ['web'] };
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
+    assert.equal(await acme.attention(), undefined);
+  });
+
+  it('keeps « key-lacks-access »: a list says nothing of the repository of a destination', async () => {
+    const { world, githubApp } = await worldWithGithub({ 7: { owner: 'acme', repositories: ['web'] } });
+    const acme = await tenant(world, githubApp, 7, ['acme/secret']);
+    assert.equal((await acme.sites[0]?.write('Hidden.'))?.status, 502);
+    assert.equal(await acme.attention(), 'key-lacks-access');
+
+    assert.equal((await listed(world, githubApp, acme.base, acme.connector.id, acme.token)).status, 200);
+    assert.equal(await acme.attention(), 'key-lacks-access');
   });
 });
 

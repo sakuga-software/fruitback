@@ -759,6 +759,7 @@ const READ_ONLY_RESTS = [
   '/notes',
   '/connectors/con_1/states',
   '/connectors/con_1/teams',
+  '/connectors/con_1/repositories',
 ];
 
 /** The paths that a route of the console API matches `rest` with, as the source writes them. */
