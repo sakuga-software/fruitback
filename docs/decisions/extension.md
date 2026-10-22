@@ -499,6 +499,9 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **A site that embeds its own widget (team mode with no mount) has no list in the panel.** That
   widget is the site's, and answers the extension nothing: the panel says that its notes are in its
   own list on the page, rather than wait for them and report a failed read.
+- **A row says the status of its note, in its colour** (FRU-370): the name of the status, then the word
+  of the store, then the word of the stage, and the drop in the colour the team chose. « Open » and
+  « Done » stay by stage. See [statuses.md](statuses.md), « What the widget draws ».
 - **A reply is 2,000 characters at most**, the length the worker takes: the field takes no more.
 - **The panel does not poll.** `notes` answers the notes, or why there are none: a read not answered
   (the panel waits for `notes-changed`), a read that failed (« Try again » asks the widget to read

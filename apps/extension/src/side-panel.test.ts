@@ -265,6 +265,29 @@ describe('the page of the panel (FRU-296, FRU-299)', () => {
     assert.equal(third?.querySelector('.kit-drop')?.getAttribute('data-stage'), 'todo');
   });
 
+  it('draws the colour and the name of a status, and the word of the store (FRU-370)', () => {
+    const notes = [
+      note({
+        id: 'p',
+        number: 1,
+        stage: 'progress',
+        status: { stage: 'progress', name: 'Waiting for the client', color: '#fef9c3' },
+      }),
+      note({ id: 'q', number: 2, stage: 'todo', stateName: 'Backlog' }),
+    ];
+    const root = panelPage(page(), { ...handlers(), state: on(notes), tab: 'open' });
+    const painted = root.querySelector<HTMLElement>('li[data-note="p"] .kit-drop');
+    const plain = root.querySelector<HTMLElement>('li[data-note="q"] .kit-drop');
+
+    assert.equal(root.querySelector('li[data-note="p"] .panel-row-stage')?.textContent, 'Waiting for the client');
+    assert.equal(root.querySelector('li[data-note="q"] .panel-row-stage')?.textContent, 'Backlog');
+    assert.equal(painted?.style.background, '#fef9c3');
+    assert.equal(painted?.style.getPropertyValue('--drop-on'), '#18181b');
+    // The stage stays on the drop, and a note with no colour keeps the class of its stage.
+    assert.equal(painted?.dataset.stage, 'progress');
+    assert.equal(plain?.style.background, '');
+  });
+
   it('lists done and closed notes under « Done »', () => {
     const root = panelPage(page(), { ...handlers(), state: on(NOTES), tab: 'finished' });
 

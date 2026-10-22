@@ -1605,6 +1605,9 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
 - **The widget writes a colour of a status into a style only as `#rrggbb`** (FRU-370). It reads the
   list with `offeredStatuses`, and `statusPaint` checks each colour again before `style.setProperty`:
   any other value draws the token of the stage. test:`lets nothing but #rrggbb reach a style, whoever built the status`.
+  The side panel of the extension takes the status of a note from the page, a world the page writes
+  in: `parsePanelNotes` keeps a colour only as `#rrggbb`, a text colour only with it, and a status only
+  of the note's stage. test:`keep the word of the store and the status of a note, and only a colour that is #rrggbb (FRU-370)`.
 - **A status comes from the worker's store or from a connector the site sends to.** A source that is
   not one of them is refused (`unknown-source`): a site cannot name the states of another tracker.
 - **A status that holds notes is not removed until the request says where they go**

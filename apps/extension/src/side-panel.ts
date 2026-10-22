@@ -1,6 +1,7 @@
 import { language, msg, t } from './i18n.ts';
 import { dropMark, primaryButton, segmentedTabs, statusDrop } from './kit.ts';
 import type { CheckVerdict, NotesReading, PanelNote, ReplyOutcome } from './protocol.ts';
+import { notePaint, stateWord } from './note-status.ts';
 import {
   type SearchHandlers,
   type SearchState,
@@ -566,9 +567,11 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
   head.type = 'button';
   head.setAttribute('aria-expanded', String(opened));
   head.addEventListener('click', () => options.onToggle(note.id));
+  const paint = notePaint(note);
   const drop = statusDrop(document, {
     stage: note.stage,
     ...(note.number === undefined ? {} : { number: note.number }),
+    ...(paint === undefined ? {} : { paint }),
   });
   if (note.number === undefined) drop.dataset.size = 'list';
   const words = make(document, 'span', 'panel-row-words');
@@ -576,7 +579,8 @@ function noteRow(document: Document, options: PanelOptions, note: PanelNote): HT
   const reopenedAt = options.reopened?.[note.id];
   // FRU-300: a verdict says itself on its row: the store moved the note, the panel names who did.
   meta.append(
-    make(document, 'strong', 'panel-row-stage', t(STAGE_WORD[note.stage])),
+    // The name of its status, or the word of its store, as the widget writes it (FRU-370).
+    make(document, 'strong', 'panel-row-stage', stateWord(note, t(STAGE_WORD[note.stage]))),
     ` · ${saidOf(note, now, reopenedAt)}`,
   );
   words.append(make(document, 'span', 'panel-row-note', note.note), meta);
@@ -673,13 +677,18 @@ function readyBlock(document: Document, options: PanelOptions, ready: PanelNote[
     const item = make(document, 'li', 'ready-item');
     item.dataset.note = note.id;
     const head = make(document, 'div', 'ready-head');
+    const paint = notePaint(note);
     const words = make(document, 'div', 'ready-words');
     words.append(
       make(document, 'span', 'ready-note', note.note),
       make(document, 'span', 'ready-meta', fixedLine(note, now)),
     );
     head.append(
-      statusDrop(document, { stage: 'done', ...(note.number === undefined ? {} : { number: note.number }) }),
+      statusDrop(document, {
+        stage: 'done',
+        ...(note.number === undefined ? {} : { number: note.number }),
+        ...(paint === undefined ? {} : { paint }),
+      }),
       words,
     );
     const checking = options.checking?.id === note.id ? options.checking : undefined;

@@ -5,8 +5,8 @@ REST), and colours a team chooses. This page was the framing, written before any
 Mathieu answered its five questions on 2026-10-21: they are _The decisions_ at the end, and the rules
 below follow them. Built: the contract (FRU-364), the table, its migration and the text colour (FRU-365), the API
 of the console with the statuses in the read (FRU-366), the screen of the statuses of a site (FRU-371), and
-the widget that draws them (FRU-370). The rest is FRU-367 to FRU-369, the side panel of the extension
-(FRU-370, a PR of its own), and the parts of FRU-371 that wait for them.
+the widget and the side panel of the extension that draw them (FRU-370). The rest is FRU-367 to FRU-369,
+and the parts of FRU-371 that wait for them.
 
 ## Statuses
 
@@ -307,9 +307,12 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **The edge of FRU-334 is on every pin, whatever its colour.** It is drawn by the rules of the pin and
   of the drop, never by a stage, so a light colour that a team chooses has it in both schemes.
   `e2e/status-colours.spec.ts` measures it.
-- **`pageNotes()` gives `stateName` and `status`** to a list outside the page: the side panel of the
-  extension reads them in a PR of its own, because its parser is the edge between the page and the
-  extension.
+- **`pageNotes()` gives `stateName` and `status`** to a list outside the page. The side panel of the
+  extension reads them with `parsePanelNotes`, the edge between the page and the extension: a colour
+  only as `#rrggbb`, a text colour only with it, a status only of the note's stage. A status keeps its
+  stage there, because the bridge parses the notes and the panel parses them again. A row of the panel
+  wears the colour and the name of its status (`note-status.ts`), and its tabs stay by stage.
+  `e2e/side-panel.spec.ts` measures a row against its pin.
 
 ### The colours
 

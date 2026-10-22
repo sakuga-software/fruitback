@@ -203,6 +203,11 @@ export type DropOptions = {
   number?: number;
   /** With a number: 24 px in a list, 28 px on a page. */
   size?: 'list' | 'page';
+  /**
+   * The colour of a status that a team chose, and its text (FRU-370), in place of the stage's. Both
+   * `#rrggbb`, checked by `parsePanelNotes`. The edge of the drop stays.
+   */
+  paint?: { fill: string; ink: string };
 };
 
 /** The drop of a status: the pin of the widget, in a list or as a mark. A screen reader skips it. */
@@ -210,6 +215,10 @@ export function statusDrop(document: Document, options: DropOptions): HTMLElemen
   const drop = make(document, 'span', 'kit-drop');
   drop.dataset.stage = options.stage;
   drop.setAttribute('aria-hidden', 'true');
+  if (options.paint !== undefined) {
+    drop.style.background = options.paint.fill;
+    drop.style.setProperty('--drop-on', options.paint.ink);
+  }
   if (options.number === undefined) {
     drop.dataset.size = 'mark';
   } else {
