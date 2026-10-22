@@ -1,6 +1,7 @@
 # Receiving notes on your own address
 
-A workspace of the Cloud can connect an address of its own. Each note of a site that sends there is
+A workspace can connect an address of its own, on the Cloud or on an instance that sets
+`FRUITBACK_SECRETS_KEY`. Each note of a site that sends there is
 posted to that address, signed. Use it to put notes in a tool Fruitback has no connector for.
 
 **The notes stay in Fruitback too.** Your address only receives: it cannot give a note back to draw

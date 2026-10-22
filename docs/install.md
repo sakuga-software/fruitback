@@ -51,8 +51,9 @@ written to anyone's workspace.
 In the console, add the address of the site, and choose **who sees the notes**:
 
 - **Members of the workspace** — the default. A read needs the session of a member, which the
-  extension gets when the reviewer connects it: this is the team mode. A visitor can still send a note,
-  and sees no pin, theirs included.
+  extension gets when the reviewer connects it: this is the team mode. « Who can leave a note » is
+  « Members only » on a new site (FRU-330): a visitor with no session is refused. With « Anyone on
+  the page », a visitor can send a note, and sees no pin, theirs included.
 - **Everyone who visits** — a read needs nothing: this is the public mode. Every note, the name its
   reporter typed and the replies are readable by anybody who knows a page address and the id of the
   site, with or without the widget.
