@@ -23,7 +23,7 @@ Please do not open a public issue for a vulnerability once the repository is pub
 
 ## What is supported
 
-Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.2.0` and
+Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.3.0` and
 **unpublished**; the worker image on GHCR is the only distributed artefact. There is no supported
 version policy to state, and pretending otherwise would be the first thing in this file that is not
 true.

@@ -1,6 +1,6 @@
 {
   "name": "fruitback",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Visual feedback that plants annotations on a live page and grows them into issues in the tracker you already run — embedded in the site, or brought to it by a browser extension.",
   "license": "MIT",
