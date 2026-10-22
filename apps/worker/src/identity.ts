@@ -132,7 +132,8 @@ export async function verifyIdentityToken(
   if (claims === undefined) return refuse('malformed');
 
   if (!filled(claims.sub)) return refuse('invalid-claims');
-  if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return refuse('invalid-claims');
+  // `Number.isFinite` refuses a value that is not a number too: a string, `null`, an absent `exp`.
+  if (!Number.isFinite(claims.exp)) return refuse('invalid-claims');
   // `scope` of a token signed by a site is the site's own claim, as JWTs often carry one: it is not
   // read, and does not refuse the token (raised in review). Only `scope: 'account'` with no workspace
   // says a session of an account (FRU-238), and only a caller that verified with the worker key reads it.
@@ -185,13 +186,15 @@ function filled(claim: unknown): claim is string {
 }
 
 function readJson<T>(segment: string): T | undefined {
+  // A segment that is not JSON leaves `null`, which the last line refuses as it refuses a JSON `null`.
+  let parsed: unknown = null;
   try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(base64UrlDecode(segment)));
-
-    return typeof parsed === 'object' && parsed !== null ? (parsed as T) : undefined;
+    parsed = JSON.parse(new TextDecoder().decode(base64UrlDecode(segment)));
   } catch {
-    return undefined;
+    // Not JSON: `parsed` stays `null`.
   }
+
+  return typeof parsed === 'object' && parsed !== null ? (parsed as T) : undefined;
 }
 
 async function hmac(signingInput: string, secret: string): Promise<ArrayBuffer> {
