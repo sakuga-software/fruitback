@@ -88,6 +88,8 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
       id: 'seed-1',
       number: 1,
       stage: 'todo',
+      // The word of the store, which the side panel writes in place of the stage's (FRU-370).
+      stateName: MINE.stateName,
       note: 'Could the title mention Bordeaux?',
       mine: true,
       createdAt: MINE.seed.createdAt,

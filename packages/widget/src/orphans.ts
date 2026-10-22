@@ -1,7 +1,7 @@
-import { type SeedIssue } from '@fruitback/shared';
+import { type SeedIssue, type SeedStatus } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
-import { stageToken } from './theme.ts';
+import { statusPaint } from './status-paint.ts';
 import { CAPTURE_START } from './events.ts';
 
 /**
@@ -48,6 +48,8 @@ export type OrphanListOptions = {
   dock?: Element;
   /** The reporter asked to look at this note. */
   onSelect?: (issue: SeedIssue) => void;
+  /** The status of a note (FRU-370): its mark takes its colour, and its entry its name. Left out: the stage. */
+  statusOf?: (issue: SeedIssue) => SeedStatus | undefined;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
@@ -120,7 +122,14 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       // a drop in its stage's colour. FRU-24 left this over-invalidating on purpose, pending the
       // ticket that would decide how a stage shows up here; that ticket is FRU-36, and this is the
       // answer. Drop the stage from this key and a note that changes stage keeps the colour it had.
-      const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
+      // The status too since FRU-370, for the same reason: its colour and its name are drawn.
+      const next = issues
+        .map((issue) => {
+          const status = options.statusOf?.(issue);
+
+          return `${issue.seed.id}:${issue.stage}:${status === undefined ? '' : JSON.stringify(status)}`;
+        })
+        .join('|');
       if (next === drawn) return;
       drawn = next;
 
@@ -143,7 +152,9 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       // says « 1 detached note ».
       toggleCount.textContent = t.plural(options.dock === undefined ? 'orphans.count' : 'orphans.chip', issues.length);
 
-      list.replaceChildren(...issues.map((issue) => entry(document, issue, t, options.onSelect)));
+      list.replaceChildren(
+        ...issues.map((issue) => entry(document, issue, options.statusOf?.(issue), t, options.onSelect)),
+      );
     },
     owns: (node) => node === root || node === style || root.contains(node) || announcer.contains(node),
     entry: (id) =>
@@ -162,6 +173,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 function entry(
   document: Document,
   issue: SeedIssue,
+  status: SeedStatus | undefined,
   t: Translator,
   onSelect?: (issue: SeedIssue) => void,
 ): HTMLElement {
@@ -174,13 +186,17 @@ function entry(
   // button's accessible name rather than in the mark, because colour alone is not a label.
   const mark = createIcon(document, 'drop');
   mark.classList.add('fruitback-orphans-stage');
-  mark.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
+  mark.style.setProperty('--fruitback-pin-color', statusPaint(issue, status).fill);
 
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'fruitback-orphans-note';
   button.textContent = excerpt(issue);
-  button.setAttribute('aria-label', t.text('orphans.entry', { stage: t.stage(issue.stage), note: excerpt(issue) }));
+  // The name of its status, when the team gave one (FRU-370).
+  button.setAttribute(
+    'aria-label',
+    t.text('orphans.entry', { stage: status?.name || t.stage(issue.stage), note: excerpt(issue) }),
+  );
   button.addEventListener('click', () => onSelect?.(issue));
 
   item.append(mark, button, ...handle(document, issue));

@@ -86,6 +86,30 @@ describe('createOrphanList', () => {
     assert.equal(after.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-closed)');
   });
 
+  it('draws the colour and says the name of its status, and draws again when the status changes (FRU-370)', () => {
+    const page = mountPage('<main></main>');
+    let color = '#7dd3fc';
+    list = createOrphanList({
+      document: page.document,
+      host: page.document.body,
+      statusOf: () => ({ key: 'own:wait', name: 'Waiting for the client', stage: 'done', color }),
+    });
+    const done = seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' });
+    list.update([done]);
+
+    const mark = () => page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
+    assert.equal(mark().style.getPropertyValue('--fruitback-pin-color'), '#7dd3fc');
+    assert.equal(
+      page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'),
+      'Waiting for the client · Une note',
+    );
+
+    // The same note, the same stage, another colour: the entry is drawn again.
+    color = '#a52a3a';
+    list.update([done]);
+    assert.equal(mark().style.getPropertyValue('--fruitback-pin-color'), '#a52a3a');
+  });
+
   it('says the stage in words too, because colour alone is not a label', () => {
     // The mark is aria-hidden, so without this the stage reaches nobody using a screen reader — and
     // nobody who cannot separate the five colours either.
