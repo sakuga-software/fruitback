@@ -48,6 +48,7 @@ import {
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
 import { type GithubApp, openInstallation, readGithubRepository } from './github-connector.ts';
+import { GITHUB_STATES } from './github.ts';
 import { githubAppTicket } from './github-app-flow.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { rememberTrackerStates } from './tracker-states.ts';
@@ -818,7 +819,8 @@ export async function handleConsoleApi(
       return json(200, { status }, headers);
     }
 
-    // FRU-368: GET …/statuses/tracker, the states of each Linear team the site sends to, read now, each
+    // FRU-368: GET …/statuses/tracker, the states of each Linear team the site sends to (FRU-369: and of
+    // each GitHub connector, once), read now, each
     // with the stage its connector gives it (its type, or an exception of FRU-102), and its colour at
     // Linear; and the switch of the site. A team that did not answer says so, the others are listed.
     // What is read is kept for the read of the pins (`rememberTrackerStates`): opening the page is
@@ -829,9 +831,29 @@ export async function handleConsoleApi(
       const trackerColours = await context.accounts.siteTrackerColours(workspaceId as string, site);
       if (current === undefined || trackerColours === undefined) return notFound();
       const trackers = [];
+      const githubListed = new Set<string>();
       for (const place of current.destinations) {
         const kept = await context.accounts.sealedKey(place.connector);
-        if (kept === undefined || kept.workspaceId !== workspaceId || kept.kind !== 'linear') continue;
+        if (kept === undefined || kept.workspaceId !== workspaceId) continue;
+        // FRU-369: a GitHub connector has the four states of GITHUB_STATES, whatever its repository, so
+        // it is one list per connector, never one per repository (heavy review of pull request 495). Its
+        // name is the connector's: two repositories of it share the list. Nothing is asked of GitHub.
+        if (kept.kind === 'github') {
+          if (githubListed.has(place.connector)) continue;
+          githubListed.add(place.connector);
+          const connector = (await context.accounts.connectors(workspaceId as string)).find(
+            (each) => each.id === place.connector,
+          );
+          trackers.push({
+            connector: place.connector,
+            label: `${KIND_NAMES.github} · ${connector?.label ?? place.connector}`,
+            // No exception of FRU-102 here: its ids are those of Linear, and a site re-stages a status
+            // of GitHub in its own rows (`siteStages`), as the ticket asks.
+            states: [...GITHUB_STATES],
+          });
+          continue;
+        }
+        if (kept.kind !== 'linear') continue;
         // The team says which of two places of one connector a list is (lite review of pull request 495).
         const named = {
           connector: place.connector,

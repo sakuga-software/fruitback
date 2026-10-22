@@ -171,6 +171,16 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
 - Four fixed keys: `open`, `closed:completed`, `closed:not_planned`, `closed:duplicate`. A close with
   no reason is `closed:completed`, as today. `reopened` is an open issue. Stages as FRU-32:
   `new`, `done`, `closed`, `closed`. The team can rename, recolour and re-stage them.
+- **Built (FRU-369).** `GITHUB_STATES` and `githubStateKey` of `github.ts`. An issue read through a
+  connector says `status: <connector>:<key>`; the store of the worker's own environment names no
+  connector and says none. A site re-stages a status in its rows, which the store reads at each read
+  (`siteStages`, as for Linear): the settings of a connector (FRU-102) hold ids of Linear, and a key of
+  GitHub, with its `:`, is not one of them.
+- **One list per connector, never per repository** (heavy review of pull request 495). The repository
+  is the `teamId` of a destination, so two repositories of one connector would list the same four
+  states twice. `GET …/statuses/tracker` lists a GitHub connector once, named by its label, and
+  `trackerSourcesOf` merges the sources of one connector, each state once; two teams of one Linear
+  connector keep their states, whose ids differ. `github-statuses.test.ts` holds both.
 - **Labels are not statuses.** FRU-32 already refused them: « a label a team has to remember to apply
   is a state the connector invents ». An issue can carry several labels, and two status labels on one
   issue have no answer. Decision 4: no labels, four fixed statuses (FRU-369).

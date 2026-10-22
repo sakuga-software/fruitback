@@ -151,5 +151,16 @@ export async function trackerSourcesOf(
     }),
   );
 
-  return read.filter((each): each is TrackerSource => each !== undefined);
+  // One source per connector (FRU-369, heavy review of pull request 495): two repositories of one GitHub
+  // connector say the same four states, and two teams of one Linear connector say states whose ids
+  // differ. Each state once, in the order the places gave them.
+  const merged = new Map<string, TrackerState[]>();
+  for (const each of read) {
+    if (each === undefined) continue;
+    const states = merged.get(each.source) ?? [];
+    for (const state of each.states) if (!states.some((kept) => kept.id === state.id)) states.push(state);
+    merged.set(each.source, states);
+  }
+
+  return [...merged].map(([source, states]) => ({ source, states }));
 }
