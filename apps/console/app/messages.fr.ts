@@ -254,6 +254,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'GitHub n’a pas été connecté. Recommencez depuis « Connecter ».',
   'GitHub sent you back without a start from this workspace, so nothing was connected. If you installed the App on github.com, press « Connect » here and choose the same account.':
     'GitHub vous a renvoyé ici sans départ depuis ce workspace : rien n’a été connecté. Si vous avez installé l’application sur github.com, appuyez ici sur « Connecter » et choisissez le même compte.',
+  'GitHub sent you back, but nothing was connected. Only an owner or an admin of a workspace connects GitHub, from the Connectors of that workspace.':
+    'GitHub vous a renvoyé ici, mais rien n’a été connecté. Seul un propriétaire ou un administrateur d’un workspace connecte GitHub, depuis les Connecteurs de ce workspace.',
   'This Fruitback has no GitHub App. Its operator must set one up.':
     'Ce Fruitback n’a pas d’application GitHub. Son opérateur doit en configurer une.',
   'Fruitback could not start the connection to GitHub. Try again.':

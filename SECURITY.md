@@ -1467,7 +1467,8 @@ of a workspace installs it on GitHub, and GitHub sends the person back to
   nothing. The workspace installs again after the approval.
 - A way back with no `state` of this browser, for example after an installation from github.com,
   attaches nothing and goes to the console with `?github=unstarted` (FRU-361). The console then says
-  to start from « Connect GitHub » of a workspace.
+  to start from « Connect GitHub » of a workspace, or, to a person who manages no workspace, that
+  nothing was connected.
 
 ### An address that receives the notes (FRU-122)
 

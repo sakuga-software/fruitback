@@ -367,7 +367,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `connected` opens the panel of the last GitHub connector, not of the last row, because an
   installation again keeps its connector. **An installation from github.com comes back with no
   `state`**: the worker sends it to `/?github=unstarted`, and the front door forwards the word to
-  the Connectors screen of the first workspace that the person manages. **A row names the account**
+  the Connectors screen of the first workspace that the person manages. A person who manages none
+  reads on the front door that nothing was connected, and « Continue » takes the front door as
+  usual. **A row names the account**
   (« Installed on acme », from `GitHub App · acme`), and its state is the one of FRU-102. **A panel
   that needs repair links to `https://github.com/apps/fruitback-app`**: the console does not know
   the id of the installation, which the worker keeps sealed. **A site chooses a repository** from

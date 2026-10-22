@@ -213,6 +213,22 @@ test('back on the front door with « unstarted », the console says to start fro
   expect(new URL(page.url()).pathname).toBe('/w/w1/connectors');
 });
 
+test('back on the front door with « unstarted », a person who manages no workspace reads that nothing was connected', async ({
+  page,
+}) => {
+  await workerWith(page, 'member');
+  await page.goto(`${CONSOLE}/?github=unstarted`);
+  await expect(page.getByRole('alert')).toHaveText(
+    'GitHub sent you back, but nothing was connected. Only an owner or an admin of a workspace connects GitHub, from the Connectors of that workspace.',
+  );
+  await picture(page, 'unstarted-member');
+  expect(new URL(page.url()).pathname).toBe('/');
+
+  // « Continue » takes the front door as usual: a member goes to the sites.
+  await page.getByRole('link', { name: 'Continue' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites`);
+});
+
 test('the row of an installation names its account, and one that needs repair links to the App', async ({ page }) => {
   const worker = await workerWith(page);
   const row = rows(page).nth(1);
