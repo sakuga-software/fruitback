@@ -3,15 +3,16 @@
 [![CI](https://github.com/sakuga-software/fruitback/actions/workflows/ci.yml/badge.svg)](https://github.com/sakuga-software/fruitback/actions/workflows/ci.yml)
 [![Licence: MIT + AGPL-3.0](https://img.shields.io/badge/licence-MIT%20%2B%20AGPL--3.0-blue)](#licence)
 
-**Visual feedback on a live site, without a backend to host.**
+**Visual feedback on a live site, delivered to your tracker.**
 
 A client opens their staging site, clicks the element that bothers them, types a note. It lands as a
 triaged issue carrying the CSS selector, the React component and the source file behind that element.
-When they come back to the page, their pins are still there, coloured by the issue's status: new, to do, in progress, done.
+When they come back to the page, their pins are still there, coloured by the issue's status: new, to do, in progress, done or closed.
+Each site can rename those statuses, recolour them, or add its own.
 
 ![A pin anchored on a button of a live page, coloured by its issue's status](docs/assets/pin-on-a-live-page.png)
 
-The guides are on **[sakuga-software.github.io/fruitback](https://sakuga-software.github.io/fruitback/)**,
+The guides are on **[fruitback.com](https://fruitback.com/)**,
 and they are the files in [docs/](docs/).
 
 **Self-hosted, Fruitback holds your feedback on your server, and nowhere else.** It stays in your
@@ -128,7 +129,7 @@ runtime, per origin, when somebody switches that site on.
 ## Where your feedback lives
 
 **In your PostgreSQL, by default.** A workspace can send the notes of a site to a tracker it connects
-in the console — a Linear workspace, or an address that receives them — and `FRUITBACK_STORE` picks
+in the console — a Linear workspace, a GitHub repository, or an address that receives them — and `FRUITBACK_STORE` picks
 where the notes of a site with no tracker of its own go. Each connector reads only its own variables,
 and an unknown name is refused at boot rather than quietly defaulted.
 
@@ -140,8 +141,8 @@ and an unknown name is refused at boot rather than quietly defaulted.
 | `memory`               | nothing                                                                                  | The dev loop. Refused under `NODE_ENV=production`.                                                                                                                           |
 
 The database is the one the instance keeps its sites and accounts in, so keeping the notes there adds
-nothing to run. What it gives up is the triage of a tracker: no assignee and no workflow, and a stage
-changes only in the database. Backups and what else you trade are in
+nothing to run. What it gives up is the triage of a tracker: no assignee and no workflow. A member
+sets the status of a note in the console or in the extension. Backups and what else you trade are in
 [docs/self-hosting.md](docs/self-hosting.md#back-it-up).
 
 GitHub Issues signs in as a GitHub App, never with a personal token: the worker mints a token that
@@ -192,7 +193,7 @@ Two licences, split where the client/server boundary is (FRU-22).
 |                                                                                                  |                   |
 | ------------------------------------------------------------------------------------------------ | ----------------- |
 | `packages/widget`, `packages/shared`, `packages/fruitback`, `packages/element`, `packages/react` | **MIT**           |
-| `apps/worker`                                                                                    | **AGPL-3.0-only** |
+| `apps/worker`, `apps/console`, `apps/extension`                                                  | **AGPL-3.0-only** |
 
 The five client-side packages are **MIT** because they are compiled into someone else's site: a
 copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the

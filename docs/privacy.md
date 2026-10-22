@@ -65,8 +65,9 @@ If your staging site shows real customer records, keep that in mind before you i
 ## Where it goes
 
 The widget talks to one address: the worker the integrator, or the reviewer in the extension, named.
-Fruitback runs no service of its own and receives nothing. The worker then writes the seed to the
-store it is configured with:
+On a self-hosted instance that worker is yours, and Fruitback receives nothing. On the Cloud it is
+the worker that Sakuga Software runs for you. The worker then writes the seed to the store it is
+configured with:
 
 | Store      | Where a note lands                                       | Who runs it                         |
 | ---------- | -------------------------------------------------------- | ----------------------------------- |
@@ -74,14 +75,16 @@ store it is configured with:
 | `github`   | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
 | `postgres` | a row in the database of the worker, beside the accounts | you                                 |
 
-On the Cloud, a workspace can connect **its own GitHub** (FRU-359): an organisation installs the
+A workspace can connect **its own GitHub** (FRU-359), on the Cloud or on an instance that sets
+`FRUITBACK_GITHUB_CONNECTOR`: an organisation installs the
 GitHub App of Fruitback, and each site sends its notes to one of its repositories, as issues. The
 worker keeps the id of the installation, and no key and no token of GitHub. When a person installs
 the App (FRU-360), GitHub gives the worker a token of that person for a moment. The worker uses it
 once, to read which installations the person reaches. It keeps no copy of it and writes it in no
 log.
 
-On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
+A workspace can also connect **an address of its own** (FRU-122), on the Cloud or on an instance
+that sets `FRUITBACK_SECRETS_KEY`. The note is then kept
 in the worker and a copy is posted to that address, whole and signed. Who runs that address decides
 who reads the copy. [Receiving notes on your own address](rest-connector.md) is the request.
 
@@ -216,7 +219,7 @@ the account of the member who left a note, and that is what says who may give a 
 ### The index of the notes, on a worker with accounts (FRU-237)
 
 A worker with a database keeps **one row for each note it planted for a site of a workspace**,
-wherever the note went: Linear, a REST endpoint, or its own store. The console counts the notes of a
+wherever the note went: Linear, GitHub, a REST endpoint, or its own store. The console counts the notes of a
 site from it (the list of the notes is FRU-244). The row is written when the note is planted, and its stage is written
 again each time a read of the page asks the store; a note planted before the index is written at
 the first read of its page, with what that read says.

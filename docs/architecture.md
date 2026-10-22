@@ -59,8 +59,9 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
 
 **Accounts, and a database, on every instance** (FRU-225, decided on 2026-10-13). An administrator
 signs in to the console, adds the sites and invites the members; a visitor who leaves a note needs no
-account. Status, threads and assignees still belong to the store: the console lists the notes, and a
-tracker you already run stays the place to triage them. The sentence that stood here said "no
+account. Threads and assignees still belong to the store, and so does the stage of an issue in a
+tracker. Each site has its own statuses on top of the five stages, set in the console (FRU-352): the
+console lists the notes, and a tracker you already run stays the place to triage them. The sentence that stood here said "no
 dashboard and no user accounts", and before FRU-26 "no database, no session store" as well. Each
 outlived itself in turn: a file of the worker's own for the seeds (FRU-31) and another for the
 sessions (FRU-42), then the accounts (FRU-141), then PostgreSQL for all of it.

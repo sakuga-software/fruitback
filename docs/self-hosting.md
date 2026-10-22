@@ -464,10 +464,11 @@ it on.
 ## Where the notes go
 
 **In the database, by default** (`FRUITBACK_STORE=postgres`). The pins on the page and the « Notes »
-screen of the console are the interface: there is no triage and no issue to assign, and a stage
-changes only by an `UPDATE` of the `stage` column. A workspace can also send the notes of a site to a
-tracker it connects in the console (a Linear workspace, or an address that receives them:
-[rest-connector.md](rest-connector.md)), and a site can choose where its notes go.
+screen of the console are the interface: there is no triage and no issue to assign. A member sets the
+status of a note on that screen or in the side panel of the extension (FRU-367, FRU-384), from the
+statuses of its site. A workspace can also send the notes of a site to a tracker it connects in the
+console (a Linear workspace, a GitHub repository through a GitHub App, or an address that receives
+them: [rest-connector.md](rest-connector.md)), and a site can choose where its notes go.
 
 `FRUITBACK_STORE` is where the notes of a site with no tracker of its own go:
 
@@ -487,12 +488,12 @@ Replies column and the last column with the code. A stage is named here as it is
 `stage` column and in the JSON. The widget shows `new` as **New**, `todo` as **To do**, `progress`
 as **In progress**, `done` as **Done** and `closed` as **Closed**.
 
-| Store      | Stages                                      | What changes the stage                                                          | Replies                                                                             | Runs in production |
-| ---------- | ------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------ |
-| `postgres` | `new`, `todo`, `progress`, `done`, `closed` | An `UPDATE` of the `stage` column of `seeds`. Nothing in the worker changes it. | The newest 20 rows of the `seed_comments` table. Nothing in the worker writes them. | yes                |
-| `linear`   | `new`, `todo`, `progress`, `done`, `closed` | The workflow state of the issue.                                                | The newest 20 comments on the issue.                                                | yes                |
-| `github`   | `new`, `done`, `closed`                     | Closing the issue, and the reason for the close.                                | The newest 20 comments on the issue.                                                | yes                |
-| `memory`   | `new`, `todo`, `progress`, `done`, `closed` | Nothing. Each note gets the next state in a fixed list.                         | Two canned replies, on every third note.                                            | no                 |
+| Store      | Stages                                      | What changes the stage                                                                          | Replies                                                                            | Runs in production |
+| ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
+| `postgres` | `new`, `todo`, `progress`, `done`, `closed` | The status a member sets in the console or the extension. A fix found wrong goes back to `new`. | The newest 20 rows of the `seed_comments` table, which replies and verdicts write. | yes                |
+| `linear`   | `new`, `todo`, `progress`, `done`, `closed` | The workflow state of the issue.                                                                | The newest 20 comments on the issue.                                               | yes                |
+| `github`   | `new`, `done`, `closed`                     | Closing the issue, and the reason for the close.                                                | The newest 20 comments on the issue.                                               | yes                |
+| `memory`   | `new`, `todo`, `progress`, `done`, `closed` | Nothing. Each note gets the next state in a fixed list.                                         | Two canned replies, on every third note.                                           | no                 |
 
 ## In a database you already run
 
