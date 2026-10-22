@@ -75,6 +75,9 @@ export class GithubInstallationGone extends StoreError {}
 /** An installation of the App that a person reaches, as `GET /user/installations` lists it (FRU-360). */
 export type ReachedInstallation = { id: number; account: string };
 
+/** A repository that an installation covers, as `GET /installation/repositories` lists it (FRU-361). */
+export type ListedRepository = { fullName: string; private: boolean };
+
 /** The App of the worker, and its tokens, for the life of the process. */
 export type GithubApp = {
   /** A token of `installation` that reaches `repository` and no other repository. */
@@ -92,6 +95,12 @@ export type GithubApp = {
    * or `undefined` when it is not one of them. It throws a `StoreError` when GitHub does not answer.
    */
   reachedBy(userToken: string, installation: number): Promise<ReachedInstallation | undefined>;
+  /**
+   * The repositories that `installation` covers, for the person who chooses a destination (FRU-361),
+   * `MAX_LISTED_REPOSITORIES` at most. The token of this list can read the metadata only, and no
+   * cache keeps it: see `listingToken`.
+   */
+  repositories(installation: number): Promise<ListedRepository[]>;
   /** For the tests: a GitHub on a port of the machine. */
   readonly api?: string;
 };
@@ -106,11 +115,29 @@ const PER_PAGE = 100;
 /** 10,000 installations. A person who reaches more is not a case this worker serves. */
 const MAX_PAGES = 100;
 
+/**
+ * The most repositories that the list of an installation answers: 10 pages of 100. A person who
+ * installs the App on more chooses among the first ones that GitHub lists.
+ */
+export const MAX_LISTED_REPOSITORIES = 1_000;
+
+/** The one permission of the token of the list. It can read the names of the repositories, and write nothing. */
+const LISTING_PERMISSIONS = { metadata: 'read' } as const;
+
 const appSchema = z.object({ slug: z.string().regex(/^[a-z0-9-]{1,100}$/) });
 const userTokenSchema = z.object({ access_token: z.string().min(1) });
 const installationsSchema = z.object({
   total_count: z.number().int().nonnegative(),
   installations: z.array(z.object({ id: z.number().int().positive(), account: z.object({ login: z.string() }) })),
+});
+
+const repositoriesSchema = z.object({
+  total_count: z.number().int().nonnegative(),
+  repositories: z.array(z.object({ full_name: z.string(), private: z.boolean() })),
+});
+
+const listingTokenSchema = accessTokenSchema.extend({
+  permissions: z.record(z.string(), z.string()).optional(),
 });
 
 const tokenSchema = accessTokenSchema.extend({
@@ -205,6 +232,54 @@ export function createGithubApp(config: GithubConnectorConfig, options: GithubAp
     return undefined;
   }
 
+  /**
+   * A token of `installation` for the list of its repositories alone (FRU-361).
+   *
+   * WARNING: this token reaches every repository of the installation. So it asks for the metadata
+   * only, it never goes into `tokens`, and only `repositories` uses it. A token that GitHub gives
+   * with another permission is not used.
+   */
+  async function listingToken(installation: number): Promise<string> {
+    let answer: unknown;
+    try {
+      answer = await githubFetch(
+        `/app/installations/${installation}/access_tokens`,
+        {
+          method: 'POST',
+          token: signAppJwt(config.appId, config.privateKey, now()),
+          body: { permissions: LISTING_PERMISSIONS },
+        },
+        api,
+      );
+    } catch (error) {
+      throw refusalOfMint(error) ?? error;
+    }
+    const issued = listingTokenSchema.safeParse(answer);
+    if (!issued.success) throw new StoreError('GitHub returned no installation token');
+    const granted = Object.entries(issued.data.permissions ?? LISTING_PERMISSIONS);
+    if (granted.some(([name, level]) => name !== 'metadata' || level !== 'read')) {
+      throw new StoreError('GitHub gave the token of the list more than the metadata');
+    }
+
+    return issued.data.token;
+  }
+
+  async function repositories(installation: number): Promise<ListedRepository[]> {
+    const token = await listingToken(installation);
+    const listed: ListedRepository[] = [];
+    for (let page = 1; listed.length < MAX_LISTED_REPOSITORIES; page += 1) {
+      const parsed = repositoriesSchema.safeParse(
+        await githubFetch(`/installation/repositories?per_page=${PER_PAGE}&page=${page}`, { token }, api),
+      );
+      if (!parsed.success) throw new StoreError('GitHub returned no list of repositories');
+      for (const each of parsed.data.repositories) listed.push({ fullName: each.full_name, private: each.private });
+      // The count, not the size of a page, as for the installations of a person.
+      if (parsed.data.repositories.length === 0 || listed.length >= parsed.data.total_count) break;
+    }
+
+    return listed.slice(0, MAX_LISTED_REPOSITORIES);
+  }
+
   return {
     token: (installation, repository) =>
       tokens.get(keyOf(installation, repository), () => mint(installation, repository)),
@@ -220,6 +295,7 @@ export function createGithubApp(config: GithubConnectorConfig, options: GithubAp
     },
     userToken,
     reachedBy,
+    repositories,
     ...(api === undefined ? {} : { api }),
   };
 }

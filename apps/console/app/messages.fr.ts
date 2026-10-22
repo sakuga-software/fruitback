@@ -235,6 +235,53 @@ export const FRENCH: Readonly<Record<string, string>> = {
 
   'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.':
     'Un ticket par note, dans un dépôt. Les fichiers d’une note ne partent pas : GitHub n’en prend aucun par son API.',
+  // FRU-361: GitHub, connected with its App.
+  'GitHub Issues': 'GitHub Issues',
+  'Installed on {account}': 'Installée sur {account}',
+  'Going to GitHub…': 'Direction GitHub…',
+  'Not on this Fruitback': 'Absent de ce Fruitback',
+  'The operator of this Fruitback has not set up the GitHub App.':
+    'L’opérateur de ce Fruitback n’a pas configuré l’application GitHub.',
+  'GitHub was not connected yet: an owner of the organisation must approve the App. After the approval, connect GitHub again.':
+    'GitHub n’est pas encore connecté : un propriétaire de l’organisation doit approuver l’application. Après l’approbation, connectez GitHub de nouveau.',
+  'Another workspace already receives the notes of this installation. Disconnect it there, or install the App on another account.':
+    'Un autre workspace reçoit déjà les notes de cette installation. Déconnectez-la là-bas, ou installez l’application sur un autre compte.',
+  'GitHub was not connected: your GitHub account does not reach this installation. Ask an owner of the organisation to connect it.':
+    'GitHub n’a pas été connecté : votre compte GitHub n’a pas accès à cette installation. Demandez à un propriétaire de l’organisation de la connecter.',
+  'GitHub was not connected: the GitHub App of this Fruitback is not set up correctly. Contact the operator of this Fruitback.':
+    'GitHub n’a pas été connecté : l’application GitHub de ce Fruitback est mal configurée. Contactez l’opérateur de ce Fruitback.',
+  'GitHub was not connected. Start again from « Connect ».':
+    'GitHub n’a pas été connecté. Recommencez depuis « Connecter ».',
+  'GitHub sent you back without a start from this workspace, so nothing was connected. If you installed the App on github.com, press « Connect » here and choose the same account.':
+    'GitHub vous a renvoyé ici sans départ depuis ce workspace : rien n’a été connecté. Si vous avez installé l’application sur github.com, appuyez ici sur « Connecter » et choisissez le même compte.',
+  'GitHub sent you back, but nothing was connected. Only an owner or an admin of a workspace connects GitHub, from the Connectors of that workspace.':
+    'GitHub vous a renvoyé ici, mais rien n’a été connecté. Seul un propriétaire ou un administrateur d’un workspace connecte GitHub, depuis les Connecteurs de ce workspace.',
+  'This Fruitback has no GitHub App. Its operator must set one up.':
+    'Ce Fruitback n’a pas d’application GitHub. Son opérateur doit en configurer une.',
+  'Fruitback could not start the connection to GitHub. Try again.':
+    'Fruitback n’a pas pu démarrer la connexion à GitHub. Réessayez.',
+  'GitHub refuses this installation since {when}, and the notes of its sites do not reach GitHub. Disconnect it, then connect GitHub again.':
+    'GitHub refuse cette installation depuis {when}, et les notes de ses sites n’arrivent pas dans GitHub. Déconnectez-la, puis connectez GitHub de nouveau.',
+  'Since {when}, GitHub refuses a repository that a site sends to, and its notes do not reach GitHub. On GitHub, give the App access to that repository, or choose another one here.':
+    'Depuis {when}, GitHub refuse un dépôt vers lequel un site envoie, et ses notes n’arrivent pas dans GitHub. Sur GitHub, donnez à l’application l’accès à ce dépôt, ou choisissez-en un autre ici.',
+  'The GitHub App is no longer installed on {account}, and since {when} the notes of its sites do not reach GitHub. Disconnect it, then connect GitHub again.':
+    'L’application GitHub n’est plus installée sur {account}, et depuis {when} les notes de ses sites n’arrivent pas dans GitHub. Déconnectez-la, puis connectez GitHub de nouveau.',
+  'Open the App on GitHub': 'Ouvrir l’application sur GitHub',
+  'Private repositories': 'Dépôts privés',
+  'Public repositories: their issues are public': 'Dépôts publics : leurs tickets sont publics',
+  '{repository} is public: each note of this site becomes an issue that anybody can read.':
+    '{repository} est public : chaque note de ce site devient un ticket que tout le monde peut lire.',
+  'Add a repository for {site}': 'Ajouter un dépôt pour {site}',
+  'Add a repository…': 'Ajouter un dépôt…',
+  'The GitHub App, installed on {account}': 'L’application GitHub, installée sur {account}',
+  'Its sites keep their notes in the workspace again. The issues already on GitHub stay there, and the App stays installed until you remove it on GitHub.':
+    'Ses sites gardent de nouveau leurs notes dans le workspace. Les tickets déjà dans GitHub y restent, et l’application reste installée tant que vous ne la retirez pas sur GitHub.',
+  'The App reaches no repository of {account}. On GitHub, give it access to one.':
+    'L’application n’a accès à aucun dépôt de {account}. Sur GitHub, donnez-lui accès à l’un d’eux.',
+  'Each note becomes an issue of the repository. Its files do not go: GitHub takes none by its API.':
+    'Chaque note devient un ticket du dépôt. Ses fichiers ne partent pas : GitHub n’en prend aucun par son API.',
+  'GitHub did not answer with the repositories of this installation.':
+    'GitHub n’a pas répondu avec les dépôts de cette installation.',
   'POST each note to your own endpoint, with an address of one hour for each of its files.':
     'Chaque note envoyée en POST à votre propre adresse, avec une adresse valable une heure pour chacun de ses fichiers.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':
@@ -687,8 +734,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'First note received just now': 'Première note reçue à l’instant',
   'First note received {when}': 'Première note reçue {when}',
   'Your first note is in': 'Votre première note est arrivée',
-  'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.':
-    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers Linear ou votre propre API quand vous voulez.',
+  'It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.':
+    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers un outil de suivi ou votre propre API quand vous voulez.',
   // How long ago (ago.ts).
   'Just now': 'À l’instant',
   '{count} min ago': 'il y a {count} min',

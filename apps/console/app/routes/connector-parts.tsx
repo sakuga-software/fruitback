@@ -16,6 +16,7 @@ export const KINDS = {
   linear: { mark: 'L', name: 'Linear' },
   // « REST API » is said « API REST » in French: `msg` marks it for the guard of the words.
   rest: { mark: '{ }', name: msg('REST API') },
+  github: { mark: 'G', name: msg('GitHub Issues') },
 } as const;
 
 /** What a refused key means for the person, and what to do. */
@@ -79,9 +80,18 @@ export function personOf(connector: Connector): string {
 /** A Linear connected with OAuth is named after its workspace of Linear: `Linear OAuth · Acme`. */
 export const OAUTH_LABEL = /^Linear OAuth · /;
 
+/** The worker names a connector of the GitHub App after its account: `GitHub App · acme` (FRU-360). */
+const GITHUB_LABEL = /^GitHub App · /;
+
+/** The account of GitHub, an organisation or a person, where the App is installed. */
+export function accountOf(connector: Connector): string {
+  return connector.label.replace(GITHUB_LABEL, '');
+}
+
 /** How a source is connected, in one line under its name. */
 export function sourceLine(connector: Connector): string {
   if (connector.kind === 'rest') return hostOf(connector);
+  if (connector.kind === 'github') return t('Installed on {account}', { account: accountOf(connector) });
   if (OAUTH_LABEL.test(connector.label)) {
     return t('Workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') });
   }
@@ -117,6 +127,8 @@ export type PanelProps = {
   id: string;
   base: string;
   connector: Connector;
+  /** Every source of the workspace: a list of places is written with the kind of each one. */
+  connectors: readonly Connector[];
   sites: Listed<Site>;
   manages: boolean;
   onChanged: () => Promise<void>;

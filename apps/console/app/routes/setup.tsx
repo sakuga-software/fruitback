@@ -292,7 +292,7 @@ export default function Setup() {
             <h2 className="text-conclusion font-bold tracking-[-0.01em]">{t('Your first note is in')}</h2>
             <p className="text-body leading-[1.55] text-muted">
               {t(
-                'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.',
+                'It waits in the {workspace} workspace. Send your notes to a tracker or your own API whenever you like.',
                 {
                   workspace: stage.workspace.name,
                 },

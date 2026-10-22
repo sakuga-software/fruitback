@@ -771,7 +771,7 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       .getByRole('status')
       .filter({ has: page.getByRole('heading', { name: 'Your first note is in' }) });
     await expect(conclusion).toContainText(
-      'It waits in the Havane workspace. Send your notes to Linear or your own API whenever you like.',
+      'It waits in the Havane workspace. Send your notes to a tracker or your own API whenever you like.',
     );
     await expect(conclusion.getByRole('link', { name: 'Open the console' })).toHaveAttribute('href', '/w/w1/sites');
     await expect(conclusion.getByRole('link', { name: 'Connect a tracker' })).toHaveAttribute(

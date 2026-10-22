@@ -129,7 +129,7 @@ function Settings({
 }
 
 /** The panel of a Linear: which sites send their notes there, to which team, and its settings. */
-export function LinearPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
+export function LinearPanel({ id, base, connector, connectors, sites, manages, onChanged, onRemoved }: PanelProps) {
   useLocale();
   const [teams, setTeams] = useState<Team[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
@@ -159,7 +159,7 @@ export function LinearPanel({ id, base, connector, sites, manages, onChanged, on
     if (writing) return;
     setWriting(true);
     setProblem(undefined);
-    const set = await setPlaces(base, site, places);
+    const set = await setPlaces(base, site, places, connectors);
     if (!set.ok) setProblem(writeProblemOf(set, msg('The destinations of this site did not change. Try again.')));
     await onChanged();
     setWriting(false);

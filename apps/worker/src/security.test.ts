@@ -30,6 +30,7 @@ import {
 import { DATABASE_REQUIRED, readConfig } from './env.ts';
 import { clientOf } from './accounts.ts';
 import { SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
+import { MAX_LISTED_REPOSITORIES } from './github-connector.ts';
 import { SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
@@ -176,6 +177,12 @@ describe('SECURITY.md states what the code does', () => {
     ]) {
       assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }
+  });
+
+  it('quotes the most repositories that the list of an installation answers (FRU-361)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    const sentence = `The list stops at ${MAX_LISTED_REPOSITORIES} repositories (${MAX_LISTED_REPOSITORIES / 100} pages of 100)`;
+    assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
   });
 
   it('quotes how long a session of better-auth lasts, and how often its end moves (FRU-147)', () => {

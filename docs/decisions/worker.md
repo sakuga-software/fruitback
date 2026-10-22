@@ -4146,7 +4146,7 @@ the mechanism, `SECURITY.md` (« The GitHub App key ») says what the key reache
 - **The way back says one word** to `/w/<id>/connectors?github=`: `connected`, `requested` (an
   owner of the organisation must approve, and nothing is written), `elsewhere`, `refused` (the person
   does not reach the installation), `forbidden`, `suspended`, or `failed` (GitHub said nothing usable).
-  A `state` that is not this browser's goes back to `/`, with no workspace named.
+  A `state` that is not this browser's goes back to `/?github=unstarted` (FRU-361), with no workspace named.
 - **`GET …/connectors` answers `githubApp: true`** where the worker has the App, a secrets key, a
   public address and a Kv, as it answers `linearOAuth`. The console offers the installation only then.
 - **The routes of a Linear connector stay Linear's.** `…/teams`, `…/states` and `…/settings` answer
@@ -4183,3 +4183,53 @@ so a second page exists. Each line was planted in the code, and the test named w
   stops at 100 pages of 100. The fake gives two a page to prove the second page is read.
 - **No real installation.** The routes and the fields are the ones of the REST documentation,
   version 2022-11-28, and of « Generating a user access token for a GitHub App ».
+
+## The repositories of an installation, for a destination (FRU-361)
+
+The console chooses the repository of a destination in a list. `GithubApp.repositories` in
+`github-connector.ts` reads it, and `SECURITY.md` (« The GitHub App key ») says what its token reaches.
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/connectors/<connector>/repositories`** answers
+  `200 { repositories: [{ fullName, private }] }`, in the order of GitHub. It is for an owner or an
+  admin (`manage-sites`), as `…/teams` is. A connector of another workspace, of another kind, or that
+  does not exist answers the same `404 not-found`. A worker with no App answers
+  `404 connectors-unavailable`.
+- **The token of the list asks for `permissions: { metadata: 'read' }`, and for no repository.** It
+  is the one token that reaches the whole installation, so it can read the names of the
+  repositories and write nothing. A token that GitHub answers with another permission is refused.
+  It never goes into the cache of the tokens: each list mints its own, and no issue call can get it.
+- **Every page of `GET /installation/repositories` is read, until `total_count`**, with
+  `MAX_LISTED_REPOSITORIES` (1,000, 10 pages of 100) as the hard cap. A person who installs the App
+  on more chooses among the first thousand that GitHub lists.
+- **The state of the connector follows FRU-359.** `404` on the mint is `connection-ended`, `403` or
+  `422` is `key-lacks-access`. A list that GitHub answers ends `connection-ended` only: it says that
+  the installation exists, and nothing of the repository of each destination.
+- **A way back with no `state` of this browser goes to `/?github=unstarted`**, where FRU-360 sent
+  it to `/`. That is also the way back of an installation from github.com, which never passed by
+  `/auth/github-app/start`. Nothing is attached, and the console says to start from a workspace.
+
+### The guards, each planted out
+
+`github-connector.test.ts` plays GitHub on a port of the machine. Its tokens carry the permissions
+that they asked for: a token with the metadata only gets `403` on an issue. Each line was planted
+in the code, and the test named went red:
+
+- The token asked with `issues: write` beside `metadata: read`: « lists every page, with a token
+  that asks for the metadata only and for no repository ».
+- The token of the list put into the cache of each repository that it lists: « never gives the
+  token of the list to an issue: a note asks its own, for its repository ».
+- No check of the permissions that GitHub answers: « refuses a token that GitHub gives with more
+  than the metadata, and lists nothing with it ».
+- `see-tracker` in place of `manage-sites`: « answers an owner or an admin, and refuses a member ».
+- No check of the workspace of the connector: « answers 404 for a connector of another workspace,
+  of another kind, or that does not exist ».
+- Another cap in the code than in `SECURITY.md`: « quotes the most repositories that the list of an
+  installation answers » in `security.test.ts`.
+
+### What was not measured
+
+- **No real installation.** The route and its fields (`total_count`, `repositories`, `full_name`,
+  `private`) are the ones of the REST documentation, version 2022-11-28. That GitHub answers
+  `permissions` in the answer of `access_tokens` is the documentation's example.
