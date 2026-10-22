@@ -351,7 +351,8 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   kept is Linear's alone, the stage of each type: the exceptions of the connector are applied at each
   read, so a change of them is never left in the `Kv` by a read that was on its way.
 - **Two routes of the console, `manage-sites` like the others**: `GET …/statuses/tracker`, the states
-  of each Linear team of the site with their stage and their colour, and the switch; `POST
+  of each Linear team of the site (named by its connector and its `teamId`, as a site can send to two
+  teams of one connector) with their stage and their colour, and the switch; `POST
 …/statuses/settings`, `{ trackerColours }`. A team Linear did not answer for says
   `tracker-unreachable`, and the others are listed.
 - **A page's cached read keeps its stages for `CACHE_TTL_MS`** (15 s) after a row of the site changes:

@@ -801,7 +801,12 @@ export async function handleConsoleApi(
       for (const place of current.destinations) {
         const kept = await context.accounts.sealedKey(place.connector);
         if (kept === undefined || kept.workspaceId !== workspaceId || kept.kind !== 'linear') continue;
-        const named = { connector: place.connector, ...(place.label === undefined ? {} : { label: place.label }) };
+        // The team says which of two places of one connector a list is (lite review of pull request 495).
+        const named = {
+          connector: place.connector,
+          ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
+          ...(place.label === undefined ? {} : { label: place.label }),
+        };
         if (context.secretsKey === undefined || place.teamId === undefined) {
           trackers.push({ ...named, error: 'tracker-unreachable' });
           continue;

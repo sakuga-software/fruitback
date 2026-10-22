@@ -626,6 +626,7 @@ describe('the states of Linear as the statuses of a site (FRU-368)', () => {
       trackers: [
         {
           connector: acme.connector,
+          teamId: 'team_design',
           label: 'Linear · Design',
           states: [
             { id: 'state_triage', name: 'Triage', type: 'triage', stage: 'new' },
@@ -723,7 +724,7 @@ describe('the states of Linear as the statuses of a site (FRU-368)', () => {
     const listed = await call(env, 'GET', `${acme.base}/sites/${acme.site.id}/statuses/tracker`, { token: acme.token });
     assert.equal(listed.status, 200, await listed.clone().text());
     assert.deepEqual(((await listed.json()) as { trackers: unknown[] }).trackers, [
-      { connector: acme.connector, label: 'Linear · Design', error: 'tracker-unreachable' },
+      { connector: acme.connector, teamId: 'team_design', label: 'Linear · Design', error: 'tracker-unreachable' },
     ]);
   });
 });
