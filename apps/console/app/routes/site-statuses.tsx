@@ -13,6 +13,7 @@ import {
   OWN,
   type ScreenStatus,
   type StatusRow,
+  type TrackerState,
   colourOf,
   isChanged,
   isDeletable,
@@ -24,7 +25,7 @@ import {
   rowOf,
   statusesOf,
 } from '../site-statuses';
-import { Button, Choice, Field, IconButton, LinkButton, Problem, Radios, StatusDot } from '../ui';
+import { Button, Choice, Field, IconButton, LinkButton, Problem, Radios, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { STAGE_NAMES } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
@@ -63,14 +64,35 @@ const STATUS_PROBLEMS: Readonly<Record<string, string>> = {
   'too-many-statuses': msg('A site holds {count} statuses at most.'),
 };
 
-/** What the page read: the site, the sources of the workspace, and the rows of the site. */
-type Loaded = { site: Site; connectors: readonly Connector[]; rows: readonly StatusRow[] };
+/** The states of one Linear team of the site, or why there are none (FRU-368). */
+type TrackerList = { connector: string; teamId?: string; label?: string; states?: TrackerState[]; error?: string };
+
+/** What the page read: the site, the sources of the workspace, the rows of the site, and its trackers. */
+type Loaded = {
+  site: Site;
+  connectors: readonly Connector[];
+  rows: readonly StatusRow[];
+  /** `failed`: the worker did not say the states of the trackers. The other lists are still drawn. */
+  tracker: { trackerColours: boolean; trackers: readonly TrackerList[] } | 'failed';
+};
 
 /** A list of the page: the worker's store, or a destination of the site. */
 type Section =
   | { kind: 'own' }
-  | { kind: 'github'; connector: Connector; label: string | undefined }
-  | { kind: 'linear'; connector: Connector; label: string | undefined };
+  | { kind: 'github'; connector: Connector; teamId: string | undefined; label: string | undefined }
+  | { kind: 'linear'; connector: Connector; teamId: string | undefined; label: string | undefined };
+
+/** The key of a list of a tracker: its connector and its team, as a site can send to two teams of one. */
+function sectionKey(section: Section): string {
+  return section.kind === 'own' ? OWN : `${section.connector.id}:${section.teamId ?? ''}`;
+}
+
+/** The states the worker read for a list of Linear: the ones of its connector and of its team. */
+function trackerOf(trackers: readonly TrackerList[], section: Section): TrackerList | undefined {
+  if (section.kind !== 'linear') return undefined;
+
+  return trackers.find((one) => one.connector === section.connector.id && one.teamId === section.teamId);
+}
 
 /** The lists of a site: the worker's store when its notes stay there, then each tracker it sends to. */
 function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
@@ -82,10 +104,13 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
   const seen = new Set<string>();
   for (const place of places) {
     const connector = connectors.find((each) => each.id === place.connector);
-    if (connector === undefined || seen.has(connector.id)) continue;
-    seen.add(connector.id);
+    // One list per team: a site can send to two teams of one connector (lite review of pull request 495).
+    const key = `${place.connector}:${place.teamId ?? ''}`;
+    if (connector === undefined || seen.has(key)) continue;
+    seen.add(key);
     const kind: string = connector.kind;
-    if (kind === 'github' || kind === 'linear') sections.push({ kind, connector, label: place.label });
+    if (kind === 'github' || kind === 'linear')
+      sections.push({ kind, connector, teamId: place.teamId, label: place.label });
   }
 
   return sections;
@@ -96,6 +121,15 @@ function token(name: string): string | undefined {
   if (typeof document === 'undefined') return undefined;
 
   return colourOf(getComputedStyle(document.documentElement).getPropertyValue(name));
+}
+
+/** The colours of a status as it is drawn: the team's, or its default (the tracker's, or its stage's). */
+function drawnOf(status: ScreenStatus) {
+  return coloursOf(
+    status.stage,
+    status.color ?? status.defaultColor ?? null,
+    status.color === null ? null : status.textColor,
+  );
 }
 
 /** The colours a status is drawn with: what the style takes, and the `#rrggbb` its contrast is measured on. */
@@ -120,9 +154,10 @@ function ratioText(ratio: number): string {
   return `${number.format(shown)}:1`;
 }
 
-/** The name a status shows: the one the team gave, or the one of GitHub, or the word of its stage. */
+/** The name a status shows: the one the team gave, or the tracker's, or the word of its stage. */
 function nameOf(status: ScreenStatus): string {
   if (status.name !== null && status.name !== '') return status.name;
+  if (status.trackerName !== undefined) return status.trackerName;
   const github = GITHUB_NAMES[status.key];
   if (status.source !== OWN && github !== undefined) return t(github);
 
@@ -157,15 +192,27 @@ export default function SiteStatuses() {
   const load = useCallback(async () => {
     // A read again keeps the rows on the screen until its answer replaces them (FRU-271).
     setRead((current) => (typeof current === 'string' ? 'loading' : current));
-    const [sites, connectors, statuses] = await Promise.all([
+    const [sites, connectors, statuses, tracker] = await Promise.all([
       call<{ sites: Site[] }>('GET', `${base}/sites`),
       call<{ connectors: Connector[] }>('GET', `${base}/connectors`),
       call<{ statuses: StatusRow[] }>('GET', `${base}/sites/${encodeURIComponent(siteId)}/statuses`),
+      // FRU-368: the states of the Linear teams of the site, read now, and the switch of their colours.
+      call<{ trackerColours: boolean; trackers: TrackerList[] }>(
+        'GET',
+        `${base}/sites/${encodeURIComponent(siteId)}/statuses/tracker`,
+      ),
     ]);
     const site = sites.ok ? sites.data.sites.find((each) => each.id === siteId) : undefined;
     if ((sites.ok && site === undefined) || (!statuses.ok && statuses.status === 404)) return setRead('gone');
-    if (site === undefined || !connectors.ok || !statuses.ok) return setRead('failed');
-    setRead({ site, connectors: connectors.data.connectors, rows: statuses.data.statuses });
+    // An answer with no list is no list (FRU-162): the page says it did not load.
+    if (site === undefined || !connectors.ok || !statuses.ok || !Array.isArray(statuses.data?.statuses))
+      return setRead('failed');
+    setRead({
+      site,
+      connectors: connectors.data.connectors,
+      rows: statuses.data.statuses,
+      tracker: tracker.ok && Array.isArray(tracker.data?.trackers) ? tracker.data : 'failed',
+    });
   }, [base, siteId]);
 
   useEffect(() => {
@@ -206,6 +253,32 @@ export default function SiteStatuses() {
       </>
     );
 
+  const tracker = typeof read === 'string' || read.tracker === 'failed' ? undefined : read.tracker;
+  const sections = typeof read === 'string' ? [] : sectionsOf(read.site, read.connectors);
+  // The switch is the site's (FRU-368): drawn once, above the first list of Linear that was read, or
+  // above the first Linear section when none was, so it can always be turned off (lite reviews of
+  // pull request 495).
+  const isRead = (section: Section) =>
+    section.kind === 'linear' &&
+    (tracker === undefined ? undefined : trackerOf(tracker.trackers, section))?.states !== undefined;
+  const firstRead = sections.findIndex(isRead);
+  const switchAt = firstRead === -1 ? sections.findIndex((section) => section.kind === 'linear') : firstRead;
+  const setTrackerColours = async (on: boolean): Promise<string | undefined> => {
+    const set = await writeOne(() =>
+      call('POST', `${base}/sites/${encodeURIComponent(siteId)}/statuses/settings`, {
+        trackerColours: on,
+      }),
+    );
+    if (set === BUSY || !set.ok) return set === BUSY ? NOT_CHANGED : problemOf(set, STATUS_PROBLEMS, NOT_CHANGED);
+    setRead((current) =>
+      typeof current === 'string' || current.tracker === 'failed'
+        ? current
+        : { ...current, tracker: { ...current.tracker, trackerColours: on } },
+    );
+
+    return undefined;
+  };
+
   const onRows = (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) =>
     setRead((current) => (typeof current === 'string' ? current : { ...current, rows: change(current.rows) }));
 
@@ -233,20 +306,41 @@ export default function SiteStatuses() {
       ) : null}
       {typeof read === 'string' ? null : (
         <div className="flex flex-col gap-[36px]">
-          {sectionsOf(read.site, read.connectors).map((section) =>
-            section.kind === 'linear' ? (
-              <LinearSection
-                key={section.connector.id}
-                id={`statuses-${section.connector.id}`}
-                workspace={workspace.id}
-                label={section.label}
-              />
-            ) : (
+          {sections.map((section, index) => {
+            const linear =
+              section.kind === 'linear' && read.tracker !== 'failed'
+                ? trackerOf(read.tracker.trackers, section)
+                : undefined;
+            if (section.kind === 'linear' && linear?.states === undefined)
+              return (
+                <LinearUnread
+                  key={sectionKey(section)}
+                  id={`statuses-${sectionKey(section)}`}
+                  label={section.label}
+                  onRetry={() => void load()}
+                  {...(index === switchAt && tracker !== undefined
+                    ? {
+                        colours: (
+                          <TrackerColours
+                            value={tracker.trackerColours}
+                            disabled={writing}
+                            onChange={setTrackerColours}
+                          />
+                        ),
+                      }
+                    : {})}
+                />
+              );
+            return (
               <StatusList
-                key={section.kind === 'own' ? OWN : section.connector.id}
+                key={sectionKey(section)}
+                id={`statuses-${sectionKey(section)}`}
                 kind={section.kind}
                 source={section.kind === 'own' ? OWN : section.connector.id}
                 label={section.kind === 'own' ? undefined : section.label}
+                states={linear?.states ?? []}
+                trackerColours={tracker?.trackerColours === true}
+                {...(index === switchAt ? { onTrackerColours: setTrackerColours } : {})}
                 rows={read.rows}
                 onRows={onRows}
                 path={`${base}/sites/${encodeURIComponent(siteId)}/statuses`}
@@ -254,8 +348,8 @@ export default function SiteStatuses() {
                 writeOne={writeOne}
                 onSay={(words) => setSaid((before) => (before === words ? `${words} ` : words))}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       )}
       {/* Says a move and a deletion, which change the list without moving focus. */}
@@ -266,21 +360,35 @@ export default function SiteStatuses() {
   );
 }
 
-/** A Linear destination: its states take their stage on the panel of Linear, for now. */
-function LinearSection({ id, workspace, label }: { id: string; workspace: string; label: string | undefined }) {
+/** A Linear destination whose states the worker could not read: it says so, and reads them again. */
+function LinearUnread({
+  id,
+  label,
+  onRetry,
+  colours,
+}: {
+  id: string;
+  label: string | undefined;
+  onRetry: () => void;
+  /** The switch of the site, when this section is where it is drawn. */
+  colours?: ReactNode;
+}) {
   useLocale();
 
   return (
     <section aria-labelledby={id} className="max-w-[760px]">
-      <h2 id={id} className="text-section font-semibold [overflow-wrap:anywhere]">
+      <h2 id={id} className="mb-[12px] text-section font-semibold [overflow-wrap:anywhere]">
         {label ?? t('Linear')}
       </h2>
-      <p className="mt-[4px] text-small text-muted">
-        {t('Fruitback reads the states of Linear. Choose the stage of each one on the panel of Linear, in Connectors.')}{' '}
-        <LinkButton space="inline" to={`/w/${workspace}/connectors`}>
-          {t('Open Connectors')}
-        </LinkButton>
-      </p>
+      {colours}
+      <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
+        <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+          {t('Fruitback could not read the states of Linear. The statuses you set are not lost.')}
+        </p>
+        <Button tone="outline" onClick={onRetry}>
+          {t('Try again')}
+        </Button>
+      </div>
     </section>
   );
 }
@@ -289,10 +397,18 @@ function LinearSection({ id, workspace, label }: { id: string; workspace: string
 type Open = { key: string; what: 'edit' | 'delete' } | { key: string; what: 'move'; notes: number };
 
 type StatusListProps = {
+  /** The id of its heading, unique on the page. */
+  id: string;
   kind: ListKind;
   source: string;
   /** The words of the destination, as the worker wrote them: « GitHub · acme/website ». */
   label: string | undefined;
+  /** The states of the tracker, for a Linear list (FRU-368). */
+  states: readonly TrackerState[];
+  /** The site draws its tracker's states in the tracker's colours. */
+  trackerColours: boolean;
+  /** Turns that switch: the list that shows it. The sentence of a refusal, or `undefined`. */
+  onTrackerColours?: (on: boolean) => Promise<string | undefined>;
   rows: readonly StatusRow[];
   onRows: (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) => void;
   path: string;
@@ -303,16 +419,32 @@ type StatusListProps = {
 };
 
 /** The statuses of one source of the site, in their order, and what can be done to each. */
-function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne, onSay }: StatusListProps) {
+function StatusList({
+  id,
+  kind,
+  source,
+  label,
+  states,
+  trackerColours,
+  onTrackerColours,
+  rows,
+  onRows,
+  path,
+  writing,
+  writeOne,
+  onSay,
+}: StatusListProps) {
   useLocale();
-  const statuses = statusesOf(kind, source, rows);
+  const statuses = statusesOf(kind, source, rows, states).map((status) =>
+    trackerColours && status.trackerColor !== undefined ? { ...status, defaultColor: status.trackerColor } : status,
+  );
   const [open, setOpen] = useState<Open | undefined>();
   const [adding, setAdding] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const list = useRef<HTMLDivElement>(null);
   // Where focus goes once the list is drawn again: a button of a row, by the key of its status.
   const [focus, setFocus] = useState<{ key: string; control: string } | undefined>();
-  const heading = `statuses-${source}`;
+  const heading = id;
 
   useEffect(() => {
     if (focus === undefined || writing) return;
@@ -413,13 +545,9 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
       <div className="mb-[12px] flex flex-wrap items-end justify-between gap-x-[24px] gap-y-[12px]">
         <div className="min-w-0 max-w-[720px]">
           <h2 id={heading} tabIndex={-1} className="text-section font-semibold [overflow-wrap:anywhere]">
-            {kind === 'own' ? t('Notes kept in Fruitback') : (label ?? t('GitHub'))}
+            {kind === 'own' ? t('Notes kept in Fruitback') : (label ?? (kind === 'linear' ? t('Linear') : t('GitHub')))}
           </h2>
-          <p className="mt-[4px] text-small text-muted">
-            {kind === 'own'
-              ? t('Five statuses are built in, one for each stage. Rename them, recolour them, or add your own.')
-              : t('A GitHub issue has four states. Rename them, recolour them, or change their stage.')}
-          </p>
+          <p className="mt-[4px] text-small text-muted">{leadOf(kind)}</p>
         </div>
         {kind === 'own' ? (
           <Button
@@ -434,6 +562,9 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
         ) : null}
       </div>
 
+      {onTrackerColours === undefined ? null : (
+        <TrackerColours value={trackerColours} disabled={writing} onChange={onTrackerColours} />
+      )}
       <div ref={list} className="@container">
         <div
           aria-hidden="true"
@@ -561,6 +692,55 @@ function StatusList({ kind, source, label, rows, onRows, path, writing, writeOne
   );
 }
 
+/** What a list says under its title. */
+function leadOf(kind: ListKind): string {
+  if (kind === 'own')
+    return t('Five statuses are built in, one for each stage. Rename them, recolour them, or add your own.');
+  if (kind === 'github') return t('A GitHub issue has four states. Rename them, recolour them, or change their stage.');
+
+  return t(
+    'The states of the Linear team this site sends to. Rename them, recolour them, or change their stage. A state added in Linear appears here.',
+  );
+}
+
+/**
+ * « Use Linear's colours » (FRU-368): a switch of the site, off by default, written at once. A refusal
+ * puts it back and says why.
+ */
+function TrackerColours({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: boolean;
+  disabled: boolean;
+  onChange: (on: boolean) => Promise<string | undefined>;
+}) {
+  useLocale();
+  const [problem, setProblem] = useState<string | undefined>();
+
+  return (
+    <div className="mb-[20px] max-w-[760px] rounded-frame border border-line px-[20px] py-[16px]">
+      <Toggle
+        strong
+        label={t("Use Linear's colours")}
+        hint={t('A status with no colour chosen here takes its colour in Linear. Off: the colours of Fruitback.')}
+        value={value}
+        disabled={disabled}
+        onChange={(on) => {
+          setProblem(undefined);
+          void onChange(on).then(setProblem);
+        }}
+      />
+      {problem === undefined ? null : (
+        <div className="mt-[12px]">
+          <Problem>{t(problem)}</Problem>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The drop of a pin and the chip of a name, in the colours of a status, as the widget draws them. */
 function StatusMark({ name, style }: { name: string; style: ReturnType<typeof coloursOf>['style'] }) {
   return (
@@ -607,7 +787,7 @@ function StatusItem({
 }: StatusItemProps) {
   useLocale();
   const name = nameOf(status);
-  const { style, ratio } = coloursOf(status.stage, status.color, status.textColor);
+  const { style, ratio } = drawnOf(status);
   const arrow = (path: string) => (
     <svg aria-hidden="true" viewBox="0 0 24 24">
       <path d={path} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -615,6 +795,7 @@ function StatusItem({
   );
   let from = t('Added by your team');
   if (status.builtIn) from = t('Built in');
+  else if (status.trackerName !== undefined) from = t('In Linear: {name}', { name: status.trackerName });
   else if (status.source !== OWN) from = t('In GitHub: {name}', { name: t(GITHUB_NAMES[status.key] ?? status.key) });
   const label = 'shrink-0 text-hint text-muted @min-[860px]:sr-only';
 
@@ -649,7 +830,7 @@ function StatusItem({
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Colour')}</span>
           <span aria-hidden="true" className="kit-swatch" style={{ background: style.background }} />
-          {status.color === null ? t('Colour of the stage') : <code className="font-mono">{status.color}</code>}
+          {status.color === null ? t(defaultColourOf(status)) : <code className="font-mono">{status.color}</code>}
         </span>
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Text')}</span>
@@ -694,6 +875,11 @@ function StatusItem({
   );
 }
 
+/** The words of the colour a status has when the team chose none: the tracker's, or its stage's. */
+function defaultColourOf(status: ScreenStatus): string {
+  return status.defaultColor === undefined ? msg('Colour of the stage') : msg("Linear's colour");
+}
+
 /** The contrast of a text on its status, in words and with a mark, never by its colour alone. */
 function Ratio({ ratio, auto }: { ratio: number | undefined; auto: boolean }) {
   useLocale();
@@ -718,6 +904,16 @@ function Ratio({ ratio, auto }: { ratio: number | undefined; auto: boolean }) {
       <span className="sr-only">{t('under 4.5:1')}</span>
     </span>
   );
+}
+
+/** What an empty name gives, said under the field: the word of a built-in stage, or the tracker's name. */
+function nameHintOf(status: ScreenStatus): string | undefined {
+  if (status.builtIn)
+    return t('Empty: « {name} », in the language of each person.', { name: t(STAGE_NAMES[status.defaultStage]) });
+  if (status.trackerName !== undefined)
+    return t('Empty: the name in Linear, « {name} ».', { name: status.trackerName });
+
+  return undefined;
 }
 
 /** What the preview says of the contrast of its text, as the field of the text will be judged. */
@@ -769,8 +965,13 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
   }, [adding]);
 
   const color = background === 'own' ? (colourOf(typedBackground) ?? null) : null;
-  const textColor = text === 'own' ? (colourOf(typedText) ?? null) : null;
-  const drawn = coloursOf(stage, background === 'own' ? color : null, textColor);
+  // A text colour goes with a colour of the team only: the worker refuses one on the colour of a stage
+  // or of the tracker (`text-without-color`), and the list would not draw it (lite review of pull
+  // request 495). With no colour of its own, the text is Auto.
+  const textChoice = background === 'own' ? text : 'auto';
+  const textColor = textChoice === 'own' ? (colourOf(typedText) ?? null) : null;
+  // With no colour of its own, the status takes its default: the tracker's when the site asks, else its stage's.
+  const drawn = coloursOf(stage, background === 'own' ? color : (status.defaultColor ?? null), textColor);
   // A colour that is not typed yet draws nothing of its own: the stage, until it is one.
   const ownTyped = background === 'own' && color === null;
   const fallback = adding ? t('New status') : nameOf({ ...status, name: null });
@@ -783,8 +984,8 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
     const found: typeof errors = {};
     if (adding && name.trim() === '') found.name = t('Give the status a name.');
     if (background === 'own' && color === null) found.background = t(typeColour);
-    if (text === 'own' && textColor === null) found.text = t(typeColour);
-    else if (text === 'own' && !reads(drawn.ratio))
+    if (textChoice === 'own' && textColor === null) found.text = t(typeColour);
+    else if (textChoice === 'own' && !reads(drawn.ratio))
       found.text = t('Text needs 4.5:1 at least: choose Auto, or a darker or lighter text.');
     setErrors(found);
     setProblem(undefined);
@@ -797,7 +998,7 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
       name: name.trim() === '' ? null : name.trim(),
       stage,
       color: background === 'own' ? color : null,
-      textColor: text === 'own' ? textColor : null,
+      textColor: textChoice === 'own' ? textColor : null,
     });
     if (refused !== undefined) setProblem(refused);
   }
@@ -826,13 +1027,7 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
             inputRef={nameField}
             onChange={(event) => setName(event.target.value)}
             {...(adding ? {} : { placeholder: nameOf({ ...status, name: null }) })}
-            {...(status.builtIn
-              ? {
-                  hint: t('Empty: « {name} », in the language of each person.', {
-                    name: t(STAGE_NAMES[status.defaultStage]),
-                  }),
-                }
-              : {})}
+            {...(nameHintOf(status) === undefined ? {} : { hint: nameHintOf(status) })}
             {...(errors.name === undefined ? {} : { error: errors.name })}
           />
           <Choice
@@ -854,7 +1049,7 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
               value={background}
               onChange={setBackground}
               options={[
-                { value: 'stage', label: t('Colour of the stage') },
+                { value: 'stage', label: t(defaultColourOf(status)) },
                 { value: 'own', label: t('Your colour') },
               ]}
             />
@@ -882,14 +1077,18 @@ function StatusEditor({ status, adding = false, disabled, onSave, onCancel }: Ed
           <div className="flex flex-col gap-[8px]">
             <Radios
               label={t('Text')}
-              value={text}
+              value={textChoice}
               onChange={setText}
+              disabled={background !== 'own'}
+              {...(background === 'own'
+                ? {}
+                : { hint: t('A text colour of your own goes with a colour of your own.') })}
               options={[
                 { value: 'auto', label: t('Auto: dark or white, whichever reads better') },
                 { value: 'own', label: t('Your colour') },
               ]}
             />
-            {text === 'own' ? (
+            {textChoice === 'own' ? (
               <span className="flex items-start gap-[10px] pl-[26px]">
                 <span
                   aria-hidden="true"

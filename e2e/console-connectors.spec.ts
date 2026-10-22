@@ -111,6 +111,9 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.endsWith('/c1/teams'))
       return json({ teams: [{ id: 't1', name: 'Acme web', key: 'ACM', projects: [{ id: 'p1', name: 'Website' }] }] });
     if (pathname.endsWith('/c1/states')) return json({ states: STATES, settings: SETTINGS });
+    // The statuses page of a site (FRU-371, FRU-368), which a link of the panel opens.
+    if (/\/sites\/\w+\/statuses$/.test(pathname)) return json({ statuses: [] });
+    if (/\/sites\/\w+\/statuses\/tracker$/.test(pathname)) return json({ trackerColours: false, trackers: [] });
     if (pathname.endsWith('/deliveries'))
       return worker.late === undefined
         ? json({}, 500)
@@ -278,36 +281,20 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect((await box(card.locator('[data-site="support.acme.dev"]'))).y).toBeGreaterThan((await box(others)).y);
   expect((await box(card.locator('[data-site="acme.dev"]'))).y).toBeLessThan((await box(others)).y);
 
-  // The statuses: a state of Linear, an arrow, and a list named after the state.
-  await expect(card.getByText('Which Linear state gives each pin its status.')).toBeVisible();
-  const states = card.locator('[data-states] > li');
-  await expect(states).toHaveCount(5);
-  expect
-    .soft(await styles(states.first(), ['display', 'column-gap']))
-    .toEqual({ display: 'grid', 'column-gap': '8px' });
-  const linear = states.first().locator('> span').first();
-  await expect(linear).toHaveText('Triage');
-  expect.soft(await styles(linear, ['padding', 'border-top-left-radius', 'border-top-width', 'white-space'])).toEqual({
-    padding: '9px 12px',
-    'border-top-left-radius': '8px',
-    'border-top-width': '1px',
-    'white-space': 'nowrap',
-  });
-  expect.soft(await painted(linear, 'backgroundColor')).toEqual(rgb(WHITE));
-  for (const [index, [state, status]] of (
-    [
-      ['Triage', 'New'],
-      ['Todo', 'To do'],
-      ['In Progress', 'In progress'],
-      ['Done', 'Done'],
-      ['Canceled', 'Closed'],
-    ] as const
-  ).entries()) {
-    // The status is said in words: its drop is a picture, and the amber one is 2.15:1 on white.
-    const choice = states.nth(index).getByRole('button', { name: new RegExp(`Status for ${state}`) });
-    await expect(choice, state).toContainText(status);
-    await expect(states.nth(index).locator('.kit-drop'), state).toHaveAttribute('aria-hidden', 'true');
-  }
+  // The statuses: since FRU-368 they are set per site, on its statuses page, which this block links to.
+  await expect(
+    card.getByText('The stage and the colour of each state of Linear are set for each site, on its statuses page.'),
+  ).toBeVisible();
+  await expect(card.getByRole('link', { name: /^Statuses of / })).toHaveText([
+    'Statuses of https://staging.acme.dev',
+    'Statuses of https://acme.dev',
+  ]);
+  await expect(card.getByRole('link', { name: 'Statuses of https://acme.dev' })).toHaveAttribute(
+    'href',
+    '/w/w1/sites/s2/statuses',
+  );
+  // The list of FRU-102 is gone from the panel: no state of Linear is chosen here any more.
+  await expect(card.getByRole('button', { name: /^Status for / })).toHaveCount(0);
 
   await expect(card.getByRole('switch', { name: 'Show Linear comments as replies' })).toBeChecked();
   // Not delivered: the picture of the element (FRU-198), and the date of the last issue (FRU-237).
@@ -561,31 +548,14 @@ test('a member reads the sources and changes none', async ({ page }) => {
   await expect(panel(page).getByRole('switch')).toHaveCount(0);
 });
 
-test('a status that is chosen is sent, and the drop beside it follows', async ({ page }) => {
-  const worker = await workerWith(page);
+test('a link of the panel leads to the statuses of its site (FRU-368)', async ({ page }) => {
+  await workerWith(page);
   await open(page);
   await rows(page).first().click();
-  const first = panel(page).locator('[data-states] > li').first();
-  const before = await painted(first.locator('.kit-drop'), 'backgroundColor');
-  await first.getByRole('button', { name: /Status for Triage/ }).click();
-  await page.getByRole('option', { name: 'Done', exact: true }).click();
-  await expect
-    .poll(() => worker.sent.at(-1))
-    .toEqual({
-      pathname: '/console/workspaces/w1/connectors/c1/settings',
-      body: { showComments: true, stages: { st0: 'done' } },
-    });
-  await expect(first.getByRole('button', { name: /Status for Triage/ })).toContainText('Done');
-  // The colour of « Done » is the token of the console (FRU-334), read where the page defines it:
-  // a change of the palette changes app.css and not this test.
-  const token = (name: string) =>
-    page.evaluate((property) => getComputedStyle(document.documentElement).getPropertyValue(property).trim(), name);
-  const done = await token('--color-status-done');
-  expect(done).toMatch(/^#[0-9a-f]{6}$/i);
-  expect(await painted(first.locator('.kit-drop'), 'backgroundColor')).toEqual(rgb(done));
-  // The control: before the choice, the drop had the colour of another status, so the drop did follow.
-  expect(before).not.toEqual(rgb(done));
-  expect(before).toEqual(rgb(await token('--color-status-new')));
+  await panel(page).getByRole('link', { name: 'Statuses of https://staging.acme.dev' }).click();
+  // A cold dev server once reloaded the page here, for a dependency it bundled late: vite.config.ts.
+  await expect(page).toHaveURL(/\/w\/w1\/sites\/s1\/statuses$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
 });
 
 test('at 390 px a long address keeps one line on its row, and its state goes under it (FRU-321)', async ({ page }) => {

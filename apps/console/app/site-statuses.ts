@@ -41,7 +41,22 @@ export type ScreenStatus = StatusRow & {
   kept: boolean;
   /** Where it is in the list when nobody ordered it. */
   rank: number;
+  /** The name the tracker gives it (FRU-368): what an empty name shows. */
+  trackerName?: string;
+  /** The colour the tracker draws it with, as `#rrggbb`, when it has one. */
+  trackerColor?: string;
+  /**
+   * The colour it has when the team chose none: the tracker's, when the site takes the tracker's colours
+   * and the tracker gives one. Absent: the colour of its stage.
+   */
+  defaultColor?: string;
 };
+
+/**
+ * A state of a tracker as `GET …/statuses/tracker` answers it (FRU-368): the stage is the one its
+ * connector gives it, its type or an exception of FRU-102.
+ */
+export type TrackerState = { id: string; name: string; type: string; stage: Stage; color?: string };
 
 /** The four states of a GitHub issue (FRU-369), and the stage of each (FRU-32). */
 export const GITHUB_STATES: readonly { key: string; stage: Stage }[] = [
@@ -51,8 +66,8 @@ export const GITHUB_STATES: readonly { key: string; stage: Stage }[] = [
   { key: 'closed:duplicate', stage: 'closed' },
 ];
 
-/** What a source of statuses is: the worker's store, or a GitHub connector. */
-export type ListKind = 'own' | 'github';
+/** What a source of statuses is: the worker's store, a GitHub connector, or a Linear one. */
+export type ListKind = 'own' | 'github' | 'linear';
 
 function blank(source: string, key: string, stage: Stage, rank: number, builtIn: boolean): ScreenStatus {
   return {
@@ -80,11 +95,14 @@ function blank(source: string, key: string, stage: Stage, rank: number, builtIn:
  * status at the place it shows it, so both count from the top of the same list. A tie keeps the
  * order of the defaults.
  */
-export function statusesOf(kind: ListKind, source: string, rows: readonly StatusRow[]): ScreenStatus[] {
-  const defaults =
-    kind === 'own'
-      ? SEED_STAGES.map((stage, rank) => blank(source, stage, stage, rank, true))
-      : GITHUB_STATES.map((state, rank) => blank(source, state.key, state.stage, rank, false));
+export function statusesOf(
+  kind: ListKind,
+  source: string,
+  rows: readonly StatusRow[],
+  /** The states of the tracker, for a Linear list. */
+  states: readonly TrackerState[] = [],
+): ScreenStatus[] {
+  const defaults = defaultsOf(kind, source, states);
   const mine = rows.filter((row) => row.source === source);
   const known = new Set(defaults.map((each) => each.key));
   const merged = defaults.map((each) => {
@@ -109,6 +127,18 @@ export function statusesOf(kind: ListKind, source: string, rows: readonly Status
     (one, other) =>
       (one.kept ? one.position : one.rank) - (other.kept ? other.position : other.rank) || one.rank - other.rank,
   );
+}
+
+/** The statuses of a source when the worker keeps no row: the built-in five, GitHub's four, Linear's states. */
+function defaultsOf(kind: ListKind, source: string, states: readonly TrackerState[]): ScreenStatus[] {
+  if (kind === 'own') return SEED_STAGES.map((stage, rank) => blank(source, stage, stage, rank, true));
+  if (kind === 'github') return GITHUB_STATES.map((state, rank) => blank(source, state.key, state.stage, rank, false));
+
+  return states.map((state, rank) => ({
+    ...blank(source, state.id, state.stage, rank, false),
+    trackerName: state.name,
+    ...(state.color === undefined ? {} : { trackerColor: state.color }),
+  }));
 }
 
 /** Whether a status differs from its default, so « Reset » gives something back. Never for one the team added. */

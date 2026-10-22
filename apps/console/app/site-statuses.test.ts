@@ -74,6 +74,26 @@ describe('the statuses of a site, as the screen holds them (FRU-371)', () => {
     );
   });
 
+  it('draws the states of a Linear team, in its order, with its names and colours, and a row in place of its state (FRU-368)', () => {
+    const states = [
+      { id: 'b1', name: 'Backlog', type: 'backlog', stage: 'new' as const, color: '#bec2c8' },
+      { id: 'd1', name: 'Done', type: 'completed', stage: 'done' as const },
+    ];
+    const listed = statusesOf('linear', 'l1', [row({ source: 'l1', key: 'd1', stage: 'closed', position: 1 })], states);
+
+    assert.deepEqual(
+      listed.map((each) => [each.key, each.stage, each.trackerName, each.trackerColor, each.kept]),
+      [
+        ['b1', 'new', 'Backlog', '#bec2c8', false],
+        ['d1', 'closed', 'Done', undefined, true],
+      ],
+    );
+    // Re-staged: « Reset » gives back the stage Linear's type gives it. A state of Linear is never deleted here.
+    assert.equal(isChanged(listed[1]!), true);
+    assert.equal(isDeletable(listed[1]!), false);
+    assert.equal(isChanged(listed[0]!), false);
+  });
+
   it('says « Reset » for a default that changed, « Delete » for a status the team added, and never both', () => {
     const listed = statusesOf('own', OWN, [
       row({ source: OWN, key: 'waiting', stage: 'todo', origin: 'team', position: 5, color: '#7dd3fc' }),

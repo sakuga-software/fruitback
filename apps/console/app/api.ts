@@ -108,8 +108,6 @@ export const STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 export type Stage = (typeof STAGES)[number];
 /** What a workspace sets on a tracker (FRU-102): the replies, and the stages some states take. */
 export type ConnectorSettings = { showComments: boolean; stages: Record<string, Stage> };
-/** A state of a team of the tracker, with the stage of its type. */
-export type TrackerState = { id: string; name: string; type: string; teamId: string; team: string; stage: Stage };
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
 export type Delivery = {
   id: string;

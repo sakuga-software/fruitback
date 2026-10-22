@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type Connector,
   type ConnectorSettings,
   type Destination,
   MAX_DESTINATIONS,
-  STAGES,
   type Site,
-  type Stage,
   type Team,
-  type TrackerState,
   UNREACHABLE,
   call,
   placesOf,
@@ -17,8 +14,8 @@ import {
 } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
-import { type Listed, known, listedOf } from '../listed';
-import { Button, Chip, Choice, LinkButton, Problem, SidePanel, StatusDot, Toggle } from '../ui';
+import { known } from '../listed';
+import { Chip, Choice, LinkButton, Problem, SidePanel, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import {
@@ -27,12 +24,12 @@ import {
   KINDS,
   OAUTH_LABEL,
   type PanelProps,
-  STAGE_NAMES,
   SitesState,
   moment,
   personOf,
   sourceLine,
 } from './connector-parts';
+import { useWorkspace } from './workspace';
 
 /** The value of the list « Add a destination… » before a place is chosen. */
 const NONE = 'fruitback';
@@ -54,40 +51,30 @@ const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> =
 };
 
 /**
- * What the workspace sets on a Linear (FRU-102): which status each state gives a pin, and whether
- * the replies come back. Only the exceptions are kept, by the id of the state: a state set back to
- * the stage of its type is no exception any more.
+ * What the workspace sets on a Linear (FRU-102): whether the replies come back. The stage and the colour
+ * of each state are set per site since FRU-368, on the statuses page of the site: this block links
+ * there for each site that sends here. The exceptions the workspace set before stay, and a site that
+ * sets no stage of its own still takes them.
  */
-function Settings({ base, connector }: { base: string; connector: Connector & { settings: ConnectorSettings } }) {
+function Settings({
+  base,
+  connector,
+  senders,
+}: {
+  base: string;
+  connector: Connector & { settings: ConnectorSettings };
+  senders: readonly Site[];
+}) {
   useLocale();
+  const { workspace } = useWorkspace();
   const [settings, setSettings] = useState<ConnectorSettings>(connector.settings);
-  // No list is not an empty list (FRU-162): a read that failed says so, and is asked again.
-  const [states, setStates] = useState<Listed<TrackerState>>('loading');
   const [problem, setProblem] = useState<string | undefined>();
   // What the worker keeps, and the writes in flight, one after the other: a later change starts from
   // the earlier one, and the answers cannot land out of order.
   const kept = useRef<ConnectorSettings>(connector.settings);
-  const chosen = useRef(false);
   const writes = useRef<Promise<void>>(Promise.resolve());
 
-  const read = useCallback(() => {
-    setStates('loading');
-    void call<{ states: TrackerState[]; settings: ConnectorSettings }>(
-      'GET',
-      `${base}/connectors/${connector.id}/states`,
-    ).then((answer) => {
-      setStates(listedOf(answer, (data) => data.states));
-      // A choice made while the states were read wins: its write is in flight, or done.
-      if (!answer.ok || chosen.current) return;
-      kept.current = answer.data.settings;
-      setSettings(answer.data.settings);
-    });
-  }, [base, connector.id]);
-
-  useEffect(() => read(), [read]);
-
   function save(change: (current: ConnectorSettings) => ConnectorSettings) {
-    chosen.current = true;
     setProblem(undefined);
     setSettings((current) => change(current));
     writes.current = writes.current.then(async () => {
@@ -108,78 +95,26 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
     });
   }
 
-  function stageOf(state: TrackerState, stage: Stage) {
-    save((current) => {
-      const { [state.id]: _was, ...others } = current.stages;
-
-      return { ...current, stages: stage === state.stage ? others : { ...others, [state.id]: stage } };
-    });
-  }
-
-  // A row is a state of Linear, an arrow, and the status it gives. The drop is a picture: the list
-  // says the status in words. The mockup draws the drop inside the list, which the list of the kit
-  // cannot do yet: it is beside it, and its column is a little wider than the one of the state.
-  const rows = known(states) ?? [];
-  const teams = new Set(rows.map((state) => state.teamId)).size;
-
   return (
     <>
       <section>
         <BlockTitle>{t('Status of the pins')}</BlockTitle>
-        <p className="mt-[2px] mb-[10px] text-hint text-muted">{t('Which Linear state gives each pin its status.')}</p>
-        {states === 'failed' ? (
-          <div className="flex flex-wrap items-center gap-[12px]">
-            <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-              {t('Fruitback could not read the states of Linear. The statuses you set are not lost.')}
-            </p>
-            <Button tone="outline" onClick={read}>
-              {t('Try again')}
-            </Button>
-          </div>
-        ) : null}
-        {known(states)?.length === 0 ? (
-          <p className="text-small text-muted">{t('The states appear here once a site sends its notes to a team.')}</p>
-        ) : null}
-        <ul className="flex flex-col gap-[8px] text-small" data-states>
-          {rows.map((state) => {
-            const name = teams > 1 ? `${state.team} · ${state.name}` : state.name;
-            const stage = settings.stages[state.id] ?? state.stage;
-
-            return (
-              <li
-                key={state.id}
-                className="grid grid-cols-[minmax(0,0.85fr)_16px_minmax(0,1.15fr)] items-center gap-[8px]"
-              >
-                <span className="truncate rounded-field border border-line bg-surface px-[12px] py-[9px] leading-auto">
-                  {name}
-                </span>
-                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-[14px] w-[14px] text-muted">
-                  <path
-                    d="M3 8h9M9 5l3 3-3 3"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="flex min-w-0 items-center gap-[8px]">
-                  <StatusDot status={stage} />
-                  <span className="min-w-0 flex-1">
-                    <Choice
-                      compact
-                      labelHidden
-                      label={t('Status for {state}', { state: name })}
-                      value={stage}
-                      onChange={(value) => stageOf(state, value as Stage)}
-                      options={STAGES.map((each) => ({ value: each, label: t(STAGE_NAMES[each]) }))}
-                    />
-                  </span>
-                </span>
+        <p className="mt-[2px] mb-[10px] text-hint text-muted">
+          {t('The stage and the colour of each state of Linear are set for each site, on its statuses page.')}
+        </p>
+        {senders.length === 0 ? (
+          <p className="text-small text-muted">{t('No site sends its notes here yet.')}</p>
+        ) : (
+          <ul className="flex flex-col gap-[4px] text-small">
+            {senders.map((site) => (
+              <li key={site.id}>
+                <LinkButton to={`/w/${workspace.id}/sites/${site.id}/statuses`}>
+                  {t('Statuses of {site}', { site: siteLabel(site.origin) })}
+                </LinkButton>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="flex flex-col gap-[12px]">
         <Toggle
@@ -406,7 +341,12 @@ export function LinearPanel({ id, base, connector, sites, manages, onChanged, on
         )}
       </section>
       {manages && connector.settings !== undefined ? (
-        <Settings key={connector.id} base={base} connector={{ ...connector, settings: connector.settings }} />
+        <Settings
+          key={connector.id}
+          base={base}
+          connector={{ ...connector, settings: connector.settings }}
+          senders={senders}
+        />
       ) : null}
     </SidePanel>
   );
