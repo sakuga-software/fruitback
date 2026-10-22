@@ -653,6 +653,7 @@ type Fixtures = Instance & {
   linear: string;
   delivery: string;
   note: string;
+  kept: string;
 };
 
 async function fixtures(on: Instance): Promise<Fixtures> {
@@ -696,6 +697,7 @@ async function fixtures(on: Instance): Promise<Fixtures> {
     linear,
     delivery,
     note: noteIdOf(on.site.id, 'sd_late'),
+    kept: noteIdOf(on.site.id, 'sd_kept'),
   };
 }
 
@@ -748,6 +750,13 @@ const CONSOLE_WRITES: readonly Write[] = [
   { method: 'DELETE', rest: (fx) => `/connectors/${fx.spareConnector}`, status: 204 },
   { method: 'POST', rest: () => '/connect', body: () => ({}), status: 201 },
   { method: 'POST', rest: (fx) => `/notes/${fx.note}/retry`, status: 204 },
+  // FRU-384: the status of a note the worker keeps, chosen in the console.
+  {
+    method: 'POST',
+    rest: (fx) => `/notes/${fx.kept}/status`,
+    body: () => ({ status: `own:${DEFAULT_SEED_STAGE}` }),
+    status: 200,
+  },
   // A path that no route serves: the guard answers before the routes.
   { method: 'POST', rest: () => '/a-route-of-later', body: () => ({}), status: 404 },
 ];
@@ -788,6 +797,8 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       'deliveries',
       'site_destinations',
       'statuses',
+      'seeds',
+      'note_index',
       'pairings',
       'organization',
     ];

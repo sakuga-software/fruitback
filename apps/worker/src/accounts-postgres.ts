@@ -56,9 +56,9 @@ import {
   statuses,
   workspace_suspensions,
 } from './postgres-schema.ts';
-import { MAX_STATUSES } from '@fruitback/shared';
+import { MAX_STATUSES, type SeedStage } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import { identifierFor } from './seed-rows.ts';
+import { identifierFor, isSameSeed, keptRowOf } from './seed-rows.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -893,6 +893,61 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         await db.delete(statuses).where(which);
 
         return { removed: true as const, moved, pages };
+      });
+    },
+
+    async setNoteStatus(workspace, site, seed, key, who) {
+      return transaction(async (db) => {
+        const refused = <R extends string>(reason: R) => ({ set: false as const, reason });
+        // The site, for update: the same lock as a status added, moved or removed (FRU-366), so the
+        // status read below is the one written.
+        if (!(await siteHeld(db, workspace, site))) return refused('not-found');
+        const [note] = await db
+          .select({
+            place: note_index.place,
+            connectorKind: connectors.kind,
+            reference: note_index.reference,
+            author: note_index.author_account_id,
+          })
+          .from(note_index)
+          .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.seed_id, seed)),
+          );
+        if (note === undefined) return refused('not-found');
+        // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
+        if (!who.manages && (note.author === null || note.author !== who.account)) return refused('not-allowed');
+        // In Fruitback, or sent on to an address: the worker keeps it, as `FB-<id>` (FRU-237).
+        const id = keptRowOf(note.place, note.connectorKind, note.reference);
+        if (id === undefined) return refused('not-kept');
+        // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
+        const [kept] = await db
+          .select({ seed: seeds.seed })
+          .from(seeds)
+          .where(and(eq(seeds.id, id), eq(seeds.client_id, site)));
+        if (kept === undefined || !isSameSeed(kept.seed, seed)) return refused('not-kept');
+
+        const [row] = await db
+          .select({ stage: statuses.stage, hidden: statuses.hidden })
+          .from(statuses)
+          .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, key)));
+        if (row?.hidden === true) return refused('status-hidden');
+        // A built-in status writes no key: a note with none is in the built-in status of its stage.
+        let chosen: { key: string | null; stage: SeedStage };
+        if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as SeedStage };
+        else if (row !== undefined) chosen = { key, stage: row.stage as SeedStage };
+        else return refused('unknown-status');
+
+        const now = Date.now();
+        const [written] = await db
+          .update(seeds)
+          .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
+          .where(and(eq(seeds.id, id), eq(seeds.client_id, site)))
+          .returning({ page: seeds.page_url });
+        if (written === undefined) return refused('not-kept');
+        await restageIndex(db, site, [id], chosen.stage, now);
+
+        return { set: true as const, stage: chosen.stage, page: written.page };
       });
     },
 

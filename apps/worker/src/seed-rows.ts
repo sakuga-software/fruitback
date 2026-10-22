@@ -52,6 +52,33 @@ export function rowOfIdentifier(identifier: string): number | undefined {
 }
 
 /**
+ * The row of `seeds` that a note of the index names, when the worker's store keeps it (FRU-384): in
+ * Fruitback, or sent on to an address (a `rest` connector), whose notes the worker keeps too and
+ * whose reference is `FB-<id>` (heavy review of #505). A note of a tracker, or of a connector removed
+ * since, is the tracker's. The row is only where to look: `isSameSeed` says whether it is this note.
+ */
+export function keptRowOf(
+  place: string,
+  connectorKind: string | null | undefined,
+  reference: string | null,
+): number | undefined {
+  const kept = place === 'fruitback' || connectorKind === 'rest';
+
+  return kept && reference !== null ? rowOfIdentifier(reference) : undefined;
+}
+
+/** Whether the `seed` column of a row is the note the widget named `seed`: its id is in the JSON. */
+export function isSameSeed(column: string, seed: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(column);
+
+    return typeof parsed === 'object' && parsed !== null && (parsed as { id?: unknown }).id === seed;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The states are ours, so there is nothing to project.
  *
  * Linear needs `stageForLinearState` because its vocabulary is its own and the contract's is the

@@ -16,7 +16,8 @@ import {
 } from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { connectors, deliveries, note_index, sites } from './postgres-schema.ts';
+import { connectors, deliveries, note_index, seeds, sites } from './postgres-schema.ts';
+import { isSameSeed, keptRowOf } from './seed-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
 /** The index of the notes in the database of the worker (FRU-237). See `notes-index.ts`. */
@@ -304,10 +305,13 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
         const byPlace = new Map(counted.map((row) => [row.key, Number(row.notes)] as const));
         const shown = page.slice(0, query.limit);
+        const kept = await keptOf(db, shown);
         const last = shown.at(-1);
 
         return {
-          notes: shown.map((row) => listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)) })),
+          notes: shown.map((row) =>
+            listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)), kept: kept.get(keyOfSeed(row.row)) }),
+          ),
           total:
             query.place === undefined
               ? [...byPlace.values()].reduce((sum, notes) => sum + notes, 0)
@@ -351,6 +355,47 @@ type Pending = {
   lastStatus: number | null;
   key: [string, string, string];
 };
+
+/** A note of a page, by its site and the id the widget gave it. */
+function keyOfSeed(row: typeof note_index.$inferSelect): string {
+  return JSON.stringify([row.site_id, row.seed_id]);
+}
+
+/**
+ * The status of each note of a page that the worker keeps (FRU-384), as `seeds` holds it now: one
+ * statement for the page. A note in Fruitback, or sent on to an address, is `FB-<id>` in the index
+ * (`keptRowOf`); its row must be of the same site and hold the same note, since a tracker can name an
+ * issue `FB-12` too.
+ */
+async function keptOf(
+  db: Db,
+  rows: readonly { row: typeof note_index.$inferSelect; connector: { kind: string } | null }[],
+): Promise<Map<string, { statusKey: string | null; stage: string }>> {
+  const owned = rows.flatMap(({ row, connector }) => {
+    const id = keptRowOf(row.place, connector?.kind, row.reference);
+
+    return id === undefined ? [] : [{ id, row }];
+  });
+  if (owned.length === 0) return new Map();
+  const found = await db
+    .select({ id: seeds.id, site: seeds.client_id, seed: seeds.seed, statusKey: seeds.status_key, stage: seeds.stage })
+    .from(seeds)
+    .where(
+      inArray(
+        seeds.id,
+        owned.map(({ id }) => id),
+      ),
+    );
+  const kept = new Map<string, { statusKey: string | null; stage: string }>();
+  for (const { id, row } of owned) {
+    const seed = found.find(
+      (one) => Number(one.id) === id && one.site === row.site_id && isSameSeed(one.seed, row.seed_id),
+    );
+    if (seed !== undefined) kept.set(keyOfSeed(row), { statusKey: seed.statusKey, stage: seed.stage });
+  }
+
+  return kept;
+}
 
 /** The key that ties a note to its delivery: its connector, its site, its reference. */
 function keyOfNote(row: typeof note_index.$inferSelect): string {
@@ -456,9 +501,10 @@ type PageRow = {
   memberName: string | null;
   memberRole: string | null;
   delivery: Pending | undefined;
+  kept: { statusKey: string | null; stage: string } | undefined;
 };
 
-function listedOf({ row, connector, memberName, memberRole, delivery }: PageRow): ListedNote {
+function listedOf({ row, connector, memberName, memberRole, delivery, kept }: PageRow): ListedNote {
   return {
     site: row.site_id,
     seed: row.seed_id,
@@ -489,6 +535,7 @@ function listedOf({ row, connector, memberName, memberRole, delivery }: PageRow)
             ...(delivery.lastStatus === null ? {} : { lastStatus: Number(delivery.lastStatus) }),
           },
         }),
+    ...(kept === undefined ? {} : { kept }),
   };
 }
 
