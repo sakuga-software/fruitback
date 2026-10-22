@@ -66,6 +66,18 @@ export const GITHUB_STATES: readonly { key: string; stage: Stage }[] = [
   { key: 'closed:duplicate', stage: 'closed' },
 ];
 
+/**
+ * The list a destination of a site shows its statuses in (FRU-369, heavy review of pull request 495):
+ * one per team of Linear, whose states are the team's, and one per connector of GitHub, whose four
+ * states are the same for every repository. The repository is the `teamId` of a destination of
+ * GitHub, so a site that sends to two of them would show the same list twice.
+ */
+export function listOf(kind: string, connector: string, teamId: string | undefined): { key: string; teamId?: string } {
+  const team = kind === 'linear' ? teamId : undefined;
+
+  return { key: `${connector}:${team ?? ''}`, ...(team === undefined ? {} : { teamId: team }) };
+}
+
 /** What a source of statuses is: the worker's store, a GitHub connector, or a Linear one. */
 export type ListKind = 'own' | 'github' | 'linear';
 

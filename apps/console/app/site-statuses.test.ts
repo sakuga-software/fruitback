@@ -7,6 +7,7 @@ import {
   isChanged,
   isDeletable,
   keyFor,
+  listOf,
   moved,
   ratioOf,
   reads,
@@ -167,5 +168,16 @@ describe('the statuses of a site, as the screen holds them (FRU-371)', () => {
     assert.equal(reads(ratioOf('#0ea5e9', '#ffffff')), false);
     assert.equal(reads(ratioOf('#0ea5e9', '#18181b')), true);
     assert.equal(reads(ratioOf(undefined, '#18181b')), false);
+  });
+});
+
+describe('the list a destination shows its statuses in (FRU-369)', () => {
+  it('is one per team of Linear, and one per connector of GitHub, whatever its repository', () => {
+    assert.deepEqual(listOf('linear', 'con_l', 'team_web'), { key: 'con_l:team_web', teamId: 'team_web' });
+    assert.notEqual(listOf('linear', 'con_l', 'team_web').key, listOf('linear', 'con_l', 'team_design').key);
+    // Two repositories of one connector: the same four states, one list.
+    assert.deepEqual(listOf('github', 'con_g', 'acme/site'), { key: 'con_g:' });
+    assert.equal(listOf('github', 'con_g', 'acme/site').key, listOf('github', 'con_g', 'acme/docs').key);
+    assert.notEqual(listOf('github', 'con_g', 'acme/site').key, listOf('github', 'con_h', 'acme/site').key);
   });
 });
