@@ -65,6 +65,8 @@ export const ENGLISH = {
   'composer.attachDrop': 'Drag and drop',
   'composer.attachDropHere': 'Drop your files here',
   'composer.attachDropChoose': 'Choose a file',
+  // `{keys}`: « ⌘V » on a Mac, « Ctrl+V » elsewhere (FRU-424).
+  'composer.attachPaste': 'Paste a screenshot ({keys})',
   // Said in place of the four ways, when the note stays in Fruitback (`canAttach: false`).
   'composer.attachNoTracker': 'This note stays in Fruitback, with no tracker: it takes no file.',
   'composer.attachRemove': 'Remove {name}',

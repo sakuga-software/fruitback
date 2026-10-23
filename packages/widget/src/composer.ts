@@ -332,6 +332,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const dropZone = root.querySelector('[data-fruitback-attach-dropzone]') as HTMLElement;
   const dropWords = root.querySelector('[data-fruitback-attach-dropzone-words]') as HTMLElement;
   const dropChoose = root.querySelector('[data-fruitback-attach-dropzone-choose]') as HTMLButtonElement;
+  const dropPaste = root.querySelector('[data-fruitback-attach-dropzone-paste]') as HTMLElement;
   const fileInput = root.querySelector('[data-fruitback-attach-file-input]') as HTMLInputElement;
   const attachNone = root.querySelector('[data-fruitback-attach-none]') as HTMLElement;
   const attachList = root.querySelector('[data-fruitback-attach-list]') as HTMLElement;
@@ -372,6 +373,7 @@ export function createComposer(options: ComposerOptions): Composer {
   attachDrop.textContent = t.text('composer.attachDrop');
   dropWords.textContent = t.text('composer.attachDropHere');
   dropChoose.textContent = t.text('composer.attachDropChoose');
+  dropPaste.textContent = t.text('composer.attachPaste', { keys: pasteKeys(document) });
   attachNone.textContent = t.text('composer.attachNoTracker');
 
   /** Whether « Keep for later » is offered at this open. A note with files is sent, never kept. */
@@ -983,6 +985,14 @@ export function createComposer(options: ComposerOptions): Composer {
     dropZone.hidden = true;
     void joinFiles(files, session).then(() => attachTrigger.focus());
   });
+  // A screenshot pasted anywhere in the composer joins the note (FRU-424), as a file chosen does.
+  root.addEventListener('paste', (event) => {
+    const images = pastedImages((event as ClipboardEvent).clipboardData);
+    if (images.length === 0) return;
+    if (seam?.offer(selected) !== 'offered' || attachTrigger.disabled) return;
+    event.preventDefault();
+    void joinFiles(images, session);
+  });
   attachTrigger.addEventListener('click', () => {
     if (attachMenu.hidden) openAttachMenu('first');
     else closeAttachMenu(true);
@@ -1361,6 +1371,7 @@ const TEMPLATE: readonly Markup[] = [
                 'button',
                 { type: 'button', 'data-fruitback-attach-dropzone-choose': '', class: 'fruitback-composer-attach-way' },
               ],
+              ['p', { 'data-fruitback-attach-dropzone-paste': '', class: 'fruitback-composer-dropzone-paste' }],
             ],
           ],
           ['p', { 'data-fruitback-attach-none': '', class: 'fruitback-composer-attach-none', hidden: '' }],
@@ -1664,6 +1675,7 @@ const STYLES = `
 .fruitback-composer-dropzone:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-composer-dropzone[data-fruitback-dragging] { border-color: var(--fruitback-color-accent); }
 .fruitback-composer-dropzone-words { margin: 0; font-size: 13px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-dropzone-paste { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-files { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .fruitback-composer-file {
   display: flex;
@@ -1893,3 +1905,21 @@ const STYLES = `
   .fruitback-composer, .fruitback-composer[data-fruitback-side="below"] { animation: none; }
 }
 `;
+
+/**
+ * The images of a paste (FRU-424): a screenshot of the system (⌘⇧4, Win+⇧+S), then ⌘V or Ctrl+V.
+ * A paste that carries text is a paste of text, even with an image beside it: Word and Pages put a
+ * picture of the copied words on the clipboard too, and the person meant the words.
+ */
+export function pastedImages(data: DataTransfer | null): File[] {
+  if (data === null || [...data.types].includes('text/plain')) return [];
+
+  return [...data.files].filter((file) => file.type.startsWith('image/'));
+}
+
+/** The keys that paste, as the person reads them on their system. */
+function pasteKeys(document: Document): string {
+  const agent = document.defaultView?.navigator.userAgent ?? '';
+
+  return /Mac|iPhone|iPad/.test(agent) ? '⌘V' : 'Ctrl+V';
+}
