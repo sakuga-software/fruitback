@@ -71,9 +71,9 @@ export const ATTACHMENT_NAME_LENGTH = 120;
  * `url` is the address that the tracker gave the file: it opens there, with an account of the
  * tracker. Fruitback serves no file. Part of the read envelope: `SEED_VERSION` does not move.
  */
-export const seedAttachmentSchema = z.object({
+export const noteAttachmentSchema = z.object({
   name: z.string().min(1),
   url: z.string().min(1).optional(),
 });
 
-export type SeedAttachment = z.infer<typeof seedAttachmentSchema>;
+export type NoteAttachment = z.infer<typeof noteAttachmentSchema>;

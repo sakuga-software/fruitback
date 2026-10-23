@@ -26,6 +26,12 @@ first publish made it expensive.
 - **A read says `identified: true` to a reader whose token the worker verified** (FRU-112), and
   leaves the field out for everybody else. Only `true` is the word of the worker. It says that a note
   of this reader would be signed by the worker, never who the reader is. A read-envelope field too.
+- **A note was a « seed » until FRU-378, and a reader takes both kinds for good.** `parseNote`
+  reads `fruitback.seed` up to `SEED_VERSION` (2), which every issue already in a tracker holds, and
+  `fruitback.note` at `NOTE_VERSION` (3), whose words are in `text` rather than `note`; it answers
+  both in the shape of version 2. The writers still write `fruitback.seed`: they move once every
+  reader takes the new kind. The names of before (`Seed`, `parseSeed`, `seed.fixture`…) are aliases
+  in `deprecated.ts`, which FRU-446 removes.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `SEED_VERSION` does not move.

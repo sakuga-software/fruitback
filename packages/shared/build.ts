@@ -3,7 +3,7 @@ import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 /**
- * The seed contract, compiled (FRU-16).
+ * The note contract, compiled (FRU-16).
  *
  * This package was internal for a long time, and `main` pointed straight at `src/index.ts` — which
  * works everywhere in this repo and nowhere outside it. The sources import each other with the `.ts`
@@ -18,7 +18,7 @@ await rm(OUT, { recursive: true, force: true });
 await promisify(execFile)(process.execPath, ['../../node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json']);
 
 /**
- * `./seed.ts` becomes `./seed.js` in the **declarations**.
+ * `./note.ts` becomes `./note.js` in the **declarations**.
  *
  * `rewriteRelativeImportExtensions` in the tsconfig handles the emitted JavaScript and stops there —
  * declarations keep the source's extension, where `dist` has no `.ts` to find. Measured, not

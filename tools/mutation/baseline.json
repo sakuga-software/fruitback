@@ -6,7 +6,7 @@
         "score": 100,
         "mutants": 175
       },
-      "src/seed.ts": {
+      "src/note.ts": {
         "score": 100,
         "mutants": 149
       },
@@ -21,6 +21,10 @@
       "src/contrast.ts": {
         "score": 93.33,
         "mutants": 30
+      },
+      "src/deprecated.ts": {
+        "score": 100,
+        "mutants": 6
       }
     }
   },

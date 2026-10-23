@@ -9,10 +9,10 @@ import {
   MAX_ATTACHMENT_BYTES_PER_NOTE,
   OPAQUE_TYPE,
   attachmentKindOf,
-  seedAttachmentSchema,
+  noteAttachmentSchema,
 } from './attachments.ts';
-import { seedIssueSchema } from './issue.ts';
-import { seedFixture } from './seed.fixture.ts';
+import { noteIssueSchema } from './issue.ts';
+import { noteFixture } from './note.fixture.ts';
 
 describe('the files of a note (FRU-331)', () => {
   it('reads the kind of a type, whatever its case and its parameters', () => {
@@ -51,13 +51,13 @@ describe('the files of a note (FRU-331)', () => {
   });
 
   it('reads the files of an issue as a name and the address of the tracker, and nothing else', () => {
-    assert.deepEqual(seedAttachmentSchema.parse({ name: 'a.png', url: 'https://t.test/a' }), {
+    assert.deepEqual(noteAttachmentSchema.parse({ name: 'a.png', url: 'https://t.test/a' }), {
       name: 'a.png',
       url: 'https://t.test/a',
     });
-    assert.deepEqual(seedAttachmentSchema.parse({ name: 'a.png' }), { name: 'a.png' });
-    assert.equal(seedAttachmentSchema.safeParse({ name: '' }).success, false);
-    assert.equal(seedAttachmentSchema.safeParse({ name: 'a.png', url: '' }).success, false);
+    assert.deepEqual(noteAttachmentSchema.parse({ name: 'a.png' }), { name: 'a.png' });
+    assert.equal(noteAttachmentSchema.safeParse({ name: '' }).success, false);
+    assert.equal(noteAttachmentSchema.safeParse({ name: 'a.png', url: '' }).success, false);
 
     const issue = {
       id: 'i',
@@ -67,10 +67,10 @@ describe('the files of a note (FRU-331)', () => {
       stateName: '',
       updatedAt: '',
       attachments: [{ name: 'a.png' }],
-      seed: seedFixture(),
+      seed: noteFixture(),
     };
-    assert.deepEqual(seedIssueSchema.parse(issue).attachments, [{ name: 'a.png' }]);
+    assert.deepEqual(noteIssueSchema.parse(issue).attachments, [{ name: 'a.png' }]);
     const { attachments: _none, ...without } = issue;
-    assert.equal('attachments' in seedIssueSchema.parse(without), false, 'absent stays absent');
+    assert.equal('attachments' in noteIssueSchema.parse(without), false, 'absent stays absent');
   });
 });

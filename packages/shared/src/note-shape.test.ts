@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
-import { SEED_VERSION, seedSchema } from './seed.ts';
+import { SEED_VERSION, noteSchema } from './note.ts';
 
 /**
  * The shape of the payload, written down beside the version it belongs to.
  *
  * The rule is « bump `SEED_VERSION` when the payload shape changes ». Nothing held it: a field added
- * to `seedSchema` passed every test, and a reader of the version before then met a payload it could
+ * to `noteSchema` passed every test, and a reader of the version before then met a payload it could
  * not tell from its own. This test cannot decide for somebody whether a change needs a new version.
  * It makes the change impossible to miss: the shape is recorded here, so a change to the schema
  * fails until somebody edits this file, and the message says what to decide.
  *
- * The shape is read from the schema, never from a seed: a fixture holds the fields its writer
+ * The shape is read from the schema, never from a note: a fixture holds the fields its writer
  * thought of.
  */
 
@@ -85,8 +85,8 @@ export function shapeOf(schema: JsonSchema, path = ''): string[] {
   return [`${path}: ${schema.type ?? 'unknown'}`];
 }
 
-describe('the shape of a seed, beside its version', () => {
-  const shape = shapeOf(z.toJSONSchema(seedSchema) as JsonSchema);
+describe('the shape of a note, beside its version', () => {
+  const shape = shapeOf(z.toJSONSchema(noteSchema) as JsonSchema);
 
   it('is the shape recorded for this version', () => {
     assert.deepEqual(

@@ -1,5 +1,5 @@
-import { type Seed, seedSchema } from './seed.ts';
-import { seedAttachmentSchema } from './attachments.ts';
+import { type Note, noteSchema } from './note.ts';
+import { noteAttachmentSchema } from './attachments.ts';
 import { z } from 'zod';
 
 /**
@@ -18,8 +18,8 @@ export function clientLabelName(clientId: string): string {
 }
 
 /** Labels to apply when creating the issue (M3 / FRU-8). */
-export function buildIssueLabels(seed: Seed): string[] {
-  return seed.client ? [FRUITBACK_LABEL, clientLabelName(seed.client.id)] : [FRUITBACK_LABEL];
+export function buildIssueLabels(note: Note): string[] {
+  return note.client ? [FRUITBACK_LABEL, clientLabelName(note.client.id)] : [FRUITBACK_LABEL];
 }
 
 /**
@@ -30,8 +30,8 @@ export function buildIssueLabels(seed: Seed): string[] {
  * A provider's states named here make every consumer of this package depend on that provider
  * (FRU-23).
  */
-export const SEED_STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
-export type SeedStage = (typeof SEED_STAGES)[number];
+export const NOTE_STAGES = ['new', 'todo', 'progress', 'done', 'closed'] as const;
+export type NoteStage = (typeof NOTE_STAGES)[number];
 
 /**
  * What a connector reports for a state it does not recognise.
@@ -40,24 +40,24 @@ export type SeedStage = (typeof SEED_STAGES)[number];
  * one, and the pin must still be drawn. Drop it and a note disappears from the page because someone
  * added a workflow column.
  */
-export const DEFAULT_SEED_STAGE: SeedStage = 'new';
+export const DEFAULT_NOTE_STAGE: NoteStage = 'new';
 
 /**
  * The stages a store can report, read from the `stages` field of the read envelope (FRU-32).
  *
- * A store can report only some of `SEED_STAGES`. GitHub has two issue states, not five state types.
+ * A store can report only some of `NOTE_STAGES`. GitHub has two issue states, not five state types.
  * The settings panel offers a filter only for the stages in this list.
  *
- * Tolerant, like `parseSeed*`. If the value is absent, malformed or empty, the result is every stage:
+ * Tolerant, like `parseNote*`. If the value is absent, malformed or empty, the result is every stage:
  * a worker from before FRU-32 sends no field, and its panel must not change. The result keeps the
- * order of `SEED_STAGES`.
+ * order of `NOTE_STAGES`.
  */
-export function offeredStages(value: unknown): SeedStage[] {
-  if (!Array.isArray(value)) return [...SEED_STAGES];
+export function offeredStages(value: unknown): NoteStage[] {
+  if (!Array.isArray(value)) return [...NOTE_STAGES];
 
-  const offered = SEED_STAGES.filter((stage) => value.includes(stage));
+  const offered = NOTE_STAGES.filter((stage) => value.includes(stage));
 
-  return offered.length > 0 ? offered : [...SEED_STAGES];
+  return offered.length > 0 ? offered : [...NOTE_STAGES];
 }
 
 /**
@@ -81,20 +81,20 @@ const statusKeySchema = z.string().min(1).max(200);
  * value. A status always belongs to one of the five stages. The stage keeps the lifecycle — the
  * filters, the counts, the fallback — and an old widget reads nothing else.
  */
-export const seedStatusSchema = z.object({
+export const noteStatusSchema = z.object({
   key: statusKeySchema,
   /** What the team or the tracker calls it. Empty means the word of the widget for the stage. */
   name: z.string().max(200),
-  stage: z.enum(SEED_STAGES),
+  stage: z.enum(NOTE_STAGES),
   /** Absent means the colour of the stage, which a host can still set. */
   color: z.string().regex(STATUS_COLOR).optional(),
   /** Absent means the foreground of the stage, or one computed from `color`. Only with `color`. */
   textColor: z.string().regex(STATUS_COLOR).optional(),
 });
 
-export type SeedStatus = z.infer<typeof seedStatusSchema>;
+export type NoteStatus = z.infer<typeof noteStatusSchema>;
 
-const statusCoreSchema = seedStatusSchema.pick({ key: true, name: true, stage: true });
+const statusCoreSchema = noteStatusSchema.pick({ key: true, name: true, stage: true });
 
 function isStatusColor(value: unknown): value is string {
   return typeof value === 'string' && STATUS_COLOR.test(value);
@@ -113,11 +113,11 @@ function isStatusColor(value: unknown): value is string {
  *
  * Never throws: the list comes from another process, and a bad entry must not hide a pin.
  */
-export function offeredStatuses(value: unknown): SeedStatus[] {
+export function offeredStatuses(value: unknown): NoteStatus[] {
   if (!Array.isArray(value)) return [];
 
   const seen = new Set<string>();
-  const kept: SeedStatus[] = [];
+  const kept: NoteStatus[] = [];
   for (const entry of value) {
     if (kept.length === MAX_STATUSES) break;
     const core = statusCoreSchema.safeParse(entry);
@@ -143,9 +143,9 @@ export function offeredStatuses(value: unknown): SeedStatus[] {
  * widget draws, so a new widget follows it: two readers of the same answer never disagree on a stage.
  */
 export function statusOf(
-  issue: Pick<SeedIssue, 'stage' | 'status'>,
-  statuses: readonly SeedStatus[],
-): SeedStatus | undefined {
+  issue: Pick<NoteIssue, 'stage' | 'status'>,
+  statuses: readonly NoteStatus[],
+): NoteStatus | undefined {
   // No key is empty, so an issue with no `status` finds nothing.
   const status = statuses.find((candidate) => candidate.key === issue.status);
 
@@ -155,11 +155,11 @@ export function statusOf(
 /**
  * A reply from the team, as the widget shows it (FRU-13).
  *
- * Part of the read envelope, not of the seed. Comments live in whichever store answers — Linear, and
+ * Part of the read envelope, not of the note. Comments live in whichever store answers — Linear, and
  * `seeds-postgres.ts` in its own table — and are fetched from it. Nothing here changes the round trip, so
  * `SEED_VERSION` does not move.
  */
-export const seedCommentSchema = z.object({
+export const noteCommentSchema = z.object({
   id: z.string().min(1),
   body: z.string(),
   createdAt: z.string(),
@@ -167,13 +167,13 @@ export const seedCommentSchema = z.object({
   author: z.string().optional(),
 });
 
-export type SeedComment = z.infer<typeof seedCommentSchema>;
+export type NoteComment = z.infer<typeof noteCommentSchema>;
 
 /**
- * What the worker sends back to the widget for one planted seed (M4 / FRU-10). Kept here because
+ * What the worker sends back to the widget for one planted note (M4 / FRU-10). Kept here because
  * both ends validate against it.
  */
-export const seedIssueSchema = z.object({
+export const noteIssueSchema = z.object({
   id: z.string().min(1),
   /** Human handle, e.g. `FRU-2` from Linear, `FB-12` from a store that numbers its own. */
   identifier: z.string().min(1),
@@ -186,7 +186,7 @@ export const seedIssueSchema = z.object({
    */
   url: z.string().min(1).optional(),
   title: z.string(),
-  stage: z.enum(SEED_STAGES),
+  stage: z.enum(NOTE_STAGES),
   stateName: z.string(),
   /**
    * The key of its status in the `statuses` of the same read (FRU-364). Absent: the note is drawn by
@@ -199,7 +199,7 @@ export const seedIssueSchema = z.object({
    * Oldest first, so the thread reads as a conversation. Absent means the worker did not ask for
    * them; empty means it did and there were none — the widget says something different for each.
    */
-  comments: z.array(seedCommentSchema).optional(),
+  comments: z.array(noteCommentSchema).optional(),
   /**
    * Who said that a note marked done looks fixed, and when (FRU-294). Read from its replies, in the
    * store: present only on a `done` note whose newest verdict is « fixed ». Read-envelope field.
@@ -214,8 +214,8 @@ export const seedIssueSchema = z.object({
    * The files of the note, as its tracker keeps them (FRU-331): a name, and the address of the
    * tracker. Absent when the store says nothing of them. Read-envelope field.
    */
-  attachments: z.array(seedAttachmentSchema).optional(),
-  seed: seedSchema,
+  attachments: z.array(noteAttachmentSchema).optional(),
+  seed: noteSchema,
 });
 
-export type SeedIssue = z.infer<typeof seedIssueSchema>;
+export type NoteIssue = z.infer<typeof noteIssueSchema>;
