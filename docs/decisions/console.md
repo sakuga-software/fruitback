@@ -566,6 +566,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup writes 22, 24 or 26 px on the same pill. A switch changes colour in 200 ms everywhere,
   where the mockup does so in the popup only. A disabled switch dims its control and not its words.
   The frame of a table takes focus, so a keyboard scrolls a table wider than its screen.
+  **A head of a table is one line** (FRU-401, `white-space: nowrap` on `.kit-table th`): a column
+  narrower than its head broke « Sur la page avec » on two lines; the table scrolls in its frame
+  instead. `e2e/console-table-heads.spec.ts` counts the lines of each head of Sites in French.
 - **Not measured**: what VoiceOver and NVDA say of the kit; the kit in Firefox and in Safari (the
   spec runs in Chromium).
 
