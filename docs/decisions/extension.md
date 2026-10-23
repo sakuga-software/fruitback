@@ -1961,6 +1961,14 @@ Both were found by asking what else the accepted fix should have touched, before
   `Extensions.triggerAction` of the DevTools protocol on the **tab** target of the site. Chromium
   runs the action of the extension: the popup opens, and the tab gets `activeTab`. There is no
   build of the extension for the bench, no entry point for tests, and no permission added for it.
+- **A Chromium with no `Extensions.triggerAction` gets `<all_urls>` instead, and says so.** The
+  Chromium of Playwright 1.58.2, the one of the image of CI, does not know the method (« wasn't
+  found »); Chromium 156 does. `startBench()` asks the browser first, and when the method is missing
+  it loads a copy that holds `<all_urls>`: `bench.gesture` is then `all-urls`, `grantActiveTab()`
+  does nothing, and every capture is allowed. That proves the capture, the file and the tracker, not
+  the gesture: the spec checks the refusal before the click only when `bench.gesture` is `click`.
+  WARNING: a machine where `chromium-1208` points to a newer Chromium measures the click, and CI
+  does not. Read the annotation `gesture` of the test before you trust a green run for the gesture.
 - **The driver is `e2e/bench.ts`**: `startBench()`, then `openSite()`, `signIn()` (done by
   `startBench` unless `paired: false`), `grantActiveTab()`, `leaveNote({ text, attach })`,
   `trackerReceived()`, `screenshot()`, `close()`. `moreCopies: ['copy']` loads a second copy of the

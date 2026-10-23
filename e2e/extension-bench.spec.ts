@@ -25,18 +25,23 @@ test('the bench sends a note in team mode, with a capture after the click on the
   expect((await readSeeds(site, bench.worker)).status).toBe(401);
   await expect(site.getByRole('button', { name: 'Team feedback' })).toBeVisible();
 
-  // The control: without the click on the icon, the browser refuses the capture.
-  await site.getByRole('button', { name: 'Team feedback' }).click();
-  await site.locator('[data-testid="card-latte"] .add').click();
-  const files = site.getByRole('group', { name: 'Attachments' });
-  await files.getByRole('button', { name: 'Attach' }).click();
-  await files.getByRole('menuitem', { name: 'Capture an area' }).click();
-  await expect(site.getByRole('dialog', { name: 'Choose an area of the page' })).toBeVisible();
-  await site.keyboard.press('Enter');
-  const refused = site.locator('.fruitback-composer-file');
-  await expect(refused).toHaveAttribute('data-fruitback-file', 'refused');
-  await expect(refused).toContainText('The capture was not taken');
-  await site.getByRole('button', { name: 'Cancel', exact: true }).click();
+  test.info().annotations.push({ type: 'gesture', description: bench.gesture });
+  // The control: without the click on the icon, the browser refuses the capture. With `<all_urls>`
+  // (a Chromium with no `Extensions.triggerAction`, the one of CI) no gesture is needed, so there is
+  // nothing to refuse.
+  if (bench.gesture === 'click') {
+    await site.getByRole('button', { name: 'Team feedback' }).click();
+    await site.locator('[data-testid="card-latte"] .add').click();
+    const files = site.getByRole('group', { name: 'Attachments' });
+    await files.getByRole('button', { name: 'Attach' }).click();
+    await files.getByRole('menuitem', { name: 'Capture an area' }).click();
+    await expect(site.getByRole('dialog', { name: 'Choose an area of the page' })).toBeVisible();
+    await site.keyboard.press('Enter');
+    const refused = site.locator('.fruitback-composer-file');
+    await expect(refused).toHaveAttribute('data-fruitback-file', 'refused');
+    await expect(refused).toContainText('The capture was not taken');
+    await site.getByRole('button', { name: 'Cancel', exact: true }).click();
+  }
 
   await bench.grantActiveTab(site);
   const log = { name: 'bench.log', mimeType: 'text/plain', buffer: Buffer.from('une ligne du banc') };

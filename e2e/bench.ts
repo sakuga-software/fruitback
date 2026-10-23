@@ -63,6 +63,12 @@ export type Bench = {
   moreCopies: string[];
   /** The address of the worker of the bench. */
   worker: string;
+  /**
+   * How `grantActiveTab` grants the capture. `click`: the click on the icon, a real `activeTab`.
+   * `all-urls`: this Chromium has no `Extensions.triggerAction`, so the copy holds `<all_urls>` and
+   * every capture is allowed with no gesture. It proves the capture, not the gesture.
+   */
+  gesture: 'click' | 'all-urls';
   /** The site in a new tab, `/?case=<name>&widget=off`, with the dormant widget of a team-mode site. */
   openSite(name?: string): Promise<Page>;
   /** Pairs the extension with the worker, from the popup, as `pnpm ext:bench` does at its start. */
@@ -107,23 +113,39 @@ export async function startBench(options: BenchOptions = {}): Promise<Bench> {
 
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fruitback-bench-'));
     stops.push(async () => fs.rmSync(root, { recursive: true, force: true }));
-    const main = copyWithLocalAccess(path.join(root, 'extension'), [], [worker.origin]);
-    const others = (options.moreCopies ?? []).map((each, index) =>
-      each === 'copy' ? copyWithLocalAccess(path.join(root, `copy-${index + 2}`), [], [worker.origin]) : each,
-    );
-    const directories = [main, ...others];
-    const context = await chromium.launchPersistentContext(path.join(root, 'profile'), {
-      channel: 'chromium',
-      headless: !(options.headed ?? true),
-      // Playwright stops the browser and the process on these signals, before `close` stops the
-      // worker and the playground. The bench stops all of it itself.
-      handleSIGINT: false,
-      handleSIGTERM: false,
-      baseURL: PLAYGROUND_ORIGIN,
-      locale: 'en-US',
-      viewport: { width: 1440, height: 900 },
-      args: [`--disable-extensions-except=${directories.join(',')}`, `--load-extension=${directories.join(',')}`],
-    });
+    const launch = async (gesture: Bench['gesture'], attempt: number) => {
+      const extra = gesture === 'all-urls' ? ['<all_urls>'] : [];
+      const main = copyWithLocalAccess(path.join(root, `extension-${attempt}`), extra, [worker.origin]);
+      const others = (options.moreCopies ?? []).map((each, index) =>
+        each === 'copy'
+          ? copyWithLocalAccess(path.join(root, `copy-${index + 2}-${attempt}`), [], [worker.origin])
+          : each,
+      );
+      const directories = [main, ...others];
+      const context = await chromium.launchPersistentContext(path.join(root, `profile-${attempt}`), {
+        channel: 'chromium',
+        headless: !(options.headed ?? true),
+        // Playwright stops the browser and the process on these signals, before `close` stops the
+        // worker and the playground. The bench stops all of it itself.
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        baseURL: PLAYGROUND_ORIGIN,
+        locale: 'en-US',
+        viewport: { width: 1440, height: 900 },
+        args: [`--disable-extensions-except=${directories.join(',')}`, `--load-extension=${directories.join(',')}`],
+      });
+
+      return { context, directories };
+    };
+    let gesture: Bench['gesture'] = 'click';
+    let { context, directories } = await launch(gesture, 1);
+    // The Chromium of Playwright 1.58.2 (CI) has no `Extensions.triggerAction`; Chromium 156 has it.
+    if (!(await canTriggerAction(context))) {
+      await context.close();
+      gesture = 'all-urls';
+      ({ context, directories } = await launch(gesture, 2));
+      log('this Chromium has no Extensions.triggerAction: the copy holds <all_urls>, and no capture needs a gesture');
+    }
     stops.push(() => context.close());
 
     const [id, ...moreIds] = directories.map(unpackedId);
@@ -144,6 +166,7 @@ export async function startBench(options: BenchOptions = {}): Promise<Bench> {
       extension,
       moreCopies: moreIds,
       worker: worker.origin,
+      gesture,
       async openSite(name) {
         cases += 1;
         const page = await context.newPage();
@@ -162,6 +185,7 @@ export async function startBench(options: BenchOptions = {}): Promise<Bench> {
         await expect(site.getByRole('button', { name: LAUNCHER })).toBeVisible();
       },
       async grantActiveTab(site) {
+        if (gesture === 'all-urls') return;
         await site.bringToFront();
         await triggerAction(context, extension, site);
         // The popup that the click opens takes the focus. The grant stays with the tab.
@@ -244,6 +268,25 @@ async function triggerAction(context: BrowserContext, extension: LoadedExtension
       id: extension.id,
       targetId: (tabs[0] as { targetId: string }).targetId,
     });
+  } finally {
+    await session.detach().catch(() => undefined);
+  }
+}
+
+/** Whether this Chromium knows `Extensions.triggerAction`: a call with an unknown id is refused, not unknown. */
+async function canTriggerAction(context: BrowserContext): Promise<boolean> {
+  const browser = context.browser();
+  if (browser === null) return false;
+  const session = (await browser.newBrowserCDPSession()) as unknown as {
+    send(method: 'Extensions.triggerAction', params: { id: string; targetId: string }): Promise<void>;
+    detach(): Promise<void>;
+  };
+  try {
+    await session.send('Extensions.triggerAction', { id: 'a'.repeat(32), targetId: 'none' });
+
+    return true;
+  } catch (error) {
+    return !String(error).includes("wasn't found");
   } finally {
     await session.detach().catch(() => undefined);
   }
