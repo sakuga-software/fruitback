@@ -94,3 +94,51 @@ describe('the documentation site (FRU-80)', () => {
     assert.deepEqual(unreachable, [], 'these links name no page of this site');
   });
 });
+
+/** The id GitHub Pages gives a heading (kramdown, GFM input): lower case, no punctuation, a dash per space. */
+function headingId(heading: string): string {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replaceAll(/\s/g, '-');
+}
+
+/** The ids of the headings of a guide. */
+function headingIds(guide: string): string[] {
+  const text = readFileSync(new URL(guide, DOCS), 'utf8');
+
+  return [...text.matchAll(/^#{1,6} (.+)$/gm)].map((match) => headingId(match[1] as string));
+}
+
+/** Every link of the landing to a page of the site with a fragment, as `[page.html, fragment]`. */
+function anchoredLinksOfLanding(): [string, string][] {
+  const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+
+  return [...landing.matchAll(/'\/([a-z-]+)\.html#([^']+)' \| relative_url/g)].map((match) => [
+    match[1] as string,
+    match[2] as string,
+  ]);
+}
+
+describe('the landing (FRU-418)', () => {
+  it('leads to the install of the extension', () => {
+    const links = anchoredLinksOfLanding().filter(
+      ([page, fragment]) => page === 'reviewing' && fragment === '1-install-it',
+    );
+
+    // The card « Sites you cannot touch », the question about a site with no script, and the footer.
+    assert.equal(links.length, 3, 'the landing lost a link to « 1. Install it » of the reviewer’s guide');
+  });
+
+  it('names only fragments that are headings of their guide', () => {
+    const links = anchoredLinksOfLanding();
+    assert.ok(links.length > 0, 'no anchored link found — the walk stopped matching');
+
+    assert.deepEqual(
+      links.filter(([page, fragment]) => !headingIds(`${page}.md`).includes(fragment)),
+      [],
+      'these links name a heading their guide does not have',
+    );
+  });
+});
