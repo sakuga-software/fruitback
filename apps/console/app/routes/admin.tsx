@@ -4,7 +4,7 @@ import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
 import { useLocale } from '../use-locale';
-import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen } from './workspace';
+import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen, extensionLink } from './workspace';
 
 /**
  * The frame of the administration of the instance, as screens 17 to 20 of the mockup of 2026-10-13
@@ -100,7 +100,7 @@ function AdminRail({ current, back }: { current: string | undefined; back: strin
   );
 
   return (
-    <RailFrame head={head} foot={{ href: GUIDE, label: t('Self-hosting guide') }}>
+    <RailFrame head={head} foot={[extensionLink(), { href: GUIDE, label: t('Self-hosting guide') }]}>
       <RailNav
         label={t('Instance')}
         entries={[

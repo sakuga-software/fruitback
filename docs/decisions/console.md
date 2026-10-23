@@ -209,6 +209,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **The extension is in no store yet** (FRU-130): « Install the extension (beta) » and « Install it
   in Firefox (beta) » (FRU-318) lead to the page of the documentation that says how to install the
   archive of the release, step by step. « Add to Chrome » comes back the day it is published.
+  **The foot of both rails leads there too** (FRU-406): « Install the extension (beta) », above « Help
+  and docs » and « Self-hosting guide ». Mathieu asked for the links of the stores: no store lists the
+  extension yet (the release of v0.3.0 did not reach them), so the link is the guide until it is.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `http://` when it is local (`localhost`, `*.localhost`,
   `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
