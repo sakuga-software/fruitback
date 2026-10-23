@@ -9,4 +9,4 @@ Each site is bound to its address. The worker refuses a note or a read that name
 of another origin (`403 origin-not-allowed-for-client`), and a page that is on no site
 (`403 origin-not-allowed`). It is not authentication: the id of a site is asserted by the browser, and
 `Origin` is what the browser says about the page. It is the same trust level CORS gives, and strictly
-more than nothing. [SECURITY.md](../../SECURITY.md) says what it stops.
+more than nothing. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md) says what it stops.
