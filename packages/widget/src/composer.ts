@@ -56,13 +56,23 @@ export type SentAs = {
  *   the team of the site can change it.
  * - `signed-out`: the worker wants an identity it did not get (`401`): a session that ended, a token
  *   out of date (FRU-193). The team of the site can do nothing; the reporter signs in again.
+ * - `members-only`: the site takes notes from its members only, and this page sent none of their
+ *   sessions (`401`, FRU-394). There was no session to end: the reporter signs in from the extension.
  * - `too-large`: the note is too heavy (`413`). It goes once it is shorter, or without its picture.
  * - `attachment-gone`: a file of the note is no longer on its way (`410`, FRU-332). It goes once the
  *   file is removed, or sent again.
  * - `no-tracker`: the place of the note takes no file (`409`). It goes without its files, or to
  *   another place.
  */
-export type SendFailure = 'retry' | 'wait' | 'refused' | 'signed-out' | 'too-large' | 'attachment-gone' | 'no-tracker';
+export type SendFailure =
+  | 'retry'
+  | 'wait'
+  | 'refused'
+  | 'signed-out'
+  | 'members-only'
+  | 'too-large'
+  | 'attachment-gone'
+  | 'no-tracker';
 
 export type ComposerOptions = {
   document?: Document;
@@ -1106,6 +1116,7 @@ const FAILURES = {
   wait: 'composer.failedWait',
   refused: 'composer.failedRefused',
   'signed-out': 'composer.failedSignedOut',
+  'members-only': 'composer.failedMembersOnly',
   'too-large': 'composer.failedTooLarge',
   'attachment-gone': 'composer.failedAttachmentGone',
   'no-tracker': 'composer.failedNoTracker',

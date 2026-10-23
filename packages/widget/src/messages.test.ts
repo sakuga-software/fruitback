@@ -18,7 +18,7 @@ import { type AttachRefusal, readableSize } from './attachments.ts';
 import { pickArea } from './area.ts';
 import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
-import { type ReadState, createSidebar } from './sidebar.ts';
+import { type ListState, createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { type ReplyFailure, createOverlay } from './overlay.ts';
@@ -363,7 +363,7 @@ describe('every word the widget shows', () => {
     // The list of every note: with the three notes, then with none.
     const listed = {
       entries: overlay.resolutions().map((each) => ({ issue: each.issue, placement: placementOf(each) })),
-      state: 'read' as ReadState,
+      state: 'read' as ListState,
       drafts: [{ seed: kept.seed }] as Draft[],
     };
     const sidebar = createSidebar({
@@ -394,7 +394,7 @@ describe('every word the widget shows', () => {
     snapshots.push(...shown(host.root));
     // Before a read answered, then after one failed (FRU-153).
     // And while the session of the host has ended (FRU-315).
-    for (const state of ['pending', 'failed', 'signed-out'] as const) {
+    for (const state of ['pending', 'failed', 'signed-out', 'members-only'] as const) {
       listed.state = state;
       sidebar.refresh();
       snapshots.push(...shown(host.root));
@@ -451,7 +451,7 @@ describe('every word the widget shows', () => {
     await settle();
     snapshots.push(...shown(host.root));
     // Each cause of a failed send has its own sentence (FRU-156).
-    for (const failure of ['wait', 'refused', 'signed-out', 'too-large'] as const) {
+    for (const failure of ['wait', 'refused', 'signed-out', 'members-only', 'too-large'] as const) {
       send.click();
       answer(failure);
       await settle();

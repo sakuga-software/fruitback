@@ -1473,6 +1473,28 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   notes are closed. The text waits in its store, and comes back when the site opens again.
   `embed-closed.test.ts` holds each rule; each was planted out and seen red.
 
+## A note or a read refused for want of a member (FRU-394)
+
+### The rules, in short
+
+- **A `401` whose `error` is `identity-required` is « Members only », not « session ended ».** The
+  worker answers it to a page that sent no token, or a token that names nobody of the workspace, on a
+  site whose notes are « Members only » (`attributionFor`, `authorizeRead`). There was no session to
+  end: the composer says « This site is for members only. Your text is kept: sign in to Fruitback
+  from the extension, then send it again. » Any other `401` keeps the words of FRU-193.
+- **The read says it too.** Refused that way, the list and the live region say « This site is for
+  members only. Sign in to Fruitback from the extension to see its notes. », and the list offers no
+  « Try again »: a second read at once is refused the same way. It reads again as a failed read does
+  (every 30 s, and when the network is back), since an admin can open the site meanwhile. Outside the
+  list, `notesState()` says `failed`, the state the side panel of the extension knows.
+- **A `403` keeps its sentence** (« tell the team of the site »): the worker answers a note `403`
+  for the origin of the page or a place that is gone, never for an account. « Your account cannot
+  leave notes here » would say something the worker did not.
+- The text stays in the field in every case. `send-refused.test.ts` sends through `plant`; on `main`
+  of before, its `401` case said « Your session has ended ».
+- Measured on 2026-10-23: the « try again » seen in production was the composer of a 0.1.0 copy of
+  the extension, installed beside the 0.3.0 one (FRU-397). The 0.3.0 already said « session ended ».
+
 ## A session of the host that ended (FRU-315)
 
 ### The rules, in short

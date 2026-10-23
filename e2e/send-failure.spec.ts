@@ -1,5 +1,6 @@
 import { type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
  * What a failed send says (FRU-156).
@@ -10,7 +11,7 @@ import { WORKER_ORIGIN } from './pin.ts';
  */
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
-async function mount(page: Page, testCase: string, locale: string): Promise<void> {
+async function mount(page: Page, testCase: string, locale: string, endpoint = WORKER_ORIGIN): Promise<void> {
   await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
@@ -21,7 +22,7 @@ async function mount(page: Page, testCase: string, locale: string): Promise<void
         clientId: 'playground',
         locale: tag as string,
       }),
-    [WORKER_ORIGIN, locale],
+    [endpoint, locale],
   );
 }
 
@@ -107,3 +108,51 @@ for (const [locale, sentence] of [
     expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
   });
 }
+
+/**
+ * FRU-394, measured in production: a page with no session sent a note to a site whose notes are
+ * « Members only », the worker answered `401`, and the composer said « try again ». The body is the
+ * one `attributionFor` answers a note with no token there. The worker of the suite takes this note,
+ * so the refusal is given here, as for the 401 above.
+ */
+for (const [locale, sentence] of [
+  [
+    'en-US',
+    'This site is for members only. Your text is kept: sign in to Fruitback from the extension, then send it again.',
+  ],
+  [
+    'fr-FR',
+    'Ce site est réservé aux membres. Le texte est gardé : connectez-vous à Fruitback depuis l’extension, puis envoyez à nouveau.',
+  ],
+] as const) {
+  test(`a note with no session on a site for members says to sign in, not to try again, in ${locale} (FRU-394)`, async ({
+    page,
+  }) => {
+    await refuseWrites(page, 401, 'identity-required');
+    await mount(page, `send-failure-members-${locale}`, locale);
+    const said = await sendFailing(page, 'Kept through a members-only 401');
+
+    expect(said).toBe(sentence);
+    expect(said).not.toMatch(/try again|réessayez/i);
+    await expect(page.locator('[data-fruitback-send]')).toBeEnabled();
+  });
+}
+
+test('a page with no session on a site its members read says so in the list, with no « Try again » (FRU-394)', async ({
+  page,
+}) => {
+  // The worker of the suite whose site its members read: its real 401, no answer given here.
+  const refused = page.waitForResponse(
+    (response) => response.url().startsWith(`${AUTHENTICATED_WORKER_ORIGIN}/feedback?`) && response.status() === 401,
+  );
+  await mount(page, 'read-members', 'en-US', AUTHENTICATED_WORKER_ORIGIN);
+  await refused;
+
+  const sentence = 'This site is for members only. Sign in to Fruitback from the extension to see its notes.';
+  // Said on the page, without the list being opened (FRU-316).
+  await expect(page.locator('[data-fruitback-announcer]')).toHaveText(sentence);
+  await page.getByRole('button', { name: /^Show every note in a sidebar/ }).click();
+  const list = page.getByRole('dialog', { name: 'Notes on this page' });
+  await expect(list.getByRole('status')).toHaveText(sentence);
+  await expect(list.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+});

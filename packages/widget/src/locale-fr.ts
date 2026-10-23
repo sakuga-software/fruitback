@@ -89,6 +89,8 @@ export const FRENCH: Catalog = {
   'composer.failedWait': 'Trop de notes en ce moment. Le texte est gardé : renvoyez-le dans une minute.',
   'composer.failedRefused': 'Ce site n’accepte pas votre note d’ici. Le texte est gardé : prévenez l’équipe du site.',
   'composer.failedSignedOut': 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-le.',
+  'composer.failedMembersOnly':
+    'Ce site est réservé aux membres. Le texte est gardé : connectez-vous à Fruitback depuis l’extension, puis envoyez à nouveau.',
   'composer.signIn': 'Se reconnecter',
   'composer.failedTooLarge':
     'Cette note est trop lourde. Le texte est gardé : raccourcissez-la, ou désactivez l’image dans les réglages.',
@@ -156,6 +158,8 @@ export const FRENCH: Catalog = {
   'sidebar.retry': 'Réessayer',
   'sidebar.signedOut': 'Connectez-vous pour voir les notes de cette page.',
   'sidebar.signIn': 'Se connecter',
+  'sidebar.membersOnly':
+    'Ce site est réservé aux membres. Connectez-vous à Fruitback depuis l’extension pour voir ses notes.',
   'sidebar.approximate': 'Position approximative',
   'sidebar.drafts': 'Gardées pour plus tard, pas encore envoyées',
   'sidebar.sendDrafts': { one: 'Envoyer {count} note', other: 'Envoyer les {count} notes' },
