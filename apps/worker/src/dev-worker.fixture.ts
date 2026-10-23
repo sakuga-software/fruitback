@@ -205,6 +205,15 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
 
     return;
   }
+  // Refused before the database starts, so a misconfigured bench stops at once and installs nothing.
+  if (given.FRUITBACK_DEV_LINEAR === 'fake' && config.config.secretsKey === undefined) {
+    console.error(
+      '[fruitback] FRUITBACK_DEV_LINEAR=fake needs FRUITBACK_SECRETS_KEY, to seal the key of the connector',
+    );
+    process.exitCode = 1;
+
+    return;
+  }
 
   // In the schema the configuration names (FRU-219): `public` unless `FRUITBACK_DATABASE_SCHEMA` says.
   const database = await databaseOn(newPglite(), config.config.databaseSchema ?? DEFAULT_DATABASE_SCHEMA);
@@ -216,14 +225,6 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     given.FRUITBACK_DEV_LINEAR === 'fake'
       ? await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)
       : undefined;
-  if (tracker === null) {
-    console.error(
-      '[fruitback] FRUITBACK_DEV_LINEAR=fake needs FRUITBACK_SECRETS_KEY, to seal the key of the connector',
-    );
-    process.exitCode = 1;
-
-    return;
-  }
 
   const server = startServer(env);
   const serve = server.listeners('request') as ((incoming: IncomingMessage, response: ServerResponse) => void)[];
