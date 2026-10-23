@@ -1,6 +1,7 @@
 import { type SeedBounds, type SeedComment, type SeedIssue, type SeedStatus } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
+import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
 import { statusLabel, statusPaint } from './status-paint.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
@@ -254,6 +255,16 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   /** What had focus when the thread opened: its badge, or an entry of the detached-notes list. */
   let threadOpener: HTMLElement | null = null;
   let selectorsShown = options.showSelectors === true;
+  /**
+   * How far the open thread was moved by its handle from its place beside the pin (FRU-420). An
+   * offset and not a position: on a scroll or a resize the thread is placed beside its pin again, and
+   * keeps this offset, so it follows its pin. Forgotten when the thread closes.
+   */
+  let threadOffset: Offset = NO_OFFSET;
+  /** The place beside the pin the offset counts from, in document coordinates. */
+  let threadPlace: Box | undefined;
+  /** The dashed line from the pin to the thread, while the thread is away from its place. */
+  let tetherLine: HTMLElement | null = null;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStartedAt = 0;
@@ -284,8 +295,100 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     for (const entry of placed) place(entry);
     fan();
     // A thread in a panel of the widget (FRU-312) has no place on the page.
-    if (thread !== null && threadHome === null)
-      positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin, t.direction);
+    if (thread !== null && threadHome === null) placeThread(thread, openPin());
+  }
+
+  function openPin(): HTMLElement | undefined {
+    return placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin;
+  }
+
+  /** Beside its pin, then moved by the offset the handle gave it (FRU-420). */
+  function placeThread(node: HTMLElement, pin: HTMLElement | undefined): void {
+    positionThread(node, pin, t.direction);
+    threadPlace = {
+      left: Number.parseFloat(node.style.left) || 0,
+      top: Number.parseFloat(node.style.top) || 0,
+      width: node.offsetWidth || THREAD_WIDTH,
+      height: node.offsetHeight,
+    };
+    showOffset(node, pin);
+  }
+
+  function showOffset(node: HTMLElement, pin: HTMLElement | undefined): void {
+    if (threadPlace === undefined) return;
+    node.style.left = `${threadPlace.left + threadOffset.x}px`;
+    node.style.top = `${threadPlace.top + threadOffset.y}px`;
+    node.toggleAttribute('data-fruitback-moved', moved(threadOffset));
+    drawTether(node, pin);
+  }
+
+  /** The handle asks for an offset: the thread stays in the window, 8 px from each edge. */
+  function moveThread(offset: Offset): void {
+    if (thread === null || threadHome !== null || threadPlace === undefined) return;
+    const inSight = {
+      left: view?.scrollX ?? 0,
+      top: view?.scrollY ?? 0,
+      // Inside the scroll bars, which `innerWidth` counts.
+      width: document.documentElement.clientWidth || (view?.innerWidth ?? 0),
+      height: document.documentElement.clientHeight || (view?.innerHeight ?? 0),
+    };
+    threadOffset = clampOffset(offset, { ...threadPlace, height: thread.offsetHeight }, inSight);
+    showOffset(thread, openPin());
+  }
+
+  function homeThread(): void {
+    threadOffset = NO_OFFSET;
+    if (thread !== null && threadHome === null) showOffset(thread, openPin());
+  }
+
+  /** A dashed line from the point of the pin to the nearest edge of the thread, once it has moved. */
+  function drawTether(node: HTMLElement, pin: HTMLElement | undefined): void {
+    const line =
+      pin === undefined || !moved(threadOffset)
+        ? undefined
+        : tether(
+            {
+              left: Number.parseFloat(node.style.left) || 0,
+              top: Number.parseFloat(node.style.top) || 0,
+              width: node.offsetWidth || THREAD_WIDTH,
+              height: node.offsetHeight,
+            },
+            {
+              x:
+                (Number.parseFloat(pin.style.left) || 0) +
+                (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x')) || 0),
+              y:
+                (Number.parseFloat(pin.style.top) || 0) +
+                (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y')) || 0),
+            },
+          );
+    if (line === undefined) {
+      tetherLine?.remove();
+      tetherLine = null;
+      return;
+    }
+    if (tetherLine === null) {
+      tetherLine = document.createElement('div');
+      tetherLine.className = 'fruitback-thread-tether';
+      tetherLine.dataset.fruitbackTether = '';
+      tetherLine.setAttribute('aria-hidden', 'true');
+    }
+    // Before the thread, so that the thread is drawn over its end.
+    if (tetherLine.nextSibling !== node) container.insertBefore(tetherLine, node);
+    tetherLine.style.setProperty('--fruitback-pin-color', node.style.getPropertyValue('--fruitback-pin-color'));
+    Object.assign(tetherLine.style, {
+      left: `${line.x}px`,
+      top: `${line.y}px`,
+      width: `${line.length}px`,
+      transform: `rotate(${line.angle}rad)`,
+    });
+  }
+
+  /** The cross closes, and the handle moves a thread on the page (FRU-420). */
+  function wireThread(node: HTMLElement): void {
+    node.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
+    const handle = node.querySelector<HTMLElement>('.fruitback-thread-handle');
+    if (handle !== null) attachHandle(handle, { current: () => threadOffset, move: moveThread, home: homeThread });
   }
 
   function place(entry: Placed): void {
@@ -578,15 +681,25 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         ? (active as HTMLTextAreaElement)
         : undefined;
     const caret = typing === undefined ? undefined : ([typing.selectionStart, typing.selectionEnd] as const);
+    const onHandle = isElement(active) && active.classList.contains('fruitback-thread-handle');
     thread?.remove();
-    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue), selectorsShown);
-    thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
+    thread = buildThread(
+      document,
+      entry.issue,
+      entry.resolution,
+      t,
+      replyFor(entry.issue),
+      selectorsShown,
+      threadHome === null,
+    );
+    wireThread(thread);
     mountThread(thread, entry);
     const field = thread.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
     if (caret !== undefined && field !== null) {
       field.focus();
       field.setSelectionRange(caret[0], caret[1]);
-    } else if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
+    } else if (focused)
+      thread.querySelector<HTMLElement>(onHandle ? '.fruitback-thread-handle' : '.fruitback-thread-close')?.focus();
   }
 
   /** On the page beside its pin, or in the panel that asked for it (FRU-312). */
@@ -597,7 +710,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       return;
     }
     container.append(node);
-    positionThread(node, entry.pin, t.direction);
+    placeThread(node, entry.pin);
   }
 
   function openThread(entry: Placed, home: HTMLElement | null = null): void {
@@ -609,8 +722,16 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     container.toggleAttribute('data-fruitback-choosing', home !== null);
     entry.pin.dataset.fruitbackOpen = '';
     entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
-    thread = buildThread(document, entry.issue, entry.resolution, t, replyFor(entry.issue), selectorsShown);
-    thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
+    thread = buildThread(
+      document,
+      entry.issue,
+      entry.resolution,
+      t,
+      replyFor(entry.issue),
+      selectorsShown,
+      home === null,
+    );
+    wireThread(thread);
     mountThread(thread, entry);
     // The thread is the last child of the container, far from its badge in the tab order.
     thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
@@ -630,6 +751,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread?.remove();
     thread = null;
     threadHome = null;
+    // A thread opened again opens in its place (FRU-420).
+    threadOffset = NO_OFFSET;
+    threadPlace = undefined;
+    tetherLine?.remove();
+    tetherLine = null;
     container.removeAttribute('data-fruitback-choosing');
     for (const entry of placed) {
       delete entry.pin.dataset.fruitbackOpen;
@@ -987,6 +1113,7 @@ function buildThread(
   t: Translator,
   reply: ReplyFooter | undefined,
   showSelector: boolean,
+  movable: boolean,
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
@@ -1020,6 +1147,8 @@ function buildThread(
     // Two columns (FRU-419): the state and the way out wrap in the first, and the cross keeps the
     // second, at the top.
     element(document, 'div', 'fruitback-thread-head', [
+      // On the page only: a thread in the list of the page has its place in the column (FRU-312).
+      ...(movable ? [handleButton(document, t)] : []),
       element(document, 'div', 'fruitback-thread-heading', [
         element(document, 'span', 'fruitback-thread-stage', [drop, state]),
         // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
@@ -1178,6 +1307,20 @@ function stateSince(issue: SeedIssue, t: Translator): string | undefined {
   if (Number.isNaN(date.getTime())) return undefined;
 
   return t.text('thread.stateSince', { state: stateLabel(issue, t), date: t.date(date) });
+}
+
+/**
+ * The handle that moves the thread (FRU-420): by a pointer, by the arrow keys, and back to its place
+ * by Home or a double click. Its name says all of that. `bubble-drag.ts` gives it its moves.
+ */
+function handleButton(document: Document, t: Translator): HTMLElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'fruitback-thread-handle';
+  button.setAttribute('aria-label', t.text('thread.move'));
+  button.append(createIcon(document, 'grip'));
+
+  return button;
 }
 
 function closeButton(document: Document, t: Translator): HTMLElement {
@@ -1516,6 +1659,46 @@ const STYLES = `
   padding-block: 14px 12px;
   padding-inline: 16px 14px;
   border-bottom: 1px solid var(--fruitback-color-border);
+}
+/* With the handle that moves it (FRU-420), first, in a column of its own. */
+.fruitback-thread-head:has(> .fruitback-thread-handle) { grid-template-columns: auto minmax(0, 1fr) auto; }
+/*
+  The handle (FRU-420): 28 px drawn, 44 px to press, like the cross. Only the handle moves the thread,
+  so the text stays selectable everywhere else. No scroll of the page under a finger on it.
+*/
+.fruitback-thread-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  border: 8px solid transparent;
+  border-radius: calc(var(--fruitback-radius-sm) + 8px);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--fruitback-color-text-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fruitback-thread-handle[data-fruitback-dragging] { cursor: grabbing; }
+.fruitback-thread-handle:hover { background: var(--fruitback-color-surface-sunken) padding-box; color: var(--fruitback-color-text); }
+.fruitback-thread-handle:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: -6px; }
+/* The line from the pin to a thread moved away from it (FRU-420): dashed, in the colour of its status. */
+.fruitback-thread-tether {
+  position: absolute;
+  z-index: 2147483099;
+  height: 0;
+  border-top: 2px dashed var(--fruitback-pin-color);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  .fruitback-thread-handle { border-color: Canvas; }
+  .fruitback-thread-tether { border-top-color: CanvasText; }
 }
 /* A long state takes the first line, and the way out goes under it (FRU-350). */
 .fruitback-thread-heading {

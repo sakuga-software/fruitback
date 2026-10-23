@@ -34,7 +34,17 @@ import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type IconName = 'gear' | 'close' | 'search' | 'drop' | 'dropDashed' | 'list' | 'mark' | 'markDashed' | 'chevron';
+export type IconName =
+  | 'gear'
+  | 'close'
+  | 'search'
+  | 'grip'
+  | 'drop'
+  | 'dropDashed'
+  | 'list'
+  | 'mark'
+  | 'markDashed'
+  | 'chevron';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
@@ -50,6 +60,8 @@ const ICONS: Record<IconName, IconShape> = {
   close: ICON_DATA.close,
   // The search of the list (FRU-308): an action, so from the set, like the gear and the cross.
   search: ICON_DATA.search,
+  // The handle that moves the bubble of a note (FRU-420): an action, so from the set.
+  grip: ICON_DATA.grip,
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
   // The mark in a dashed outline, for the notes that could not be placed (FRU-259): the stroke and

@@ -151,6 +151,9 @@ export const ENGLISH = {
   'pin.labelDraft': 'Not sent yet · {note}',
 
   'thread.close': 'Close the note',
+  // The handle of the bubble (FRU-420): its name says every way to use it.
+  'thread.move':
+    'Move the note. The arrow keys move it by 16 px, Shift and an arrow by 48 px. Home or a double click puts it back.',
   'thread.dialog': 'Note {number}',
   'thread.draft': 'Not sent yet',
   // Must not start like `sidebar.dialog`: both can be open at once.

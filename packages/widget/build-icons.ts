@@ -36,6 +36,7 @@ const WANTED: Record<string, string> = {
   gear: 'gear-fill',
   close: 'x-bold',
   search: 'magnifying-glass-bold',
+  grip: 'dots-six-vertical-bold',
 };
 
 type IconifyInfo = {

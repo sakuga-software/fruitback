@@ -439,6 +439,21 @@ schemes, outside the ring of the pin (FRU-334)`.
     `showSelectors` option and the setting « Show CSS selectors » of the extension; before FRU-419
     the source showed always. A reviewer reads the note: these lines are for a developer. 12 px of
     mono, in the muted ink, with no box, and selectable.
+  - **The bubble moves by its handle** (FRU-420), the grip of Phosphor (`dots-six-vertical-bold`)
+    at the start of the head, 28 px drawn and 44 px to press. Only the handle moves it, so the text
+    stays selectable everywhere else. A pointer drags it (Pointer Events and `setPointerCapture`;
+    `touch-action: none` on the handle, so a finger does not scroll the page). The arrow keys move it
+    16 px, Shift and an arrow 48 px, and Home or a double click puts it back; its name says all of
+    that. It stays in the window, 8 px from each edge, while it moves.
+    - **An offset, not a position.** The bubble keeps how far it was moved from its place beside the
+      pin: a scroll or a resize places it beside its pin again and adds the offset, so it follows its
+      pin. The offset is forgotten when the bubble closes. A thread drawn again (a resolve, the
+      selectors switched) keeps it, the focus on the handle, and the reply being typed.
+    - **A dashed line of 2 px**, in the colour of the status, joins the point of the pin to the
+      nearest edge of a bubble that left its place. None when it is in its place.
+    - **No handle in the list of the page** (FRU-312): there the bubble has its place in the column.
+    - Held by `e2e/thread-handle.spec.ts` (the mouse, the keyboard, the double click, the scroll, the
+      reply kept, 8 px at 390 px) and `bubble-drag.test.ts`.
   - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note »:
     the mock-up names it « Close », and two crosses of the widget can be on screen. The cross is
     28 px drawn and 44 px to press.
