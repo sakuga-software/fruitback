@@ -127,8 +127,17 @@ describe('the landing (FRU-418)', () => {
       ([page, fragment]) => page === 'reviewing' && fragment === '1-install-it',
     );
 
-    // The card « Sites you cannot touch », the question about a site with no script, and the footer.
-    assert.equal(links.length, 3, 'the landing lost a link to « 1. Install it » of the reviewer’s guide');
+    // Firefox, by hand: the card « Sites you cannot touch », and the question about a site with no script.
+    assert.equal(links.length, 2, 'the landing lost a link to « 1. Install it » of the reviewer’s guide');
+  });
+
+  it('leads Chrome and Edge to the Chrome Web Store', () => {
+    const landing = readFileSync(new URL('_layouts/landing.html', DOCS), 'utf8');
+    const store = 'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa';
+
+    // The card, the question, and the footer.
+    assert.equal(landing.split(`href="${store}"`).length - 1, 3, 'the landing lost a link to the Chrome Web Store');
+    assert.ok(!landing.includes('not in a store yet'), 'the landing still says the extension is in no store');
   });
 
   it('names only fragments that are headings of their guide', () => {

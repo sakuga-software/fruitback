@@ -9,10 +9,13 @@ with the worker. If it does not, that is private mode and the extension mounts t
 
 ## 1. Install it
 
-The extension is **in beta, and not in a store yet**. You install the archive of its last release
-by hand, once; it takes two minutes and no developer tools.
+The extension is in beta. **In Chrome or Edge**, add it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa),
+then go on at step 4 below. It is not on the add-ons site of Firefox yet: there, and in a browser that
+does not reach the store, you install the archive of its last release by hand, once; it takes two
+minutes and no developer tools.
 
-**In Chrome, Edge, Brave or Arc:**
+**By hand, in Chrome, Edge, Brave or Arc:**
 
 1. Download `fruitback-<version>-chrome.zip` from the
    [last release](https://github.com/sakuga-software/fruitback/releases/latest), and unzip it. Keep
