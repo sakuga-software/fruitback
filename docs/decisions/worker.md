@@ -414,6 +414,14 @@ degradation the ticket asked to have written down rather than discovered.
     (`stageForLinearState`). `GET /console/workspaces/:id/connectors/:id/states` lists the states of
     the teams the sites of the workspace send to, with the stage of each type.
   - A change reaches the next read of the tracker. The read cache keeps an answer for its TTL.
+- **A connector can have a name that its workspace gives it** (FRU-404): several connectors can
+  reach one source, and their `label` is the worker's (`Linear · Camille`, `GitHub App · acme`), which
+  the console reads to say how each is connected. So the name is its own column, `connectors.name`
+  (migration 0029), NULL for none, and `renameConnector` writes it alone. `POST
+/console/workspaces/<id>/connectors/<connector>` `{ name }` answers the connector, for
+  `manage-workspace`, with the rule and the code of the name of a workspace (`invalid-name`); `null`
+  or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
+  installed again keeps the name, as it keeps its connector.
 
 ## Where a seed is stored
 

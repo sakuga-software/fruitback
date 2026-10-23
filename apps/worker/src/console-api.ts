@@ -410,6 +410,7 @@ function connectorView(connector: Connector): {
   id: string;
   kind: string;
   label: string;
+  name?: string;
   createdAt: string;
   attention?: ConnectorAttention;
   settings: ConnectorSettings;
@@ -418,6 +419,8 @@ function connectorView(connector: Connector): {
     id: connector.id,
     kind: connector.kind,
     label: connector.label,
+    // Absent for a connector nobody named (FRU-404): the console then names it by its kind.
+    ...(connector.name === undefined ? {} : { name: connector.name }),
     createdAt: connector.createdAt,
     settings: connector.settings,
     // Absent for a connector that works: the console draws « Needs attention » from this field only.
@@ -1175,6 +1178,20 @@ export async function handleConsoleApi(
   const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);
   if (connector !== null) {
     const id = connector[1] as string;
+    if (connector[2] === undefined && request.method === 'POST') {
+      // FRU-404: the name a workspace gives its connector, so that two of one kind read apart. `null`
+      // or an empty name takes it away. The rule of a name is the one of a workspace.
+      if (!allowed('manage-workspace')) return forbidden();
+      const given = (await readBody(request))?.name;
+      const cleared = given === null || (typeof given === 'string' && given.trim() === '');
+      const name = cleared ? undefined : workspaceName(given);
+      if (!cleared && name === undefined) return json(400, { error: 'invalid-name' }, headers);
+      const renamed = await context.accounts.renameConnector(workspaceId as string, id, name);
+      if (!renamed) return json(404, { error: 'not-found' }, headers);
+      const kept = (await context.accounts.connectors(workspaceId as string)).find((each) => each.id === id);
+
+      return kept === undefined ? json(404, { error: 'not-found' }, headers) : json(200, connectorView(kept), headers);
+    }
     if (connector[2] === undefined) {
       if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
       if (!allowed('manage-workspace')) return forbidden();

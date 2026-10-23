@@ -430,6 +430,94 @@ describe('who may touch a connector (FRU-121)', () => {
   });
 });
 
+describe('a workspace names its connector (FRU-404)', () => {
+  type Listed = { connectors: { id: string; label: string; name?: string }[] };
+  const listed = async (env: World, world: Awaited<ReturnType<typeof acme>>) =>
+    ((await (await call(env, 'GET', `${world.base}/connectors`, { token: world.owner.token })).json()) as Listed)
+      .connectors;
+
+  it('keeps the name an owner gives, beside the label of the worker, and takes it away again', async () => {
+    const env = await envWith();
+    fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, world);
+    const other = await connected(env, world);
+    assert.equal((await listed(env, world))[0]?.name, undefined, 'no name until one is given');
+
+    const named = await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+      token: world.owner.token,
+      body: { name: '  Linear   of the  clients ' },
+    });
+    assert.equal(named.status, 200);
+    const view = (await named.json()) as { id: string; label: string; name?: string };
+    assert.equal(view.id, connector);
+    assert.equal(view.name, 'Linear of the clients', 'one line, its spaces made one');
+    const [first, second] = await listed(env, world);
+    assert.equal(first?.name, 'Linear of the clients');
+    assert.equal(first?.label, view.label, 'the label of the worker does not move');
+    assert.equal(second?.id, other);
+    assert.equal(second?.name, undefined, 'one connector, not its neighbour');
+
+    for (const name of [null, '', '   ']) {
+      await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+        token: world.owner.token,
+        body: { name: 'Again' },
+      });
+      const cleared = await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+        token: world.owner.token,
+        body: { name },
+      });
+      assert.equal(cleared.status, 200, JSON.stringify(name));
+      assert.equal(((await cleared.json()) as { name?: string }).name, undefined, JSON.stringify(name));
+    }
+  });
+
+  it('refuses a name that is not one, and keeps the one before', async () => {
+    const env = await envWith();
+    fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, world);
+    await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+      token: world.owner.token,
+      body: { name: 'Clients' },
+    });
+
+    for (const body of [{}, { name: 42 }, { name: 'x'.repeat(81) }]) {
+      const refused = await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+        token: world.owner.token,
+        body,
+      });
+      assert.equal(refused.status, 400, JSON.stringify(body));
+      assert.deepEqual(await refused.json(), { error: 'invalid-name' });
+    }
+    assert.equal((await listed(env, world))[0]?.name, 'Clients');
+  });
+
+  it('lets only who manages the workspace name a connector, and only one of their own', async () => {
+    const env = await envWith();
+    fakeLinear();
+    const world = await acme(env);
+    const connector = await connected(env, world);
+    const member = await world.person('member@acme.dev');
+    await memberOf(env, world.workspace.id, member.account.id, 'member');
+    const other = await world.person('other@else.dev');
+    const elsewhere = await world.accounts.createWorkspace('Elsewhere', other.account.id);
+
+    const byMember = await call(env, 'POST', `${world.base}/connectors/${connector}`, {
+      token: member.token,
+      body: { name: 'Mine' },
+    });
+    const fromElsewhere = await call(env, 'POST', `/console/workspaces/${elsewhere.id}/connectors/${connector}`, {
+      token: other.token,
+      body: { name: 'Mine' },
+    });
+
+    assert.equal(byMember.status, 403);
+    assert.equal(fromElsewhere.status, 404);
+    assert.equal((await listed(env, world))[0]?.name, undefined);
+  });
+});
+
 describe('the key that encrypts the connectors', () => {
   it('opens what it sealed, and nothing another key or another hand wrote', () => {
     const sealed = seal('lin_api_x', SECRETS_KEY);

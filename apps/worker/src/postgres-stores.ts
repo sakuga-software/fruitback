@@ -99,6 +99,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     resealConnector: true,
     noteConnector: true,
     setConnectorSettings: true,
+    renameConnector: true,
     sealedKey: true,
     setDestination: true,
     setDestinations: true,
