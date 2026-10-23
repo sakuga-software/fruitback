@@ -307,7 +307,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the three states, the counts, the form, the menu, the roles, 390 px and axe.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
   from « Statuses » in the menu of a site row, for an owner or an admin. It is the board
-  `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Two things of the kit
+  `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the
+  room above the title, so **the title of every page of a frame is at one place** (FRU-405): 40 px
+  under the top of the screen, at the left of its padding, 28 px. `e2e/console-titles.spec.ts` reads
+  it on the ten pages of a workspace and of the administration, at 1440, 1492 and 390 px. Two things of the kit
   came with it: `Field` takes `error` (the sentence a field is described by, `aria-invalid`) and
   `inputRef`, so a refused press gives focus to the field it names; and `.kit-pin`,
   `.kit-status-chip` and `.kit-swatch` in `app.css` draw a status as the widget does. Its colours
