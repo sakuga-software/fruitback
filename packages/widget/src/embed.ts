@@ -415,6 +415,8 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     translator,
     label: options.label,
+    // FRU-411: on request, the frame names the element as the head of the composer will.
+    ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     onConfigure: () => panel.toggle(),
