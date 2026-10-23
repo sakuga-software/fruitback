@@ -307,7 +307,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   The counts are the summary of the sites (FRU-237), in the answer that lists them: **nothing of a row
   comes after the row**, so nothing moves under a press, and a test holds the read to prove it. A
   cell with nothing to say draws « · » for the eye and says « None yet » to a screen reader; a worker
-  that sends no summary gets that, and no bar. The legend of the statuses is above the table. **A row
+  that sends no summary gets that, and no bar. **No legend of the statuses** (FRU-400, Mathieu): the
+  name of a bar says its counts, and the page of the statuses of a site says what each colour is. **A row
   has one menu, and what it opens is under the row**: « Install », for every role; « Preview builds »,
   which is the proof of a domain of FRU-103, and « Remove », for who manages the sites. One thing is
   open at a time, and what closes gives focus back to the button of the row. « Remove » asks twice:
