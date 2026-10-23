@@ -95,7 +95,7 @@ async function stubWorker(page: Page, places: Place[]): Promise<Worker> {
 async function openPanel(page: Page, row: number): Promise<void> {
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   await expect(page.locator('main h1')).toBeVisible();
-  await page.locator('button[aria-pressed]').nth(row).click();
+  await page.locator('button[id^="source-row-"]').nth(row).click();
 }
 
 test('the Linear panel waits for a list to be kept before the next gesture', async ({ page }) => {

@@ -722,6 +722,11 @@ type SidePanelProps = {
   onKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
   /** The space between the parts of the panel: 24 px, or 22 px (« tight ») for the panels of the administration. */
   spacing?: 'normal' | 'tight';
+  /**
+   * An accordion under its row (FRU-403): no card of its own, and the title is said to a screen reader
+   * only, as the row above already shows it.
+   */
+  flush?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -737,6 +742,7 @@ export function SidePanel({
   panelRef,
   onKeyDown,
   spacing = 'normal',
+  flush = false,
   className = '',
   children,
 }: SidePanelProps) {
@@ -749,6 +755,7 @@ export function SidePanel({
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
       className={`kit-panel ${className}`}
       data-spacing={spacing}
+      {...(flush ? { 'data-flush': '' } : {})}
     >
       <div className="kit-panel__head">
         <h2 id={id} className="kit-panel__title">

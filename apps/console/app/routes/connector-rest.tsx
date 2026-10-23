@@ -89,6 +89,7 @@ export function RestPanel({ id, base, connector, connectors, sites, manages, onC
   return (
     <SidePanel
       id={id}
+      flush
       title={t(KINDS.rest.name)}
       detail={t('Sends to {host}', { host: hostOf(connector) })}
       {...(manages

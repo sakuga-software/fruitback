@@ -33,6 +33,8 @@ const ACCENT = '#dd2c27';
 const ACCENT_STRONG = '#b91c1c';
 const DONE = '#15803d';
 const WHITE = '#ffffff';
+/** The width of a row at 1440 px, inside the border of the list: the whole page, since FRU-403. */
+const ROW_WIDTH = 1093;
 
 const SETTINGS = { showComments: true, stages: {} };
 const LINEAR = {
@@ -131,7 +133,7 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator('main h1')).toBeVisible();
 }
 
-const rows = (page: Page) => page.locator('button[aria-pressed]');
+const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.locator('#source-panel');
 const sources = (page: Page) => page.getByRole('region', { name: 'Add a source' }).getByRole('listitem');
 
@@ -155,18 +157,11 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   await rows(page).first().click();
   await expect(panel(page)).toBeVisible();
 
-  // Two columns that wrap: the list takes the room, the panel 340 px inside its border.
-  const columns = page.locator('main > div').last();
-  expect.soft(await styles(columns, ['display', 'flex-wrap', 'column-gap', 'align-items'])).toEqual({
+  // One column (FRU-403): the panel opens under its row, where the mockup draws a column beside the list.
+  const list = page.locator('main > div').last();
+  expect.soft(await styles(list, ['display', 'flex-direction', 'row-gap'])).toEqual({
     display: 'flex',
-    'flex-wrap': 'wrap',
-    'column-gap': '28px',
-    'align-items': 'flex-start',
-  });
-  const list = columns.locator('> div').first();
-  expect.soft(await styles(list, ['flex-grow', 'flex-basis', 'row-gap'])).toEqual({
-    'flex-grow': '999',
-    'flex-basis': '440px',
+    'flex-direction': 'column',
     'row-gap': '32px',
   });
 
@@ -186,8 +181,8 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect.soft(await painted(frame, 'borderTopColor')).toEqual(rgb(LINE));
   const chosen = rows(page).first();
   const resting = rows(page).nth(1);
-  await expect(chosen).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expect(chosen).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('button[id^="source-row-"][aria-expanded="true"]')).toHaveCount(1);
   expect.soft(await styles(chosen, ['padding', 'column-gap', 'text-align'])).toEqual({
     padding: '14px 18px',
     'column-gap': '14px',
@@ -195,6 +190,15 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   });
   expect.soft(await painted(chosen, 'backgroundColor')).toEqual(rgb(CHIP));
   expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(WHITE));
+  // The boxes at 1440 px. The rows take the width of the page, where the mockup draws a column for
+  // the panel, and the panel opens under its row, before the next one (FRU-403).
+  expectBox(await box(title), { x: 297, y: 130, height: 18 }, 2, '« Connected »');
+  expectBox(await box(chosen), { x: 298, y: 159, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
+  expectBox(await box(panel(page)), { x: 298, y: 224, width: ROW_WIDTH }, 2, 'the panel');
+  const under = await box(panel(page));
+  expectBox(await box(resting), { x: 298, y: under.y + under.height, width: ROW_WIDTH }, 2, 'the second row');
+
+  // A hover scrolls the second row into view, below the panel: the boxes are taken before it.
   await resting.hover();
   expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(SUBTLE));
   await page.mouse.move(700, 880);
@@ -230,39 +234,31 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect.soft(await painted(state, 'color')).toEqual(rgb(DONE));
   expect.soft(contrast(rgb(DONE), rgb(CHIP)), 'the green on the tint of the chosen row').toBeGreaterThanOrEqual(4.5);
 
-  // The boxes of the mockup at 1440 px, in a screen as wide as its column (FRU-398): 11.5 px wider
-  // than the 1180 px of the mockup.
-  expectBox(await box(title), { x: 297, y: 130, height: 18 }, 2, '« Connected »');
-  expectBox(await box(chosen), { x: 298, y: 159, width: 723.2, height: 65 }, 2, 'the first row');
-  expectBox(await box(resting), { x: 298, y: 224, width: 723.2 }, 2, 'the second row');
-  expectBox(await box(panel(page)), { x: 1049.7, y: 130, width: 342.3 }, 2, 'the panel');
-  expectBox(
-    await box(panel(page).getByRole('heading', { level: 2 })),
-    { x: 1072.7, y: 151, height: 21 },
-    2,
-    'the title of the panel',
-  );
-
-  // The panel: a tinted card with a head, a body and a foot.
+  // The panel: the tint of a panel inside the frame of the list, under the rule of its row. It has
+  // no card of its own, and its row shows its name: its title is said to a screen reader only.
+  expect.soft(await painted(panel(page), 'backgroundColor')).toEqual(rgb(SUBTLE));
+  expect.soft(await styles(panel(page), ['border-top-width'])).toEqual({ 'border-top-width': '1px' });
+  expect.soft(await painted(panel(page), 'borderTopColor')).toEqual(rgb(LINE));
   const card = panel(page).locator('aside');
-  expect.soft(await styles(card, ['border-top-left-radius', 'border-top-width'])).toEqual({
-    'border-top-left-radius': '14px',
-    'border-top-width': '1px',
+  expect.soft(await styles(card, ['border-top-width', 'background-color'])).toEqual({
+    'border-top-width': '0px',
+    'background-color': 'rgba(0, 0, 0, 0)',
   });
-  expect.soft(await painted(card, 'backgroundColor')).toEqual(rgb(SUBTLE));
-  expect.soft(await painted(card, 'borderTopColor')).toEqual(rgb(LINE));
   const heading = card.getByRole('heading', { level: 2, name: 'Linear', exact: true });
-  expect
-    .soft(await styles(heading, ['font-size', 'font-weight']))
-    .toEqual({ 'font-size': '18px', 'font-weight': '700' });
+  await expect(heading).toBeAttached();
+  expect.soft(await styles(heading, ['width', 'height', 'position'])).toEqual({
+    width: '1px',
+    height: '1px',
+    position: 'absolute',
+  });
   expect.soft(await styles(heading.locator('..'), ['padding', 'border-bottom-width'])).toEqual({
-    padding: '20px 22px',
-    'border-bottom-width': '1px',
+    padding: '16px 22px 0px',
+    'border-bottom-width': '0px',
   });
   await expect(card.getByText('Connected to the workspace Acme')).toBeVisible();
   const block = card.getByRole('heading', { level: 3, name: 'Sites sending here' });
   expect.soft(await styles(block, ['font-size', 'font-weight'])).toEqual({ 'font-size': '14px', 'font-weight': '600' });
-  expect.soft(await styles(block.locator('xpath=ancestor::section/..'), ['padding', 'row-gap'])).toEqual({
+  expect.soft(await styles(block.locator('xpath=ancestor::section[1]/..'), ['padding', 'row-gap'])).toEqual({
     padding: '20px 22px',
     'row-gap': '24px',
   });

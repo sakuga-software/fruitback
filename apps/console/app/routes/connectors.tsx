@@ -12,11 +12,11 @@ import { GithubPanel } from './connector-github';
 import { LinearPanel } from './connector-linear';
 import { KEY_PROBLEMS, KINDS, type PanelProps, SourceMark, siteCount, sourceLine } from './connector-parts';
 import { RestPanel } from './connector-rest';
-import { useWide } from '../wide';
 
 /**
  * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
- * sources that are connected, the ones to add, and the panel of the source that is chosen.
+ * sources that are connected, the ones to add, and the panel of the source that is chosen. The panel
+ * opens under its row at every width, as an accordion (FRU-403), where the mockup draws a column.
  *
  * Linear connects with OAuth or an API key (FRU-121, FRU-134), GitHub with its App where the worker
  * has one (FRU-361), and an address of the workspace's own receives each note (FRU-132). The other
@@ -105,7 +105,6 @@ export default function Connectors() {
   // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
   const opening = useRef(false);
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
-  const wide = useWide();
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
@@ -200,7 +199,6 @@ export default function Connectors() {
     open === undefined || Panel === undefined ? null : (
       <Opened
         key={open.id}
-        wide={wide}
         label={`${t(KINDS[open.kind].name)} · ${sourceLine(open)}`}
         takesFocus={opening}
         onClose={() => {
@@ -241,197 +239,185 @@ export default function Connectors() {
           workspace: workspace.name,
         })}
       />
-      <div className="flex flex-wrap items-start gap-[28px]">
-        <div className="flex min-w-0 flex-[999_1_440px] flex-col gap-[32px]">
-          <section aria-labelledby="connected-title">
-            <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
-              {t('Connected')}
+      <div className="flex min-w-0 flex-col gap-[32px]">
+        <section aria-labelledby="connected-title">
+          <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
+            {t('Connected')}
+          </h2>
+          {unread ? (
+            <div className="mb-[12px] flex flex-wrap items-center gap-[12px]">
+              <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+                {t('Fruitback did not answer. The sources and their sites could not be read.')}
+              </p>
+              <Button tone="outline" onClick={() => void reload()}>
+                {t('Try again')}
+              </Button>
+            </div>
+          ) : null}
+          {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+          {connectors?.length === 0 ? (
+            <p className="text-small text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
+          ) : null}
+          {connectors === undefined || connectors.length === 0 ? null : (
+            <ul className="overflow-hidden rounded-frame border border-line">
+              {connectors.map((connector) => {
+                const chosen = connector.id === selected;
+
+                return (
+                  <li key={connector.id} className="border-b border-line last:border-b-0">
+                    <button
+                      type="button"
+                      aria-expanded={chosen}
+                      id={rowId(connector.id)}
+                      aria-controls={chosen ? PANEL : undefined}
+                      onClick={() => {
+                        // A person opened it, so the panel takes focus when it appears (FRU-197).
+                        opening.current = !chosen;
+                        setSelected(chosen ? undefined : connector.id);
+                      }}
+                      // Under 640 px the state goes under the address, in line with it (FRU-321).
+                      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
+                        chosen ? 'bg-chip' : 'hover:bg-subtle'
+                      }`}
+                    >
+                      <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-body leading-auto font-semibold">
+                          {t(KINDS[connector.kind].name)}
+                        </span>
+                        {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
+                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={sourceLine(connector)}>
+                          <span className="min-w-0 truncate" data-source-line>
+                            {sourceLine(connector)}
+                          </span>
+                          <span className="flex-none whitespace-pre">{countOf(connector)}</span>
+                        </span>
+                      </span>
+                      <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
+                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                      </span>
+                    </button>
+                    {/* The accordion of the source opens under its row (FRU-403). */}
+                    {chosen ? panel : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {answered ? (
+          <section aria-labelledby="add-title">
+            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
+              {t('Add a source')}
             </h2>
-            {unread ? (
-              <div className="mb-[12px] flex flex-wrap items-center gap-[12px]">
-                <p role="alert" className="min-w-0 flex-1 text-small text-muted">
-                  {t('Fruitback did not answer. The sources and their sites could not be read.')}
-                </p>
-                <Button tone="outline" onClick={() => void reload()}>
-                  {t('Try again')}
-                </Button>
-              </div>
-            ) : null}
-            {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
-            {connectors?.length === 0 ? (
-              <p className="text-small text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
-            ) : null}
-            {connectors === undefined || connectors.length === 0 ? null : (
-              <ul className="overflow-hidden rounded-frame border border-line">
-                {connectors.map((connector) => {
-                  const chosen = connector.id === selected;
-
-                  return (
-                    <li key={connector.id} className="border-b border-line last:border-b-0">
-                      <button
-                        type="button"
-                        aria-pressed={chosen}
-                        id={rowId(connector.id)}
-                        aria-controls={chosen ? PANEL : undefined}
-                        onClick={() => {
-                          // A person opened it, so the panel takes focus when it appears (FRU-197).
-                          opening.current = !chosen;
-                          setSelected(chosen ? undefined : connector.id);
-                        }}
-                        // Under 640 px the state goes under the address, in line with it (FRU-321).
-                        className={`flex w-full cursor-pointer flex-wrap items-center gap-x-[14px] gap-y-[4px] px-[18px] py-[14px] text-left -outline-offset-2 sm:flex-nowrap ${
-                          chosen ? 'bg-chip' : 'hover:bg-subtle'
-                        }`}
-                      >
-                        <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-body leading-auto font-semibold">
-                            {t(KINDS[connector.kind].name)}
-                          </span>
-                          {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
-                          <span
-                            className="flex min-w-0 text-hint leading-auto text-muted"
-                            title={sourceLine(connector)}
-                          >
-                            <span className="min-w-0 truncate" data-source-line>
-                              {sourceLine(connector)}
-                            </span>
-                            <span className="flex-none whitespace-pre">{countOf(connector)}</span>
-                          </span>
-                        </span>
-                        <span className="flex-none max-sm:basis-full max-sm:pl-[50px]">
-                          <State connector={connector} late={late[connector.id]} chosen={chosen} />
-                        </span>
-                      </button>
-                      {/* Under 1280 px there is no column beside the list: the panel opens under its row. */}
-                      {!wide && chosen ? panel : null}
-                    </li>
-                  );
-                })}
-              </ul>
+            {manages ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
             )}
-          </section>
-
-          {answered ? (
-            <section aria-labelledby="add-title">
-              <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
-                {t('Add a source')}
-              </h2>
-              {manages ? null : (
-                <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
-              )}
-              {available ? null : (
-                <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-              )}
-              <ul className="border-t border-line">
-                <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
-                  {adding === 'linear' ? null : (
-                    <span className="flex flex-wrap items-center gap-x-[16px]">
-                      {oauth ? (
-                        <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
-                          {t('Use an API key')}
-                        </LinkButton>
-                      ) : null}
-                      <Button
-                        tone="outline"
-                        inset={16}
-                        disabled={cannot || leaving}
-                        onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
-                      >
-                        {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
-                      </Button>
-                    </span>
-                  )}
-                  {adding === 'linear' ? (
-                    <Under>
-                      <AddLinear
-                        base={base}
-                        onDone={(connector) => {
-                          setAdding(undefined);
-                          if (connector !== undefined) {
-                            setSelected(connector.id);
-                            void load();
-                          }
-                        }}
-                      />
-                    </Under>
-                  ) : null}
-                  {problem === undefined ? null : (
-                    <Under>
-                      <Problem>{t(problem)}</Problem>
-                    </Under>
-                  )}
-                </Source>
-                {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
-                <Source
-                  name={t(KINDS.github.name)}
-                  detail={t(
-                    'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
-                  )}
-                >
-                  {githubApp ? (
+            {available ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
+            )}
+            <ul className="border-t border-line">
+              <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
+                {adding === 'linear' ? null : (
+                  <span className="flex flex-wrap items-center gap-x-[16px]">
+                    {oauth ? (
+                      <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
+                        {t('Use an API key')}
+                      </LinkButton>
+                    ) : null}
                     <Button
                       tone="outline"
                       inset={16}
-                      disabled={cannot || toGithub}
-                      onClick={() => void connectGithub()}
+                      disabled={cannot || leaving}
+                      onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
                     >
-                      {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
+                      {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
                     </Button>
-                  ) : (
-                    <>
-                      {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
-                      <Button tone="outline" inset={16} disabled>
-                        {t('Not on this Fruitback')}
-                      </Button>
-                      <Under>
-                        <p className="text-hint text-muted">
-                          {t('The operator of this Fruitback has not set up the GitHub App.')}
-                        </p>
-                      </Under>
-                    </>
-                  )}
-                  {githubProblem === undefined ? null : (
-                    <Under>
-                      <Problem>{t(githubProblem)}</Problem>
-                    </Under>
-                  )}
-                </Source>
-                <Source
-                  name={t(KINDS.rest.name)}
-                  detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
-                >
-                  {adding === 'rest' ? (
-                    <Under>
-                      <AddRest
-                        base={base}
-                        onAdded={(connector) => {
+                  </span>
+                )}
+                {adding === 'linear' ? (
+                  <Under>
+                    <AddLinear
+                      base={base}
+                      onDone={(connector) => {
+                        setAdding(undefined);
+                        if (connector !== undefined) {
                           setSelected(connector.id);
                           void load();
-                        }}
-                        onDone={() => setAdding(undefined)}
-                      />
-                    </Under>
-                  ) : (
-                    <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
-                      <Connect name={t(KINDS.rest.name)} />
-                    </Button>
-                  )}
-                </Source>
-                {LATER.map((source) => (
-                  <Source key={source.name} name={source.name} detail={t(source.detail)}>
-                    {/* No connector of this kind exists: the button says when, and connects nothing. */}
+                        }
+                      }}
+                    />
+                  </Under>
+                ) : null}
+                {problem === undefined ? null : (
+                  <Under>
+                    <Problem>{t(problem)}</Problem>
+                  </Under>
+                )}
+              </Source>
+              {/* FRU-331: the API of an issue of GitHub takes no file, so the files of a note do not go there. */}
+              <Source
+                name={t(KINDS.github.name)}
+                detail={t(
+                  'An issue per note, in one repository. The files of a note do not go: GitHub takes none by its API.',
+                )}
+              >
+                {githubApp ? (
+                  <Button tone="outline" inset={16} disabled={cannot || toGithub} onClick={() => void connectGithub()}>
+                    {toGithub ? t('Going to GitHub…') : <Connect name={t(KINDS.github.name)} />}
+                  </Button>
+                ) : (
+                  <>
+                    {/* A worker with no App connects no GitHub: the button says so, and connects nothing. */}
                     <Button tone="outline" inset={16} disabled>
-                      {t('After the beta')}
+                      {t('Not on this Fruitback')}
                     </Button>
-                  </Source>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </div>
-
-        {wide ? panel : null}
+                    <Under>
+                      <p className="text-hint text-muted">
+                        {t('The operator of this Fruitback has not set up the GitHub App.')}
+                      </p>
+                    </Under>
+                  </>
+                )}
+                {githubProblem === undefined ? null : (
+                  <Under>
+                    <Problem>{t(githubProblem)}</Problem>
+                  </Under>
+                )}
+              </Source>
+              <Source
+                name={t(KINDS.rest.name)}
+                detail={t('POST each note to your own endpoint, with an address of one hour for each of its files.')}
+              >
+                {adding === 'rest' ? (
+                  <Under>
+                    <AddRest
+                      base={base}
+                      onAdded={(connector) => {
+                        setSelected(connector.id);
+                        void load();
+                      }}
+                      onDone={() => setAdding(undefined)}
+                    />
+                  </Under>
+                ) : (
+                  <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
+                    <Connect name={t(KINDS.rest.name)} />
+                  </Button>
+                )}
+              </Source>
+              {LATER.map((source) => (
+                <Source key={source.name} name={source.name} detail={t(source.detail)}>
+                  {/* No connector of this kind exists: the button says when, and connects nothing. */}
+                  <Button tone="outline" inset={16} disabled>
+                    {t('After the beta')}
+                  </Button>
+                </Source>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
     </>
   );
@@ -502,26 +488,22 @@ function rowId(connector: string): string {
 }
 
 /**
- * The open panel (FRU-161). Under 1280 px it opens under its row, and the page scrolls as little as
- * shows it, or its top when it is taller than the screen. A row at the bottom of the screen would
- * otherwise open a panel nobody sees, and a second touch would close it. A change of width across
- * 1280 px moves the panel, so it is mounted again: it holds no field that somebody types in.
+ * The open panel: an accordion under its row, at every width (FRU-161, FRU-403). The page scrolls as
+ * little as shows it, or its top when it is taller than the screen. A row at the bottom of the screen
+ * would otherwise open a panel nobody sees, and a second touch would close it.
  *
- * **A panel that a person opened takes focus** (FRU-197). The press of a row changed nothing a screen
- * reader says but the state of the button, and from 1280 px the panel is not even the next thing
- * after its row. So the panel is a region with the name of its source, and focus goes to it: a
- * screen reader says the name and reads on from there, and Tab goes to its first control. **Escape
- * closes it and gives focus back to the row.** A panel that appears by itself takes no focus: the one
- * of a source that Linear just connected, and the one that a change of width mounts again.
+ * **A panel that a person opened takes focus** (FRU-197). The press of a row changes nothing a screen
+ * reader says but the state of the button. So the panel is a region with the name of its source, and
+ * focus goes to it: a screen reader says the name and reads on from there, and Tab goes to its first
+ * control. **Escape closes it and gives focus back to the row.** A panel that appears by itself takes
+ * no focus: the one of a source that Linear or GitHub just connected.
  */
 function Opened({
-  wide,
   label,
   takesFocus,
   onClose,
   children,
 }: {
-  wide: boolean;
   /** The name of the region: the kind of the source, and which one. */
   label: string;
   /** Set by the press that opens the panel, and spent by the panel that appears. */
@@ -537,9 +519,8 @@ function Opened({
       // The scroll is the one below: a focus that scrolls would put the top of a tall panel off the screen.
       held.current?.focus({ preventScroll: true });
     }
-    if (wide) return;
     held.current?.scrollIntoView({ block: 'nearest' });
-  }, [wide, takesFocus]);
+  }, [takesFocus]);
 
   return (
     <div
@@ -548,9 +529,8 @@ function Opened({
       role="region"
       aria-label={label}
       tabIndex={-1}
-      // Beside the list the panel is the second column of the mockup: 340 px inside its border. Under
-      // its row it is inside the frame of the list, with the rule of the list above it.
-      className={`scroll-mt-4 rounded-frame ${wide ? 'max-w-full min-w-0 flex-[1_1_342px]' : 'border-t border-line bg-subtle p-[12px]'}`}
+      // Inside the frame of the list, with the rule of the list above it and the tint of a panel.
+      className="scroll-mt-4 border-t border-line bg-subtle"
       onKeyDown={(event) => {
         // `Confirmation` and an open list take their own Escape, and stop it before it gets here.
         if (event.key !== 'Escape' || event.defaultPrevented) return;

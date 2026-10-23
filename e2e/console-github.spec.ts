@@ -129,7 +129,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 }
 
 const card = (page: Page) => page.locator('[data-source="GitHub Issues"]');
-const rows = (page: Page) => page.locator('button[aria-pressed]');
+const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.getByRole('region', { name: /^GitHub Issues · / });
 
 /**

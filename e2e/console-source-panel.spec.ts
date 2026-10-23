@@ -2,9 +2,9 @@ import { type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
- * Where the panel of a source opens (FRU-161). From 1280 px it has its column beside the list, as on
- * `design/boards/4-connectors.png`. Under 1280 px there is no such column: the panel opens under the
- * row that was touched, and its top is on the screen.
+ * Where the panel of a source opens (FRU-161, FRU-403). At every width it is an accordion under the
+ * row that was touched, where `design/boards/4-connectors.png` draws a column beside the list, and its
+ * top is on the screen.
  *
  * The worker is answered by stubs: this measures layout.
  */
@@ -42,12 +42,13 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
   });
 }
 
-const rows = (page: Page) => page.locator('button[aria-pressed]');
+const rows = (page: Page) => page.locator('button[id^="source-row-"]');
 const panel = (page: Page) => page.locator('#source-panel');
 
 for (const { width, height, locale } of [
   { width: 390, height: 844, locale: 'fr' },
   { width: 768, height: 1024, locale: 'en' },
+  { width: 1440, height: 900, locale: 'en' },
 ] as const) {
   test(`at ${width} px, the panel of a source opens under its row, on the screen`, async ({ page }) => {
     await page.setViewportSize({ width, height });
@@ -58,11 +59,9 @@ for (const { width, height, locale } of [
     for (const index of [0, COUNT - 1]) {
       const row = rows(page).nth(index);
       await row.click();
-      await expect(row).toHaveAttribute('aria-pressed', 'true');
+      await expect(row).toHaveAttribute('aria-expanded', 'true');
 
-      // The top of the panel, its title and the reason the source needs somebody, are on the screen.
-      const title = page.getByRole('heading', { level: 2, name: 'Linear', exact: true });
-      await expect(title).toBeInViewport();
+      // The top of the panel and the reason the source needs somebody are on the screen.
       await expect
         .poll(async () => {
           const box = await panel(page).boundingBox();
@@ -76,32 +75,28 @@ for (const { width, height, locale } of [
       expect(await row.evaluate((button) => button.nextElementSibling?.id)).toBe('source-panel');
       await expect(row).toHaveAttribute('aria-controls', 'source-panel');
 
+      // It takes the width of its row, right under it, and the next row comes after it.
+      const under = (await row.boundingBox())!;
+      const opened = (await panel(page).boundingBox())!;
+      expect(Math.abs(opened.x - under.x)).toBeLessThan(2);
+      expect(Math.abs(opened.width - under.width)).toBeLessThan(2);
+      expect(Math.abs(opened.y - (under.y + under.height))).toBeLessThan(2);
+      if (index === 0) {
+        const next = (await rows(page).nth(1).boundingBox())!;
+        expect(Math.abs(next.y - (opened.y + opened.height))).toBeLessThan(2);
+      }
+
       // A second touch closes it.
       await row.click();
       await expect(panel(page)).toHaveCount(0);
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
     }
   });
 }
 
-test('at 1440 px, the panel of a source keeps its column beside the list', async ({ page }) => {
-  await stubWorker(page, 'en');
-  await page.goto(`${CONSOLE}/w/w1/connectors`);
-  const row = rows(page).first();
-  await row.click();
-  await expect(panel(page)).toBeVisible();
-
-  const list = await row.boundingBox();
-  const heading = await page.getByRole('heading', { name: 'Connected', exact: true }).boundingBox();
-  const beside = await panel(page).boundingBox();
-  expect(beside!.x).toBeGreaterThan(list!.x + list!.width);
-  // Its top is level with the heading of the list, as on the board.
-  expect(Math.abs(beside!.y - heading!.y)).toBeLessThan(20);
-});
-
 /**
- * FRU-197. A press of a row said nothing to a screen reader but the state of the button, and from
- * 1280 px the panel is not the next thing after its row. So the panel that a person opens is a named
- * region that takes focus, and Escape gives focus back to the row.
+ * FRU-197. A press of a row says nothing to a screen reader but the state of the button. So the panel
+ * that a person opens is a named region that takes focus, and Escape gives focus back to the row.
  */
 for (const { width, height, locale, name } of [
   { width: 390, height: 844, locale: 'fr', name: 'Linear · Clé de Person 1' },
@@ -122,9 +117,15 @@ for (const { width, height, locale, name } of [
     await page.keyboard.press('Enter');
     await expect(region).toBeFocused();
     await expect(region).toHaveAttribute('id', 'source-panel');
-    await expect(row).toHaveAttribute('aria-pressed', 'true');
-    // The scroll that shows the panel is not undone by the focus: its title is on the screen.
-    await expect(page.getByRole('heading', { level: 2, name: 'Linear', exact: true })).toBeInViewport();
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    // The scroll that shows the panel is not undone by the focus: its top is on the screen.
+    await expect
+      .poll(async () => {
+        const box = await region.boundingBox();
+
+        return box !== null && box.y >= 0 && box.y < height;
+      })
+      .toBe(true);
 
     // Tab goes on inside the panel, wherever the panel is drawn.
     await page.keyboard.press('Tab');
@@ -149,21 +150,22 @@ for (const { width, height, locale, name } of [
     await page.keyboard.press('Escape');
     await expect(region).toHaveCount(0);
     await expect(row).toBeFocused();
-    await expect(row).toHaveAttribute('aria-pressed', 'false');
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
   });
 }
 
-test('a panel that appears by itself takes no focus: the one a change of width mounts again', async ({ page }) => {
+test('a change of width keeps the panel under its row, and takes the focus from nobody', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await stubWorker(page, 'en');
   await page.goto(`${CONSOLE}/w/w1/connectors`);
   const row = rows(page).first();
   await row.click();
   await expect(panel(page)).toBeFocused();
-  // The person goes back to the row, then the window gets narrow: the panel moves under the row.
+  expect(await row.evaluate((button) => button.nextElementSibling?.id)).toBe('source-panel');
+  // The person goes back to the row, then the window gets narrow: nothing moves, nothing is mounted again.
   await row.focus();
   await page.setViewportSize({ width: 768, height: 1024 });
-  await expect.poll(() => row.evaluate((button) => button.nextElementSibling?.id)).toBe('source-panel');
+  expect(await row.evaluate((button) => button.nextElementSibling?.id)).toBe('source-panel');
 
   await expect(row).toBeFocused();
 });
