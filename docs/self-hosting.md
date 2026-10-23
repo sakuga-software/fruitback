@@ -347,7 +347,7 @@ nobody signed up before it. The worker gives the role in the database, when the 
 no variable names an administrator. On a database that had accounts before this version, the oldest
 account gets the role. The administrator reads every workspace of the instance under
 `/console/admin/`, and each read in a workspace they are not a member of leaves a row that the owners
-of that workspace read: [SECURITY.md](../SECURITY.md#the-administrator-of-the-instance-fru-261) says
+of that workspace read: [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#the-administrator-of-the-instance-fru-261) says
 what they see and what they do not. No route names a second administrator yet.
 
 The other people of a workspace are invited from the console, on « Members ». An instance with no

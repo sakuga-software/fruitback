@@ -125,9 +125,9 @@ the two.
 
 ## Where to go next
 
-|                                    |                                                                                     |
-| ---------------------------------- | ----------------------------------------------------------------------------------- |
-| [install.md](install.md)           | The site's and the operator's side: the instance, the site, the widget, the tracker |
-| [reviewing.md](reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                    |
-| [self-hosting.md](self-hosting.md) | Running the instance: from an empty folder to a pin, then backups and upgrades      |
-| [../SECURITY.md](../SECURITY.md)   | What each boundary actually holds, and what it does not                             |
+|                                                                                   |                                                                                     |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [install.md](install.md)                                                          | The site's and the operator's side: the instance, the site, the widget, the tracker |
+| [reviewing.md](reviewing.md)                                                      | The reviewer's side: the extension, switching a site on, pairing                    |
+| [self-hosting.md](self-hosting.md)                                                | Running the instance: from an empty folder to a pin, then backups and upgrades      |
+| [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md) | What each boundary actually holds, and what it does not                             |

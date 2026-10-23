@@ -113,6 +113,9 @@ How this repository is formatted, tested and documented, and which test holds ea
   an empty element with that id at the end of the old page, and `docs.js` goes on to the new one.
   Links of the worker, the console and the repository go to the new page directly. `docs-site.test.ts`
   checks both ends of `moved.yml`, and every link between two guides, heading included.
+  **A guide links a file out of the site by its address on GitHub** (FRU-429): the site publishes
+  `docs/` without `decisions/`, so `../SECURITY.md` answered 404 there. `docs-site.test.ts` refuses a
+  relative link that leaves the published pages.
   Code blocks and tables take `tabindex="0"`, so a keyboard can scroll them (axe,
   `scrollable-region-focusable`). The one script, `docs.js`, adds « Copy » to the code blocks.
   Say only what exists, and what `docs/` already says: a price the beta has not set is « Free during

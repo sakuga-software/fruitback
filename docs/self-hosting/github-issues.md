@@ -18,7 +18,7 @@ settings panel offers only these three.
 | closed as not planned, or as a duplicate                       | `closed`, shown as Closed |
 
 **On a public repository, every note is public**, with the name and the address of the reporter when
-they typed one. See [SECURITY.md](../../SECURITY.md).
+they typed one. See [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md).
 
 ## Create the App
 

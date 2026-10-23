@@ -91,11 +91,11 @@ who reads the copy. [Receiving notes on your own address](rest-connector.md) is 
 `postgres` is the default, and the database is the one every instance has (FRU-225): the notes of
 every workspace are in it, in the clear, beside the accounts. Who reads them there is whoever can
 read the database or a dump of it: the role of `FRUITBACK_DATABASE_URL`, the people who run the
-server, and whoever holds a backup. [SECURITY.md](../SECURITY.md#what-the-database-keeps-and-who-reads-it)
+server, and whoever holds a backup. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#what-the-database-keeps-and-who-reads-it)
 says it in full.
 
 In the two trackers, the issue description also states the reporter's name and e-mail in a line
-your team reads, and the seed below it repeats them. [SECURITY.md](../SECURITY.md#a-seed-is-stored-in-the-clear-in-your-database-or-your-tracker)
+your team reads, and the seed below it repeats them. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-seed-is-stored-in-the-clear-in-your-database-or-your-tracker)
 says who can read each store. **On a public GitHub repository, that is everyone.**
 
 ### Who can read a note back
@@ -105,7 +105,7 @@ name and e-mail included, and the replies of your team with their authors' names
 them is the visibility of the site, chosen in the console when it is added (FRU-225): `members`, a
 session of its workspace and nobody else, which is what a site added with no visibility gets; or
 `everyone`, anybody who knows a page address and the id of the site, with or without the widget.
-[SECURITY.md](../SECURITY.md#who-reads-the-pins-the-visibility-of-each-site) says it in full.
+[SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#who-reads-the-pins-the-visibility-of-each-site) says it in full.
 
 - A worker of before FRU-225 read `FRUITBACK_READ` instead, public by default. That worker no longer
   starts.

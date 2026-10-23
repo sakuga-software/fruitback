@@ -326,4 +326,4 @@ expires within 30 days regardless.
   at runtime, and unregistered when you switch it off.
 
 The full list, and what each refusal is for, is in
-[SECURITY.md](../SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).
+[SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).

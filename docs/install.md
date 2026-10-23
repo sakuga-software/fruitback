@@ -251,7 +251,7 @@ cannot mount a second widget.
 
 The reviewer then turns your origin on in the extension's popup, in **Team** mode, and pairs with
 the worker, from the console. Until they do, the extension relays nothing — see
-[the threat model](../SECURITY.md#what-the-extension-relays-and-what-it-refuses-to) for why, and for
+[the threat model](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#what-the-extension-relays-and-what-it-refuses-to) for why, and for
 the five other things the relay checks first.
 
 > This mode is worth turning on only for a site that « Members of … » read. On a site that everyone

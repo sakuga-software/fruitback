@@ -339,6 +339,30 @@ describe('the guides split in pages (FRU-427)', () => {
     );
   });
 
+  /**
+   * The site publishes `docs/` and nothing above it, and not `decisions/` (FRU-429). A relative link
+   * to `../SECURITY.md` reads well on GitHub, and answers 404 on fruitback.com. Such a link names the
+   * file on GitHub instead.
+   */
+  it('links nothing out of the published pages by a relative path', () => {
+    const outside = excluded();
+    const leaving = pages().flatMap((page) => {
+      const text = readFileSync(new URL(page, DOCS), 'utf8').replaceAll(/^```[\s\S]*?^```/gm, '');
+
+      return [...text.matchAll(/\]\(([^)\s]+)\)/g)].flatMap((match) => {
+        const link = match[1] as string;
+        if (/^[a-z]+:/.test(link) || link.startsWith('#')) return [];
+        const target = new URL(link.split('#')[0] ?? '', new URL(page, DOCS)).pathname;
+        if (!target.startsWith(DOCS.pathname)) return [`${page}: ${link}`];
+        const inside = target.slice(DOCS.pathname.length);
+
+        return outside.some((entry) => inside === entry || inside.startsWith(`${entry}/`)) ? [`${page}: ${link}`] : [];
+      });
+    });
+
+    assert.deepEqual(leaving, [], 'these links leave the site: name the file on GitHub');
+  });
+
   /** A split moves headings from one file to another: a link between two guides is where it breaks. */
   it('links each guide only to pages that exist, and to headings they have', () => {
     const broken = pages().flatMap((page) => {

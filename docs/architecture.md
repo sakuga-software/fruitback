@@ -107,9 +107,9 @@ an author-written id is kept, a `useId` `:r7:` and a CSS-modules class are refus
 that repeats is anchored under the nearest ancestor that _is_ identifiable rather than pathed from
 `<html>`.
 
-See [`packages/shared/src/seed.ts`](../packages/shared/src/seed.ts),
-[`packages/shared/src/markdown-description.ts`](../packages/shared/src/markdown-description.ts) and
-[`packages/widget/src/selector.ts`](../packages/widget/src/selector.ts).
+See [`packages/shared/src/seed.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/seed.ts),
+[`packages/shared/src/markdown-description.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/markdown-description.ts) and
+[`packages/widget/src/selector.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/widget/src/selector.ts).
 
 ## Layout
 
