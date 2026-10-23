@@ -57,10 +57,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and
   Escape give the row back, with focus on its first button. `e2e/console-confirm.spec.ts` measures it
   on both screens, at 1440 px in English and 390 px in French (FRU-191).
-  **A panel writes the whole list of a site, one write at a time** (FRU-123): a second gesture made
+  **The places of a site are written whole, one write at a time** (FRU-123): a second gesture made
   before the first list is kept would start from the list of before and take the first change away,
-  so the controls of the list are disabled while it is written. `e2e/console-destinations.spec.ts`
-  holds a write open and tries the second gesture, on the panel of a Linear and of an address.
+  so the controls of the list are disabled while it is written. `e2e/console-site-places.spec.ts`
+  holds a write open and tries the second gesture.
   **The panel of a source is an accordion under its row, at every width** (FRU-161, FRU-403), where
   the board draws a column beside the list: the row is a button with `aria-expanded`, names the panel
   in `aria-controls`, and the page scrolls as far as the panel needs. The panel is a `SidePanel` with
@@ -348,9 +348,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
   200, the answer of `GET …/sites` is the place for `q` and a cursor, a route of the worker.
   **A card has one menu, and what it opens is after the card**, over the whole width of the grid:
-  « Install », for every role; « Preview builds », which is the proof of a domain of FRU-103, and
-  « Remove », for who manages the sites. One thing is open at a time, and what closes gives focus
-  back to the button of the card. « Remove » asks twice: the menu is the first time, and
+  « Install », for every role; « Destinations », « Preview builds », which is the proof of a domain
+  of FRU-103, and « Remove », for who manages the sites. One thing is open at a time, and what
+  closes gives focus back to the button of the card. « Remove » asks twice: the menu is the first
+  time, and
   `Confirmation` (`confirm.tsx`) the second; once the site is gone, focus goes to the search.
   **No item changes who sees the notes of a site**: the worker has no route for it, and a button
   that does nothing is not drawn; so the form that adds a site asks it, in the card of a workspace
@@ -407,10 +408,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   or how many notes did not reach an address**; the count is read with the list, and an address
   whose count was not read says « Connected » and no number. On the chosen row the red is the
   strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
-  draw**: the places of each site (FRU-123), under « Sites sending here » for the sites that send
-  there and under « Other sites » for the others; the notes that did not arrive; « Use an API
-  key ». It does not show « Attach a picture of the element » (FRU-198), a count of notes by site
-  nor « Last issue created » (FRU-237). **The drop of a status is beside its list**, where the
+  draw**: « Sites sending here », the sites that send there and their places in it, read only, with
+  a link to the Sites screen, where a site chooses them (FRU-399); the notes that did not arrive;
+  « Use an API key ». It does not show « Attach a picture of the element » (FRU-198), a count of
+  notes by site nor « Last issue created » (FRU-237). **The drop of a status is beside its list**,
+  where the
   mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
   times, so each button also holds the name of its source for a screen reader.
   `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
@@ -429,17 +431,32 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   usual. **A row names the account**
   (« Installed on acme », from `GitHub App · acme`), and its state is the one of FRU-102. **A panel
   that needs repair links to `https://github.com/apps/fruitback-app`**: the console does not know
-  the id of the installation, which the worker keeps sealed. **A site chooses a repository** from
-  `GET …/connectors/<id>/repositories`, private ones first, then the public ones under « Public
-  repositories: their issues are public »; the place is sent as `{ connector, repository }` and
-  read back from `teamId`. **A place in a public repository says, under it, that each note becomes an
+  the id of the installation, which the worker keeps sealed. **A site chooses a repository** on the
+  Sites screen (FRU-399), from `GET …/connectors/<id>/repositories`, private ones first, then the
+  public ones under « GitHub, public repositories of {account}: their issues are public »; the
+  place is sent as `{ connector, repository }` and read back from `teamId`. **A place in a public
+  repository says, under it, that each note becomes an
   issue that anybody can read, from the worker's word on the destination** (FRU-382): `private`
-  comes with each destination of `GET …/sites`, so the warning shows as the panel opens, while the
-  list is read, when it failed, and to a member, who reads no list. Once the list names the
+  comes with each destination of `GET …/sites`, so the warning shows on the card of the site and in
+  the panel of the source as they open, while the list is read, when it failed, and to a member, who
+  reads no list. Once the list names the
   repository, it wins either way: it is GitHub's word now, and the worker's can be older. A destination with no word (a worker of before, a
-  GitHub that did not answer) warns only from the list. **`setPlaces` takes the sources of the workspace**: each panel sends
-  the whole list of a site, and a GitHub place sent as a team makes the worker refuse that list.
-  `e2e/console-github.spec.ts` holds the card, every word, the panel, the bodies sent, 390 px and axe.
+  GitHub that did not answer) warns only from the list. **`setPlaces` takes the sources of the
+  workspace**: the whole list of a site is sent, and a GitHub place sent as a team makes the worker
+  refuse that list. `e2e/console-github.spec.ts` holds the card, every word, the panel, 390 px and
+  axe; `e2e/console-site-places.spec.ts` the places and the bodies sent.
+- **A site chooses where its notes go on the Sites screen** (FRU-399, Mathieu), and no longer in the
+  panel of a source: « Destinations » of the menu of a card, for an owner or an admin
+  (`site-places.tsx`). It lists the places of the site in their order, with « Make it the default »
+  and « Remove », and « Add a destination… » offers what every source of the workspace has: the
+  teams and projects of each Linear, the repositories of each GitHub, each address. The sources are
+  read once with the screen, their teams and repositories when the panel opens; a read that failed
+  says which source and offers « Try again ». **No list is written before the sources are read**: a
+  list is sent with the kind of each source, and with none a GitHub place would go as a team, which
+  the worker refuses. The panel of a GitHub on the Connectors screen reads its repositories too, for
+  who manages the sources, so the list wins there as here (FRU-382). The answer of a write is the
+  list the worker keeps:
+  the card takes it at once, and the sites are not read again. No route of the worker is new.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

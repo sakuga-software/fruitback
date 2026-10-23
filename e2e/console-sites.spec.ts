@@ -704,7 +704,14 @@ test('the menu of a card is walked with the keyboard, and what it opens gives fo
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
   // « Statuses » leads to the page of the statuses of the site (FRU-371).
-  await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Statuses', 'Preview builds', 'Remove']);
+  // « Destinations » sets where the notes of the site go (FRU-399).
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Install',
+    'Destinations',
+    'Statuses',
+    'Preview builds',
+    'Remove',
+  ]);
   await expect(menu.getByRole('menuitem', { name: 'Install' })).toBeFocused();
   await page.waitForTimeout(250);
   const opened = await new AxeBuilder({ page }).include('.kit-menu').analyze();

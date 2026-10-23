@@ -1,25 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type Delivery, MAX_DESTINATIONS, type Site, call, hasRoomFor, placesOf, setPlaces } from '../api';
+import { type Delivery, call } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
-import { known } from '../listed';
-import { Button, Choice, LinkButton, Problem, SidePanel } from '../ui';
+import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
-import { siteLabel } from '../site-address';
 import {
   BlockTitle,
   Disconnect,
   KINDS,
   type PanelProps,
-  SitesState,
+  SendersList,
   hostOf,
   moment,
   shortHost,
 } from './connector-parts';
-
-const HERE = 'fruitback';
-/** The value of the choice « this site sends its notes to the address ». */
-const THERE = 'address';
+import { useWorkspace } from './workspace';
 
 /** Where the contract of the request is written, for whoever writes the receiver. */
 const REST_GUIDE = 'https://fruitback.com/rest-connector.html';
@@ -33,16 +28,13 @@ function reasonOf(delivery: Delivery): string {
 }
 
 /**
- * The panel of an address that receives (FRU-132): which sites send their notes there, and the notes
- * that did not arrive. A site has no team to choose here: it sends, or it does not.
+ * The panel of an address that receives (FRU-132): the sites that send their notes there (read only:
+ * a site chooses its places on the Sites screen, FRU-399), and the notes that did not arrive.
  */
-export function RestPanel({ id, base, connector, connectors, sites, manages, onChanged, onRemoved }: PanelProps) {
+export function RestPanel({ id, base, connector, sites, manages, onChanged, onRemoved }: PanelProps) {
   useLocale();
+  const { workspace } = useWorkspace();
   const [late, setLate] = useState<Delivery[] | undefined>();
-  // A list is written whole, from the list on the screen. A second change before the first one is
-  // kept and read again would be made from the list of before, and would take the first one away:
-  // the controls wait.
-  const [writing, setWriting] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
   const read = useCallback(async () => {
@@ -52,24 +44,6 @@ export function RestPanel({ id, base, connector, connectors, sites, manages, onC
   }, [base, connector.id]);
 
   useEffect(() => void read(), [read]);
-
-  async function place(site: Site, value: string) {
-    // One write at a time: see `writing`.
-    if (writing) return;
-    setWriting(true);
-    setProblem(undefined);
-    // The other places of the site stay, in their order: this address is added last, or taken out.
-    const others = placesOf(site).filter((each) => each.connector !== connector.id);
-    const set = await setPlaces(
-      base,
-      site,
-      value === THERE ? [...others, { connector: connector.id }] : others,
-      connectors,
-    );
-    if (!set.ok) setProblem(writeProblemOf(set, msg('The destination of this site did not change. Try again.')));
-    await onChanged();
-    setWriting(false);
-  }
 
   async function retry(delivery: Delivery) {
     setProblem(undefined);
@@ -105,45 +79,12 @@ export function RestPanel({ id, base, connector, connectors, sites, manages, onC
           }
         : {})}
     >
-      <section className="flex flex-col gap-[8px]">
-        <BlockTitle>{t('Sites sending here')}</BlockTitle>
-        <SitesState sites={sites} />
-        <ul className="flex flex-col gap-[10px]">
-          {(known(sites) ?? []).map((site) => {
-            const places = placesOf(site);
-            const sends = places.some((each) => each.connector === connector.id);
-            // The worker refuses a sixth place: the reason is said here, and the choice is not offered.
-            const full = !hasRoomFor(site, connector.id);
-            const elsewhere = places.some((each) => each.connector !== connector.id);
-
-            return (
-              <li key={site.id}>
-                <Choice
-                  compact
-                  label={siteLabel(site.origin)}
-                  value={sends ? THERE : HERE}
-                  disabled={!manages || full || writing}
-                  onChange={(value) => void place(site, value)}
-                  options={[
-                    { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback only') },
-                    { value: THERE, label: t('Fruitback, and this address') },
-                  ]}
-                />
-                {manages && full ? (
-                  <p className="mt-[4px] text-hint text-muted">
-                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-        <p className="text-hint text-muted">
-          <LinkButton space="inline" href={REST_GUIDE} newTab>
-            {t('The request, and how to check its signature')}
-          </LinkButton>
-        </p>
-      </section>
+      <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      <p className="text-hint text-muted">
+        <LinkButton space="inline" href={REST_GUIDE} newTab>
+          {t('The request, and how to check its signature')}
+        </LinkButton>
+      </p>
 
       <section className="flex flex-col gap-[8px]" data-deliveries>
         <BlockTitle>{t('Notes that did not arrive')}</BlockTitle>

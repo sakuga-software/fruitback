@@ -289,83 +289,51 @@ test('the row of an installation names its account, and one that needs repair li
   );
 });
 
-test('a site chooses a repository, sent as a repository, and a public one says its issues are public', async ({
-  page,
-}) => {
-  const worker = await workerWith(page);
-  await openGithub(page);
-  const add = panel(page).getByRole('button', { name: /Add a repository for staging\.acme\.dev/ });
-  await expect(add).toBeEnabled();
-  await add.click();
-  // The private ones, then the public ones, each in the order of their names.
-  await expect(page.getByRole('option')).toHaveText(['Add a repository…', 'acme/api', 'acme/web', 'acme/Docs']);
-  await expect(page.getByText('Public repositories: their issues are public', { exact: true })).toBeVisible();
-  await picture(page, 'repository-picker', { fullPage: false });
-  await page.getByRole('option', { name: 'acme/Docs', exact: true }).click();
-
-  await expect.poll(() => worker.sent).toEqual([[{ connector: 'g1', repository: 'acme/docs' }]]);
-  // The choice comes back from `teamId`, in lower case.
-  await expect(panel(page).getByText('GitHub · acme/docs', { exact: true })).toBeVisible();
-  const warning = panel(page).locator('[data-public]');
-  await expect(warning).toHaveText(
-    'acme/docs is public: each note of this site becomes an issue that anybody can read.',
-  );
-  await picture(page, 'repository-public-warning');
-
-  // A private repository says nothing of the kind.
-  await panel(page).getByRole('button', { name: 'Remove', exact: true }).click();
-  await expect.poll(() => worker.sent.length).toBe(2);
-  await panel(page)
-    .getByRole('button', { name: /Add a repository for staging\.acme\.dev/ })
-    .click();
-  await page.getByRole('option', { name: 'acme/web', exact: true }).click();
-  await expect(panel(page).getByText('GitHub · acme/web', { exact: true })).toBeVisible();
-  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
-  await expectNoViolation(page, 'the panel of an installation');
-});
-
-test('a read of the repositories that failed says so, and « Try again » reads them again', async ({ page }) => {
-  const worker = await workerWith(page);
-  worker.silentReads = 1;
-  await openGithub(page);
-  await expect(panel(page).getByRole('alert')).toHaveText(
-    'GitHub did not answer with the repositories of this installation.',
-  );
-  const add = panel(page).getByRole('button', { name: /Add a repository for staging\.acme\.dev/ });
-  await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
-
-  await expect(panel(page).getByRole('alert')).toHaveCount(0);
-  await add.click();
-  await expect(page.getByRole('option')).toHaveText(['Add a repository…', 'acme/api', 'acme/web', 'acme/Docs']);
-});
-
 /** The warning of a public repository, and its words for acme/docs. */
 const PUBLIC_DOCS = 'acme/docs is public: each note of this site becomes an issue that anybody can read.';
 
-test('the warning of a public repository shows at once, while the list of the repositories is still read (FRU-382)', async ({
+test('in the panel, once the list names the repository, it wins over an older word of the worker (FRU-382)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // The worker last read acme/web public; GitHub's list says it is private. And acme/docs the other way.
+  worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
+  worker.repositoriesWait = true;
+  const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
+  await page.route('**/console/workspaces/w1/sites', (route) =>
+    route.fulfill({
+      json: { sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destinations: [stale] }] },
+    }),
+  );
+  await openGithub(page);
+  // While the list is read, the worker's word.
+  await expect(panel(page).locator('[data-public]')).toHaveCount(1);
+
+  worker.repositoriesWait = false;
+  await page.reload();
+  await rows(page).nth(1).click();
+  await expect(panel(page)).toBeVisible();
+  await expect.poll(() => worker.listed).toBeGreaterThan(1);
+  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
+});
+
+test('in the panel, a list of the repositories that failed keeps the warning, says so, and reads again', async ({
   page,
 }) => {
   const worker = await workerWith(page);
   worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
-  worker.repositoriesWait = true;
+  // Every read fails: a development build runs the effect twice.
+  worker.silentReads = 2;
   await openGithub(page);
-
-  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
-  // The list was asked for and has not answered: the warning is the worker's word on the destination.
-  expect(worker.listed).toBeGreaterThan(0);
-  await expect(page.getByRole('option')).toHaveCount(0);
-});
-
-test('a list of the repositories that failed does not hide the warning (FRU-382)', async ({ page }) => {
-  const worker = await workerWith(page);
-  worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
-  // Every read fails: a development build runs the effect twice, and a second read must not answer.
-  worker.silentReads = 100;
-  await openGithub(page);
-
   await expect(
     panel(page).getByText('GitHub did not answer with the repositories of this installation.'),
   ).toBeVisible();
+  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+  await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(panel(page).getByText('GitHub did not answer with the repositories of this installation.')).toHaveCount(
+    0,
+  );
+  // acme/docs is public in the list too: the warning stays.
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
 });
 
@@ -384,28 +352,6 @@ test('a member reads the warning too, and asks for no list (FRU-382)', async ({ 
   await expectNoViolation(page, 'the panel of a member');
 });
 
-test('once the list names the repository, it wins over an older word of the worker (FRU-382)', async ({ page }) => {
-  const worker = await workerWith(page);
-  // The worker last read acme/web public; GitHub's list now says it is private.
-  worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
-  worker.repositoriesWait = true;
-  const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
-  await page.route('**/console/workspaces/w1/sites', (route) =>
-    route.fulfill({
-      json: { sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destinations: [stale] }] },
-    }),
-  );
-  await openGithub(page);
-  // While the list is read, the worker's word.
-  await expect(panel(page).locator('[data-public]')).toHaveCount(1);
-
-  worker.repositoriesWait = false;
-  await page.reload();
-  await rows(page).nth(1).click();
-  await expect(panel(page).getByRole('button', { name: /Add a repository for staging\.acme\.dev/ })).toBeEnabled();
-  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
-});
-
 test('the control: with no word of the worker and no list, nothing says the repository is public (FRU-382)', async ({
   page,
 }) => {
@@ -418,23 +364,6 @@ test('the control: with no word of the worker and no list, nothing says the repo
 
   await expect(panel(page).getByText('GitHub · acme/docs', { exact: true })).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveCount(0);
-});
-
-test('the panel of Linear sends the GitHub place of a site as a repository', async ({ page }) => {
-  const worker = await workerWith(page);
-  worker.places = [
-    { connector: 'g1', teamId: 'acme/web' },
-    { connector: 'c1', teamId: 't1' },
-  ];
-  await page.goto(`${CONSOLE}/w/w1/connectors`);
-  await rows(page).first().click();
-  await expect(page.getByRole('region', { name: /^Linear · / })).toBeVisible();
-  await page
-    .getByRole('region', { name: /^Linear · / })
-    .getByRole('button', { name: 'Remove', exact: true })
-    .click();
-
-  await expect.poll(() => worker.sent).toEqual([[{ connector: 'g1', repository: 'acme/web' }]]);
 });
 
 for (const locale of ['en', 'fr'] as const) {

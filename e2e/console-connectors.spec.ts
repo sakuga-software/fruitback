@@ -263,8 +263,9 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
     'row-gap': '24px',
   });
 
-  // The sites that send here, each with its places; then the ones that do not, to add this place.
-  await expect(card.locator('[data-site]')).toHaveCount(3);
+  // The sites that send here, each with its places, read only: a site chooses them on the Sites
+  // screen (FRU-399), which the block leads to.
+  await expect(card.locator('[data-site]')).toHaveCount(2);
   const sender = card.locator('[data-site="staging.acme.dev"]');
   expect.soft(await styles(sender, ['padding-top', 'padding-bottom', 'border-bottom-width'])).toEqual({
     'padding-top': '8px',
@@ -274,9 +275,10 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect
     .soft(await styles(sender.getByText('https://staging.acme.dev', { exact: true }), ['font-weight']))
     .toEqual({ 'font-weight': '600' });
-  const others = card.getByRole('heading', { level: 3, name: 'Other sites' });
-  expect((await box(card.locator('[data-site="support.acme.dev"]'))).y).toBeGreaterThan((await box(others)).y);
-  expect((await box(card.locator('[data-site="acme.dev"]'))).y).toBeLessThan((await box(others)).y);
+  await expect(card.getByRole('heading', { level: 3, name: 'Other sites' })).toHaveCount(0);
+  await expect(card.locator('[data-site="support.acme.dev"]')).toHaveCount(0);
+  await expect(card.getByText('Each site chooses where its notes go, on the Sites screen.')).toBeVisible();
+  await expect(card.getByRole('link', { name: 'Open the sites' })).toHaveAttribute('href', '/w/w1/sites');
 
   // The statuses: since FRU-368 they are set per site, on its statuses page, which this block links to.
   await expect(
