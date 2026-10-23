@@ -31,7 +31,8 @@ describe('the shortcut that starts a note (FRU-291)', () => {
   it('asks for no new permission', () => {
     // FRU-423 added `contextMenus`, for « Capture with Fruitback » (`context-menu.test.ts`).
     assert.deepEqual(manifest.permissions, ['storage', 'scripting', 'activeTab', 'alarms', 'contextMenus']);
-    assert.deepEqual(manifest.optional_host_permissions, ['*://*/*']);
+    // FRU-425 added `<all_urls>`, asked for by the options page only (`capture-everywhere.test.ts`).
+    assert.deepEqual(manifest.optional_host_permissions, ['*://*/*', '<all_urls>']);
   });
 
   it('sends the widget the command of the popup button, and nothing for a command that is not ours', () => {

@@ -249,6 +249,15 @@ export type PreferencesOptions = {
   /** « Show CSS selectors » (FRU-349). Off by default. */
   selectors: boolean;
   onSelectors: (on: boolean) => Promise<void> | void;
+  /** « Allow captures on every site » (FRU-425): whether `<all_urls>` is held now. */
+  capturesEverywhere: boolean;
+  /** The words of the prompt of this browser, quoted by the row. */
+  captureWarning: string;
+  /**
+   * Asks for `<all_urls>`, or gives it back. Called in the click, before anything is awaited.
+   * Answers whether it is held after: a refused prompt puts the switch back, with no error.
+   */
+  onCapturesEverywhere: (on: boolean) => Promise<boolean>;
 };
 
 /** What a preference whose write failed says: the control is back where it was. */
@@ -351,6 +360,40 @@ export function preferencesSection(document: Document, options: PreferencesOptio
           label: t('Show CSS selectors'),
           size: 'preference',
           onChange: (on) => save(options.onSelectors(on), () => flipBack(control, on)),
+        });
+
+        return control;
+      })(),
+    ),
+  );
+
+  card.append(
+    row(
+      document,
+      t('Allow captures on every site'),
+      t(
+        'Your browser will say that Fruitback can “{warning}”. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.',
+        { warning: t(options.captureWarning) },
+      ),
+      (() => {
+        const control: HTMLElement = toggle(document, {
+          checked: options.capturesEverywhere,
+          label: t('Allow captures on every site'),
+          size: 'preference',
+          // The request is the first call of the click: an `await` before it loses the gesture.
+          onChange: (on) => {
+            problem.textContent = '';
+            void options.onCapturesEverywhere(on).then(
+              (held) => {
+                if (held !== on) flipBack(control, on);
+              },
+              (error: unknown) => {
+                console.error('[fruitback] the permission of the captures did not change', error);
+                flipBack(control, on);
+                problem.textContent = t(PREFERENCE_NOT_SAVED);
+              },
+            );
+          },
         });
 
         return control;

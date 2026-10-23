@@ -39,6 +39,7 @@ import {
   sitesHead,
   sitesTable,
 } from '../../src/site-page.ts';
+import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../src/capture-everywhere.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
 import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
@@ -706,6 +707,10 @@ async function preferences(): Promise<HTMLElement> {
   if (typeof commands.openShortcutSettings === 'function') onShortcut = () => void commands.openShortcutSettings?.();
   else if (!import.meta.env.FIREFOX) onShortcut = () => void browser.tabs.create({ url: CHROMIUM_SHORTCUTS_URL });
   const panel = (browser as unknown as { sidePanel?: unknown }).sidePanel !== undefined;
+  // FRU-425: `<all_urls>`, asked for here and nowhere else.
+  const capturesEverywhere = await browser.permissions
+    .contains({ origins: [...CAPTURE_EVERYWHERE.origins] })
+    .catch(() => false);
 
   return preferencesSection(document, {
     // The icon opens the panel only where the browser has one to open (Chrome): no row on Firefox.
@@ -724,6 +729,13 @@ async function preferences(): Promise<HTMLElement> {
     // Absent is off: turning it off removes the key rather than keeping a `false`.
     onSelectors: (on) =>
       on ? browser.storage.local.set({ [SHOW_SELECTORS_KEY]: true }) : browser.storage.local.remove(SHOW_SELECTORS_KEY),
+    capturesEverywhere,
+    captureWarning: browserWarning(import.meta.env.FIREFOX),
+    onCapturesEverywhere: (on) =>
+      setCaptureEverywhere(on, {
+        request: (wanted) => browser.permissions.request({ origins: [...wanted.origins] }),
+        remove: (given) => browser.permissions.remove({ origins: [...given.origins] }),
+      }),
   });
 }
 

@@ -74,7 +74,9 @@ export default defineConfig({
     // capture needs in team mode, where nobody clicked the icon. It adds no warning at install.
     permissions: ['storage', 'scripting', 'activeTab', 'alarms', 'contextMenus'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
-    optional_host_permissions: ['*://*/*'],
+    // FRU-425: `<all_urls>`, requested only by « Allow captures on every site » of the options page:
+    // `tabs.captureVisibleTab` takes it, and refuses `*://*/*`. Optional, so nothing changes at install.
+    optional_host_permissions: ['*://*/*', '<all_urls>'],
     // Without these the browser draws a grey square with an initial, in the toolbar and in the list
     // of extensions, and a store listing is refused for want of a 128px one (FRU-78).
     icons: Object.fromEntries(ICON_SIZES.map((size) => [size, iconPath(size)])),

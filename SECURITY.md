@@ -2176,6 +2176,17 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   What the page decides is the area, and nothing else: it buys a capture of its own tab, that goes to
   the worker of its own entry with a session it never sees, and only when `activeTab` was granted.
   The widget is hidden while the capture is taken.
+- **« Allow captures on every site »** (FRU-425) is `<all_urls>`, in `optional_host_permissions`:
+  nothing asks for it at install, and the popup never asks for it. Only the switch of the options
+  page does, in its click, and the row quotes the browser's own warning (Chrome: « Read and change
+  all your data on all websites », measured with `getPermissionWarningsByManifest`). **What it gives
+  the extension:** `tabs.captureVisibleTab` with no gesture on any tab, and, since it is a host
+  permission on every origin, access to every page the scripting API could reach. **What the
+  extension does with it:** the capture, under every condition above; the content scripts stay
+  registered for the sites the reviewer turned on, and only those (the `sync` of `background.ts`
+  starts from the rules that are on, then checks the grant of each). With it, every rule reads as granted. Turning the switch off removes `<all_urls>`
+  (`permissions.remove`). Whether Chrome then keeps a grant made before for one site is not
+  measured: a rule that reads « not granted » after asks again.
 - **« Capture with Fruitback », in the context menu of a page** (FRU-423), is the `contextMenus`
   permission. It grants no host, no content script and no read of a page: it puts one item in the
   menu of a web page (`http` and `https` only), and Chrome shows no warning for it (measured on the

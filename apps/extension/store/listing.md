@@ -109,10 +109,22 @@ In team mode, renews the short-lived access token before it expires. A Manifest 
 Shows the notes of the page in the browser's side panel, next to the page, when the user opens it from the popup. The panel is a page packaged in the extension; it reads nothing from a website by itself and gives the extension no access to any page.
 ```
 
+`contextMenus` (FRU-423)
+
+```text
+Adds one item, "Capture with Fruitback", to the context menu of a web page. A click on it is the user's gesture that lets the extension capture the visible tab (activeTab), for a note the user is writing on a site of their team. It reads nothing by itself, and on a page where the user did not turn Fruitback on, it does nothing.
+```
+
 Host permission (`optional_host_permissions: *://*/*`)
 
 ```text
 The extension requests no host access at install. The pattern is optional and wide because the user chooses which site to review, and that can be any staging or production site. Access is requested for one origin at a time, when the user clicks "Turn on for this site". When the user turns a site off, the extension unregisters its scripts for that site, runs nothing there, and gives the access to that site back to the browser. In team mode the extension also asks for access to the address of the user's own feedback server, to send the notes to it.
+```
+
+Host permission (`optional_host_permissions: <all_urls>`, FRU-425)
+
+```text
+Optional, and never requested at install or by the popup. The user can request it only from the options page, with the switch "Allow captures on every site", whose text quotes the browser's own warning. The browser's capture of the visible tab (tabs.captureVisibleTab) needs either activeTab, granted by a click on the extension, or <all_urls>; a host pattern such as *://*/* is refused. With <all_urls>, the user no longer clicks the icon before each capture. The extension uses it for that capture only: it registers its scripts on the sites the user turned on, exactly as without it. Turning the switch off gives the permission back to the browser.
 ```
 
 **Remote code**: No.
@@ -156,6 +168,8 @@ Fruitback needs a server. A public sandbox is available for the review. It holds
 To stop it: click the icon, then "Turn off here". The extension then runs nothing on the site, and gives its access to the site back to the browser.
 
 The second mode, "Team", needs a paired session with a private server and cannot be tried on the sandbox. It uses the same permissions.
+
+Captures of the page (team mode only): the browser refuses tabs.captureVisibleTab without activeTab or <all_urls>. The user grants activeTab by clicking the Fruitback icon, or the item "Capture with Fruitback" of the context menu. <all_urls> is optional: only the switch "Allow captures on every site" of the options page (Preferences) requests it, and turning the switch off removes it. Nothing is requested at install.
 ```
 
 ## Mozilla (addons.mozilla.org)

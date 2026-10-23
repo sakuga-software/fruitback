@@ -262,6 +262,9 @@ describe('« Preferences » (FRU-302)', () => {
     onSynced: nothing,
     selectors: false,
     onSelectors: nothing,
+    capturesEverywhere: false,
+    captureWarning: 'Read and change all your data on all websites',
+    onCapturesEverywhere: async (on: boolean) => on,
     ...extra,
   });
 
@@ -275,6 +278,7 @@ describe('« Preferences » (FRU-302)', () => {
         'Open notes in the sidebar',
         'Name on my notes',
         'Show CSS selectors',
+        'Allow captures on every site',
         'Leave feedback shortcut',
         'Keep my rules in the account of this browser',
       ],
@@ -299,17 +303,52 @@ describe('« Preferences » (FRU-302)', () => {
 
     assert.deepEqual(
       switches.map((each) => each.getAttribute('aria-label')),
-      ['Open notes in the sidebar', 'Show CSS selectors', 'Keep my rules in the account of this browser'],
+      [
+        'Open notes in the sidebar',
+        'Show CSS selectors',
+        'Allow captures on every site',
+        'Keep my rules in the account of this browser',
+      ],
     );
     for (const each of switches) each.click();
     assert.deepEqual(calls, ['panel:true', 'selectors:true', 'sync:true']);
+  });
+
+  it('asks for the captures on every site in the click, quotes the prompt, and puts the switch back when it is refused (FRU-425)', async () => {
+    const asked: boolean[] = [];
+    let answer = false;
+    const section = preferencesSection(
+      page(),
+      options({
+        onCapturesEverywhere: (on) => {
+          asked.push(on);
+
+          return Promise.resolve(answer);
+        },
+      }),
+    );
+    const knob = section.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Allow captures on every site"]');
+    assert.ok(knob);
+    assert.match(
+      section.textContent ?? '',
+      /Your browser will say that Fruitback can “Read and change all your data on all websites”/,
+    );
+    knob.click();
+    // Asked in the click itself: nothing awaited before.
+    assert.deepEqual(asked, [true]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(knob.getAttribute('aria-checked'), 'false', 'a refused prompt puts the switch back');
+    answer = true;
+    knob.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(knob.getAttribute('aria-checked'), 'true');
   });
 
   it('draws no panel row where the browser has no panel to open', () => {
     const { panelOnClick: _panel, ...firefox } = options();
     const section = preferencesSection(page(), firefox);
 
-    assert.equal(section.querySelectorAll('[role="switch"]').length, 2);
+    assert.equal(section.querySelectorAll('[role="switch"]').length, 3);
   });
 
   it('keeps the name as it is typed, trimmed, at most 120 characters', () => {
@@ -362,10 +401,19 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onSynced: refuse,
       selectors: false,
       onSelectors: refuse,
+      capturesEverywhere: false,
+      captureWarning: 'Read and change all your data on all websites',
+      onCapturesEverywhere: refuse,
     });
-    const [panel, selectors, synced] = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+    const [panel, selectors, captures, synced] = [...section.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
     const name = section.querySelector<HTMLInputElement>('input.pref-name');
-    if (panel === undefined || selectors === undefined || synced === undefined || name === null) {
+    if (
+      panel === undefined ||
+      selectors === undefined ||
+      captures === undefined ||
+      synced === undefined ||
+      name === null
+    ) {
       throw new Error('no control');
     }
 
@@ -378,6 +426,12 @@ describe('« Preferences » whose write failed (raised in review)', () => {
     selectors.click();
     await settle();
     assert.equal(selectors.getAttribute('aria-checked'), 'false', 'the switch shows a value that was not kept');
+
+    // FRU-425: a request that throws puts the switch back too, and says so.
+    captures.click();
+    await settle();
+    assert.equal(captures.getAttribute('aria-checked'), 'false');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, PREFERENCE_NOT_SAVED);
 
     synced.click();
     await settle();
@@ -400,6 +454,9 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onSynced: () => Promise.resolve(),
       selectors: false,
       onSelectors: () => Promise.resolve(),
+      capturesEverywhere: false,
+      captureWarning: 'Read and change all your data on all websites',
+      onCapturesEverywhere: (on) => Promise.resolve(on),
     });
     const panel = section.querySelector<HTMLButtonElement>('[role="switch"]');
     if (panel === null) throw new Error('no switch');

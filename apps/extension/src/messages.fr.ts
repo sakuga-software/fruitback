@@ -6,6 +6,13 @@
  */
 export const FRENCH: Readonly<Record<string, string>> = {
   'This preference could not be saved. Try again.': 'Cette préférence n’a pas pu être enregistrée. Réessayez.',
+  // FRU-425: « Allow captures on every site », and the prompt of each browser that it quotes.
+  'Allow captures on every site': 'Autoriser les captures sur tous les sites',
+  'Your browser will say that Fruitback can “{warning}”. Fruitback uses it only for the captures you ask for, so you no longer click its icon before each one. Turning it off gives it back to your browser.':
+    'Votre navigateur dira que Fruitback peut « {warning} ». Fruitback s’en sert seulement pour les captures que vous demandez : vous n’avez plus à cliquer sur son icône avant chacune. La désactiver la rend à votre navigateur.',
+  // Measured: Chrome in French says it so (`e2e/capture-everywhere.spec.ts`).
+  'Read and change all your data on all websites': 'Lire et modifier toutes vos données sur tous les sites Web',
+  'Access your data for all websites': 'Accéder à vos données sur tous les sites web',
   // FRU-423: the item of the context menu of a page.
   'Capture with Fruitback': 'Capturer avec Fruitback',
   // FRU-298: the screens 2 and 3 of the popup.

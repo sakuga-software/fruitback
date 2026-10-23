@@ -10,7 +10,7 @@ describe('the item « Capture with Fruitback » of the context menu (FRU-423)', 
   it('is the permission contextMenus of the manifest, and no host', () => {
     const manifest = config.manifest as { permissions?: string[]; optional_host_permissions?: string[] };
     assert.ok(manifest.permissions?.includes('contextMenus'));
-    assert.deepEqual(manifest.optional_host_permissions, ['*://*/*']);
+    assert.deepEqual(manifest.optional_host_permissions, ['*://*/*', '<all_urls>']);
   });
 
   it('is on the web pages only, in the language of the reviewer', () => {
