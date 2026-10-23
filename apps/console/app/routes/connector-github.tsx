@@ -199,6 +199,7 @@ export function GithubPanel({ id, base, connector, connectors, sites, manages, o
   return (
     <SidePanel
       id={id}
+      flush
       title={t(KINDS.github.name)}
       detail={t('The GitHub App, installed on {account}', { account })}
       {...(manages

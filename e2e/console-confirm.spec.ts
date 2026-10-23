@@ -94,7 +94,7 @@ const screens = [
     askWithKeys: (page: Page) => page.keyboard.press('Enter'),
     second: (locale: Locale) => (locale === 'en' ? 'Disconnect Key of Ana' : 'Déconnecter Clé de Ana'),
     // The panel of the source opens from its row.
-    open: (page: Page) => page.locator('button[aria-pressed]').first().click(),
+    open: (page: Page) => page.locator('button[id^="source-row-"]').first().click(),
     deletes: '/console/workspaces/w1/connectors/c1',
   },
 ] as const;

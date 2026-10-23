@@ -1041,6 +1041,31 @@ textarea {
   gap: 22px;
 }
 
+/* An accordion under its row (FRU-403): the frame of the list is its card, and its row names it. */
+.kit-panel[data-flush] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.kit-panel[data-flush] .kit-panel__head {
+  padding: 16px 22px 0;
+  border-bottom: 0;
+}
+
+.kit-panel[data-flush] .kit-panel__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.kit-panel[data-flush] .kit-panel__detail {
+  margin-top: 0;
+}
+
 .kit-panel__foot {
   display: flex;
   flex-wrap: wrap;

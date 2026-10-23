@@ -61,14 +61,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   before the first list is kept would start from the list of before and take the first change away,
   so the controls of the list are disabled while it is written. `e2e/console-destinations.spec.ts`
   holds a write open and tries the second gesture, on the panel of a Linear and of an address.
-  **The panel of a source opens where it is seen** (FRU-161): from 1280 px in its column beside the
-  list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
-  the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
-  768 and 1440 px.
+  **The panel of a source is an accordion under its row, at every width** (FRU-161, FRU-403), where
+  the board draws a column beside the list: the row is a button with `aria-expanded`, names the panel
+  in `aria-controls`, and the page scrolls as far as the panel needs. The panel is a `SidePanel` with
+  `flush`: no card of its own inside the frame of the list, and its title said to a screen reader
+  only, as the row above shows the name. `e2e/console-source-panel.spec.ts` measures it at 390, 768
+  and 1440 px.
   **A panel that a person opens takes focus** (FRU-197): it is a region named after its source, focus
   goes to it when a press of its row opened it, and Escape closes it and gives focus back to the
-  row. A panel that appears by itself takes none: the one a change of width mounts again. The same
-  spec holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
+  row. A panel that appears by itself takes none: the one of a source just connected. The same spec
+  holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
   and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
   admin, the domains of the workspace (`domains.tsx`), under the row of a site, behind « Preview
@@ -243,7 +245,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px; in a row of a table it takes the line of the table),
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
   a value set elsewhere; `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
-  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`; `flush` for an accordion under its row), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a

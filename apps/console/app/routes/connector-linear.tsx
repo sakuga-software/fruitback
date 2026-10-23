@@ -280,6 +280,7 @@ export function LinearPanel({ id, base, connector, connectors, sites, manages, o
   return (
     <SidePanel
       id={id}
+      flush
       title={t(KINDS.linear.name)}
       detail={
         OAUTH_LABEL.test(connector.label)
