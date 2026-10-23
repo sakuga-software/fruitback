@@ -412,6 +412,44 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await settingsOf(linear.id), DEFAULT_CONNECTOR_SETTINGS);
   });
 
+  it('keeps the name of a connector, given from its own workspace only (FRU-404)', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+    const linear = await store.addConnector(acme.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const other = await store.addConnector(acme.id, { kind: 'linear', label: 'Other', sealed: 'sealed' });
+    const nameOf = async (id: string) => (await store.connectors(acme.id)).find((each) => each.id === id)?.name;
+
+    assert.equal(linear.name, undefined);
+    assert.equal(await store.renameConnector(globex.id, linear.id, 'Clients'), false);
+    assert.equal(await store.renameConnector(acme.id, 'con_nobody', 'Clients'), false);
+    assert.equal(await nameOf(linear.id), undefined);
+
+    assert.equal(await store.renameConnector(acme.id, linear.id, 'Clients'), true);
+    assert.equal(await nameOf(linear.id), 'Clients');
+    assert.equal((await store.connectors(acme.id)).find((each) => each.id === linear.id)?.label, 'Linear');
+    assert.equal(await nameOf(other.id), undefined, 'one connector, not its neighbour');
+
+    assert.equal(await store.renameConnector(acme.id, linear.id, undefined), true);
+    assert.equal(await nameOf(linear.id), undefined);
+
+    // A GitHub App installed again keeps its connector, and so its name.
+    const installed = await store.attachInstallation(acme.id, {
+      label: 'GitHub App · acme',
+      sealed: 's1',
+      installation: 'f1',
+    });
+    const github = installed?.connector.id as string;
+    assert.equal(await store.renameConnector(acme.id, github, 'Clients'), true);
+    const again = await store.attachInstallation(acme.id, {
+      label: 'GitHub App · acme',
+      sealed: 's2',
+      installation: 'f1',
+    });
+    assert.equal(again?.created, false);
+    assert.equal(again?.connector.name, 'Clients');
+    assert.equal(await nameOf(github), 'Clients');
+  });
+
   it('removes a connector only from its own workspace, and its sites keep their notes in the worker again', async (store) => {
     const { workspace: acme } = await world(store);
     const { workspace: globex } = await otherWorld(store);

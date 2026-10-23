@@ -1984,6 +1984,13 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   (`/organization/update`, which also takes a slug, a logo and metadata) stays closed. The id, the
   sites, the members and the extensions that are paired do not move: they name the id.
   test:`moves nothing else: the id, the sites, the members, and the extensions that are paired`.
+- **A connector is named by an owner or an admin of its workspace** (FRU-404), by
+  `POST /console/workspaces/<id>/connectors/<connector>` with `{ name }`, under the rule of the name of
+  a workspace; `null` or an empty name takes it away. A member and a guest get `403`, and a connector
+  of another workspace `404`, as for its settings. The name is kept in `connectors.name`, beside the
+  `label` that the worker writes, and is never sent to a tracker nor to a page of a site: only
+  the routes of the connectors of the console answer it, to who may see the tracker.
+  test:`lets only who manages the workspace name a connector, and only one of their own`.
 
 ### A reply to a note, from the page (FRU-257)
 

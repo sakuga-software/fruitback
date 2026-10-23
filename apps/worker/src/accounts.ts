@@ -322,6 +322,11 @@ export type Connector = {
   workspaceId: string;
   kind: ConnectorKind;
   label: string;
+  /**
+   * The name a workspace gave the connector (FRU-404), so that two connectors of one kind read apart.
+   * Absent: none was given. `label` stays the worker's own words, which the console reads.
+   */
+  name?: string;
   createdAt: string;
   attention?: ConnectorAttention;
   settings: ConnectorSettings;
@@ -531,6 +536,11 @@ export type AccountStore = {
    * workspace, and then nothing changes.
    */
   setConnectorSettings(workspace: string, connector: string, settings: ConnectorSettings): Promise<boolean>;
+  /**
+   * The name a workspace gives its connector (FRU-404), or `undefined` to take it away. `false` when
+   * the connector is not of this workspace, and then nothing changes.
+   */
+  renameConnector(workspace: string, connector: string, name: string | undefined): Promise<boolean>;
   /** The encrypted key of a connector and its settings, for the worker's own calls. */
   sealedKey(
     connector: string,

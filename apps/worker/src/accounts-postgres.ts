@@ -993,6 +993,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             workspace_id: connectors.workspace_id,
             kind: connectors.kind,
             label: connectors.label,
+            name: connectors.name,
             created_at: connectors.created_at,
             attention: connectors.attention,
             attention_at: connectors.attention_at,
@@ -1057,6 +1058,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             workspace_id: connectors.workspace_id,
             kind: connectors.kind,
             label: connectors.label,
+            name: connectors.name,
             created_at: connectors.created_at,
             attention: connectors.attention,
             attention_at: connectors.attention_at,
@@ -1103,6 +1105,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db
           .update(connectors)
           .set({ settings: JSON.stringify(settings) })
+          .where(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)))
+          .returning({ id: connectors.id }),
+      );
+
+      return changed.length === 1;
+    },
+
+    async renameConnector(workspace, connector, name) {
+      const changed = await run((db) =>
+        db
+          .update(connectors)
+          .set({ name: name ?? null })
           .where(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)))
           .returning({ id: connectors.id }),
       );

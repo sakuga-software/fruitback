@@ -279,6 +279,20 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'keeps the name of a connector, given from its own workspace only (FRU-404)',
+    by: 'names the connector of any workspace',
+    replace: {
+      after: 'async renameConnector(',
+      from: 'eq(connectors.workspace_id, workspace), eq(connectors.id, connector)',
+      to: 'sql`true`, eq(connectors.id, connector)',
+    },
+  },
+  {
+    breaks: 'keeps the name of a connector, given from its own workspace only (FRU-404)',
+    by: 'reads no name back',
+    replace: { after: 'async connectors(', from: 'name: connectors.name,', to: '' },
+  },
+  {
     breaks: 'removes a connector only from its own workspace, and its sites keep their notes in the worker again',
     by: 'removes a connector for any workspace',
     replace: {

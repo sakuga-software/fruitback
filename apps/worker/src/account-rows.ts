@@ -147,6 +147,7 @@ export function connectorOf(row: Record<string, unknown> | undefined): Connector
     workspaceId: row.workspace_id,
     kind,
     label: row.label,
+    ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
     settings: connectorSettingsOf(row.settings),
     ...(reason === undefined

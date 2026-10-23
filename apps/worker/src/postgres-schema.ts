@@ -67,6 +67,8 @@ export const connectors = pgTable(
     // What a workspace sets on the connector (FRU-102), as JSON: `connectorSettingsOf` reads it.
     settings: text('settings').notNull().default('{}'),
     installation: text('installation'),
+    // The name a workspace gave the connector (FRU-404), NULL for none: `label` stays the worker's.
+    name: text('name'),
   },
   (table) => [
     unique('connectors_installation_key').on(table.installation),
