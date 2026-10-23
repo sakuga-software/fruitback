@@ -5,9 +5,8 @@ import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
-import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar, StatusDot } from '../ui';
+import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
-import { STAGE_NAMES } from './connector-parts';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
@@ -154,7 +153,6 @@ export default function Sites() {
           row stays in what is seen of it. */}
       {listed ? (
         <>
-          <Legend />
           {adding ? (
             <section
               aria-label={t('Add a site')}
@@ -499,25 +497,6 @@ function SiteRows({
         </tr>
       )}
     </>
-  );
-}
-
-/** The five statuses, as the drops of the bars mean them. */
-function Legend() {
-  useLocale();
-
-  return (
-    <ul
-      aria-label={t('Statuses')}
-      className="mb-[12px] flex flex-wrap gap-x-[18px] gap-y-[6px] text-hint leading-auto text-muted"
-    >
-      {STAGES.map((stage) => (
-        <li key={stage} className="flex items-center gap-[7px]">
-          <StatusDot status={stage} />
-          {t(STAGE_NAMES[stage])}
-        </li>
-      ))}
-    </ul>
   );
 }
 

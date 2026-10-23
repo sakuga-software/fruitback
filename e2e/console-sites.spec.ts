@@ -181,7 +181,7 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
-test('the list is the table of the mockup, with its six columns and the legend of the statuses', async ({ page }) => {
+test('the list is the table of the mockup, with its six columns and no legend of the statuses', async ({ page }) => {
   await page.clock.setFixedTime(NOON);
   await workerWith(page);
   await open(page);
@@ -201,27 +201,11 @@ test('the list is the table of the mockup, with its six columns and the legend o
   const hidden = await box(headers.last().locator('span'));
   expect.soft({ width: hidden.width, height: hidden.height }).toEqual({ width: 1, height: 1 });
 
-  // The legend of the statuses, above the table: the five words, each after its drop.
-  const legend = page.getByRole('list', { name: 'Statuses' });
-  await expect(legend.getByRole('listitem')).toHaveText(['New', 'To do', 'In progress', 'Done', 'Closed']);
-  expect.soft(await styles(legend, ['font-size', 'column-gap', 'row-gap', 'margin-bottom'])).toEqual({
-    'font-size': '13px',
-    'column-gap': '18px',
-    'row-gap': '6px',
-    'margin-bottom': '12px',
-  });
-  expect.soft(await painted(legend, 'color')).toEqual(rgb(MUTED));
-  const drops = legend.locator('[aria-hidden="true"]');
-  await expect(drops).toHaveCount(5);
-  // The five statuses of the widget, chosen by Mathieu (FRU-334).
-  const colours = ['#bec2c8', '#d9dbdf', '#f3bb3d', '#5560c4', '#a52a3a'];
-  for (const [index, colour] of colours.entries())
-    expect.soft(await painted(drops.nth(index), 'backgroundColor'), `drop ${index}`).toEqual(rgb(colour));
-  expect.soft(await styles(legend.getByRole('listitem').first(), ['column-gap'])).toEqual({ 'column-gap': '7px' });
-  const drop = await box(drops.first());
-  expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 9, height: 9 });
-  // The table starts where the mockup draws it, under the legend.
-  expectBox(await box(table(page).locator('table')), { x: 298, y: 159, width: 1093.5 }, 2, 'the table');
+  // No legend of the statuses above the table (FRU-400): a bar says its counts in its own name, and
+  // the page of the statuses of a site says what each colour is.
+  await expect(page.getByRole('list', { name: 'Statuses' })).toHaveCount(0);
+  // The table starts right under the head of the page, where the legend was (FRU-400).
+  expectBox(await box(table(page).locator('table')), { x: 298, y: 130, width: 1093.5 }, 2, 'the table');
 
   // The frame and the cells, as the mockup writes them.
   expect.soft(await styles(table(page), ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
