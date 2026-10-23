@@ -70,7 +70,10 @@ export function ConnectorName({
         onSubmit={(event) => void submit(event)}
         onKeyDown={(event) => {
           if (event.key !== 'Escape') return;
+          // `Opened` already ignores an Escape that is prevented; stopping it too keeps any other
+          // handler above from reading it.
           event.preventDefault();
+          event.stopPropagation();
           setName(connector.name ?? '');
           close();
         }}
