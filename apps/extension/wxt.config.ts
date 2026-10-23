@@ -70,7 +70,9 @@ export default defineConfig({
     // FRU-296: wxt adds `sidePanel` on Chrome, with `side_panel.default_path`, because
     // `entrypoints/sidepanel/` exists; on Firefox it writes `sidebar_action`, which asks for no
     // permission. `sidePanel` adds no warning at install: `e2e/side-panel.spec.ts` asks Chrome.
-    permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
+    // FRU-423: `contextMenus` for « Capture with Fruitback »: a click on it grants `activeTab`, which a
+    // capture needs in team mode, where nobody clicked the icon. It adds no warning at install.
+    permissions: ['storage', 'scripting', 'activeTab', 'alarms', 'contextMenus'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
     // Without these the browser draws a grey square with an initial, in the toolbar and in the list

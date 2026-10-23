@@ -228,6 +228,8 @@ export default defineContentScript({
         let done = false;
         let counts: ReturnType<NonNullable<typeof widget>['pageCounts']>;
         if (widget !== undefined && message.command === 'leave-feedback') done = widget.leaveFeedback();
+        // FRU-423: the context menu granted `activeTab`; the capture of an area, or a note.
+        if (widget !== undefined && message.command === 'capture-area') done = widget.captureArea();
         if (widget !== undefined && message.command === 'show-notes') {
           widget.showEveryNote();
           done = true;

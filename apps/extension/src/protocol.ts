@@ -322,6 +322,8 @@ export const TAB_COMMANDS = [
   // FRU-307: « Show pins on the page », off and on.
   'hide-pins',
   'show-pins',
+  // FRU-423: « Capture with Fruitback » of the context menu.
+  'capture-area',
 ] as const;
 export type TabCommand = (typeof TAB_COMMANDS)[number];
 

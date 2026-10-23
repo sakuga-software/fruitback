@@ -25,6 +25,9 @@ import { type CaptureArea, bytesOf, captureAnswerOf, createCapture, pixelsOf } f
 import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
+import { captureMenu, runCaptureMenu } from '../src/context-menu.ts';
+import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
+import { nearest } from '../src/i18n.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import {
@@ -362,6 +365,8 @@ export default defineBackground(() => {
   // the sessions (`session-previews.test.ts`).
   // A session made or ended changes it too: a site whose session ended opens the popup (review).
   browser.storage.local.onChanged.addListener((changes) => {
+    // FRU-423: the item of the context menu speaks the language of the reviewer.
+    if (changes[LANGUAGE_KEY] !== undefined) void placeCaptureMenu();
     const keys = Object.keys(changes);
     if (changes[PANEL_ON_CLICK_KEY] !== undefined || changes.sites !== undefined || touchesARefreshToken(keys)) {
       followPanelOnClick();
@@ -376,6 +381,7 @@ export default defineBackground(() => {
         .create({ url: browser.runtime.getURL(WELCOME_PATH) })
         .catch((error: unknown) => console.error('[fruitback] could not open the welcome page', error));
     }
+    void placeCaptureMenu();
     void sync();
     // FRU-296: the click on the icon opens the popup; the panel opens from it. The browser keeps the
     // behaviour, so it is set at install and at each update.
@@ -390,6 +396,7 @@ export default defineBackground(() => {
       );
   });
   browser.runtime.onStartup.addListener(() => {
+    void placeCaptureMenu();
     void sync();
     mergeRules();
   });
@@ -444,6 +451,10 @@ export default defineBackground(() => {
     if (alarm.name === PREVIEWS_ALARM) void refreshProven();
     if (alarm.name === CONNECT_ALARM) void claimSignIn();
   });
+  // FRU-423: « Capture with Fruitback ». Its click grants `activeTab` for the tab. See `src/context-menu.ts`.
+  browser.contextMenus.onClicked.addListener((info, tab) =>
+    runCaptureMenu(info, tab, (tabId, message) => browser.tabs.sendMessage(tabId, message)),
+  );
   // FRU-291: the key of the manifest starts a note on the tab it was pressed on. See `runShortcut`.
   browser.commands.onCommand.addListener((command, tab) => {
     void tabOfCommand(tab, () => browser.tabs.query({ active: true, currentWindow: true })).then((pressedOn) =>
@@ -573,4 +584,18 @@ async function cropPicture(picture: Blob, area: CaptureArea): Promise<Blob> {
   bitmap.close();
 
   return canvas.convertToBlob({ type: 'image/png' });
+}
+
+/**
+ * Places « Capture with Fruitback » in the context menu (FRU-423), in the language of the reviewer.
+ * Removed first: `create` fails on an id that is there, and a menu of the version before stays.
+ */
+async function placeCaptureMenu(): Promise<void> {
+  try {
+    const kept = await storedLanguage(browser.storage.local);
+    await browser.contextMenus.removeAll();
+    browser.contextMenus.create(captureMenu(nearest(kept ?? browser.i18n.getUILanguage())));
+  } catch (error) {
+    console.error('[fruitback] could not place the item of the context menu', error);
+  }
 }
