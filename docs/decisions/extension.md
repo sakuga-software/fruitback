@@ -782,7 +782,10 @@ a change when the account refuses one of them, and marks only those as known`. O
   données sur tous les sites Web »), both measured with `getPermissionWarningsByManifest`; Firefox
   « Access your data for all websites », the text Mozilla documents, not measured. With it,
   `captureVisibleTab` takes the tab with no gesture; without it the remedy of FRU-423 stays. Turning
-  it off is `permissions.remove`. The scripts stay on the rules that are on, whatever it grants.
+  it off is `permissions.remove`. **It grants no rule**: the background, the options page, the
+  popup and a pending site read the grant of a rule from `permissions.getAll` without `<all_urls>`
+  (`holdsSiteAccess` of `src/site-grant.ts`), since `permissions.contains` answers `true` for every
+  origin once it is held; a site whose access was removed in the browser stays off.
 - **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
   worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
   text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a

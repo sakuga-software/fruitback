@@ -40,6 +40,7 @@ import {
   sitesTable,
 } from '../../src/site-page.ts';
 import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../src/capture-everywhere.ts';
+import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
 import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
@@ -342,7 +343,8 @@ async function pairedAs(site: SiteConfig): Promise<string | undefined> {
 async function ruleRow(pattern: string, site: SiteConfig, proven: FreshPreviews, copied: boolean): Promise<RuleRow> {
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
-  const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
+  // FRU-425: `<all_urls>` grants no rule (`src/site-grant.ts`).
+  const granted = await holdsSiteAccess(matchPatternFor(pattern), browser.permissions);
   // A rule stored before FRU-75, or the previews of a site whose worker does not list them now
   // (FRU-103). It runs nowhere, so the row offers only to remove it, and says which of the two it is.
   const refused = lendsSession(pattern, site, proven);

@@ -2170,11 +2170,13 @@ Each one waits in the database of the worker until the tracker has it, and no lo
 - **Who reads a file after: the people of the tracker.** A read of the page says the names of the
   files of a note and the address the tracker gave each, for the readers of the note; a guest reads
   the names only, as a guest reads no reference of a tracker.
-- **The capture of a page or of an area needs no new permission** of the extension: `activeTab`, as
-  before (FRU-332). The background takes it only for a site of a workspace in team mode, on an https
+- **The capture of a page or of an area needs `activeTab`, or `<all_urls>`** (FRU-332, FRU-425):
+  `activeTab` by a gesture on the page, or `<all_urls>` when the reviewer turned on « Allow captures
+  on every site » (below), with no gesture then. The background takes it only for a site of a workspace in team mode, on an https
   worker, with a session, and answers the PNG to the widget, which sends it like a file of the disk.
   What the page decides is the area, and nothing else: it buys a capture of its own tab, that goes to
-  the worker of its own entry with a session it never sees, and only when `activeTab` was granted.
+  the worker of its own entry with a session it never sees, and only when `activeTab` was granted or
+  `<all_urls>` is held.
   The widget is hidden while the capture is taken.
 - **« Allow captures on every site »** (FRU-425) is `<all_urls>`, in `optional_host_permissions`:
   nothing asks for it at install, and the popup never asks for it. Only the switch of the options
@@ -2184,7 +2186,11 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   permission on every origin, access to every page the scripting API could reach. **What the
   extension does with it:** the capture, under every condition above; the content scripts stay
   registered for the sites the reviewer turned on, and only those (the `sync` of `background.ts`
-  starts from the rules that are on, then checks the grant of each). With it, every rule reads as granted. Turning the switch off removes `<all_urls>`
+  starts from the rules that are on, then checks the grant of each). **`<all_urls>` grants no rule**
+  (`src/site-grant.ts`, review of #560): the grant of a rule is read from `permissions.getAll`,
+  leaving out `<all_urls>` and the pattern of every web page, because `permissions.contains` says
+  `true` for every origin once `<all_urls>` is held. A site whose access the reviewer removed in the
+  browser stays off, and reads « not granted », with the switch on. Turning the switch off removes `<all_urls>`
   (`permissions.remove`). Whether Chrome then keeps a grant made before for one site is not
   measured: a rule that reads « not granted » after asks again.
 - **« Capture with Fruitback », in the context menu of a page** (FRU-423), is the `contextMenus`

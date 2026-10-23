@@ -33,6 +33,7 @@ import {
   offerFor,
 } from '../../src/cloud.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
+import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { rememberLanguage } from '../../src/language-sync.ts';
 import {
@@ -362,7 +363,8 @@ function unreachableScreen(account: Account | undefined): HTMLElement {
 
 /** Whether the browser still grants the sites of a rule: access can be removed in its settings. */
 async function holdsAccess(pattern: string): Promise<boolean> {
-  return browser.permissions.contains({ origins: [matchPatternFor(pattern)] }).catch(() => true);
+  // FRU-425: `<all_urls>` grants no rule (`src/site-grant.ts`).
+  return holdsSiteAccess(matchPatternFor(pattern), browser.permissions).catch(() => true);
 }
 
 /**
