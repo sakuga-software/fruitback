@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router';
+import { extensionBrowsers } from '../api';
+import { watchConnection } from '../connect-watch';
 import { t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
 import { Button, EntryPage, Lead, LinkButton, Title } from '../ui';
@@ -10,11 +13,26 @@ import { useLocale } from '../use-locale';
  * worker, and opens `/connect/<request>` with the word to check: the same way in as a popup opened
  * anywhere else, and the same session, of the account.
  *
- * It mints nothing and reads nothing. Before FRU-313 the button minted a pairing code, and the
+ * It mints nothing. Before FRU-313 the button minted a pairing code, and the
  * worker's page `/pair` held it: a session of one workspace, with the words of a worker.
+ *
+ * It reads the browsers of the extension of the account while its tab is shown, and leads to the
+ * console as soon as one connects (FRU-410): the worker is the only one that sees it.
  */
 export default function ConnectStart() {
   useLocale();
+  const navigate = useNavigate();
+
+  useEffect(
+    () =>
+      watchConnection({
+        read: () => extensionBrowsers({ quiet: true }),
+        page: document,
+        now: Date.now,
+        onConnected: () => void navigate('/', { replace: true }),
+      }),
+    [navigate],
+  );
 
   useEffect(() => {
     const before = document.title;

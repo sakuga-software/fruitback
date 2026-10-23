@@ -117,8 +117,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« Connect this browser » of a site leads to the sign-in of the popup, on the Cloud** (FRU-313).
   On a console of Fruitback Cloud (`connectsBySignIn` of `instance.ts`, the host of the worker) the
   button opens `/connect`, a page that says the three steps of the popup: the icon, « Sign in with
-  email », the word. It mints no code and reads nothing, and the session is the one of the account,
-  so the popup offers « Add to … and turn on » after it like after any sign-in. The worker's page
+  email », the word. It mints no code, and the session is the one of the account, so the popup
+  offers « Add to … and turn on » after it like after any sign-in. **`/connect` leaves for the
+  console once a browser connects** (FRU-410, `connect-watch.ts`): it reads `GET /console/me/browsers`
+  every ten seconds while its tab is shown (six of the twenty requests a minute that the worker takes
+  from one address by default), nothing while it is hidden, and at once when it is shown
+  again, since the person comes back from the tab where they pressed « Connect ». A browser counts
+  when it was not in the first list read, or, signed out at first, when it connected after the page
+  opened (two minutes of margin for the clocks). A `401` there ends no session: the person may sign
+  in from the other tab. The console cannot tell that it is this browser, and cannot see that the
+  extension is installed: that would take a content script on the console or `externally_connectable`
+  in the manifest (`extension.md`), and neither is wanted. The worker's page
   `/pair` held a session of one workspace, in the words of a worker. **A self-hosted console keeps
   the pairing link** (`useConnect`): the extension of the store signs in to the Cloud alone
   (`WXT_FRUITBACK_CLOUD`), so it cannot sign in to that worker.

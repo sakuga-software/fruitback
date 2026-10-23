@@ -450,13 +450,15 @@ test.describe('Connect this browser (FRU-240)', () => {
 
 /**
  * « Connect this browser » from the console of Fruitback Cloud (FRU-313): `/connect` says to sign in
- * from the popup. It mints no code and asks the worker nothing, so the page is the same signed in or
- * not. Which consoles lead here is `connectsBySignIn` of `instance.ts`: the console of these specs
+ * from the popup. It mints no code and asks the worker nothing that pairs, so the page is the same
+ * signed in or not: it reads the browsers of the extension only, to leave once one connects (FRU-410). Which consoles lead here is `connectsBySignIn` of `instance.ts`: the console of these specs
  * is self-hosted, and still pairs.
  */
 test.describe('the way to connect a browser from the console of the Cloud (FRU-313)', () => {
   for (const locale of ['en', 'fr'] as const) {
-    test(`says the three steps of the popup, and asks the worker nothing, in ${locale}`, async ({ browser }) => {
+    test(`says the three steps of the popup, and asks the worker nothing that pairs, in ${locale}`, async ({
+      browser,
+    }) => {
       const context = await browser.newContext({ locale: locale === 'en' ? 'en-US' : 'fr-FR' });
       const page = await context.newPage();
       const asked: string[] = [];
@@ -493,4 +495,102 @@ test.describe('the way to connect a browser from the console of the Cloud (FRU-3
       await context.close();
     });
   }
+});
+
+const LONG_AGO = {
+  id: 'ext_old',
+  browser: 'Firefox on Linux',
+  connectedAt: '2026-10-01T09:00:00Z',
+  usedAt: '2026-10-01T09:00:00Z',
+};
+
+/**
+ * `/connect` reads `GET /console/me/browsers` every ten seconds while its tab is shown, and leads to
+ * the console once a browser connects (FRU-410). The clock of the page is driven, so no test waits.
+ * `browsers` is what the worker lists; `null` refuses, as for somebody who is not signed in.
+ */
+async function connectWatched(
+  page: Page,
+  first: object[] | null,
+): Promise<{ list: (browsers: object[] | null) => void; reads: () => number }> {
+  let browsers = first;
+  let reads = 0;
+  await page.route(`${WORKER_ORIGIN}/**`, (route) => {
+    if (new URL(route.request().url()).pathname !== '/console/me/browsers') {
+      return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
+    }
+    reads += 1;
+
+    return browsers === null
+      ? route.fulfill({ status: 401, json: { error: 'unauthorized' } })
+      : route.fulfill({ json: { browsers } });
+  });
+  await page.clock.install({ time: new Date('2026-10-23T12:00:00Z') });
+  await page.goto(`${CONSOLE}/connect`);
+  await expect(page.locator('main h1')).toHaveText('Connect this browser');
+  // The dev server mounts the page twice (`StrictMode` of the default entry), so it reads twice at
+  // once. The clock of the page stands still: nothing else is read until a test moves it.
+  await expect.poll(() => reads).toBeGreaterThan(0);
+  await expect(page.locator('main h1')).toBeVisible();
+  await new Promise((done) => setTimeout(done, 300));
+  const before = reads;
+
+  return { list: (next) => void (browsers = next), reads: () => reads - before };
+}
+
+/** Shows or hides the tab, as the browser does when the person goes to another tab and back. */
+async function showTab(page: Page, state: 'visible' | 'hidden'): Promise<void> {
+  await page.evaluate((shown) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => shown });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+}
+
+test.describe('/connect leaves once a browser connects (FRU-410)', () => {
+  const JUST_NOW = {
+    id: 'ext_new',
+    browser: 'Chrome on macOS',
+    connectedAt: '2026-10-23T12:00:20Z',
+    usedAt: '2026-10-23T12:00:20Z',
+  };
+
+  test('reads the browsers every ten seconds, and leads to the console when one appears', async ({ page }) => {
+    const worker = await connectWatched(page, [LONG_AGO]);
+    await page.clock.runFor(10_000);
+    await expect.poll(worker.reads).toBe(1);
+    // The browser of the first list was there before: the page stays.
+    await expect(page).toHaveURL(`${CONSOLE}/connect`);
+    worker.list([LONG_AGO, JUST_NOW]);
+    await page.clock.runFor(10_000);
+    await expect(page).not.toHaveURL(`${CONSOLE}/connect`);
+  });
+
+  test('asks nothing while its tab is hidden, and asks at once when it is shown again', async ({ page }) => {
+    const worker = await connectWatched(page, []);
+    await showTab(page, 'hidden');
+    await page.clock.runFor(60_000);
+    expect(worker.reads()).toBe(0);
+    // Connected from the other tab, in the meantime.
+    worker.list([JUST_NOW]);
+    await showTab(page, 'visible');
+    await expect(page).not.toHaveURL(`${CONSOLE}/connect`);
+    expect(worker.reads()).toBe(1);
+  });
+
+  test('signed out, keeps reading without ending anything, and takes no browser connected before', async ({ page }) => {
+    const worker = await connectWatched(page, null);
+    await page.clock.runFor(10_000);
+    await expect.poll(worker.reads).toBe(1);
+    // Signed in from the other tab: a browser of long ago is not this one.
+    worker.list([LONG_AGO]);
+    await page.clock.runFor(10_000);
+    await expect.poll(worker.reads).toBe(2);
+    await expect(page).toHaveURL(`${CONSOLE}/connect`);
+    await expect(page.locator('main h1')).toHaveText('Connect this browser');
+    // A refused read is no ended session: « Your session ended » is not said (FRU-148).
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    worker.list([LONG_AGO, JUST_NOW]);
+    await page.clock.runFor(10_000);
+    await expect(page).not.toHaveURL(`${CONSOLE}/connect`);
+  });
 });
