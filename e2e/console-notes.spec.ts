@@ -193,6 +193,8 @@ type Worker = {
   /** Releases a read that `waits`. */
   release: () => void;
   retry: 'ok' | 'refused' | 'waits';
+  /** The sources of the workspace, which may have a name (FRU-404). */
+  connectors: unknown[];
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Worker> {
@@ -203,6 +205,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     read: 'list',
     release: () => release(),
     retry: 'ok',
+    connectors: CONNECTORS,
   };
   const delivered = new Set<string>();
   const answer = (pathname: string, route: Route) => {
@@ -210,7 +213,7 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname === '/console/workspaces/w1/connectors') {
       return role === 'guest'
         ? route.fulfill({ status: 403, json: { error: 'forbidden' } })
-        : route.fulfill({ json: { connectors: CONNECTORS, available: true } });
+        : route.fulfill({ json: { connectors: worker.connectors, available: true } });
     }
     const retry = /^\/console\/workspaces\/w1\/notes\/(\w+)\/retry$/.exec(pathname);
     if (retry !== null) {
@@ -797,3 +800,14 @@ for (const locale of ['en', 'fr'] as const) {
     await expectNoViolation(page, `390 px, ${locale}`);
   });
 }
+
+test('a source its workspace named is called by its name, on its chip and in its rows (FRU-404)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.connectors = [{ ...(CONNECTORS[0] as object), name: 'Clients' }, CONNECTORS[1]];
+  await open(page);
+  await expect(chips(page)).toHaveText(['All10', 'Clients6', 'REST API3', 'In Fruitback1']);
+  await expect(rows(page).getByText('Clients', { exact: true }).first()).toBeVisible();
+  await expect(rows(page).getByText('Linear', { exact: true })).toHaveCount(0);
+  // A source with no name keeps the name of its kind.
+  await expect(rows(page).getByText('REST API', { exact: true }).first()).toBeVisible();
+});

@@ -109,6 +109,8 @@ export type Connector = {
   id: string;
   kind: 'linear' | 'rest' | 'github';
   label: string;
+  /** The name the workspace gave it (FRU-404). Absent: none, or a worker of before. */
+  name?: string;
   createdAt: string;
   attention?: ConnectorAttention;
   /** Absent from a worker of before FRU-102: the panel then has no settings to show. */

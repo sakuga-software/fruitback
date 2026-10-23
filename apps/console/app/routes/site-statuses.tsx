@@ -28,7 +28,7 @@ import {
 } from '../site-statuses';
 import { Button, Choice, Field, IconButton, LinkButton, Problem, Radios, StatusDot, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
-import { STAGE_NAMES } from './connector-parts';
+import { STAGE_NAMES, placeLabel } from './connector-parts';
 import { PageHead, useWorkspace } from './workspace';
 
 /**
@@ -111,7 +111,9 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
     if (seen.has(list.key)) continue;
     seen.add(list.key);
     const kind: string = connector.kind;
-    if (kind === 'linear') sections.push({ kind, connector, teamId: list.teamId, label: place.label });
+    // A source its workspace named says its name in place of its kind (FRU-404): « Clients · Design ».
+    if (kind === 'linear')
+      sections.push({ kind, connector, teamId: list.teamId, label: placeLabel(connector, place.label) });
     // A list of GitHub is its connector's, and says every repository of it the site sends to: the label
     // of one would name the others wrongly. One repository keeps the label the worker gave its place.
     if (kind === 'github') {
@@ -120,7 +122,7 @@ function sectionsOf(site: Site, connectors: readonly Connector[]): Section[] {
         repositories.length < 2
           ? place.label
           : `GitHub · ${repositories.map((each) => each.teamId ?? each.connector).join(', ')}`;
-      sections.push({ kind, connector, teamId: undefined, label });
+      sections.push({ kind, connector, teamId: undefined, label: placeLabel(connector, label) });
     }
   }
 

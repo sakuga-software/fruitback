@@ -1166,4 +1166,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   "Linear's colour": 'Couleur de Linear',
   'A text colour of your own goes with a colour of your own.':
     'Une couleur de texte à vous va avec une couleur de fond à vous.',
+  'A name of one line, up to 80 characters.': 'Un nom d’une ligne, de 80 caractères au plus.',
+  'Only an owner or an admin of the workspace renames a source.':
+    'Seul un propriétaire ou un admin du workspace renomme une source.',
+  'This source is not connected any more.': 'Cette source n’est plus connectée.',
+  'The source was not renamed. Try again.': 'La source n’a pas été renommée. Réessayez.',
+  'Name of this source': 'Nom de cette source',
+  'Empty, it is named {kind}.': 'Vide, elle s’appelle {kind}.',
 };
