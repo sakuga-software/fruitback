@@ -19,17 +19,17 @@
     - title: Run Fruitback yourself
       url: /self-hosting.html
     - title: Behind a reverse proxy
-      url: /self-hosting.html#behind-a-reverse-proxy
+      url: /self-hosting/reverse-proxy.html
     - title: Your own database
-      url: /self-hosting.html#in-a-database-you-already-run
+      url: /self-hosting/database.html
     - title: Back up and restore
-      url: /self-hosting.html#back-it-up
+      url: /self-hosting/backup.html
     - title: GitHub Issues as a store
-      url: /self-hosting.html#storing-the-seeds-in-github-issues
+      url: /self-hosting/github-issues.html
     - title: Upgrade and roll back
-      url: /self-hosting.html#upgrading-and-rolling-back
+      url: /self-hosting/upgrade.html
     - title: When something is wrong
-      url: /self-hosting.html#when-something-is-wrong
+      url: /self-hosting/troubleshooting.html
 - title: Guides
   pages:
     - title: Translate the widget
@@ -47,7 +47,9 @@
     - title: Widget options
       url: /install.html#what-else-init-takes
     - title: Environment variables
-      url: /self-hosting.html#every-environment-variable
+      url: /self-hosting/environment-variables.html
+    - title: Worker responses
+      url: /self-hosting/worker.html
 - title: Privacy and security
   short: Privacy
   pages:

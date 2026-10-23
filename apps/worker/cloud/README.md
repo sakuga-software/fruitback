@@ -642,7 +642,7 @@ image and the one before read the same database.
 1. **Remove `FRUITBACK_GITHUB_OAUTH` from the environment of the worker**, and « Deploy » the image
    that runs. Nothing reads it since switch 2. The image of FRU-150 **refuses to start** with it, or
    with `FRUITBACK_ACCOUNTS_PATH`: `/health` answers `500`, and the log names the variable and
-   `docs/self-hosting.md`. `saveEnvironment` replaces the whole environment: build it again from the
+   `docs/self-hosting/upgrade.md`. `saveEnvironment` replaces the whole environment: build it again from the
    Keychain entries, without that one.
 2. **The worker of FRU-150.** « Deploy ». Check: `/health` answers `200`; the log says « better-auth
    is ready, under /console/auth »; `GET /auth/providers` answers `betterAuth` and nothing else;

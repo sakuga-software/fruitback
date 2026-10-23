@@ -548,7 +548,7 @@ describe('the conformance suite', () => {
  * provider, and no test reads it.
  *
  * The matrix lists the stores that an operator can choose. A store that `readConfig` refuses by its
- * name since FRU-225 is not one of them, and the page names it in « Upgrading » only.
+ * name since FRU-225 is not one of them, and only `docs/self-hosting/upgrade.md` names it.
  */
 describe('the store matrix in docs/self-hosting.md', () => {
   const offered = (provider: string) => !Object.hasOwn(REFUSED_SINCE_POSTGRES, provider);

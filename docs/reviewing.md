@@ -158,7 +158,7 @@ Team mode relays every call through your session, so until you pair the site can
 **Every worker holds sessions since FRU-225**: they are in its PostgreSQL, whatever `FRUITBACK_STORE`
 says, and `FRUITBACK_IDENTITY_SECRET` signs the access token. The usual way is « Connect this
 browser » in the console. That is the operator's side, in
-[self-hosting.md](self-hosting.md#the-worker), which lists the `/session/` routes.
+[self-hosting/worker.md](self-hosting/worker.md), which lists the `/session/` routes.
 
 **A pairing code is minted by an operator, on the container, never over HTTP:**
 

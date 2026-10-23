@@ -365,7 +365,7 @@ answered `200`. Traefik v3.5 and Caddy 2.10 replace the header by default with t
 Behind them a count that is too high falls back to the socket peer, so every caller shares the
 proxy's bucket instead of escaping it. A replacing proxy behind another proxy loses the client's
 address unless it trusts that proxy (Traefik: `forwardedHeaders.trustedIPs`).
-[docs/self-hosting.md](docs/self-hosting.md#behind-a-reverse-proxy) has the cases and a check an
+[docs/self-hosting/reverse-proxy.md](docs/self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the cases and a check an
 operator can run.
 
 ### Private mode hides the pins from a visitor, and from nobody else
@@ -890,7 +890,7 @@ test:`takes no token that the holder of the worker key signed: a console session
 **The key still signs the token of an extension, so no site holds it on a worker with accounts.**
 With accounts no site needs it: a site is a row the console wrote, and it signs nothing. A worker
 that served one site with this key, and then got accounts, must change it. The steps are in
-[docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret).
+[docs/self-hosting/backup.md](docs/self-hosting/backup.md#change-fruitback_identity_secret).
 
 ### The index of the notes, and who reads it (FRU-237)
 

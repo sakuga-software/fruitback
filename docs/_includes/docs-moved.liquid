@@ -1,0 +1,13 @@
+{%- comment -%}
+  The ids of the headings that left this page for a page of their own (docs/_data/moved.yml, FRU-427).
+  Each is an empty element at the end of the page: an old link still lands here, and docs.js sends it
+  on to the new page.
+{%- endcomment -%}
+{%- assign moved = site.data.moved[page.url] -%}
+{%- if moved %}
+<div class="moved">
+  {%- for pair in moved %}
+  <span id="{{ pair[0] }}" data-moved-to="{{ pair[1] | relative_url }}"></span>
+  {%- endfor %}
+</div>
+{%- endif -%}

@@ -19,7 +19,7 @@ function read(path: string): string {
 
 const COMPOSE = read('../../../docker-compose.yml');
 const ENV_EXAMPLE = read('../../../.env.example');
-const SELF_HOSTING = read('../../../docs/self-hosting.md');
+const VARIABLES = read('../../../docs/self-hosting/environment-variables.md');
 
 /** The worker reads these, and the compose file must not pass them. */
 const NOT_PASSED: Readonly<Record<string, string>> = {
@@ -225,12 +225,10 @@ describe('.env.example', () => {
   });
 });
 
-describe('docs/self-hosting.md', () => {
+describe('docs/self-hosting/environment-variables.md', () => {
   /** The cells of each row of the variable reference, keyed by the variable name (FRU-50). */
   function referenceRows(): Map<string, string> {
-    const section = /^## Every environment variable\n([\s\S]*?)(?=^## )/m.exec(SELF_HOSTING)?.[1] ?? '';
-
-    const rows = [...section.matchAll(/^\| `([A-Z][A-Z0-9_]*)` *\|(.*)$/gm)].map(
+    const rows = [...VARIABLES.matchAll(/^\| `([A-Z][A-Z0-9_]*)` *\|(.*)$/gm)].map(
       (match) => [match[1] ?? '', match[2] ?? ''] as const,
     );
     const names = rows.map(([name]) => name);

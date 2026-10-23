@@ -149,14 +149,14 @@ describe('PostgreSQL is required, with what an administrator signs in with (FRU-
       REFUSED_SINCE_POSTGRES.FRUITBACK_SQLITE_PATH,
       REFUSED_SINCE_POSTGRES.sqlite,
     ]) {
-      for (const named of ['migrate-to-postgres', '« Upgrading » of docs/self-hosting.md']) {
+      for (const named of ['migrate-to-postgres', 'as docs/self-hosting/upgrade.md says']) {
         assert.ok(said.includes(named), `${said} does not name ${named}`);
       }
     }
     assert.match(DATABASE_REQUIRED, /^FRUITBACK_DATABASE_URL \(/);
     // The page and its section exist: a sentence that sends an operator nowhere is worse than none.
-    const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
-    assert.match(guide, /^## Upgrading\b/m);
+    const guide = readFileSync(new URL('../../../docs/self-hosting/upgrade.md', import.meta.url), 'utf8');
+    assert.match(guide, /^# Upgrade and roll back$/m);
   });
 
   it('refuses each variable of before by its sentence, and never ignores it', () => {

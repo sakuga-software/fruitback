@@ -311,7 +311,7 @@ async function ensureTheSchema(db: Db, schema: string): Promise<void> {
       throw new StoreError(
         `The schema « ${schema} » is not in the database, and the role of FRUITBACK_DATABASE_URL cannot create ` +
           'in its database to make it: make the schema and grant that role CREATE and USAGE on it, or make that role ' +
-          'the owner of the database (docs/self-hosting.md)',
+          'the owner of the database (docs/self-hosting/database.md)',
       );
     }
     // Under the lock of the caller: two workers that start together do not both make it.
@@ -327,7 +327,7 @@ async function ensureTheSchema(db: Db, schema: string): Promise<void> {
   throw new StoreError(
     `The role of FRUITBACK_DATABASE_URL cannot create in the schema « ${schema} », or cannot use it, and the ` +
       'worker needs both: grant that role CREATE and USAGE on the schema, or make it the owner of the database ' +
-      '(docs/self-hosting.md)',
+      '(docs/self-hosting/database.md)',
   );
 }
 
@@ -348,7 +348,7 @@ async function refuseASearchPathThatIsNotTheSchema(db: Db, schema: string): Prom
     `The tables of the worker are in the schema « ${schema} », and this connection would write elsewhere: ` +
       'its search path is not the one the worker set. A pooler that shares one session between clients loses it: ' +
       'give FRUITBACK_DATABASE_URL an address that keeps a session, such as PgBouncer in session mode ' +
-      '(docs/self-hosting.md, « Behind a connection pooler »)',
+      '(docs/self-hosting/database.md, « Behind a connection pooler »)',
   );
 }
 
@@ -502,7 +502,7 @@ async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Pro
         `The schema « ${schema} » is empty, and the migration tool of before left this database in the schema ` +
           `« ${other} »: the worker sets its search path itself now, and the one of the address has no effect. ` +
           `Set FRUITBACK_DATABASE_SCHEMA=${other} to keep it there, or move its tables to « ${schema} » by hand ` +
-          '(docs/self-hosting.md). Nothing was written',
+          '(docs/self-hosting/database.md). Nothing was written',
       );
     }
   }
@@ -512,7 +512,7 @@ async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Pro
 export const PUBLIC_IS_OPEN =
   'the role of FRUITBACK_DATABASE_URL may use the schema « public » of this database, beside the schema of the ' +
   'worker: a schema of its own is a place for names, not a wall. Revoke what it does not need ' +
-  '(docs/self-hosting.md, « In a database that another application uses »)';
+  '(docs/self-hosting/database.md, « In a database that another application uses »)';
 
 /**
  * Warns, once for each database, when a worker in a schema of its own may use `public` (FRU-266).
@@ -538,13 +538,13 @@ async function warnWhenPublicIsOpen(db: Db, schema: string, warn: (line: string)
  *
  * That is a pooler in transaction mode: it hands each statement out of a transaction to whichever
  * connection of the server is free. A lock of the session then stays with a session the worker no
- * longer has. Measured with PgBouncer 1.26.1 (docs/self-hosting.md, « Behind a connection pooler »).
+ * longer has. Measured with PgBouncer 1.26.1 (docs/self-hosting/database.md, « Behind a connection pooler »).
  */
 export const POOLER_IN_TRANSACTION_MODE =
   'a connection pooler in transaction mode (PgBouncer with pool_mode = transaction) is between the worker and ' +
   'PostgreSQL: it ran two statements of one connection of the worker in two sessions of the server, and a lock ' +
   'of the session does not hold there. Put the pooler in session mode, then restart it: its sessions, and the ' +
-  'lock they hold, end with it (docs/self-hosting.md, « Behind a connection pooler »)';
+  'lock they hold, end with it (docs/self-hosting/database.md, « Behind a connection pooler »)';
 
 /** The session of the server that answers this statement. */
 async function sessionOf(db: Db): Promise<unknown> {

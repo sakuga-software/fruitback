@@ -1,0 +1,39 @@
+# The parts of a guide that moved to a page of their own (FRU-427). A guide split in several pages
+# keeps each address it had: the old page carries an empty element for each id that left it, and
+# docs.js sends a reader who comes with that id to the new page. With no script, the reader lands at
+# the end of the old page, beside the links to the new ones.
+#
+# By page, then the id the heading had, then where it is now. docs-site.test.ts checks both ends.
+
+/self-hosting.html:
+  behind-a-reverse-proxy: /self-hosting/reverse-proxy.html#behind-a-reverse-proxy
+  what-trusted_proxy_hops-does: /self-hosting/reverse-proxy.html#what-trusted_proxy_hops-does
+  check-it: /self-hosting/reverse-proxy.html#check-it
+  deploying-with-dokploy: /self-hosting/reverse-proxy.html#deploying-with-dokploy
+  in-a-database-you-already-run: /self-hosting/database.html#in-a-database-you-already-run
+  in-a-database-that-another-application-uses: /self-hosting/database.html#in-a-database-that-another-application-uses
+  behind-a-connection-pooler-fru-267: /self-hosting/database.html#behind-a-connection-pooler-fru-267
+  sizing-and-more-than-one-replica: /self-hosting/database.html#sizing-and-more-than-one-replica
+  back-it-up: /self-hosting/backup.html#back-it-up
+  restore-it: /self-hosting/backup.html#restore-it
+  change-fruitback_identity_secret: /self-hosting/backup.html#change-fruitback_identity_secret
+  storing-the-seeds-in-github-issues: /self-hosting/github-issues.html
+  create-the-app: /self-hosting/github-issues.html#create-the-app
+  configure-the-worker: /self-hosting/github-issues.html#configure-the-worker
+  check-it-1: /self-hosting/github-issues.html#check-it
+  what-it-costs: /self-hosting/github-issues.html#what-it-costs
+  upgrading-and-rolling-back: /self-hosting/upgrade.html
+  upgrading-a-worker-that-has-no-database-fru-225: /self-hosting/upgrade.html#upgrading-a-worker-that-has-no-database-fru-225
+  upgrading-a-deployment-that-has-an-accounts-file: /self-hosting/upgrade.html#upgrading-a-deployment-that-has-an-accounts-file
+  moving-the-notes-of-the-sqlite-file-into-postgresql: /self-hosting/upgrade.html#moving-the-notes-of-the-sqlite-file-into-postgresql
+  upgrading-a-deployment-from-before-fru-48: /self-hosting/upgrade.html#upgrading-a-deployment-from-before-fru-48
+  tags-and-digests: /self-hosting/upgrade.html#tags-and-digests
+  when-something-is-wrong: /self-hosting/troubleshooting.html#when-something-is-wrong
+  every-environment-variable: /self-hosting/environment-variables.html
+  the-image-and-the-port: /self-hosting/environment-variables.html#the-image-and-the-port
+  who-may-call-the-worker: /self-hosting/environment-variables.html#who-may-call-the-worker
+  where-the-notes-live: /self-hosting/environment-variables.html#where-the-notes-live
+  several-client-sites: /self-hosting/environment-variables.html#several-client-sites
+  identity-and-reads: /self-hosting/environment-variables.html#identity-and-reads
+  the-database-the-console-and-the-sessions: /self-hosting/environment-variables.html#the-database-the-console-and-the-sessions
+  the-worker: /self-hosting/worker.html

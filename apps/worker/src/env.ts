@@ -320,7 +320,7 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  */
 /** Why `FRUITBACK_ACCOUNTS_PATH` stops the worker (FRU-150): what to set, and where to read how. */
 export const ACCOUNTS_FILE_REFUSED =
-  'FRUITBACK_ACCOUNTS_PATH (the accounts are in PostgreSQL since FRU-150: set FRUITBACK_DATABASE_URL and FRUITBACK_AUTH_SECRET, and copy the file with `migrate-to-postgres`, as « Upgrading » of docs/self-hosting.md says)';
+  'FRUITBACK_ACCOUNTS_PATH (the accounts are in PostgreSQL since FRU-150: set FRUITBACK_DATABASE_URL and FRUITBACK_AUTH_SECRET, and copy the file with `migrate-to-postgres`, as docs/self-hosting/upgrade.md says)';
 
 /** Why `FRUITBACK_GITHUB_OAUTH` stops the worker (FRU-150). */
 export const GITHUB_APP_REFUSED =
@@ -331,7 +331,7 @@ export const GITHUB_APP_REFUSED =
  * in a schema of one that exists (decision of 2026-10-13). Nothing falls back to a file.
  */
 export const DATABASE_REQUIRED =
-  'FRUITBACK_DATABASE_URL (Fruitback keeps its notes, its sites, its accounts and its sessions in PostgreSQL since FRU-225: a postgres:// address, of a database of its own or of one that exists, with FRUITBACK_DATABASE_SCHEMA. An instance of before copies its files there with `migrate-to-postgres`, as « Upgrading » of docs/self-hosting.md says)';
+  'FRUITBACK_DATABASE_URL (Fruitback keeps its notes, its sites, its accounts and its sessions in PostgreSQL since FRU-225: a postgres:// address, of a database of its own or of one that exists, with FRUITBACK_DATABASE_SCHEMA. An instance of before copies its files there with `migrate-to-postgres`, as docs/self-hosting/upgrade.md says)';
 
 /**
  * What a worker with a database needs for its console (FRU-225): an administrator can always sign
@@ -360,13 +360,13 @@ export const REQUIRED_WITH_DATABASE: Readonly<
  */
 export const REFUSED_SINCE_POSTGRES = {
   FRUITBACK_CLIENTS:
-    'FRUITBACK_CLIENTS (the sites are in the database since FRU-225, and the console makes them: make each site there, then copy its notes with `migrate-to-postgres --seeds <file> --client <id>=<id of the site>`, as « Upgrading » of docs/self-hosting.md says; then remove this variable)',
+    'FRUITBACK_CLIENTS (the sites are in the database since FRU-225, and the console makes them: make each site there, then copy its notes with `migrate-to-postgres --seeds <file> --client <id>=<id of the site>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
   FRUITBACK_SESSION_PATH:
     'FRUITBACK_SESSION_PATH (the sessions of the extension are in the database since FRU-225: each reviewer pairs again, once, from the console; remove this variable)',
   FRUITBACK_SQLITE_PATH:
-    'FRUITBACK_SQLITE_PATH (the notes are in the database since FRU-225: copy the file with `migrate-to-postgres --seeds <file>`, as « Upgrading » of docs/self-hosting.md says; then remove this variable)',
+    'FRUITBACK_SQLITE_PATH (the notes are in the database since FRU-225: copy the file with `migrate-to-postgres --seeds <file>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
   sqlite:
-    'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --seeds <file>`, as « Upgrading » of docs/self-hosting.md says)',
+    'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --seeds <file>`, as docs/self-hosting/upgrade.md says)',
   FRUITBACK_FIRST_REVIEWER:
     'FRUITBACK_FIRST_REVIEWER (it names no workspace, and every worker has workspaces since FRU-225: the first administrator is FRUITBACK_FIRST_ADMIN, and a reviewer pairs from the console; remove this variable)',
   unnamedStore:

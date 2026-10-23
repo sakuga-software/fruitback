@@ -51,7 +51,7 @@ export type ConformanceSubject = {
   readWithNoClient?: string;
   /** The stage of a seed just written. Absent when the store picks it some other way. */
   writtenStage?: SeedStage;
-  /** The most replies a read returns on one seed. A case writes more, and `docs/self-hosting.md` gives it. */
+  /** The most replies a read returns on one seed. A case writes more, and the store matrix of `docs/self-hosting.md` gives it. */
   replyCap: number | string;
   /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
   otherTenant: ClientConfig | string;

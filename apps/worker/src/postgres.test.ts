@@ -503,7 +503,7 @@ describe(
   { skip: NO_REAL_POSTGRES !== false },
   () => {
     const SAYS_THE_POOLER = /a connection pooler in transaction mode \(PgBouncer with pool_mode = transaction\)/;
-    const SENDS_TO_THE_DOC = /docs\/self-hosting\.md, « Behind a connection pooler »/;
+    const SENDS_TO_THE_DOC = /docs\/self-hosting\/database\.md, « Behind a connection pooler »/;
     const held = (database: Database) =>
       rowsOf(
         database,

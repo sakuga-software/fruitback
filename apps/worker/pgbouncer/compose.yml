@@ -1,6 +1,6 @@
 # A worker behind PgBouncer, to try a pooler before you put one in front of yours (FRU-267).
 # Not for production: `trial.sh` starts it, plays a short path through it, and removes it with its
-# volumes. Its database, its pooler and its worker are of this file alone. docs/self-hosting.md,
+# volumes. Its database, its pooler and its worker are of this file alone. docs/self-hosting/database.md,
 # « Behind a connection pooler », says what was measured with it.
 name: ${TRIAL_PROJECT:-fruitback-pgbouncer-trial}
 services:
