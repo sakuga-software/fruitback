@@ -3,10 +3,12 @@ import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { type Visibility, WRITERS, type Writers } from './accounts.ts';
 import { createPairingCommand } from './app.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
+import { createLinearFake, installLinearFake, LINEAR_FAKE_TEAM, type LinearFake } from './linear-fake.fixture.ts';
 import { pairingLink } from './pair-page.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { DEFAULT_DATABASE_SCHEMA, DEV_DATABASE, type PgDatabase, provideDevDatabase } from './postgres.ts';
 import { migrate } from './postgres-migrate.ts';
+import { seal } from './secrets.ts';
 import { startServer } from './server.ts';
 
 /**
@@ -36,6 +38,9 @@ import { startServer } from './server.ts';
  * - **`POST /__dev/writers`** `{ writers }` (FRU-330), who may leave a note on the site: `members`,
  *   the default of a new site, or `anyone`. A spec about one of the two says it, rather than
  *   reading the default. Through `addSite`, as the console writes it.
+ * - **`FRUITBACK_DEV_LINEAR=fake`** (FRU-426): the site sends its notes through a Linear connector
+ *   of the workspace, to the fake Linear of `linear-fake.fixture.ts`. `GET /__dev/tracker` answers
+ *   what that fake received. It needs `FRUITBACK_SECRETS_KEY`, which seals the key of the connector.
  */
 
 /** The site of the playground: the id that `apps/playground` and the specs name. */
@@ -160,6 +165,31 @@ async function bodyOf(incoming: IncomingMessage): Promise<Record<string, unknown
   }
 }
 
+/**
+ * A Linear connector of the workspace, to the fake Linear, and the site of the playground sends to it.
+ * `null` when the worker has no key to seal the connector with.
+ */
+export async function connectFakeLinear(
+  database: PgDatabase,
+  workspace: string,
+  secretsKey: string | undefined,
+): Promise<LinearFake | null> {
+  if (secretsKey === undefined) return null;
+  const fake = createLinearFake();
+  installLinearFake(fake);
+  const accounts = createPostgresAccountStore(database);
+  const connector = await accounts.addConnector(workspace, {
+    kind: 'linear',
+    label: 'Linear · Bench',
+    sealed: seal('lin_api_fake_key_of_the_bench', secretsKey),
+  });
+  await accounts.setDestinations(workspace, DEV_SITE, [
+    { connector: connector.id, teamId: LINEAR_FAKE_TEAM, label: 'Linear · Bench' },
+  ]);
+
+  return fake;
+}
+
 export async function startDevWorker(given: WorkerEnv = process.env): Promise<void> {
   if (given.NODE_ENV === 'production') {
     console.error('[fruitback] dev-worker.fixture.ts is for development: NODE_ENV is production');
@@ -175,6 +205,15 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
 
     return;
   }
+  // Refused before the database starts, so a misconfigured bench stops at once and installs nothing.
+  if (given.FRUITBACK_DEV_LINEAR === 'fake' && config.config.secretsKey === undefined) {
+    console.error(
+      '[fruitback] FRUITBACK_DEV_LINEAR=fake needs FRUITBACK_SECRETS_KEY, to seal the key of the connector',
+    );
+    process.exitCode = 1;
+
+    return;
+  }
 
   // In the schema the configuration names (FRU-219): `public` unless `FRUITBACK_DATABASE_SCHEMA` says.
   const database = await databaseOn(newPglite(), config.config.databaseSchema ?? DEFAULT_DATABASE_SCHEMA);
@@ -182,6 +221,10 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   provideDevDatabase(database);
   const visibility: Visibility = given.FRUITBACK_DEV_VISIBILITY === 'members' ? 'members' : 'everyone';
   const seeded = await seedDevWorkspace(database, { origin: DEV_PLAYGROUND, visibility });
+  const tracker =
+    given.FRUITBACK_DEV_LINEAR === 'fake'
+      ? ((await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)) ?? undefined)
+      : undefined;
 
   const server = startServer(env);
   const serve = server.listeners('request') as ((incoming: IncomingMessage, response: ServerResponse) => void)[];
@@ -189,6 +232,11 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   server.on('request', (incoming: IncomingMessage, response: ServerResponse) => {
     if (incoming.method === 'POST' && incoming.url === '/__dev/stage') {
       void moveStage(database, incoming, response);
+
+      return;
+    }
+    if (tracker !== undefined && incoming.method === 'GET' && incoming.url === '/__dev/tracker') {
+      response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(tracker.received()));
 
       return;
     }

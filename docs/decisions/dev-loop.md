@@ -228,6 +228,10 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   its database** (`FRUITBACK_STORE=postgres`), so the suite writes and reads a note through the
   store of the database in a browser; the first worker keeps the Linear in memory, for the specs
   of the widget.
+- **`e2e/bench.ts` is the bench of the extension** (FRU-426): a worker of its own on a free port, a
+  Linear connector to a fake Linear, and the click on the icon through `Extensions.triggerAction`.
+  `extension-bench.spec.ts` drives it, and `pnpm ext:bench` keeps one open. See « The bench of the
+  extension » in [extension.md](extension.md).
 
 ### The reasons, and the history
 
