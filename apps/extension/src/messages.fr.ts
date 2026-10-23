@@ -132,11 +132,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A note is being written on the page. Send it or close it first.':
     'Une note est en cours d’écriture sur la page. Envoyez-la ou fermez-la d’abord.',
   'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
+  // FRU-395: a pairing link where the worker goes, and a worker that is not at the address of a rule.
+  'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.':
+    'Ceci est un lien d’appairage, pas l’adresse d’un worker. Utilisez-le pour vous appairer, et donnez à la règle l’adresse avant /pair.',
+  'An address that ends in /pair, or that carries a #, is a pairing link, not a worker. Give the address before /pair.':
+    'Une adresse qui finit par /pair, ou qui porte un #, est un lien d’appairage, pas un worker. Donnez l’adresse avant /pair.',
+  'Pair with this link': 'S’appairer avec ce lien',
+  'The worker of this rule does not answer. Check its address in the options.':
+    'Le worker de cette règle ne répond pas. Vérifiez son adresse dans les options.',
   // FRU-397: another copy of Fruitback on the page of the tab.
-  'Another copy of Fruitback runs on this page. Remove it in {place}.':
-    'Une autre copie de Fruitback tourne sur cette page. Retirez-la dans {place}.',
-  'Another copy of Fruitback ({version}) runs on this page. Remove it in {place}.':
-    'Une autre copie de Fruitback ({version}) tourne sur cette page. Retirez-la dans {place}.',
+  'Another copy of Fruitback runs on this page, or the version of before of this one. Reload the page. If this stays, remove the other copy in {place}.':
+    'Une autre copie de Fruitback tourne sur cette page, ou la version précédente de celle-ci. Rechargez la page. Si cela reste, retirez l’autre copie dans {place}.',
+  'Another copy of Fruitback ({version}) runs on this page. Reload the page. If this stays, remove that copy in {place}.':
+    'Une autre copie de Fruitback ({version}) tourne sur cette page. Rechargez la page. Si cela reste, retirez cette copie dans {place}.',
   // A site of no workspace (FRU-255).
   'Ask an admin of your workspace to add this site.': 'Demandez à un admin de votre workspace d’ajouter ce site.',
   Workspace: 'Workspace',

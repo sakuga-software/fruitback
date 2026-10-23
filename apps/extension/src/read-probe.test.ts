@@ -69,3 +69,13 @@ describe('probeRead (FRU-66)', () => {
     assert.equal(await probeRead(SITE, PAGE, unreachable), 'unknown');
   });
 });
+
+describe('a worker that is not at the address of the rule (FRU-395)', () => {
+  it('says so on a 404, and asks with no client when the rule names none', async () => {
+    const seams = answering(404);
+    assert.equal(await probeRead({ endpoint: 'https://api.fruitback.test/pair' }, PAGE, seams), 'not-found');
+    assert.deepEqual(seams.asked, [
+      'https://api.fruitback.test/pair/feedback?url=https%3A%2F%2Fstaging.acme.dev%2Fpricing%3Ftab%3Dannual',
+    ]);
+  });
+});

@@ -273,8 +273,12 @@ open composer and its note` fails without the check, 3 runs out of 3.
 - **A site of a workspace is never mounted with no relay by another copy**: only the page script of
   the copy that decided hears the `mount`. A page script of another protocol hears no message of this
   one, so it cannot take a `relay: true` for a private mount.
-- **The popup says it**: « Another copy of Fruitback (0.1.0) runs on this page. Remove it in
-  chrome://extensions. » (`about:addons` on Firefox). The bridge adds `otherCopy` to its answers to the
+- **The popup says it**: « Another copy of Fruitback (0.4.0) runs on this page. Reload the page. If
+  this stays, remove that copy in chrome://extensions. » (`about:addons` on Firefox). **Reload first**
+  (heavy review of #533): a tab left open across an update of this extension keeps the page script
+  of the version before, which sets the flag of before and nothing else, like a copy of before. A
+  copy of before says no version, and the sentence then names « the version of before of this one »
+  too. The bridge adds `otherCopy` to its answers to the
   popup. It learns it from the `ready` of its page script, from a `ready` whose proof is another
   copy's, or from any message on the channel of before; once paired with a page script that holds the
   page, it posts one `ready` on that channel, which a bridge of before answers with its decision.
@@ -283,6 +287,23 @@ open composer and its note` fails without the check, 3 runs out of 3.
 - `e2e/two-copies.spec.ts` loads an old copy (`e2e/fixtures/old-copy`, the guard and the channel of
   0.1.0) beside the built one, in both orders. Not verified on Firefox: the format of the stack of a
   main-world script there is read from the documentation of the stack, not measured.
+
+## A pairing link is no worker (FRU-395)
+
+### The rules, in short
+
+- **The form of a rule refuses a worker whose path ends in `/pair`, or that carries a `#`**, in the
+  popup and on the page of the extension (`complaint` in `site-form.ts`). Measured in production on
+  2026-10-23: a rule of private mode kept `https://api.fruitback.com/pair`, a pairing link pasted where
+  the worker goes, and every page read `/pair/feedback`, which answered `404`, with nothing on screen.
+- **A whole link is offered as a pairing**: « Pair with this link » (remedy `pair`) opens « Workers
+  and sessions » on the card of the worker before `/pair`, with the code filled in, as a link opened in
+  a tab does (FRU-92). An address with no code says to give the address before `/pair`.
+- **The popup says it for a rule already stored**: the probe of FRU-66 now runs in both modes, and a
+  `404` says « The worker of this rule does not answer. Check its address in the options. ». A worker
+  that is there answers its read, or refuses it: only an address with no route answers `404`.
+- **A stored rule is not rewritten** (`…/pair` into `…`): it is said, not corrected in silence
+  (the recommendation of the ticket).
 
 ## The look of the popup and of the options page (FRU-170)
 

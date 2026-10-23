@@ -21,11 +21,17 @@ export const READ_NEEDS_SESSION =
 export const NOTES_NEED_SESSION =
   'This site takes notes from its members only, and private mode carries no session: no note can be sent from here. To review it in private mode, an admin of the site sets « Who can leave a note » to « Anyone on the page » in the console.';
 
+/**
+ * FRU-395: the worker of the rule answers `404` to a read, so nothing is at that address: a pairing
+ * link pasted where the worker goes (`…/pair`), or a path that is not the worker's.
+ */
+export const WORKER_NOT_FOUND = 'The worker of this rule does not answer. Check its address in the options.';
+
 /** The guide that says which mode can read an authenticated worker. */
 export const MODES_GUIDE = 'https://sakuga-software.github.io/fruitback/modes.html';
 
 /** `members-only`: a `401` that also says that a note would be refused (FRU-330). */
-export type ReadProbe = 'answers' | 'wants-a-session' | 'members-only' | 'unknown';
+export type ReadProbe = 'answers' | 'wants-a-session' | 'members-only' | 'not-found' | 'unknown';
 
 export type ReadProbeSeams = {
   fetch: (
@@ -38,15 +44,16 @@ export type ReadProbeSeams = {
 export const READ_PROBE_TIMEOUT_MS = 4_000;
 
 /**
- * Only a `401` is a statement. A worker that is down, slow or rate-limited says nothing about who can
+ * Only a `401` and a `404` are statements. A worker that is down, slow or rate-limited says nothing about who can
  * read, so the popup stays silent for it rather than naming a cause it did not measure.
  */
 export async function probeRead(
-  site: { endpoint: string; clientId: string },
+  site: { endpoint: string; clientId?: string | undefined },
   pageUrl: string,
   seams: ReadProbeSeams,
 ): Promise<ReadProbe> {
-  const url = `${site.endpoint}/feedback?url=${encodeURIComponent(pageUrl)}&client=${encodeURIComponent(site.clientId)}`;
+  const client = site.clientId === undefined ? '' : `&client=${encodeURIComponent(site.clientId)}`;
+  const url = `${site.endpoint}/feedback?url=${encodeURIComponent(pageUrl)}${client}`;
 
   try {
     const response = await seams.fetch(url, { signal: AbortSignal.timeout(READ_PROBE_TIMEOUT_MS) });
@@ -57,6 +64,9 @@ export async function probeRead(
 
       return closed ? 'members-only' : 'wants-a-session';
     }
+
+    // FRU-395: no route at that address. A worker that is there answers its read, or refuses it.
+    if (response.status === 404) return 'not-found';
 
     return response.ok ? 'answers' : 'unknown';
   } catch {

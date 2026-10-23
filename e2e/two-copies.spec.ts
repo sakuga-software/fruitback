@@ -43,7 +43,8 @@ function pageReads(page: Page): string[] {
   return seen;
 }
 
-const WARNING = 'Another copy of Fruitback runs on this page. Remove it in chrome://extensions.';
+const WARNING =
+  'Another copy of Fruitback runs on this page, or the version of before of this one. Reload the page. If this stays, remove the other copy in chrome://extensions.';
 
 for (const order of ['before', 'after'] as const) {
   test(`an old copy that starts ${order} the current one reads nothing for the site of the workspace, and the popup says to remove it`, async ({

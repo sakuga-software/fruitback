@@ -1,9 +1,15 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
-import { MODES_GUIDE, NOTES_NEED_SESSION, READ_NEEDS_SESSION, probeRead } from '../../src/read-probe.ts';
+import {
+  MODES_GUIDE,
+  NOTES_NEED_SESSION,
+  READ_NEEDS_SESSION,
+  WORKER_NOT_FOUND,
+  probeRead,
+} from '../../src/read-probe.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored } from '../../src/site-editor.ts';
-import { complaint, siteFrom } from '../../src/site-form.ts';
+import { complaint, pairingFragment, pairingLinkIn, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
 import { type SiteConfig, type SiteMode, findSite, readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
@@ -786,30 +792,48 @@ function otherCopyLine(tab: PopupTab | undefined, on: boolean): HTMLElement {
   return line;
 }
 
-const OTHER_COPY = msg('Another copy of Fruitback runs on this page. Remove it in {place}.');
-const OTHER_COPY_VERSION = msg('Another copy of Fruitback ({version}) runs on this page. Remove it in {place}.');
+// Reload first (heavy review of #533): a tab open across an update of this extension keeps the page
+// script of the version before, which looks like a copy of before until the page is loaded again.
+const OTHER_COPY = msg(
+  'Another copy of Fruitback runs on this page, or the version of before of this one. Reload the page. If this stays, remove the other copy in {place}.',
+);
+const OTHER_COPY_VERSION = msg(
+  'Another copy of Fruitback ({version}) runs on this page. Reload the page. If this stays, remove that copy in {place}.',
+);
 
 /**
- * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66).
+ * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66), and, in both
+ * modes, a rule whose worker is not at its address (FRU-395).
  *
  * The line is empty until the worker answers, and stays empty unless the answer is a `401`. The
  * popup does not wait for it: the switch must not sit behind a worker that is slow.
  */
 function readability(site: SiteConfig, pageUrl: string): HTMLElement {
   const line = element('p', '', 'problem');
-  if (site.mode !== 'private' || !site.enabled) return line;
+  if (!site.enabled) return line;
 
-  void probeRead(site, pageUrl, { fetch: (url, init) => fetch(url, init) }).then((answer) => {
-    if (answer !== 'wants-a-session' && answer !== 'members-only') return;
+  // FRU-395: in both modes, a worker that is not at the address of the rule. The client is the one
+  // the widget reads with, when the rule names one.
+  const clientId = site.mode === 'private' ? site.clientId : site.mount?.clientId;
+  void probeRead({ endpoint: site.endpoint, clientId }, pageUrl, { fetch: (url, init) => fetch(url, init) }).then(
+    (answer) => {
+      if (answer === 'not-found') {
+        line.append(t(WORKER_NOT_FOUND));
 
-    const guide = element('a', t('Which mode can read it'));
-    guide.href = MODES_GUIDE;
-    guide.target = '_blank';
-    guide.rel = 'noreferrer';
-    // FRU-330: a site whose notes are « Members only » refuses the notes of private mode too.
-    const sentence = answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION;
-    line.append(`${t(sentence)} `, guide);
-  });
+        return;
+      }
+      if (site.mode !== 'private') return;
+      if (answer !== 'wants-a-session' && answer !== 'members-only') return;
+
+      const guide = element('a', t('Which mode can read it'));
+      guide.href = MODES_GUIDE;
+      guide.target = '_blank';
+      guide.rel = 'noreferrer';
+      // FRU-330: a site whose notes are « Members only » refuses the notes of private mode too.
+      const sentence = answer === 'members-only' ? NOTES_NEED_SESSION : READ_NEEDS_SESSION;
+      line.append(`${t(sentence)} `, guide);
+    },
+  );
 
   return line;
 }
@@ -1129,7 +1153,18 @@ function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLEle
     // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
     // ignored by a page that reported nothing — which reads as a broken extension. Raised in review.
     const wrong = complaint(values, pattern);
-    showProblem(problem, wrong);
+    // FRU-395: a pairing link where the worker goes. Its pairing is on the page of the extension.
+    const link = pairingLinkIn(values.endpoint);
+    showProblem(problem, wrong, {
+      ...(link === undefined
+        ? {}
+        : {
+            pair: () => {
+              void browser.tabs.create({ url: `${browser.runtime.getURL('/options.html')}${pairingFragment(link)}` });
+              window.close();
+            },
+          }),
+    });
     if (wrong !== '') return;
 
     // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.
