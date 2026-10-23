@@ -99,6 +99,16 @@ How this repository is formatted, tested and documented, and which test holds ea
   `relative_url`. It needs no script: the questions are `<details>`, and the three cases sit side by
   side rather than in tabs. The glyphs are inline SVG (icons.md), the stage colours are the widget's
   `--fruitback-stage-*`, and the text wraps as in the console (widget.md, FRU-350).
+  **Every other page takes the layout `docs`** (FRU-417, after the board « Fruitback Docs »), set
+  for all in `_config.yml`: a header, the six sections of `docs/_data/docs.yml` in a sidebar, the
+  breadcrumb, « On this page », « Previous » and « Next », and « Improve this page ». The home of the
+  guides is `docs/docs.html`. The logic is in `docs/_includes/*.liquid`, a name the HTML formatter
+  leaves alone: it reflowed the Liquid of a layout into lines nobody could read. An entry of
+  `docs.yml` with a `#` is a part of a page, and `docs-site.test.ts` checks that each one names a
+  heading of its guide, with the id GitHub Pages gives it. Keep a heading that the console or the
+  extension links to (`reviewing.html#1-install-it`, `#3-pair-in-team-mode`): its id is its address.
+  Code blocks and tables take `tabindex="0"`, so a keyboard can scroll them (axe,
+  `scrollable-region-focusable`). The one script, `docs.js`, adds « Copy » to the code blocks.
   Say only what exists, and what `docs/` already says: a price the beta has not set is « Free during
   the beta », and the state of the images, the widget and the extension is the one of
   `self-hosting.md`, `install.md` and `reviewing.md`. The board of FRU-309 said « no account

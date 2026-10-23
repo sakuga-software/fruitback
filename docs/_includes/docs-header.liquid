@@ -1,0 +1,6 @@
+{%- comment -%} The sections of the header: the first page of each, Contribute left to the sidebar. {%- endcomment -%}
+{%- for group in site.data.docs -%}
+  {%- if group.title == 'Contribute' -%}{%- continue -%}{%- endif -%}
+  {%- assign first = group.pages | first %}
+<a href="{{ first.url | relative_url }}"{% if section.title == group.title %} aria-current="true"{% endif %}>{{ group.short | default: group.title }}</a>
+{%- endfor -%}

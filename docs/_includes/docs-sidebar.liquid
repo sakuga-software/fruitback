@@ -1,0 +1,15 @@
+{%- comment -%} The six sections of docs/_data/docs.yml, drawn twice by the layout: aside and small screens. {%- endcomment -%}
+{%- for group in site.data.docs %}
+<div class="side-group">
+  <p class="side-title">{{ group.title }}</p>
+  <ul>
+    {%- for item in group.pages -%}
+      {%- if item.url contains '://' %}
+    <li><a href="{{ item.url }}"><span>{{ item.title }}</span><span class="out" aria-hidden="true">↗</span></a></li>
+      {%- else %}
+    <li><a href="{{ item.url | relative_url }}"{% if item.url == here %} aria-current="page"{% endif %}>{{ item.title }}</a></li>
+      {%- endif -%}
+    {%- endfor %}
+  </ul>
+</div>
+{%- endfor -%}

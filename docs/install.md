@@ -1,4 +1,4 @@
-# Installing Fruitback
+# Install the widget
 
 Three things have to exist: **an instance** — the worker, its PostgreSQL and its console — **a site**,
 made in the console, and **the widget**, which goes on the pages of that site. The widget writes to the

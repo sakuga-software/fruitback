@@ -1,4 +1,4 @@
-# Translating the widget
+# Translate the widget
 
 The widget bundles English and French. This page is for adding a language to the bundle, so every
 site gets it. To translate the widget on one site only, pass `messages` to `init` instead — see

@@ -1,0 +1,67 @@
+# The six sections of the guides, in the order a reader goes through them (FRU-417). The header, the
+# sidebar, the breadcrumb and « Previous » and « Next » of every guide read this list.
+#
+# An entry with no « # » is a page: it is the one the sidebar marks as current, and « Previous » and
+# « Next » walk the pages in this order. An entry with a « # » is a part of a page. Every link is
+# checked against the guides by docs-site.test.ts.
+- title: Get started
+  pages:
+    - title: Overview
+      url: /docs.html
+    - title: Choose a mode
+      url: /modes.html
+    - title: Install the widget
+      url: /install.html
+    - title: Review with the extension
+      url: /reviewing.html
+- title: Self-hosting
+  pages:
+    - title: Run Fruitback yourself
+      url: /self-hosting.html
+    - title: Behind a reverse proxy
+      url: /self-hosting.html#behind-a-reverse-proxy
+    - title: Your own database
+      url: /self-hosting.html#in-a-database-you-already-run
+    - title: Back up and restore
+      url: /self-hosting.html#back-it-up
+    - title: GitHub Issues as a store
+      url: /self-hosting.html#storing-the-seeds-in-github-issues
+    - title: Upgrade and roll back
+      url: /self-hosting.html#upgrading-and-rolling-back
+    - title: When something is wrong
+      url: /self-hosting.html#when-something-is-wrong
+- title: Guides
+  pages:
+    - title: Translate the widget
+      url: /translating.html
+    - title: Several sites, one instance
+      url: /install.html#4-one-instance-several-sites
+    - title: Identified reporters
+      url: /install.html#5-identified-reporters
+    - title: What the team sees
+      url: /install.html#6-what-the-team-sees
+- title: Reference
+  pages:
+    - title: REST connector
+      url: /rest-connector.html
+    - title: Widget options
+      url: /install.html#what-else-init-takes
+    - title: Environment variables
+      url: /self-hosting.html#every-environment-variable
+- title: Privacy and security
+  short: Privacy
+  pages:
+    - title: What the widget collects
+      url: /privacy.html
+    - title: Delete a reporter's notes
+      url: /privacy.html#deleting-a-reporters-notes
+    - title: A notice you can adapt
+      url: /privacy.html#a-notice-you-can-adapt
+- title: Contribute
+  pages:
+    - title: Architecture
+      url: /architecture.html
+    - title: Commands
+      url: /architecture.html#commands
+    - title: Decisions
+      url: https://github.com/sakuga-software/fruitback/tree/main/docs/decisions

@@ -1,4 +1,4 @@
-# Receiving notes on your own address
+# REST connector
 
 A workspace can connect an address of its own, on the Cloud or on an instance that sets
 `FRUITBACK_SECRETS_KEY`. Each note of a site that sends there is

@@ -1,4 +1,4 @@
-# Running Fruitback yourself
+# Run Fruitback yourself
 
 A self-hosted Fruitback is three containers that `docker-compose.yml` starts together: **the
 worker**, which answers the widget; **PostgreSQL**, where the worker keeps the notes, the sites, the
@@ -1029,10 +1029,14 @@ The other answers the worker gives:
 1. [Back up](#back-it-up) every database.
 2. Write down the image you run now, as a digest from the registry:
 
+   <!-- {% raw %} -->
+
    ```bash
    docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' \
      "$(docker compose images -q worker)" | grep '^ghcr.io/'
    ```
+
+   <!-- {% endraw %} -->
 
    Keep the `ghcr.io/` line. An image that also has a local tag lists a name no registry serves, and
    on the containerd image store that name came first (measured).
@@ -1396,10 +1400,14 @@ The image runs as `node` rather than root, carries no `node_modules` — the bui
 everything into one file — and declares a `HEALTHCHECK` against `/health`. Every published build ships
 a provenance attestation and an SBOM:
 
+<!-- {% raw %} -->
+
 ```bash
 gh attestation verify oci://ghcr.io/sakuga-software/fruitback-worker:edge --owner sakuga-software
 docker buildx imagetools inspect ghcr.io/sakuga-software/fruitback-worker:edge --format '{{json .SBOM}}'
 ```
+
+<!-- {% endraw %} -->
 
 **Nothing is published before it has been booted and scanned, on every architecture.** The release
 workflow builds each platform separately, starts it, waits for `/health`, asserts the image still

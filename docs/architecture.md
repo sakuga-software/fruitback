@@ -1,4 +1,4 @@
-# Architecture, and the decisions under it
+# Architecture
 
 Written for somebody changing Fruitback, or deciding whether to. It is the design half of the old
 README: the page a reader lands on answers _what is this_, and everything that answers _why is it
