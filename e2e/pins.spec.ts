@@ -123,7 +123,10 @@ for (const scheme of ['light', 'dark'] as const) {
     await list.getByRole('button', { name: /^Toutes 1$/ }).click();
     await list.locator('[data-fruitback-note]').click();
     await expect(list.getByRole('button', { name: 'Toutes les notes' })).toBeVisible();
-    await expect(list.locator('.fruitback-thread-answers-title')).toHaveText('Réponses');
+    // The thread is drawn, in French. No reply yet: no « Réponses » over nothing (FRU-419).
+    await expect(list.locator('.fruitback-thread-note')).toHaveText('Une note lue dans la liste');
+    await expect(list.locator('.fruitback-thread-close')).toHaveAccessibleName('Fermer la note');
+    await expect(list.locator('.fruitback-thread-answers')).toHaveCount(0);
 
     const results = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
     expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual(

@@ -528,8 +528,10 @@ test('« Show CSS selectors »: off, the thread of a pin hides the selector; on,
   await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
   await site.locator('.fruitback-pin-badge').click();
   await expect(site.locator('.fruitback-thread')).toBeVisible();
-  await expect(site.locator('.fruitback-thread-component')).toBeVisible();
+  // Off: neither the selector nor the source (FRU-419).
+  await expect(site.locator('.fruitback-thread-note')).toBeVisible();
   await expect(site.locator('.fruitback-thread-selector')).toHaveCount(0);
+  await expect(site.locator('.fruitback-thread-component')).toHaveCount(0);
 
   const page = await extension.context.newPage();
   await openPage(page, extension.id);
@@ -543,6 +545,7 @@ test('« Show CSS selectors »: off, the thread of a pin hides the selector; on,
   // The open thread is drawn again with the selector: the same thread, not a widget built again.
   await site.bringToFront();
   await expect(site.locator('.fruitback-thread-selector')).toHaveText(/\S/);
+  await expect(site.locator('.fruitback-thread-source')).toBeVisible();
   await expect(site.locator('.fruitback-thread')).toBeVisible();
 
   await page.bringToFront();
@@ -552,6 +555,7 @@ test('« Show CSS selectors »: off, the thread of a pin hides the selector; on,
     .toBeUndefined();
   await site.bringToFront();
   await expect(site.locator('.fruitback-thread-selector')).toHaveCount(0);
+  await expect(site.locator('.fruitback-thread-source')).toHaveCount(0);
 });
 
 test('a pairing link says « Paired » once it paired, and « already paired » only to a browser paired before (FRU-289)', async ({
