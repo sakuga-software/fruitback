@@ -21,7 +21,14 @@ import { useLocale } from '../use-locale';
  * and at 900 px and under its sections are one row.
  */
 
-export type WorkspaceContext = { me: Me; workspace: Workspace };
+export type WorkspaceContext = {
+  me: Me;
+  workspace: Workspace;
+  /** The worker renamed the workspace (FRU-414): the rail shows the new name at once. */
+  renamed: (workspace: Workspace) => void;
+};
+
+type Read = Omit<WorkspaceContext, 'renamed'>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -51,7 +58,7 @@ const ROLE_WORDS: Readonly<Record<Role, string>> = {
 };
 
 /** The context of workspace `id` in what `/console/me` answered, if it names it. */
-function contextOf(me: Me | undefined, id: string | undefined): WorkspaceContext | undefined {
+function contextOf(me: Me | undefined, id: string | undefined): Read | undefined {
   const workspace = me?.workspaces.find((each) => each.id === id);
 
   return me === undefined || workspace === undefined ? undefined : { me, workspace };
@@ -63,7 +70,9 @@ export default function WorkspaceFrame() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   // Drawn at once from the last answer of this tab (FRU-356), and read again below.
-  const [read, setContext] = useState<WorkspaceContext | undefined>(() => contextOf(knownMe(), id));
+  const [read, setContext] = useState<Read | undefined>(() => contextOf(knownMe(), id));
+  // Asks `/console/me` again: after a rename, so that the answer this tab keeps has the new name.
+  const [asked, askAgain] = useState(0);
   // A change of workspace draws the new one from the last answer too, while the worker is asked.
   const context = read?.workspace.id === id ? read : (contextOf(knownMe(), id) ?? read);
 
@@ -76,7 +85,7 @@ export default function WorkspaceFrame() {
       if (workspace === undefined) return navigate('/', { replace: true });
       setContext({ me: me.data, workspace });
     });
-  }, [id, navigate]);
+  }, [id, navigate, asked]);
 
   // A write refused because the workspace is suspended shows the banner, also when the suspension
   // came after `/console/me` was read. Only a refusal of the workspace on screen: a write sent in
@@ -106,6 +115,18 @@ export default function WorkspaceFrame() {
   if (context === undefined || context.workspace.id !== id)
     return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
+  const outlet: WorkspaceContext = {
+    ...context,
+    renamed: (workspace) => {
+      const name = (each: Workspace) => (each.id === workspace.id ? { ...each, name: workspace.name } : each);
+      setContext({
+        me: { ...context.me, workspaces: context.me.workspaces.map(name) },
+        workspace: name(context.workspace),
+      });
+      askAgain((count) => count + 1);
+    },
+  };
+
   const sections = SECTIONS.filter((section) => section.built);
   const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
 
@@ -118,13 +139,15 @@ export default function WorkspaceFrame() {
           sections={sections}
           current={current?.path}
           onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
+          onSettings={() => navigate(`/w/${context.workspace.id}/settings`, { viewTransition: true })}
+          settings={pathname === `/w/${context.workspace.id}/settings`}
           admin={context.me.instanceAdmin === true}
         />
       }
     >
       <SuspendedBanner workspace={context.workspace} />
       <Screen>
-        <Outlet context={context} />
+        <Outlet context={outlet} />
       </Screen>
     </Frame>
   );
@@ -202,12 +225,19 @@ type RailProps = {
   /** The `path` of the section on screen. */
   current: string | undefined;
   onWorkspace: (id: string) => void;
+  /** Opens the settings of the workspace (FRU-414), from its name. */
+  onSettings: () => void;
+  /** The settings of the workspace are on screen. */
+  settings?: boolean;
   /** The person administers the instance (FRU-262): the rail leads to the administration. */
   admin?: boolean;
 };
 
 /** An entry of the rail: where it leads, its words, and whether its screen is the one shown. */
 export type RailEntry = { to: string; label: string; current: boolean };
+
+/** The item of the menu of the workspaces that opens the settings: no workspace id has a space. */
+const SETTINGS = 'workspace settings';
 
 /** The classes of the box at the top of the rail: what the rail is of. */
 export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px] text-left text-white';
@@ -256,7 +286,16 @@ export function RailFrame({
  * The rail of a workspace: the workspace, its sections, and the way to the documentation. The
  * sections are links, and the one on screen has `aria-current="page"`.
  */
-export function Rail({ workspace, workspaces, sections, current, onWorkspace, admin = false }: RailProps) {
+export function Rail({
+  workspace,
+  workspaces,
+  sections,
+  current,
+  onWorkspace,
+  onSettings,
+  settings = false,
+  admin = false,
+}: RailProps) {
   useLocale();
   const name = (
     <>
@@ -277,10 +316,13 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace, ad
       <Menu
         triggerClassName={`${RAIL_HEAD} hover:bg-rail-active`}
         chosen={workspace.id}
+        choiceLabel={t('Workspaces')}
         onAction={(chosen) => {
-          if (chosen !== workspace.id) onWorkspace(chosen);
+          if (chosen === SETTINGS) onSettings();
+          else if (chosen !== workspace.id) onWorkspace(chosen);
         }}
         items={workspaces.map((each) => ({ id: each.id, label: each.name, detail: t(ROLE_WORDS[each.role]) }))}
+        after={[{ id: SETTINGS, label: t('Workspace settings') }]}
       >
         {name}
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[16px] w-[16px] flex-none text-rail-muted">
@@ -295,7 +337,16 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace, ad
         </svg>
       </Menu>
     ) : (
-      <div className={RAIL_HEAD}>{name}</div>
+      // One workspace: its name leads to its settings (FRU-414). A screen reader hears where.
+      <Link
+        to={`/w/${workspace.id}/settings`}
+        viewTransition
+        {...(settings ? { 'aria-current': 'page' as const } : {})}
+        className={`${RAIL_HEAD} hover:bg-rail-active ${settings ? 'bg-rail-active' : ''}`}
+      >
+        {name}
+        <span className="sr-only"> {t('Workspace settings')}</span>
+      </Link>
     );
 
   return (

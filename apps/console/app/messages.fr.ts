@@ -816,6 +816,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Account: 'Compte',
   Browser: 'Navigateur',
   Workspaces: 'Workspaces',
+  // Workspace settings, FRU-414.
+  'Workspace settings': 'Réglages du workspace',
+  'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
+  'The name is saved.': 'Le nom est enregistré.',
+  'Saving…': 'Enregistrement…',
   'No workspace yet': 'Aucun pour l’instant',
   'Connecting…': 'Connexion…',
   'Connect {browser}': 'Connecter {browser}',

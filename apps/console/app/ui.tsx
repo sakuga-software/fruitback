@@ -909,6 +909,12 @@ type MenuProps = {
   items: readonly MenuItem[];
   /** The item that is the current one, when the menu is a choice: it is checked. */
   chosen?: string;
+  /**
+   * Items under the choice, which choose nothing: « Workspace settings » under the workspaces. With
+   * them, the choice and these items are two groups, and `choiceLabel` names the first one.
+   */
+  after?: readonly MenuItem[];
+  choiceLabel?: string;
   onAction: (id: string) => void;
   /**
    * What opens the menu: a button that is a picture (36 px, named by `triggerLabel`), or a button of
@@ -933,6 +939,8 @@ type MenuProps = {
 export function Menu({
   items,
   chosen,
+  after = [],
+  choiceLabel,
   onAction,
   trigger = 'plain',
   triggerLabel,
@@ -950,23 +958,41 @@ export function Menu({
       <Dropdown.Popover className="kit-menu" placement={trigger === 'icon' ? 'bottom end' : 'bottom start'}>
         <Dropdown.Menu
           onAction={(id) => onAction(String(id))}
-          disabledKeys={items.filter((item) => item.disabled === true).map((item) => item.id)}
-          {...(chosen === undefined
-            ? {}
-            : { selectionMode: 'single' as const, selectedKeys: [chosen], disallowEmptySelection: true })}
+          disabledKeys={[...items, ...after].filter((item) => item.disabled === true).map((item) => item.id)}
+          {...(chosen === undefined || after.length > 0 ? {} : choice(chosen))}
         >
-          {items.map((item) => (
-            <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
-              {chosen === undefined ? null : <Dropdown.ItemIndicator />}
-              <span className="kit-menu__words">
-                <Label>{item.label}</Label>
-                {item.detail === undefined ? null : <Description>{item.detail}</Description>}
-              </span>
-            </Dropdown.Item>
-          ))}
+          {after.length === 0 ? (
+            items.map((item) => menuItem(item, chosen !== undefined))
+          ) : (
+            <>
+              <Dropdown.Section aria-label={choiceLabel} {...(chosen === undefined ? {} : choice(chosen))}>
+                {items.map((item) => menuItem(item, chosen !== undefined))}
+              </Dropdown.Section>
+              <Dropdown.Section className="kit-menu__after">
+                {after.map((item) => menuItem(item, false))}
+              </Dropdown.Section>
+            </>
+          )}
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>
+  );
+}
+
+/** A menu or a group of it where one item is checked: the current one. */
+function choice(chosen: string) {
+  return { selectionMode: 'single' as const, selectedKeys: [chosen], disallowEmptySelection: true };
+}
+
+function menuItem(item: MenuItem, checkable: boolean) {
+  return (
+    <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+      {checkable ? <Dropdown.ItemIndicator /> : null}
+      <span className="kit-menu__words">
+        <Label>{item.label}</Label>
+        {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+      </span>
+    </Dropdown.Item>
   );
 }
 
