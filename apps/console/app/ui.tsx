@@ -918,6 +918,10 @@ type MenuProps = {
  * A button that opens a menu, as the dropdown of HeroUI: the arrows walk the items, Escape closes
  * the menu and gives focus back to the button. The menu is named after its button, so the button
  * says what the menu lists. The menu is drawn on the surface of a page, wherever its button is.
+ *
+ * The menu opens under its button. The menu of a picture ends at the right edge of its button
+ * (FRU-407): that button closes a row, and a menu that started at its left edge went out of the
+ * table. The menu of a button of the screen starts at its left edge, as the name of a workspace.
  */
 export function Menu({
   items,
@@ -936,7 +940,7 @@ export function Menu({
       >
         {children}
       </Dropdown.Trigger>
-      <Dropdown.Popover className="kit-menu" placement="bottom start">
+      <Dropdown.Popover className="kit-menu" placement={trigger === 'icon' ? 'bottom end' : 'bottom start'}>
         <Dropdown.Menu
           onAction={(id) => onAction(String(id))}
           disabledKeys={items.filter((item) => item.disabled === true).map((item) => item.id)}
