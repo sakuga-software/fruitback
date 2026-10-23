@@ -164,24 +164,28 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
   expectBox(await box(help), { x: 20, y: 829, height: 17 }, 2, 'the way to the documentation');
 });
 
-test('the room of a screen is the one of the mockup, and as wide as its screen is drawn', async ({ page }) => {
+test('the room of a screen is as wide as the column beside the rail, with the padding of the mockup (FRU-398)', async ({
+  page,
+}) => {
   await stubWorker(page);
-  const widths = { sites: 1120, notes: 1240, connectors: 1180, members: 1120, account: 820 };
-  for (const [screen, width] of Object.entries(widths)) {
+  for (const screen of ['sites', 'notes', 'connectors', 'members', 'account']) {
     await open(page, screen);
     const main = page.locator('main');
     expect
       .soft(await styles(main, ['max-width', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right']), screen)
       .toEqual({
-        'max-width': `${width}px`,
+        // The mockup capped each screen (820 to 1240 px), and left an empty band at the right.
+        'max-width': 'none',
         'padding-top': '40px',
         'padding-bottom': '72px',
         // clamp(16px, 4vw, 48px) at 1440 px.
         'padding-left': '48px',
         'padding-right': '48px',
       });
-    // The room is as wide as the screen is drawn, and no wider than what the rail leaves (1191.5 px).
-    expectBox(await box(main), { x: 248.5, y: 0, width: Math.min(width, 1191.5) }, 2, `the room of ${screen}`);
+    // The room ends at the right edge of the window: all of what the rail leaves (1191.5 px).
+    const room = await box(main);
+    expect.soft(Math.abs(room.x + room.width - 1440), `the right edge of the room of ${screen}`).toBeLessThanOrEqual(1);
+    expectBox(room, { x: 248.5, y: 0, width: 1191.5 }, 2, `the room of ${screen}`);
     expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 32.2 }, 2, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
@@ -191,6 +195,37 @@ test('the room of a screen is the one of the mockup, and as wide as its screen i
     'flex-basis': '640px',
     'min-width': '0px',
   });
+});
+
+test('the rail is as high as the window and stays while the screen scrolls; under 888 px it scrolls away (FRU-402)', async ({
+  page,
+}) => {
+  await stubWorker(page);
+  // A window lower than « My account »: the document scrolls.
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await open(page, 'account');
+  const help = rail(page).getByRole('link', { name: 'Help and docs' });
+  await expect(help).toBeVisible();
+  expect.soft(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(600 + 200);
+
+  await page.evaluate(() => window.scrollTo(0, 200));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
+  const held = await box(rail(page));
+  expect.soft(held, 'the rail after a scroll of 200 px').toMatchObject({ x: 0, y: 0, height: 600 });
+  // The screen moved, and the foot of the rail is still at the bottom of the window.
+  expect.soft((await box(page.locator('main'))).y).toBe(-200);
+  expect.soft((await box(help)).y).toBeGreaterThan(600 - 80);
+  expect.soft((await box(help)).y + (await box(help)).height).toBeLessThanOrEqual(600);
+  expect.soft(await sideScroll(page)).toBe(0);
+
+  // Above the screen, on a phone, the rail is part of the page: it scrolls away with it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo(0, 150));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(150);
+  expect.soft((await box(rail(page))).y).toBe(-150);
+  expect.soft(await styles(rail(page), ['position'])).toEqual({ position: 'static' });
+  expect.soft(await sideScroll(page)).toBe(0);
 });
 
 test('one section, and one alone, is the section on screen', async ({ page }) => {

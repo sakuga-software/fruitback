@@ -115,11 +115,13 @@ function Health({ facts }: { facts: InstanceFacts }) {
   const unnamed = attention.count - named.length;
 
   return (
+    // Four facts on a line at the most, as the mockup draws them: the screen is as wide as its column
+    // (FRU-398), and a fifth track would leave a hole at the end of the line.
     <section aria-labelledby="health-title">
       <h2 id="health-title" className="mb-[12px] text-section font-bold">
         {t('Health')}
       </h2>
-      <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] border-y border-line">
+      <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(max(200px,25%),100%),1fr))] border-y border-line">
         <Fact term={t('Worker')} value={t('Answering')} tone="done" detail={uptime(facts.startedAt, now)} />
         <Fact
           term={t('Database')}
