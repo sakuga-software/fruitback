@@ -342,7 +342,9 @@ export function preferencesSection(document: Document, options: PreferencesOptio
     row(
       document,
       t('Show CSS selectors'),
-      t('In the note of a pin. The issue in your tracker keeps the selector either way.'),
+      t(
+        'In the head of a note you write, and in the note of a pin. The issue in your tracker keeps the selector either way.',
+      ),
       (() => {
         const control: HTMLElement = toggle(document, {
           checked: options.selectors,

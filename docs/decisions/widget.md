@@ -1498,6 +1498,18 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   of before, its `401` case said « Your session has ended ».
 - Measured on 2026-10-23: the « try again » seen in production was the composer of a 0.1.0 copy of
   the extension, installed beside the 0.3.0 one (FRU-397). The 0.3.0 already said « session ended ».
+## The selector in the head of the composer, on request (FRU-411)
+
+### The rules, in short
+
+- **`init({ selectorInHead })`**: `always` (the default) writes « button.add · <AddToCart> » in the
+  head of the composer, as before. `with-selectors` writes it only while `showSelectors` is on (the
+  option, or the method); otherwise the head writes what a person reads for the element, then its
+  component (`plainHead`: « Commander · <AddToCart> », the tag when the element says nothing).
+- **The extension asks for `with-selectors`**, so « Show CSS selectors » of its preferences (FRU-349,
+  off by default) governs the head too. A site that embeds the widget keeps the selector.
+- The head is set when the composer opens: a change of the preference shows at the next note.
+- The note and the issue keep the selector in every case: only the screen changes.
 
 ## A session of the host that ended (FRU-315)
 

@@ -722,6 +722,19 @@ export function aboutTarget(element: Element, source: SeedSource | undefined): s
 }
 
 /**
+ * The head of the composer with no selector (FRU-411): what a person reads for the element, then its
+ * component, « Commander · <AddToCart> ». The component alone when the element says nothing, and the
+ * tag when the page gives neither.
+ */
+export function plainHead(element: Element, source: SeedSource | undefined): string {
+  const name = readableName(element);
+  const component = componentOf(element, source)?.trim() ?? '';
+  const parts = [name, component === '' ? '' : `<${component}>`].filter((part) => part !== '');
+
+  return parts.length === 0 ? element.tagName.toLowerCase() : parts.join(' · ');
+}
+
+/**
  * The corners of the frame: those of the element, grown by the outset, or the small radius when the
  * element is square or its corners are not in pixels.
  */
