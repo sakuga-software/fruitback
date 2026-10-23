@@ -442,11 +442,15 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
       { x: 595, y: 481.2, width: 164.1, height: 17 },
       'Firefox',
     );
-    // The extension is in no store yet: both links lead to the page that says how to install it.
-    for (const link of [add, page.getByRole('link', { name: 'Install it in Firefox (beta)' })]) {
-      await expect(link).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
-      await expect(link).toHaveAttribute('target', '_blank');
-    }
+    // Chromium installs from the Chrome Web Store (FRU-409). Firefox is not on AMO yet: its link keeps
+    // the page that says how to install the archive.
+    await expect(add).toHaveAttribute(
+      'href',
+      'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa',
+    );
+    const firefox = page.getByRole('link', { name: 'Install it in Firefox (beta)' });
+    await expect(firefox).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
+    for (const link of [add, firefox]) await expect(link).toHaveAttribute('target', '_blank');
     await expect(page.getByText(/signs in with this account/)).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Go to the console' })).toHaveAttribute('href', '/w/w1/sites');
     expect(await violations(page)).toEqual([]);

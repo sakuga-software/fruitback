@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { CHROME_WEB_STORE, EXTENSION_GUIDE, extensionInstallFor } from './extension-store.ts';
 
@@ -32,5 +33,42 @@ describe('where a browser installs the extension', () => {
   it('names the listing of the extension, and the install section of the guide', () => {
     assert.match(CHROME_WEB_STORE, /^https:\/\/chromewebstore\.google\.com\/detail\/fruitback\/[a-p]{32}$/);
     assert.equal(EXTENSION_GUIDE, 'https://fruitback.com/reviewing.html#1-install-it');
+  });
+});
+
+/** The console has no DOM under `node --test`: the guard reads the source of the screens (FRU-409). */
+const SCREENS = ['routes/connect-start.tsx', 'routes/setup-install.tsx', 'routes/invitations.tsx'].map((path) => ({
+  path,
+  source: readFileSync(new URL(path, import.meta.url), 'utf8'),
+}));
+
+/** A control that leads somebody to install the extension, with its href and its words. */
+const INSTALL =
+  /href=\{([^}]+)\} newTab>\s*\{t\('(Install the extension \(beta\)|Install it in Firefox \(beta\))'\)\}/g;
+
+function installLinks(source: string): { href: string; words: string }[] {
+  return [...source.matchAll(INSTALL)].map(([, href = '', words = '']) => ({ href, words }));
+}
+
+describe('the screens that offer the extension (FRU-409)', () => {
+  it('lead this browser where it installs it: the store for Chrome and Edge, the guide otherwise', () => {
+    for (const { path, source } of SCREENS) {
+      const links = installLinks(source).filter(({ words }) => words === 'Install the extension (beta)');
+      assert.deepEqual(
+        links.map(({ href }) => href),
+        ['extensionInstallFor(navigator.userAgent)'],
+        path,
+      );
+    }
+    // The control: a screen that still leads to the guide alone is found.
+    const before = "<Button href={EXTENSION_GUIDE} newTab>\n  {t('Install the extension (beta)')}";
+    assert.deepEqual(installLinks(before), [{ href: 'EXTENSION_GUIDE', words: 'Install the extension (beta)' }]);
+  });
+
+  it('keep the guide for « Install it in Firefox (beta) »: Firefox is not on AMO yet', () => {
+    const firefox = SCREENS.flatMap(({ source }) => installLinks(source)).filter(
+      ({ words }) => words === 'Install it in Firefox (beta)',
+    );
+    assert.deepEqual(firefox, [{ href: 'EXTENSION_GUIDE', words: 'Install it in Firefox (beta)' }]);
   });
 });

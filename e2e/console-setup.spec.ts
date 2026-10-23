@@ -649,9 +649,10 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
       'first card',
     );
     expect.soft((await boxOf(cards.nth(1))).x).toBe(160);
+    // Chromium installs from the Chrome Web Store (FRU-409); `console-extension-store.spec.ts` holds Firefox.
     await expect(page.getByRole('link', { name: 'Install the extension (beta)' })).toHaveAttribute(
       'href',
-      'https://fruitback.com/reviewing.html#1-install-it',
+      'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa',
     );
     // The step says that it waits for the first note, and what to do on the site (FRU-237 tells it).
     await expect(page.getByRole('status').filter({ hasText: 'Waiting for your first note.' })).toContainText(

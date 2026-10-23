@@ -1,7 +1,8 @@
 import type { Site, Workspace } from '../api';
 import { ago } from '../ago';
 import { locale, t } from '../i18n';
-import { BY_SIGN_IN, CONNECT_PAGE, EXTENSION_GUIDE, snippetFor, useConnect, useCopy } from '../install-options';
+import { extensionInstallFor } from '../extension-store';
+import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
@@ -34,7 +35,7 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
             {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
           </p>
           <div className="mt-auto flex flex-col gap-2">
-            <Button tone="outline" size="page" wide href={EXTENSION_GUIDE} newTab>
+            <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
               {t('Install the extension (beta)')}
               <Away />
             </Button>
