@@ -740,6 +740,14 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   dropped, picked or captured then is not taken, since no note would name it (FRU-373). The worker says on each read whether files go: `canAttach: true` offers the
   menu, `false` shows the sentence that the note has no tracker and no way, absent shows nothing. A
   place of a member says it for itself (`destinations[].canAttach`).
+- **A screenshot pasted anywhere in the composer joins the note** (FRU-424, decision of Mathieu):
+  the capture that works everywhere, ⌘⇧4 or Win+⇧+S then ⌘V or Ctrl+V. Each image of the paste goes
+  through `joinFiles`, as a file picked, with its limits and its refusals; the text of the note is
+  not touched. **A paste that carries `text/plain` is a paste of text**, even with an image beside it:
+  Word and Pages put a picture of the copied words on the clipboard too. Where the note takes no
+  file, or once it is sent, the paste is the browser's, as before. The drop zone says « Paste a
+  screenshot (⌘V) », with Ctrl+V off a Mac. `e2e/extension-paste.spec.ts` sends a pasted PNG to the
+  Linear in memory.
 - **No pin, no tooltip, no open thread and no frame of the element on a capture** (FRU-351): from
   the start of a capture, the area being chosen included, the host carries `data-fruitback-shooting`,
   which hides the overlay and the highlight; they come back in a `finally`, after the capture, a

@@ -39,6 +39,7 @@ export const FRENCH: Catalog = {
   'composer.attachDrop': 'Glisser-déposer',
   'composer.attachDropHere': 'Déposez vos fichiers ici',
   'composer.attachDropChoose': 'Choisir un fichier',
+  'composer.attachPaste': 'Collez une capture ({keys})',
   'composer.attachNoTracker': 'Cette note reste dans Fruitback, sans tracker : elle ne prend aucun fichier.',
   'composer.attachRemove': 'Retirer {name}',
   'composer.attachSending': 'Envoi…',

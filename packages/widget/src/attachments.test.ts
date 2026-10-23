@@ -407,6 +407,90 @@ describe('the menu of « Attach » (FRU-351)', () => {
   });
 });
 
+describe('a screenshot pasted in the composer (FRU-424)', () => {
+  type View = { File: typeof File; Event: typeof Event };
+
+  /** A paste as the browser fires it: its files, and the types of what the clipboard holds. */
+  function paste(page: ReturnType<typeof mount>['page'], on: Element, files: File[], types = ['Files']): Event {
+    const view = page.view as unknown as View;
+    const event = new view.Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { files, types } });
+    on.dispatchEvent(event);
+
+    return event;
+  }
+
+  async function until(check: () => boolean, settle: () => Promise<unknown>): Promise<void> {
+    for (let tries = 0; tries < 20 && !check(); tries += 1) await settle();
+  }
+
+  it('joins a pasted image to the note, as a file chosen, and sends it on its way', async () => {
+    const { page, root, q, uploads, settle } = mount();
+    composer?.open(ANCHOR);
+    const note = q<HTMLTextAreaElement>('[data-fruitback-note]');
+    note.value = 'Le bouton est coupé';
+    const view = page.view as unknown as View;
+    const shot = new view.File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png' });
+    const event = paste(page, note, [shot]);
+    assert.equal(event.defaultPrevented, true, 'the image is not pasted into the text');
+    await until(() => uploads.length > 0, settle);
+    assert.equal(uploads.length, 1);
+    assert.deepEqual(uploads[0]?.file, { name: 'image.png', type: 'image/png', size: 4, base64: 'iVBORw==' });
+    assert.deepEqual(files(root), [['image.png', '0.1 kB · Sending…', 'sending']]);
+    assert.equal(note.value, 'Le bouton est coupé');
+  });
+
+  it('leaves a paste of text alone, even with a picture of the words beside it', async () => {
+    const { page, root, q, uploads, settle } = mount();
+    composer?.open(ANCHOR);
+    const note = q<HTMLTextAreaElement>('[data-fruitback-note]');
+    const view = page.view as unknown as View;
+    assert.equal(paste(page, note, [], ['text/plain']).defaultPrevented, false);
+    const words = new view.File([new Uint8Array([1, 2, 3])], 'image.png', { type: 'image/png' });
+    assert.equal(paste(page, note, [words], ['text/plain', 'text/html', 'Files']).defaultPrevented, false);
+    const text = new view.File(['hello'], 'notes.txt', { type: 'text/plain' });
+    assert.equal(paste(page, note, [text]).defaultPrevented, false, 'a file that is no image is not taken');
+    for (let tries = 0; tries < 5; tries += 1) await settle();
+    assert.equal(uploads.length, 0);
+    assert.deepEqual(files(root), []);
+  });
+
+  it('refuses an image too heavy, says so, and keeps the note', async () => {
+    const { page, root, q, uploads, settle } = mount();
+    composer?.open(ANCHOR);
+    const note = q<HTMLTextAreaElement>('[data-fruitback-note]');
+    note.value = 'Le bouton est coupé';
+    const view = page.view as unknown as View;
+    const heavy = new view.File([new Uint8Array(MAX_ATTACHMENT_BYTES.image + 1)], 'image.png', { type: 'image/png' });
+    paste(page, note, [heavy]);
+    await until(() => files(root).length > 0, settle);
+    assert.equal(uploads.length, 0);
+    assert.equal(files(root)[0]?.[2], 'refused');
+    assert.match(String(files(root)[0]?.[1]), /Too large/);
+    assert.equal(note.value, 'Le bouton est coupé');
+  });
+
+  it('takes nothing where the note takes no file: the paste stays as it was', async () => {
+    const { page, root, q, uploads, settle } = mount({ offer: () => 'no-tracker' });
+    composer?.open(ANCHOR);
+    const view = page.view as unknown as View;
+    const shot = new view.File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png' });
+    assert.equal(paste(page, q('[data-fruitback-note]'), [shot]).defaultPrevented, false);
+    for (let tries = 0; tries < 5; tries += 1) await settle();
+    assert.equal(uploads.length, 0);
+    assert.deepEqual(files(root), []);
+  });
+
+  it('says in the drop zone that a screenshot can be pasted', () => {
+    const { q } = mount();
+    composer?.open(ANCHOR);
+    assert.match(
+      q<HTMLElement>('[data-fruitback-attach-dropzone-paste]').textContent ?? '',
+      /^Paste a screenshot \((⌘V|Ctrl\+V)\)$/,
+    );
+  });
+});
+
 describe('the area of a capture (FRU-332)', () => {
   const t = createTranslator({ language: 'en' });
 
