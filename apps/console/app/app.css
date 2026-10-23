@@ -454,6 +454,16 @@ textarea {
   padding: 0 28px 0 12px;
 }
 
+/*
+ * The chosen value takes the type of its button, as the mockup writes it (15 px), and as a field does
+ * (FRU-412): HeroUI draws it at 14 px on a line of 20, so beside a field its words sat a pixel higher
+ * and smaller. A compact list and a list of statuses set their size on the button, and it follows.
+ */
+.kit-field .select__value {
+  font-size: inherit;
+  line-height: normal;
+}
+
 .kit-field[data-compact='true'] .input,
 .kit-field[data-compact='true'] .select__trigger {
   height: var(--spacing-control-panel);

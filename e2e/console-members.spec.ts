@@ -1073,3 +1073,26 @@ test('the days of a read made before, late, do not replace those of the read mad
   await expect(nora).toContainText('2 days ago');
   await expect(nora).not.toContainText('3 days ago');
 });
+
+test('the words of « Email » and « Role » sit on one baseline, in the type of the mockup (FRU-412)', async ({
+  page,
+}) => {
+  await workerWith(page);
+  await page.setViewportSize({ width: 1528, height: 840 });
+  await open(page);
+  // The mockup writes both controls at 15 px. HeroUI wrote the chosen role at 14 px on a line of
+  // 20 px, so its words sat higher and smaller than those of the field beside it.
+  const type = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const { fontSize, lineHeight } = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      return { fontSize, lineHeight, middle: Math.round((box.top + box.height / 2) * 10) / 10 };
+    });
+  const field = await type(email(page));
+  const chosen = await type(roles(page).locator('.select__value'));
+  expect(chosen).toEqual(field);
+  expect(field.fontSize).toBe('15px');
+  // The value takes the size of its button, so a compact list keeps its own.
+  const button = await roles(page).evaluate((element) => getComputedStyle(element).fontSize);
+  expect(chosen.fontSize).toBe(button);
+});
