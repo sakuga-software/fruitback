@@ -57,7 +57,7 @@ const SITE = { id: 's1', origin: 'https://preview.client.fr', visibility: 'membe
 type Worker = {
   sent: Sent[];
   rows: Row[];
-  deleteAnswer?: (path: string) => { status: number; json: unknown };
+  deleteAnswer?: (path: string) => { status: number; json?: unknown };
   /** Holds the answer to a written status this long, in ms: a write that is still on its way. */
   slow?: number;
 };
@@ -94,7 +94,7 @@ async function workerWith(
     worker.sent.push({ method, path, body });
     if (method === 'DELETE') {
       const answered = worker.deleteAnswer?.(path) ?? { status: 200, json: { moved: 0 } };
-      if (answered.status === 200) {
+      if (answered.status === 200 || answered.status === 204) {
         const key = decodeURIComponent(pathname.split('/').at(-1) ?? '');
         worker.rows = worker.rows.filter((each) => each.key !== key);
       }
@@ -476,6 +476,24 @@ test('a status the list says is empty still asks where its notes go when the wor
     `${STATUSES}/own/legal`,
     `${STATUSES}/own/legal?moveTo=progress`,
   ]);
+});
+
+test('a delete the worker answers with no body still ends: the row goes and it is said (lite review of PR 541)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  worker.deleteAnswer = () => ({ status: 204 });
+  await open(page);
+
+  await item(page, 'legal')
+    .getByRole('button', { name: /^Delete Waiting for the client's legal/ })
+    .click();
+  await page
+    .getByRole('group', { name: /^Delete Waiting for the client's legal/ })
+    .getByRole('button', { name: /^Delete/ })
+    .click();
+  await expect(item(page, 'legal')).toHaveCount(0);
+  await expect(page.locator('main [aria-live="polite"]')).toContainText('was deleted.');
 });
 
 test('a site that sends to GitHub shows its four states, beside a Linear list that could not be read', async ({

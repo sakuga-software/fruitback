@@ -565,7 +565,9 @@ function StatusList({
       return setProblem(problemOf(removed, STATUS_PROBLEMS, msg('This status is still here. Try again.')));
     setOpen(undefined);
     onRows((current) => current.filter((row) => row.source !== status.source || row.key !== status.key));
-    onDeleted(status.key, removed.data.moved, moveTo?.key);
+    // A worker that answers with no body (204) moved nothing this screen can count (lite review of PR 541).
+    const moved = removed.data?.moved;
+    onDeleted(status.key, typeof moved === 'number' ? moved : 0, moveTo?.key);
     onSay(
       moveTo === undefined
         ? t('« {name} » was deleted.', { name: nameOf(status) })
