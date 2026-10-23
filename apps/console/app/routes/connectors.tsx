@@ -10,7 +10,16 @@ import { useLocale } from '../use-locale';
 import { AddLinear, AddRest } from './connector-add';
 import { GithubPanel } from './connector-github';
 import { LinearPanel } from './connector-linear';
-import { KEY_PROBLEMS, KINDS, type PanelProps, SourceMark, siteCount, sourceLine } from './connector-parts';
+import { ConnectorName } from './connector-name';
+import {
+  KEY_PROBLEMS,
+  KINDS,
+  type PanelProps,
+  SourceMark,
+  connectorName,
+  siteCount,
+  sourceLine,
+} from './connector-parts';
 import { RestPanel } from './connector-rest';
 
 /**
@@ -199,7 +208,7 @@ export default function Connectors() {
     open === undefined || Panel === undefined ? null : (
       <Opened
         key={open.id}
-        label={`${t(KINDS[open.kind].name)} · ${sourceLine(open)}`}
+        label={`${connectorName(open)} · ${sourceLine(open)}`}
         takesFocus={opening}
         onClose={() => {
           setSelected(undefined);
@@ -207,6 +216,7 @@ export default function Connectors() {
           document.getElementById(rowId(open.id))?.focus();
         }}
       >
+        <ConnectorName base={base} connector={open} manages={manages} onRenamed={reload} />
         <Panel
           id={PANEL_TITLE}
           base={base}
@@ -282,13 +292,14 @@ export default function Connectors() {
                     >
                       <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-body leading-auto font-semibold">
-                          {t(KINDS[connector.kind].name)}
+                        {/* The name its workspace gave it, or its kind (FRU-404). */}
+                        <span className="block truncate text-body leading-auto font-semibold">
+                          {connectorName(connector)}
                         </span>
                         {/* One line: a long address is cut at its end, and the panel writes it whole (FRU-321). */}
-                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={sourceLine(connector)}>
+                        <span className="flex min-w-0 text-hint leading-auto text-muted" title={lineOf(connector)}>
                           <span className="min-w-0 truncate" data-source-line>
-                            {sourceLine(connector)}
+                            {lineOf(connector)}
                           </span>
                           <span className="flex-none whitespace-pre">{countOf(connector)}</span>
                         </span>
@@ -421,6 +432,13 @@ export default function Connectors() {
       </div>
     </>
   );
+}
+
+/** The line under the name of a source: its kind first when a name hides it (FRU-404). */
+function lineOf(connector: Connector): string {
+  return connector.name === undefined
+    ? sourceLine(connector)
+    : `${t(KINDS[connector.kind].name)} · ${sourceLine(connector)}`;
 }
 
 /** « Connect », with the name of the source for a screen reader: seven buttons would say the same word. */

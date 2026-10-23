@@ -419,6 +419,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
   times, so each button also holds the name of its source for a screen reader.
   `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+  **A source can have a name** (FRU-404): several sources can reach one tracker, so an owner or an
+  admin names one at the top of its panel (`connector-name.tsx`, « Rename » in place, as for a
+  workspace), and an empty name gives it back the name of its kind. `connectorName` of
+  `connector-parts.tsx` is how every screen names a source: its row, where the kind then goes first
+  on the line under it, the chips and the places of Notes, and the lists of a site's statuses
+  (`placeLabel`: « Clients · Design » for « Linear · Design »). A worker of before sends no `name`,
+  and every source is named by its kind, as before.
 - **GitHub connects with its App, where the worker has one** (FRU-361, routes of FRU-359 and
   FRU-360): `connectors.tsx` (the card), `connector-github.tsx` (the panel). The card « GitHub
   Issues » is always in « Add a source », between Linear and the REST API. With `githubApp: true`,

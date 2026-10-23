@@ -549,6 +549,24 @@ test('a site that sends to GitHub shows its four states, beside a Linear list th
   await expectNoViolation(page, 'GitHub and Linear');
 });
 
+test('a source its workspace named gives its name to its lists, in place of its kind (FRU-404)', async ({ page }) => {
+  const github = { connector: 'g1', label: 'GitHub · acme/website' };
+  const linear = { connector: 'l1', teamId: 't1', label: 'Linear · Acme web' };
+  await workerWith(page, {
+    site: { ...SITE, destinations: [github, linear], destination: github },
+    connectors: [
+      { id: 'g1', kind: 'github', label: 'GitHub', name: 'Public bugs', createdAt: '2026-10-01T00:00:00Z' },
+      { id: 'l1', kind: 'linear', label: 'Linear', name: 'Clients', createdAt: '2026-10-01T00:00:00Z' },
+    ],
+    rows: [],
+  });
+  await open(page);
+
+  await expect(page.getByRole('region', { name: 'Public bugs · acme/website' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Clients · Acme web' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Linear · Acme web' })).toHaveCount(0);
+});
+
 test('a site that sends to two repositories of one GitHub connector has one list of its four states (FRU-369)', async ({
   page,
 }) => {

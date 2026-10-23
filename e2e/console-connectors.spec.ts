@@ -80,6 +80,8 @@ type Worker = {
   down: boolean;
   /** What the worker answers to a source that is added. */
   refuses?: string;
+  /** What the worker answers to a name (FRU-404). */
+  refusesName?: string;
   sent: { pathname: string; body: unknown }[];
 };
 
@@ -91,6 +93,20 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (!pathname.startsWith('/console/workspaces/w1/')) return undefined;
     if (request.method() !== 'GET') {
       worker.sent.push({ pathname, body: request.postDataJSON() });
+      const named = /\/connectors\/(\w+)$/.exec(pathname);
+      if (named !== null && request.method() === 'POST') {
+        if (worker.refusesName !== undefined) return json({ error: worker.refusesName }, 400);
+        const name = (request.postDataJSON() as { name: string }).name;
+        worker.connectors = worker.connectors.map((each) => {
+          const connector = each as { id: string; name?: string };
+          if (connector.id !== named[1]) return each;
+          const { name: _, ...rest } = connector;
+
+          return name === '' ? rest : { ...rest, name };
+        });
+
+        return json(worker.connectors.find((each) => (each as { id: string }).id === named[1]));
+      }
       if (pathname.endsWith('/connectors')) {
         if (worker.refuses !== undefined) return json({ error: worker.refuses }, 400);
         const made = {
@@ -192,6 +208,11 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect.soft(await painted(resting, 'backgroundColor')).toEqual(rgb(WHITE));
   // The boxes at 1440 px. The rows take the width of the page, where the mockup draws a column for
   // the panel, and the panel opens under its row, before the next one (FRU-403).
+  // The panel scrolled the screen as far as it needs: the boxes are taken from the top of the screen.
+  await title.evaluate((heading) => {
+    for (let at: Element | null = heading; at !== null; at = at.parentElement) at.scrollTop = 0;
+    document.scrollingElement?.scrollTo(0, 0);
+  });
   expectBox(await box(title), { x: 297, y: 130, height: 18 }, 2, '« Connected »');
   expectBox(await box(chosen), { x: 298, y: 159, width: ROW_WIDTH, height: 65 }, 2, 'the first row');
   expectBox(await box(panel(page)), { x: 298, y: 224, width: ROW_WIDTH }, 2, 'the panel');
@@ -602,3 +623,105 @@ for (const locale of ['en', 'fr'] as const) {
     expect.soft(await sideScroll(page), 'the form of an address').toBe(0);
   });
 }
+
+/**
+ * FRU-404. Several sources can reach one tracker, so an owner or an admin names each one in its panel,
+ * and the name is what its row shows. An empty name gives it back the name of its kind.
+ */
+for (const { width, height, locale, words } of [
+  {
+    width: 1440,
+    height: 900,
+    locale: 'en',
+    words: {
+      rename: 'Rename Linear',
+      field: 'Name of this source',
+      save: 'Save',
+      refused: 'A name of one line, up to 80 characters.',
+    },
+  },
+  {
+    width: 390,
+    height: 844,
+    locale: 'fr',
+    words: {
+      rename: 'Renommer Linear',
+      field: 'Nom de cette source',
+      save: 'Enregistrer',
+      refused: 'Un nom d’une ligne, de 80 caractères au plus.',
+    },
+  },
+] as const) {
+  test(`an owner names a source, and its row says the name, at ${width} px in ${locale}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    const worker = await workerWith(page, 'owner', locale);
+    worker.connectors = [LINEAR, { ...LINEAR, id: 'c2', label: 'Linear · Ana' }, ADDRESS];
+    await open(page);
+    const row = rows(page).first();
+    await row.click();
+
+    // A refused name keeps the form open, with what was typed.
+    await panel(page).getByRole('button', { name: words.rename, exact: true }).click();
+    const field = panel(page).getByRole('textbox', { name: words.field });
+    await expect(field).toBeFocused();
+    await field.fill('Clients');
+    worker.refusesName = 'invalid-name';
+    await panel(page).getByRole('button', { name: words.save, exact: true }).click();
+    await expect(panel(page).getByText(words.refused)).toBeVisible();
+    await expect(field).toHaveValue('Clients');
+
+    worker.refusesName = undefined;
+    await field.fill('  Clients  ');
+    await field.press('Enter');
+    await expect(row.locator('span.font-semibold').first()).toHaveText('Clients');
+    expect(worker.sent.at(-1)).toEqual({ pathname: '/console/workspaces/w1/connectors/c1', body: { name: 'Clients' } });
+    // The kind goes under the name, so that a name never hides what the source is.
+    await expect(row.locator('[data-source-line]')).toHaveText(/^Linear · /);
+    // The neighbour of the same kind keeps its own name.
+    await expect(rows(page).nth(1).locator('span.font-semibold').first()).toHaveText('Linear');
+    // Focus is back on « Rename », and the panel is still open.
+    await expect(panel(page).getByRole('button', { name: /Clients$/ })).toBeFocused();
+    expect(await sideScroll(page)).toBe(0);
+    await expectNoViolation(page, `named, ${width} px`);
+
+    // Escape in the form closes the form, not the panel.
+    await panel(page)
+      .getByRole('button', { name: /Clients$/ })
+      .click();
+    await page.keyboard.press('Escape');
+    await expect(panel(page)).toBeVisible();
+
+    // An empty name gives the source back the name of its kind.
+    await panel(page)
+      .getByRole('button', { name: /Clients$/ })
+      .click();
+    await panel(page).getByRole('textbox', { name: words.field }).fill('');
+    await panel(page).getByRole('button', { name: words.save, exact: true }).click();
+    await expect(row.locator('span.font-semibold').first()).toHaveText('Linear');
+    expect(worker.sent.at(-1)?.body).toEqual({ name: '' });
+  });
+}
+
+test('« Rename » starts from the name of the last read, not the one of when the panel opened', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  // The panel of the address: « Try now » of a late note reads the list of the sources again.
+  const row = rows(page).nth(1);
+  await row.click();
+  // Another admin names it meanwhile.
+  worker.connectors = [LINEAR, { ...ADDRESS, name: 'Support' }];
+  await panel(page).getByRole('button', { name: 'Try now' }).first().click();
+  await expect(row.locator('span.font-semibold').first()).toHaveText('Support');
+  await panel(page).getByRole('button', { name: 'Rename Support', exact: true }).click();
+  await expect(panel(page).getByRole('textbox', { name: 'Name of this source' })).toHaveValue('Support');
+});
+
+test('a member reads the name of a source, and renames none', async ({ page }) => {
+  const worker = await workerWith(page, 'member');
+  worker.connectors = [{ ...LINEAR, name: 'Clients' }, ADDRESS];
+  await open(page);
+  await expect(rows(page).first().locator('span.font-semibold').first()).toHaveText('Clients');
+  await rows(page).first().click();
+  await expect(panel(page).getByText('Clients', { exact: true })).toBeVisible();
+  await expect(panel(page).getByRole('button', { name: /^Rename/ })).toHaveCount(0);
+});

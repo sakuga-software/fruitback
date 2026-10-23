@@ -89,6 +89,29 @@ export function accountOf(connector: Connector): string {
   return connector.label.replace(GITHUB_LABEL, '');
 }
 
+/**
+ * The name of a source, wherever it is shown (FRU-404): the one its workspace gave it, or its kind.
+ * Several sources can be of one kind, so a name is what tells them apart.
+ */
+export function connectorName(connector: Pick<Connector, 'kind' | 'name'>): string {
+  return connector.name ?? t(KINDS[connector.kind].name);
+}
+
+/**
+ * The label of a place of a named source: its name takes the place of the kind that the worker
+ * wrote first, « Linear · Design » → « Clients · Design ». A source with no name keeps the label.
+ */
+export function placeLabel(
+  connector: Pick<Connector, 'name'> | undefined,
+  label: string | undefined,
+): string | undefined {
+  if (connector?.name === undefined || label === undefined) return label;
+  const cut = label.indexOf(' · ');
+
+  // A label with no kind first (a word of the worker this build does not expect) is kept whole after the name.
+  return cut < 0 ? `${connector.name} · ${label}` : `${connector.name}${label.slice(cut)}`;
+}
+
 /** How a source is connected, in one line under its name. */
 export function sourceLine(connector: Connector): string {
   if (connector.kind === 'rest') return hostOf(connector);

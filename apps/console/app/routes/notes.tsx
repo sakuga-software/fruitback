@@ -15,7 +15,7 @@ import {
   Problem,
   StatusDot,
 } from '../ui';
-import { KINDS, STAGE_NAMES } from './connector-parts';
+import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
@@ -320,6 +320,7 @@ export default function Notes() {
                         key={note.id}
                         note={note}
                         site={hostOf(note.site.id)}
+                        source={connectors.find((each) => each.id === note.place?.connector)}
                         manages={manages}
                         retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
                         statuses={shown.statuses?.[note.site.id]}
@@ -365,11 +366,13 @@ function Places({
   onChoose: (place: string) => void;
 }) {
   useLocale();
-  // A place is named by its kind, and by its own name when two connectors are of the same kind.
+  // A place is named by the name its workspace gave it (FRU-404), else by its kind, and by the label
+  // of the worker when two connectors with no name are of the same kind.
   const nameOf = (id: string): string => {
     if (id === 'fruitback') return t('In Fruitback');
     const connector = connectors.find((each) => each.id === id);
     if (connector === undefined) return t('A source that was removed');
+    if (connector.name !== undefined) return connector.name;
     const twins = connectors.filter((each) => each.kind === connector.kind).length > 1;
 
     return twins ? connector.label : t(KINDS[connector.kind].name);
@@ -425,6 +428,7 @@ function hostOfLabel(label: string | undefined): string | undefined {
 function NoteRow({
   note,
   site,
+  source,
   manages,
   retry,
   onSent,
@@ -434,6 +438,8 @@ function NoteRow({
   note: IndexedNote;
   /** The host of the site of the note, when the sites were read. */
   site: string | undefined;
+  /** The connector the note went to, when the connectors were read: it may have a name (FRU-404). */
+  source: Connector | undefined;
   manages: boolean;
   retry: () => Promise<{ ok: true } | { ok: false; error: string }>;
   onSent: () => void;
@@ -483,7 +489,13 @@ function NoteRow({
       </td>
       {place === undefined ? null : (
         <td>
-          <Place place={place} reference={note.ref} address={note.url} late={note.delivery !== undefined} />
+          <Place
+            place={place}
+            source={source}
+            reference={note.ref}
+            address={note.url}
+            late={note.delivery !== undefined}
+          />
           {note.delivery === undefined ? null : (
             <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-hint">
               {/* The worker stopped trying (FRU-122): « Send again » still sends it, and the words say why
@@ -592,11 +604,14 @@ function NoteStatus({
 /** Where a note went: the tracker and its reference, an address, Fruitback, or a source that is gone. */
 function Place({
   place,
+  source,
   reference,
   address,
   late,
 }: {
   place: NotePlace;
+  /** Its connector, when it is still there: its name is the one its workspace gave it (FRU-404). */
+  source: Connector | undefined;
   reference: string | undefined;
   address: string | undefined;
   late: boolean;
@@ -604,7 +619,7 @@ function Place({
   useLocale();
   if (place.kind === 'fruitback') return <span className="block font-semibold">{t('Kept in Fruitback')}</span>;
   if (place.kind === 'removed') return <span className="block font-semibold">{t('A source that was removed')}</span>;
-  const name = t(KINDS[place.kind].name);
+  const name = source === undefined ? t(KINDS[place.kind].name) : connectorName(source);
   // An address that did not take the note yet does not read « Delivered to » above « Not delivered yet ».
   const host = place.kind === 'rest' && !late ? hostOfLabel(place.label) : undefined;
 
