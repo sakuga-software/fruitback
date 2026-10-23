@@ -73,6 +73,11 @@ type Loaded = {
   site: Site;
   connectors: readonly Connector[];
   rows: readonly StatusRow[];
+  /**
+   * The notes in each status of the worker's store, by key (FRU-386). `undefined`: a worker of before,
+   * which says the number only when it refuses a delete (`409 status-in-use`).
+   */
+  notes: Readonly<Record<string, number>> | undefined;
   /** `failed`: the worker did not say the states of the trackers. The other lists are still drawn. */
   tracker: { trackerColours: boolean; trackers: readonly TrackerList[] } | 'failed';
 };
@@ -206,7 +211,10 @@ export default function SiteStatuses() {
     const [sites, connectors, statuses, tracker] = await Promise.all([
       call<{ sites: Site[] }>('GET', `${base}/sites`),
       call<{ connectors: Connector[] }>('GET', `${base}/connectors`),
-      call<{ statuses: StatusRow[] }>('GET', `${base}/sites/${encodeURIComponent(siteId)}/statuses`),
+      call<{ statuses: StatusRow[]; notes?: Record<string, number> }>(
+        'GET',
+        `${base}/sites/${encodeURIComponent(siteId)}/statuses`,
+      ),
       // FRU-368: the states of the Linear teams of the site, read now, and the switch of their colours.
       call<{ trackerColours: boolean; trackers: TrackerList[] }>(
         'GET',
@@ -222,6 +230,7 @@ export default function SiteStatuses() {
       site,
       connectors: connectors.data.connectors,
       rows: statuses.data.statuses,
+      notes: notesOf(statuses.data.notes),
       tracker: tracker.ok && Array.isArray(tracker.data?.trackers) ? tracker.data : 'failed',
     });
   }, [base, siteId]);
@@ -297,6 +306,14 @@ export default function SiteStatuses() {
 
   const onRows = (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) =>
     setRead((current) => (typeof current === 'string' ? current : { ...current, rows: change(current.rows) }));
+  // A status deleted: it counts nothing, and the status that took its notes counts them too.
+  const onDeleted = (key: string, moved: number, to: string | undefined) =>
+    setRead((current) => {
+      if (typeof current === 'string' || current.notes === undefined) return current;
+      const { [key]: _gone, ...notes } = current.notes;
+
+      return { ...current, notes: to === undefined ? notes : { ...notes, [to]: (notes[to] ?? 0) + moved } };
+    });
 
   return (
     <>
@@ -358,7 +375,9 @@ export default function SiteStatuses() {
                 trackerColours={tracker?.trackerColours === true}
                 {...(index === switchAt ? { onTrackerColours: setTrackerColours } : {})}
                 rows={read.rows}
+                notes={section.kind === 'own' ? read.notes : undefined}
                 onRows={onRows}
+                onDeleted={onDeleted}
                 path={`${base}/sites/${encodeURIComponent(siteId)}/statuses`}
                 writing={writing}
                 writeOne={writeOne}
@@ -426,7 +445,11 @@ type StatusListProps = {
   /** Turns that switch: the list that shows it. The sentence of a refusal, or `undefined`. */
   onTrackerColours?: (on: boolean) => Promise<string | undefined>;
   rows: readonly StatusRow[];
+  /** The notes in each status, for the list of the worker's store when the worker says them (FRU-386). */
+  notes: Readonly<Record<string, number>> | undefined;
   onRows: (change: (rows: readonly StatusRow[]) => readonly StatusRow[]) => void;
+  /** The status `key` was deleted, and `moved` of its notes went to the status `to`. */
+  onDeleted: (key: string, moved: number, to: string | undefined) => void;
   path: string;
   writing: boolean;
   /** Runs one write, or nothing while another is running: one write at a time for the whole page. */
@@ -444,7 +467,9 @@ function StatusList({
   trackerColours,
   onTrackerColours,
   rows,
+  notes,
   onRows,
+  onDeleted,
   path,
   writing,
   writeOne,
@@ -540,6 +565,7 @@ function StatusList({
       return setProblem(problemOf(removed, STATUS_PROBLEMS, msg('This status is still here. Try again.')));
     setOpen(undefined);
     onRows((current) => current.filter((row) => row.source !== status.source || row.key !== status.key));
+    onDeleted(status.key, removed.data.moved, moveTo?.key);
     onSay(
       moveTo === undefined
         ? t('« {name} » was deleted.', { name: nameOf(status) })
@@ -611,10 +637,16 @@ function StatusList({
                 setOpen({ key: status.key, what: 'edit' });
               }}
               onReset={() => void reset(status)}
+              {...(notes === undefined ? {} : { notes: notes[status.key] ?? 0 })}
               onDelete={() => {
                 setAdding(false);
                 setProblem(undefined);
-                setOpen({ key: status.key, what: 'delete' });
+                // FRU-386: notes are in it, so the first step is where they go. The `409` of the
+                // worker stays the net for a note written since the list was read.
+                const held = notes?.[status.key] ?? 0;
+                setOpen(
+                  held > 0 ? { key: status.key, what: 'move', notes: held } : { key: status.key, what: 'delete' },
+                );
               }}
             >
               {open?.key === status.key && open.what === 'edit' ? (
@@ -780,6 +812,8 @@ type StatusItemProps = {
   last: boolean;
   writing: boolean;
   open: Open | undefined;
+  /** How many notes are in it: the worker's store only, and a worker that says it (FRU-386). */
+  notes?: number;
   onMove: (step: -1 | 1) => void;
   onEdit: () => void;
   onReset: () => void;
@@ -795,6 +829,7 @@ function StatusItem({
   last,
   writing,
   open,
+  notes,
   onMove,
   onEdit,
   onReset,
@@ -836,7 +871,10 @@ function StatusItem({
       <span className="grid min-w-0 flex-1 grid-cols-1 items-center gap-x-[12px] gap-y-[6px] @min-[860px]:grid-cols-[minmax(200px,1.6fr)_140px_minmax(150px,1fr)_120px_minmax(150px,auto)]">
         <span className="flex min-w-0 flex-col gap-[3px]">
           <StatusMark name={name} style={style} />
-          <span className="pl-[42px] text-hint text-muted">{from}</span>
+          <span className="pl-[42px] text-hint text-muted">
+            {from}
+            {notes === undefined ? null : ` · ${notesText(notes)}`}
+          </span>
         </span>
         <span className="flex min-w-0 items-center gap-[8px]">
           <span className={`${label} w-[64px]`}>{t('Stage')}</span>
@@ -889,6 +927,23 @@ function StatusItem({
       {open === undefined ? null : <div className="w-full basis-full">{children}</div>}
     </li>
   );
+}
+
+/** How many notes are in a status, in words. */
+function notesText(notes: number): string {
+  if (notes === 0) return t('No notes');
+
+  return notes === 1 ? t('1 note') : t('{count} notes', { count: notes });
+}
+
+/** The notes of each status as the worker says them, or `undefined` for anything that is not such a map. */
+function notesOf(value: unknown): Record<string, number> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, number] => Number.isInteger(entry[1]) && (entry[1] as number) >= 0,
+  );
+
+  return Object.fromEntries(entries);
 }
 
 /** The words of the colour a status has when the team chose none: the tracker's, or its stage's. */
