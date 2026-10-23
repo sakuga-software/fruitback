@@ -1,7 +1,7 @@
 import { init } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, type CaptureResponseMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { createRelayTransport, randomId } from '../src/relay-transport.ts';
-import { pictureOfAnswer } from '../src/capture-answer.ts';
+import { captureOfAnswer } from '../src/capture-answer.ts';
 import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
@@ -100,7 +100,7 @@ export default defineContentScript({
       height: number;
       scale: number;
     }): Promise<CaptureResponseMessage['picture']> =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         const id = randomId(window);
         const timer = setTimeout(() => {
           pictures.delete(id);
@@ -108,7 +108,12 @@ export default defineContentScript({
         }, CAPTURE_TIMEOUT_MS);
         pictures.set(id, (answer) => {
           clearTimeout(timer);
-          resolve(pictureOfAnswer(answer));
+          // FRU-423: a refusal for want of a gesture rejects, and the composer says to click the icon.
+          try {
+            resolve(captureOfAnswer(answer));
+          } catch (error) {
+            reject(error);
+          }
         });
         post({
           channel: CHANNEL,

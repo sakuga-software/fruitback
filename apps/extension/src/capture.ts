@@ -22,7 +22,9 @@ import type { SiteConfig } from './sites.ts';
  * **Only for a site of a workspace, with a session**: the one place where the worker takes files. A
  * page that asks for a capture of another site gets nothing.
  *
- * Every refusal is `undefined`, never an error.
+ * Every refusal is `undefined`, never an error. One refusal has a name (FRU-423): the browser refused
+ * `captureVisibleTab` for want of `activeTab` or `<all_urls>`, which a click on the icon grants. It
+ * is `{ refused: 'permission' }`, and the composer says to click the icon.
  */
 
 /** Where on the screen the area is, in CSS pixels of the viewport, and the scale of the screen. */
@@ -36,6 +38,22 @@ export type CapturedFile = { name: string; type: 'image/png' | 'image/jpeg'; siz
  * its name and its size, and no bytes. The widget says it is too large, rather than « not taken ».
  */
 export type TooLargeCapture = { tooLarge: { name: string; size: number } };
+
+/** A capture the browser refused for want of a gesture on the extension (FRU-423). */
+export type RefusedCapture = { refused: 'permission' };
+
+/**
+ * Whether the browser refused `captureVisibleTab` for want of a permission. Chromium says « Either
+ * the '<all_urls>' or 'activeTab' permission is required. » (measured on 145 and 156), Firefox
+ * « Missing activeTab permission ».
+ */
+export function isPermissionRefusal(error: unknown): boolean {
+  let message = '';
+  if (error instanceof Error) message = error.message;
+  else if (typeof error === 'string') message = error;
+
+  return /activeTab|<all_urls>/.test(message);
+}
 
 export type CaptureSeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
@@ -55,7 +73,7 @@ export function createCapture(seams: CaptureSeams) {
   return async (
     area: CaptureArea | undefined,
     origin: string | undefined,
-  ): Promise<CapturedFile | TooLargeCapture | undefined> => {
+  ): Promise<CapturedFile | TooLargeCapture | RefusedCapture | undefined> => {
     try {
       return await take(seams, area, origin);
     } catch {
@@ -68,7 +86,7 @@ async function take(
   { readSite, ensureAccess, captureTab, crop, toJpeg }: CaptureSeams,
   area: CaptureArea | undefined,
   origin: string | undefined,
-): Promise<CapturedFile | TooLargeCapture | undefined> {
+): Promise<CapturedFile | TooLargeCapture | RefusedCapture | undefined> {
   if (origin === undefined) return undefined;
   const site = await readSite(origin);
   if (site === undefined || !site.enabled || site.mode !== 'team') return undefined;
@@ -78,7 +96,13 @@ async function take(
   const access = await ensureAccess(site.endpoint);
   if (!access.ok) return undefined;
 
-  const tab = await captureTab();
+  let tab: Blob;
+  try {
+    tab = await captureTab();
+  } catch (error) {
+    if (isPermissionRefusal(error)) return { refused: 'permission' };
+    throw error;
+  }
   const png = area === undefined ? tab : await crop(tab, area);
   const name = area === undefined ? CAPTURE_NAMES.page : CAPTURE_NAMES.area;
   // A PNG of a whole page on a large screen can pass the limit of the worker: it goes as a JPEG, and
@@ -158,12 +182,14 @@ export function pixelsOf(
  */
 
 /** The answer of the background to the content script: a picture, a capture said too large, or nothing. */
-export function captureAnswerOf(taken: CapturedFile | TooLargeCapture | undefined): {
+export function captureAnswerOf(taken: CapturedFile | TooLargeCapture | RefusedCapture | undefined): {
   picture?: CapturedFile;
   tooLarge?: TooLargeCapture['tooLarge'];
+  refused?: RefusedCapture['refused'];
 } {
   if (taken === undefined) return {};
   if ('tooLarge' in taken) return { tooLarge: taken.tooLarge };
+  if ('refused' in taken) return { refused: taken.refused };
 
   return { picture: taken };
 }

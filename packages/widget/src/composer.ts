@@ -198,7 +198,7 @@ export type AttachSeam = {
   /** Whether the host can capture the page: the extension can, a page alone cannot. */
   captures(): boolean;
   /** A capture of the visible page, or of an area the person chooses. `cancelled`: Esc, or « Cancel ». */
-  capture(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | undefined>;
+  capture(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined>;
   /** Sends one file on its way. Its id is what the note names. */
   upload(
     file: PickedFile,
@@ -516,11 +516,10 @@ export function createComposer(options: ComposerOptions): Composer {
     if (mine !== session) return;
     from.focus();
     if (taken === 'cancelled') return;
-    if (taken === undefined) {
-      held = [
-        ...held,
-        { key: (heldKeys += 1), name: CAPTURE_NAME[kind], size: 0, state: 'refused', refusal: 'capture' },
-      ];
+    if (taken === undefined || taken === 'permission') {
+      // FRU-423: a capture the browser refused for want of a gesture says what grants it.
+      const refusal = taken === 'permission' ? 'capture-permission' : 'capture';
+      held = [...held, { key: (heldKeys += 1), name: CAPTURE_NAME[kind], size: 0, state: 'refused', refusal }];
       drawAttachments();
 
       return;
@@ -1142,6 +1141,7 @@ const REFUSALS = {
   full: 'composer.attachFull',
   'signed-out': 'composer.attachSignedOut',
   capture: 'composer.attachCapture',
+  'capture-permission': 'composer.attachCapturePermission',
   retry: 'composer.attachRetry',
 } as const satisfies Record<AttachRefusal, MessageKey>;
 

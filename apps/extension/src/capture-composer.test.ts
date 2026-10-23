@@ -4,7 +4,7 @@ import { Window as HappyDomWindow } from 'happy-dom';
 import { MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import { type AttachSeam, type Composer, createComposer } from '@fruitback/widget';
 import { captureAnswerOf, createCapture } from './capture.ts';
-import { captureResponseOf, pictureOfAnswer } from './capture-answer.ts';
+import { captureOfAnswer, captureResponseOf, pictureOfAnswer } from './capture-answer.ts';
 import { MAX_FILE_BASE64 } from './protocol.ts';
 import type { SiteConfig } from './sites.ts';
 
@@ -45,6 +45,32 @@ describe('a capture too large for the worker, from the background to the compose
     await assertSaidTooLarge(tab, async () => {
       throw new Error('no 2d context');
     });
+  });
+});
+
+describe('a capture the browser refused for want of a gesture, from the background to the page world (FRU-423)', () => {
+  it('crosses both hops, and the page world rejects it with NotAllowedError', async () => {
+    const background = createCapture({
+      readSite: async () => TEAM,
+      ensureAccess: async () => ({ ok: true, grant: GRANT }),
+      captureTab: async () => {
+        throw new Error("Either the '<all_urls>' or 'activeTab' permission is required.");
+      },
+      crop: async (picture) => picture,
+    });
+    const answer = captureAnswerOf(await background(undefined, 'https://acme.dev'));
+    assert.deepEqual(answer, { refused: 'permission' });
+    const posted = captureResponseOf(across(answer), 'req1');
+    assert.equal(posted.refused, 'permission');
+    assert.throws(() => captureOfAnswer(across(posted) as typeof posted), { name: 'NotAllowedError' });
+  });
+
+  it('keeps « not taken » for an answer with nothing, and the file for a picture', () => {
+    assert.equal(captureOfAnswer(captureResponseOf({}, 'req2')), undefined);
+    const picture = { name: 'page.png', type: 'image/png' as const, size: 4, base64: 'iVBORw==' };
+    assert.deepEqual(captureOfAnswer(captureResponseOf({ picture }, 'req3')), picture);
+    // A page cannot add a refusal to a picture: the picture wins.
+    assert.deepEqual(captureOfAnswer(captureResponseOf({ picture, refused: 'permission' }, 'req4')), picture);
   });
 });
 

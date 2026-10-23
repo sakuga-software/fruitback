@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { MAX_ATTACHMENTS_PER_NOTE, MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type AttachSeam, type Composer, createComposer } from './composer.ts';
-import { type AttachRefusal, type PickedFile, readableSize, refusalBefore, refusalOf } from './attachments.ts';
+import {
+  type AttachRefusal,
+  type PickedFile,
+  isCapturePermissionRefusal,
+  readableSize,
+  refusalBefore,
+  refusalOf,
+} from './attachments.ts';
 import { MIN_SIDE, STEP, clamp, pickArea } from './area.ts';
 import { attachOffer, failureOf, plant, uploadAttachment } from './embed.ts';
 import { offeredDestinations } from './destinations.ts';
@@ -267,6 +274,25 @@ describe('the files of a note in the composer (FRU-332)', () => {
     q<HTMLButtonElement>('[data-fruitback-attach-area]').click();
     await settle();
     assert.deepEqual(files(root), [['area.png', 'The capture was not taken', 'refused']]);
+  });
+
+  it('says to click the icon when the browser refused the capture for want of a gesture (FRU-423)', async () => {
+    const { root, q, settle } = mount({ capture: async () => 'permission' });
+    composer?.open(ANCHOR);
+    const note = q<HTMLTextAreaElement>('[data-fruitback-note]');
+    note.value = 'La note reste';
+    q<HTMLButtonElement>('[data-fruitback-attach-page]').click();
+    await settle();
+    assert.deepEqual(files(root), [
+      ['page.png', 'Click the Fruitback icon in the toolbar, then try again.', 'refused'],
+    ]);
+    assert.equal(note.value, 'La note reste');
+  });
+
+  it('reads a rejection named NotAllowedError as a refusal of permission, and any other as « not taken »', () => {
+    assert.equal(isCapturePermissionRefusal(Object.assign(new Error('refused'), { name: 'NotAllowedError' })), true);
+    assert.equal(isCapturePermissionRefusal(new Error('Missing activeTab permission')), false);
+    assert.equal(isCapturePermissionRefusal(undefined), false);
   });
 });
 

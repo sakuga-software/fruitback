@@ -93,13 +93,25 @@ describe('a capture of the page or of an area (FRU-332)', () => {
     assert.notEqual(await harness().capture(undefined, 'https://acme.dev'), undefined);
   });
 
-  it('gives up without an error when the browser refuses the capture, or the area is off the screen', async () => {
-    const refused = harness({
+  it('names a refusal of the browser for want of a gesture « permission », and gives up on any other failure', async () => {
+    // FRU-423: the words of Chromium (145, 156) and of Firefox.
+    for (const words of [
+      "Either the '<all_urls>' or 'activeTab' permission is required.",
+      'Missing activeTab permission',
+    ]) {
+      const refused = harness({
+        captureTab: async () => {
+          throw new Error(words);
+        },
+      });
+      assert.deepEqual(await refused.capture(undefined, 'https://acme.dev'), { refused: 'permission' }, words);
+    }
+    const failed = harness({
       captureTab: async () => {
-        throw new Error("Either the '<all_urls>' or 'activeTab' permission is required.");
+        throw new Error('Cannot access contents of url "chrome://newtab/".');
       },
     });
-    assert.equal(await refused.capture(undefined, 'https://acme.dev'), undefined);
+    assert.equal(await failed.capture(undefined, 'https://acme.dev'), undefined);
     const off = harness({
       crop: async () => {
         throw new Error('the area is not on the screen');
