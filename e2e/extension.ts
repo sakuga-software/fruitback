@@ -28,6 +28,7 @@ declare const chrome: {
 };
 
 export const BUILT_EXTENSION = 'apps/extension/.output/chrome-mv3';
+const IIFE = 'packages/widget/dist/fruitback.iife.js';
 export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
@@ -77,14 +78,18 @@ export const test = base.extend<{ extension: LoadedExtension; extraPermissions: 
 });
 
 /**
- * A copy of the built extension that holds host access to the local origins: the playground and both workers.
+ * A copy of the built extension that holds host access to the local origins: the playground and the workers.
  *
  * A browser asks the person before it grants an optional host permission, and automation cannot
  * answer the prompt: `permissions.request` stays pending. A host permission in the manifest is
  * granted at load, so the request from the options page and the popup resolves at once. Only this
  * copy changes. The shipped manifest still asks for no host at install.
  */
-function copyWithLocalAccess(directory: string, extraPermissions: string[] = []): string {
+export function copyWithLocalAccess(
+  directory: string,
+  extraPermissions: string[] = [],
+  workers: string[] = [WORKER_ORIGIN, AUTHENTICATED_WORKER_ORIGIN],
+): string {
   const builtPath = path.join(BUILT_EXTENSION, 'manifest.json');
   if (!fs.existsSync(builtPath)) {
     throw new Error(`${BUILT_EXTENSION} is not built. Run pnpm e2e, which builds it first.`);
@@ -106,7 +111,7 @@ function copyWithLocalAccess(directory: string, extraPermissions: string[] = [])
   const manifestPath = path.join(directory, 'manifest.json');
   fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-  manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`, `${AUTHENTICATED_WORKER_ORIGIN}/*`];
+  manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, ...workers.map((worker) => `${worker}/*`)];
   // A host (`<all_urls>`, or a pattern with a scheme) is a host permission in MV3, not a permission.
   const hosts = extraPermissions.filter((each) => each === '<all_urls>' || each.includes('://'));
   const others = extraPermissions.filter((each) => !hosts.includes(each));
@@ -117,6 +122,35 @@ function copyWithLocalAccess(directory: string, extraPermissions: string[] = [])
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 
   return directory;
+}
+
+/** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
+export async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
+  await page.addScriptTag({ path: IIFE });
+  await page.evaluate((endpoint) => {
+    type Mounted = { destroy(): void };
+    const scope = globalThis as unknown as {
+      Fruitback: { init(options: Record<string, unknown>): Mounted };
+      fruitbackExtension?: { transport: unknown };
+    };
+    let widget: Mounted | undefined;
+    const follow = (): void => {
+      widget?.destroy();
+      widget = undefined;
+      if (scope.fruitbackExtension === undefined) return;
+      widget = scope.Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        label: 'Team feedback',
+        transport: scope.fruitbackExtension.transport,
+        // FRU-332: the capture of the page, which the extension offers beside its transport.
+        captureVisible: (scope.fruitbackExtension as { captureVisible?: unknown }).captureVisible,
+      });
+    };
+    // The extension can announce before or after this runs, so the site does both.
+    window.addEventListener('fruitback:extension', follow);
+    follow();
+  }, endpoint);
 }
 
 /**

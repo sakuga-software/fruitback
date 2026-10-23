@@ -7,6 +7,7 @@ import {
   addRule,
   mintPairing,
   mintPairingCode,
+  mountTheSiteWidget,
   openBareSite,
   openPopup,
   pairFromPopup,
@@ -38,7 +39,6 @@ declare const chrome: {
  * can never read.
  */
 
-const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const REVIEWER = 'E2E Reviewer';
 
 /** The requests a page sends to either worker, counted from the moment this is called. */
@@ -304,35 +304,6 @@ test('team mode: a note joins a file of the disk, and its thread says how many f
   // Every call went through the background, the file included.
   expect(calls).toEqual([]);
 });
-
-/** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
-async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
-  await page.addScriptTag({ path: IIFE });
-  await page.evaluate((endpoint) => {
-    type Mounted = { destroy(): void };
-    const scope = globalThis as unknown as {
-      Fruitback: { init(options: Record<string, unknown>): Mounted };
-      fruitbackExtension?: { transport: unknown };
-    };
-    let widget: Mounted | undefined;
-    const follow = (): void => {
-      widget?.destroy();
-      widget = undefined;
-      if (scope.fruitbackExtension === undefined) return;
-      widget = scope.Fruitback.init({
-        endpoint,
-        clientId: 'playground',
-        label: 'Team feedback',
-        transport: scope.fruitbackExtension.transport,
-        // FRU-332: the capture of the page, which the extension offers beside its transport.
-        captureVisible: (scope.fruitbackExtension as { captureVisible?: unknown }).captureVisible,
-      });
-    };
-    // The extension can announce before or after this runs, so the site does both.
-    window.addEventListener('fruitback:extension', follow);
-    follow();
-  }, endpoint);
-}
 
 /**
  * Asserts that the page can read no stored token, and no bridge message that names the header.

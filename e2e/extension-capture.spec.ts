@@ -1,5 +1,14 @@
-import { type Page, expect } from '@playwright/test';
-import { addRule, mintPairing, openBareSite, pairFromPopup, readSeeds, storedTokens, test } from './extension.ts';
+import { expect } from '@playwright/test';
+import {
+  addRule,
+  mintPairing,
+  mountTheSiteWidget,
+  openBareSite,
+  pairFromPopup,
+  readSeeds,
+  storedTokens,
+  test,
+} from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -8,53 +17,26 @@ import { WORKER_ORIGIN } from './pin.ts';
  * through the relay to `POST /attachments`, the note names it, and the Linear in memory of the
  * worker of the suite (the double of the tracker) holds it.
  *
- * `captureVisibleTab` needs the gesture on the toolbar button (`activeTab`), which an automated
- * browser cannot make. This copy of the extension holds `<all_urls>` instead, which Chromium 145
- * takes for the capture (measured in FRU-44): the shipped manifest asks for neither more nor less.
+ * `captureVisibleTab` needs `activeTab` or `<all_urls>`. This copy of the extension holds
+ * `<all_urls>`, which Chromium takes for the capture (measured in FRU-44 and FRU-426): the shipped
+ * manifest asks for neither more nor less. `extension-bench.spec.ts` takes the capture with the
+ * `activeTab` of a click on the icon, through `Extensions.triggerAction` (FRU-426).
  */
 test.use({ extraPermissions: ['<all_urls>'] });
 
 const REVIEWER = 'E2E Capture';
-const IIFE = 'packages/widget/dist/fruitback.iife.js';
-
-/** The widget of a site of a workspace, with the transport and the capture of the extension. */
-async function mountTheSiteWidget(page: Page): Promise<void> {
-  await page.addScriptTag({ path: IIFE });
-  await page.evaluate((endpoint) => {
-    const scope = globalThis as unknown as {
-      Fruitback: { init(options: Record<string, unknown>): { destroy(): void } };
-      fruitbackExtension?: { transport: unknown; captureVisible?: unknown };
-    };
-    let widget: { destroy(): void } | undefined;
-    const follow = (): void => {
-      widget?.destroy();
-      widget = undefined;
-      if (scope.fruitbackExtension === undefined) return;
-      widget = scope.Fruitback.init({
-        endpoint,
-        clientId: 'playground',
-        label: 'Team feedback',
-        transport: scope.fruitbackExtension.transport,
-        captureVisible: scope.fruitbackExtension.captureVisible,
-      });
-    };
-    window.addEventListener('fruitback:extension', follow);
-    follow();
-  }, WORKER_ORIGIN);
-}
-
 test('a capture of the page and one of an area go through the relay to the ticket of the tracker', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'team', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-capture-files');
-  await mountTheSiteWidget(page);
+  await mountTheSiteWidget(page, WORKER_ORIGIN);
   await pairFromPopup(extension, page, (await mintPairing(REVIEWER, WORKER_ORIGIN)).code, REVIEWER);
   await page.bringToFront();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
-  await mountTheSiteWidget(page);
+  await mountTheSiteWidget(page, WORKER_ORIGIN);
 
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();

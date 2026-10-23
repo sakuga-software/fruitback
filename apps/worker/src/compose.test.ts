@@ -28,6 +28,7 @@ const NOT_PASSED: Readonly<Record<string, string>> = {
   FRUITBACK_FAKE_LINEAR: 'deprecated and dev-only, and the image ignores it',
   FRUITBACK_DEV_DATABASE: 'dev-only: the image refuses it, and holds no database to put in the process (FRU-223)',
   FRUITBACK_DEV_VISIBILITY: 'read by the worker of development alone, which is not in the image (FRU-223)',
+  FRUITBACK_DEV_LINEAR: 'read by the worker of development alone, which is not in the image (FRU-426)',
 };
 
 function workerVariables(): string[] {

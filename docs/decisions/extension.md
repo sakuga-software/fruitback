@@ -710,8 +710,10 @@ a change when the account refuses one of them, and marks only those as known`. O
   a message (not measured with a file that size).
 - **Measured on Chromium 145** (FRU-44): `captureVisibleTab` is refused with the host of the origin,
   with `*://*/*`, and with `activeTab` declared but not granted; it works with `<all_urls>`. The
-  success path in a browser needs the gesture on the extension, which an automated browser cannot
-  make: the E2E suite joins a file of the disk instead, and a capture that is refused says so.
+  success path in a browser needs the gesture on the extension. `extension-capture.spec.ts` takes
+  `<all_urls>` in its copy instead. Since FRU-426 the bench makes the click on the icon with
+  `Extensions.triggerAction`, and `extension-bench.spec.ts` takes a capture with the `activeTab`
+  that it grants (Chromium 156, « The bench of the extension » below).
 - **The capture shows what the screen showed**: the widget is hidden for the two frames before it,
   and the area of the capture is drawn by the widget, then removed before the capture is taken.
 
@@ -1938,6 +1940,121 @@ same endpoint. So the rule is in `session.ts` rather than only in the popup: a w
 not a rule, and a session already stored would otherwise have gone on leaking.
 
 Both were found by asking what else the accepted fix should have touched, before pushing it.
+
+## The bench of the extension (FRU-426)
+
+### The rules, in short
+
+- **`pnpm ext:bench` opens a Chromium on the screen, with the extension in team mode and paired.**
+  It builds the packages and the extension, then starts `e2e/bench.ts`: a worker of development on
+  a free port (a database in its process, the site `playground` that members only read,
+  `FRUITBACK_STORE=postgres`), the playground if nothing answers on 5177, and a Chromium with a
+  profile of its own and a copy of the build. The copy holds host access to the playground and to
+  that worker, as the copy of the E2E suite does. Ctrl-C stops all of it.
+- **The site of the bench sends its notes through a Linear connector to a fake Linear**
+  (`FRUITBACK_DEV_LINEAR=fake`, `linear-fake.fixture.ts`). `linear.ts` runs as in production:
+  `fileUpload`, the PUT of the bytes, `issueCreate`, `attachmentCreate`, and the read of the issues.
+  Only `fetch` to `api.linear.app` and to the storage it names is answered in the process.
+  `GET /__dev/tracker` of that worker answers what the fake received: the issues, each PUT with its
+  type, its size and its SHA-256, and each attachment.
+- **`grantActiveTab()` is the click on the icon, made by the browser.** It sends
+  `Extensions.triggerAction` of the DevTools protocol on the **tab** target of the site. Chromium
+  runs the action of the extension: the popup opens, and the tab gets `activeTab`. There is no
+  build of the extension for the bench, no entry point for tests, and no permission added for it.
+- **The driver is `e2e/bench.ts`**: `startBench()`, then `openSite()`, `signIn()` (done by
+  `startBench` unless `paired: false`), `grantActiveTab()`, `leaveNote({ text, attach })`,
+  `trackerReceived()`, `screenshot()`, `close()`. `moreCopies: ['copy']` loads a second copy of the
+  build, or the directory of another one, beside the first (FRU-397). It needs no runner of
+  Playwright. It runs from the root of the repository: its paths are relative to it.
+- **`e2e/extension-bench.spec.ts` goes through the driver**, in `pnpm e2e`, headless. The anonymous
+  read of the page answers `401`; a capture before the click is refused (« The capture was not
+  taken »); after it, a capture of an area and a file of the disk go with a note; the fake Linear
+  holds both, the bytes of the file match, and the pin and « 2 attachments » come back after a
+  reload, through the relay.
+
+### What was measured (2026-10-23)
+
+Chromium 156.0.8078.4 (Chrome for Testing of Playwright 1.58.2, `channel: 'chromium'`), on a page
+of `http://127.0.0.1`, with a copy of the build that holds no host permission unless the row says
+so. The service worker then asks for the address of the tab, `tabs.captureVisibleTab`, and
+`scripting.executeScript`. Headless and headed gave the same results.
+
+| Path                                                                   | Address of the tab | Capture | Script  |
+| ---------------------------------------------------------------------- | ------------------ | ------- | ------- |
+| nothing (the control)                                                  | withheld           | refused | refused |
+| `<all_urls>` in the copy                                               | read               | taken   | runs    |
+| `http://127.0.0.1/*` in the copy                                       | read               | refused | runs    |
+| `*://*/*` in the copy                                                  | read               | refused | runs    |
+| `Alt+Shift+F` from Playwright (the command holds `⌥⇧F`)                | withheld           | refused | refused |
+| `Input.dispatchKeyEvent` from `chrome.debugger` (copy with `debugger`) | withheld           | refused | refused |
+| `action.openPopup()` from the service worker (the popup opens)         | withheld           | refused | refused |
+| `Extensions.triggerAction` on a browser session, **tab** target        | read               | taken   | runs    |
+| the same, then a navigation to `?next` on the same origin              | read               | taken   | runs    |
+| the same, then a navigation to `http://localhost`, another origin      | withheld           | refused | refused |
+| the same, without `--enable-unsafe-extension-debugging`                | read               | taken   | runs    |
+
+- **A refused capture says** « Either the '<all_urls>' or 'activeTab' permission is required. »
+  Two captures less than a second apart are refused for another reason,
+  `MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND`: a measurement waits a second between them.
+- **`Extensions.triggerAction` wants the tab target.** On a session of the page it answers
+  « Method not allowed ». On the browser session, with the id of the page target, it answers
+  « Action can only be triggered on a tab target ». The tab target comes from `Target.getTargets`
+  with the filter `type: 'tab'`, found by its address: the driver throws when two tabs show it.
+- **Playwright 1.58.2 does not type the method.** Its `protocol.d.ts` knows `Extensions.loadUnpacked`,
+  `uninstall` and the storage methods only. The browser has it; `triggerAction` of the driver types
+  the call.
+- **`Extensions.getStorageItems` is of no use here**: « No associated browser context » on the
+  browser session, « Extension not found » on a session of the page.
+- **A key of the browser still reaches no command.** Playwright and `chrome.debugger` both send
+  their keys to the renderer of the page, through the same `Input` domain, and the browser catches
+  a command before that. The key gesture of FRU-291 stays proved by its parts only
+  (`extension-shortcut.spec.ts`): the key installed, and the message that `runShortcut` sends.
+- **The extension declares no entry in a context menu**, so no menu gesture grants anything. The
+  native menu is out of reach of automation; not measured.
+
+### What the bench does not cover, and why
+
+- **The permission prompt of a site.** The copy declares the playground and the worker, because
+  automation cannot answer the prompt (FRU-45).
+- **The keyboard shortcut as a gesture**, measured above: no automated key reaches a command.
+- **The auto-update 0.2.0 → 0.3.0 in an open browser.** Not built: the bench loads unpacked copies,
+  and no update path was measured.
+- **The side panel** beyond what `side-panel.spec.ts` reads: the bench opens none.
+- **Firefox.** `web-ext` is not a dependency of the repository. `pnpm dlx web-ext@10.8.0 run`
+  fetched it from the registry (so not offline), and loaded `firefox-mv3`, with host access to the
+  playground, in Firefox 153.0: « Installed … as a temporary add-on ». Nothing was mounted and no
+  note was sent: a person must add the rule in the page of the extension, and this machine has no
+  driver for that Firefox. The Firefox of Playwright is a build of its own, and is not installed
+  here. Whether Firefox grants a host permission of the manifest at a temporary install was not
+  measured.
+- **The fake Linear is not Linear.** It answers the operations `linear.ts` sends, keeps the issues in
+  the order they come, gives every issue the state « Todo », and gives no comment. A change in the
+  API of Linear does not reach it.
+- **The second copy is loaded, nothing more.** What two copies do to one page is FRU-397; the bench
+  gives that ticket its setup.
+
+### From /tfp, or any Node script
+
+Write the script anywhere, and run it from the root of the repository:
+
+```js
+// node /path/to/run.mjs, with the root of the repository as the current directory
+const { startBench } = await import(`${process.cwd()}/e2e/bench.ts`);
+const bench = await startBench({ headed: true });
+try {
+  const site = await bench.openSite();
+  await bench.grantActiveTab(site);
+  await bench.leaveNote(site, { text: 'From a script', attach: ['area'] });
+  await bench.screenshot(site, `${process.env.OUT}/after.png`);
+  console.log('TFP_REPORT', JSON.stringify(await bench.trackerReceived()));
+} finally {
+  await bench.close();
+}
+```
+
+`startBench` needs the extension built (`pnpm ext:bench` builds it, and so does `pnpm e2e`). It
+starts its own worker on a free port, so it runs beside `pnpm dev`; it uses the playground on 5177
+when one answers. Node prints a warning about the type of `e2e/bench.ts`, and runs it.
 
 ## Releasing the extension (FRU-329)
 

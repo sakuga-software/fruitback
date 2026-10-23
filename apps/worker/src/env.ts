@@ -68,6 +68,8 @@ export type WorkerEnv = {
   NODE_ENV?: string;
   /** For `dev-worker.fixture.ts` alone: `members` makes the site of the playground one that only a session reads. */
   FRUITBACK_DEV_VISIBILITY?: string;
+  /** For `dev-worker.fixture.ts` alone: `fake` sends the notes of the playground to a fake Linear (FRU-426). */
+  FRUITBACK_DEV_LINEAR?: string;
   /**
    * Multi-tenant routing as JSON, e.g.
    * `{"acme":{"teamId":"team_1","projectId":"proj_1","origins":["https://acme.test"]}}`.
