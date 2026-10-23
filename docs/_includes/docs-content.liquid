@@ -1,0 +1,8 @@
+{%- comment -%}
+  The page as kramdown made it, with one change: a code block and a table scroll in their own box, so
+  each one takes the focus, and a keyboard can scroll it (axe, scrollable-region-focusable).
+{%- endcomment -%}
+{{ include.content
+  | replace: '<pre class="highlight">', '<pre class="highlight" tabindex="0">'
+  | replace: '<pre>', '<pre tabindex="0">'
+  | replace: '<table>', '<table tabindex="0">' }}

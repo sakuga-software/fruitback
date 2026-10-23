@@ -142,3 +142,140 @@ describe('the landing (FRU-418)', () => {
     );
   });
 });
+
+/** The six sections of the guides (FRU-417), as `_data/docs.yml` lists them. */
+type Section = { title: string; short?: string; pages: { title: string; url: string }[] };
+
+function sections(): Section[] {
+  return parse(readFileSync(new URL('_data/docs.yml', DOCS), 'utf8')) as Section[];
+}
+
+/** The source of a page of the site, from its address: `/install.html` is `install.md`. */
+function sourceOf(page: string): string | undefined {
+  const name = page.replace(/^\//, '').replace(/\.html$/, '');
+  for (const candidate of [`${name}.md`, `${name}.html`]) {
+    try {
+      readFileSync(new URL(candidate, DOCS));
+
+      return candidate;
+    } catch {
+      // The other extension, then nothing.
+    }
+  }
+
+  return undefined;
+}
+
+/** The relative luminance of a `#rrggbb` colour, as WCAG 2 defines it. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((at) => {
+    const channel = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+
+    return channel <= 0.039_28 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(one: string, other: string): number {
+  const [light, dark] = [luminance(one), luminance(other)].sort((a, b) => b - a) as [number, number];
+
+  return (light + 0.05) / (dark + 0.05);
+}
+
+describe('the guides (FRU-417)', () => {
+  it('lists every guide in a section of the sidebar', () => {
+    const listed = new Set(
+      sections().flatMap((section) => section.pages.map((page) => sourceOf(page.url.split('#')[0] ?? ''))),
+    );
+
+    assert.deepEqual(
+      guides().filter((guide) => !listed.has(guide)),
+      [],
+      'these guides are in no section of docs/_data/docs.yml',
+    );
+  });
+
+  it('links only pages of the site, and headings they have', () => {
+    const links = sections().flatMap((section) => section.pages.map((page) => page.url));
+    assert.ok(links.length >= 20, `only ${links.length} links found — the walk stopped matching`);
+
+    const broken = links.filter((link) => {
+      if (link.startsWith('https://github.com/sakuga-software/fruitback/')) return false;
+      const [page = '', fragment] = link.split('#');
+      const source = sourceOf(page);
+      if (source === undefined) return true;
+
+      return fragment !== undefined && !headingIds(source).includes(fragment);
+    });
+
+    assert.deepEqual(broken, [], 'these entries of docs/_data/docs.yml name no page, or no heading of it');
+  });
+
+  it('starts each section with a page, which the header links to', () => {
+    assert.deepEqual(
+      sections()
+        .filter((section) => (section.pages[0]?.url ?? '#').includes('#'))
+        .map((section) => section.title),
+      [],
+    );
+  });
+
+  it('keeps every text of the code blocks at 4.5:1 on their surface', () => {
+    const css = readFileSync(new URL('assets/docs.css', DOCS), 'utf8');
+    const surface = /--code-surface: (#[0-9a-f]{6});/.exec(css)?.[1];
+    assert.ok(surface !== undefined, 'docs.css names no --code-surface');
+    const text = /--code-text: (#[0-9a-f]{6});/.exec(css)?.[1];
+    const palette = [...css.matchAll(/\.highlight [^{]*\{\s*color: (#[0-9a-f]{6});/g)].map(
+      (match) => match[1] as string,
+    );
+    assert.ok(palette.length >= 6, `only ${palette.length} colours of the code found — the walk stopped matching`);
+
+    assert.deepEqual(
+      [text ?? 'none', ...palette].filter((colour) => colour === 'none' || contrast(colour, surface ?? '') < 4.5),
+      [],
+      'these colours of the code fall under 4.5:1 on the surface of a code block',
+    );
+  });
+
+  it('keeps the text of the pages at 4.5:1 on the page and on a card', () => {
+    const css = readFileSync(new URL('assets/docs.css', DOCS), 'utf8');
+    const token = (name: string) => new RegExp(`--${name}: (#[0-9a-f]{6});`).exec(css)?.[1] ?? 'none';
+    const pairs = ['ink', 'body', 'muted', 'link'].flatMap((text) =>
+      ['page', 'surface', 'inset', 'chip'].map((ground) => [text, ground] as const),
+    );
+
+    assert.deepEqual(
+      pairs.filter(
+        ([text, ground]) =>
+          token(text) === 'none' || token(ground) === 'none' || contrast(token(text), token(ground)) < 4.5,
+      ),
+      [],
+      'these text colours fall under 4.5:1',
+    );
+  });
+});
+
+describe('the guides as Jekyll reads them (FRU-417)', () => {
+  /**
+   * Jekyll runs Liquid on every page, code blocks included: `{{println .}}` in a command of
+   * `self-hosting.md` became an empty string on fruitback.com, and the command printed nothing. A
+   * brace pair of Liquid goes between `<!-- {% raw %} -->` and `<!-- {% endraw %} -->`, which GitHub
+   * hides and Jekyll reads.
+   */
+  it('keeps every Liquid brace of a guide inside a raw block', () => {
+    const exposed = guides().flatMap((guide) => {
+      const text = readFileSync(new URL(guide, DOCS), 'utf8').replaceAll(
+        /<!-- \{% raw %\} -->[\s\S]*?<!-- \{% endraw %\} -->/g,
+        '',
+      );
+
+      return text
+        .split('\n')
+        .filter((line) => /\{\{|\{%/.test(line))
+        .map((line) => `${guide}: ${line.trim()}`);
+    });
+
+    assert.deepEqual(exposed, [], 'Jekyll would run these lines as Liquid');
+  });
+});

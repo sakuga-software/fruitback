@@ -1,0 +1,17 @@
+{%- comment -%}
+  « On this page »: the level-2 headings of the page, read from what kramdown made of the markdown.
+  The opening and the end of a heading are written encoded, so no formatter reads them as tags.
+{%- endcomment -%}
+{%- assign opener = '%3Ch2 id="' | url_decode -%}
+{%- assign closer = '%3C/h2%3E' | url_decode -%}
+{%- assign headings = include.content | split: opener -%}
+{%- if headings.size > 2 %}
+<p class="side-title">On this page</p>
+<ul>
+  {%- for chunk in headings offset: 1 -%}
+    {%- assign id = chunk | split: '"' | first -%}
+    {%- assign label = chunk | split: closer | first | remove_first: id | remove_first: '">' | strip_html %}
+  <li><a href="#{{ id }}">{{ label }}</a></li>
+  {%- endfor %}
+</ul>
+{%- endif -%}

@@ -1,0 +1,24 @@
+{%- comment -%}
+  Where the page is in docs/_data/docs.yml (FRU-417): `current` and `section` for the breadcrumb and
+  the sidebar, `previous` and `next` for the pager. Only an entry with no « # » is a page; an entry of
+  another site is skipped. A `.liquid` file, so that the HTML formatter leaves the logic as written.
+{%- endcomment -%}
+{%- assign here = page.url | replace: '/index.html', '/' -%}
+{%- assign current = nil -%}
+{%- assign section = nil -%}
+{%- assign previous = nil -%}
+{%- assign next = nil -%}
+{%- assign found = false -%}
+{%- for group in site.data.docs -%}
+  {%- for item in group.pages -%}
+    {%- if item.url contains '#' or item.url contains '://' -%}{%- continue -%}{%- endif -%}
+    {%- if found and next == nil -%}{%- assign next = item -%}{%- endif -%}
+    {%- if item.url == here -%}
+      {%- assign current = item -%}
+      {%- assign section = group -%}
+      {%- assign found = true -%}
+    {%- endif -%}
+    {%- unless found -%}{%- assign previous = item -%}{%- endunless -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- unless found -%}{%- assign previous = nil -%}{%- endunless -%}

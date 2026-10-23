@@ -7,7 +7,14 @@
 # markdown stays the source, and the tests keep reading the files.
 title: Fruitback
 description: Visual feedback on a live site, delivered to your tracker.
-theme: jekyll-theme-primer
+
+# Every guide takes the layout of the docs (FRU-417): the header, the six sections of _data/docs.yml
+# in a sidebar, « On this page », and « Previous » and « Next ». The home page keeps the landing.
+defaults:
+  - scope:
+      path: ''
+    values:
+      layout: docs
 
 # The decisions are the per-ticket histories, written for whoever works on this repository rather
 # than for somebody trying to run it. They stay on GitHub, where their links to the source resolve.

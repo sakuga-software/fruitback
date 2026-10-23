@@ -404,9 +404,11 @@ What it took was mostly measuring, because four things the documentation said we
   the composer of the playground for the note): take them again from there when a screen changes.
   Before a capture, move the pointer off what was pressed: a button under it is drawn in its hover
   colour.
-- **The colours of code blocks and quotes are ours, not the theme's.** `docs/assets/css/style.scss`
-  imports `jekyll-theme-primer` and overrides the Rouge palette and `blockquote`. Each colour holds
-  4.5:1 at least on `#f6f8fa` and `#f4f4f4`.
+- **The colours of code blocks and quotes are ours, not the theme's.** Since FRU-417 the guides use
+  no theme: `docs/assets/docs.css` draws the code on `#1c1917` with its own Rouge palette, and each
+  colour holds 4.5:1 at least on it. `docs-site.test.ts` computes each ratio. Before FRU-417,
+  `docs/assets/css/style.scss` overrode the palette of `jekyll-theme-primer`, on `#f6f8fa` and
+  `#f4f4f4`; the measurements below are of that site.
 
 ### The measurements
 

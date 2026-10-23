@@ -1,4 +1,4 @@
-# Reviewing a site with the extension
+# Review with the extension
 
 This is the reviewer's side. The site's side and the worker's are in [install.md](install.md); which
 mode you want is in [modes.md](modes.md).

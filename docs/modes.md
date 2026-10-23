@@ -1,4 +1,4 @@
-# The three modes
+# Choose a mode
 
 The first question a reader has is whether their reviewers need the site to ship anything. There are
 three answers, and picking one is the only decision this page asks for.

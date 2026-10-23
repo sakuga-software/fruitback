@@ -1,0 +1,102 @@
+---
+layout: docs
+title: Documentation
+description: Install the widget, run Fruitback yourself, review a site with the extension.
+---
+
+<!--
+  The home of the guides (FRU-417), after the board « Docs home ». HTML rather than markdown: it is a
+  page of the site only, and GitHub lists the guides in docs/ by itself. The sections come from
+  _data/docs.yml, as the sidebar does.
+-->
+
+<h1 id="documentation">Documentation</h1>
+
+<p>
+  Reviewers pin a note on the element itself. Fruitback attaches the page, the screen size, the CSS selector and, in a
+  React app, the source file, and sends the note to your tracker.
+</p>
+
+<h2 id="which-one-are-you">Which one are you?</h2>
+
+<ul class="home-paths">
+  <li>
+    <span class="home-who">I build the site</span>
+    <span class="home-title">Install the widget</span>
+    <span>A script tag, npm, a React component or a custom element, on Fruitback Cloud or on your own instance.</span>
+    <span class="home-tags"><span>Public mode</span><span>Team mode</span></span>
+    <a class="home-cta" href="{{ '/install.html' | relative_url }}">Install →</a>
+  </li>
+  <li>
+    <span class="home-who">I run the server</span>
+    <span class="home-title">Run Fruitback yourself</span>
+    <span
+      >Docker Compose, three containers, five lines of <code>.env</code>. From an empty folder to a first pin in seven
+      steps.</span
+    >
+    <span class="home-tags"><span>Self-hosted</span><span>Docker</span></span>
+    <a class="home-cta" href="{{ '/self-hosting.html' | relative_url }}">Self-host →</a>
+  </li>
+  <li>
+    <span class="home-who">I review a site</span>
+    <span class="home-title">Review with the extension</span>
+    <span
+      >Leave notes on a site that ships nothing. The extension asks for access to a site only when you switch it
+      on.</span
+    >
+    <span class="home-tags"><span>Private mode</span><span>Chrome</span><span>Firefox</span></span>
+    <a class="home-cta" href="{{ '/reviewing.html#1-install-it' | relative_url }}">Get the extension →</a>
+  </li>
+</ul>
+
+<h2 id="does-the-site-ship-anything">Does the site ship anything?</h2>
+
+<p>
+  Fruitback runs in three modes. Pick one before you install: it decides what goes on the site and who sees the pins.
+  <a href="{{ '/modes.html' | relative_url }}">The three modes</a> compares them.
+</p>
+
+<ul class="home-modes">
+  <li>
+    <span class="home-title">Public</span>
+    <span>The site embeds the widget.</span>
+    <span>Good for a public « report a problem ».</span>
+  </li>
+  <li>
+    <span class="home-title">Private</span>
+    <span>The site embeds nothing.</span>
+    <span>Good for reviewing a client's site, invisibly.</span>
+  </li>
+  <li>
+    <span class="home-title">Team</span>
+    <span>The site embeds the widget, dormant.</span>
+    <span>Good for a team reviewing its own staging.</span>
+  </li>
+</ul>
+
+<h2 id="all-the-docs">All the docs</h2>
+
+{% include docs-sections.liquid %}
+
+<h2 id="how-a-note-travels">How a note travels</h2>
+
+<p>The widget talks only to your worker.</p>
+
+<ol>
+  <li>
+    <strong>The widget, on the page.</strong> It runs in a Shadow DOM, so the page and the widget do not change each
+    other's styles. It finds the element again on the next visit.
+  </li>
+  <li>
+    <strong>The worker, on your server or on Fruitback Cloud, in Europe.</strong> It keeps the key of the tracker out of
+    the page. PostgreSQL and the console run beside it.
+  </li>
+  <li>
+    <strong>Where the note lands.</strong> Linear, GitHub Issues, an HTTPS address of yours, or only the workspace.
+  </li>
+</ol>
+
+<p>
+  The widget is MIT. The server, the console and the extension are AGPL-3.0. The source is on
+  <a href="https://github.com/sakuga-software/fruitback">GitHub</a>.
+</p>

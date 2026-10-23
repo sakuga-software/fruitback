@@ -1,0 +1,17 @@
+{%- comment -%} « All the docs » of the home: every entry of docs/_data/docs.yml, section by section. {%- endcomment -%}
+<ul class="home-sections">
+{%- for group in site.data.docs %}
+  <li>
+    <span class="home-title">{{ group.title }}</span>
+    <ul>
+    {%- for item in group.pages -%}
+      {%- if item.url contains '://' %}
+      <li><a href="{{ item.url }}">{{ item.title }} ↗</a></li>
+      {%- else %}
+      <li><a href="{{ item.url | relative_url }}">{{ item.title }}</a></li>
+      {%- endif -%}
+    {%- endfor %}
+    </ul>
+  </li>
+{%- endfor %}
+</ul>
