@@ -11,6 +11,7 @@ import {
 } from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
+import { EXTENSION_GUIDE } from '../install-options';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -213,7 +214,8 @@ export const RAIL_HEAD = 'flex w-full items-center gap-[10px] rounded-box p-[8px
 
 /**
  * The dark rail of the mockup, for a workspace or for the instance (FRU-262): what it is of, its
- * entries, what more the frame puts under them, and a foot with the way to the documentation.
+ * entries, what more the frame puts under them, and a foot with the way to the extension (FRU-406)
+ * and to the documentation. Each link of the foot opens in another tab.
  *
  * `kit-rail` gives every control in it the focus ring of the rail.
  */
@@ -224,7 +226,7 @@ export function RailFrame({
 }: {
   head: ReactNode;
   children: ReactNode;
-  foot: { href: string; label: string };
+  foot: readonly { href: string; label: string }[];
 }) {
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
@@ -233,14 +235,17 @@ export function RailFrame({
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
-        <a
-          href={foot.href}
-          target="_blank"
-          rel="noreferrer"
-          className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
-        >
-          {foot.label}
-        </a>
+        {foot.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer"
+            className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
+          >
+            {link.label}
+          </a>
+        ))}
         <Logo on="rail" />
       </div>
     </aside>
@@ -294,7 +299,7 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace, ad
     );
 
   return (
-    <RailFrame head={head} foot={{ href: 'https://fruitback.com', label: t('Help and docs') }}>
+    <RailFrame head={head} foot={[extensionLink(), { href: 'https://fruitback.com', label: t('Help and docs') }]}>
       <RailNav
         label={t('Workspace')}
         entries={sections.map((section) => ({
@@ -308,6 +313,15 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace, ad
       ) : null}
     </RailFrame>
   );
+}
+
+/**
+ * The way to the browser extension, at the foot of both rails (FRU-406). The extension is in no
+ * store yet (FRU-130): the link leads to the page that installs the archive of the release, as on
+ * the other screens of the console. The day it is published, it leads to the stores.
+ */
+export function extensionLink(): { href: string; label: string } {
+  return { href: EXTENSION_GUIDE, label: t('Install the extension (beta)') };
 }
 
 /** Whether a row that scrolls holds more before its start and after its end. */

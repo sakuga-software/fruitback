@@ -273,6 +273,7 @@ test('a section under the pointer, and a control with focus, read on the rail', 
     ...['Sites', 'Notes', 'Connectors', 'Members', 'My account'].map((name) =>
       sections(page).getByRole('link', { name, exact: true }),
     ),
+    rail(page).getByRole('link', { name: 'Install the extension (beta)' }),
     rail(page).getByRole('link', { name: 'Help and docs' }),
   ];
   for (const [index, control] of order.entries()) {
@@ -298,6 +299,7 @@ test('every text of the rail is at 4.5:1 on what is behind it', async ({ page })
     ['the section on screen', sections(page).getByRole('link', { name: 'Sites' }), RAIL_ACTIVE],
     ['a section', sections(page).getByRole('link', { name: 'Members' }), RAIL],
     ['the way to the documentation', rail(page).getByRole('link', { name: 'Help and docs' }), RAIL],
+    ['the way to the extension', rail(page).getByRole('link', { name: 'Install the extension (beta)' }), RAIL],
   ];
   for (const [name, text, behind] of pairs) {
     expect.soft(contrast(await painted(text, 'color'), rgb(behind)), name).toBeGreaterThanOrEqual(4.5);
@@ -311,6 +313,43 @@ test('every text of the rail is at 4.5:1 on what is behind it', async ({ page })
   const help = rail(page).getByRole('link', { name: 'Help and docs' });
   await help.hover();
   expect(contrast(await painted(help, 'color'), rgb(RAIL))).toBeGreaterThanOrEqual(4.5);
+});
+
+test('the foot of the rail leads to the extension, then to the documentation, each in another tab (FRU-406)', async ({
+  page,
+}) => {
+  await stubWorker(page, { locale: 'fr' });
+  await open(page);
+  // The extension is in no store yet (FRU-130): the link is the page that installs the archive.
+  const extension = rail(page).getByRole('link', { name: 'Installer l’extension (bêta)' });
+  await expect(extension).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
+  await expect(extension).toHaveAttribute('target', '_blank');
+  const help = rail(page).getByRole('link', { name: 'Aide et documentation' });
+  // Both in the foot, the extension first, and the foot is still at the bottom of the window.
+  const foot = rail(page).locator('> div').last();
+  await expect(foot.getByRole('link')).toHaveText(['Installer l’extension (bêta)', 'Aide et documentation']);
+  expect((await box(extension)).y).toBeLessThan((await box(help)).y);
+  expect.soft((await box(help)).y).toBeGreaterThan(900 - 80);
+  // The administration has it too, above its guide.
+  await stubWorker(page, {
+    locale: 'fr',
+    answer: (pathname, route) =>
+      pathname === '/console/me'
+        ? route.fulfill({
+            json: {
+              account: { id: 'a1', email: 'ana@acme.dev', name: 'Ana', locale: 'fr' },
+              workspaces: [{ id: 'w1', name: 'Acme', role: 'owner' }],
+              instanceAdmin: true,
+            },
+          })
+        : undefined,
+  });
+  await page.goto(`${CONSOLE}/admin`);
+  await expect(page.locator('main h1')).toBeVisible();
+  await expect(rail(page).locator('> div').last().getByRole('link')).toHaveText([
+    'Installer l’extension (bêta)',
+    'Guide d’auto-hébergement',
+  ]);
 });
 
 test('the name of the workspace opens the menu of the workspaces of the person', async ({ page }) => {
