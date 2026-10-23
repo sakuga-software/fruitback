@@ -850,6 +850,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your session ended before {provider} was linked. Sign in, then link again.':
     'Votre session s’est terminée avant que {provider} soit lié. Connectez-vous, puis liez à nouveau.',
   '{provider} was not linked.': '{provider} n’a pas été lié.',
+  '{provider} was not linked. If {provider} has not verified the address of that account, verify it there. Then link again.':
+    '{provider} n’a pas été lié. Si {provider} n’a pas vérifié l’adresse de ce compte, vérifiez-la chez lui. Puis liez à nouveau.',
   '{provider} was not linked. Try again.': '{provider} n’a pas été lié. Réessayez.',
   'The account was not linked.': 'Le compte n’a pas été lié.',
   'This is the last way you sign in here: link another one first.':

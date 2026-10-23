@@ -423,7 +423,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the list, or none, gives « The account was not linked. », and « Try again » is said for a failure on
   the way only, never for a refusal. The sentence stays until « Unlink ». better-auth 1.7.7 writes
   `email_does_not_match`, which the console read as an unknown code until FRU-416, and
-  `unable_to_link_account` for an address that the provider did not verify. « Unlink » asks twice, and the last way to sign in stays and says why
+  `unable_to_link_account` for an address that the provider did not verify and for a write that
+  failed: its sentence names both. « Unlink » asks twice, and the last way to sign in stays and says why
   (`409 last-sign-in`, `403 sign-in-again`). The three rows of « How you sign in » are drawn before
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET

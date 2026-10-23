@@ -858,10 +858,11 @@ test('the way back of a link says what happened, once', async ({ page }) => {
       'provider=github&error=email_not_verified',
       'GitHub did not say that its address is verified. Verify it at GitHub, then link again.',
     ],
-    // better-auth 1.7.7 says an address that GitHub did not verify with this code.
+    // better-auth 1.7.7 says an address that GitHub did not verify with this code, and a write that
+    // failed too: the sentence names both causes.
     [
       'provider=github&error=unable_to_link_account',
-      'GitHub did not say that its address is verified. Verify it at GitHub, then link again.',
+      'GitHub was not linked. If GitHub has not verified the address of that account, verify it there. Then link again.',
     ],
     [
       'provider=github&error=identity_required',

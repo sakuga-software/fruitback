@@ -58,8 +58,8 @@ function providerWord(asked: Asked, provider: Linkable): string {
  *
  * better-auth 1.7.7 writes `email_does_not_match`; `email_doesn't_match` is its spelling of before.
  * It answers an address that the provider did not verify with `unable_to_link_account` (read in
- * `oauth2/link-account.mjs`, and held by a test of the worker): that code also covers a write that
- * failed, which « link again » covers too.
+ * `oauth2/link-account.mjs`, and held by a test of the worker). The same code says a write that
+ * failed, so its sentence names both causes, and both end with « link again ».
  */
 const OTHER_ADDRESS = msg(
   'Your {provider} account does not have the address {email}. Fruitback links only a {provider} account that has the address of your account. In {provider}, choose the account {email}, or keep signing in as you do now.',
@@ -74,7 +74,9 @@ const LINK_PROBLEMS: Readonly<Record<string, string>> = {
     'This {provider} account already opens another Fruitback account. To link it here, that account must unlink it first, or an administrator of this instance must delete that account.',
   ),
   email_not_verified: NOT_VERIFIED,
-  unable_to_link_account: NOT_VERIFIED,
+  unable_to_link_account: msg(
+    '{provider} was not linked. If {provider} has not verified the address of that account, verify it there. Then link again.',
+  ),
   identity_required: msg('Your session ended before {provider} was linked. Sign in, then link again.'),
 };
 /** A code of a failure on the way, not of a refusal: trying again can work. */
