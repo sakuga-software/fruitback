@@ -63,9 +63,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     });
 
     it('answers a site of another workspace as none, and writes nothing there', async () => {
-      const { database, store, other, site } = await acme();
+      const { database, store, workspace, other, site } = await acme();
 
       assert.equal(await store.siteStatuses(other, site), undefined);
+      assert.equal(await store.siteStatusNotes(other, site), undefined);
+      assert.deepEqual(await store.siteStatusNotes(workspace, site), {}, 'the control: its own workspace reads it');
       assert.deepEqual(await store.putSiteStatus(other, site, status('waiting')), {
         saved: false,
         reason: 'not-found',

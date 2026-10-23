@@ -423,6 +423,12 @@ export type AccountStore = {
    */
   siteStatuses(workspace: string, site: string): Promise<SiteStatus[] | undefined>;
   /**
+   * How many notes the worker keeps in each status of its store for a site (FRU-386), by key: a note
+   * with no status of its own counts in the built-in status of its stage. A key with no note is absent.
+   * One aggregate over the notes of the site. `undefined` when the site is not of this workspace.
+   */
+  siteStatusNotes(workspace: string, site: string): Promise<Record<string, number> | undefined>;
+  /**
    * Whether a site draws the states of its tracker in the tracker's colours (FRU-368), a switch of the
    * site that is off by default. `undefined` when the site is not of this workspace.
    */

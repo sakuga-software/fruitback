@@ -186,6 +186,35 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     assert.deepEqual(await rowsOf(team.database, `SELECT key FROM statuses WHERE site_id = '${site}'`), []);
   });
 
+  it('counts the notes in each status of the store, 0 for one with none, and those of its site only (FRU-386)', async () => {
+    const { team, token, workspace, site } = await acme();
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
+    await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
+    await plant(team, site, NEW as string, 'waiting', 'seed-1');
+    await plant(team, site, NEW as string, 'waiting', 'seed-2');
+    // No status of its own: the built-in status of its stage.
+    await plant(team, site, DONE as string, null, 'seed-3');
+    // The control: a note of another site of the same workspace, in a status of the same key.
+    const elsewhere = (
+      await team.accounts.addSite(workspace, { origin: 'https://globex.test', visibility: 'everyone' })
+    ).id;
+    await plant(team, elsewhere, NEW as string, 'waiting', 'seed-4');
+
+    const listed = await callOn(team, 'GET', path(workspace, site), { token });
+    assert.equal(listed.status, 200, await listed.clone().text());
+    const { notes } = (await listed.json()) as { notes: Record<string, number> };
+    assert.deepEqual(notes, {
+      ...Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])),
+      [DONE as string]: 1,
+      waiting: 2,
+      parked: 0,
+    });
+
+    // The number the list gives is the one a delete with no `moveTo` refuses with.
+    const refused = await callOn(team, 'DELETE', path(workspace, site, '/own/waiting'), { token });
+    assert.deepEqual([refused.status, await refused.json()], [409, { error: 'status-in-use', notes: 2 }]);
+  });
+
   it('writes the new stage of the notes it moves in the index of the notes, with no read of their page', async () => {
     // Found in the heavy review of #487: the index learns a stage from a read of the page only.
     const { team, token, workspace, site } = await acme();

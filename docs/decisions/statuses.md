@@ -261,11 +261,17 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 
 | Route                                      | What it does                                                                                                    |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `GET …/statuses`                           | The rows of the site, by `position`, then source and key.                                                       |
+| `GET …/statuses`                           | The rows of the site, by `position`, then source and key, and `notes`: the notes in each status of the store.   |
 | `POST …/statuses`                          | Adds a status, or changes the one of that source and key. `readSiteStatus` first; the worker sets `origin`.     |
 | `POST …/statuses/order`                    | `{ order: [{ source, key }] }`: each one takes its place. One unknown, or one twice: nothing changes.           |
 | `DELETE …/statuses/<source>/<key>?moveTo=` | Removes it. Its notes go to `moveTo` first; with notes and no `moveTo`: `409 status-in-use`, with their number. |
 
+- **`notes` counts the notes of each status of the worker's store** (FRU-386): `{ "<key>": n }` for the
+  five built-in statuses and each one the team added, `0` included. A note with no `status_key` counts
+  in the built-in status of its stage. One aggregate over the notes of the site (`GROUP BY`), however
+  many statuses it has. A state of a tracker has no entry: its notes are in the tracker. The console
+  can then show the number on each row and ask where the notes go before a delete; the `409` stays,
+  for a note written between the read and the delete.
 - **POST, not PUT**: the CORS of the console allows `GET`, `POST` and `DELETE` (`console-cors.ts`),
   as every other write of the console.
 - **A built-in status keeps its stage** (`400 built-in-stage`): a note with no `status_key` is in the
