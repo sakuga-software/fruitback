@@ -11,7 +11,7 @@ import {
 } from '../api';
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
-import { EXTENSION_GUIDE } from '../install-options';
+import { extensionInstallFor } from '../extension-store';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -316,12 +316,12 @@ export function Rail({ workspace, workspaces, sections, current, onWorkspace, ad
 }
 
 /**
- * The way to the browser extension, at the foot of both rails (FRU-406). The extension is in no
- * store yet (FRU-130): the link leads to the page that installs the archive of the release, as on
- * the other screens of the console. The day it is published, it leads to the stores.
+ * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
+ * Chrome Web Store, where 0.3.0 is public. Firefox is not on AMO yet: it, and every other browser,
+ * goes to the page that installs the archive of the release.
  */
 export function extensionLink(): { href: string; label: string } {
-  return { href: EXTENSION_GUIDE, label: t('Install the extension (beta)') };
+  return { href: extensionInstallFor(navigator.userAgent), label: t('Install the extension (beta)') };
 }
 
 /** Whether a row that scrolls holds more before its start and after its end. */

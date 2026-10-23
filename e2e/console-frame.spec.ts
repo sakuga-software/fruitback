@@ -320,9 +320,12 @@ test('the foot of the rail leads to the extension, then to the documentation, ea
 }) => {
   await stubWorker(page, { locale: 'fr' });
   await open(page);
-  // The extension is in no store yet (FRU-130): the link is the page that installs the archive.
+  // Chromium goes to the Chrome Web Store; Firefox keeps the guide (extension-store.test.ts).
   const extension = rail(page).getByRole('link', { name: 'Installer l’extension (bêta)' });
-  await expect(extension).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
+  await expect(extension).toHaveAttribute(
+    'href',
+    'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa',
+  );
   await expect(extension).toHaveAttribute('target', '_blank');
   const help = rail(page).getByRole('link', { name: 'Aide et documentation' });
   // Both in the foot, the extension first, and the foot is still at the bottom of the window.
