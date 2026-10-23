@@ -35,7 +35,13 @@ document.querySelectorAll('.prose pre').forEach((pre) => {
 // An address of a part that moved to a page of its own (FRU-427): the old page keeps an empty element
 // with the old id, which names the new address. The browser has scrolled to it; this goes on there.
 function followMoved() {
-  const id = decodeURIComponent(location.hash.slice(1));
+  let id = '';
+  try {
+    id = decodeURIComponent(location.hash.slice(1));
+  } catch {
+    // A fragment with a stray « % » names no moved part (raised in review).
+    return;
+  }
   const to = id && document.getElementById(id)?.dataset.movedTo;
   if (to) location.replace(to);
 }
