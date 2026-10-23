@@ -56,9 +56,9 @@
     - title: What the widget collects
       url: /privacy.html
     - title: Delete a reporter's notes
-      url: /privacy.html#deleting-a-reporters-notes
+      url: /privacy/delete-notes.html
     - title: A notice you can adapt
-      url: /privacy.html#a-notice-you-can-adapt
+      url: /privacy/notice.html
 - title: Contribute
   pages:
     - title: Architecture
