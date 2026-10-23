@@ -49,6 +49,14 @@ export type Sidebar = {
  */
 export type ReadState = 'pending' | 'read' | 'failed' | 'signed-out';
 
+/**
+ * What the list says, one state more than `ReadState`. `members-only`: the site is read by its
+ * members only, and this page sent no session of theirs (FRU-394). A second read at once is refused
+ * the same way, so the list says to sign in from the extension, and offers no « Try again ». Outside the list,
+ * `notesState` says `failed` for it.
+ */
+export type ListState = ReadState | 'members-only';
+
 export type SidebarOptions = {
   /** Where to render. The Shadow root, in practice. */
   host: Element | ShadowRoot;
@@ -62,7 +70,7 @@ export type SidebarOptions = {
   /** The reviewer went back from a thread to the rows: its thread closes. */
   onBack?: () => void;
   /** Read on each draw. Left out, the list is always `read`. */
-  readState?: () => ReadState;
+  readState?: () => ListState;
   /** The reviewer asked to read the notes again, after a failed read. */
   onRetry?: () => void;
   /** The reviewer asked to sign in again, while the read state is `signed-out` (FRU-315). */
@@ -479,7 +487,8 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const state = options.readState?.() ?? 'read';
     if (state !== 'pending') retrying = false;
     const signedOut = state === 'signed-out';
-    const failing = state === 'failed' || signedOut;
+    const membersOnly = state === 'members-only';
+    const failing = state === 'failed' || signedOut || membersOnly;
     const asking = failing || retrying;
     const known = state === 'read' || entries.length > 0;
 
@@ -508,12 +517,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     // Set only when it changes, so a draw does not announce the same words again.
     let message = '';
     if (signedOut) message = t.text('sidebar.signedOut');
+    else if (membersOnly) message = t.text('sidebar.membersOnly');
     else if (failing) message = t.text('sidebar.failed');
     else if (retrying) message = t.text('sidebar.loading');
     if (failedText.textContent !== message) failedText.textContent = message;
     const retryWords = t.text(signedOut ? 'sidebar.signIn' : 'sidebar.retry');
     if (retry.textContent !== retryWords) retry.textContent = retryWords;
     retry.setAttribute('aria-disabled', String(retrying));
+    retry.hidden = membersOnly;
     // A new note would be refused: the list's way to one goes while the session is over.
     leave.hidden = signedOut || options.closed?.() === true;
     const leaving = !asking && failed.contains(active);
@@ -964,6 +975,8 @@ const STYLES = `
   font-weight: 600;
   cursor: pointer;
 }
+/* FRU-394: no « Try again » on a site that its members read. The reset of the host shows a button. */
+.fruitback-sidebar-retry[hidden] { display: none; }
 .fruitback-sidebar-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .fruitback-sidebar-list[hidden] { display: none; }
 .fruitback-sidebar-list > li, .fruitback-sidebar-unplaced-list > li { list-style: none; }

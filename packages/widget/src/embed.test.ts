@@ -1291,10 +1291,12 @@ describe('why a send failed', () => {
     assert.equal(failureOf(answer(429, 'rate-limited')), 'wait');
   });
 
-  it('says to sign in again on a 401, whatever the worker calls it (FRU-193)', () => {
+  it('says to sign in again on a 401 (FRU-193), and that the site is for members when no session came (FRU-394)', () => {
     // The team of the site can do nothing about a session that ended: the reporter can.
-    assert.equal(failureOf(answer(401, 'identity-required')), 'signed-out');
+    assert.equal(failureOf(answer(401, 'invalid-identity')), 'signed-out');
     assert.equal(failureOf(answer(401)), 'signed-out');
+    // No session at all, on a site whose notes are « Members only »: nothing ended.
+    assert.equal(failureOf(answer(401, 'identity-required')), 'members-only');
     // A place cannot be gone on a 401: the worker did not get as far as the places.
     assert.equal(failureOf(answer(401, 'destination-not-allowed')), 'signed-out');
   });

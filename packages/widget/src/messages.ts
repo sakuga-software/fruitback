@@ -129,6 +129,9 @@ export const ENGLISH = {
     'This site does not accept your note from here. Your text is kept: tell the team of the site.',
   // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).
   'composer.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
+  // A `401` on a site whose notes are « Members only », for a page with no session (FRU-394).
+  'composer.failedMembersOnly':
+    'This site is for members only. Your text is kept: sign in to Fruitback from the extension, then send it again.',
   // The button beside that sentence, when the host can open the sign-in (FRU-315).
   'composer.signIn': 'Sign in again',
   'composer.failedTooLarge':
@@ -188,6 +191,8 @@ export const ENGLISH = {
   'sidebar.open': 'Show every note in a sidebar',
   // The same button while the notes of the page could not be read (FRU-316): its dot says why.
   'sidebar.openFailed': 'Show every note in a sidebar. They could not be read.',
+  // FRU-394: the same button on a site that its members read, for a page with no session.
+  'sidebar.openMembersOnly': 'Show every note in a sidebar. This site is for members only.',
   // The name of the dialog (FRU-259). Its head shows `sidebar.title`, then the host of the page.
   'sidebar.dialog': 'Notes on this page',
   'sidebar.title': 'Notes',
@@ -218,6 +223,9 @@ export const ENGLISH = {
   // The list while the session of the extension has ended (FRU-315), and its one button.
   'sidebar.signedOut': 'Sign in to see the notes of this page.',
   'sidebar.signIn': 'Sign in',
+  // The list of a site that its members read, for a page with no session (FRU-394). Not « could not
+  // be read »: a second try is refused the same way.
+  'sidebar.membersOnly': 'This site is for members only. Sign in to Fruitback from the extension to see its notes.',
   'sidebar.approximate': 'Approximate position',
   // The notes kept for later in this tab, on every page, and the button that sends them (FRU-124).
   'sidebar.drafts': 'Kept for later, not sent yet',

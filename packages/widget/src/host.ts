@@ -89,9 +89,10 @@ export type CaptureHost = {
   /**
    * The notes of the page could not be read, or they could again (FRU-316). The button of the list
    * wears a dot and says it in its name, and the sentence of the list is announced once, so the
-   * page says it without the list being opened.
+   * page says it without the list being opened. `opener`: the name of the button then, « could not
+   * be read » unless the host says why (FRU-394).
    */
-  readFailed(failed: boolean, sentence: string): void;
+  readFailed(failed: boolean, sentence: string, opener?: string): void;
 
   /**
    * Choose an element as a click of a capture would, with its component, and hand it to
@@ -610,10 +611,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     capturing: () => capturing,
     hold,
     release,
-    readFailed(failed, sentence) {
-      if (alert.hidden === !failed) return;
+    readFailed(failed, sentence, opener = t.text('sidebar.openFailed')) {
+      const name = failed ? opener : t.text('sidebar.open');
+      if (alert.hidden === !failed && listing.getAttribute('aria-label') === name) return;
       alert.hidden = !failed;
-      listing.setAttribute('aria-label', t.text(failed ? 'sidebar.openFailed' : 'sidebar.open'));
+      listing.setAttribute('aria-label', name);
       // Said once, when it starts: a screen reader hears it at the load, with no list to open. A
       // capture holds the same region for its own words: the sentence waits for its end (review).
       if (!failed) unsaid = '';

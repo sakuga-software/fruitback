@@ -17,7 +17,7 @@ import { resolveAnchor } from './resolve.ts';
 import { type TypingPlace, createTypingStore } from './typing.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackPlacement, feedbackAsText, placementOf } from './export.ts';
-import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
+import { type ListState, type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, aboutTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -526,7 +526,7 @@ export function init(options: FruitbackOptions): Fruitback {
   let lastReadAt = Number.NEGATIVE_INFINITY;
   // Per page (FRU-153): a navigation starts again at `pending`. A failed read after a good one
   // leaves the state and the pins alone, like it always did.
-  let readState: ReadState = 'pending';
+  let readState: ListState = 'pending';
   const read = (): Promise<void> => {
     lastReadAt = Date.now();
 
@@ -537,9 +537,14 @@ export function init(options: FruitbackOptions): Fruitback {
       if (outcome === 'read') {
         readState = 'read';
         composer.identityChanged();
-      } else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
+      } else if (outcome !== 'stale' && readState !== 'read') readState = outcome;
       // FRU-316: said on the page, without the list being opened, and read again by itself.
-      host.readFailed(readState === 'failed', translator.text('sidebar.failed'));
+      // FRU-394: the words of a site that its members read, which no second read changes.
+      host.readFailed(
+        readState === 'failed' || readState === 'members-only',
+        translator.text(readState === 'members-only' ? 'sidebar.membersOnly' : 'sidebar.failed'),
+        translator.text(readState === 'members-only' ? 'sidebar.openMembersOnly' : 'sidebar.openFailed'),
+      );
       retryWhileFailing();
       sidebar.refresh();
       tellNotes({ kind: 'list' });
@@ -578,10 +583,12 @@ export function init(options: FruitbackOptions): Fruitback {
   let destroyed = false;
   function retryWhileFailing(): void {
     if (retrying !== 0) view.clearTimeout(retrying);
-    retrying = readState === 'failed' && !destroyed ? view.setTimeout(() => void read(), READ_RETRY_MS) : 0;
+    retrying = failing() && !destroyed ? view.setTimeout(() => void read(), READ_RETRY_MS) : 0;
   }
+  // FRU-394: a site that its members read is read again too: an admin can open it meanwhile.
+  const failing = (): boolean => readState === 'failed' || readState === 'members-only';
   const onOnline = (): void => {
-    if (readState === 'failed') void read();
+    if (failing()) void read();
   };
   view.addEventListener('online', onOnline);
 
@@ -787,7 +794,7 @@ export function init(options: FruitbackOptions): Fruitback {
         // A read brings the list of now, and the composer says what changed.
         if (destination !== undefined) await read();
 
-        return planted;
+        return forThisHost(planted);
       }
 
       // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
@@ -825,6 +832,13 @@ export function init(options: FruitbackOptions): Fruitback {
         };
       });
 
+  /**
+   * A host that signs in (the extension) holds the sign-in: any `401` is « Your session has ended »
+   * with « Sign in again » there, on a note and on the notes kept for later (reviews of #529).
+   */
+  const forThisHost = (failure: SendFailure): SendFailure =>
+    failure === 'members-only' && options.onSignIn !== undefined ? 'signed-out' : failure;
+
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
   const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
@@ -841,7 +855,9 @@ export function init(options: FruitbackOptions): Fruitback {
       // places on screen is then old. The read brings the list of now, and the next try follows it.
       if (outcome.kept.length > 0 || outcome.failure !== undefined) await read();
 
-      return { sent: outcome.kept.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
+      const failure = outcome.failure === undefined ? undefined : forThisHost(outcome.failure);
+
+      return { sent: outcome.kept.length, ...(failure === undefined ? {} : { failure }) };
     } finally {
       sending = false;
     }
@@ -1006,7 +1022,8 @@ export function init(options: FruitbackOptions): Fruitback {
           placement,
         }));
     },
-    notesState: () => readState,
+    // The list says `members-only` apart; the side panel of the extension knows `failed` (FRU-394).
+    notesState: () => (readState === 'members-only' ? 'failed' : readState),
     focusNote: (id) => overlay.select(id),
     markNote: (id) => overlay.mark(id),
     showPins: (shown) => overlay.showPins(shown),
@@ -1142,6 +1159,11 @@ function createReader(
       // FRU-330: a refused read says whether a note would be refused too. Only a `401` says it: a
       // worker that is down or slow says nothing of who writes, and changes nothing.
       if (response.status === 401) identity.canWrite = refusesNotes(response.body) ? false : true;
+      // FRU-394: a site that its members read says so, rather than « could not be read ».
+      // Not for a host that signs in: its list offers the sign-in, by `signedOut` (review of #529).
+      if (response.status === 401 && options.onSignIn === undefined && membersOnly(response.body)) {
+        return 'members-only';
+      }
       if (!response.ok) return 'failed';
 
       const body = JSON.parse(response.body) as {
@@ -1196,8 +1218,11 @@ function refusesNotes(body: string): boolean {
   }
 }
 
-/** `stale`: a newer read was sent, and this one touched nothing. */
-type ReadOutcome = 'read' | 'failed' | 'stale';
+/**
+ * `stale`: a newer read was sent, and this one touched nothing. `members-only`: refused for want of a
+ * session of a member (FRU-394).
+ */
+type ReadOutcome = 'read' | 'failed' | 'members-only' | 'stale';
 
 /**
  * Exported for its tests, never from `public.ts`.
@@ -1571,12 +1596,21 @@ export function failureOf(response: { status: number; body: string }): SendFailu
   if (response.status === 410) return 'attachment-gone';
   if (response.status === 409 && errorOf(response.body) === 'attachments-not-taken') return 'no-tracker';
   // Not « try again »: a host that mints a bad token mints it again at the next send (FRU-193).
-  if (response.status === 401) return 'signed-out';
+  if (response.status === 401) return membersOnly(response.body) ? 'members-only' : 'signed-out';
   if (response.status === 403) {
     return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
   }
 
   return 'retry';
+}
+
+/**
+ * Whether a `401` says that the site takes its members only, and that no session of a member came
+ * (FRU-394): the worker's `identity-required`. A token that the worker refused (`invalid-identity`),
+ * a session that ended, and a body it did not write are `signed-out`, as before.
+ */
+function membersOnly(body: string): boolean {
+  return errorOf(body) === 'identity-required';
 }
 
 function errorOf(body: string): unknown {
