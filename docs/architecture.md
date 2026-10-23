@@ -5,7 +5,7 @@ README: the page a reader lands on answers _what is this_, and everything that a
 shaped like that_ is here (FRU-26).
 
 The per-ticket histories — the measurements, the first versions that failed, the reviews that caught
-them — are one level down, in [decisions/](decisions/).
+them — are one level down, in [decisions/](https://github.com/sakuga-software/fruitback/tree/main/docs/decisions).
 
 ## Why this shape
 
@@ -74,7 +74,7 @@ summary, `github` puts the same block in the issue body, and `postgres` puts it 
 decisions below were made for the Linear connector, and they are what the markdown codec exists for.
 The GitHub connector uses the same codec, and finds a page's seeds by label instead of by
 `description contains`: see _GitHub Issues, and the stages it cannot say_ in
-[decisions/worker.md](decisions/worker.md).
+[decisions/worker.md](https://github.com/sakuga-software/fruitback/blob/main/docs/decisions/worker.md).
 
 Two decisions worth knowing:
 
@@ -121,29 +121,6 @@ packages/widget    capture + overlay + Shadow DOM host + popover          ✅
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
 
-## Commands
+## Next steps
 
-```bash
-pnpm install
-pnpm dev          # playground on :5177 + worker on :8788, no Linear key needed
-pnpm test         # node --test across packages via Nx, vitest for the worker
-pnpm e2e          # playwright, starts both servers itself
-pnpm typecheck
-pnpm lint         # oxlint
-pnpm format:fix   # oxfmt
-
-pnpm --filter @fruitback/shared test:watch
-```
-
-Tests run on Node's own runner (`node:test` + `node:assert/strict`) against the TypeScript sources —
-no test framework, no transpiler, no loader in the dependency tree. Same reason relative imports carry
-their `.ts` extension: Node's resolver wants it, and it buys `node --test` and `node --watch` for free.
-The worker is the exception: its tests run on vitest, so that mutation testing follows each test
-(FRU-346, [conventions.md](decisions/conventions.md)).
-
-On top of that sits a small Playwright suite, for the two things a DOM emulator cannot vouch for and
-that this product rests on: a real selector engine and real layout. `pnpm dev` opens the same page by
-hand — a deliberately hostile fake client site, with a **Redéployer** button that rehashes classes and
-shuffles the markup so re-anchoring can be watched rather than argued about. Both run against a
-worker with a **PostgreSQL in its process** and an **in-memory Linear**, so neither needs a service or
-an API key, nor touches a workspace.
+- [Commands](architecture/commands.md): install, run, test and format, and what each test runner is for.

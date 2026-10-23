@@ -64,6 +64,6 @@
     - title: Architecture
       url: /architecture.html
     - title: Commands
-      url: /architecture.html#commands
+      url: /architecture/commands.html
     - title: Decisions
       url: https://github.com/sakuga-software/fruitback/tree/main/docs/decisions
