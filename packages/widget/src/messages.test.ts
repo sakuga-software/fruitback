@@ -402,6 +402,9 @@ describe('every word the widget shows', () => {
     // The button of the list, when the notes could not be read (FRU-316).
     host.readFailed(true, translator.text('sidebar.failed'));
     snapshots.push(...shown(host.root));
+    // And on a site that its members read (FRU-394).
+    host.readFailed(true, translator.text('sidebar.membersOnly'), translator.text('sidebar.openMembersOnly'));
+    snapshots.push(...shown(host.root));
     host.readFailed(false, '');
     sidebar.close();
     // The launch button, while the session of the host has ended (FRU-315).

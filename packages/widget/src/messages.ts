@@ -191,6 +191,8 @@ export const ENGLISH = {
   'sidebar.open': 'Show every note in a sidebar',
   // The same button while the notes of the page could not be read (FRU-316): its dot says why.
   'sidebar.openFailed': 'Show every note in a sidebar. They could not be read.',
+  // FRU-394: the same button on a site that its members read, for a page with no session.
+  'sidebar.openMembersOnly': 'Show every note in a sidebar. This site is for members only.',
   // The name of the dialog (FRU-259). Its head shows `sidebar.title`, then the host of the page.
   'sidebar.dialog': 'Notes on this page',
   'sidebar.title': 'Notes',

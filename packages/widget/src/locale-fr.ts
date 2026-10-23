@@ -136,6 +136,7 @@ export const FRENCH: Catalog = {
 
   'sidebar.open': 'Voir toutes les notes dans un panneau',
   'sidebar.openFailed': 'Voir toutes les notes dans un panneau. Elles n’ont pas pu être lues.',
+  'sidebar.openMembersOnly': 'Voir toutes les notes dans un panneau. Ce site est réservé aux membres.',
   'sidebar.dialog': 'Notes de cette page',
   'sidebar.title': 'Notes',
   'sidebar.back': 'Toutes les notes',

@@ -1481,9 +1481,12 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   worker answers it to a page that sent no token, or a token that names nobody of the workspace, on a
   site whose notes are « Members only » (`attributionFor`, `authorizeRead`). There was no session to
   end: the composer says « This site is for members only. Your text is kept: sign in to Fruitback
-  from the extension, then send it again. » Any other `401` keeps the words of FRU-193.
+  from the extension, then send it again. » Any other `401` keeps the words of FRU-193. **A host
+  that signs in (`onSignIn`, the extension) keeps « Your session has ended » and its « Sign in
+  again »** for that `401` too: it holds the sign-in, and the button is the way out (review of #529).
 - **The read says it too.** Refused that way, the list and the live region say « This site is for
-  members only. Sign in to Fruitback from the extension to see its notes. », and the list offers no
+  members only. Sign in to Fruitback from the extension to see its notes. », the button of the list
+  is named « Show every note in a sidebar. This site is for members only. », and the list offers no
   « Try again »: a second read at once is refused the same way. It reads again as a failed read does
   (every 30 s, and when the network is back), since an admin can open the site meanwhile. Outside the
   list, `notesState()` says `failed`, the state the side panel of the extension knows.

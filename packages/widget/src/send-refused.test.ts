@@ -5,6 +5,8 @@ import { init, plant } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
+import { createTypingStore } from './typing.ts';
+import { canonicalizePageUrl } from '@fruitback/shared';
 
 /**
  * A send or a read refused for who the reader is, not for the network (FRU-394).
@@ -147,11 +149,12 @@ describe('a read refused for who the reader is (FRU-394)', () => {
       list: () => root.querySelector('.fruitback-sidebar-failed-text')?.textContent ?? '',
       retry: () => root.querySelector('.fruitback-sidebar-retry') as HTMLButtonElement,
       announced: () => root.querySelector('[data-fruitback-announcer]')?.textContent ?? '',
+      opener: () => root.querySelector('.fruitback-listing')?.getAttribute('aria-label') ?? '',
     };
   }
 
   it('says the site is for members in the list and on the page, and offers no « Try again »', async () => {
-    const { widget, list, retry, announced } = await widgetReading(
+    const { widget, list, retry, announced, opener } = await widgetReading(
       401,
       JSON.stringify({ error: 'identity-required', reason: 'identity-required' }),
     );
@@ -160,6 +163,8 @@ describe('a read refused for who the reader is (FRU-394)', () => {
     assert.equal(list(), sentence);
     assert.equal(announced(), sentence);
     assert.equal(retry().hidden, true);
+    // The button of the list says why too, not « could not be read » (review of #529).
+    assert.equal(opener(), 'Show every note in a sidebar. This site is for members only.');
     // The side panel of the extension knows four states, and this is one of its failures.
     assert.equal(widget.notesState(), 'failed');
   });
@@ -178,5 +183,63 @@ describe('a read refused for who the reader is (FRU-394)', () => {
 
     assert.equal(list(), 'The notes of this page could not be read. They are not lost.');
     assert.equal(retry().hidden, false);
+  });
+});
+
+describe('a host that signs in (FRU-394, review of #529)', () => {
+  it('offers « Sign in again » for the 401 of a members-only site, as for a session that ended', async () => {
+    const page = mounted();
+    // A note left on the button: the widget opens its composer again at the first read (FRU-311).
+    const typing = createTypingStore({ storage: page.view.sessionStorage, key: 'fruitback:config:typing' });
+    typing.write(
+      {
+        page: canonicalizePageUrl(page.view.location.href),
+        anchor: {
+          selector: '[data-testid="cta"]',
+          tag: 'button',
+          text: 'Commander',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      },
+      NOTE,
+    );
+    // The choice of the element reads its component with react-grab, which reads the global `window`.
+    const had = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', { value: page.view, configurable: true, writable: true });
+    cleanup.push(() =>
+      had === undefined
+        ? Reflect.deleteProperty(globalThis, 'window')
+        : Object.defineProperty(globalThis, 'window', had),
+    );
+    const asked: number[] = [];
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      onSignIn: () => asked.push(1),
+      transport: async (request) =>
+        request.method === 'POST'
+          ? { ok: false, status: 401, body: JSON.stringify({ error: 'identity-required' }) }
+          : { ok: true, status: 200, body: JSON.stringify({ issues: [] }) },
+    });
+    cleanup.push(() => widget.destroy());
+    await widget.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
+    assert.equal(field.value, NOTE, 'the composer did not open again on the note');
+
+    (root.querySelector('[data-fruitback-send]') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    assert.equal(
+      root.querySelector('[data-fruitback-failed-text]')?.textContent,
+      'Your session has ended. Your text is kept: sign in again, then send it.',
+    );
+    const signIn = root.querySelector('[data-fruitback-sign-in]') as HTMLButtonElement;
+    assert.equal(signIn.hidden, false);
+    signIn.click();
+    assert.deepEqual(asked, [1]);
+    assert.equal(field.value, NOTE);
   });
 });

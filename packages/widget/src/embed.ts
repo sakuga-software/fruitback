@@ -543,6 +543,7 @@ export function init(options: FruitbackOptions): Fruitback {
       host.readFailed(
         readState === 'failed' || readState === 'members-only',
         translator.text(readState === 'members-only' ? 'sidebar.membersOnly' : 'sidebar.failed'),
+        translator.text(readState === 'members-only' ? 'sidebar.openMembersOnly' : 'sidebar.openFailed'),
       );
       retryWhileFailing();
       sidebar.refresh();
@@ -787,6 +788,8 @@ export function init(options: FruitbackOptions): Fruitback {
         onSeed: (id) => (seedId = id),
       });
       if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
+      // A host that signs in (the extension) offers « Sign in again » for any 401 (review of #529).
+      if (planted === 'members-only' && options.onSignIn !== undefined) return 'signed-out';
       if (typeof planted === 'string') {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
