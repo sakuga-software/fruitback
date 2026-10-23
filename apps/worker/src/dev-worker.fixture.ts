@@ -223,7 +223,7 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
   const seeded = await seedDevWorkspace(database, { origin: DEV_PLAYGROUND, visibility });
   const tracker =
     given.FRUITBACK_DEV_LINEAR === 'fake'
-      ? await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)
+      ? ((await connectFakeLinear(database, seeded.workspace, config.config.secretsKey)) ?? undefined)
       : undefined;
 
   const server = startServer(env);
