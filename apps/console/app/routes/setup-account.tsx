@@ -134,9 +134,9 @@ export function Unnamed({
   );
 }
 
-const WORKSPACE_NOT_RENAMED = msg('The workspace was not renamed. Try again.');
+export const WORKSPACE_NOT_RENAMED = msg('The workspace was not renamed. Try again.');
 /** What the worker refuses when a workspace is renamed: the rule of its name, and who may. */
-const RENAME_PROBLEMS: Readonly<Record<string, string>> = {
+export const RENAME_PROBLEMS: Readonly<Record<string, string>> = {
   ...NAME_PROBLEMS,
   forbidden: msg('Only an owner or an admin of the workspace renames it.'),
 };

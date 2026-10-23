@@ -30,6 +30,7 @@ export default [
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
     route('w/:workspace/members', 'routes/members.tsx'),
     route('w/:workspace/account', 'routes/account.tsx'),
+    route('w/:workspace/settings', 'routes/workspace-settings.tsx'),
   ]),
   layout('routes/admin.tsx', [
     route('admin', 'routes/admin-instance.tsx'),

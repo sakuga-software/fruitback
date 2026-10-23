@@ -56,10 +56,13 @@ describe('the sections of the rail (FRU-234)', () => {
     // The control: an entry that is shown with no route is found, and so is a route with no entry.
     assert.deepEqual(dead([{ path: 'reports', built: true }], built), ['reports']);
     assert.deepEqual(dead([{ path: 'sites', built: false }], built), ['sites']);
-    // Every screen of a workspace is a section: a route the rail does not know has no entry.
+    // Every screen of a workspace is a section: a route the rail does not know has no entry. The
+    // settings are the one exception: the name of the workspace, at the top of the rail, opens them
+    // (FRU-414), and the frame names their path.
     const screens = built.filter((path) => path.startsWith('w/:workspace/')).map((path) => path.split('/')[2]);
+    assert.ok(frame.includes('/settings`'), 'the rail leads to the settings');
     assert.deepEqual(
-      screens.filter((path) => !sections(frame).some((section) => section.path === path)),
+      screens.filter((path) => path !== 'settings' && !sections(frame).some((section) => section.path === path)),
       [],
     );
     assert.ok(screens.length >= 4, built.join(', '));

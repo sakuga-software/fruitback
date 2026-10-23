@@ -1677,3 +1677,10 @@ textarea {
 .kit-menu .menu-item[data-danger='true'] {
   color: var(--color-accent-strong);
 }
+
+/* The items under a choice, which choose nothing (FRU-414): a rule of the menu above them. */
+.kit-menu .kit-menu__after {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-line);
+}

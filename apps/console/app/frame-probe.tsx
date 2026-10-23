@@ -23,6 +23,7 @@ export default function FrameProbe() {
           sections={SECTIONS}
           current="notes"
           onWorkspace={() => {}}
+          onSettings={() => {}}
         />
       }
     />

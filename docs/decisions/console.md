@@ -283,7 +283,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
   there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
-  with one it is no button, and draws no chevrons. **At 900 px and under the sections are one row
+  with one it is no button, and draws no chevrons. **The name of the workspace leads to its settings**
+  (FRU-414, `routes/workspace-settings.tsx`, asked by Mathieu; no board draws it): with one workspace
+  the name is a link to `/w/<id>/settings`, `aria-current` there; with several, the menu of the
+  workspaces ends with « Workspace settings », in a group of its own under a rule that chooses nothing
+  (`after` of `Menu`). The screen renames the workspace for an owner or an admin (FRU-236), and the
+  rail shows the new name at once; another role reads the name, locked. **No logo**: a workspace has
+  none in the worker, and no route keeps one. The settings are no section of the rail, and
+  `frame.test.ts` names them as the one screen of a workspace that is not. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
   screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
