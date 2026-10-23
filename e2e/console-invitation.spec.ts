@@ -81,7 +81,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await owner.goto(CONSOLE);
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
-    await expect(owner.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(owner.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
@@ -125,7 +125,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(paul.getByRole('link', { name: 'Open https://staging.acme.dev' })).toHaveAttribute('href', SITE);
     await paul.getByRole('link', { name: 'Go to the console' }).click();
     await expect(paul).toHaveURL(`${CONSOLE}/w/${workspace}/sites`);
-    await expect(paul.getByText('https://staging.acme.dev', { exact: true })).toBeVisible();
+    await expect(paul.getByRole('heading', { name: 'staging.acme.dev', exact: true })).toBeVisible();
 
     // The owner sees Paul as a member, and the invitation is gone.
     await owner.reload();
@@ -133,8 +133,8 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner.getByText('Invitation sent', { exact: true })).toHaveCount(0);
 
     // Paul connects his browser: the pairing page opens with a code after the `#`.
-    // « Install » is in the menu of the row of the site, for a member too (FRU-243).
-    await paul.getByRole('button', { name: 'More for https://staging.acme.dev' }).click();
+    // « Install » is in the menu of the card of the site, for a member too (FRU-243).
+    await paul.getByRole('button', { name: 'More for staging.acme.dev' }).click();
     await paul.getByRole('menuitem', { name: 'Install' }).click();
     const opened = pauls.waitForEvent('page');
     await paul.getByRole('button', { name: 'Connect this browser' }).click();

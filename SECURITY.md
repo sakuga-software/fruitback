@@ -1733,10 +1733,12 @@ is a cookie of the worker that no script reads.
   `script-src 'self'` and the hashes of the inline scripts of the build, never `'unsafe-inline'`;
   `connect-src 'self'` and the origin of the worker; `frame-ancestors 'none'`; `base-uri 'none'`.
 - **The preview of the setup frames the site the person added, in their browser** (FRU-354):
-  `frame-src https: http:`, and `img-src https:` for the icon of that site. The frame is sandboxed
-  without `allow-top-navigation`, so the site cannot take the tab of the console away, and it gets
-  no referrer. The console asks the site for nothing from a server: no request of the worker goes
-  there. A script cannot read what a frame of another origin shows, and the console cannot tell a
+  `frame-src https: http:`, and `img-src https:` for the icon of that site. The Sites screen asks
+  the same icon of each site it shows (FRU-408), at most 12 at a time, from the browser of the
+  person and with no referrer: the site sees a request for its icon from that browser, as a visit
+  would make. The frame is sandboxed without `allow-top-navigation`, so the site cannot take the tab
+  of the console away, and it gets no referrer. The console asks the site for nothing from a server:
+  no request of the worker goes there. A script cannot read what a frame of another origin shows, and the console cannot tell a
   site that refuses to be framed from one that shows, so the person can ask for the address in place
   of the frame. What this widens: markup injected in the console could load an image or a frame
   from any address. `script-src` and `connect-src` are as above, so such markup runs no script and

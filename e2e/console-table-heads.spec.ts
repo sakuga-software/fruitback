@@ -2,10 +2,11 @@ import { type Page, expect, test } from '@playwright/test';
 import { sideScroll, stubWorker } from './console-workspace.ts';
 
 /**
- * The heads of a table of the console are one line each (FRU-401). Measured on the Sites screen in
- * French, whose heads are the longest, with the six columns that an owner sees: at
- * 1024 and 1280 px « Sur la page avec », « Les notes vont vers » and « Dernière note » broke on two
- * lines. The worker is answered by stubs; the sample data is of nobody.
+ * The heads of a table of the console are one line each (FRU-401): at 1024 and 1280 px « Sur la page
+ * avec », « Les notes vont vers » and « Dernière note » broke on two lines in the table of the Sites
+ * screen. That screen is a grid of cards since FRU-408: its terms are measured there, in French,
+ * whose words are the longest, and the rule of the kit on the table that `/kit` mounts. The worker
+ * is answered by stubs; the sample data is of nobody.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -34,43 +35,52 @@ const SITES = [
   },
 ];
 
-/** The heads that show words, each with the number of lines its words take. */
-function linesOfHeads(page: Page): Promise<{ head: string; lines: number }[]> {
-  return page
-    .getByRole('region', { name: 'Sites' })
-    .locator('thead th')
-    .evaluateAll((heads) =>
-      heads
-        // A head with no word to show (the column of the menus) is said to a screen reader only.
-        .filter(
-          (head) => head.checkVisibility() && getComputedStyle(head.firstElementChild ?? head).position !== 'absolute',
-        )
-        .map((head) => {
-          const words = document.createRange();
-          words.selectNodeContents(head);
-          const tops = new Set(
-            [...words.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top)),
-          );
+/** The words of each element, and the number of lines they take. */
+function linesOf(page: Page, selector: string): Promise<{ text: string; lines: number }[]> {
+  return page.locator(selector).evaluateAll((elements) =>
+    elements
+      .filter((element) => element.checkVisibility())
+      .map((element) => {
+        const words = document.createRange();
+        words.selectNodeContents(element);
+        const tops = new Set(
+          [...words.getClientRects()].filter((rect) => rect.width > 0).map((rect) => Math.round(rect.top)),
+        );
 
-          return { head: head.textContent ?? '', lines: tops.size };
-        }),
-    );
+        return { text: element.textContent ?? '', lines: tops.size };
+      }),
+  );
 }
 
 for (const width of [1024, 1280, 1440, 390]) {
-  test(`every head of the table of sites is one line at ${width} px, in French`, async ({ page }) => {
+  test(`every term of a card of sites is one line at ${width} px, in French`, async ({ page }) => {
     await stubWorker(page, { locale: 'fr', sites: SITES });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${CONSOLE}/w/w1/sites`);
-    await expect(page.getByRole('region', { name: 'Sites' }).locator('tbody tr').first()).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Sites' }).locator('li[data-site]').first()).toBeVisible();
 
-    const heads = await linesOfHeads(page);
-    // The control: the heads of the tracker are there, so the six columns are measured.
-    expect(heads.map(({ head }) => head)).toEqual(
+    const terms = await linesOf(page, 'main li[data-site] dt');
+    // The control: the terms of the tracker are there, so the three of them are measured.
+    expect(terms.map(({ text }) => text)).toEqual(
       expect.arrayContaining(['Sur la page avec', 'Les notes vont vers', 'Dernière note']),
     );
-    expect(heads.filter(({ lines }) => lines !== 1)).toEqual([]);
-    // A table wider than its frame scrolls in it: the page does not.
+    expect(terms.filter(({ lines }) => lines !== 1)).toEqual([]);
     expect(await sideScroll(page)).toBe(0);
   });
 }
+
+test('every head of a table of the kit is one line, at 390 px too', async ({ page }) => {
+  await stubWorker(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${CONSOLE}/kit`);
+  const heads = page.getByRole('region', { name: 'Members' }).locator('thead th');
+  await expect(heads.first()).toBeVisible();
+
+  for (const head of await heads.all())
+    expect(await head.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe('nowrap');
+  expect(await linesOf(page, 'main [role="region"][aria-label="Members"] thead th')).toEqual([
+    { text: 'Person', lines: 1 },
+    { text: 'Role', lines: 1 },
+    { text: 'Last seen', lines: 1 },
+  ]);
+});

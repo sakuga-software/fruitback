@@ -48,7 +48,7 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
   return deleted;
 }
 
-const MORE = { en: 'More for https://staging.acme.dev', fr: 'Plus pour https://staging.acme.dev' } as const;
+const MORE = { en: 'More for staging.acme.dev', fr: 'Plus pour staging.acme.dev' } as const;
 
 /**
  * What a screen needs to ask the first time, and the `DELETE` its second button sends.
@@ -80,8 +80,7 @@ const screens = [
       await expect(page.getByRole('menuitem').last()).toBeFocused();
       await page.keyboard.press('Enter');
     },
-    second: (locale: Locale) =>
-      locale === 'en' ? 'Remove https://staging.acme.dev' : 'Retirer https://staging.acme.dev',
+    second: (locale: Locale) => (locale === 'en' ? 'Remove staging.acme.dev' : 'Retirer staging.acme.dev'),
     open: async (_page: Page) => {},
     deletes: '/console/workspaces/w1/sites/s1',
   },

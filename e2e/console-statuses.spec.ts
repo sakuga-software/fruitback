@@ -495,7 +495,7 @@ test('at 390 px in French: one card per status, no sideways scroll, and the word
 test('only an owner or an admin sets the statuses, and the menu of a site leads there', async ({ page }) => {
   await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/sites`);
-  await page.getByRole('button', { name: 'More for https://preview.client.fr' }).click();
+  await page.getByRole('button', { name: 'More for preview.client.fr' }).click();
   await page.getByRole('menuitem', { name: 'Statuses' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1/statuses`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
@@ -503,7 +503,7 @@ test('only an owner or an admin sets the statuses, and the menu of a site leads 
   await page.unrouteAll({ behavior: 'ignoreErrors' });
   await workerWith(page, { role: 'member' });
   await page.goto(`${CONSOLE}/w/w1/sites`);
-  await page.getByRole('button', { name: 'More for https://preview.client.fr' }).click();
+  await page.getByRole('button', { name: 'More for preview.client.fr' }).click();
   await expect(page.getByRole('menuitem', { name: 'Statuses' })).toHaveCount(0);
   await page.goto(`${CONSOLE}/w/w1/sites/s1/statuses`);
   await expect(page.locator('main')).toContainText(

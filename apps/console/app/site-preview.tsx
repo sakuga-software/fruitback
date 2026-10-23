@@ -4,6 +4,7 @@ import { DESK, scaleOf } from './preview-scale';
 import { PreviewScene } from './preview-scene';
 import { msg, t } from './i18n';
 import { siteLabel } from './site-address';
+import { SiteIcon } from './site-icon';
 import { BrowserFrame, LinkButton } from './ui';
 import { useLocale } from './use-locale';
 
@@ -166,29 +167,10 @@ function Refused({
   onExample: () => void;
 }) {
   useLocale();
-  // The icon comes from the site, in the browser of the person, as the frame would: https only.
-  const [icon, setIcon] = useState(origin.startsWith('https://'));
-
   return (
     <div className="site-preview__refused">
-      {icon ? (
-        <img
-          src={`${origin}/favicon.ico`}
-          alt=""
-          width={40}
-          height={40}
-          referrerPolicy="no-referrer"
-          className="site-preview__icon"
-          onError={() => setIcon(false)}
-        />
-      ) : (
-        <span aria-hidden="true" className="site-preview__icon site-preview__letter">
-          {host
-            .replace(/^www\./, '')
-            .charAt(0)
-            .toUpperCase()}
-        </span>
-      )}
+      {/* The icon comes from the site, in the browser of the person, as the frame would. */}
+      <SiteIcon origin={origin} className="site-preview__icon" letterClassName="site-preview__letter" />
       <p className="site-preview__host">{host}</p>
       <p className="site-preview__why">{t(WHY[refusal])}</p>
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
