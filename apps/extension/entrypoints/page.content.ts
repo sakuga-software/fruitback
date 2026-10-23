@@ -383,6 +383,8 @@ export default defineContentScript({
         ...(message.relay === true ? { captureVisible } : {}),
         // FRU-302: « Name on my notes », for a reporter who kept none on this site.
         ...(message.name !== undefined ? { reporterName: message.name } : {}),
+        // FRU-411: the head of the composer writes the selector only with « Show CSS selectors ».
+        selectorInHead: 'with-selectors',
       });
       mounted = signature;
       // FRU-299: the side panel asks for the notes again when they change, and opens the row of a

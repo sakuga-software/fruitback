@@ -515,14 +515,19 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
   await expect.poll(behaviour).toBe(false);
 });
 
-test('« Show CSS selectors »: off, the thread of a pin hides the selector; on, it shows it without building the widget again (FRU-349)', async ({
+test('« Show CSS selectors »: off, the thread of a pin and the head of a note hide the selector; on, they show it without building the widget again (FRU-349, FRU-411)', async ({
   extension,
 }) => {
   await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const site = await extension.context.newPage();
   await openBareSite(site, 'prefs-selectors');
   await site.locator('[data-fruitback-host-launch]').click();
+  // FRU-411: off, the label of the frame of the capture names the element as a person reads it.
+  await site.locator('[data-testid="card-latte"] .add').hover();
+  await expect(site.locator('.fruitback-highlight-tag')).toHaveText('Ajouter · <Button>');
   await site.locator('[data-testid="card-latte"] .add').click();
+  // FRU-411: off, the head of the composer names the element as a person reads it, with no selector.
+  await expect(site.locator('.fruitback-composer-about')).toHaveText('Ajouter · <Button>');
   await site.getByPlaceholder('What should change?').fill('Le sélecteur est pour un développeur.');
   await site.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -547,6 +552,14 @@ test('« Show CSS selectors »: off, the thread of a pin hides the selector; on,
   await expect(site.locator('.fruitback-thread-selector')).toHaveText(/\S/);
   await expect(site.locator('.fruitback-thread-source')).toBeVisible();
   await expect(site.locator('.fruitback-thread')).toBeVisible();
+  // FRU-411: on, the head of the next note writes the selector.
+  await site.keyboard.press('Escape');
+  await site.locator('[data-fruitback-host-launch]').click();
+  await site.locator('[data-testid="card-mocha"] .add').hover();
+  await expect(site.locator('.fruitback-highlight-tag')).toHaveText('button.add · <Button>');
+  await site.locator('[data-testid="card-mocha"] .add').click();
+  await expect(site.locator('.fruitback-composer-about')).toHaveText('button.add · <Button>');
+  await site.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   await page.bringToFront();
   await selectors.click();

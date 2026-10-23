@@ -37,6 +37,12 @@ export type CaptureHostOptions = {
   document?: Document;
   /** Swapped in the tests; production wants react-grab. */
   engine?: CaptureEngine;
+  /**
+   * The words on the frame of a capture (FRU-411). Left out, `aboutTarget`: the short selector, then
+   * the component. `init` passes the head of the composer, so the two follow « Show CSS selectors »
+   * together when the host asks for it.
+   */
+  nameOf?: (element: Element, source: SeedSource | undefined) => string;
   /** The reporter picked an element. The note UI is the caller's business (FRU-4). */
   onSelect: (target: CaptureTarget) => void;
   /** Label on the floating button. Wins over the translated one: a host's label is the host's word. */
@@ -330,13 +336,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    * page gives one (FRU-303), as « button.add · <AddToCart> ». Only if the element is still framed.
    */
   function name(element: Element): void {
-    const selector = shortSelector(element);
-    tag.textContent = selector;
+    const nameOf = options.nameOf;
+    tag.textContent = nameOf === undefined ? shortSelector(element) : nameOf(element, undefined);
     tag.hidden = false;
     void sourceOf(element).then((source) => {
       if (element !== hovered && element !== chosen) return;
       // As text: a name is whatever the page called its component.
-      tag.textContent = aboutTarget(element, source);
+      tag.textContent = (nameOf ?? aboutTarget)(element, source);
     });
   }
 
@@ -719,6 +725,19 @@ export function aboutTarget(element: Element, source: SeedSource | undefined): s
   const component = componentOf(element, source)?.trim() ?? '';
 
   return component === '' ? selector : `${selector} · <${component}>`;
+}
+
+/**
+ * The head of the composer with no selector (FRU-411): what a person reads for the element, then its
+ * component, « Commander · <AddToCart> ». The component alone when the element says nothing, and the
+ * tag when the page gives neither.
+ */
+export function plainHead(element: Element, source: SeedSource | undefined): string {
+  const name = readableName(element);
+  const component = componentOf(element, source)?.trim() ?? '';
+  const parts = [name, component === '' ? '' : `<${component}>`].filter((part) => part !== '');
+
+  return parts.length === 0 ? element.tagName.toLowerCase() : parts.join(' · ');
 }
 
 /**

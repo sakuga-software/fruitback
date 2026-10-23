@@ -8,6 +8,7 @@ import {
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
+  type SeedSource,
   type SeedStage,
   type SeedStatus,
 } from '@fruitback/shared';
@@ -18,7 +19,14 @@ import { type TypingPlace, createTypingStore } from './typing.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackPlacement, feedbackAsText, placementOf } from './export.ts';
 import { type ListState, type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
-import { type CaptureHost, type CaptureTarget, aboutTarget, createCaptureHost, readableName } from './host.ts';
+import {
+  type CaptureHost,
+  type CaptureTarget,
+  aboutTarget,
+  createCaptureHost,
+  plainHead,
+  readableName,
+} from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type AttachOffer, type AttachRefusal, type CaptureArea, type PickedFile, refusalOf } from './attachments.ts';
@@ -187,6 +195,13 @@ export type FruitbackOptions = {
    * wants it on screen turns it on here, or later with `showSelectors`.
    */
   showSelectors?: boolean;
+  /**
+   * Whether the head of the composer writes the short selector of the element, « button.add ·
+   * <AddToCart> » (FRU-411). `always`, the default. `with-selectors`: only while `showSelectors` is on;
+   * otherwise the head writes what a person reads for the element, and its component. The extension
+   * asks for it, so « Show CSS selectors » of its preferences governs the head too.
+   */
+  selectorInHead?: 'always' | 'with-selectors';
   document?: Document;
 };
 
@@ -390,10 +405,18 @@ export function init(options: FruitbackOptions): Fruitback {
   let panel: ConfigPanel;
   let sidebar: Sidebar;
 
+  /** « Show CSS selectors », as the host said it last (FRU-349). The head follows it on request (FRU-411). */
+  let selectorsShown = options.showSelectors === true;
+  const headOf = (element: Element, source: SeedSource | undefined): string =>
+    options.selectorInHead !== 'with-selectors' || selectorsShown
+      ? aboutTarget(element, source)
+      : plainHead(element, source);
   const host: CaptureHost = createCaptureHost({
     document,
     translator,
     label: options.label,
+    // FRU-411: on request, the frame names the element as the head of the composer will.
+    ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     onConfigure: () => panel.toggle(),
@@ -433,7 +456,7 @@ export function init(options: FruitbackOptions): Fruitback {
           bottom: rect.bottom + view.scrollY,
           right: rect.right + view.scrollX,
         },
-        aboutTarget(selected.element, selected.source),
+        headOf(selected.element, selected.source),
         readableName(selected.element),
       );
     },
@@ -1027,7 +1050,10 @@ export function init(options: FruitbackOptions): Fruitback {
     focusNote: (id) => overlay.select(id),
     markNote: (id) => overlay.mark(id),
     showPins: (shown) => overlay.showPins(shown),
-    showSelectors: (shown) => overlay.showSelectors(shown),
+    showSelectors: (shown) => {
+      selectorsShown = shown;
+      overlay.showSelectors(shown);
+    },
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.seed.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {
