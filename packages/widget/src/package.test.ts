@@ -322,6 +322,16 @@ describe('a consumer installing this from npm', () => {
           `${tarball} names no repository, or another one`,
         );
         assert.match(licence, /^MIT License/, `${tarball} ships a LICENSE that is not the MIT text`);
+        // The README is the page npm shows for the package (FRU-388). npm force-includes one, so the
+        // test reads its text: the name of the package, the install line, a guide and the licence.
+        const readme = await run('tar', ['-xzOf', join(scratch, tarball), 'package/README.md']).then(
+          ({ stdout }) => stdout,
+          () => '',
+        );
+        assert.ok(readme.startsWith(`# ${declared.name}\n`), `${tarball} ships no README with its name`);
+        assert.ok(readme.includes(`npm i ${declared.name}\n`), `${tarball}: its README does not say how to install it`);
+        assert.match(readme, /\(https:\/\/fruitback\.com\/[a-z-]+\.html/, `${tarball}: its README links no guide`);
+        assert.match(readme, /^## Licence\n\nMIT\./m, `${tarball}: its README does not give the licence`);
       }
 
       // MIT asks for the notice to travel with the code, and the widget compiles `react-grab` and
