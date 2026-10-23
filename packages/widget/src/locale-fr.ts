@@ -107,6 +107,8 @@ export const FRENCH: Catalog = {
   'pin.labelDraft': 'Pas encore envoyée · {note}',
 
   'thread.close': 'Fermer la note',
+  'thread.move':
+    'Déplacer la note. Les flèches la déplacent de 16 px, Maj et une flèche de 48 px. Début ou un double-clic la remet à sa place.',
   'thread.dialog': 'Note {number}',
   'thread.draft': 'Pas encore envoyée',
   'thread.draftDialog': 'Note pas encore envoyée',

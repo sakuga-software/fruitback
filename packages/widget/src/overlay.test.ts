@@ -530,11 +530,9 @@ describe('createOverlay', () => {
     // The head: two columns, what it says and the cross (FRU-419). The state behind its drop and the
     // way out share the first; the age of the state is not in the head.
     const head = thread.querySelector('.fruitback-thread-head') as HTMLElement;
-    assert.deepEqual(classes(head), ['fruitback-thread-heading', 'fruitback-thread-close']);
-    assert.deepEqual(classes(head.firstElementChild as HTMLElement), [
-      'fruitback-thread-stage',
-      'fruitback-thread-link',
-    ]);
+    // The handle first, on the page (FRU-420).
+    assert.deepEqual(classes(head), ['fruitback-thread-handle', 'fruitback-thread-heading', 'fruitback-thread-close']);
+    assert.deepEqual(classes(head.children[1] as HTMLElement), ['fruitback-thread-stage', 'fruitback-thread-link']);
     assert.equal(head.querySelector('.fruitback-thread-drop')?.getAttribute('aria-hidden'), 'true');
     assert.equal(head.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
     // The identifier and an arrow, in a chip: no name of a store the widget does not know.
@@ -1452,5 +1450,117 @@ describe('the name of a pin, cut at the end of a word (FRU-320)', () => {
     assert.equal(shortened(`Ok ${'x'.repeat(80)}`, 60), `Ok ${'x'.repeat(56)}…`);
     // No dangling comma before the ellipsis.
     assert.equal(shortened('aaaa bbbb, cccc dddd', 12), 'aaaa bbbb…');
+  });
+});
+
+describe('the handle of a bubble (FRU-420)', () => {
+  const keydown = (page: MountedPage, target: Element, key: string, shiftKey = false) => {
+    const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
+    target.dispatchEvent(new KeyboardEventCtor('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  };
+  const at = (page: MountedPage) => {
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+
+    return { left: Number.parseFloat(thread.style.left), top: Number.parseFloat(thread.style.top) };
+  };
+  const tetherOf = (page: MountedPage) => page.document.querySelector('[data-fruitback-tether]');
+
+  function opened(): { page: MountedPage; handle: HTMLElement } {
+    const page = mountWithCta();
+    overlay = createOverlay({
+      document: page.document,
+      reply: { allowed: () => true, send: () => new Promise(() => undefined) },
+    });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    const handle = page.document.querySelector<HTMLElement>('.fruitback-thread-handle');
+    assert.ok(handle !== null, 'the thread on the page has a handle');
+
+    return { page, handle };
+  }
+
+  it('is a button whose name says the arrows, Shift, Home and the double click', () => {
+    const { handle } = opened();
+    assert.equal(handle.tagName, 'BUTTON');
+    // Three columns by an attribute, not by `:has()`, which a browser without it drops.
+    assert.equal(handle.parentElement?.hasAttribute('data-fruitback-movable'), true);
+    assert.equal(
+      handle.getAttribute('aria-label'),
+      'Move the note. The arrow keys move it by 16 px, Shift and an arrow by 48 px. Home or a double click puts it back.',
+    );
+    assert.equal(handle.querySelector('svg')?.getAttribute('aria-hidden'), 'true');
+  });
+
+  it('moves the thread 16 px with an arrow and 48 px with Shift, draws the line to the pin, and goes home', () => {
+    const { page, handle } = opened();
+    const home = at(page);
+    assert.equal(tetherOf(page), null);
+
+    keydown(page, handle, 'ArrowDown');
+    assert.deepEqual(at(page), { left: home.left, top: home.top + 16 });
+    keydown(page, handle, 'ArrowLeft', true);
+    assert.deepEqual(at(page), { left: home.left - 48, top: home.top + 16 });
+    const line = tetherOf(page) as HTMLElement | null;
+    assert.ok(line !== null, 'a line joins the moved thread to its pin');
+    assert.equal(line.getAttribute('aria-hidden'), 'true');
+
+    // The page scrolls: the thread is placed beside its pin again, and keeps its offset.
+    overlay?.reposition();
+    assert.deepEqual(at(page), { left: home.left - 48, top: home.top + 16 });
+
+    keydown(page, handle, 'Home');
+    assert.deepEqual(at(page), home);
+    assert.equal(tetherOf(page), null);
+
+    keydown(page, handle, 'ArrowRight');
+    handle.dispatchEvent(new (page.view as unknown as typeof globalThis).MouseEvent('dblclick', { bubbles: true }));
+    assert.deepEqual(at(page), home);
+  });
+
+  it('keeps the thread in the window, 8 px from its edge', () => {
+    const { page, handle } = opened();
+    for (let step = 0; step < 40; step += 1) keydown(page, handle, 'ArrowUp', true);
+    assert.equal(at(page).top, 8);
+  });
+
+  it('forgets the move when the thread closes', () => {
+    const { page, handle } = opened();
+    const home = at(page);
+    keydown(page, handle, 'ArrowDown', true);
+    overlay?.closeThread();
+    assert.equal(tetherOf(page), null);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.deepEqual(at(page), home);
+  });
+
+  it('keeps the move, the focus on the handle and the reply being typed when the thread is drawn again', () => {
+    const { page, handle } = opened();
+    const field = page.document.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    assert.ok(field !== null);
+    field.value = 'Je regarde';
+    field.dispatchEvent(new (page.view as unknown as typeof globalThis).Event('input'));
+    handle.focus();
+    keydown(page, handle, 'ArrowRight', true);
+    const moved = at(page);
+
+    overlay?.showSelectors(true);
+    assert.deepEqual(at(page), moved);
+    assert.equal(page.document.activeElement?.className, 'fruitback-thread-handle');
+    assert.equal(
+      page.document.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field')?.value,
+      'Je regarde',
+    );
+  });
+
+  it('has no handle in the list of the page, where the thread has its place (FRU-312)', () => {
+    const page = mountWithCta();
+    const home = page.document.createElement('div');
+    page.document.body.append(home);
+    overlay = createOverlay({ document: page.document });
+    const issue = issueOnCta();
+    overlay.render([issue]);
+    assert.equal(overlay.select(issue.seed.id, home), true);
+    assert.ok(home.querySelector('[data-fruitback-thread]') !== null);
+    assert.equal(home.querySelector('.fruitback-thread-handle'), null);
   });
 });
