@@ -1142,20 +1142,25 @@ function buildThread(
   const since = stateSince(issue, t);
   if (since !== undefined) state.title = since;
 
-  thread.append(
-    // A div, not a header: inside the widget's region landmark a header is a banner (FRU-51).
-    // Two columns (FRU-419): the state and the way out wrap in the first, and the cross keeps the
-    // second, at the top.
-    element(document, 'div', 'fruitback-thread-head', [
-      // On the page only: a thread in the list of the page has its place in the column (FRU-312).
-      ...(movable ? [handleButton(document, t)] : []),
-      element(document, 'div', 'fruitback-thread-heading', [
-        element(document, 'span', 'fruitback-thread-stage', [drop, state]),
-        // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
-        ...link(document, issue, t),
-      ]),
-      closeButton(document, t),
+  // A div, not a header: inside the widget's region landmark a header is a banner (FRU-51).
+  // Two columns (FRU-419): the state and the way out wrap in the first, and the cross keeps the
+  // second, at the top.
+  const head = element(document, 'div', 'fruitback-thread-head', [
+    // On the page only: a thread in the list of the page has its place in the column (FRU-312).
+    ...(movable ? [handleButton(document, t)] : []),
+    element(document, 'div', 'fruitback-thread-heading', [
+      element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+      // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
+      ...link(document, issue, t),
     ]),
+    closeButton(document, t),
+  ]);
+  // An attribute and not `:has()`: a browser with no `:has()` drops the rule, and the cross would
+  // fall to a second line again.
+  if (movable) head.dataset.fruitbackMovable = '';
+
+  thread.append(
+    head,
     element(document, 'div', 'fruitback-thread-body', [
       element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
       byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
@@ -1661,7 +1666,7 @@ const STYLES = `
   border-bottom: 1px solid var(--fruitback-color-border);
 }
 /* With the handle that moves it (FRU-420), first, in a column of its own. */
-.fruitback-thread-head:has(> .fruitback-thread-handle) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.fruitback-thread-head[data-fruitback-movable] { grid-template-columns: auto minmax(0, 1fr) auto; }
 /*
   The handle (FRU-420): 28 px drawn, 44 px to press, like the cross. Only the handle moves the thread,
   so the text stays selectable everywhere else. No scroll of the page under a finger on it.

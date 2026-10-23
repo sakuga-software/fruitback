@@ -1482,6 +1482,8 @@ describe('the handle of a bubble (FRU-420)', () => {
   it('is a button whose name says the arrows, Shift, Home and the double click', () => {
     const { handle } = opened();
     assert.equal(handle.tagName, 'BUTTON');
+    // Three columns by an attribute, not by `:has()`, which a browser without it drops.
+    assert.equal(handle.parentElement?.hasAttribute('data-fruitback-movable'), true);
     assert.equal(
       handle.getAttribute('aria-label'),
       'Move the note. The arrow keys move it by 16 px, Shift and an arrow by 48 px. Home or a double click puts it back.',
