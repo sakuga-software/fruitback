@@ -838,15 +838,70 @@ test('the way back of a link says what happened, once', async ({ page }) => {
   await expect(page.getByText('Console · this browser')).toBeVisible();
   await expect(page.getByText('Google is linked to your account.')).toHaveCount(0);
 
-  await page.goto(`${CONSOLE}/w/w1/account?error=email_doesn't_match`);
-  await expect(section(page, 'How you sign in').getByRole('alert')).toHaveText(
-    'That account has another address than yours. Fruitback links only the address of your account.',
+  // A refusal names the provider and the address of the account, and says what to do (FRU-416).
+  // `email_does_not_match` is the code of better-auth 1.7.7: on `main` it read as an unknown code.
+  const refusal = section(page, 'How you sign in').getByRole('alert');
+  for (const [query, sentence] of [
+    [
+      'provider=google&error=email_does_not_match',
+      'Your Google account does not have the address ana@acme.dev. Fruitback links only a Google account that has the address of your account. In Google, choose the account ana@acme.dev, or keep signing in as you do now.',
+    ],
+    [
+      "provider=google&error=email_doesn't_match",
+      'Your Google account does not have the address ana@acme.dev. Fruitback links only a Google account that has the address of your account. In Google, choose the account ana@acme.dev, or keep signing in as you do now.',
+    ],
+    [
+      'provider=google&error=account_already_linked_to_different_user',
+      'This Google account already opens another Fruitback account. To link it here, that account must unlink it first, or an administrator of this instance must delete that account.',
+    ],
+    [
+      'provider=github&error=email_not_verified',
+      'GitHub did not say that its address is verified. Verify it at GitHub, then link again.',
+    ],
+    // better-auth 1.7.7 says an address that GitHub did not verify with this code.
+    [
+      'provider=github&error=unable_to_link_account',
+      'GitHub did not say that its address is verified. Verify it at GitHub, then link again.',
+    ],
+    [
+      'provider=github&error=identity_required',
+      'Your session ended before GitHub was linked. Sign in, then link again.',
+    ],
+    // A refusal that this build does not know: no « Try again », which would not help.
+    ['provider=google&error=access_denied', 'Google was not linked.'],
+    // A failure on the way: trying again can work.
+    ['provider=google&error=internal_server_error', 'Google was not linked. Try again.'],
+    // Codes and providers of the address that name a property of every object, or nothing known.
+    ['provider=google&error=constructor', 'Google was not linked.'],
+    ['provider=gitlab&error=email_does_not_match', 'The account was not linked.'],
+    ['provider=constructor&error=email_does_not_match', 'The account was not linked.'],
+    ['error=email_does_not_match', 'The account was not linked.'],
+  ] as const) {
+    await page.goto(`${CONSOLE}/w/w1/account?${query}`);
+    await expect(refusal, query).toHaveText(sentence);
+    await expect(page, query).toHaveURL(/\/w\/w1\/account$/);
+  }
+});
+
+test('a refused link stays said until the next gesture, in French too', async ({ page }) => {
+  const worker = await workerWith(page, 'owner', 'fr');
+  await page.goto(`${CONSOLE}/w/w1/account?provider=google&error=email_does_not_match`);
+  const ways = section(page, 'Comment vous vous connectez');
+  await expect(ways.getByRole('alert')).toHaveText(
+    'Votre compte Google n’a pas l’adresse ana@acme.dev. Fruitback ne lie qu’un compte Google qui a l’adresse de votre compte. Dans Google, choisissez le compte ana@acme.dev, ou continuez de vous connecter comme aujourd’hui.',
   );
-  // A code of the address that names a property of every object reads as a link that failed.
-  await page.goto(`${CONSOLE}/w/w1/account?error=constructor`);
-  await expect(section(page, 'How you sign in').getByRole('alert')).toHaveText(
-    'The account was not linked. Try again.',
-  );
+  // The address is clean, and the sentence is still there after the worker answered everything.
+  await expect(page).toHaveURL(/\/w\/w1\/account$/);
+  await expect(page.getByText('Console · ce navigateur')).toBeVisible();
+  await expect(ways.getByRole('alert')).toHaveCount(1);
+
+  // The next gesture takes it away.
+  worker.unlinkRefuses = undefined;
+  const github = ways.getByRole('listitem').nth(1);
+  await github.getByRole('button', { name: 'Délier', exact: true }).click();
+  await github.getByRole('button', { name: 'Délier GitHub' }).click();
+  await expect(github).toContainText('Non lié');
+  await expect(ways.getByRole('alert')).toHaveCount(0);
 });
 
 test('a provider is « Not set up » when the worker has none, and the three rows are there before it answers', async ({

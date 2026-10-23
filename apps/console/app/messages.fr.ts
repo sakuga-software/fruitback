@@ -840,14 +840,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // My account, FRU-249.
   Linked: 'Lié',
   'Not linked': 'Non lié',
-  'That account has another address than yours. Fruitback links only the address of your account.':
-    'Ce compte a une autre adresse que la vôtre. Fruitback ne lie que l’adresse de votre compte.',
-  'That account already opens another Fruitback account.': 'Ce compte ouvre déjà un autre compte Fruitback.',
-  'The provider did not say that this address is verified. Verify it there, then link again.':
-    'Le fournisseur n’a pas dit que cette adresse est vérifiée. Vérifiez-la chez lui, puis liez à nouveau.',
-  'Your session ended before the link. Sign in, then link again.':
-    'Votre session s’est terminée avant le lien. Connectez-vous, puis liez à nouveau.',
-  'The account was not linked. Try again.': 'Le compte n’a pas été lié. Réessayez.',
+  // FRU-416: the provider and the address of the account, then what to do.
+  'Your {provider} account does not have the address {email}. Fruitback links only a {provider} account that has the address of your account. In {provider}, choose the account {email}, or keep signing in as you do now.':
+    'Votre compte {provider} n’a pas l’adresse {email}. Fruitback ne lie qu’un compte {provider} qui a l’adresse de votre compte. Dans {provider}, choisissez le compte {email}, ou continuez de vous connecter comme aujourd’hui.',
+  'This {provider} account already opens another Fruitback account. To link it here, that account must unlink it first, or an administrator of this instance must delete that account.':
+    'Ce compte {provider} ouvre déjà un autre compte Fruitback. Pour le lier ici, l’autre compte doit d’abord le délier, ou être supprimé par un administrateur de l’instance.',
+  '{provider} did not say that its address is verified. Verify it at {provider}, then link again.':
+    '{provider} n’a pas dit que son adresse est vérifiée. Vérifiez-la chez {provider}, puis liez à nouveau.',
+  'Your session ended before {provider} was linked. Sign in, then link again.':
+    'Votre session s’est terminée avant que {provider} soit lié. Connectez-vous, puis liez à nouveau.',
+  '{provider} was not linked.': '{provider} n’a pas été lié.',
+  '{provider} was not linked. Try again.': '{provider} n’a pas été lié. Réessayez.',
+  'The account was not linked.': 'Le compte n’a pas été lié.',
   'This is the last way you sign in here: link another one first.':
     'C’est votre dernière façon de vous connecter ici : liez-en une autre d’abord.',
   'Sign in again first: a way to sign in changes only in the day after a sign-in.':
