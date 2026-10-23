@@ -956,8 +956,8 @@ with no context and no instruction added.
   rule `isElement` exists for, and `languageOf` is the one place. Node's global navigator also says
   `en-US`, so a binding that read it would pass every test expecting English. The tests set the
   page's navigator to French and assert the global one disagrees.
-- **A message is text.** The composer's template is parsed with `innerHTML`, so its words are set as
-  properties afterwards and never interpolated into it. A test hands it markup and checks that nothing
+- **A message is text.** The composer is built with `createElement` (FRU-389), and its words are set
+  as properties afterwards, never as markup. A test hands it markup and checks that nothing
   was parsed.
 - **`label` still wins over `launch.label`.** A host's label is the host's word, in any language.
 - **The factories take an optional `translator` and default to the page's language**

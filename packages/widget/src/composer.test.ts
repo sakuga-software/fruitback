@@ -73,8 +73,8 @@ const sentText = () => composer?.element.querySelector('[data-fruitback-sent-tex
 
 describe('what the popover looks like (FRU-36)', () => {
   it('writes Send behind the drop of the mark, and has no cross: Cancel and Escape close it (FRU-305)', () => {
-    // The icon is appended after the template is parsed, because an SVG written into an innerHTML
-    // string lands in the HTML namespace and renders nothing at all.
+    // The icon is appended after the template is built, because an SVG made by createElement lands
+    // in the HTML namespace and renders nothing at all.
     mount(async () => {});
 
     assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the drop of Send is not drawn');
@@ -562,7 +562,7 @@ describe('createComposer', () => {
   });
 
   it('writes a host translation as text, never as markup (FRU-37)', () => {
-    // The template is parsed with innerHTML, so a word interpolated into it would be parsed too.
+    // A word set as markup would be parsed: every word is set after the build, as text (FRU-389).
     const page = mountPage('<main></main>');
     const host = page.document.createElement('div');
     page.document.body.append(host);

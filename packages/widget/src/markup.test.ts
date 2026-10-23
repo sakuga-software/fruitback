@@ -7,9 +7,10 @@ import { describe, it } from 'node:test';
  *
  * **A word, a note and a comment body are text.** A note is written by anybody who can reach the page,
  * and a comment by anybody who can comment on the issue. The widget draws both inside the page of
- * somebody else, so markup made from either is a script on a client's site. The composer parses one
- * constant template and sets its words after, with `textContent`. This test holds that: markup is
- * assigned from a constant with no substitution, and from nothing else.
+ * somebody else, so markup made from either is a script on a client's site. The composer builds its
+ * elements with `createElement` and sets its words after, with `textContent`. Since FRU-389 no string
+ * is handed to the HTML parser at all, a constant included: the validator of addons.mozilla.org flags
+ * any assignment to `innerHTML`, and a page that asks for Trusted Types refuses it.
  *
  * **A library the widget uses is compiled into it.** A client site must not have to install it, or
  * resolve a version conflict over it. So it is a devDependency, and its notice travels in
@@ -41,21 +42,13 @@ function codeOf(source: string): string {
 /** Every way to hand a string to the HTML parser. */
 const MARKUP = /\.(innerHTML|outerHTML)\s*[+]?=(?!=)\s*([^;\n]*)|\.(insertAdjacentHTML|setHTMLUnsafe)\(([^;\n]*)/g;
 
-/** What is wrong with each place a source makes markup from a string. */
+/** Each place a source hands a string to the HTML parser: none is allowed (FRU-389). */
 export function markupOffences(file: string, source: string): string[] {
-  const code = codeOf(source);
-
-  return [...code.matchAll(MARKUP)].flatMap((match) => {
+  return [...codeOf(source).matchAll(MARKUP)].map((match) => {
     const how = match[1] ?? match[3];
     const value = (match[2] ?? match[4] ?? '').trim();
-    const name = /^[A-Z][A-Z0-9_]*$/.exec(value)?.[0];
 
-    if (name === undefined) return [`${file}: ${how} takes « ${value} », which is no constant template`];
-
-    const literal = new RegExp(`const ${name} = \`([^\`]*)\``).exec(code)?.[1];
-    if (literal === undefined) return [`${file}: ${how} takes ${name}, which is no template of this file`];
-
-    return literal.includes('${') ? [`${file}: the template ${name} holds a substitution`] : [];
+    return `${file}: ${how} takes « ${value} »`;
   });
 }
 
@@ -84,21 +77,21 @@ describe('a word, a note and a comment body are text', () => {
   const files = shipped(SRC);
 
   /** A guard over an empty set passes. */
-  it('finds the sources it is written to guard, and the one template they parse', () => {
+  it('finds the sources it is written to guard, and the composer built element by element', () => {
     assert.ok(files.length > 20, `only ${files.length} sources found in packages/widget/src`);
-    assert.match(codeOf(read(SRC, 'composer.ts')), /\.innerHTML = TEMPLATE;/);
+    assert.match(codeOf(read(SRC, 'composer.ts')), /TEMPLATE\.map\(\(markup\) => build\(document, markup\)\)/);
   });
 
-  it('makes markup from a constant template, and from nothing else', () => {
+  it('hands no string to the HTML parser (FRU-389)', () => {
     assert.deepEqual(
       files.flatMap((file) => markupOffences(file, read(SRC, file))),
       [],
-      'set a word, a note or a comment body with textContent or an attribute, after the template is parsed',
+      'build the element with createElement, and set a word with textContent or an attribute',
     );
   });
 
-  it('refuses a variable, a substitution and an insertion', () => {
-    assert.equal(markupOffences('a.ts', 'const T = `<b></b>`;\nroot.innerHTML = T;').length, 0);
+  it('refuses a constant, a variable, a substitution and an insertion', () => {
+    assert.equal(markupOffences('a.ts', 'const T = `<b></b>`;\nroot.innerHTML = T;').length, 1);
     assert.equal(markupOffences('a.ts', 'root.innerHTML = note.body;').length, 1);
     assert.equal(markupOffences('a.ts', 'const T = `<b>${word}</b>`;\nroot.innerHTML = T;').length, 1);
     assert.equal(markupOffences('a.ts', 'root.innerHTML = `<b>${word}</b>`;').length, 1);

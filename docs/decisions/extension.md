@@ -88,9 +88,20 @@ it changes who is shown the feedback and never who may fetch it.
   extension works with none of them missing, and asks for no optional permission later. Firefox
   shows the list itself from Firefox 140, so `strict_min_version` went from 128 to 140; below it, the
   extension would need a consent screen of its own (decision of Mathieu, 2026-10-20).
-  `data-collection.test.ts` holds the list, written out. `web-ext lint` on the build reports no
-  error, and two warnings from the bundle of the widget: the test of zod for `eval`
-  (`Function("")`), and the template of the composer written with `innerHTML`, a constant.
+  `data-collection.test.ts` holds the list, written out. `addons-linter` on the build reports no
+  error, and since FRU-389 one warning: the key `data_collection_permissions` is not known to Firefox
+  for Android 140 (`KEY_FIREFOX_ANDROID_UNSUPPORTED_BY_MIN_VERSION`), a manifest matter left to a
+  ticket of its own.
+- **The validator of AMO finds no eval and no `innerHTML`** (FRU-389). It said both on 0.2.0 and
+  0.3.0, and both were no defect: the probe of zod for `eval` (`Function("")`, in `background.js`,
+  `page.js`, `bridge.js` and the side panel) and the template of the composer given to `innerHTML`.
+  The build takes the `Function` constructor out of the two files of zod that name it
+  (`src/no-eval.ts`, a plugin of Vite in `wxt.config.ts`): `allowsEval` answers `false`, which is
+  what it answered under the CSP of Manifest V3, and zod parses as it does `jitless`. The composer is
+  built with `createElement`. Measured with `addons-linter` on the Firefox build: 6 warnings before,
+  1 after (the manifest one above). `e2e/amo-lint.spec.ts` runs the validator on the build of
+  `pnpm e2e`, which builds the Firefox output too, and fails when either code comes back. No note
+  for the reviewer is needed for them any more.
 - **The job `submit` hands the archives of `package` to the Chrome Web Store and to AMO** (FRU-329),
   with `wxt submit`, which is `publish-browser-extension` at the version of the lockfile. It builds
   nothing: the stores get the files that the release holds. **It runs in the environment `stores`,
