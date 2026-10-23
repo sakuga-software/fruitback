@@ -29,6 +29,8 @@ export type PickedFile = { name: string; type: string; size: number; base64: str
  * - `full`: the person holds too many files on their way (`429 transit-full`).
  * - `signed-out`: the session ended (`401`).
  * - `capture`: the capture of the page did not come.
+ * - `capture-permission`: the browser refused the capture for want of a gesture (FRU-423). A click on
+ *   the icon of the extension grants it.
  * - `retry`: no answer, or the worker failed. A second try can work.
  */
 export type AttachRefusal =
@@ -39,7 +41,17 @@ export type AttachRefusal =
   | 'full'
   | 'signed-out'
   | 'capture'
+  | 'capture-permission'
   | 'retry';
+
+/**
+ * Whether a capture that failed was refused by the browser for want of a permission (FRU-423): the
+ * host rejects `captureVisible` with an error named `NotAllowedError`, as the web platform names a
+ * refusal of permission. A widget of before reads any rejection as « not taken ».
+ */
+export function isCapturePermissionRefusal(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { name?: unknown }).name === 'NotAllowedError';
+}
 
 /** What the worker said of the files of this reader, at the last read. */
 export type AttachOffer = 'offered' | 'no-tracker' | 'none';

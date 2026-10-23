@@ -51,6 +51,7 @@ export const FRENCH: Catalog = {
   'composer.attachFull': 'Trop de fichiers en route : envoyez d’abord vos notes',
   'composer.attachSignedOut': 'Votre session est terminée : reconnectez-vous',
   'composer.attachCapture': 'La capture n’a pas été prise',
+  'composer.attachCapturePermission': 'Cliquez sur l’icône Fruitback dans la barre d’outils, puis réessayez.',
   'composer.attachRetry': 'N’est pas parti : retirez-le, puis réessayez',
   'composer.failedAttachmentGone':
     'Un fichier de cette note n’est plus en route. Votre texte est gardé : retirez le fichier, puis renvoyez.',

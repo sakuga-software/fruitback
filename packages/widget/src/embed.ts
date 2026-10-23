@@ -29,7 +29,14 @@ import {
 } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
-import { type AttachOffer, type AttachRefusal, type CaptureArea, type PickedFile, refusalOf } from './attachments.ts';
+import {
+  type AttachOffer,
+  type AttachRefusal,
+  type CaptureArea,
+  type PickedFile,
+  isCapturePermissionRefusal,
+  refusalOf,
+} from './attachments.ts';
 import { pickArea } from './area.ts';
 import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
 import {
@@ -119,6 +126,10 @@ export type FruitbackOptions = {
    * The file goes to the ticket of the tracker, through the worker, which keeps it only while it
    * travels (FRU-331). Without it, « Capture an area » and « Capture the whole page » are not offered. A file
    * of the disk is offered whatever this is, when the worker takes files for this reader.
+   *
+   * `undefined`, or a rejection: the capture was not taken. A rejection with an error named
+   * `NotAllowedError`: the browser refused it for want of a gesture on the extension, and the composer
+   * says to click its icon (FRU-423).
    */
   captureVisible?: (area?: CaptureArea) => Promise<PickedFile | undefined>;
   /** Chrome the page mounts around the widget, which the pointer must skip. */
@@ -697,7 +708,7 @@ export function init(options: FruitbackOptions): Fruitback {
    * the area is chosen too (`data-fruitback-shooting`), so the person sees what the file will show.
    * They come back in `finally`: after the capture, a cancel, or a capture that fails or throws.
    */
-  async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | undefined> {
+  async function captureFor(kind: 'page' | 'area'): Promise<PickedFile | 'cancelled' | 'permission' | undefined> {
     const take = options.captureVisible;
     if (take === undefined) return undefined;
     const container = host.root.host as HTMLElement;
@@ -716,8 +727,9 @@ export function init(options: FruitbackOptions): Fruitback {
         await new Promise((resolve) => view.requestAnimationFrame(() => view.requestAnimationFrame(resolve)));
 
         return await take(area);
-      } catch {
-        return undefined;
+      } catch (error) {
+        // FRU-423: refused for want of a gesture, the composer says what grants it.
+        return isCapturePermissionRefusal(error) ? 'permission' : undefined;
       } finally {
         container.style.visibility = visibility;
       }

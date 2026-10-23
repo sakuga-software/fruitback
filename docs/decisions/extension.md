@@ -753,6 +753,16 @@ a change when the account refuses one of them, and marks only those as known`. O
   other path, a body of text to `/attachments`, and a read of `/attachments/<id>` are refused.
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.
+- **A capture refused for want of a gesture says what grants it** (FRU-423). In team mode the widget
+  mounts by itself, so nobody clicked the icon and `activeTab` is not granted: `captureVisibleTab`
+  is refused (« Either the '<all_urls>' or 'activeTab' permission is required. » on Chromium,
+  « Missing activeTab permission » on Firefox). `isPermissionRefusal` of `src/capture.ts` reads those
+  words, the answer is `{ refused: 'permission' }` across the bridge, and the page world rejects
+  `captureVisible` with an error named `NotAllowedError`. The composer says « Click the Fruitback
+  icon in the toolbar, then try again. »: the click opens the popup, which grants `activeTab` until
+  the page navigates, and the note stays open behind it. Any other failure keeps « The capture was
+  not taken ». A widget of before reads the rejection as « not taken », as it read any rejection.
+  `e2e/extension-capture-refused.spec.ts` plays the refusal; the grant by a click is checked by hand.
 - **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
   worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
   text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a

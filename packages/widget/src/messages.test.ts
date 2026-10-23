@@ -527,6 +527,7 @@ describe('every word the widget shows', () => {
       'full',
       'signed-out',
       'capture',
+      'capture-permission',
       'retry',
     ] as const) {
       capturePage();

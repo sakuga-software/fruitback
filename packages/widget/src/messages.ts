@@ -79,6 +79,8 @@ export const ENGLISH = {
   'composer.attachFull': 'Too many files on their way: send your notes first',
   'composer.attachSignedOut': 'Your session has ended: sign in again',
   'composer.attachCapture': 'The capture was not taken',
+  // FRU-423: the browser refused the capture for want of a gesture on the extension.
+  'composer.attachCapturePermission': 'Click the Fruitback icon in the toolbar, then try again.',
   'composer.attachRetry': 'Did not go: remove it, then try again',
   'composer.failedAttachmentGone':
     'A file of this note is no longer on its way. Your text is kept: remove the file, then send again.',

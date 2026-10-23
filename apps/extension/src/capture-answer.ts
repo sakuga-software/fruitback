@@ -38,3 +38,19 @@ export function pictureOfAnswer(answer: CaptureResponseMessage): CaptureResponse
     base64: '',
   };
 }
+
+/**
+ * What the page world gives the widget for an answer (FRU-423): the file of `pictureOfAnswer`, or a
+ * rejection named `NotAllowedError` when the browser refused the capture for want of a gesture. The
+ * widget says to click the icon; a widget of before reads the rejection as « not taken ».
+ */
+export function captureOfAnswer(answer: CaptureResponseMessage): CaptureResponseMessage['picture'] {
+  const picture = pictureOfAnswer(answer);
+  if (picture === undefined && answer.refused === 'permission') {
+    throw Object.assign(new Error('The browser refused the capture: click the Fruitback icon.'), {
+      name: 'NotAllowedError',
+    });
+  }
+
+  return picture;
+}

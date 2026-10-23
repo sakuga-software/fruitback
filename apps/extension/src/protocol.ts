@@ -249,6 +249,8 @@ export type CaptureResponseMessage = {
   picture?: { name: string; type: 'image/png' | 'image/jpeg'; size: number; base64: string };
   /** A capture over the limit of the worker, even as a JPEG: no bytes, its name and its size. */
   tooLarge?: { name: string; size: number };
+  /** The browser refused the capture for want of a gesture on the extension (FRU-423). */
+  refused?: 'permission';
 };
 
 /**
@@ -733,6 +735,7 @@ function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMes
     id,
     ...(ok ? { picture: { name, type: picture.type as 'image/png' | 'image/jpeg', size, base64 } } : {}),
     ...(!ok && tooLarge !== undefined ? { tooLarge } : {}),
+    ...(!ok && tooLarge === undefined && data.refused === 'permission' ? { refused: 'permission' as const } : {}),
   };
 }
 
