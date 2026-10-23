@@ -40,7 +40,7 @@ import {
   sitesTable,
 } from '../../src/site-page.ts';
 import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../src/capture-everywhere.ts';
-import { holdsSiteAccess } from '../../src/site-grant.ts';
+import { holdsRuleAccess, requestRuleAccess } from '../../src/site-grant-browser.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
 import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
@@ -72,7 +72,8 @@ let current: Record<string, SiteConfig> = {};
 const needsList: HTMLButtonElement[] = [];
 
 const editor = createEditor({
-  request: (pattern) => browser.permissions.request({ origins: [matchPatternFor(pattern)] }),
+  // FRU-425: the yes is recorded (`site-grant.ts`).
+  request: (pattern) => requestRuleAccess(pattern),
   write: writeSite,
   current: () => current,
   activate: (pattern) => injectIntoOpenTabs(scripting, pattern),
@@ -344,7 +345,7 @@ async function ruleRow(pattern: string, site: SiteConfig, proven: FreshPreviews,
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
   // FRU-425: `<all_urls>` grants no rule (`src/site-grant.ts`).
-  const granted = await holdsSiteAccess(matchPatternFor(pattern), browser.permissions);
+  const granted = await holdsRuleAccess(pattern);
   // A rule stored before FRU-75, or the previews of a site whose worker does not list them now
   // (FRU-103). It runs nowhere, so the row offers only to remove it, and says which of the two it is.
   const refused = lendsSession(pattern, site, proven);
@@ -367,7 +368,7 @@ async function ruleRow(pattern: string, site: SiteConfig, proven: FreshPreviews,
  * Answers whether the grant was given, so a refusal is reported like a failure.
  */
 async function grant(pattern: string, site: SiteConfig): Promise<boolean> {
-  const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+  const granted = await requestRuleAccess(pattern);
   if (granted && site.enabled) await injectIntoOpenTabs(scripting, pattern);
 
   return granted;

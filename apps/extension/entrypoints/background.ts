@@ -7,7 +7,7 @@ import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
 import { createBrowserPending } from '../src/pending-site-browser.ts';
 import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
 import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
-import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
+import { serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
 import { createSessionPreviews } from '../src/session-previews.ts';
 import { touchesARefreshToken } from '../src/session-storage.ts';
@@ -26,7 +26,7 @@ import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { captureMenu, runCaptureMenu } from '../src/context-menu.ts';
-import { holdsSiteAccess } from '../src/site-grant.ts';
+import { forgetRemovedAccess, holdsRuleAccess } from '../src/site-grant-browser.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { nearest } from '../src/i18n.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
@@ -101,7 +101,7 @@ export default defineBackground(() => {
       // an origin we do not hold and says nothing (measured, FRU-45), so the grant is checked here.
       const held = await Promise.all(
         // FRU-425: a grant of the site itself. `<all_urls>` does not count: see `src/site-grant.ts`.
-        wanted.map((pattern) => holdsSiteAccess(matchPatternFor(pattern), browser.permissions)),
+        wanted.map((pattern) => holdsRuleAccess(pattern)),
       );
       const granted = wanted.filter((_, index) => held[index]);
 
@@ -439,7 +439,12 @@ export default defineBackground(() => {
     // FRU-103: a pairing or a logout ends what the worker listed. See `session-previews.ts`.
     void sessionPreviews(Object.keys(changes));
   });
-  browser.permissions.onRemoved.addListener(() => void sync());
+  // FRU-425: a site whose access the browser removed is forgotten, then the scripts follow.
+  browser.permissions.onRemoved.addListener((removed) => {
+    void forgetRemovedAccess(removed.origins ?? [])
+      .catch((error: unknown) => console.error('[fruitback] could not forget a removed access', error))
+      .then(() => sync());
+  });
   // The options page grants access to an entry that is already stored, so no storage change follows.
   browser.permissions.onAdded.addListener(() => {
     // FRU-118: the prompt can close the popup that asked, so the site it asked for is finished here.

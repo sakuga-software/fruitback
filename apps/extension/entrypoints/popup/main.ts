@@ -33,7 +33,7 @@ import {
   offerFor,
 } from '../../src/cloud.ts';
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
-import { holdsSiteAccess } from '../../src/site-grant.ts';
+import { holdsRuleAccess, requestRuleAccess } from '../../src/site-grant-browser.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { rememberLanguage } from '../../src/language-sync.ts';
 import {
@@ -364,7 +364,7 @@ function unreachableScreen(account: Account | undefined): HTMLElement {
 /** Whether the browser still grants the sites of a rule: access can be removed in its settings. */
 async function holdsAccess(pattern: string): Promise<boolean> {
   // FRU-425: `<all_urls>` grants no rule (`src/site-grant.ts`).
-  return holdsSiteAccess(matchPatternFor(pattern), browser.permissions).catch(() => true);
+  return holdsRuleAccess(pattern).catch(() => true);
 }
 
 /**
@@ -382,8 +382,7 @@ function siteWithoutAccess(origin: string, { pattern, site }: ResolvedSite, acco
     primary: {
       label: t('Allow access again'),
       onClick: () =>
-        void browser.permissions
-          .request({ origins: [matchPatternFor(pattern)] })
+        void requestRuleAccess(pattern)
           .then(async (granted) => {
             if (!granted) return;
             await activateOpenTabs(pattern);
@@ -626,7 +625,7 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
   };
 
   void (async () => {
-    const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] }).catch(() => false);
+    const granted = await requestRuleAccess(origin).catch(() => false);
     if (!granted) {
       done();
       showProblem(problem, NO_ACCESS_PROBLEM, { grant: again });
@@ -1216,7 +1215,7 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
   // WARNING: not awaited. An await before `permissions.request` loses the gesture, and the prompt
   // can close this popup: the background then finishes what is remembered here.
   void pending.remember(pattern, site).catch(() => undefined);
-  const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+  const granted = await requestRuleAccess(pattern);
   // A refusal keeps the values as a draft, so the form shows them again (FRU-117).
   if (!granted) return false;
 

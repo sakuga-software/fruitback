@@ -2190,7 +2190,11 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   (`src/site-grant.ts`, review of #560): the grant of a rule is read from `permissions.getAll`,
   leaving out `<all_urls>` and the pattern of every web page, because `permissions.contains` says
   `true` for every origin once `<all_urls>` is held. A site whose access the reviewer removed in the
-  browser stays off, and reads « not granted », with the switch on. Turning the switch off removes `<all_urls>`
+  browser stays off, and reads « not granted », with the switch on. **A site the reviewer asks for
+  while the switch is on is recorded** (`siteGrants` in the local storage of the extension): Chrome
+  answers yes to that request and adds nothing to `getAll` (measured), so the record is what says the
+  reviewer chose that site. It counts only while the browser holds the site (`contains`), and a site
+  whose access the browser removes (`permissions.onRemoved`) is forgotten. Turning the switch off removes `<all_urls>`
   (`permissions.remove`). Whether Chrome then keeps a grant made before for one site is not
   measured: a rule that reads « not granted » after asks again.
 - **« Capture with Fruitback », in the context menu of a page** (FRU-423), is the `contextMenus`

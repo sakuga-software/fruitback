@@ -48,10 +48,42 @@ export function grantedForSite(wanted: string, origins: readonly string[]): bool
   return origins.some((origin) => !EVERY_SITE.has(origin) && covers(origin, wanted));
 }
 
-/** The grant of the match pattern `wanted`, read from the browser. */
-export async function holdsSiteAccess(
-  wanted: string,
-  permissions: { getAll: () => Promise<{ origins?: string[] }> },
-): Promise<boolean> {
-  return grantedForSite(wanted, (await permissions.getAll()).origins ?? []);
+/**
+ * The sites the reviewer granted in the extension, by a request of theirs that the browser answered
+ * yes (`SITE_GRANTS_KEY`). Measured on Chromium (review of #560): with `<all_urls>` held, a request
+ * for one more site answers `true` at once and adds nothing to `permissions.getAll`. Without this
+ * record, a site turned on with the switch on would read « not granted » and never run.
+ */
+export const SITE_GRANTS_KEY = 'siteGrants';
+
+export type GrantSeams = {
+  getAll: () => Promise<{ origins?: string[] }>;
+  contains: (wanted: { origins: string[] }) => Promise<boolean>;
+  /** The patterns of `SITE_GRANTS_KEY`. */
+  recorded: () => Promise<readonly string[]>;
+};
+
+/**
+ * The grant of the match pattern `wanted`: a grant of the browser that covers it, other than a grant
+ * of every site; or a request of the reviewer for it that the browser still holds.
+ */
+export async function holdsSiteAccess(wanted: string, seams: GrantSeams): Promise<boolean> {
+  if (grantedForSite(wanted, (await seams.getAll()).origins ?? [])) return true;
+  if (!(await seams.recorded()).includes(wanted)) return false;
+
+  return seams.contains({ origins: [wanted] });
+}
+
+/** The record with `wanted` in it, once. */
+export function withGrant(recorded: readonly string[], wanted: string): string[] {
+  return recorded.includes(wanted) ? [...recorded] : [...recorded, wanted];
+}
+
+/**
+ * The record without the sites whose access the browser just removed (`permissions.onRemoved`). The
+ * removal of a grant of every site forgets nothing: the sites the reviewer asked for stay theirs, and
+ * `contains` says they are not held until the browser grants them again.
+ */
+export function withoutRemoved(recorded: readonly string[], removed: readonly string[]): string[] {
+  return recorded.filter((wanted) => !removed.some((origin) => !EVERY_SITE.has(origin) && covers(origin, wanted)));
 }

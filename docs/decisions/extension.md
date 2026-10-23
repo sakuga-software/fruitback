@@ -785,7 +785,10 @@ a change when the account refuses one of them, and marks only those as known`. O
   it off is `permissions.remove`. **It grants no rule**: the background, the options page, the
   popup and a pending site read the grant of a rule from `permissions.getAll` without `<all_urls>`
   (`holdsSiteAccess` of `src/site-grant.ts`), since `permissions.contains` answers `true` for every
-  origin once it is held; a site whose access was removed in the browser stays off.
+  origin once it is held; a site whose access was removed in the browser stays off. A request for
+  one site while `<all_urls>` is held answers yes and adds nothing to `getAll` (measured on Chromium,
+  review of #560), so `requestRuleAccess` records each yes in `siteGrants`, and the record counts
+  while `contains` says the site is held; `permissions.onRemoved` forgets a site the browser removed.
 - **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
   worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
   text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a

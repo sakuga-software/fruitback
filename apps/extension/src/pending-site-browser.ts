@@ -1,7 +1,6 @@
 import { browser } from 'wxt/browser';
 import { PENDING_KEY, type Pending, createPending } from './pending-site.ts';
-import { matchPatternFor } from './registration.ts';
-import { holdsSiteAccess } from './site-grant.ts';
+import { holdsRuleAccess } from './site-grant-browser.ts';
 import type { SiteConfig } from './sites.ts';
 import { injectIntoOpenTabs } from './tab-injection.ts';
 import { browserTabScripting } from './tab-scripting-browser.ts';
@@ -13,7 +12,7 @@ export function createBrowserPending(store: (pattern: string, site: SiteConfig) 
     write: (pending) => browser.storage.local.set({ [PENDING_KEY]: pending }),
     clear: () => browser.storage.local.remove(PENDING_KEY),
     // FRU-425: `<all_urls>` grants no rule (`site-grant.ts`).
-    granted: (pattern) => holdsSiteAccess(matchPatternFor(pattern), browser.permissions),
+    granted: (pattern) => holdsRuleAccess(pattern),
     store,
     activate: (pattern) => injectIntoOpenTabs(browserTabScripting, pattern),
   });

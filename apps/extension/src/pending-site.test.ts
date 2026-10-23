@@ -145,7 +145,8 @@ describe('the wiring of the pending site', () => {
   it('remembers the site before the popup asks for access, and does not wait for it', () => {
     const turnOn = popup.slice(popup.indexOf('async function turnOn('));
     const remember = turnOn.indexOf('pending.remember(pattern, site)');
-    const request = turnOn.indexOf('browser.permissions.request(');
+    // FRU-425: the request goes through `requestRuleAccess`, whose first call is the request.
+    const request = turnOn.indexOf('requestRuleAccess(pattern)');
 
     assert.ok(remember !== -1 && request !== -1 && remember < request);
     assert.equal(/await\s+pending\.remember/.test(popup), false, 'an await before the request loses the gesture');
