@@ -231,8 +231,13 @@ export default function SiteStatuses() {
   }, [load, manages]);
 
   const host = typeof read === 'string' ? undefined : siteLabel(read.site.origin);
+  // The crumbs are in the room above the title (21 px of words and 10 px under them, in the 40 px of
+  // the top of the screen): the title of every page is at the same place (FRU-405).
   const crumbs = (
-    <nav aria-label={t('Breadcrumb')} className="mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted">
+    <nav
+      aria-label={t('Breadcrumb')}
+      className="-mt-[31px] mb-[10px] flex flex-wrap items-center gap-[8px] text-small text-muted"
+    >
       <LinkButton space="inline" to={`/w/${workspace.id}/sites`}>
         {t('Sites')}
       </LinkButton>
