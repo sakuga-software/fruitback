@@ -96,6 +96,21 @@ test('with several workspaces, their menu ends with « Workspace settings »', a
   await expect(page).toHaveURL(/\/w\/w2\/sites$/);
 });
 
+test('the settings of another workspace show its own name, not what was typed for the first', async ({ page }) => {
+  await workerWith(page, [ACME, { ...LUMEN, role: 'admin' }]);
+  await page.goto(`${CONSOLE}/w/w1/settings`);
+  const name = page.getByRole('textbox', { name: 'Workspace name' });
+  await expect(name).toHaveValue('Acme');
+  await name.fill('Typed for Acme');
+  // The same screen of another workspace, with no load of the page.
+  await page.evaluate(() => {
+    history.pushState(null, '', '/w/w2/settings');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page).toHaveURL(/\/w\/w2\/settings$/);
+  await expect(name).toHaveValue('Lumen Studio');
+});
+
 test('a member reads the name and does not rename it', async ({ page }) => {
   await workerWith(page, [{ ...ACME, role: 'member' }]);
   await page.goto(`${CONSOLE}/w/w1/settings`);

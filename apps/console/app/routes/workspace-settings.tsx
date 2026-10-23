@@ -16,6 +16,14 @@ import { PageHead, useWorkspace } from './workspace';
  * admin. A logo is not here: a workspace has none in the worker, and no route keeps one.
  */
 export default function WorkspaceSettings() {
+  const { workspace } = useWorkspace();
+
+  // A move to the settings of another workspace mounts the form again: nothing typed for one
+  // workspace is saved as the name of another.
+  return <Settings key={workspace.id} />;
+}
+
+function Settings() {
   useLocale();
   const { workspace, renamed } = useWorkspace();
   const [name, setName] = useState(workspace.name);
