@@ -32,9 +32,9 @@ async function paths(mode: string): Promise<string[]> {
 
 /** The sections a source declares: the path, the English label, and whether its screen is built. */
 function sections(source: string): { path: string; label: string; built: boolean }[] {
-  return [
-    ...source.matchAll(/\{ path: '([a-z]+)', label: msg\('([^']+)'\), width: '[^']+', built: (true|false) \}/g),
-  ].map(([, path, label, built]) => ({ path: path as string, label: label as string, built: built === 'true' }));
+  return [...source.matchAll(/\{ path: '([a-z]+)', label: msg\('([^']+)'\), built: (true|false) \}/g)].map(
+    ([, path, label, built]) => ({ path: path as string, label: label as string, built: built === 'true' }),
+  );
 }
 
 describe('the sections of the rail (FRU-234)', () => {

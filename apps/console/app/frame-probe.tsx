@@ -1,4 +1,4 @@
-import { Rail, SECTIONS } from './routes/workspace';
+import { Frame, Rail, SECTIONS } from './routes/workspace';
 
 /**
  * The rail with every section of the mockup, « Notes » too, and « Notes » as the section on screen
@@ -15,15 +15,16 @@ const WORKSPACES = [
 
 export default function FrameProbe() {
   return (
-    <div className="flex min-h-screen flex-wrap bg-page text-ink">
-      <Rail
-        workspace={WORKSPACES[0]}
-        workspaces={WORKSPACES}
-        sections={SECTIONS}
-        current="notes"
-        onWorkspace={() => {}}
-      />
-      <div className="min-w-0 flex-[999_1_640px]" />
-    </div>
+    <Frame
+      rail={
+        <Rail
+          workspace={WORKSPACES[0]}
+          workspaces={WORKSPACES}
+          sections={SECTIONS}
+          current="notes"
+          onWorkspace={() => {}}
+        />
+      }
+    />
   );
 }

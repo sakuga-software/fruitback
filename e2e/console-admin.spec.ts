@@ -211,8 +211,9 @@ test('an administrator sees the frame and the instance, with the values of the m
     'https://fruitback.com/self-hosting.html',
   );
 
+  // As wide as its column (FRU-398), where the mockup capped it at 1040 px.
   expect.soft(await styles(main(page), ['max-width', 'row-gap', 'flex-direction'])).toEqual({
-    'max-width': '1040px',
+    'max-width': 'none',
     'row-gap': '44px',
     'flex-direction': 'column',
   });

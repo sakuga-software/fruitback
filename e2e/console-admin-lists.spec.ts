@@ -493,7 +493,8 @@ function bar(page: Page, name: string): { bar: Locator; field: Locator; list: Lo
 
 /** The values of the search bar and of the two columns of the mockup. */
 async function expectLayout(page: Page, search: string, table: string, minWidth: string): Promise<void> {
-  expect.soft(await styles(main(page), ['max-width'])).toEqual({ 'max-width': '1240px' });
+  // As wide as its column (FRU-398), where the mockup capped it at 1240 px.
+  expect.soft(await styles(main(page), ['max-width'])).toEqual({ 'max-width': 'none' });
   const parts = bar(page, search);
   expect.soft(await styles(parts.bar, ['row-gap', 'column-gap', 'margin-bottom'])).toEqual({
     'row-gap': '10px',

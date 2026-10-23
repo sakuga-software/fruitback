@@ -26,20 +26,20 @@ export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
 }
 
-/** A section of a workspace: an entry of the rail, and the widest its screen is drawn. */
-export type Section = { path: string; label: string; width: string; built: boolean };
+/** A section of a workspace: an entry of the rail. */
+export type Section = { path: string; label: string; built: boolean };
 
 /**
  * The sections, in the order of the mockup. `built` says that the screen exists: the rail shows no
  * entry for a screen that does not, so no entry leads nowhere. `frame.test.ts` holds `built` to the
- * routes of `routes.ts`. `width` is a whole class name, so Tailwind finds it.
+ * routes of `routes.ts`.
  */
 export const SECTIONS: readonly Section[] = [
-  { path: 'sites', label: msg('Sites'), width: 'max-w-[1120px]', built: true },
-  { path: 'notes', label: msg('Notes'), width: 'max-w-[1240px]', built: true },
-  { path: 'connectors', label: msg('Connectors'), width: 'max-w-[1180px]', built: true },
-  { path: 'members', label: msg('Members'), width: 'max-w-[1120px]', built: true },
-  { path: 'account', label: msg('My account'), width: 'max-w-[820px]', built: true },
+  { path: 'sites', label: msg('Sites'), built: true },
+  { path: 'notes', label: msg('Notes'), built: true },
+  { path: 'connectors', label: msg('Connectors'), built: true },
+  { path: 'members', label: msg('Members'), built: true },
+  { path: 'account', label: msg('My account'), built: true },
 ];
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
@@ -109,25 +109,58 @@ export default function WorkspaceFrame() {
   const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
 
   return (
-    // Under 888 px the rail is above the section (248 + 640). `content-start` keeps it at its own
-    // height there: the screen is at least as high as the window, and a short section left the rest
-    // of that height to the rail, as the mockup does at 390 px (286 px of rail on « did not load »).
-    <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start">
-      <Rail
-        workspace={context.workspace}
-        workspaces={context.me.workspaces}
-        sections={sections}
-        current={current?.path}
-        onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
-        admin={context.me.instanceAdmin === true}
-      />
-      <div className="min-w-0 flex-[999_1_640px]">
-        <SuspendedBanner workspace={context.workspace} />
-        <main className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.width ?? ''}`}>
-          <Outlet context={context} />
-        </main>
-      </div>
+    <Frame
+      rail={
+        <Rail
+          workspace={context.workspace}
+          workspaces={context.me.workspaces}
+          sections={sections}
+          current={current?.path}
+          onWorkspace={(chosen) => navigate(`/w/${chosen}/sites`, { viewTransition: true })}
+          admin={context.me.instanceAdmin === true}
+        />
+      }
+    >
+      <SuspendedBanner workspace={context.workspace} />
+      <Screen>
+        <Outlet context={context} />
+      </Screen>
+    </Frame>
+  );
+}
+
+/**
+ * The frame of a workspace and of the instance: the rail, and the column of the screen beside it.
+ *
+ * From 888 px (248 + 640) the rail is beside the column, and is as high as the window: it stays in
+ * place while the document scrolls the screen (FRU-402). The document scrolls, not the column, so
+ * the keys of the keyboard, `scrollIntoView` and the address of an anchor keep their usual scroller.
+ * `flex-nowrap` there: with a classic scroll bar the window is wider than the document, and the
+ * column would wrap under a rail as high as the window.
+ *
+ * Under 888 px the rail is above the column. `content-start` keeps it at its own height there: the
+ * frame is at least as high as the window, and a short screen left the rest of that height to the
+ * rail, as the mockup does at 390 px (286 px of rail on « did not load »).
+ */
+export function Frame({ rail, children }: { rail: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start min-[888px]:flex-nowrap">
+      {rail}
+      <div className="min-w-0 flex-[999_1_640px]">{children}</div>
     </div>
+  );
+}
+
+/**
+ * The room of a screen: as wide as the column beside the rail (FRU-398), with the padding of the
+ * mockup. The mockup capped each screen at its own width (820 to 1240 px), which left an empty band
+ * at the right of a wide window. `className` adds the layout of a screen, never a width.
+ */
+export function Screen({ className = '', children }: { className?: string; children: ReactNode }) {
+  return (
+    <main className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${className}`}>
+      {children}
+    </main>
   );
 }
 
@@ -194,7 +227,9 @@ export function RailFrame({
   foot: { href: string; label: string };
 }) {
   return (
-    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col gap-[20px] bg-rail px-[12px] py-[16px] text-white">
+    // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
+    // screen scrolls (FRU-402). A window lower than the rail scrolls the rail itself.
+    <aside className="kit-rail box-border flex min-w-0 flex-[1_1_248px] flex-col gap-[20px] bg-rail px-[12px] py-[16px] text-white min-[888px]:sticky min-[888px]:top-0 min-[888px]:h-dvh min-[888px]:overflow-y-auto">
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">

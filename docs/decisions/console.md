@@ -272,7 +272,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
   workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
   the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
-  five of the mockup in its order, each with `built` and the widest its screen is drawn, and
+  five of the mockup in its order, each with `built`, and
   `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
   there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
   the five. **The name of the workspace opens a menu only when the person has several workspaces**:
@@ -284,6 +284,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
   a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
   (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
+- **The rail is as high as the window, and only the screen scrolls** (FRU-402, FRU-398). `Frame`
+  of `routes/workspace.tsx` is the frame of a workspace and of the instance: from 888 px the rail is
+  `sticky` at the top and `h-dvh`, so its foot stays at the bottom of the window, and a window lower
+  than the rail scrolls the rail itself. **The document scrolls, not the column**: a column that
+  scrolls takes the keys of the keyboard only once it has focus, and `scrollIntoView` and the specs
+  read the document. Under 888 px the rail is above the screen and scrolls away with it. **A screen
+  is as wide as its column** (`Screen`): the mockup capped each one, from 820 to 1240 px, which left
+  an empty band at the right of a wide window, and Mathieu asked for the whole width on 2026-10-23.
+  `e2e/console-frame.spec.ts` holds the rail after a scroll at 1440 px and at 390 px, and the right
+  edge of each screen.
 - **The Sites screen is the table of the mockup, with its six columns** (FRU-243, FRU-270,
   `routes/sites.tsx`): the site and who sees its notes, its notes by status (a count and a bar whose
   name says the counts again), how they came (the script or the extension), where they go, to

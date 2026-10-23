@@ -4,7 +4,7 @@ import { API, type Me, callUntilAnswered, knownMe, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { instanceOf } from '../instance';
 import { useLocale } from '../use-locale';
-import { RAIL_HEAD, RailFrame, RailNav } from './workspace';
+import { Frame, RAIL_HEAD, RailFrame, RailNav, Screen } from './workspace';
 
 /**
  * The frame of the administration of the instance, as screens 17 to 20 of the mockup of 2026-10-13
@@ -23,13 +23,14 @@ export function useAdmin(): AdminContext {
 
 /**
  * The screens of the administration, in the order of the mockup. The rail shows an entry only for a
- * screen that exists. `layout` is a whole class name, so Tailwind finds it.
+ * screen that exists. `layout` is a whole class name, so Tailwind finds it. It sets no width: a
+ * screen is as wide as its column (FRU-398).
  */
 const SCREENS = [
-  { path: '/admin', label: msg('Instance'), layout: 'max-w-[1040px] flex flex-col gap-[44px]' },
-  { path: '/admin/workspaces', label: msg('Workspaces'), layout: 'max-w-[1240px]' },
-  { path: '/admin/users', label: msg('Users'), layout: 'max-w-[1240px]' },
-  { path: '/admin/notes', label: msg('Notes'), layout: 'max-w-[1240px]' },
+  { path: '/admin', label: msg('Instance'), layout: 'flex flex-col gap-[44px]' },
+  { path: '/admin/workspaces', label: msg('Workspaces'), layout: '' },
+  { path: '/admin/users', label: msg('Users'), layout: '' },
+  { path: '/admin/notes', label: msg('Notes'), layout: '' },
 ];
 
 const GUIDE = 'https://fruitback.com/self-hosting.html';
@@ -61,16 +62,11 @@ export default function AdminFrame() {
   const current = SCREENS.find((screen) => screen.path === pathname);
 
   return (
-    <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start">
-      <AdminRail current={current?.path} back={context.me.workspaces[0]?.id} />
-      <div className="min-w-0 flex-[999_1_640px]">
-        <main
-          className={`kit-screen box-border px-[clamp(16px,4vw,48px)] pt-[40px] pb-[72px] ${current?.layout ?? ''}`}
-        >
-          <Outlet context={context} />
-        </main>
-      </div>
-    </div>
+    <Frame rail={<AdminRail current={current?.path} back={context.me.workspaces[0]?.id} />}>
+      <Screen className={current?.layout ?? ''}>
+        <Outlet context={context} />
+      </Screen>
+    </Frame>
   );
 }
 
