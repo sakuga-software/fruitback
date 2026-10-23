@@ -6,6 +6,8 @@ import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 import { createTypingStore } from './typing.ts';
+import { createDraftStore } from './drafts.ts';
+import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { canonicalizePageUrl } from '@fruitback/shared';
 
 /**
@@ -241,5 +243,52 @@ describe('a host that signs in (FRU-394, review of #529)', () => {
     signIn.click();
     assert.deepEqual(asked, [1]);
     assert.equal(field.value, NOTE);
+  });
+});
+
+describe('a host that signs in, past the composer (FRU-394, second review of #529)', () => {
+  const refusing = async (request: TransportRequest): Promise<TransportResponse> =>
+    request.method === 'POST'
+      ? { ok: false, status: 401, body: JSON.stringify({ error: 'identity-required' }) }
+      : { ok: false, status: 401, body: JSON.stringify({ error: 'identity-required' }) };
+
+  it('says the session ended for the notes kept for later, not « members only »', async () => {
+    const page = mounted();
+    const store = createDraftStore({ storage: page.view.sessionStorage, key: 'fruitback:config:drafts' });
+    store.add({ seed: seedFixture({ id: 'sd_kept', note: NOTE }) });
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      onSignIn: () => {},
+      transport: refusing,
+    });
+    cleanup.push(() => widget.destroy());
+    await widget.refresh();
+    widget.showEveryNote();
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    (root.querySelector('[data-fruitback-send-drafts]') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const said = root.querySelector('[data-fruitback-drafts-sent]')?.textContent ?? '';
+    assert.match(said, /Your session has ended/);
+    assert.doesNotMatch(said, /members only/);
+  });
+
+  it('leaves the list of a host that signs in to its sign-in, with no « members only »', async () => {
+    const page = mounted();
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      onSignIn: () => {},
+      transport: refusing,
+    });
+    cleanup.push(() => widget.destroy());
+    await widget.refresh();
+    widget.showEveryNote();
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+
+    assert.doesNotMatch(root.querySelector('.fruitback-sidebar-failed-text')?.textContent ?? '', /members only/);
   });
 });

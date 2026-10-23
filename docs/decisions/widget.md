@@ -1483,7 +1483,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   end: the composer says « This site is for members only. Your text is kept: sign in to Fruitback
   from the extension, then send it again. » Any other `401` keeps the words of FRU-193. **A host
   that signs in (`onSignIn`, the extension) keeps « Your session has ended » and its « Sign in
-  again »** for that `401` too: it holds the sign-in, and the button is the way out (review of #529).
+  again »** for that `401` too, on a note and on the notes kept for later, and its list keeps the
+  offer of `signedOut`: it holds the sign-in, and the button is the way out (reviews of #529).
 - **The read says it too.** Refused that way, the list and the live region say « This site is for
   members only. Sign in to Fruitback from the extension to see its notes. », the button of the list
   is named « Show every note in a sidebar. This site is for members only. », and the list offers no

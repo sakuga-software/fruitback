@@ -788,15 +788,13 @@ export function init(options: FruitbackOptions): Fruitback {
         onSeed: (id) => (seedId = id),
       });
       if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
-      // A host that signs in (the extension) offers « Sign in again » for any 401 (review of #529).
-      if (planted === 'members-only' && options.onSignIn !== undefined) return 'signed-out';
       if (typeof planted === 'string') {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
         // A read brings the list of now, and the composer says what changed.
         if (destination !== undefined) await read();
 
-        return planted;
+        return forThisHost(planted);
       }
 
       // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
@@ -834,6 +832,13 @@ export function init(options: FruitbackOptions): Fruitback {
         };
       });
 
+  /**
+   * A host that signs in (the extension) holds the sign-in: any `401` is « Your session has ended »
+   * with « Sign in again » there, on a note and on the notes kept for later (reviews of #529).
+   */
+  const forThisHost = (failure: SendFailure): SendFailure =>
+    failure === 'members-only' && options.onSignIn !== undefined ? 'signed-out' : failure;
+
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
   const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
@@ -850,7 +855,9 @@ export function init(options: FruitbackOptions): Fruitback {
       // places on screen is then old. The read brings the list of now, and the next try follows it.
       if (outcome.kept.length > 0 || outcome.failure !== undefined) await read();
 
-      return { sent: outcome.kept.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
+      const failure = outcome.failure === undefined ? undefined : forThisHost(outcome.failure);
+
+      return { sent: outcome.kept.length, ...(failure === undefined ? {} : { failure }) };
     } finally {
       sending = false;
     }
@@ -1153,7 +1160,10 @@ function createReader(
       // worker that is down or slow says nothing of who writes, and changes nothing.
       if (response.status === 401) identity.canWrite = refusesNotes(response.body) ? false : true;
       // FRU-394: a site that its members read says so, rather than « could not be read ».
-      if (response.status === 401 && membersOnly(response.body)) return 'members-only';
+      // Not for a host that signs in: its list offers the sign-in, by `signedOut` (review of #529).
+      if (response.status === 401 && options.onSignIn === undefined && membersOnly(response.body)) {
+        return 'members-only';
+      }
       if (!response.ok) return 'failed';
 
       const body = JSON.parse(response.body) as {
