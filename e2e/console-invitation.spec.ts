@@ -48,6 +48,10 @@ async function signIn(page: Page, worker: Worker, email: string): Promise<void> 
 }
 
 test.describe('an invited reviewer (FRU-104)', () => {
+  // Three times the default 30 s (FRU-430). The time of a test counts the start of its worker in
+  // `beforeEach`: 7.4 s on CI in the trace of run 39953980180. The first test took 15.2 s to 30.3 s on
+  // 38 jobs of CI (median 22.0 s), and it timed out twice in one job.
+  test.slow();
   let worker: Worker;
   const contexts: BrowserContext[] = [];
 
