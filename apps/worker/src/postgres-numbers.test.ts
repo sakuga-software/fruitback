@@ -424,11 +424,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // (the site of a delivery, FRU-194, is one), but three of the browsers of an account (FRU-238): `max` of a text, and `min` and `max` of an
     // instant, read through `mapWith` of the column, which test:`lists the browsers of an account by
     // their instants, on each side of 2^32` holds. Read a new one, then change its count here.
-    // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238).
+    // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238). One
+    // more is selected: the key of the status of a note (FRU-386), `COALESCE` of two texts, a text.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 6, sessions: 9 },
+      { accounts: 7, sessions: 9 },
     );
   });
 });

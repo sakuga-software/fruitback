@@ -84,6 +84,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     sites: true,
     removeSite: true,
     siteStatuses: true,
+    siteStatusNotes: true,
     siteTrackerColours: true,
     setSiteTrackerColours: true,
     putSiteStatus: true,

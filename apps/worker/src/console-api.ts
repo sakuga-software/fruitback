@@ -58,7 +58,7 @@ import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } fro
 import { seal } from './secrets.ts';
 import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
 import { invalidatePages } from './note-helpers.ts';
-import { DEFAULT_SEED_STAGE, MAX_STATUSES, type SeedStage } from '@fruitback/shared';
+import { DEFAULT_SEED_STAGE, MAX_STATUSES, SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
@@ -824,9 +824,17 @@ export async function handleConsoleApi(
     // every write of the console: its CORS allows GET, POST and DELETE (console-cors.ts).
     if (statusPath[2] === undefined && statusPath[3] === undefined) {
       if (request.method === 'GET') {
-        const listed = await context.accounts.siteStatuses(workspaceId as string, site);
+        const [listed, held] = await Promise.all([
+          context.accounts.siteStatuses(workspaceId as string, site),
+          context.accounts.siteStatusNotes(workspaceId as string, site),
+        ]);
+        if (listed === undefined || held === undefined) return notFound();
+        // FRU-386: the notes in each status of the worker's store, 0 included, so the console shows
+        // them and asks where they go before a delete. A state of a tracker has its notes there.
+        const own = [...SEED_STAGES, ...listed.filter((row) => row.source === OWN_SOURCE).map((row) => row.key)];
+        const notes = Object.fromEntries(own.map((key) => [key, held[key] ?? 0]));
 
-        return listed === undefined ? notFound() : json(200, { statuses: listed }, headers);
+        return json(200, { statuses: listed, notes }, headers);
       }
       if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
       const body = await readBody(request);

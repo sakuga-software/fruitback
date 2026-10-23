@@ -1638,6 +1638,8 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
   site of another workspace answers `404`, like one that does not exist, with nothing written.
   test:`answers a site of another workspace as one that does not exist, and refuses a member who does not set sites`,
   test:`answers a site of another workspace as none, and writes nothing there`.
+- **The number of notes in each status (FRU-386) comes with the list, under the same role**, and
+  counts the notes of that site only. test:`counts the notes in each status of the store, 0 for one with none, and those of its site only (FRU-386)`.
 - **A colour reaches a style, so it is `#rrggbb` and nothing else**, checked by the worker on every
   write (`readSiteStatus`) and by every reader of the answer (`offeredStatuses` of `shared`): no
   `var(…)`, no `url(…)`, no named colour. A text colour that the team chose under 4.5:1 on its

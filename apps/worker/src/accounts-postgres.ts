@@ -770,6 +770,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
+    async siteStatusNotes(workspace, site) {
+      return run(async (db) => {
+        const owned = await db
+          .select({ id: sites.id })
+          .from(sites)
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)));
+        if (owned.length === 0) return undefined;
+        // NULL is the built-in status of the note's stage, whose key is the stage.
+        const key = sql<string>`COALESCE(${seeds.status_key}, ${seeds.stage})`;
+        const rows = await db.select({ key, notes: count() }).from(seeds).where(eq(seeds.client_id, site)).groupBy(key);
+
+        return Object.fromEntries(rows.map((row) => [row.key, Number(row.notes)]));
+      });
+    },
+
     async putSiteStatus(workspace, site, status) {
       return transaction(async (db) => {
         if (!(await siteHeld(db, workspace, site))) return { saved: false as const, reason: 'not-found' as const };
