@@ -764,6 +764,13 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   dropped, picked or captured then is not taken, since no note would name it (FRU-373). The worker says on each read whether files go: `canAttach: true` offers the
   menu, `false` shows the sentence that the note has no tracker and no way, absent shows nothing. A
   place of a member says it for itself (`destinations[].canAttach`).
+- **The menu « Attach » floats over the composer, and the composer keeps its size** (FRU-431). It is
+  `position: absolute` in the box of the row that holds its button, under the button. When the menu does not fit under
+  it and the window has more room above, it opens above, as at the foot of the sheet of a phone. Its
+  height is never more than the room of its side, so it stays in the window, and no ancestor in the
+  composer clips it. In the flow, it pushed the drop zone, the files and the foot down by its height.
+  `e2e/attachments.spec.ts` measures the height of the composer, closed and open, and the box of the
+  menu at 1440 × 600, 390 × 844 and 320 × 568.
 - **A screenshot pasted anywhere in the composer joins the note** (FRU-424, decision of Mathieu):
   the capture that works everywhere, ⌘⇧4 or Win+⇧+S then ⌘V or Ctrl+V. Each image of the paste goes
   through `joinFiles`, as a file picked, with its limits and its refusals; the text of the note is

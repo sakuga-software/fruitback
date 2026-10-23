@@ -195,3 +195,101 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(axe.violations).toEqual([]);
   });
 }
+
+type Box = { top: number; bottom: number; left: number; right: number; height: number };
+
+/** The boxes of the composer, of « Attach » and of its menu, and the window, in CSS px of the viewport. */
+async function boxes(page: Page): Promise<{ composer: Box; trigger: Box; menu: Box; width: number; height: number }> {
+  return page.evaluate(() => {
+    const shadow = (document.querySelector('[data-fruitback-host]') as Element).shadowRoot as ShadowRoot;
+    const box = (selector: string): Box => {
+      const { top, bottom, left, right, height } = (shadow.querySelector(selector) as Element).getBoundingClientRect();
+
+      return { top, bottom, left, right, height };
+    };
+
+    return {
+      composer: box('.fruitback-composer'),
+      trigger: box('[data-fruitback-attach-trigger]'),
+      menu: box('[data-fruitback-attach-menu]'),
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+    };
+  });
+}
+
+/** Opens the composer on the latte card, with a note typed: the text that nothing may clear. */
+async function openOnLatte(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
+  await mount(page);
+  await page.getByRole('button', { name: 'Laisser une note' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('Que faut-il changer ?').fill('Le texte reste');
+  // The composer rises and scales as it comes: its box is its own only once that is over.
+  await page.evaluate(() =>
+    Promise.all(
+      (document.querySelector('[data-fruitback-host]')?.shadowRoot?.getAnimations() ?? []).map((each) => each.finished),
+    ),
+  );
+}
+
+test('the menu « Joindre » floats under its button, and the composer keeps its size (FRU-431)', async ({ page }) => {
+  await openOnLatte(page, '/?case=attachments-float&widget=off');
+  const files = page.getByRole('group', { name: 'Pièces jointes' });
+  const trigger = files.getByRole('button', { name: 'Joindre' });
+  const menu = files.getByRole('menu');
+  const closed = await boxes(page);
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  const open = await boxes(page);
+  expect(open.composer.height).toBeCloseTo(closed.composer.height, 1);
+  expect(open.composer.top).toBeCloseTo(closed.composer.top, 1);
+  expect(open.menu.top).toBeGreaterThanOrEqual(open.trigger.bottom);
+  expect(open.menu.bottom).toBeLessThanOrEqual(open.height);
+
+  // A click out of the menu closes it, and the note keeps its text.
+  await page.getByPlaceholder('Que faut-il changer ?').click();
+  await expect(menu).toBeHidden();
+  await expect(page.getByPlaceholder('Que faut-il changer ?')).toHaveValue('Le texte reste');
+  expect((await boxes(page)).composer.height).toBeCloseTo(closed.composer.height, 1);
+});
+
+for (const [width, height] of [
+  [1440, 600],
+  [390, 844],
+  [320, 568],
+] as const) {
+  test(`at ${width} × ${height}, at the foot of the window, the menu « Joindre » opens above its button and stays in the window (FRU-431)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await openOnLatte(page, `/?case=attachments-up-${width}&widget=off`);
+    const files = page.getByRole('group', { name: 'Pièces jointes' });
+    const trigger = files.getByRole('button', { name: 'Joindre' });
+    const menu = files.getByRole('menu');
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(menu).toBeVisible();
+    const open = await boxes(page);
+    // The premise of the case: the menu does not fit under « Joindre ».
+    expect(open.height - open.trigger.bottom).toBeLessThan(open.menu.height);
+    expect(open.menu.bottom).toBeLessThanOrEqual(open.trigger.top);
+    expect(open.menu.top).toBeGreaterThanOrEqual(0);
+    expect(open.menu.left).toBeGreaterThanOrEqual(0);
+    expect(open.menu.right).toBeLessThanOrEqual(open.width);
+    expect(open.menu.bottom).toBeLessThanOrEqual(open.height);
+    await expect(menu.getByRole('menuitem', { name: 'Ajouter une pièce jointe' })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    // A way of the menu above takes a click: nothing clips or covers it.
+    await trigger.click();
+    await menu.getByRole('menuitem', { name: 'Glisser-déposer' }).click();
+    await expect(page.locator('[data-fruitback-attach-dropzone]')).toBeVisible();
+    await expect(page.getByPlaceholder('Que faut-il changer ?')).toHaveValue('Le texte reste');
+  });
+}
