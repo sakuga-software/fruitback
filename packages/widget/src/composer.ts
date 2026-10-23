@@ -277,7 +277,8 @@ export function createComposer(options: ComposerOptions): Composer {
   root.className = 'fruitback-composer';
   root.dataset.fruitbackComposer = '';
   root.hidden = true;
-  root.innerHTML = TEMPLATE;
+  // Built element by element, never parsed from a string (FRU-389): see `TEMPLATE`.
+  root.append(...TEMPLATE.map((markup) => build(document, markup)));
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', t.text('composer.dialog'));
@@ -288,8 +289,8 @@ export function createComposer(options: ComposerOptions): Composer {
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
   // The drop of the mark and the word, as the mock-up of 2026-10-20 draws it (FRU-305). The drop is
-  // appended after the template is parsed: an SVG in an innerHTML string is parsed into the HTML
-  // namespace and renders nothing (FRU-36).
+  // appended after the template is built: an SVG made by `createElement` is in the HTML namespace and
+  // renders nothing (FRU-36).
   const sendWord = document.createElement('span');
   sendWord.textContent = t.text('composer.send');
   send.append(createIcon(document, 'mark'), sendWord);
@@ -344,7 +345,7 @@ export function createComposer(options: ComposerOptions): Composer {
   let asksForName = true;
   const choice = options.destinations;
 
-  // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
+  // Set after the build and never part of TEMPLATE: a host translation is text, not markup.
   field.placeholder = t.text('composer.placeholder');
   // Named by the label the mock-up writes above it, « Your comment » (FRU-305).
   noteLabel.textContent = t.text('composer.label');
@@ -1140,73 +1141,322 @@ const CAPTURE_NAME = { page: 'page.png', area: 'area.png' } as const;
 /** The most files of a note: the ways to join one are off beyond it. */
 const MAX_FILES = MAX_ATTACHMENTS_PER_NOTE;
 
-const TEMPLATE = `
-  <div class="fruitback-composer-head">
-    <span class="fruitback-composer-drop" aria-hidden="true"></span>
-    <span data-fruitback-about class="fruitback-composer-about"></span>
-    <button type="button" data-fruitback-pick class="fruitback-composer-pick" hidden></button>
-  </div>
-  <div class="fruitback-composer-body">
-    <label class="fruitback-composer-field">
-      <span data-fruitback-note-label class="fruitback-composer-label"></span>
-      <textarea data-fruitback-note rows="4"></textarea>
-    </label>
-    <div data-fruitback-who class="fruitback-composer-who">
-      <label class="fruitback-composer-field">
-        <span data-fruitback-name-label class="fruitback-composer-label"></span>
-        <input data-fruitback-name type="text" name="fruitback-name" autocomplete="name" />
-      </label>
-      <label data-fruitback-remember-label class="fruitback-composer-check fruitback-composer-remember">
-        <input data-fruitback-remember type="checkbox" name="fruitback-remember" /><span></span>
-      </label>
-    </div>
-    <label data-fruitback-picture-label class="fruitback-composer-check" hidden>
-      <input data-fruitback-picture type="checkbox" name="fruitback-picture" /><span></span>
-    </label>
-    <div data-fruitback-attach class="fruitback-composer-attach" role="group" aria-labelledby="fruitback-composer-attach-label" hidden>
-      <span data-fruitback-attach-label id="fruitback-composer-attach-label" class="fruitback-composer-label"></span>
-      <div data-fruitback-attach-ways class="fruitback-composer-attach-ways">
-        <button type="button" data-fruitback-attach-trigger class="fruitback-composer-attach-way fruitback-composer-attach-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="fruitback-composer-attach-menu"></button>
-        <ul data-fruitback-attach-menu id="fruitback-composer-attach-menu" class="fruitback-composer-attach-menu" role="menu" aria-labelledby="fruitback-composer-attach-label" hidden>
-          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-file class="fruitback-composer-attach-item"></button></li>
-          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-area class="fruitback-composer-attach-item"></button></li>
-          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-page class="fruitback-composer-attach-item"></button></li>
-          <li role="none"><button type="button" role="menuitem" tabindex="-1" data-fruitback-attach-drop class="fruitback-composer-attach-item"></button></li>
-        </ul>
-        <input data-fruitback-attach-file-input type="file" multiple tabindex="-1" aria-hidden="true" hidden />
-      </div>
-      <div data-fruitback-attach-dropzone class="fruitback-composer-dropzone" tabindex="-1" role="group" aria-labelledby="fruitback-composer-dropzone-words" hidden>
-        <p data-fruitback-attach-dropzone-words id="fruitback-composer-dropzone-words" class="fruitback-composer-dropzone-words"></p>
-        <button type="button" data-fruitback-attach-dropzone-choose class="fruitback-composer-attach-way"></button>
-      </div>
-      <p data-fruitback-attach-none class="fruitback-composer-attach-none" hidden></p>
-      <ul data-fruitback-attach-list class="fruitback-composer-files" hidden></ul>
-    </div>
-    <button type="button" data-fruitback-destination class="fruitback-composer-identify" aria-expanded="false" hidden></button>
-    <div data-fruitback-destinations class="fruitback-composer-places" role="radiogroup" hidden></div>
-    <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
-  </div>
-  <div data-fruitback-failed class="fruitback-composer-failed" role="alert" hidden>
-    <p data-fruitback-failed-title class="fruitback-composer-failed-title"></p>
-    <p data-fruitback-failed-text class="fruitback-composer-failed-text"></p>
-  </div>
-  <div data-fruitback-sent class="fruitback-composer-sent" tabindex="-1" hidden>
-    <span data-fruitback-sent-drop class="fruitback-composer-sent-drop" aria-hidden="true"></span>
-    <div class="fruitback-composer-sent-words">
-      <p data-fruitback-sent-title class="fruitback-composer-sent-title" role="status"></p>
-      <p data-fruitback-sent-text class="fruitback-composer-sent-text"></p>
-    </div>
-    <a data-fruitback-sent-open class="fruitback-composer-sent-open" target="_blank" rel="noreferrer noopener" hidden></a>
-  </div>
-  <div class="fruitback-composer-foot">
-    <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
-    <span data-fruitback-lands class="fruitback-composer-lands"></span>
-    <button type="button" data-fruitback-sign-in class="fruitback-composer-ghost fruitback-composer-sign-in" hidden></button>
-    <button type="button" data-fruitback-keep class="fruitback-composer-ghost fruitback-composer-keep" hidden></button>
-    <button type="button" data-fruitback-cancel class="fruitback-composer-ghost"></button>
-    <button type="button" data-fruitback-send class="fruitback-composer-send"></button>
-  </div>
-`;
+/**
+ * An element of the composer: its tag, its attributes, and its children. No text: every word is set
+ * after the build, with `textContent`, so a translation of the host is never markup.
+ */
+type Markup = readonly [tag: string, attributes: Readonly<Record<string, string>>, children?: readonly Markup[]];
+
+/**
+ * The element that `markup` describes, made with `createElement` (FRU-389).
+ *
+ * The composer was a constant string given to `innerHTML`. Nothing typed went into it, but the
+ * validator of addons.mozilla.org flags every assignment to `innerHTML`, a reviewer may refuse a
+ * version for it, and a page whose CSP asks for Trusted Types refuses the assignment itself. The
+ * icons are built the same way (`icons.ts`).
+ */
+function build(document: Document, [tag, attributes, children = []]: Markup): Element {
+  const element = document.createElement(tag);
+  for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+  element.append(...children.map((child) => build(document, child)));
+
+  return element;
+}
+
+const TEMPLATE: readonly Markup[] = [
+  [
+    'div',
+    { class: 'fruitback-composer-head' },
+    [
+      ['span', { class: 'fruitback-composer-drop', 'aria-hidden': 'true' }],
+      ['span', { 'data-fruitback-about': '', class: 'fruitback-composer-about' }],
+      ['button', { type: 'button', 'data-fruitback-pick': '', class: 'fruitback-composer-pick', hidden: '' }],
+    ],
+  ],
+  [
+    'div',
+    { class: 'fruitback-composer-body' },
+    [
+      [
+        'label',
+        { class: 'fruitback-composer-field' },
+        [
+          ['span', { 'data-fruitback-note-label': '', class: 'fruitback-composer-label' }],
+          ['textarea', { 'data-fruitback-note': '', rows: '4' }],
+        ],
+      ],
+      [
+        'div',
+        { 'data-fruitback-who': '', class: 'fruitback-composer-who' },
+        [
+          [
+            'label',
+            { class: 'fruitback-composer-field' },
+            [
+              ['span', { 'data-fruitback-name-label': '', class: 'fruitback-composer-label' }],
+              ['input', { 'data-fruitback-name': '', type: 'text', name: 'fruitback-name', autocomplete: 'name' }],
+            ],
+          ],
+          [
+            'label',
+            { 'data-fruitback-remember-label': '', class: 'fruitback-composer-check fruitback-composer-remember' },
+            [
+              ['input', { 'data-fruitback-remember': '', type: 'checkbox', name: 'fruitback-remember' }],
+              ['span', {}],
+            ],
+          ],
+        ],
+      ],
+      [
+        'label',
+        { 'data-fruitback-picture-label': '', class: 'fruitback-composer-check', hidden: '' },
+        [
+          ['input', { 'data-fruitback-picture': '', type: 'checkbox', name: 'fruitback-picture' }],
+          ['span', {}],
+        ],
+      ],
+      [
+        'div',
+        {
+          'data-fruitback-attach': '',
+          class: 'fruitback-composer-attach',
+          role: 'group',
+          'aria-labelledby': 'fruitback-composer-attach-label',
+          hidden: '',
+        },
+        [
+          [
+            'span',
+            {
+              'data-fruitback-attach-label': '',
+              id: 'fruitback-composer-attach-label',
+              class: 'fruitback-composer-label',
+            },
+          ],
+          [
+            'div',
+            { 'data-fruitback-attach-ways': '', class: 'fruitback-composer-attach-ways' },
+            [
+              [
+                'button',
+                {
+                  type: 'button',
+                  'data-fruitback-attach-trigger': '',
+                  class: 'fruitback-composer-attach-way fruitback-composer-attach-trigger',
+                  'aria-haspopup': 'menu',
+                  'aria-expanded': 'false',
+                  'aria-controls': 'fruitback-composer-attach-menu',
+                },
+              ],
+              [
+                'ul',
+                {
+                  'data-fruitback-attach-menu': '',
+                  id: 'fruitback-composer-attach-menu',
+                  class: 'fruitback-composer-attach-menu',
+                  role: 'menu',
+                  'aria-labelledby': 'fruitback-composer-attach-label',
+                  hidden: '',
+                },
+                [
+                  [
+                    'li',
+                    { role: 'none' },
+                    [
+                      [
+                        'button',
+                        {
+                          type: 'button',
+                          role: 'menuitem',
+                          tabindex: '-1',
+                          'data-fruitback-attach-file': '',
+                          class: 'fruitback-composer-attach-item',
+                        },
+                      ],
+                    ],
+                  ],
+                  [
+                    'li',
+                    { role: 'none' },
+                    [
+                      [
+                        'button',
+                        {
+                          type: 'button',
+                          role: 'menuitem',
+                          tabindex: '-1',
+                          'data-fruitback-attach-area': '',
+                          class: 'fruitback-composer-attach-item',
+                        },
+                      ],
+                    ],
+                  ],
+                  [
+                    'li',
+                    { role: 'none' },
+                    [
+                      [
+                        'button',
+                        {
+                          type: 'button',
+                          role: 'menuitem',
+                          tabindex: '-1',
+                          'data-fruitback-attach-page': '',
+                          class: 'fruitback-composer-attach-item',
+                        },
+                      ],
+                    ],
+                  ],
+                  [
+                    'li',
+                    { role: 'none' },
+                    [
+                      [
+                        'button',
+                        {
+                          type: 'button',
+                          role: 'menuitem',
+                          tabindex: '-1',
+                          'data-fruitback-attach-drop': '',
+                          class: 'fruitback-composer-attach-item',
+                        },
+                      ],
+                    ],
+                  ],
+                ],
+              ],
+              [
+                'input',
+                {
+                  'data-fruitback-attach-file-input': '',
+                  type: 'file',
+                  multiple: '',
+                  tabindex: '-1',
+                  'aria-hidden': 'true',
+                  hidden: '',
+                },
+              ],
+            ],
+          ],
+          [
+            'div',
+            {
+              'data-fruitback-attach-dropzone': '',
+              class: 'fruitback-composer-dropzone',
+              tabindex: '-1',
+              role: 'group',
+              'aria-labelledby': 'fruitback-composer-dropzone-words',
+              hidden: '',
+            },
+            [
+              [
+                'p',
+                {
+                  'data-fruitback-attach-dropzone-words': '',
+                  id: 'fruitback-composer-dropzone-words',
+                  class: 'fruitback-composer-dropzone-words',
+                },
+              ],
+              [
+                'button',
+                { type: 'button', 'data-fruitback-attach-dropzone-choose': '', class: 'fruitback-composer-attach-way' },
+              ],
+            ],
+          ],
+          ['p', { 'data-fruitback-attach-none': '', class: 'fruitback-composer-attach-none', hidden: '' }],
+          ['ul', { 'data-fruitback-attach-list': '', class: 'fruitback-composer-files', hidden: '' }],
+        ],
+      ],
+      [
+        'button',
+        {
+          type: 'button',
+          'data-fruitback-destination': '',
+          class: 'fruitback-composer-identify',
+          'aria-expanded': 'false',
+          hidden: '',
+        },
+      ],
+      [
+        'div',
+        { 'data-fruitback-destinations': '', class: 'fruitback-composer-places', role: 'radiogroup', hidden: '' },
+      ],
+      [
+        'div',
+        {
+          'data-fruitback-destination-gone': '',
+          class: 'fruitback-composer-notice',
+          role: 'status',
+          'aria-live': 'polite',
+        },
+      ],
+    ],
+  ],
+  [
+    'div',
+    { 'data-fruitback-failed': '', class: 'fruitback-composer-failed', role: 'alert', hidden: '' },
+    [
+      ['p', { 'data-fruitback-failed-title': '', class: 'fruitback-composer-failed-title' }],
+      ['p', { 'data-fruitback-failed-text': '', class: 'fruitback-composer-failed-text' }],
+    ],
+  ],
+  [
+    'div',
+    { 'data-fruitback-sent': '', class: 'fruitback-composer-sent', tabindex: '-1', hidden: '' },
+    [
+      ['span', { 'data-fruitback-sent-drop': '', class: 'fruitback-composer-sent-drop', 'aria-hidden': 'true' }],
+      [
+        'div',
+        { class: 'fruitback-composer-sent-words' },
+        [
+          ['p', { 'data-fruitback-sent-title': '', class: 'fruitback-composer-sent-title', role: 'status' }],
+          ['p', { 'data-fruitback-sent-text': '', class: 'fruitback-composer-sent-text' }],
+        ],
+      ],
+      [
+        'a',
+        {
+          'data-fruitback-sent-open': '',
+          class: 'fruitback-composer-sent-open',
+          target: '_blank',
+          rel: 'noreferrer noopener',
+          hidden: '',
+        },
+      ],
+    ],
+  ],
+  [
+    'div',
+    { class: 'fruitback-composer-foot' },
+    [
+      [
+        'span',
+        { 'data-fruitback-status': '', class: 'fruitback-composer-status', role: 'status', 'aria-live': 'polite' },
+      ],
+      ['span', { 'data-fruitback-lands': '', class: 'fruitback-composer-lands' }],
+      [
+        'button',
+        {
+          type: 'button',
+          'data-fruitback-sign-in': '',
+          class: 'fruitback-composer-ghost fruitback-composer-sign-in',
+          hidden: '',
+        },
+      ],
+      [
+        'button',
+        {
+          type: 'button',
+          'data-fruitback-keep': '',
+          class: 'fruitback-composer-ghost fruitback-composer-keep',
+          hidden: '',
+        },
+      ],
+      ['button', { type: 'button', 'data-fruitback-cancel': '', class: 'fruitback-composer-ghost' }],
+      ['button', { type: 'button', 'data-fruitback-send': '', class: 'fruitback-composer-send' }],
+    ],
+  ],
+];
 
 /**
  * The composer of the mock-up of 2026-10-13 (FRU-258): a head, the note, a foot behind a rule.
