@@ -260,6 +260,12 @@ export type Composer = {
    * one takes it at its next open: a field must not leave under somebody who types in it.
    */
   identityChanged(): void;
+  /**
+   * Starts « Capture an area », as its item of the menu does (FRU-423): the context menu of the
+   * extension. `false`, and nothing happens, when the composer is closed or sent, when the note takes
+   * no file, when the host captures nothing, or when the note holds as many files as it can.
+   */
+  captureArea(): boolean;
   /** The popover's own root, for tests and for whoever needs to measure it. */
   element: HTMLElement;
   destroy(): void;
@@ -1080,6 +1086,13 @@ export function createComposer(options: ComposerOptions): Composer {
     state: () => state,
     identityChanged() {
       if (root.hidden) askForNameOrNot();
+    },
+    captureArea() {
+      const offered = seam?.offer(selected) === 'offered' && seam.captures();
+      if (root.hidden || !joinable() || !offered || attachArea.getAttribute('aria-disabled') === 'true') return false;
+      void capture('area', attachTrigger);
+
+      return true;
     },
     element: root,
     destroy() {

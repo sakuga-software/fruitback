@@ -2176,6 +2176,14 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   What the page decides is the area, and nothing else: it buys a capture of its own tab, that goes to
   the worker of its own entry with a session it never sees, and only when `activeTab` was granted.
   The widget is hidden while the capture is taken.
+- **« Capture with Fruitback », in the context menu of a page** (FRU-423), is the `contextMenus`
+  permission. It grants no host, no content script and no read of a page: it puts one item in the
+  menu of a web page (`http` and `https` only), and Chrome shows no warning for it (measured on the
+  built manifest with `management.getPermissionWarningsByManifest`, `e2e/context-menu.spec.ts`).
+  **A click on the item is a gesture of the person**, which the browser answers by granting
+  `activeTab` on that tab until it navigates, as a click on the icon does. The item then sends the
+  widget of the tab the command `capture-area`, by `tabs.sendMessage`; a tab with no widget of the
+  extension answers nothing. No page can click the item, and the capture keeps every condition above.
 
 What a capture shows is whatever the page showed on the screen, the open composer of the widget
 included when it covers it.

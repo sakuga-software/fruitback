@@ -170,7 +170,7 @@ test('the manifest declares the panel, and Chrome shows no new warning for it', 
     };
   });
 
-  expect(read.permissions).toEqual(['storage', 'scripting', 'activeTab', 'alarms', 'sidePanel']);
+  expect(read.permissions).toEqual(['storage', 'scripting', 'activeTab', 'alarms', 'contextMenus', 'sidePanel']);
   expect(read.panel).toEqual({ default_path: 'sidepanel.html' });
   // The icon keeps its popup.
   expect(read.action).toMatchObject({ default_popup: 'popup.html' });

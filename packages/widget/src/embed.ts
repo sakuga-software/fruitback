@@ -249,6 +249,12 @@ export type Fruitback = {
    * choosing, it answers `true` and starts nothing over.
    */
   leaveFeedback(): boolean;
+  /**
+   * « Capture with Fruitback » of the context menu of the extension (FRU-423): starts the capture of
+   * an area in the open composer, or, with no composer open, starts choosing an element as
+   * `leaveFeedback` does. Answers whether something started.
+   */
+  captureArea(): boolean;
   /** Opens the list of every note of the page, as its button does (FRU-254). */
   showEveryNote(): void;
   /**
@@ -999,6 +1005,13 @@ export function init(options: FruitbackOptions): Fruitback {
     refresh: () => read(),
     feedbackAsText: asText,
     settings: panel,
+    captureArea() {
+      if (!composer.element.hidden && composer.state() !== 'sent' && composer.state() !== 'kept') {
+        return composer.captureArea();
+      }
+
+      return this.leaveFeedback();
+    },
     leaveFeedback() {
       // A note would be refused (FRU-315): what was asked leads to the sign-in.
       if (ended) {

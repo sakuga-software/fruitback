@@ -763,6 +763,16 @@ a change when the account refuses one of them, and marks only those as known`. O
   the page navigates, and the note stays open behind it. Any other failure keeps « The capture was
   not taken ». A widget of before reads the rejection as « not taken », as it read any rejection.
   `e2e/extension-capture-refused.spec.ts` plays the refusal; the grant by a click is checked by hand.
+- **« Capture with Fruitback », in the context menu of a web page, is the gesture that grants the
+  capture** (FRU-423, `src/context-menu.ts`). The `contextMenus` permission adds no warning at install
+  (Chrome, measured with `getPermissionWarningsByManifest` in `e2e/context-menu.spec.ts`). A click on
+  the item grants `activeTab` on the tab until it navigates, and sends the widget the command
+  `capture-area`: in an open composer that takes files, the capture of an area starts; with no
+  composer open, a note starts, as `leave-feedback` does. The item is placed at install and at each
+  start, in the language of the reviewer, and placed again when that language changes. It is on
+  every `http` and `https` page; where no widget of the extension answers, nothing happens. Nothing in
+  automation can click a menu of the browser: the spec checks the permission, the item, and the path
+  of the command, with `<all_urls>` on its copy for the capture itself.
 - **A capture that fails costs the capture, never the note.** No `activeTab`, no session, an http
   worker, thirty seconds without an answer: the composer says « The capture was not taken », and the
   text and the other files stay. Ten seconds was too short for a prompt of permission, a crop and a

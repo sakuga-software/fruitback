@@ -29,7 +29,8 @@ describe('the shortcut that starts a note (FRU-291)', () => {
   // A command asks for nothing at install. The list is written out, so a permission added with the
   // shortcut fails here.
   it('asks for no new permission', () => {
-    assert.deepEqual(manifest.permissions, ['storage', 'scripting', 'activeTab', 'alarms']);
+    // FRU-423 added `contextMenus`, for « Capture with Fruitback » (`context-menu.test.ts`).
+    assert.deepEqual(manifest.permissions, ['storage', 'scripting', 'activeTab', 'alarms', 'contextMenus']);
     assert.deepEqual(manifest.optional_host_permissions, ['*://*/*']);
   });
 

@@ -40,7 +40,14 @@ const VIEWS = [
   './workers-page.ts',
 ] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
-const CONSTANTS = ['./remedy.ts', './site-form.ts', './site-editor.ts', './read-probe.ts'] as const;
+// FRU-423: `context-menu.ts` holds the words of the item of the context menu.
+const CONSTANTS = [
+  './remedy.ts',
+  './site-form.ts',
+  './site-editor.ts',
+  './read-probe.ts',
+  './context-menu.ts',
+] as const;
 
 const pages = new Map(PAGES.map((path) => [path, code(read(path))]));
 const views = new Map(VIEWS.map((path) => [path, code(read(path))]));
