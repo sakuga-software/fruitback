@@ -874,25 +874,19 @@ export function shortened(text: string, max: number): string {
  * This is what closes the loop: someone leaves a note, the team replies in Linear, and the reply
  * shows up where the note was left rather than in an inbox the reporter does not have.
  *
- * Three states, and they are not the same. Comments absent means the worker was not asked for them —
- * the widget says nothing at all, because "no replies yet" would be a claim it cannot make. An empty
- * list means it asked and there were none, which is worth saying. Anything else is the thread.
+ * Comments absent means the worker was not asked for them. An empty list means it asked and there
+ * were none. In both cases the thread shows no section (FRU-419): a title over nothing is noise, and
+ * the field to reply is below. Anything else is the thread.
  */
 function replies(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
-  // « Replies », above the list or above the sentence that says there is none (FRU-304). For the eye:
-  // the list is named by the same word.
+  // No reply yet: no section at all (FRU-419). The field to reply, and its placeholder, say enough.
+  if (issue.comments.length === 0) return [];
+
+  // « Replies », above the list (FRU-304). For the eye: the list is named by the same word.
   const title = element(document, 'p', 'fruitback-thread-answers-title', t.text('thread.replies'));
   title.setAttribute('aria-hidden', 'true');
-  if (issue.comments.length === 0) {
-    return [
-      element(document, 'div', 'fruitback-thread-answers', [
-        title,
-        element(document, 'p', 'fruitback-thread-empty', t.text('thread.noReplies')),
-      ]),
-    ];
-  }
 
   const list = document.createElement('ul');
   list.className = 'fruitback-thread-replies';
@@ -942,25 +936,25 @@ function initialOf(name: string): string {
 }
 
 /**
- * What the note points at, in a block of mono (FRU-304): the selector the note carries, then the
- * component and the file behind the element when the capture found them (FRU-256), as
+ * What the note points at, in lines of mono (FRU-304, FRU-419): the selector the note carries, then
+ * the component and the file behind the element when the capture found them (FRU-256), as
  * « <AddToCart> · src/components/Card.tsx:42 ». As text, like everything a note carries.
  *
- * The selector shows only when the host asks for it (FRU-349). With no selector and no source, there
- * is no block: an empty box says nothing.
+ * Both show only when the host asks for the selectors (FRU-349, FRU-419): a reviewer reads the note,
+ * and these lines are for a developer.
  */
 function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean): HTMLElement[] {
+  if (!showSelector) return [];
   const source = issue.seed.source;
   const selector = issue.seed.anchor.selector;
   const line = source?.line === undefined ? '' : `:${source.line}`;
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;
   const parts = [component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
-  if (!showSelector && parts.length === 0) return [];
 
   return [
     element(document, 'div', 'fruitback-thread-source', [
-      ...(showSelector ? [element(document, 'p', 'fruitback-thread-selector', selector)] : []),
+      element(document, 'p', 'fruitback-thread-selector', selector),
       ...(parts.length > 0 ? [element(document, 'p', 'fruitback-thread-component', parts.join(' · '))] : []),
     ]),
   ];
@@ -1013,22 +1007,24 @@ function buildThread(
   drop.className = 'fruitback-thread-drop';
   drop.setAttribute('aria-hidden', 'true');
 
+  // The store's own word for the state. `stateName` is what the store said — Linear's "In Progress",
+  // SQLite's own — and the drop beside it carries the stage colour through `--fruitback-pin-color`.
+  // See `stateLabel` for why this is not just `issue.stateName`.
+  const state = element(document, 'span', 'fruitback-thread-state', stateLabel(issue, t));
+  // Since when the note is in its state (FRU-304): in the title of its word, not in the head (FRU-419).
+  const since = stateSince(issue, t);
+  if (since !== undefined) state.title = since;
+
   thread.append(
     // A div, not a header: inside the widget's region landmark a header is a banner (FRU-51).
+    // Two columns (FRU-419): the state and the way out wrap in the first, and the cross keeps the
+    // second, at the top.
     element(document, 'div', 'fruitback-thread-head', [
-      // The store's own word for the state. `stateName` is what the store said — Linear's
-      // "In Progress", SQLite's own — and the drop beside it carries the stage colour through
-      // `--fruitback-pin-color`.
-      //
-      // See `stateLabel` for why this is not just `issue.stateName`.
-      element(document, 'span', 'fruitback-thread-stage', [
-        drop,
-        element(document, 'span', 'fruitback-thread-state', stateLabel(issue, t)),
+      element(document, 'div', 'fruitback-thread-heading', [
+        element(document, 'span', 'fruitback-thread-stage', [drop, state]),
+        // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
+        ...link(document, issue, t),
       ]),
-      // Since when the note is in its state (FRU-304), from the last change the store reports.
-      ...stateAge(document, issue, t),
-      // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
-      ...link(document, issue, t),
       closeButton(document, t),
     ]),
     element(document, 'div', 'fruitback-thread-body', [
@@ -1173,17 +1169,15 @@ function uncertaintyNote(document: Document, resolution: AnchorResolution, t: Tr
 }
 
 /**
- * How long ago the store last changed the note, as a relative date (FRU-304), with the day in the
- * title. A draft has no store, and a date the store wrote in a shape `Date` cannot read says nothing.
+ * « In Progress since 10/23/2026 », from the last change the store reports (FRU-304, FRU-419). A
+ * draft has no store, and a date the store wrote in a shape `Date` cannot read says nothing.
  */
-function stateAge(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
-  if (DRAFTS.has(issue)) return [];
+function stateSince(issue: SeedIssue, t: Translator): string | undefined {
+  if (DRAFTS.has(issue)) return undefined;
   const date = new Date(issue.updatedAt);
-  if (Number.isNaN(date.getTime())) return [];
-  const age = element(document, 'span', 'fruitback-thread-age', t.relative(date));
-  age.title = t.date(date);
+  if (Number.isNaN(date.getTime())) return undefined;
 
-  return [age];
+  return t.text('thread.stateSince', { state: stateLabel(issue, t), date: t.date(date) });
 }
 
 function closeButton(document: Document, t: Translator): HTMLElement {
@@ -1510,16 +1504,28 @@ const STYLES = `
   .fruitback-thread { outline: 1px solid CanvasText; }
   .fruitback-thread[data-fruitback-home] { outline: 0; }
 }
+/*
+  Two columns (FRU-419): what the head says, and the cross. The cross keeps its column and the top of
+  it, so a long head wraps under the state and never pushes the cross to a line of its own.
+*/
 .fruitback-thread-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 10px;
   padding-block: 14px 12px;
   padding-inline: 16px 14px;
   border-bottom: 1px solid var(--fruitback-color-border);
-  /* A long state takes the first line, and the age and the way out go under it (FRU-350). */
+}
+/* A long state takes the first line, and the way out goes under it (FRU-350). */
+.fruitback-thread-heading {
+  display: flex;
   flex-wrap: wrap;
-  row-gap: 6px;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  /* As tall as the cross is drawn, so that a one-line head centres its state on the cross. */
+  min-height: 28px;
 }
 .fruitback-thread-stage {
   display: flex;
@@ -1543,7 +1549,6 @@ const STYLES = `
 }
 /* anywhere: the store names its states, and a long name must wrap inside the head. */
 .fruitback-thread-state { min-width: 0; overflow-wrap: anywhere; }
-.fruitback-thread-age { flex: none; font-size: 12px; color: var(--fruitback-color-text-muted); }
 /*
   The way out to the store (FRU-304): « FRU-128 → » in a chip of the sunken surface, at the end of the
   head. Its target is 44 px tall: a transparent border around the chip, and the margins give it back.
@@ -1583,9 +1588,6 @@ const STYLES = `
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
-.fruitback-thread-link + .fruitback-thread-close { margin-inline-start: -8px; }
-.fruitback-thread-age + .fruitback-thread-close,
-.fruitback-thread-stage + .fruitback-thread-close { margin-inline-start: auto; }
 .fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken) padding-box; }
 @media (forced-colors: active) {
   .fruitback-thread-close, .fruitback-thread-link { border-color: Canvas; }
@@ -1599,19 +1601,20 @@ const STYLES = `
 .fruitback-thread-files a { color: var(--fruitback-color-text); text-underline-offset: 2px; }
 .fruitback-thread-files a:hover { color: var(--fruitback-color-accent-strong); }
 .fruitback-thread-files a:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
+/*
+  Discreet (FRU-419): lines of 12 px in mono, no box. Selectable, for a developer who copies a path.
+*/
 .fruitback-thread-source {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--fruitback-color-border);
-  border-radius: var(--fruitback-radius-sm);
-  background: var(--fruitback-color-surface-warm);
-  font-family: var(--fruitback-font-mono);
+  font: 12px/1.5 var(--fruitback-font-mono);
+  color: var(--fruitback-color-text-muted);
   overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
 }
-.fruitback-thread-selector { margin: 0; font-size: 12px; line-height: 1.5; color: var(--fruitback-color-text); }
-.fruitback-thread-component { margin: 0; font-size: 11px; line-height: 1.5; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-selector, .fruitback-thread-component { margin: 0; }
 .fruitback-thread-orphan { margin: 0; font-size: 12px; color: var(--fruitback-color-warning); }
 .fruitback-thread-answers { padding: 10px 16px 16px; }
 .fruitback-thread-answers-title {
@@ -1622,7 +1625,6 @@ const STYLES = `
   text-transform: uppercase;
   color: var(--fruitback-color-text-muted);
 }
-.fruitback-thread-empty { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-replies {
   display: flex;
   flex-direction: column;

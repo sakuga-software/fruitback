@@ -527,25 +527,22 @@ describe('createOverlay', () => {
     const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
     const classes = (parent: Element) => [...parent.children].map((child) => child.className);
     assert.deepEqual(classes(thread), ['fruitback-thread-head', 'fruitback-thread-body', 'fruitback-thread-answers']);
-    // The head: the state behind its drop, since when, the way out, and the cross.
+    // The head: two columns, what it says and the cross (FRU-419). The state behind its drop and the
+    // way out share the first; the age of the state is not in the head.
     const head = thread.querySelector('.fruitback-thread-head') as HTMLElement;
-    assert.deepEqual(classes(head), [
+    assert.deepEqual(classes(head), ['fruitback-thread-heading', 'fruitback-thread-close']);
+    assert.deepEqual(classes(head.firstElementChild as HTMLElement), [
       'fruitback-thread-stage',
-      'fruitback-thread-age',
       'fruitback-thread-link',
-      'fruitback-thread-close',
     ]);
     assert.equal(head.querySelector('.fruitback-thread-drop')?.getAttribute('aria-hidden'), 'true');
     assert.equal(head.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
-    // The age of the state, from the last change the store reports, with the day in its title.
-    assert.ok((head.querySelector('.fruitback-thread-age')?.textContent ?? '') !== '');
-    assert.ok((head.querySelector('.fruitback-thread-age')?.getAttribute('title') ?? '') !== '');
     // The identifier and an arrow, in a chip: no name of a store the widget does not know.
     assert.equal(head.querySelector('a')?.textContent, 'SKG-742 →');
+    // No source: it shows with the selectors only (FRU-419).
     assert.deepEqual(classes(thread.querySelector('.fruitback-thread-body') as HTMLElement), [
       'fruitback-thread-note',
       'fruitback-thread-meta',
-      'fruitback-thread-source',
     ]);
     // « Replies » above the list, and the initial of who answered in a round (FRU-304).
     const answers = thread.querySelector('.fruitback-thread-answers') as HTMLElement;
@@ -593,22 +590,51 @@ describe('createOverlay', () => {
     assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<<img src=x onerror=alert(1)>>');
   });
 
-  it('hides the selector by default, and keeps the component and the file (FRU-349)', () => {
+  it('hides the selector and the source by default, and shows both with the selectors (FRU-349, FRU-419)', () => {
     const page = mountWithCta();
     const issue = issueOnCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issue]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-    assert.equal(thread.querySelector('.fruitback-thread-selector'), null);
-    assert.doesNotMatch(thread.textContent ?? '', /checkout-cta"\]/);
+    const thread = () => page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    assert.equal(thread().querySelector('.fruitback-thread-source'), null);
+    assert.doesNotMatch(thread().textContent ?? '', /checkout-cta"\]/);
+    assert.doesNotMatch(thread().textContent ?? '', /CheckoutCta|checkout-cta\.tsx/);
+    // The note keeps them: only the thread hides them.
+    assert.equal(issue.seed.anchor.selector, '[data-testid="checkout-cta"]');
+    assert.equal(issue.seed.source?.component, 'CheckoutCta');
+
+    overlay.showSelectors(true);
+    assert.equal(thread().querySelector('.fruitback-thread-selector')?.textContent, '[data-testid="checkout-cta"]');
     assert.equal(
-      thread.querySelector('.fruitback-thread-source > .fruitback-thread-component')?.textContent,
+      thread().querySelector('.fruitback-thread-source > .fruitback-thread-component')?.textContent,
       '<CheckoutCta> · src/components/checkout-cta.tsx:42',
     );
-    // The note keeps it: only the thread hides it.
-    assert.equal(issue.seed.anchor.selector, '[data-testid="checkout-cta"]');
+  });
+
+  it('says since when the note is in its state in the title of its word, not in the head (FRU-419)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({
+      document: page.document,
+      translator: createTranslator({ locale: 'fr-FR' }),
+      isDraft: (issue) => issue.identifier === 'DRAFT',
+    });
+    overlay.render([
+      issueOnCta({ stateName: 'In Progress', updatedAt: '2026-10-23T09:00:00.000Z' }),
+      issueOnCta({ identifier: 'DRAFT', updatedAt: '2026-10-23T09:00:00.000Z' }),
+    ]);
+    const badges = page.document.querySelectorAll<HTMLElement>('.fruitback-pin-badge');
+
+    badges[0]?.click();
+    const state = page.document.querySelector('.fruitback-thread-state');
+    assert.equal(state?.getAttribute('title'), 'In Progress depuis le 23/10/2026');
+    // Nothing relative in the head: the date of the note stays under the note.
+    assert.equal(page.document.querySelector('.fruitback-thread-head')?.textContent?.includes('il y a'), false);
+
+    // A draft has no store, so no state to date.
+    badges[1]?.click();
+    assert.equal(page.document.querySelector('.fruitback-thread-state')?.hasAttribute('title'), false);
   });
 
   it('draws no empty box for a note with no source while the selector is hidden (FRU-349)', () => {
@@ -977,7 +1003,7 @@ describe('the team’s replies', () => {
     assert.equal(body?.querySelector('img'), null);
   });
 
-  it('says nothing at all when the worker did not fetch replies', () => {
+  it('shows no section when the worker did not fetch replies', () => {
     // Absent is not empty. "No reply yet" would be a claim the widget cannot make when it
     // was never told — a client with comments switched off would be told its team never answered.
     const page = mountWithCta();
@@ -985,17 +1011,38 @@ describe('the team’s replies', () => {
     overlay.render([issueOnCta({ comments: undefined })]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.equal(page.document.querySelector('.fruitback-thread-empty'), null);
+    assert.equal(page.document.querySelector('.fruitback-thread-answers'), null);
     assert.equal(page.document.querySelector('.fruitback-thread-replies'), null);
   });
 
-  it('says so when it asked and there were none', () => {
+  it('shows no « Replies » over nothing, and the title and the list from the first reply on (FRU-419)', async () => {
     const page = mountWithCta();
-    overlay = createOverlay({ document: page.document });
+    const reply = {
+      id: 'c1',
+      body: 'Vu, on corrige.',
+      createdAt: '2026-10-23T10:00:00.000Z',
+      author: 'Léa',
+    };
+    overlay = createOverlay({
+      document: page.document,
+      reply: { allowed: () => true, send: () => Promise.resolve(reply) },
+    });
     overlay.render([issueOnCta({ comments: [] })]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.match(page.document.querySelector('.fruitback-thread-empty')?.textContent ?? '', /No reply yet/);
+    assert.equal(page.document.querySelector('.fruitback-thread-answers'), null);
+    assert.doesNotMatch(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /Replies|No reply/);
+    // The field stays, and its placeholder says enough.
+    const field = page.document.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
+    assert.ok(field !== null);
+
+    field.value = 'Merci';
+    field.dispatchEvent(new (page.document.defaultView as unknown as typeof globalThis).Event('input'));
+    field.form?.requestSubmit();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(page.document.querySelector('.fruitback-thread-answers-title')?.textContent, 'Replies');
+    assert.equal(page.document.querySelectorAll('.fruitback-thread-reply').length, 1);
   });
 });
 

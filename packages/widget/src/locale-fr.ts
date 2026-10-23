@@ -107,7 +107,7 @@ export const FRENCH: Catalog = {
   'thread.draft': 'Pas encore envoyée',
   'thread.draftDialog': 'Note pas encore envoyée',
   'thread.noNote': 'Aucune note.',
-  'thread.noReplies': 'Pas encore de réponse.',
+  'thread.stateSince': '{state} depuis le {date}',
   'thread.replies': 'Réponses',
   'thread.team': 'Équipe',
   'reply.label': 'Réponse',

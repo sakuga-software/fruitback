@@ -280,8 +280,8 @@ test('the team’s replies show up inside the pin', async ({ page }) => {
       return;
     }
 
-    // The pin that got no reply says so, which is a different thing from saying nothing.
-    await expect(page.locator('.fruitback-thread-empty')).toHaveText(/No reply yet/);
+    // The pin that got no reply has no section of replies (FRU-419): its field to reply says enough.
+    await expect(page.locator('.fruitback-thread-answers')).toHaveCount(0);
     await page.keyboard.press('Escape');
   }
 

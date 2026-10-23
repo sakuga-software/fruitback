@@ -153,7 +153,8 @@ export const ENGLISH = {
   // Must not start like `sidebar.dialog`: both can be open at once.
   'thread.draftDialog': 'Note not sent yet',
   'thread.noNote': 'No note.',
-  'thread.noReplies': 'No reply yet.',
+  // The title of the word of the status (FRU-419): since when the note is in it.
+  'thread.stateSince': '{state} since {date}',
   'thread.replies': 'Replies',
   'thread.team': 'Team',
   'reply.label': 'Reply',

@@ -417,35 +417,44 @@ schemes, outside the ring of the pin (FRU-334)`.
 
 - **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
   held by `e2e/thread.spec.ts` on computed styles.
-  - **Three parts, each behind a rule**: a head (the drop and the word of the status, its age, the
-    way out to the store, the cross), the note (its text, who and when, the block of mono), the
-    replies. 344 px wide (FRU-304), a border of 1 px, 14 px of corner and the shadow of the thread.
-    The colour of the status is the drop beside its word.
+  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
+    to the store, the cross), the note (its text, who and when, the lines of mono), the replies.
+    344 px wide (FRU-304), a border of 1 px, 14 px of corner and the shadow of the thread. The
+    colour of the status is the drop beside its word.
   - **It opens beside the drop** (FRU-304): 26 px past its point on the end side of the reading
     direction, or on the other side when the window has no room there; 8 px above the top of the
     drop, and never nearer than 24 px to the top or the bottom of the window. When neither side has
     the room, it opens under the pin as before, or above it. That is every phone.
-  - **The age of the status**, « yesterday », « 2 days ago », in 12 px, from the last change the
-    store reports (`updatedAt`), with the day in its title. The mock-up words it per status
-    (« since yesterday », « for 1 day »): one relative date says it in every language the widget has.
-  - **The block of mono** (FRU-304): the selector the note carries, in 12 px, then
-    « <HeroBanner> · src/components/Hero.tsx:42 » in 11 px, from its `source`. A note with no source
-    has the selector alone. On the warm surface, with a border and 6 px of corner.
+  - **The head is a grid of two columns, `minmax(0, 1fr) auto`** (FRU-419). The cross has the
+    second, at the top, always; the state and the way out wrap in the first. Before, the head was one
+    line that wrapped: in French « In Progress · il y a 21 minutes · FRU-408 → » asked about 338 px
+    of 314, and the cross fell alone to a second line. A long state still wraps and is never cut
+    (FRU-350). Held by `e2e/thread-head.spec.ts`: the drawn box of the cross has the `top` of the
+    state.
+  - **The age of the status is not in the head** (FRU-419). It is in the title of the word of the
+    status, « In Progress depuis le 23/10/2026 », from the last change the store reports
+    (`updatedAt`). The age of the note stays under the note, in its byline.
+  - **The lines of mono show with the selectors only** (FRU-349, FRU-419): the selector the note
+    carries, then « <HeroBanner> · src/components/Hero.tsx:42 » from its `source`. Both follow the
+    `showSelectors` option and the setting « Show CSS selectors » of the extension; before FRU-419
+    the source showed always. A reviewer reads the note: these lines are for a developer. 12 px of
+    mono, in the muted ink, with no box, and selectable.
   - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note »:
     the mock-up names it « Close », and two crosses of the widget can be on screen. The cross is
     28 px drawn and 44 px to press.
   - **The link is the identifier and an arrow, « ACM-142 → »**, in a chip of the sunken surface, 44 px
     to press. The widget does not know which store is behind the worker (FRU-31), so it does not
     write « in Linear ». A store with no address of an issue has no chip.
-  - **« Replies »**, in 11 px capitals, above the replies or above « No reply yet. ». Each reply has
+  - **« Replies »**, in 11 px capitals, above the replies. **No reply, no section** (FRU-419):
+    neither the title nor a sentence that says there is none. The field to reply stays, and its
+    placeholder says enough. The first reply brings the title and the list back. Each reply has
     the initial of who wrote it in a round of 24 px, then « **Léa** · 1 day ago » in 11 px, then its
     text in 13 px.
   - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
     « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
   - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a
     decision (who may answer from a page, and as whom).
-  - **Kept, though the mock-up does not draw it**: « No reply yet. », which is not the same as
-    saying nothing; the two sentences about an approximate place, under the byline; the replies
+  - **Kept, though the mock-up does not draw it**: the two sentences about an approximate place, under the byline; the replies
     capped at 180 px with a scroll a keyboard can reach (FRU-154), 10 px apart; a note kept for
     later, whose head says « Not sent yet » behind a grey drop, with no link; the dark scheme; and
     an outline in forced colours, where a shadow is not drawn.
