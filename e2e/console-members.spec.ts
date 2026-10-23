@@ -146,8 +146,14 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
     }
     if (!['invite-member', 'cancel-invitation', 'remove-member'].includes(call)) return undefined;
     const body = request.postDataJSON() as Record<string, unknown>;
+    // A request held open reaches the worker a while after the button says « Sending… »: on CI the
+    // button said it before the stub saw the request (FRU-442: 6 sent where 7 were read).
+    // The stub keeps that order on every machine, so a test reads what was sent by polling.
+    if (worker.slow)
+      return new Promise<void>(() => {
+        setTimeout(() => worker.sent.push({ call, body }), 300);
+      });
     worker.sent.push({ call, body });
-    if (worker.slow) return new Promise<void>(() => {});
     if (worker.refuses !== undefined) {
       const { status, ...refused } = worker.refuses;
 
@@ -652,6 +658,11 @@ test('an invitation that is refused says its cause, and clears nothing that was 
   await expect(sending).toBeDisabled();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(email(page)).toHaveValue('tom@acme');
+  // The request reaches the worker after the button changed: it is waited for, not read at once.
+  await expect.poll(() => worker.sent.length).toBe(before + 1);
+  // A second press on the busy button sends nothing more, even once its request had time to arrive.
+  await sending.click({ force: true });
+  await page.waitForTimeout(400);
   expect(worker.sent.length).toBe(before + 1);
 });
 
