@@ -482,9 +482,12 @@ export type ConsoleSession = { id: string; createdAt: string; lastUsedAt: string
  */
 export type ExtensionBrowser = { id: string; browser: string; connectedAt: string; usedAt: string };
 
-/** The browsers of the extension of the person. A refusal is no list. */
-export async function extensionBrowsers(): Promise<Answer<ExtensionBrowser[]>> {
-  const listed = await call<{ browsers?: ExtensionBrowser[] }>('GET', '/console/me/browsers');
+/**
+ * The browsers of the extension of the person. A refusal is no list. `quiet`: a `401` does not end
+ * the session of the screen (`/connect` reads it signed out too, FRU-410).
+ */
+export async function extensionBrowsers(options: { quiet?: boolean } = {}): Promise<Answer<ExtensionBrowser[]>> {
+  const listed = await call<{ browsers?: ExtensionBrowser[] }>('GET', '/console/me/browsers', undefined, options);
   if (!listed.ok) return listed;
 
   return Array.isArray(listed.data?.browsers)
