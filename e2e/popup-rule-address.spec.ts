@@ -45,3 +45,28 @@ for (const [name, endpoint, said] of [
     }
   });
 }
+
+test('the page of the extension refuses a pairing link as a worker, and « Pair with this link » opens its card with the code (review of #539)', async ({
+  extension,
+}) => {
+  const options = await extension.context.newPage();
+  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  await options.getByRole('button', { name: 'Add a site' }).click();
+  await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
+  await options.getByLabel(/^Mode/).selectOption('private');
+  await options.getByLabel('Worker endpoint', { exact: true }).fill(`${WORKER_ORIGIN}/pair#ABCD-EFGH-JKLM`);
+  await options.getByLabel('Client id', { exact: true }).fill('playground');
+  await options.getByRole('button', { name: 'Add rule' }).click();
+
+  await expect(
+    options.getByText(
+      'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.',
+    ),
+  ).toBeVisible();
+  // Nothing was stored.
+  await expect(options.locator(`tr.rule-row[data-pattern="${PLAYGROUND_ORIGIN}"]`)).toHaveCount(0);
+
+  await options.getByRole('button', { name: 'Pair with this link' }).click();
+  const card = options.locator(`.worker-card[data-endpoint="${WORKER_ORIGIN}"]`);
+  await expect(card.getByLabel('Pairing code')).toHaveValue('ABCD-EFGH-JKLM');
+});
