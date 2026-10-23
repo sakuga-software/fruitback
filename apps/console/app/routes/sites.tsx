@@ -136,8 +136,9 @@ export default function Sites() {
   const [removed, setRemoved] = useState(0);
   useEffect(() => {
     if (removed === 0) return;
+    // The search, and not the form « Add a site » that can be open above it (raised in review).
     const next =
-      document.querySelector<HTMLElement>('main [role="region"][tabindex="0"]') ??
+      document.querySelector<HTMLElement>('main input[type="search"]') ??
       document.querySelector<HTMLElement>('main input');
     next?.focus();
   }, [removed]);

@@ -804,9 +804,18 @@ test('removing a site asks twice, and a site that is still there says so after i
   await expect(page.getByRole('alert')).toHaveCount(0);
   // The card and its button are gone: focus is on the search, and not back at the top of the page.
   await expect(search(page)).toBeFocused();
+
+  // With the form « Add a site » open above the search, focus still goes to the search.
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  await more(page, 'acme.dev').click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
+  await page.getByRole('button', { name: 'Remove acme.dev', exact: true }).click();
+  await expect(card(page, 'acme.dev')).toHaveCount(0);
+  await expect(search(page)).toBeFocused();
   expect(worker.sent.map(({ method, pathname }) => `${method} ${pathname}`)).toEqual([
     'DELETE /console/workspaces/w1/sites/s1',
     'DELETE /console/workspaces/w1/sites/s1',
+    'DELETE /console/workspaces/w1/sites/s2',
   ]);
 });
 
