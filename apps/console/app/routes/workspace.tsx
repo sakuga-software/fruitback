@@ -462,7 +462,10 @@ export function RailNav({ label, entries }: { label: string; entries: readonly R
                 : 'pr-[12px] pl-[31px] text-rail-text hover:bg-rail-active hover:text-white'
             }`}
           >
-            {active ? <span aria-hidden="true" className="kit-drop bg-rail-accent" data-size="9" /> : null}
+            {/* The drop of the entry on screen slides to the next one in a move (FRU-413): `kit-rail-drop`. */}
+            {active ? (
+              <span aria-hidden="true" className="kit-drop kit-rail-drop bg-rail-accent" data-size="9" />
+            ) : null}
             {entry.label}
           </Link>
         );

@@ -286,7 +286,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   of workspace draws the new one from it, never the one before. « My workspaces » leads to the first
   workspace itself. Rail entries and the change of workspace use view transitions: the rail holds
   still, the screen cross-fades (120 ms out, 220 ms in from 4 px lower), nothing moves with
-  `prefers-reduced-motion`. No colour transition on the rail: `e2e/console-frame.spec.ts` reads the
+  `prefers-reduced-motion`. **The drop of the entry on screen slides to the new entry** (FRU-413):
+  it is a picture of its own in the move (`view-transition-name: rail-drop`), 220 ms on the curve
+  of the kit, and is at its place at once with reduced motion. `e2e/console-rail-drop.spec.ts` reads
+  its animation during a move. No colour transition on the rail: `e2e/console-frame.spec.ts` reads the
   colours of a hovered entry and would read them halfway. `e2e/console-moves.spec.ts` reads every
   frame of a move, with a control.
 - **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the

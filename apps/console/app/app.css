@@ -727,6 +727,29 @@ textarea {
   animation: none;
 }
 
+/*
+  The drop of the entry on screen slides from the entry of before to the new one (FRU-413): it is a
+  picture of its own in the move, so the rail that holds still does not hold it. The same drop is
+  on both sides, so it moves and does not fade. With reduced motion it is at its place at once (the
+  rule below). One entry of the rail is on screen at a time, so the name is held once.
+*/
+.kit-rail-drop {
+  view-transition-name: rail-drop;
+}
+
+::view-transition-group(rail-drop) {
+  animation-duration: var(--duration-fast);
+  animation-timing-function: var(--ease-settle);
+}
+
+::view-transition-old(rail-drop) {
+  display: none;
+}
+
+::view-transition-new(rail-drop) {
+  animation: none;
+}
+
 ::view-transition-old(screen) {
   animation: kit-screen-out 120ms ease-out both;
 }
