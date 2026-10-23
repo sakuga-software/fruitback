@@ -1,5 +1,7 @@
 import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM } from './site-editor.ts';
 import {
+  PAIRING_LINK_PROBLEM,
+  PAIR_PATH_PROBLEM,
   PATTERN_PROBLEM,
   PREVIEWS_NOT_PROVEN,
   STALE_TEAM_WILDCARD,
@@ -47,7 +49,9 @@ export type Remedy =
   /** Read the list of rules: the change can be stored although its answer was lost. */
   | 'list'
   /** Read about it. The reviewer cannot fix it from the browser. */
-  | 'guide';
+  | 'guide'
+  /** Pair with the link that was typed where the worker goes (FRU-395). */
+  | 'pair';
 
 /** The words on the button. One word for one remedy, on both pages. */
 export const REMEDY_LABEL: Record<Remedy, string> = {
@@ -56,6 +60,7 @@ export const REMEDY_LABEL: Record<Remedy, string> = {
   change: 'Change the worker',
   list: 'Check the list',
   guide: 'How to get a code',
+  pair: 'Pair with this link',
 };
 
 export type Problem = { text: string } & ({ remedy: Remedy } | { remedy: null; why: string });
@@ -73,6 +78,8 @@ export const PROBLEMS: readonly Problem[] = [
   { text: DUPLICATE_PROBLEM, remedy: null, why: 'The rule to remove is in the list above the form.' },
   { text: PATTERN_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: WILDCARD_TEAM_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
+  { text: PAIRING_LINK_PROBLEM, remedy: 'pair' },
+  { text: PAIR_PATH_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: STALE_TEAM_WILDCARD, remedy: null, why: 'The row offers Remove, and nothing else can run that rule.' },
   {
     text: PREVIEWS_NOT_PROVEN,

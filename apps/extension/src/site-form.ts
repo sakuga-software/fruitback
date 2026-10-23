@@ -1,5 +1,6 @@
 import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint } from './endpoint.ts';
 import { lendsSession } from './site-patterns.ts';
+import { PAIR_PATH, type PairLink, parsePairLink } from './pair-link.ts';
 import type { SiteConfig, SiteMode } from './sites.ts';
 
 /**
@@ -30,6 +31,39 @@ export const WILDCARD_TEAM_PROBLEM =
   'A team-mode rule must name one origin. A wildcard would lend your session to every site it covers.';
 
 /**
+ * FRU-395: a pairing link pasted where the worker goes. The link is `<worker>/pair#<code>`, and the
+ * worker is the address before `/pair`: a rule that reads `<worker>/pair` asks for
+ * `<worker>/pair/feedback` and gets `404` on every page, with nothing on screen to say so.
+ */
+export const PAIRING_LINK_PROBLEM =
+  'This is a pairing link, not the address of a worker. Use it to pair, and give the rule the address before /pair.';
+
+/** The same address with no code, or with a fragment that is no code. */
+export const PAIR_PATH_PROBLEM =
+  'An address that ends in /pair, or that carries a #, is a pairing link, not a worker. Give the address before /pair.';
+
+/** Whether this address is a pairing link, or the page of one, rather than a worker. */
+export function isPairingAddress(value: string): boolean {
+  try {
+    const url = new URL(value);
+
+    return url.hash !== '' || url.pathname.replace(/\/+$/, '').endsWith(PAIR_PATH);
+  } catch {
+    return false;
+  }
+}
+
+/** Where the page of the extension pairs with a link (FRU-302): the fragment `options` reads. */
+export function pairingFragment(link: PairLink): string {
+  return `#workers?${new URLSearchParams({ worker: link.endpoint, code: link.code }).toString()}`;
+}
+
+/** The pairing link this address is, when it is a whole one: the form offers to pair with it. */
+export function pairingLinkIn(value: string): PairLink | undefined {
+  return parsePairLink(value.trim());
+}
+
+/**
  * What is wrong with these fields, for the rule stored under `pattern`, in the reporter's words, or
  * nothing.
  */
@@ -37,6 +71,9 @@ export function complaint(values: SiteFields, pattern: string): string {
   if (lendsSession(pattern, values)) return WILDCARD_TEAM_PROBLEM;
   if (values.endpoint === '') return 'The worker endpoint is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
+  if (isPairingAddress(values.endpoint)) {
+    return pairingLinkIn(values.endpoint) === undefined ? PAIR_PATH_PROBLEM : PAIRING_LINK_PROBLEM;
+  }
   // Trimmed, because an id made of spaces is an absent id. `importSites` passes the value of a file
   // here as it is, and a worker with several clients answers `client-required` for it (FRU-73).
   if (values.mode === 'private' && values.clientId.trim() === '') return 'The client id is required.';

@@ -1,6 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { WILDCARD_TEAM_PROBLEM, complaint, siteFrom } from './site-form.ts';
+import {
+  PAIRING_LINK_PROBLEM,
+  PAIR_PATH_PROBLEM,
+  WILDCARD_TEAM_PROBLEM,
+  complaint,
+  pairingFragment,
+  pairingLinkIn,
+  siteFrom,
+} from './site-form.ts';
+import type { PairLink } from './pair-link.ts';
 
 const ORIGIN = 'https://acme.dev';
 
@@ -78,5 +87,37 @@ describe('siteFrom', () => {
       endpoint: 'https://w.test',
       enabled: false,
     });
+  });
+});
+
+describe('a pairing link where the worker goes (FRU-395)', () => {
+  const rule = (endpoint: string) =>
+    complaint({ mode: 'private', endpoint, clientId: 'fruitback' }, 'https://app.fruitback.test');
+
+  it('refuses an address that ends in /pair, or that carries a fragment', () => {
+    assert.equal(rule('https://api.fruitback.com/pair'), PAIR_PATH_PROBLEM);
+    assert.equal(rule('https://api.fruitback.com/pair/'), PAIR_PATH_PROBLEM);
+    assert.equal(rule('https://api.fruitback.com/pair#abc'), PAIR_PATH_PROBLEM);
+    assert.equal(rule('https://api.fruitback.com/#abc'), PAIR_PATH_PROBLEM);
+    assert.equal(
+      complaint(
+        { mode: 'team', endpoint: 'https://api.fruitback.com/pair', clientId: '' },
+        'https://app.fruitback.test',
+      ),
+      PAIR_PATH_PROBLEM,
+    );
+  });
+
+  it('offers to pair with a whole link, at the worker before /pair', () => {
+    assert.equal(rule('https://example.com/fruitback/pair#ABCD-EFGH-JKLM'), PAIRING_LINK_PROBLEM);
+    const link = pairingLinkIn('https://example.com/fruitback/pair#ABCD-EFGH-JKLM') as PairLink;
+    assert.deepEqual(link, { endpoint: 'https://example.com/fruitback', code: 'ABCD-EFGH-JKLM' });
+    assert.equal(pairingFragment(link), '#workers?worker=https%3A%2F%2Fexample.com%2Ffruitback&code=ABCD-EFGH-JKLM');
+  });
+
+  it('accepts a worker behind a path, and a path that only starts like it', () => {
+    assert.equal(rule('https://example.com/fruitback'), '');
+    assert.equal(rule('https://example.com/pairs'), '');
+    assert.equal(rule('https://pair.example.com'), '');
   });
 });

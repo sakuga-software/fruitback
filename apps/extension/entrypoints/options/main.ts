@@ -1,7 +1,13 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored, createEditor, latestOnly } from '../../src/site-editor.ts';
-import { PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD, TOO_LARGE_FOR_ACCOUNT } from '../../src/site-form.ts';
+import {
+  PREVIEWS_NOT_PROVEN,
+  STALE_TEAM_WILDCARD,
+  TOO_LARGE_FOR_ACCOUNT,
+  pairingFragment,
+  pairingLinkIn,
+} from '../../src/site-form.ts';
 import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
@@ -282,7 +288,9 @@ function choose(pattern: string | undefined): void {
     const aside = rulePanel(document, {
       ...panelOptions(row, name),
       onSave: (fields) =>
-        void editor.save(row.pattern, fields).then((text) => showProblem(said, text, { list: reloadList })),
+        void editor
+          .save(row.pattern, fields)
+          .then((text) => showProblem(said, text, { list: reloadList, ...pairWith(fields.endpoint) })),
     });
     aside.querySelector('.panel-body')?.append(said);
     shown = pattern;
@@ -403,7 +411,7 @@ function addForm(): HTMLElement {
         clientId: clientId.input.value.trim(),
       })
       .then((text) => {
-        showProblem(problem, text, { grant: submit, list: reloadList });
+        showProblem(problem, text, { grant: submit, list: reloadList, ...pairWith(endpoint.input.value) });
         // Stored: the new rule's panel takes the place of the form. Typed in, it is not « imported ».
         const added = parseSitePattern(sites.input.value);
         if (text === '' && added !== undefined) imported.delete(added);
@@ -544,6 +552,16 @@ function button(text: string, onClick: () => void, className?: string): HTMLButt
   node.addEventListener('click', onClick);
 
   return node;
+}
+
+/**
+ * FRU-395: a pairing link typed where the worker goes. « Pair with this link » takes it to its
+ * worker's card, in « Workers and sessions », with the code filled in.
+ */
+function pairWith(endpoint: string): { pair?: () => void } {
+  const link = pairingLinkIn(endpoint);
+
+  return link === undefined ? {} : { pair: () => void (window.location.hash = pairingFragment(link)) };
 }
 
 function linkedPairing(hash: string): { endpoint: string; code: string } | undefined {

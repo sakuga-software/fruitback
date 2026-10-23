@@ -69,3 +69,32 @@ describe('probeRead (FRU-66)', () => {
     assert.equal(await probeRead(SITE, PAGE, unreachable), 'unknown');
   });
 });
+
+describe('a worker that is not at the address of the rule (FRU-395)', () => {
+  it('says so on a 404, and asks with no client when the rule names none', async () => {
+    const seams = answering(404);
+    assert.equal(await probeRead({ endpoint: 'https://api.fruitback.test/pair' }, PAGE, seams), 'not-found');
+    assert.deepEqual(seams.asked, [
+      'https://api.fruitback.test/pair/feedback?url=https%3A%2F%2Fstaging.acme.dev%2Fpricing%3Ftab%3Dannual',
+    ]);
+  });
+});
+
+describe('a 404 of the read, as the worker or a proxy writes it (review of #539)', () => {
+  const answering404 = (body: unknown, json = true) => ({
+    fetch: async () => ({
+      status: 404,
+      ok: false,
+      ...(json ? { json: async () => body } : { json: async () => Promise.reject(new SyntaxError('not json')) }),
+    }),
+  });
+
+  it('is « not found » for a path the worker does not serve, and for a 404 that is not JSON', async () => {
+    assert.equal(await probeRead(SITE, PAGE, answering404({ error: 'not-found' })), 'not-found');
+    assert.equal(await probeRead(SITE, PAGE, answering404(undefined, false)), 'not-found');
+  });
+
+  it('says nothing for a 404 that names another error', async () => {
+    assert.equal(await probeRead(SITE, PAGE, answering404({ error: 'unknown-client' })), 'unknown');
+  });
+});
