@@ -176,14 +176,17 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const { worker, cookie, id } = await signedIn();
       const bob = await worker.signIn('bob@acme.dev');
 
-      for (const [answers, why] of [
-        [github('alice@other.dev'), 'another address'],
-        [github('alice@acme.dev', { verified: false }), 'an address GitHub did not verify'],
+      // The console names the provider and says what to do from these two words (FRU-416). better-auth
+      // 1.7.7 answers an address the provider did not verify with `unable_to_link_account`.
+      for (const [answers, code, why] of [
+        [github('alice@other.dev'), 'email_does_not_match', 'another address'],
+        [github('alice@acme.dev', { verified: false }), 'unable_to_link_account', 'an address GitHub did not verify'],
       ] as const) {
         const { location } = await linkThrough(worker, cookie, 'github', answers);
         const back = new URL(location);
         assert.equal(`${back.origin}${back.pathname}`, `${CONSOLE_URL}/w/ws_0123456789abcdef0123/account`, why);
-        assert.ok(back.searchParams.get('error'), `${why}: no error in ${location}`);
+        assert.equal(back.searchParams.get('error'), code, `${why}: ${location}`);
+        assert.equal(back.searchParams.get('provider'), 'github', `${why}: ${location}`);
         assert.deepEqual(await providersOf(worker.database, id), [], why);
       }
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 2);
@@ -194,7 +197,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       };
       await linkThrough(worker, bob, 'github', github('bob@acme.dev', { id: 7 }));
       const { location } = await linkThrough(worker, cookie, 'github', github('alice@acme.dev', { id: 7 }));
-      assert.ok(new URL(location).searchParams.get('error'), location);
+      assert.equal(new URL(location).searchParams.get('error'), 'account_already_linked_to_different_user', location);
+      assert.equal(new URL(location).searchParams.get('provider'), 'github', location);
       assert.deepEqual(await providersOf(worker.database, id), []);
       assert.deepEqual(await providersOf(worker.database, bobs.account.id), ['github']);
     });
@@ -208,20 +212,23 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         Cookie: cookie,
         'Sec-Fetch-Site': 'cross-site',
       });
-      assert.equal(crossSite.headers.get('Location'), `${page}?error=started_from_another_site`);
+      assert.equal(crossSite.headers.get('Location'), `${page}?provider=github&error=started_from_another_site`);
       assert.deepEqual(crossSite.headers.getSetCookie(), []);
 
       const nobody = await start('/console/auth/link/github?workspace=ws_0123456789abcdef0123', {
         'Sec-Fetch-Site': 'same-site',
       });
-      assert.equal(nobody.headers.get('Location'), `${page}?error=identity_required`);
+      assert.equal(nobody.headers.get('Location'), `${page}?provider=github&error=identity_required`);
 
       // An address that is not a workspace id goes to the root of the console, and nowhere else.
       const elsewhere = await start('/console/auth/link/github?workspace=..%2F..%2Fevil.example', {
         Cookie: cookie,
         'Sec-Fetch-Site': 'cross-site',
       });
-      assert.equal(elsewhere.headers.get('Location'), `${CONSOLE_URL}/?error=started_from_another_site`);
+      assert.equal(
+        elsewhere.headers.get('Location'),
+        `${CONSOLE_URL}/?provider=github&error=started_from_another_site`,
+      );
 
       assert.equal((await start('/console/auth/link/gitlab', { Cookie: cookie })).status, 404);
       assert.equal(
