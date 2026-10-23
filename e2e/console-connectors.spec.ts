@@ -230,14 +230,15 @@ test('the list of the sources and the panel of a Linear are the ones of the mock
   expect.soft(await painted(state, 'color')).toEqual(rgb(DONE));
   expect.soft(contrast(rgb(DONE), rgb(CHIP)), 'the green on the tint of the chosen row').toBeGreaterThanOrEqual(4.5);
 
-  // The boxes of the mockup at 1440 px.
+  // The boxes of the mockup at 1440 px, in a screen as wide as its column (FRU-398): 11.5 px wider
+  // than the 1180 px of the mockup.
   expectBox(await box(title), { x: 297, y: 130, height: 18 }, 2, '« Connected »');
-  expectBox(await box(chosen), { x: 298, y: 159, width: 711.7, height: 65 }, 2, 'the first row');
-  expectBox(await box(resting), { x: 298, y: 224, width: 711.7 }, 2, 'the second row');
-  expectBox(await box(panel(page)), { x: 1038, y: 130, width: 342.3 }, 2, 'the panel');
+  expectBox(await box(chosen), { x: 298, y: 159, width: 723.2, height: 65 }, 2, 'the first row');
+  expectBox(await box(resting), { x: 298, y: 224, width: 723.2 }, 2, 'the second row');
+  expectBox(await box(panel(page)), { x: 1049.7, y: 130, width: 342.3 }, 2, 'the panel');
   expectBox(
     await box(panel(page).getByRole('heading', { level: 2 })),
-    { x: 1061, y: 151, height: 21 },
+    { x: 1072.7, y: 151, height: 21 },
     2,
     'the title of the panel',
   );

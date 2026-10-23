@@ -274,10 +274,11 @@ test('the list is the table of the mockup, with what the worker of today says of
       'font-variant-numeric': 'tabular-nums',
     });
   expect.soft(await painted(tom.nth(3), 'color')).toEqual(rgb(MUTED));
-  expectBox(await box(table(page)), { x: 296.5, y: 216.2, width: 1024, height: 366.5 }, 2, 'the frame of the table');
+  // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
+  expectBox(await box(table(page)), { x: 296.5, y: 216.2, width: 1095.5, height: 366.5 }, 2, 'the frame of the table');
   expectBox(await box(table(page).locator('thead tr')), { height: 43.3 }, 2, 'the header row');
   // A row of the mockup is 64 px: two lines of 14 px and 13 px at 1.45, and 12 px above and under.
-  expectBox(await box(row(page, 'Tom')), { x: 297.5, y: 324.7, width: 1022, height: 64.1 }, 2, 'the second row');
+  expectBox(await box(row(page, 'Tom')), { x: 297.5, y: 324.7, width: 1093.5, height: 64.1 }, 2, 'the second row');
 
   // A person: the round chip with the initial, the name at 600, the address under it.
   const chip = tom.nth(0).locator('.kit-avatar');
@@ -335,8 +336,8 @@ test('the list is the table of the mockup, with what the worker of today says of
   });
   expect.soft(await painted(resend, 'color')).toEqual(rgb(INK));
   // The link of the kit is 33 px high where the mockup has 36.3: its line is `normal`, not 1.45.
-  expectBox(await box(resend), { x: 1187, y: 531, width: 50.2 }, 2, '« Resend »');
-  expectBox(await box(cancel), { x: 1253.2, y: 531, width: 46.3 }, 2, '« Cancel »');
+  expectBox(await box(resend), { x: 1258.5, y: 531, width: 50.2 }, 2, '« Resend »');
+  expectBox(await box(cancel), { x: 1324.7, y: 531, width: 46.3 }, 2, '« Cancel »');
   await resend.hover();
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
@@ -362,8 +363,8 @@ test('the list is the table of the mockup, with what the worker of today says of
   expect.soft(await styles(legend.locator('dt').first(), ['font-weight'])).toEqual({ 'font-weight': '600' });
   expect.soft(await styles(legend.locator('dd').first(), ['margin-top'])).toEqual({ 'margin-top': '2px' });
   expect.soft(await painted(legend.locator('dd').first(), 'color')).toEqual(rgb(MUTED));
-  expectBox(await box(legend), { x: 296.5, y: 610.7, width: 1024, height: 65 }, 2, 'the legend');
-  expectBox(await box(legend.locator('> div').nth(1)), { x: 648.5, width: 320 }, 2, 'the second role of the legend');
+  expectBox(await box(legend), { x: 296.5, y: 610.7, width: 1095.5, height: 65 }, 2, 'the legend');
+  expectBox(await box(legend.locator('> div').nth(1)), { x: 672.4, width: 343.8 }, 2, 'the second role of the legend');
 
   await expectNoViolation(page, 'the list');
 });
@@ -426,10 +427,10 @@ test('the invitation is one line: a form with a name, and each field under its l
   expect.soft(await painted(invite(page), 'backgroundColor')).toEqual(rgb(ACCENT));
 
   // The mockup has a third list, « Site », where the role is here: the field takes its room.
-  expectBox(await box(form(page)), { x: 296.5, y: 126.2, width: 1024, height: 66 }, 2, 'the form');
+  expectBox(await box(form(page)), { x: 296.5, y: 126.2, width: 1095.5, height: 66 }, 2, 'the form');
   expectBox(await box(email(page)), { x: 296.5, y: 148.2, height: 44 }, 2, 'the field');
-  expectBox(await box(roles(page)), { x: 1025.1, y: 148.2, width: 200.3, height: 44 }, 2, 'the list of roles');
-  expectBox(await box(invite(page)), { x: 1235.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
+  expectBox(await box(roles(page)), { x: 1096.7, y: 148.2, width: 200.3, height: 44 }, 2, 'the list of roles');
+  expectBox(await box(invite(page)), { x: 1307.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
 
   // The roles in the order of the mockup; the list « Site » is for a guest only.
   await expect(form(page).getByText('Site', { exact: true })).toHaveCount(0);
@@ -476,10 +477,10 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   // The state of the mockup at 1440 px: Email, Role, Site, « Invite » on one line.
   await expect(sitesList(page)).toBeVisible();
   await expect(sitesList(page)).toContainText('staging.acme.dev');
-  expectBox(await box(email(page)), { x: 297, y: 148, width: 508.3, height: 44 }, 2, 'the field');
-  expectBox(await box(roles(page)), { x: 815, y: 148, width: 200.3, height: 44 }, 2, 'the list of roles');
-  expectBox(await box(sitesList(page)), { x: 1025, y: 148, width: 200.3, height: 44 }, 2, 'the list of sites');
-  expectBox(await box(invite(page)), { x: 1235.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
+  expectBox(await box(email(page)), { x: 297, y: 148, width: 580.1, height: 44 }, 2, 'the field');
+  expectBox(await box(roles(page)), { x: 886.6, y: 148, width: 200.3, height: 44 }, 2, 'the list of roles');
+  expectBox(await box(sitesList(page)), { x: 1097, y: 148, width: 200.3, height: 44 }, 2, 'the list of sites');
+  expectBox(await box(invite(page)), { x: 1307.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
   const label = form(page).locator('.label', { hasText: 'Site' }).first();
   expect.soft(await styles(label, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
   await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);

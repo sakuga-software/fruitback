@@ -190,7 +190,8 @@ test('the list is the table of the mockup, with its six columns and the legend o
   await expect(page.locator('main h1')).toHaveText('Sites');
   await expect(page.getByText('Where Acme collects notes, and where they stand.')).toBeVisible();
   const add = page.getByRole('button', { name: 'Add a site', exact: true });
-  expectBox(await box(add), { x: 1211, y: 58, width: 110, height: 44 }, 2, '« Add a site »');
+  // The screen is as wide as its column (FRU-398): 71.5 px wider than the 1120 px of the mockup.
+  expectBox(await box(add), { x: 1282, y: 58, width: 110, height: 44 }, 2, '« Add a site »');
   expect.soft(await styles(page.locator('main header'), ['margin-bottom'])).toEqual({ 'margin-bottom': '28px' });
 
   // Six columns, each a column header. « Actions » is said and not shown.
@@ -220,7 +221,7 @@ test('the list is the table of the mockup, with its six columns and the legend o
   const drop = await box(drops.first());
   expect.soft({ width: drop.width, height: drop.height }).toEqual({ width: 9, height: 9 });
   // The table starts where the mockup draws it, under the legend.
-  expectBox(await box(table(page).locator('table')), { x: 298, y: 159, width: 1022 }, 2, 'the table');
+  expectBox(await box(table(page).locator('table')), { x: 298, y: 159, width: 1093.5 }, 2, 'the table');
 
   // The frame and the cells, as the mockup writes them.
   expect.soft(await styles(table(page), ['border-top-left-radius', 'border-top-width', 'overflow-x'])).toEqual({
@@ -333,7 +334,7 @@ test('the list is the table of the mockup, with its six columns and the legend o
 
   // The button of a row: 36 px, named after its site, and it opens a menu.
   const button = more(page, 'staging.acme.dev');
-  expectBox(await box(button), { x: 1264, width: 36, height: 36 }, 2, 'the button of a row');
+  expectBox(await box(button), { x: 1335, width: 36, height: 36 }, 2, 'the button of a row');
   expect.soft(await styles(button, ['border-top-left-radius'])).toEqual({ 'border-top-left-radius': '8px' });
   expect.soft(await painted(button, 'color')).toEqual(rgb(MUTED));
   await expect(button).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
@@ -544,7 +545,7 @@ test('the counts come with the list: nothing that a pointer can reach moves when
   expect(await Promise.all(reachable.map(box))).toEqual(before);
   expectBox(
     await box(page.getByRole('button', { name: 'Add a site', exact: true })),
-    { x: 1211, y: 58 },
+    { x: 1282, y: 58 },
     2,
     '« Add a site »',
   );
