@@ -282,11 +282,27 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/**
+ * Whether a server answers at `url`, on either loopback address.
+ *
+ * `localhost` can name `127.0.0.1` or `::1`, and a server that listens on one of them refuses the
+ * other. The playground of the e2e is checked by Playwright, which tries both; `fetch` of Node tries
+ * one. In the container of CI it was the wrong one, and the bench waited 60 s for a playground that ran.
+ */
 async function answers(url: string): Promise<boolean> {
-  return fetch(url).then(
-    (response) => response.ok,
-    () => false,
-  );
+  const given = new URL(url);
+  const hosts = given.hostname === 'localhost' ? ['localhost', '127.0.0.1', '[::1]'] : [given.hostname];
+  for (const host of hosts) {
+    const tried = new URL(url);
+    tried.hostname = host;
+    const ok = await fetch(tried).then(
+      (response) => response.ok,
+      () => false,
+    );
+    if (ok) return true;
+  }
+
+  return false;
 }
 
 async function startWorker(port: number): Promise<{ origin: string; stop: () => Promise<void> }> {
