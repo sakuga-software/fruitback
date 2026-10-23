@@ -139,6 +139,9 @@ export async function startBench(options: BenchOptions = {}): Promise<Bench> {
     };
     let gesture: Bench['gesture'] = 'click';
     let { context, directories } = await launch(gesture, 1);
+    // Registered at once, and it closes the browser of the moment: a failure of the probe or of the
+    // second launch still closes what is open.
+    stops.push(() => context.close());
     // The Chromium of Playwright 1.58.2 (CI) has no `Extensions.triggerAction`; Chromium 156 has it.
     if (!(await canTriggerAction(context))) {
       await context.close();
@@ -146,7 +149,6 @@ export async function startBench(options: BenchOptions = {}): Promise<Bench> {
       ({ context, directories } = await launch(gesture, 2));
       log('this Chromium has no Extensions.triggerAction: the copy holds <all_urls>, and no capture needs a gesture');
     }
-    stops.push(() => context.close());
 
     const [id, ...moreIds] = directories.map(unpackedId);
     const serviceWorker = await serviceWorkerOf(context, id as string);
