@@ -3908,7 +3908,9 @@ client map were refused together at boot.
   one (the E2E suite caught it).
 - `GET /console/me/sign-in` lists the ways; `GET /console/auth/link/<provider>` links one by a
   navigation, because WebKit keeps no cookie of the state from the answer of a `fetch` (FRU-147);
-  `DELETE /console/me/sign-in/<provider>` unlinks one.
+  `DELETE /console/me/sign-in/<provider>` unlinks one. A link that did not start, or that
+  better-auth refused, comes back to « My account » with `?provider=<provider>&error=<code>`: the
+  provider is the one of the path, a closed list, and the console names it (FRU-416).
 - The worker decides whether a provider may go, not better-auth: its count of rows does not see the
   link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
   `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.

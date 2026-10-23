@@ -558,10 +558,12 @@ async function signInMethods(
 /**
  * `GET /console/auth/link/<provider>?workspace=<id>` (FRU-249): links a provider to the account of the
  * cookie, by a navigation, as `START_PATH` starts a sign-in. The person comes back to « My account »
- * of that workspace, with `?linked=<provider>`, or with `?error=<code>` when better-auth refused.
+ * of that workspace, with `?linked=<provider>`, or with `?provider=<provider>&error=<code>` when
+ * the link did not start or better-auth refused it: the console names the provider (FRU-416).
+ * `provider` is one of `LINK_PATH`, never a value of the request.
  *
  * better-auth links only an address that the provider verified, and **only the address of the
- * account**: another one answers `email_doesn't_match`, and two accounts are never joined here
+ * account**: another one answers `email_does_not_match`, and two accounts are never joined here
  * (read in `oauth2/link-account.mjs` of 1.7.7, and tested). A page of another site does not start
  * one; a page of the same site sends the cookie, and can link to the account its own provider
  * account at most, which a sign-in with that provider does too.
@@ -573,6 +575,7 @@ async function linkProvider(request: Request, provider: string, context: AuthRou
   const page = WORKSPACE_ID.test(workspace) ? `/w/${workspace}/account` : '/';
   const back = (code: string): Response => {
     const to = new URL(page, consoleOrigin);
+    to.searchParams.set('provider', provider);
     to.searchParams.set('error', code);
 
     return new Response(null, { status: 302, headers: { Location: to.href, 'Cache-Control': 'no-store' } });
@@ -589,7 +592,8 @@ async function linkProvider(request: Request, provider: string, context: AuthRou
     body: {
       provider,
       callbackURL: `${consoleOrigin}${page}?linked=${provider}`,
-      errorCallbackURL: `${consoleOrigin}${page}`,
+      // better-auth adds `&error=<code>` to an address that has a query already.
+      errorCallbackURL: `${consoleOrigin}${page}?provider=${provider}`,
       disableRedirect: true,
     },
     headers: headersFor(request, context),
