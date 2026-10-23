@@ -160,6 +160,11 @@ The trusted publisher must publish within 2 days, or npm forgets it: push the ta
   package with none of its own — so "the tarball contains a LICENSE" is true even for a package that
   never declared one. `THIRD-PARTY-NOTICES.md` is the opposite case: nothing force-includes it, so
   its `files` entry **is** load-bearing.
+- **Each published package ships a README of its own** (FRU-388), the page npm shows for it: its
+  name as the title, `npm i <name>`, a minimal example, links to the guides on `fruitback.com`, and
+  « ## Licence » that says MIT. npm force-includes a README, so the pack guard reads its text from
+  the tarball, as it does for the LICENSE. A link goes to the page of the site (`install.html`), not
+  to the `.md`: npm does not rewrite it.
 - **The README snippet is read from the README and checked against the build** (`package.test.ts`,
   FRU-26). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
   the built script actually reads. Before that, the claim in `CLAUDE.md` was an overclaim: the test
