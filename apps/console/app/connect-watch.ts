@@ -70,12 +70,13 @@ export function watchConnection({ read, page, now, onConnected }: ConnectionWatc
     timer = undefined;
     if (stopped || asking || page.visibilityState !== 'visible') return;
     asking = true;
-    const answer = await read();
+    // A read that throws is a read that failed: the next one is made at its time.
+    const answer = await read().catch((): undefined => undefined);
     asking = false;
     if (stopped) return;
     const wasFirst = first;
     first = false;
-    if (answer.ok) {
+    if (answer?.ok === true) {
       // The first list is what was there before: nothing in it connected from this page.
       if (wasFirst) known = new Set(answer.data.map((each) => each.id));
       const found = wasFirst ? undefined : newlyConnected(answer.data, known, openedAt);

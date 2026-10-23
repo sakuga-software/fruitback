@@ -150,6 +150,30 @@ describe('watching for a browser that connects (FRU-410)', () => {
     assert.deepEqual(connected, [NEW]);
   });
 
+  it('keeps reading after a read that throws', async () => {
+    const connected: ExtensionBrowser[] = [];
+    let calls = 0;
+    const throwing = (): Promise<Answer<ExtensionBrowser[]>> => {
+      calls += 1;
+      if (calls === 2) return Promise.reject(new TypeError('Failed to fetch'));
+
+      return Promise.resolve({ ok: true, data: calls < 3 ? [OLD] : [OLD, NEW] });
+    };
+    watchConnection({
+      read: throwing,
+      page: fakePage(),
+      now: () => OPENED,
+      onConnected: (found) => connected.push(found),
+    });
+    await settle();
+    for (let round = 0; round < 2; round += 1) {
+      mock.timers.tick(CONNECTED_EVERY_MS);
+      await settle();
+    }
+    assert.equal(calls, 3);
+    assert.deepEqual(connected, [NEW]);
+  });
+
   it('stops when the page goes away', async () => {
     answers = [{ ok: true, data: [] }];
     const page = fakePage();
