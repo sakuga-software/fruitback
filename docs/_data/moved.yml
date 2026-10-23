@@ -44,3 +44,6 @@
   4-one-instance-several-sites: /install/several-sites.html
   5-identified-reporters: /install/identified-reporters.html
   6-what-the-team-sees: /install/team-view.html
+/privacy.html:
+  deleting-a-reporters-notes: /privacy/delete-notes.html
+  a-notice-you-can-adapt: /privacy/notice.html#a-notice-you-can-adapt
