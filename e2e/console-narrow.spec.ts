@@ -78,7 +78,7 @@ test('at 390 px, the title follows the sections, and a long host reads in full',
   expect(title!.y - (rail!.y + rail!.height)).toBeLessThanOrEqual(40);
   expect(title!.y - (rail!.y + rail!.height)).toBeGreaterThan(0);
 
-  const host = page.getByText(`https://${LONG_HOST}`, { exact: true });
+  const host = page.getByRole('heading', { level: 2, name: LONG_HOST, exact: true });
   await expect(host).toBeVisible();
   // Read in full: nothing cut, and nothing past the right edge of the screen.
   expect(await host.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);

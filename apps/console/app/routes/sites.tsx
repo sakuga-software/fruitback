@@ -1,17 +1,20 @@
 import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { type Destination, STAGES, type Site, type Visibility, type Workspace, type Writers, call } from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
-import { Button, DataTable, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
+import { Button, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
+import { NotePages } from './notes';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
-import { siteAddress, siteLabel } from '../site-address';
+import { siteAddress, siteName } from '../site-address';
+import { SiteIcon } from '../site-icon';
+import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
@@ -25,7 +28,10 @@ type Draft = { url: string; visibility: Visibility; writers: Writers };
 /** A new site: read by its members, and « Members only » (FRU-330), as the worker makes it. */
 const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' };
 
-/** What is open under the row of a site: one thing at a time, on one row at a time. */
+/** How many cards a page shows: 12 fills rows of 1, 2, 3 or 4 cards. */
+const SITES_PER_PAGE = 12;
+
+/** What is open after the card of a site: one thing at a time, on one site at a time. */
 type Under = { site: string; what: 'install' | 'previews' | 'remove' };
 
 /**
@@ -51,6 +57,38 @@ export default function Sites() {
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
   const seesTracker = workspace.role !== 'guest';
 
+  // The search and the page live in the address (FRU-408): a reload keeps the view. The worker
+  // answers every site at once, so both are done here, on the list that was read.
+  const [params, setParams] = useSearchParams();
+  const latest = useRef(params);
+  useEffect(() => {
+    latest.current = params;
+  }, [params]);
+  const q = params.get('q') ?? '';
+  /** Writes a search, and goes back to the first page: a page of another list means nothing. */
+  const search = (value: string) => {
+    const next = new URLSearchParams(latest.current);
+    if (value === '') next.delete('q');
+    else next.set('q', value);
+    next.delete('page');
+    latest.current = next;
+    setParams(next, { replace: true });
+  };
+  const [typed, setTyped] = useTypedSearch(q, search);
+  const found = typeof sites === 'string' ? [] : matching(sites, q);
+  const pages = Math.max(1, Math.ceil(found.length / SITES_PER_PAGE));
+  // A page past the last one (a site removed, an address typed) shows the last one.
+  const at = Math.min(pages, Math.max(1, Math.trunc(Number(params.get('page'))) || 1));
+  const shown = found.slice((at - 1) * SITES_PER_PAGE, at * SITES_PER_PAGE);
+  const turn = (to: number) => {
+    const next = new URLSearchParams(latest.current);
+    if (to <= 1) next.delete('page');
+    else next.set('page', String(to));
+    latest.current = next;
+    setUnder(undefined);
+    setParams(next);
+  };
+
   // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162).
   const read = useCallback(async () => {
     setSites('loading');
@@ -63,7 +101,18 @@ export default function Sites() {
   function added(site: Site) {
     // On a list that was never read, the site alone would hide the others: read them all.
     if (typeof sites === 'string') void read();
-    else setSites((current) => edited(current, (items) => [...items.filter((each) => each.id !== site.id), site]));
+    else {
+      const items = [...sites.filter((each) => each.id !== site.id), site];
+      setSites(items);
+      // The new site is the last one: with no search, on the last page, where its card is seen.
+      const next = new URLSearchParams(latest.current);
+      next.delete('q');
+      const last = Math.ceil(items.length / SITES_PER_PAGE);
+      if (last <= 1) next.delete('page');
+      else next.set('page', String(last));
+      latest.current = next;
+      setParams(next, { replace: true });
+    }
     setAdding(false);
     // The new site shows how to put Fruitback on it.
     setUnder({ site: site.id, what: 'install' });
@@ -149,8 +198,6 @@ export default function Sites() {
         </div>
       ) : null}
 
-      {/* The six columns need 860 px: on a phone the table scrolls in its frame, and what opens under a
-          row stays in what is seen of it. */}
       {listed ? (
         <>
           {adding ? (
@@ -167,23 +214,31 @@ export default function Sites() {
               />
             </section>
           ) : null}
-          <DataTable label={t('Sites')} minWidth={860} hover>
-            <thead>
-              <tr>
-                <th scope="col">{t('Site')}</th>
-                <th scope="col">{t('Notes')}</th>
-                <th scope="col">{t('On the page with')}</th>
-                {seesTracker ? <th scope="col">{t('Notes go to')}</th> : null}
-                <th scope="col">{t('Last note')}</th>
-                {/* The header holds its hidden name: with no anchor, the name widens the page at 390 px. */}
-                <th scope="col" data-align="end" className="relative">
-                  <span className="sr-only">{t('Actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sites.map((site) => (
-                <SiteRows
+          <div className="mb-[16px] max-w-[420px]">
+            <Field
+              label={t('Search sites')}
+              labelHidden
+              compact
+              type="search"
+              placeholder={t('Search by address')}
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+            />
+          </div>
+          {found.length === 0 ? (
+            <p className="text-body text-muted">
+              {t('No site matches « {search} ».', { search: q })}{' '}
+              <LinkButton space="inline" onClick={() => search('')}>
+                {t('Clear the search')}
+              </LinkButton>
+            </p>
+          ) : (
+            <ul
+              aria-label={t('Sites')}
+              className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[16px]"
+            >
+              {shown.map((site) => (
+                <SiteCard
                   key={site.id}
                   workspace={workspace}
                   site={site}
@@ -199,8 +254,19 @@ export default function Sites() {
                   previews={<Domains workspace={workspace} sites={sites} />}
                 />
               ))}
-            </tbody>
-          </DataTable>
+            </ul>
+          )}
+          {pages > 1 ? (
+            <NotePages
+              label={t('Pages of sites')}
+              from={(at - 1) * SITES_PER_PAGE + 1}
+              shown={shown.length}
+              total={found.length}
+              first={at === 1}
+              last={at === pages}
+              onPage={(to) => turn(to === 'next' ? at + 1 : at - 1)}
+            />
+          ) : null}
           {seesTracker ? (
             <p className="mt-[14px] text-hint text-muted">
               {t('A site with no tracker keeps its notes in Fruitback.')}{' '}
@@ -349,7 +415,7 @@ function GoesTo({ site }: { site: Site }) {
   );
 }
 
-type SiteRowsProps = {
+type SiteCardProps = {
   workspace: Workspace;
   site: Site;
   manages: boolean;
@@ -363,8 +429,11 @@ type SiteRowsProps = {
   previews: ReactNode;
 };
 
-/** The row of a site, and under it what its menu opened. */
-function SiteRows({
+/**
+ * The card of a site (FRU-408), and after it what its menu opened, over the whole width of the grid:
+ * the cards after it go under it.
+ */
+function SiteCard({
   workspace,
   site,
   manages,
@@ -374,24 +443,24 @@ function SiteRows({
   problem,
   onRemove,
   previews,
-}: SiteRowsProps) {
+}: SiteCardProps) {
   useLocale();
   const navigate = useNavigate();
   const more = useRef<HTMLSpanElement>(null);
-  const host = siteLabel(site.origin);
+  const name = siteName(site.origin);
   // Every role puts Fruitback on a site with its own browser. The rest is of who manages the sites.
   const items: MenuItem[] = [
     { id: 'install', label: t('Install') },
     ...(manages
       ? [
-          // The statuses of the site have a page of their own (FRU-371), not a panel under the row.
+          // The statuses of the site have a page of their own (FRU-371), not a panel under the card.
           { id: 'statuses', label: t('Statuses') },
           { id: 'previews', label: t('Preview builds') },
           { id: 'remove', label: t('Remove'), danger: true },
         ]
       : []),
   ];
-  // What closes gives focus back to the button of the row, so a keyboard finds the row as it was.
+  // What closes gives focus back to the button of the card, so a keyboard finds the card as it was.
   const close = () => {
     onUnder(undefined);
     more.current?.querySelector('button')?.focus();
@@ -399,53 +468,46 @@ function SiteRows({
 
   return (
     <>
-      <tr data-site={site.id}>
-        <td>
-          {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
-              dot or a hyphen first, and inside a name only when one name is wider than the column (FRU-350):
-              it takes `overflow-wrap: anywhere` from the body. With `break-word`, the longest piece set the
-              narrowest width of the column, and at 390 px the column ran 7 px past the screen (FRU-379). */}
-          <span className="block font-semibold">
-            {host.split('.').map((part, index) => (
-              <Fragment key={index}>
-                {index === 0 ? null : (
-                  <>
-                    .<wbr />
-                  </>
-                )}
-                {part}
-              </Fragment>
-            ))}
-          </span>
-          <span className="block text-hint leading-[inherit] text-muted">
-            {site.visibility === 'members'
-              ? t('Members of {workspace}', { workspace: workspace.name })
-              : t('Everyone who visits')}
-          </span>
-          {/* FRU-330: the row says the exception only. « Members only » is the default of a new site,
-              and a worker of before, which sends no `writers`, says nothing it could be wrong about. */}
-          {site.visibility === 'members' && site.writers === 'anyone' ? (
-            <span className="block text-hint leading-[inherit] text-muted">{t('Notes from anyone on the page')}</span>
-          ) : null}
-        </td>
-        {/* The cells that can hold hidden words hold them: with no anchor, they widen the page at 390 px. */}
-        <td className="relative">
-          <Counts site={site} />
-        </td>
-        <td className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</td>
-        {seesTracker ? (
-          <td>
-            <GoesTo site={site} />
-          </td>
-        ) : null}
-        <td className="relative whitespace-nowrap text-muted tabular-nums">
-          {site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}
-        </td>
-        <td data-align="end">
-          <span ref={more} className="inline-flex">
+      <li
+        data-site={site.id}
+        className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[18px]"
+      >
+        <div className="flex items-start gap-[12px]">
+          <SiteIcon
+            origin={site.origin}
+            className="mt-[2px] size-[28px] flex-none rounded-button object-contain"
+            letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
+          />
+          <div className="min-w-0 flex-1">
+            {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
+                dot first, and inside a name only when one name is wider than the card. */}
+            <h2 className="text-body leading-[1.4] font-semibold">
+              {name.split('.').map((part, index) => (
+                <Fragment key={index}>
+                  {index === 0 ? null : (
+                    <>
+                      .<wbr />
+                    </>
+                  )}
+                  {part}
+                </Fragment>
+              ))}
+            </h2>
+            <p className="text-hint text-muted">
+              {site.visibility === 'members'
+                ? t('Members of {workspace}', { workspace: workspace.name })
+                : t('Everyone who visits')}
+            </p>
+            {/* FRU-330: the card says the exception only. « Members only » is the default of a new site,
+                and a worker of before, which sends no `writers`, says nothing it could be wrong about. */}
+            {site.visibility === 'members' && site.writers === 'anyone' ? (
+              <p className="text-hint text-muted">{t('Notes from anyone on the page')}</p>
+            ) : null}
+          </div>
+          <span ref={more} className="-mt-[4px] -mr-[8px] inline-flex flex-none">
             <Menu
               trigger="icon"
-              triggerLabel={t('More for {site}', { site: host })}
+              triggerLabel={t('More for {site}', { site: name })}
               items={items}
               onAction={(id) =>
                 id === 'statuses'
@@ -460,44 +522,60 @@ function SiteRows({
               </svg>
             </Menu>
           </span>
-        </td>
-      </tr>
+        </div>
+        <Counts site={site} />
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[14px] gap-y-[6px] text-hint">
+          <dt className="text-muted">{t('On the page with')}</dt>
+          <dd className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</dd>
+          {seesTracker ? (
+            <>
+              <dt className="text-muted">{t('Notes go to')}</dt>
+              <dd>
+                <GoesTo site={site} />
+              </dd>
+            </>
+          ) : null}
+          <dt className="text-muted">{t('Last note')}</dt>
+          <dd className="relative tabular-nums">{site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}</dd>
+        </dl>
+      </li>
       {under === undefined && problem === undefined ? null : (
-        <tr className="bg-subtle">
-          <td colSpan={seesTracker ? 6 : 5}>
-            {/* No width of its own: what is under a row takes the width of the table and never widens
-                it. A script is one long line, and without this it pushed the row past the screen. On a
-                phone the table scrolls: this stays at the left of what is seen, as wide as the frame. */}
-            <div className="sticky left-[20px] flex w-0 min-w-[min(100%,calc(100vw-72px))] flex-col gap-[16px] py-[6px]">
-              {under === 'remove' ? (
-                <Confirmation
-                  confirmLabel={t('Remove {site}', { site: host })}
-                  consequence={t(
-                    'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.',
-                    { site: host },
-                  )}
-                  onConfirm={onRemove}
-                  onKeep={close}
-                />
-              ) : null}
-              {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-              {under === 'install' ? (
-                <section aria-label={t('Install on {site}', { site: host })}>
-                  <InstallOptions workspace={workspace} site={site} />
-                </section>
-              ) : null}
-              {under === 'previews' ? previews : null}
-              {under === 'install' || under === 'previews' ? (
-                <div>
-                  <LinkButton onClick={close}>{t('Close')}</LinkButton>
-                </div>
-              ) : null}
+        <li className="col-span-full flex min-w-0 flex-col gap-[16px] rounded-frame border border-line bg-subtle px-[20px] py-[18px]">
+          {under === 'remove' ? (
+            <Confirmation
+              confirmLabel={t('Remove {site}', { site: name })}
+              consequence={t(
+                'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.',
+                { site: name },
+              )}
+              onConfirm={onRemove}
+              onKeep={close}
+            />
+          ) : null}
+          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+          {under === 'install' ? (
+            <section aria-label={t('Install on {site}', { site: name })} className="min-w-0">
+              <InstallOptions workspace={workspace} site={site} />
+            </section>
+          ) : null}
+          {under === 'previews' ? previews : null}
+          {under === 'install' || under === 'previews' ? (
+            <div>
+              <LinkButton onClick={close}>{t('Close')}</LinkButton>
             </div>
-          </td>
-        </tr>
+          ) : null}
+        </li>
       )}
     </>
   );
+}
+
+/** The sites whose name holds the search, in the order of the list: the search is the address typed. */
+function matching(sites: readonly Site[], q: string): readonly Site[] {
+  const wanted = q.trim().toLowerCase();
+  if (wanted === '') return sites;
+
+  return sites.filter((site) => siteName(site.origin).toLowerCase().includes(wanted));
 }
 
 /** A cell with nothing to say yet: a dot for the eye, and words for a screen reader. */

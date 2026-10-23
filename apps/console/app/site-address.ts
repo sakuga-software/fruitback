@@ -77,3 +77,22 @@ export function siteLabel(origin: string): string {
     return origin;
   }
 }
+
+/**
+ * A site as the Sites screen names it (FRU-408): its origin with no scheme, when the scheme is the
+ * one `siteAddress` gives the host typed alone. `https://acme.dev` is `acme.dev`, and
+ * `http://localhost:3000` is `localhost:3000`. The other scheme is kept, `http://acme.dev` or
+ * `https://localhost:3000`, so two sites that differ by their scheme alone still read as two, and
+ * the name typed again gives the same site.
+ */
+export function siteName(origin: string): string {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return origin;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return url.origin;
+
+  return url.protocol.slice(0, -1) === defaultScheme(url.host) ? url.host : url.origin;
+}

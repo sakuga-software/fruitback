@@ -669,6 +669,7 @@ export function NotesFailed({ onRetry }: { onRetry: () => void }) {
 
 /** Where the page is in the list, and the way to the page before and after it. */
 export function NotePages({
+  label,
   from,
   shown,
   total,
@@ -676,6 +677,8 @@ export function NotePages({
   last,
   onPage,
 }: {
+  /** What the pages are of: « Pages of notes » when none is given. */
+  label?: string;
   from: number;
   shown: number;
   total: number;
@@ -687,7 +690,7 @@ export function NotePages({
 
   return (
     <nav
-      aria-label={t('Pages of notes')}
+      aria-label={label ?? t('Pages of notes')}
       className="mt-[16px] flex flex-wrap items-center justify-between gap-[12px] text-small text-muted"
     >
       <span className="tabular-nums">{t('{from} to {to} of {total}', { from, to: from + shown - 1, total })}</span>

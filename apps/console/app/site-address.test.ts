@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultScheme, siteAddress, siteLabel } from './site-address.ts';
+import { defaultScheme, siteAddress, siteLabel, siteName } from './site-address.ts';
 
 /** The table `apps/extension/src/site-patterns.test.ts` holds too: both apps read a host alike. */
 const SCHEMES: ReadonlyArray<readonly [string, 'http' | 'https']> = [
@@ -66,5 +66,31 @@ describe('a site as the console writes it (FRU-314)', () => {
 
   it('writes what is not an origin as it came', () => {
     assert.equal(siteLabel('not an origin'), 'not an origin');
+  });
+});
+
+describe('a site as the Sites screen names it (FRU-408)', () => {
+  it('drops the scheme that the host typed alone would get', () => {
+    assert.equal(siteName('https://sakuga.dev'), 'sakuga.dev');
+    assert.equal(siteName('https://Staging.Acme.dev:443'), 'staging.acme.dev');
+    assert.equal(siteName('https://acme.dev:8443'), 'acme.dev:8443');
+    assert.equal(siteName('http://localhost:5187'), 'localhost:5187');
+    assert.equal(siteName('http://192.168.1.20:3000'), '192.168.1.20:3000');
+  });
+
+  it('keeps the other scheme, so two sites that differ by it alone read as two', () => {
+    assert.equal(siteName('http://acme.dev'), 'http://acme.dev');
+    assert.equal(siteName('https://localhost:5187'), 'https://localhost:5187');
+    assert.notEqual(siteName('http://acme.dev'), siteName('https://acme.dev'));
+    assert.notEqual(siteName('http://localhost:5187'), siteName('https://localhost:5187'));
+  });
+
+  it('gives back the same site when its name is typed again', () => {
+    for (const origin of ['https://acme.dev', 'http://acme.dev', 'http://localhost:5187', 'https://localhost:5187'])
+      assert.equal(new URL(siteAddress(siteName(origin)) ?? '').origin, origin);
+  });
+
+  it('writes what is not an origin as it came', () => {
+    assert.equal(siteName('not an origin'), 'not an origin');
   });
 });

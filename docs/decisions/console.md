@@ -219,7 +219,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `*.local`, `127.0.0.0/8`, `[::1]`, `10/8`, `172.16/12`, `192.168/16`) and `https://` otherwise,
   as in the extension (FRU-314): the address kept is the one the person opens. **A site is written
   with its scheme on every screen** (`siteLabel`): two sites that differ by their scheme alone read
-  as two, and « Open » opens the one that was added. The field is not `type="url"`:
+  as two, and « Open » opens the one that was added. **The Sites screen drops the scheme that the
+  host typed alone would get** (`siteName`, FRU-408, Mathieu): `acme.dev` for `https://acme.dev`,
+  `localhost:3000` for `http://localhost:3000`, and the other scheme is written (`http://acme.dev`),
+  so two sites still read as two, and the name typed again is the same site. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
   console never showed. The worker still decides what a site is.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
@@ -301,28 +304,44 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   an empty band at the right of a wide window, and Mathieu asked for the whole width on 2026-10-23.
   `e2e/console-frame.spec.ts` holds the rail after a scroll at 1440 px and at 390 px, and the right
   edge of each screen.
-- **The Sites screen is the table of the mockup, with its six columns** (FRU-243, FRU-270,
-  `routes/sites.tsx`): the site and who sees its notes, its notes by status (a count and a bar whose
-  name says the counts again), how they came (the script or the extension), where they go, to
-  whoever sees the tracker, and the last one (`ago.ts`: « 12 min ago », « Yesterday », then the day).
-  The counts are the summary of the sites (FRU-237), in the answer that lists them: **nothing of a row
-  comes after the row**, so nothing moves under a press, and a test holds the read to prove it. A
-  cell with nothing to say draws « · » for the eye and says « None yet » to a screen reader; a worker
-  that sends no summary gets that, and no bar. **No legend of the statuses** (FRU-400, Mathieu): the
-  name of a bar says its counts, and the page of the statuses of a site says what each colour is. **A row
-  has one menu, and what it opens is under the row**: « Install », for every role; « Preview builds »,
-  which is the proof of a domain of FRU-103, and « Remove », for who manages the sites. One thing is
-  open at a time, and what closes gives focus back to the button of the row. « Remove » asks twice:
-  the menu is the first time, and `Confirmation` (`confirm.tsx`) the second. **No item changes who
-  sees the notes of a site**: the worker has no route for it, and a button that does nothing is not
-  drawn; so the form that adds a site asks it, in the card of a workspace with no site too, where the
-  mockup draws the address alone. **The address of a site is no link** until a site has a page. **The
-  table is 860 px at the least**, as the mockup draws it: on a phone it scrolls in its frame, and what
-  opens under a row stays at the left of what is seen (`sticky`), as wide as the frame. A host breaks
-  after its dots first (`<wbr>`). The hidden words of a cell are anchored to the cell: with no anchor,
-  they widen the page at 390 px. The card and the alert are sized by their content (`box-content`),
-  as the mockup sizes them: 640 px and 760 px inside their padding. `e2e/console-sites.spec.ts` holds
-  the three states, the counts, the form, the menu, the roles, 390 px and axe.
+- **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
+  of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). A card says what a row of the table
+  said: the icon and the name of the site (`siteName`), who sees its notes, its notes by status (a
+  count and a bar whose name says the counts again), then after a term each, how they came (the
+  script or the extension), where they go, to whoever sees the tracker, and the last one (`ago.ts`:
+  « 12 min ago », « Yesterday », then the day). Cards are side by side while each has 280 px, and
+  one under the other on a phone, so nothing scrolls sideways. The counts are the summary of the
+  sites (FRU-237), in the answer that lists them: **nothing of a card comes after the card**, so
+  nothing moves under a press, and a test holds the read to prove it. A value with nothing to say
+  draws « · » for the eye and says « None yet » to a screen reader; a worker that sends no summary
+  gets that, and no bar. **No legend of the statuses** (FRU-400, Mathieu): the name of a bar says
+  its counts, and the page of the statuses of a site says what each colour is.
+  **The icon of a site is its `/favicon.ico`** (`site-icon.tsx`, shared with the preview of the
+  setup), asked by the browser of the person with no referrer, and its first letter when it does
+  not load or the site is on `http`: the policy of the image allows `img-src https:` only. No other
+  service is asked for it. Measured on 2026-10-23: under Playwright a route never sees a request to
+  `/favicon.ico` (Chromium and Chrome), so the specs see the letter, and read the attributes of the
+  image when there is one.
+  **The search and the pages are done in the console** (FRU-408): the worker answers every site of
+  a workspace at once and has no search. The search keeps the sites whose name holds what is typed,
+  is written in the address (`q`) 300 ms after the last key (`useTypedSearch`), and goes back to the
+  first page. A page is 12 cards (rows of 1, 2, 3 or 4), with the « Previous » and « Next » of the
+  Notes page (`NotePages`), and lives in the address (`page`); a page past the last shows the last.
+  A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
+  page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
+  200, the answer of `GET …/sites` is the place for `q` and a cursor, a route of the worker.
+  **A card has one menu, and what it opens is after the card**, over the whole width of the grid:
+  « Install », for every role; « Preview builds », which is the proof of a domain of FRU-103, and
+  « Remove », for who manages the sites. One thing is open at a time, and what closes gives focus
+  back to the button of the card. « Remove » asks twice: the menu is the first time, and
+  `Confirmation` (`confirm.tsx`) the second; once the site is gone, focus goes to the search.
+  **No item changes who sees the notes of a site**: the worker has no route for it, and a button
+  that does nothing is not drawn; so the form that adds a site asks it, in the card of a workspace
+  with no site too, where the mockup draws the address alone. **The address of a site is no link**
+  until a site has a page. A host breaks after its dots first (`<wbr>`). The card and the alert are
+  sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px inside their
+  padding. `e2e/console-sites.spec.ts` holds the three states, the counts, the search, the pages,
+  the form, the menu, the roles, 390 px and axe.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
   from « Statuses » in the menu of a site row, for an owner or an admin. It is the board
   `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the

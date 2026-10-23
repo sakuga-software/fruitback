@@ -45,8 +45,9 @@ async function stubWorker(page: Page): Promise<string[]> {
 }
 
 const screens = [
-  { name: 'the Sites screen', path: '/w/w1/sites', submit: 'Add site' },
-  { name: 'the second step of the set-up', path: '/setup', submit: 'Add site' },
+  // The Sites screen drops the scheme a host typed alone gets (FRU-408): http, for a local host.
+  { name: 'the Sites screen', path: '/w/w1/sites', submit: 'Add site', local: 'localhost:5187' },
+  { name: 'the second step of the set-up', path: '/setup', submit: 'Add site', local: 'http://localhost:5187' },
 ] as const;
 
 for (const screen of screens) {
@@ -64,17 +65,15 @@ for (const screen of screens) {
     await expect(page.getByRole('alert')).toHaveCount(0);
   });
 
-  test(`on ${screen.name}, a local host with no scheme is added as http, and written with it (FRU-314)`, async ({
-    page,
-  }) => {
+  test(`on ${screen.name}, a local host with no scheme is added as http (FRU-314)`, async ({ page }) => {
     const sent = await stubWorker(page);
     await page.goto(`${CONSOLE}${screen.path}`);
 
     await page.getByRole('textbox', { name: 'Site address' }).fill('localhost:5187');
     await page.getByRole('button', { name: screen.submit, exact: true }).click();
     await expect.poll(() => sent).toEqual(['http://localhost:5187']);
-    // The scheme stays on the screen: the site that was added is the one the person opens.
-    await expect(page.getByText('http://localhost:5187', { exact: true }).first()).toBeVisible();
+    // The site that was added is the one the person opens: its name, typed again, is the same site.
+    await expect(page.getByText(screen.local, { exact: true }).first()).toBeVisible();
   });
 
   test(`on ${screen.name}, what is not an address gets the sentence of the console`, async ({ page }) => {
