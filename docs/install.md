@@ -201,100 +201,6 @@ the import. The element reads `endpoint`, `client-id`, `label`, `locale` and `in
 attribute cannot carry goes through a property: `element.options = { theme, identityToken }`. Without
 an `endpoint` and a `client-id` it mounts nothing, and it takes the widget away when it leaves the page.
 
-### What else `init` takes
-
-| Option          | Why you would                                                                                                    |
-| --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `label`         | the text on the floating button                                                                                  |
-| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default                                   |
-| `messages`      | your own words for that language — see [Another language](#another-language)                                     |
-| `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner                                |
-| `identityToken` | a signed token, so a reporter is _verified_ — not on a site of the console yet, see [5](#5-identified-reporters) |
-| `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default                                 |
-| `transport`     | who carries the calls — the extension's, in team mode below                                                      |
-| `showSelectors` | `true` to show the CSS selector of the element in the thread of a pin — off by default; the issue keeps it       |
-
-**One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
-`https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget
-then takes its part out of the address. The rest of the fragment is yours: `#pricing` is neither read
-nor changed, and `#pricing&fruitback-note=<id>` leaves `#pricing`.
-
-### The feedback of a page, as text
-
-The settings panel has a button, **Copy the feedback as text**. It puts the notes of the page in the
-clipboard, as Markdown: one block per note, with its status, the element it points at, the component
-and the file behind it when your build exposes them, who wrote it, and the team's replies.
-
-```md
-# Feedback on https://staging.acme.dev/pricing
-
-## 1. FB-12 — To do
-
-- Element: button "Add to cart" · `[data-testid="card-latte"] .add`
-- Component: Button · src/components/site.tsx:42
-- By: Camille Durand · 2026-10-06
-
-> The price is cut off on mobile
-
-Reply from Léa · 2026-10-07
-
-> Fixed in the next deploy.
-```
-
-- **It is what the reviewers wrote and where, and nothing else.** No instruction and no introduction.
-  Paste it into a ticket, a message or an agent, and write your own request around it.
-- **Every line a reviewer wrote starts with `>`.** A note is text from anybody who can reach the
-  page. Quoted, it cannot pass for a heading or a line of the format. It is still somebody else's
-  text: an agent that reads it must treat it as data.
-- It follows the panel: a stage the reporter hid is not copied. A note whose element is gone is
-  copied, and says so.
-- The labels follow the language of the widget. The dates are `2026-10-06` in every language.
-- The same text comes from your own code, with no request to the worker:
-
-  ```ts
-  const widget = init({ endpoint: WORKER_URL, clientId: 'site_…' });
-  const text = widget.feedbackAsText();
-  ```
-
-### Another language
-
-The widget ships English and French. It follows the browser's language, `locale` overrides it, and
-`messages` supplies or overrides the words:
-
-```ts
-init({
-  endpoint: 'https://api.feedback.acme.dev',
-  clientId: 'site_…',
-  messages: {
-    de: {
-      'launch.label': 'Feedback geben',
-      'settings.open': 'Fruitback-Einstellungen öffnen',
-      'settings.dialog': 'Fruitback-Einstellungen',
-      'orphans.count': { one: '{count} Notiz ohne Element', other: '{count} Notizen ohne Element' },
-    },
-  },
-});
-```
-
-- For a `fr-CA` reader, a key comes from your `fr-CA`, the bundled `fr-CA`, your `fr`, the bundled
-  `fr`, then English. A key you leave out never shows as its own name.
-- The keys and the English they replace are `ENGLISH` in `packages/widget/src/messages.ts`, and
-  `MessageKey` is their type.
-- A count takes one string per `Intl.PluralRules` category, and `other` is required. `{count}`,
-  `{stage}`, `{note}` and `{identifier}` are replaced wherever the English message has them, and the
-  count is formatted for the language of the message.
-- `settings.open` names the gear and `settings.dialog` the panel it opens. Keep them different: a
-  screen reader cannot tell two controls with one name apart.
-- In a right-to-left language — Arabic, Hebrew, Persian — the widget reads right to left: the dock
-  moves to the left corner and the popover opens on the element's right edge. The pins stay on their
-  elements. The direction follows the words, so pass a catalog for the language; without one the
-  widget shows English, left to right.
-- `label` wins over `launch.label`.
-- A script tag cannot carry a catalog, but it detects the browser's language, so a French browser gets
-  French. For any other language, call `Fruitback.init` yourself.
-
-To add a language to the bundle, so every site gets it, see [translating.md](translating.md).
-
 ### Team mode: dormant until a reviewer arrives
 
 Ship the widget and call `init` only when a reviewer with the extension opens the page. Your users
@@ -354,59 +260,10 @@ the five other things the relay checks first.
 
 ---
 
-## 4. One instance, several sites
+## Next steps
 
-Add each site in the console: one address, one id, one visibility. A site is the client of one
-workspace, so a session of another workspace reads and writes nothing there. A workspace per client
-keeps their notes and their members apart; a guest of one site reads that site and no other of the
-workspace (FRU-250).
-
-Each site is bound to its address. The worker refuses a note or a read that names a site from the page
-of another origin (`403 origin-not-allowed-for-client`), and a page that is on no site
-(`403 origin-not-allowed`). It is not authentication: the id of a site is asserted by the browser, and
-`Origin` is what the browser says about the page. It is the same trust level CORS gives, and strictly
-more than nothing. [SECURITY.md](../SECURITY.md) says what it stops.
-
----
-
-## 5. Identified reporters
-
-By default a reporter is anonymous, and a name typed into the popover is stored as a **claim** — a
-tracker shows it as _self-declared_. On a site of the console, a reporter is **verified** in one case:
-a member of the workspace whose extension is connected, in team mode. The worker sets the flag, and
-removes it from anything a browser sends.
-
-**Do not pass `init({ identityToken })` on a site of the console: the worker has no key to verify the
-token with, and the note is refused.** The option exists for a site that already knows who its
-visitor is: its backend mints a short-lived **HS256 JWT** (`sub`, an `exp`, and optionally `name` and
-`email`) and hands it to the widget, which sends it in the `Authorization` header and never inside the
-seed. This is what it looks like, for the day a site of the console gets a key:
-
-```ts
-init({
-  endpoint: WORKER_URL,
-  clientId: 'site_…',
-  // Called before every write, so a token that expired mid-session is refreshed rather than refused.
-  identityToken: () => fetch('/api/fruitback-token').then((response) => response.text()),
-});
-```
-
-A token that fails to verify is a `401`, not a silent downgrade to anonymous: measured on 2026-10-16, a note sent
-with a token signed by a key of the host answered `401 invalid-identity`, and was not kept. The key was
-the `identitySecret` of a client of `FRUITBACK_CLIENTS`, which no worker takes since FRU-225. Whether a
-site of the console gets one is not decided (FRU-184).
-
----
-
-## 6. What the team sees
-
-Where the notes go is the site's choice in the console. **In the database**, the default, the
-« Notes » screen of the console lists them, and the pins on the page are the thread. **In a tracker**,
-a note becomes an issue titled with the reporter's own words, carrying the CSS selector, the React
-component and the source file, and replying in the issue puts the reply back inside the pin on the
-page — that is the loop closing, and it needs nothing configured.
-
-If your team treats issue comments as internal, turn that off: the switch « Show Linear comments as
-replies » of the connector, or `FRUITBACK_HIDE_COMMENTS=1` for the whole instance. On a site that
-everyone reads, the read path needs no authentication, so anything it returns is readable by anyone
-who can load the page.
+- [Widget options](install/widget-options.md): what else `init` takes, and the feedback of a page as text.
+- [Several sites, one instance](install/several-sites.md): a site per client, each bound to its address.
+- [Identified reporters](install/identified-reporters.md): when a reporter is verified, and when a name is only a claim.
+- [Translate the widget](translating.md): the language of the widget, and your own words.
+- [What the team sees](install/team-view.md): the « Notes » screen, or an issue in a tracker.

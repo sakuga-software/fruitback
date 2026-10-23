@@ -32,22 +32,22 @@
       url: /self-hosting/troubleshooting.html
 - title: Guides
   pages:
+    - title: Several sites, one instance
+      url: /install/several-sites.html
+    - title: Identified reporters
+      url: /install/identified-reporters.html
     - title: Translate the widget
       url: /translating.html
-    - title: Several sites, one instance
-      url: /install.html#4-one-instance-several-sites
-    - title: Identified reporters
-      url: /install.html#5-identified-reporters
     - title: What the team sees
-      url: /install.html#6-what-the-team-sees
+      url: /install/team-view.html
 - title: Reference
   pages:
-    - title: REST connector
-      url: /rest-connector.html
     - title: Widget options
-      url: /install.html#what-else-init-takes
+      url: /install/widget-options.html
     - title: Environment variables
       url: /self-hosting/environment-variables.html
+    - title: REST connector
+      url: /rest-connector.html
     - title: Worker responses
       url: /self-hosting/worker.html
 - title: Privacy and security
