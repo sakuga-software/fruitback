@@ -109,7 +109,15 @@ export function ConnectorName({
     <p className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[4px] px-[22px] pt-[16px] text-body">
       <span className="min-w-0 font-semibold [overflow-wrap:anywhere]">{connectorName(connector)}</span>
       {manages ? (
-        <LinkButton space="flush" autoFocus={back} onClick={() => setRenaming(true)}>
+        <LinkButton
+          space="flush"
+          autoFocus={back}
+          onClick={() => {
+            // The name as the last read of the list says it: another admin may have changed it.
+            setName(connector.name ?? '');
+            setRenaming(true);
+          }}
+        >
           {t('Rename')}
           <span className="sr-only"> {connectorName(connector)}</span>
         </LinkButton>

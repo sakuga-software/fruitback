@@ -108,7 +108,8 @@ export function placeLabel(
   if (connector?.name === undefined || label === undefined) return label;
   const cut = label.indexOf(' · ');
 
-  return cut < 0 ? connector.name : `${connector.name}${label.slice(cut)}`;
+  // A label with no kind first (a word of the worker this build does not expect) is kept whole after the name.
+  return cut < 0 ? `${connector.name} · ${label}` : `${connector.name}${label.slice(cut)}`;
 }
 
 /** How a source is connected, in one line under its name. */

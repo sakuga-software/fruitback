@@ -702,6 +702,18 @@ for (const { width, height, locale, words } of [
   });
 }
 
+test('« Rename » starts from the name of the last read, not the one of when the panel opened', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await rows(page).first().click();
+  // Another admin names it meanwhile; a write of the panel reads the list again.
+  worker.connectors = [{ ...LINEAR, name: 'Support' }, ADDRESS];
+  await panel(page).getByRole('button', { name: 'Remove', exact: true }).first().click();
+  await expect(rows(page).first().locator('span.font-semibold').first()).toHaveText('Support');
+  await panel(page).getByRole('button', { name: 'Rename Support', exact: true }).click();
+  await expect(panel(page).getByRole('textbox', { name: 'Name of this source' })).toHaveValue('Support');
+});
+
 test('a member reads the name of a source, and renames none', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.connectors = [{ ...LINEAR, name: 'Clients' }, ADDRESS];
