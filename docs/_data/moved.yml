@@ -37,3 +37,10 @@
   identity-and-reads: /self-hosting/environment-variables.html#identity-and-reads
   the-database-the-console-and-the-sessions: /self-hosting/environment-variables.html#the-database-the-console-and-the-sessions
   the-worker: /self-hosting/worker.html
+/install.html:
+  what-else-init-takes: /install/widget-options.html#what-else-init-takes
+  the-feedback-of-a-page-as-text: /install/widget-options.html#the-feedback-of-a-page-as-text
+  another-language: /translating.html#another-language
+  4-one-instance-several-sites: /install/several-sites.html
+  5-identified-reporters: /install/identified-reporters.html
+  6-what-the-team-sees: /install/team-view.html

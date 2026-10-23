@@ -1,8 +1,45 @@
 # Translate the widget
 
-The widget bundles English and French. This page is for adding a language to the bundle, so every
-site gets it. To translate the widget on one site only, pass `messages` to `init` instead — see
-[install.md](install.md#another-language).
+The widget bundles English and French. On one site, `locale` and `messages` choose the language and
+the words: [Another language](#another-language). To add a language to the bundle, so every site gets
+it, see [Add a catalog](#add-a-catalog).
+
+## Another language
+
+The widget ships English and French. It follows the browser's language, `locale` overrides it, and
+`messages` supplies or overrides the words:
+
+```ts
+init({
+  endpoint: 'https://api.feedback.acme.dev',
+  clientId: 'site_…',
+  messages: {
+    de: {
+      'launch.label': 'Feedback geben',
+      'settings.open': 'Fruitback-Einstellungen öffnen',
+      'settings.dialog': 'Fruitback-Einstellungen',
+      'orphans.count': { one: '{count} Notiz ohne Element', other: '{count} Notizen ohne Element' },
+    },
+  },
+});
+```
+
+- For a `fr-CA` reader, a key comes from your `fr-CA`, the bundled `fr-CA`, your `fr`, the bundled
+  `fr`, then English. A key you leave out never shows as its own name.
+- The keys and the English they replace are `ENGLISH` in `packages/widget/src/messages.ts`, and
+  `MessageKey` is their type.
+- A count takes one string per `Intl.PluralRules` category, and `other` is required. `{count}`,
+  `{stage}`, `{note}` and `{identifier}` are replaced wherever the English message has them, and the
+  count is formatted for the language of the message.
+- `settings.open` names the gear and `settings.dialog` the panel it opens. Keep them different: a
+  screen reader cannot tell two controls with one name apart.
+- In a right-to-left language — Arabic, Hebrew, Persian — the widget reads right to left: the dock
+  moves to the left corner and the popover opens on the element's right edge. The pins stay on their
+  elements. The direction follows the words, so pass a catalog for the language; without one the
+  widget shows English, left to right.
+- `label` wins over `launch.label`.
+- A script tag cannot carry a catalog, but it detects the browser's language, so a French browser gets
+  French. For any other language, call `Fruitback.init` yourself.
 
 ## Add a catalog
 
