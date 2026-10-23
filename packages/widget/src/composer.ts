@@ -502,9 +502,26 @@ export function createComposer(options: ComposerOptions): Composer {
   function openAttachMenu(focus: 'first' | 'last'): void {
     if (attachTrigger.getAttribute('aria-disabled') === 'true' || attachTrigger.disabled) return;
     attachMenu.hidden = false;
+    placeAttachMenu();
     attachTrigger.setAttribute('aria-expanded', 'true');
     const items = menuItems();
     (focus === 'first' ? items[0] : items[items.length - 1])?.focus();
+  }
+
+  /**
+   * Under « Attach », or above it when the menu does not fit below and the window has more room above
+   * (FRU-431). The menu is never taller than the room of its side: it scrolls, and stays in the window.
+   */
+  function placeAttachMenu(): void {
+    attachMenu.removeAttribute('data-fruitback-side');
+    attachMenu.style.removeProperty('--fruitback-composer-attach-room');
+    const button = attachTrigger.getBoundingClientRect();
+    const tall = attachMenu.getBoundingClientRect().height;
+    const below = (view?.innerHeight ?? 0) - button.bottom - MENU_GAP - GAP;
+    const above = button.top - MENU_GAP - GAP;
+    const up = tall > below && above > below;
+    attachMenu.dataset.fruitbackSide = up ? 'above' : 'below';
+    attachMenu.style.setProperty('--fruitback-composer-attach-room', `${Math.max(0, up ? above : below)}px`);
   }
 
   function closeAttachMenu(refocus: boolean): void {
@@ -1112,6 +1129,8 @@ export function createComposer(options: ComposerOptions): Composer {
 /** The measures of the mock-up (FRU-258), kept next to the stylesheet that `place` must agree with. */
 const WIDTH = 360;
 const GAP = 10;
+/** The space between « Attach » and its menu. */
+const MENU_GAP = 4;
 /**
  * How far above the top of its element the composer ends, and how far the frame stands off the element:
  * a line of 2 px, 3 px off (FRU-303).
@@ -1637,17 +1656,24 @@ const STYLES = `
 .fruitback-composer-attach-way[disabled], .fruitback-composer-attach-way[aria-disabled="true"] { opacity: 0.55; cursor: default; }
 .fruitback-composer-attach-none { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 /*
-  « Attach » and its menu (FRU-351). The menu opens under the button in the flow of the composer, not
-  over it: on a phone the composer is a sheet, and a menu laid over it was cut by its foot.
+  « Attach » and its menu (FRU-351). The menu floats over the composer, so the composer keeps its size
+  (FRU-431). placeAttachMenu() puts it above the button when the window has no room below, as at the
+  foot of the sheet of a phone, and limits its height to the room of its side.
 */
-.fruitback-composer-attach-ways { flex-direction: column; align-items: flex-start; }
+.fruitback-composer-attach-ways { position: relative; flex-direction: column; align-items: flex-start; }
 .fruitback-composer-attach-trigger { display: inline-flex; align-items: center; gap: 4px; }
 .fruitback-composer-attach-trigger .fruitback-icon { width: 14px; height: 14px; }
 .fruitback-composer-attach-trigger[aria-expanded="true"] .fruitback-icon { transform: rotate(180deg); }
 .fruitback-composer-attach-menu {
+  position: absolute;
+  top: calc(100% + ${MENU_GAP}px);
+  inset-inline-start: 0;
+  z-index: 1;
   box-sizing: border-box;
   min-width: 220px;
   max-width: 100%;
+  max-height: var(--fruitback-composer-attach-room, none);
+  overflow-y: auto;
   margin: 0;
   padding: 4px;
   list-style: none;
@@ -1656,6 +1682,7 @@ const STYLES = `
   background: var(--fruitback-color-surface);
   box-shadow: var(--fruitback-shadow-xl);
 }
+.fruitback-composer-attach-menu[data-fruitback-side="above"] { top: auto; bottom: calc(100% + ${MENU_GAP}px); }
 .fruitback-composer-attach-menu li { display: block; list-style: none; margin: 0; padding: 0; }
 .fruitback-composer-attach-menu[hidden], .fruitback-composer-attach-menu li[hidden], .fruitback-composer-dropzone[hidden] { display: none; }
 .fruitback-composer-attach-item {
