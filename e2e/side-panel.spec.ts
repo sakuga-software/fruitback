@@ -485,7 +485,17 @@ test('a tab whose widget is gone does not leave the panel reading for ever (FRU-
   await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
 
   // The bridge stays, the widget goes: the page answers `no-widget`, and no `notes-changed` follows.
-  await page.evaluate(() => window.postMessage({ channel: 'fruitback-extension', kind: 'unmount' }, '*'));
+  // With the tag of the copy (FRU-397), which the page can read: the bridge is no access control.
+  await page.evaluate(() =>
+    window.postMessage(
+      {
+        channel: 'fruitback-extension/2',
+        kind: 'unmount',
+        copy: (window as unknown as { __fruitbackPageHolder: { tag: string } }).__fruitbackPageHolder.tag,
+      },
+      '*',
+    ),
+  );
   await expect(page.locator('[data-fruitback-host-launch]')).toHaveCount(0);
 
   const again = await openPopup(extension, page);

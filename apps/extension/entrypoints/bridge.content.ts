@@ -1,5 +1,6 @@
 import {
   CHANNEL,
+  LEGACY_CHANNEL,
   type BridgeMessage,
   NOTES_NAME_KEY,
   type RelayRequestMessage,
@@ -17,6 +18,7 @@ import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 import { randomId } from '../src/relay-transport.ts';
 import { captureResponseOf } from '../src/capture-answer.ts';
+import { createPairing } from '../src/copy.ts';
 import {
   PANEL_EVENT_TYPE,
   type TabCommandAnswer,
@@ -54,9 +56,15 @@ export default defineContentScript({
 
     const origin = window.location.origin;
 
+    // FRU-397: the page script of this copy, among the copies on this page. Nothing is posted to the
+    // page until it said `ready`: a decision posted with no tag would be heard by none, or by all.
+    const pairing = createPairing(new URL(browser.runtime.getURL('/')).host);
     const post = (message: BridgeMessage): void => {
-      window.postMessage(message, window.location.origin);
+      const tag = pairing.tag();
+      if (tag === undefined) return;
+      window.postMessage({ ...message, copy: tag }, window.location.origin);
     };
+    let probed = false;
 
     // FRU-315: whether the site wants a session this browser does not hold. Read, never written, and
     // in `storage.local` alone, with the epoch rule of every reader: `storage.session` is closed to
@@ -110,11 +118,22 @@ export default defineContentScript({
       if (event.source !== window) return;
 
       const message = parseBridgeMessage(event.data);
-      if (message?.kind === 'ready') {
-        void apply(true);
+      const heard = pairing.read(event.data, message?.kind === 'ready' ? message : undefined);
+      if (heard === 'paired') {
+        // A copy of before stepped aside without a word, if this one came first: its bridge says its
+        // decision again when asked, and that is how the popup learns it is there (FRU-397). Once,
+        // and only from a page script that holds the page: one of before that holds it would build
+        // its widget again.
+        if (!probed && !pairing.steppedAside()) {
+          probed = true;
+          window.postMessage({ channel: LEGACY_CHANNEL, kind: 'ready', probe: true }, window.location.origin);
+        }
+        // Stepped aside: nothing on this page obeys this copy.
+        if (!pairing.steppedAside()) void apply(true);
 
         return;
       }
+      if (heard === 'foreign') return;
 
       // FRU-315: the widget asks for the sign-in. The background decides whether to open anything.
       if (message?.kind === 'sign-in') {
@@ -159,15 +178,24 @@ export default defineContentScript({
       const request = acceptedRequest(message, sender, browser.runtime.id, browser.runtime.getURL('/'));
       if (request === undefined) return undefined;
 
+      // FRU-397: the page script of this copy stepped aside for another copy, which holds the page.
+      const other = pairing.other();
+      if (pairing.steppedAside()) return Promise.resolve<TabCommandAnswer>({ done: false, otherCopy: other ?? {} });
+      const withOther = (answer: TabCommandAnswer): TabCommandAnswer => {
+        const seen = pairing.other();
+
+        return seen === undefined ? answer : { ...answer, otherCopy: seen };
+      };
+
       return new Promise<TabCommandAnswer>((resolve) => {
         const id = randomId(window);
         const timer = setTimeout(() => {
           commands.delete(id);
-          resolve({ done: false });
+          resolve(withOther({ done: false }));
         }, commandTimeout(request.command));
         commands.set(id, (answer) => {
           clearTimeout(timer);
-          resolve(answer);
+          resolve(withOther(answer));
         });
         post({ channel: CHANNEL, kind: 'command', id, ...request });
       });
@@ -189,6 +217,8 @@ export default defineContentScript({
       }
     });
 
+    // The page script of this copy may have said `ready` before this listener existed.
+    window.postMessage({ channel: CHANNEL, kind: 'hello' }, window.location.origin);
     await apply();
   },
 });

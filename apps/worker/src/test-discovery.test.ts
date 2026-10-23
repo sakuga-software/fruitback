@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { globSync, readFileSync } from 'node:fs';
-import { matchesGlob } from 'node:path';
+import { join, matchesGlob, relative } from 'node:path';
 import { describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 
@@ -46,8 +46,10 @@ function isSource(path: string): boolean {
 }
 
 function files(pattern: string): string[] {
-  return globSync(pattern, { cwd: REPOSITORY })
-    .map((path) => path.replaceAll('\\', '/'))
+  // Files only: a directory under e2e/ (FRU-397: e2e/fixtures/old-copy) is no source to read.
+  return globSync(pattern, { cwd: REPOSITORY, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(REPOSITORY, join(entry.parentPath, entry.name)).replaceAll('\\', '/'))
     .filter(isSource)
     .sort();
 }

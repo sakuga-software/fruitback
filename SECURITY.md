@@ -413,6 +413,16 @@ relayed write, no stored token appears in anything the page's JavaScript can rea
 first changes what our widget says on that page, the second opens our popup over that tab, only
 when its site wants a session, at most once in 5 s for that tab, and never over a popup already open. Neither reaches a token, the relay or another tab.
 
+**Two copies of Fruitback in one browser do not talk over each other** (FRU-397). The channel
+carries the version of its protocol (`fruitback-extension/2`), and each message the tag of its copy:
+a tag the page script draws for this page, with a proof in its `ready` that is a hash of the tag and
+of the address of its copy (`chrome-extension://<id>/`, read from its own stack). A bridge hears only
+the tag whose proof its own address gives. This is not access control: the page can read the same
+stack and forge any of it, as above. It keeps the page script of an old copy, which knew no relay,
+from obeying a new bridge and reading a site of a workspace with no session. What the page learns
+that it did not: the version of the copy that holds it (in `ready`, and on
+`window.__fruitbackPageHolder`). The address of the copy is not posted; the tag is new on each page.
+
 ### What a session protects, and what it does not
 
 The worker can hold sessions for the browser extension. An operator mints a pairing code for a named

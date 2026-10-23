@@ -132,6 +132,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A note is being written on the page. Send it or close it first.':
     'Une note est en cours d’écriture sur la page. Envoyez-la ou fermez-la d’abord.',
   'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
+  // FRU-397: another copy of Fruitback on the page of the tab.
+  'Another copy of Fruitback runs on this page. Remove it in {place}.':
+    'Une autre copie de Fruitback tourne sur cette page. Retirez-la dans {place}.',
+  'Another copy of Fruitback ({version}) runs on this page. Remove it in {place}.':
+    'Une autre copie de Fruitback ({version}) tourne sur cette page. Retirez-la dans {place}.',
   // A site of no workspace (FRU-255).
   'Ask an admin of your workspace to add this site.': 'Demandez à un admin de votre workspace d’ajouter ce site.',
   Workspace: 'Workspace',

@@ -146,15 +146,16 @@ test('private mode: the same decision posted again keeps the open composer and i
   const note = page.getByPlaceholder('What should change?');
   await note.fill('Une note à moitié écrite');
 
-  // The page asks, and waits until the isolated world has answered with its mount.
+  // The page asks, and waits until the isolated world has answered with its mount. Since FRU-397 the
+  // bridge hears only the `ready` of its own page script: `hello` makes that script say it again.
   const answered = await page.evaluate(
     () =>
       new Promise<boolean>((resolve) => {
         window.addEventListener('message', (event: MessageEvent) => {
           const data = event.data as { channel?: unknown; kind?: unknown } | null;
-          if (data?.channel === 'fruitback-extension' && data.kind === 'mount') setTimeout(() => resolve(true), 250);
+          if (data?.channel === 'fruitback-extension/2' && data.kind === 'mount') setTimeout(() => resolve(true), 250);
         });
-        window.postMessage({ channel: 'fruitback-extension', kind: 'ready' }, '*');
+        window.postMessage({ channel: 'fruitback-extension/2', kind: 'hello' }, '*');
         setTimeout(() => resolve(false), 5_000);
       }),
   );

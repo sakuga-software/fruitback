@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Fruitback (old copy, e2e fixture)",
+  "version": "0.1.0",
+  "description": "Speaks the bridge of Fruitback 0.1.0 to 0.3.0, for e2e/two-copies.spec.ts. Not shipped.",
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:5177/*"],
+      "js": ["page.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["http://localhost:5177/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

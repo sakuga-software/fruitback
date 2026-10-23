@@ -336,6 +336,7 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       if (found !== undefined && !open) body.push(...(await session(found.site)));
       if (found !== undefined && !open && facts.tab?.url !== undefined)
         body.push(readability(found.site, facts.tab.url));
+      if (found !== undefined && !open) body.push(otherCopyLine(facts.tab, found.site.enabled));
 
       return frame(...body);
     }
@@ -724,7 +725,7 @@ async function siteOfWorkspaceOn(
     onOpenPanel: openPanel,
     onSettings: openSettings,
   });
-  screen.querySelector('.popup-body')?.append(problem);
+  screen.querySelector('.popup-body')?.append(problem, otherCopyLine(tab, site.enabled));
   // An account and a pairing with another worker (FRU-319): the foot is the account's, so the
   // pairing keeps its row and its « Log out » in the body.
   if (paired !== undefined && account !== undefined) {
@@ -764,6 +765,29 @@ async function askTab(tab: PopupTab | undefined, command: TabCommand): Promise<T
 
   return parseAnswer(await browser.tabs.sendMessage(tab.id, tabCommand(command)).catch(() => undefined));
 }
+
+/**
+ * FRU-397: another copy of Fruitback runs on this page, an old one or an unpacked one. Its rules and
+ * its widget are its own, and nothing in this copy can stop them: removing it is the one thing that
+ * helps. Empty until the tab answers, and when it says nothing of another copy.
+ */
+function otherCopyLine(tab: PopupTab | undefined, on: boolean): HTMLElement {
+  const line = element('p', '', 'problem');
+  if (!on) return line;
+  void askTab(tab, 'counts').then(({ otherCopy }) => {
+    if (otherCopy === undefined) return;
+    const place = import.meta.env.FIREFOX ? 'about:addons' : 'chrome://extensions';
+    line.textContent =
+      otherCopy.version === undefined
+        ? t(OTHER_COPY, { place })
+        : t(OTHER_COPY_VERSION, { version: otherCopy.version, place });
+  });
+
+  return line;
+}
+
+const OTHER_COPY = msg('Another copy of Fruitback runs on this page. Remove it in {place}.');
+const OTHER_COPY_VERSION = msg('Another copy of Fruitback ({version}) runs on this page. Remove it in {place}.');
 
 /**
  * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66).
