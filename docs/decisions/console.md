@@ -419,7 +419,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`POST /console/me/name`), kept when the field is left or by Enter, as the mockup draws no button; a
   refusal says why and keeps what was typed. **A provider is linked by a navigation** to the worker
   (`/console/auth/link/<provider>`), which comes back with `?linked=` or `?error=`, said once and
-  taken from the address; « Unlink » asks twice, and the last way to sign in stays and says why
+  taken from the address. **A refused link names the provider and the address of the account, then
+  says what to do** (FRU-416): the worker adds `?provider=`, read in the closed list `LINKABLE`, and
+  the address is the one of `/console/me`, never one of the address bar; a provider that is not in
+  the list, or none, gives « The account was not linked. », and « Try again » is said for a failure on
+  the way only, never for a refusal. The sentence stays until « Unlink ». better-auth 1.7.7 writes
+  `email_does_not_match`, which the console read as an unknown code until FRU-416, and
+  `unable_to_link_account` for an address that the provider did not verify and for a write that
+  failed: its sentence names both. « Unlink » asks twice, and the last way to sign in stays and says why
   (`409 last-sign-in`, `403 sign-in-again`). The three rows of « How you sign in » are drawn before
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET

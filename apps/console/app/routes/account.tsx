@@ -52,16 +52,56 @@ function providerWord(asked: Asked, provider: Linkable): string {
   return known.linked ? msg('Linked') : msg('Not linked');
 }
 
-/** Why a provider did not link, by the code the worker puts in the address on the way back. */
+/**
+ * Why a provider did not link, by the code the worker puts in the address on the way back (FRU-416):
+ * each sentence names the provider and the address of the account, then says what to do.
+ *
+ * better-auth 1.7.7 writes `email_does_not_match`; `email_doesn't_match` is its spelling of before.
+ * It answers an address that the provider did not verify with `unable_to_link_account` (read in
+ * `oauth2/link-account.mjs`, and held by a test of the worker). The same code says a write that
+ * failed, so its sentence names both causes, and both end with « link again ».
+ */
+const OTHER_ADDRESS = msg(
+  'Your {provider} account does not have the address {email}. Fruitback links only a {provider} account that has the address of your account. In {provider}, choose the account {email}, or keep signing in as you do now.',
+);
+const NOT_VERIFIED = msg(
+  '{provider} did not say that its address is verified. Verify it at {provider}, then link again.',
+);
 const LINK_PROBLEMS: Readonly<Record<string, string>> = {
-  "email_doesn't_match": msg(
-    'That account has another address than yours. Fruitback links only the address of your account.',
+  email_does_not_match: OTHER_ADDRESS,
+  "email_doesn't_match": OTHER_ADDRESS,
+  account_already_linked_to_different_user: msg(
+    'This {provider} account already opens another Fruitback account. To link it here, that account must unlink it first, or an administrator of this instance must delete that account.',
   ),
-  account_already_linked_to_different_user: msg('That account already opens another Fruitback account.'),
-  email_not_verified: msg('The provider did not say that this address is verified. Verify it there, then link again.'),
-  identity_required: msg('Your session ended before the link. Sign in, then link again.'),
+  email_not_verified: NOT_VERIFIED,
+  unable_to_link_account: msg(
+    '{provider} was not linked. If {provider} has not verified the address of that account, verify it there. Then link again.',
+  ),
+  identity_required: msg('Your session ended before {provider} was linked. Sign in, then link again.'),
 };
-const NOT_LINKED = msg('The account was not linked. Try again.');
+/** A code of a failure on the way, not of a refusal: trying again can work. */
+const LINK_FAILURES: ReadonlySet<string> = new Set([
+  'internal_server_error',
+  'unable_to_get_user_info',
+  'invalid_code',
+]);
+const NOT_LINKED = msg('{provider} was not linked.');
+const LINK_FAILED = msg('{provider} was not linked. Try again.');
+/** A provider that is not in the list of the console, or none: a worker of before sends none. */
+const ACCOUNT_NOT_LINKED = msg('The account was not linked.');
+
+/**
+ * The sentence of a link that the worker refused. Both values come from the address, which anybody
+ * writes: the code is read in own keys only (`?error=constructor` is no method of Object), and the
+ * provider in the closed list `LINKABLE`. Neither is ever shown as it is written there.
+ */
+function linkProblem(code: string, provider: string | null, email: string): string {
+  if (provider === null || !(LINKABLE as readonly string[]).includes(provider)) return t(ACCOUNT_NOT_LINKED);
+  const named = PROVIDER_NAMES[provider as Linkable];
+  if (Object.hasOwn(LINK_PROBLEMS, code)) return t(LINK_PROBLEMS[code] as string, { provider: named, email });
+
+  return t(LINK_FAILURES.has(code) ? LINK_FAILED : NOT_LINKED, { provider: named });
+}
 
 /** Why a provider is still there after « Unlink ». */
 const UNLINK_PROBLEMS: Readonly<Record<string, string>> = {
@@ -115,14 +155,20 @@ export default function Account() {
   // The way back of a link: `?linked=<provider>` or `?error=<code>`, said once, then taken away.
   const [params, setParams] = useSearchParams();
   const [linked] = useState(() => params.get('linked'));
-  const [linkError] = useState(() => params.get('error'));
+  // The provider of a link that was refused (FRU-416): it stays with its sentence until the next gesture.
+  const [linkError, setLinkError] = useState(() => {
+    const code = params.get('error');
+
+    return code === null ? null : { code, provider: params.get('provider') };
+  });
   useEffect(() => {
-    if (params.has('linked') || params.has('error')) setParams({}, { replace: true });
+    if (params.has('linked') || params.has('error') || params.has('provider')) setParams({}, { replace: true });
   }, [params, setParams]);
   const [unlinkStuck, setUnlinkStuck] = useState<{ provider: Linkable; problem: string } | undefined>();
 
   async function unlink(provider: Linkable) {
     setUnlinkStuck(undefined);
+    setLinkError(null);
     const gone = await unlinkProvider(provider);
     if (!gone.ok && gone.status !== 404) {
       // Own keys only (`problemOf`): a code named `constructor` must not find a method of `Object`.
@@ -303,11 +349,7 @@ export default function Account() {
           ) : null}
           {linkError === null ? null : (
             <div className="mb-[12px]">
-              {/* The code comes from the address, which anybody writes: own keys only, so that
-                  `?error=constructor` reads the sentence of a link that failed, not a method of Object. */}
-              <Problem>
-                {t(Object.hasOwn(LINK_PROBLEMS, linkError) ? (LINK_PROBLEMS[linkError] as string) : NOT_LINKED)}
-              </Problem>
+              <Problem>{linkProblem(linkError.code, linkError.provider, me.account.email)}</Problem>
             </div>
           )}
           {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
