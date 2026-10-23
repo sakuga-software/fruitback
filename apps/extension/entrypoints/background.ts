@@ -26,6 +26,7 @@ import { pollConnect } from '../src/connect.ts';
 import { PENDING_CONNECT_KEY, createBrowserConnect } from '../src/connect-browser.ts';
 import { runShortcut, tabOfCommand } from '../src/shortcut.ts';
 import { captureMenu, runCaptureMenu } from '../src/context-menu.ts';
+import { holdsSiteAccess } from '../src/site-grant.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { nearest } from '../src/i18n.ts';
 import { acceptedSignIn, createSignInGate } from '../src/sign-in-request.ts';
@@ -99,7 +100,8 @@ export default defineBackground(() => {
       // this extension hearing about it in any way it could act on. Chromium registers a script for
       // an origin we do not hold and says nothing (measured, FRU-45), so the grant is checked here.
       const held = await Promise.all(
-        wanted.map((pattern) => browser.permissions.contains({ origins: [matchPatternFor(pattern)] })),
+        // FRU-425: a grant of the site itself. `<all_urls>` does not count: see `src/site-grant.ts`.
+        wanted.map((pattern) => holdsSiteAccess(matchPatternFor(pattern), browser.permissions)),
       );
       const granted = wanted.filter((_, index) => held[index]);
 
