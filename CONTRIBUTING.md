@@ -160,7 +160,7 @@ contribution we expect most often.
 2. Declare it with `defineStore`, and add one entry to `STORE_SPECS` in `stores.ts`. Name your
    environment variables in `envNames`, so that a boot error names the variable an operator sets.
 3. Add each variable to `docker-compose.yml`, `.env.example` and the variable table of
-   `docs/self-hosting.md`. `compose.test.ts` compares all three with `envNames`: if it fails on your pull
+   `docs/self-hosting/environment-variables.md`. `compose.test.ts` compares all three with `envNames`: if it fails on your pull
    request, one of the three is missing a variable.
 4. If your store cannot report all five stages, declare the ones it can in `stages`. The settings panel
    then offers only those.

@@ -37,7 +37,7 @@ Two things matter whatever you deploy with:
 - **`TRUSTED_PROXY_HOPS` is the number of proxies in front of the container**: `0` when the port is
   published directly, `1` behind one Traefik. Too high behind a proxy that appends to
   `X-Forwarded-For`, and a caller escapes the rate limit with a forged header. Too low, and every
-  caller shares one bucket. [Behind a reverse proxy](self-hosting.md#behind-a-reverse-proxy) has the
+  caller shares one bucket. [Behind a reverse proxy](self-hosting/reverse-proxy.md#behind-a-reverse-proxy) has the
   measured cases and a check you can run.
 
 To try the whole loop from the sources with no Linear account at all, `pnpm dev` runs the worker with

@@ -10,7 +10,7 @@
 #
 # While the repository is private, the downloads and the image need a GitHub login: see the README.
 # If your .env comes from before FRU-225 (no FRUITBACK_DATABASE_URL), the worker refuses to start and
-# says why: read « Upgrading » in docs/self-hosting.md first.
+# says why: read docs/self-hosting/upgrade.md first.
 # Compose does not pull an image tag that is already on the machine. To update, run this first:
 #   docker compose pull
 #
@@ -32,7 +32,7 @@ services:
       - '${FRUITBACK_PORT:-8080}:8080'
     volumes:
       # The SQLite files of a worker of before FRU-225, if this stack had them: `migrate-to-postgres`
-      # reads them here, once, as « Upgrading » in docs/self-hosting.md says. The worker writes
+      # reads them here, once, as docs/self-hosting/upgrade.md says. The worker writes
       # nothing here any more.
       - fruitback-data:/data
     # To put Traefik in front instead of publishing the port:
@@ -104,7 +104,7 @@ services:
   # its password still required, or remove it together with the `depends_on` block of the worker:
   # without that block removed too, Compose refuses a service that waits for one that is not there.
   # No port is published: the worker reaches the database on the network of this file, and nothing
-  # else does. Back it up with pg_dump, never with a copy of its volume: see docs/self-hosting.md.
+  # else does. Back it up with pg_dump, never with a copy of its volume: see docs/self-hosting/backup.md.
   postgres:
     # The image CI tests the worker against. compose.test.ts compares the two.
     image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24

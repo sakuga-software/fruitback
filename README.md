@@ -146,11 +146,11 @@ and an unknown name is refused at boot rather than quietly defaulted.
 The database is the one the instance keeps its sites and accounts in, so keeping the notes there adds
 nothing to run. What it gives up is the triage of a tracker: no assignee and no workflow. A member
 sets the status of a note in the console or in the extension. Backups and what else you trade are in
-[docs/self-hosting.md](docs/self-hosting.md#back-it-up).
+[docs/self-hosting/backup.md](docs/self-hosting/backup.md#back-it-up).
 
 GitHub Issues signs in as a GitHub App, never with a personal token: the worker mints a token that
 expires after an hour and reaches one repository. Setting up the App is in
-[docs/self-hosting.md](docs/self-hosting.md#storing-the-seeds-in-github-issues). Every connector plugs
+[docs/self-hosting/github-issues.md](docs/self-hosting/github-issues.md). Every connector plugs
 into [`apps/worker/src/store.ts`](apps/worker/src/store.ts).
 
 ## Security, and what is open by default

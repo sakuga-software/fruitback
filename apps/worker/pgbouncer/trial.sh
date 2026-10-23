@@ -9,7 +9,7 @@
 # TRIAL_PORT is the port of the worker on 127.0.0.1 (default 8094). Every password and secret is made
 # at each run and thrown away with it.
 #
-# It prints facts and decides nothing: docs/self-hosting.md, « Behind a connection pooler », reads them.
+# It prints facts and decides nothing: docs/self-hosting/database.md, « Behind a connection pooler », reads them.
 set -uo pipefail
 
 MODE=${1:-}

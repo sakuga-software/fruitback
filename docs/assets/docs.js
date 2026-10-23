@@ -31,3 +31,13 @@ document.querySelectorAll('.prose pre').forEach((pre) => {
   }
   box.prepend(button);
 });
+
+// An address of a part that moved to a page of its own (FRU-427): the old page keeps an empty element
+// with the old id, which names the new address. The browser has scrolled to it; this goes on there.
+function followMoved() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const to = id && document.getElementById(id)?.dataset.movedTo;
+  if (to) location.replace(to);
+}
+followMoved();
+window.addEventListener('hashchange', followMoved);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'vitest';
 import { parse } from 'yaml';
 
@@ -28,6 +28,18 @@ const DOCS = new URL('../../../docs/', import.meta.url);
 function guides(): string[] {
   return readdirSync(DOCS)
     .filter((file) => file.endsWith('.md') && file !== 'index.md')
+    .sort();
+}
+
+/**
+ * Every page of the guides, as a path under `docs/`: the guides, and the pages a guide was split into
+ * (FRU-427), one folder down. The decisions and the folders of Jekyll are not pages.
+ */
+function pages(): string[] {
+  return readdirSync(DOCS, { recursive: true, encoding: 'utf8' })
+    .map((file) => file.replaceAll('\\', '/'))
+    .filter((file) => file.endsWith('.md') && file !== 'index.md')
+    .filter((file) => !/^(decisions|_[a-z]+|assets)\//.test(file))
     .sort();
 }
 
@@ -198,8 +210,9 @@ describe('the guides (FRU-417)', () => {
       sections().flatMap((section) => section.pages.map((page) => sourceOf(page.url.split('#')[0] ?? ''))),
     );
 
+    assert.ok(pages().length > guides().length, 'no page in a folder found — the walk stopped matching');
     assert.deepEqual(
-      guides().filter((guide) => !listed.has(guide)),
+      pages().filter((page) => !listed.has(page)),
       [],
       'these guides are in no section of docs/_data/docs.yml',
     );
@@ -273,7 +286,7 @@ describe('the guides as Jekyll reads them (FRU-417)', () => {
    * hides and Jekyll reads.
    */
   it('keeps every Liquid brace of a guide inside a raw block', () => {
-    const exposed = guides().flatMap((guide) => {
+    const exposed = pages().flatMap((guide) => {
       const text = readFileSync(new URL(guide, DOCS), 'utf8').replaceAll(
         /<!-- \{% raw %\} -->[\s\S]*?<!-- \{% endraw %\} -->/g,
         '',
@@ -286,5 +299,72 @@ describe('the guides as Jekyll reads them (FRU-417)', () => {
     });
 
     assert.deepEqual(exposed, [], 'Jekyll would run these lines as Liquid');
+  });
+});
+
+/** Where a part of a guide went when the guide was split (FRU-427), from `_data/moved.yml`. */
+function moved(): [string, string, string][] {
+  const data = parse(readFileSync(new URL('_data/moved.yml', DOCS), 'utf8')) as Record<string, Record<string, string>>;
+
+  return Object.entries(data).flatMap(([page, ids]) => Object.entries(ids).map(([id, to]) => [page, id, to] as const));
+}
+
+describe('the guides split in pages (FRU-427)', () => {
+  it('sends every id that left a page to a page, and a heading of it', () => {
+    const all = moved();
+    assert.ok(all.length >= 20, `only ${all.length} moved ids found — the walk stopped matching`);
+
+    assert.deepEqual(
+      all.filter(([, , to]) => {
+        const [page = '', fragment] = to.split('#');
+        const source = sourceOf(page);
+
+        return source === undefined || (fragment !== undefined && !headingIds(source).includes(fragment));
+      }),
+      [],
+      'these ids of docs/_data/moved.yml lead to no page, or to no heading of it',
+    );
+  });
+
+  /** The old page keeps an empty element with the old id: a heading with that id too would be two. */
+  it('keeps the old page, and none of the ids that left it', () => {
+    assert.deepEqual(
+      moved().filter(([page, id]) => {
+        const source = sourceOf(page);
+
+        return source === undefined || headingIds(source).includes(id);
+      }),
+      [],
+      'these ids of docs/_data/moved.yml are still headings of their page, or their page is gone',
+    );
+  });
+
+  /** A split moves headings from one file to another: a link between two guides is where it breaks. */
+  it('links each guide only to pages that exist, and to headings they have', () => {
+    const broken = pages().flatMap((page) => {
+      const text = readFileSync(new URL(page, DOCS), 'utf8').replaceAll(/^```[\s\S]*?^```/gm, '');
+
+      return [...text.matchAll(/\]\(([^)\s]+)\)/g)].flatMap((match) => {
+        const link = match[1] as string;
+        if (/^[a-z]+:/.test(link)) return [];
+        const [path = '', fragment] = link.split('#');
+        const target = path === '' ? new URL(page, DOCS) : new URL(path, new URL(page, DOCS));
+        // A file out of `docs/` is read on GitHub: it has to exist, and its ids are GitHub's.
+        if (!target.pathname.startsWith(DOCS.pathname) || target.pathname.includes('/docs/decisions/')) {
+          return existsSync(target) ? [] : [`${page}: ${link}`];
+        }
+        const inside = target.pathname.slice(DOCS.pathname.length);
+        try {
+          readFileSync(target);
+        } catch {
+          return [`${page}: ${link}`];
+        }
+        if (fragment === undefined || !inside.endsWith('.md')) return [];
+
+        return headingIds(inside).includes(fragment) ? [] : [`${page}: ${link}`];
+      });
+    });
+
+    assert.deepEqual(broken, [], 'these links of a guide name no file, or no heading of it');
   });
 });

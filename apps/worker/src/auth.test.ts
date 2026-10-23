@@ -220,7 +220,7 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
       [DATABASE_REQUIRED, REQUIRED_WITH_DATABASE.FRUITBACK_AUTH_SECRET, ACCOUNTS_FILE_REFUSED],
     );
     assert.match(ACCOUNTS_FILE_REFUSED, /^FRUITBACK_ACCOUNTS_PATH \(/);
-    for (const named of ['FRUITBACK_DATABASE_URL', 'migrate-to-postgres', 'docs/self-hosting.md']) {
+    for (const named of ['FRUITBACK_DATABASE_URL', 'migrate-to-postgres', 'docs/self-hosting/upgrade.md']) {
       assert.ok(ACCOUNTS_FILE_REFUSED.includes(named), `the refusal does not name ${named}`);
     }
     // An empty value is an absent one.

@@ -107,6 +107,12 @@ How this repository is formatted, tested and documented, and which test holds ea
   `docs.yml` with a `#` is a part of a page, and `docs-site.test.ts` checks that each one names a
   heading of its guide, with the id GitHub Pages gives it. Keep a heading that the console or the
   extension links to (`reviewing.html#1-install-it`, `#3-pair-in-team-mode`): its id is its address.
+  **A guide split in pages keeps its addresses** (FRU-427): the pages it gave go in a folder of its
+  name (`self-hosting/reverse-proxy.md`), each heading keeps its text and so its id, and
+  `docs/_data/moved.yml` lists each id that left the old page with its new address. The layout leaves
+  an empty element with that id at the end of the old page, and `docs.js` goes on to the new one.
+  Links of the worker, the console and the repository go to the new page directly. `docs-site.test.ts`
+  checks both ends of `moved.yml`, and every link between two guides, heading included.
   Code blocks and tables take `tabindex="0"`, so a keyboard can scroll them (axe,
   `scrollable-region-focusable`). The one script, `docs.js`, adds « Copy » to the code blocks.
   Say only what exists, and what `docs/` already says: a price the beta has not set is « Free during

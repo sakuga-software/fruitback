@@ -52,8 +52,7 @@
           </p>
 
           <div class="prose">{% include docs-content.liquid content=content %}</div>
-
-          {%- if previous or next %}
+          {% include docs-moved.liquid %} {%- if previous or next %}
           <nav class="pager" aria-label="Previous and next">
             {%- if previous %}
             <a class="pager-prev" href="{{ previous.url | relative_url }}" rel="prev">
