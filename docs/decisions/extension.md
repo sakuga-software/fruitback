@@ -249,6 +249,41 @@ open composer and its note` fails without the check, 3 runs out of 3.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+## One copy of Fruitback drives a page (FRU-397)
+
+### The rules, in short
+
+- **The bridge has a version, and it is in the channel**: `fruitback-extension/2`. The copies of
+  0.1.0 to 0.3.0 speak on `fruitback-extension` (`LEGACY_CHANNEL`): a copy hears nothing of the other
+  protocol. Measured on 2026-10-23 on a Chrome with the 0.3.0 of the store and a 0.1.0 unpacked: the
+  0.1.0 page script held the page, obeyed the 0.3.0 bridge, mounted its site of a workspace with no
+  relay, and read it from the page with no session (`401`).
+- **Each message carries the tag of its copy** (`copy`). The page script draws it for this page and
+  says it in `ready`, with a proof: `proofOf(address, tag)`, where `address` is the host of its copy
+  (`chrome-extension://<id>/`), read from its own stack because the main world has no `chrome.*`. The
+  bridge reads its own with `runtime.getURL('/')`, takes the tag whose proof it gives, and posts
+  nothing before. When it starts it posts `hello`, and each page script says `ready` again. A `ready`
+  with no proof (a browser whose stack names no file) is taken while no proven one came: that browser
+  mounts as before. See `src/copy.ts`.
+- **The guard says who holds the page.** `__fruitbackPageScript` stays `true`, which is what a copy of
+  before steps aside on; `__fruitbackPageHolder` holds the tag, the proof and the version. A page
+  script that finds the page held by another copy steps aside and says it in its `ready`
+  (`heldBy`, with the version when the other wrote one). Held by a copy of before, there is no
+  version to say.
+- **A site of a workspace is never mounted with no relay by another copy**: only the page script of
+  the copy that decided hears the `mount`. A page script of another protocol hears no message of this
+  one, so it cannot take a `relay: true` for a private mount.
+- **The popup says it**: « Another copy of Fruitback (0.1.0) runs on this page. Remove it in
+  chrome://extensions. » (`about:addons` on Firefox). The bridge adds `otherCopy` to its answers to the
+  popup. It learns it from the `ready` of its page script, from a `ready` whose proof is another
+  copy's, or from any message on the channel of before; once paired with a page script that holds the
+  page, it posts one `ready` on that channel, which a bridge of before answers with its decision.
+  Nothing in this copy can stop the other one from mounting its own rules: removing it is the one
+  thing that helps.
+- `e2e/two-copies.spec.ts` loads an old copy (`e2e/fixtures/old-copy`, the guard and the channel of
+  0.1.0) beside the built one, in both orders. Not verified on Firefox: the format of the stack of a
+  main-world script there is read from the documentation of the stack, not measured.
+
 ## The look of the popup and of the options page (FRU-170)
 
 ### The rules, in short

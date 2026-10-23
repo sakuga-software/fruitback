@@ -18,7 +18,15 @@ import { STATUS_COLOR } from '@fruitback/shared';
 import type { TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
 
-export const CHANNEL = 'fruitback-extension';
+/**
+ * The channel, and the version of the protocol it carries (FRU-397). Version 2: each message carries
+ * the tag of the copy that posted it (`copy.ts`), and a copy hears no other. A copy of 0.1.0 to 0.3.0
+ * speaks on `LEGACY_CHANNEL`: it hears nothing said here, and nothing it says is heard here.
+ */
+export const CHANNEL = 'fruitback-extension/2';
+
+/** The channel of the copies of before (0.1.0 to 0.3.0), which carried no version and no copy. */
+export const LEGACY_CHANNEL = 'fruitback-extension';
 
 /**
  * The request the page asks the extension to make for it, and the answer.
@@ -158,6 +166,26 @@ export type UnmountMessage = {
 export type ReadyMessage = {
   channel: typeof CHANNEL;
   kind: 'ready';
+  /**
+   * FRU-397: the hash of the tag of the message and of the address of the copy of the page script
+   * (`proofOf`). Absent: the page script could not read its address, and the bridge takes it while
+   * no proven one came.
+   */
+  proof?: string;
+  /** The version of the copy of the page script, which a bridge of another copy says in its popup. */
+  version?: string;
+  /** The page script found the page held by another copy, and stepped aside (FRU-397). */
+  heldBy?: { version?: string };
+};
+
+/**
+ * The bridge asks the page script of its copy to say `ready` again (FRU-397). The bridge hears only
+ * the tag of a `ready`, so it asks when it starts: the page script may have said it before the bridge
+ * listened. It carries no tag, and every page script on the page answers it.
+ */
+export type HelloMessage = {
+  channel: typeof CHANNEL;
+  kind: 'hello';
 };
 
 /**
@@ -468,6 +496,7 @@ export type BridgeMessage =
   | NotesChangedMessage
   | UnmountMessage
   | ReadyMessage
+  | HelloMessage
   | AnnounceMessage
   | RelayRequestMessage
   | RelayResponseMessage
@@ -488,7 +517,8 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (!isRecord(data) || data.channel !== CHANNEL) return undefined;
 
   if (data.kind === 'unmount') return { channel: CHANNEL, kind: 'unmount' };
-  if (data.kind === 'ready') return { channel: CHANNEL, kind: 'ready' };
+  if (data.kind === 'ready') return parseReady(data);
+  if (data.kind === 'hello') return { channel: CHANNEL, kind: 'hello' };
   if (data.kind === 'announce') return { channel: CHANNEL, kind: 'announce' };
   if (data.kind === 'sign-in') return { channel: CHANNEL, kind: 'sign-in' };
   if (data.kind === 'session') {
@@ -525,6 +555,25 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     ...(relay === true ? { relay: true } : {}),
     ...(isNonEmptyString(name) && name.length <= NAME_MAX ? { name } : {}),
   };
+}
+
+/** A proof is 16 hexadecimal digits (`proofOf`); a version, digits and dots. */
+function parseReady(data: Record<string, unknown>): ReadyMessage {
+  const { proof, version, heldBy } = data;
+  const held = isRecord(heldBy) ? parseVersion(heldBy.version) : undefined;
+
+  return {
+    channel: CHANNEL,
+    kind: 'ready',
+    ...(typeof proof === 'string' && /^[0-9a-f]{16}$/.test(proof) ? { proof } : {}),
+    ...(parseVersion(version) === undefined ? {} : { version: version as string }),
+    ...(isRecord(heldBy) ? { heldBy: held === undefined ? {} : { version: held } } : {}),
+  };
+}
+
+/** A version as a manifest writes it: one to four numbers with dots, at most 32 characters. */
+export function parseVersion(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 32 && /^\d+(?:\.\d+){0,3}$/.test(value) ? value : undefined;
 }
 
 /** The longest name the widget keeps for a reporter (`REPORTER_NAME_MAX` of its config). */

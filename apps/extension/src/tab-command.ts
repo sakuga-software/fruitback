@@ -14,7 +14,9 @@ import {
   type TabCommand,
   parsePageCounts,
   parsePanelNotes,
+  parseVersion,
 } from './protocol.ts';
+import type { OtherCopy } from './copy.ts';
 
 /**
  * The popup's way to the widget of the tab it was opened on (FRU-254): « Leave feedback », « Show
@@ -65,6 +67,11 @@ export type TabCommandAnswer = {
   notes?: PanelNote[];
   outcome?: ReplyOutcome;
   reading?: NotesReading;
+  /**
+   * Another copy of Fruitback on this page (FRU-397), with its version when it said it. The bridge
+   * adds it to every answer; with it and not `done`, the page script of this copy stepped aside.
+   */
+  otherCopy?: OtherCopy;
 };
 
 /** What the popup, or the side panel, sends. */
@@ -123,7 +130,7 @@ export function acceptedRequest(
 /** The answer, read back: an unknown shape is « not done ». */
 export function parseAnswer(value: unknown): TabCommandAnswer {
   if (typeof value !== 'object' || value === null) return { done: false };
-  const { done, busy, counts, notes, outcome, reading } = value as Record<string, unknown>;
+  const { done, busy, counts, notes, outcome, reading, otherCopy } = value as Record<string, unknown>;
   const parsed = parsePageCounts(counts);
   const listed = parsePanelNotes(notes);
   const replied = REPLY_OUTCOMES.find((each) => each === outcome);
@@ -136,7 +143,14 @@ export function parseAnswer(value: unknown): TabCommandAnswer {
     ...(listed === undefined ? {} : { notes: listed }),
     ...(replied === undefined ? {} : { outcome: replied }),
     ...(why === undefined ? {} : { reading: why }),
+    ...(typeof otherCopy === 'object' && otherCopy !== null ? { otherCopy: otherOf(otherCopy) } : {}),
   };
+}
+
+function otherOf(value: object): OtherCopy {
+  const version = parseVersion((value as { version?: unknown }).version);
+
+  return version === undefined ? {} : { version };
 }
 
 /**

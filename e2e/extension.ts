@@ -32,7 +32,12 @@ export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
-export const test = base.extend<{ extension: LoadedExtension; extraPermissions: string[]; keepWelcome: boolean }>({
+export const test = base.extend<{
+  extension: LoadedExtension;
+  extraPermissions: string[];
+  keepWelcome: boolean;
+  alongside: string[];
+}>({
   /**
    * Permissions the copy holds beyond the shipped manifest, for one spec (FRU-297). A popup opened in
    * a tab has no `activeTab`, which the click on the toolbar gives: with `tabs`, it reads the address
@@ -41,7 +46,12 @@ export const test = base.extend<{ extension: LoadedExtension; extraPermissions: 
   extraPermissions: [[], { option: true }],
   /** The welcome page that a first install opens (FRU-318) stays open, for the spec that reads it. */
   keepWelcome: [false, { option: true }],
-  extension: async ({ extraPermissions, keepWelcome }, use, testInfo) => {
+  /**
+   * Other unpacked extensions loaded beside the built one (FRU-397): an old copy of Fruitback, built
+   * for the spec under `e2e/fixtures/`. None has a background: the first service worker stays ours.
+   */
+  alongside: [[], { option: true }],
+  extension: async ({ extraPermissions, keepWelcome, alongside }, use, testInfo) => {
     const directory = copyWithLocalAccess(testInfo.outputPath('extension'), extraPermissions);
     // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile
     // holds a refresh token.
@@ -54,7 +64,10 @@ export const test = base.extend<{ extension: LoadedExtension; extraPermissions: 
       baseURL: PLAYGROUND_ORIGIN,
       locale: 'en-US',
       viewport: { width: 1440, height: 900 },
-      args: [`--disable-extensions-except=${directory}`, `--load-extension=${directory}`],
+      args: [
+        `--disable-extensions-except=${[directory, ...alongside].join(',')}`,
+        `--load-extension=${[directory, ...alongside].join(',')}`,
+      ],
     });
 
     try {

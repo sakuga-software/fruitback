@@ -1,4 +1,5 @@
 import type { CaptureArea, FruitbackTransport, PickedFile } from '@fruitback/widget';
+import type { PageHolder } from './copy.ts';
 
 /**
  * What the extension puts on a team-mode page, and how the site finds it (FRU-57).
@@ -55,6 +56,13 @@ export type FruitbackExtensionApi = {
  */
 export const PAGE_SCRIPT_FLAG = '__fruitbackPageScript';
 
+/**
+ * Beside the flag, since FRU-397: the tag and the proof of the copy that holds the page, and its
+ * version. The flag stays `true`, which is what a copy of before steps aside on. A page script finds
+ * here whether the page is held by its own copy or by another one: see `holderOf` in `copy.ts`.
+ */
+export const PAGE_HOLDER = '__fruitbackPageHolder';
+
 /** The same guard for the isolated world, where it is on that world's own global. */
 export const BRIDGE_SCRIPT_FLAG = '__fruitbackBridgeScript';
 
@@ -62,5 +70,6 @@ declare global {
   interface Window {
     fruitbackExtension?: FruitbackExtensionApi;
     __fruitbackPageScript?: true;
+    __fruitbackPageHolder?: PageHolder;
   }
 }

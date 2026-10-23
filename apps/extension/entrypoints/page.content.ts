@@ -6,9 +6,12 @@ import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
   EXTENSION_GLOBAL,
+  PAGE_HOLDER,
   PAGE_SCRIPT_FLAG,
   type FruitbackExtensionApi,
 } from '../src/page-api.ts';
+import { copyAddressOfStack, holderOf, proofOf, tagOf } from '../src/copy.ts';
+import { version as VERSION } from '../package.json';
 
 /**
  * The page's own world, which mounts the widget in private mode and announces itself in team mode
@@ -47,9 +50,38 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main() {
-    // A second copy of this file in a window that already has one. See `PAGE_SCRIPT_FLAG`.
-    if (window[PAGE_SCRIPT_FLAG] === true) return;
+    // FRU-397: the tag of this copy on this page, and the proof that this copy drew it. See `copy.ts`.
+    const address = copyAddressOfStack(new Error().stack);
+    const tag = randomId(window);
+    const proof = address === undefined ? undefined : proofOf(address, tag);
+    const post = (message: Record<string, unknown>): void => window.postMessage({ ...message, copy: tag }, '*');
+    const ready = (heldBy?: { version?: string }): void =>
+      post({
+        channel: CHANNEL,
+        kind: 'ready',
+        ...(proof === undefined ? {} : { proof }),
+        version: VERSION,
+        ...(heldBy === undefined ? {} : { heldBy }),
+      });
+
+    // A second copy of this file in a window that already has one (see `PAGE_SCRIPT_FLAG`), or the
+    // page script of another copy of Fruitback (FRU-397). The second steps aside without a word; for
+    // the other, it says to its bridge who holds the page, and does nothing else: one copy drives a
+    // page, and nothing of this one can stop the other.
+    const holder = holderOf(window[PAGE_SCRIPT_FLAG], window[PAGE_HOLDER], address);
+    if (holder === 'mine') return;
+    if (holder !== 'free') {
+      window.addEventListener('message', (event: MessageEvent) => {
+        if (event.source !== window) return;
+        if (parseBridgeMessage(event.data)?.kind === 'hello') ready(holder);
+      });
+      ready(holder);
+
+      return;
+    }
+    // `true` stays, for the copies of before: they step aside on it.
     window[PAGE_SCRIPT_FLAG] = true;
+    window[PAGE_HOLDER] = { tag, ...(proof === undefined ? {} : { proof }), version: VERSION };
 
     let widget: ReturnType<typeof init> | undefined;
     /** The captures asked for and not answered yet, by the id of the request (FRU-44). */
@@ -78,15 +110,12 @@ export default defineContentScript({
           clearTimeout(timer);
           resolve(pictureOfAnswer(answer));
         });
-        window.postMessage(
-          {
-            channel: CHANNEL,
-            kind: 'capture-request',
-            id,
-            ...(area === undefined ? {} : { area }),
-          },
-          '*',
-        );
+        post({
+          channel: CHANNEL,
+          kind: 'capture-request',
+          id,
+          ...(area === undefined ? {} : { area }),
+        });
       });
     /**
      * The mount that built `widget`, as it was posted (FRU-186).
@@ -107,7 +136,7 @@ export default defineContentScript({
       transport: createRelayTransport({
         // Same target as the handshake below. The request is the page's own call, and the token it
         // comes back with is attached in the background, so nothing secret travels here.
-        post: (message) => window.postMessage(message, '*'),
+        post: (message) => post(message),
         subscribe: (listener) => relayListeners.push(listener),
         newId: () => randomId(window),
         setTimer: (run, delayMs) => {
@@ -150,6 +179,15 @@ export default defineContentScript({
 
       const message = parseBridgeMessage(event.data);
       if (message === undefined) return;
+      // The bridge of this copy asks for `ready`: the bridge of another copy is answered too, and
+      // takes nothing from it (FRU-397).
+      if (message.kind === 'hello') {
+        ready();
+
+        return;
+      }
+      // Only the bridge of this copy is heard.
+      if (tagOf(event.data) !== tag) return;
 
       // Our own handshake and our own relay requests, which `postMessage` delivers back to this
       // window like any other. Ignored here rather than filtered at the source: the isolated world
@@ -216,21 +254,18 @@ export default defineContentScript({
           done = true;
         }
         const answer = (outcome?: string): void =>
-          window.postMessage(
-            {
-              channel: CHANNEL,
-              kind: 'command-response',
-              id: message.id,
-              done,
-              // The widget is ours and said no to a choice: somebody writes a note.
-              ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
-              ...(counts === undefined ? {} : { counts }),
-              ...(notes === undefined ? {} : { notes }),
-              ...(outcome === undefined ? {} : { outcome }),
-              ...(reading === undefined ? {} : { reading }),
-            },
-            '*',
-          );
+          post({
+            channel: CHANNEL,
+            kind: 'command-response',
+            id: message.id,
+            done,
+            // The widget is ours and said no to a choice: somebody writes a note.
+            ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
+            ...(counts === undefined ? {} : { counts }),
+            ...(notes === undefined ? {} : { notes }),
+            ...(outcome === undefined ? {} : { outcome }),
+            ...(reading === undefined ? {} : { reading }),
+          });
         // FRU-300: « Looks fixed » / « Still wrong », by the widget's transport (the relay in team mode).
         if (
           widget !== undefined &&
@@ -342,9 +377,7 @@ export default defineContentScript({
         ...(message.relay === true ? { transport: api.transport } : { replies: false }),
         // FRU-315: a site of a workspace can lose its session. The widget then offers the sign-in,
         // which the popup holds: the isolated world carries the ask to the background.
-        ...(message.relay === true
-          ? { onSignIn: () => window.postMessage({ channel: CHANNEL, kind: 'sign-in' }, '*') }
-          : {}),
+        ...(message.relay === true ? { onSignIn: () => post({ channel: CHANNEL, kind: 'sign-in' }) } : {}),
         // FRU-332: the capture of the page or of an area, for a site of a workspace: the files of a
         // note go through the relay, with the session. The picture of the element of FRU-44 is gone.
         ...(message.relay === true ? { captureVisible } : {}),
@@ -355,15 +388,12 @@ export default defineContentScript({
       // FRU-299: the side panel asks for the notes again when they change, and opens the row of a
       // note opened on the page. Stopped with the widget, by `destroy`.
       widget.watchNotes((change) =>
-        window.postMessage(
-          { channel: CHANNEL, kind: 'notes-changed', ...(change.kind === 'open' ? { open: change.id } : {}) },
-          '*',
-        ),
+        post({ channel: CHANNEL, kind: 'notes-changed', ...(change.kind === 'open' ? { open: change.id } : {}) }),
       );
     });
 
     // The isolated script may have decided before this listener existed — it has no way to know when
     // the page's world is ready — so ask rather than wait to be told.
-    window.postMessage({ channel: CHANNEL, kind: 'ready' }, '*');
+    ready();
   },
 });
