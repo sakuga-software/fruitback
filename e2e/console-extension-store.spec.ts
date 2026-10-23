@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { stubWorker } from './console-workspace.ts';
+import { WORKER_ORIGIN } from './pin.ts';
 
 /**
- * Where the foot of the rail sends somebody to install the extension. Since 0.3.0 the extension is on
+ * Where the console sends somebody to install the extension: the foot of the rail, and `/connect`
+ * (FRU-409). Where the foot of the rail sends somebody to install the extension. Since 0.3.0 the extension is on
  * the Chrome Web Store, which Chrome and Edge install from. Firefox is not on AMO yet: it keeps the
  * guide that installs the archive of the release. The browser is told apart by its user agent
  * (`extension-store.ts`), so each case runs in Chromium with the user agent of that browser.
@@ -37,6 +39,20 @@ for (const browser of BROWSERS) {
       const extension = page.locator('aside.kit-rail').getByRole('link', { name: 'Install the extension (beta)' });
       await expect(extension).toHaveAttribute('href', browser.href);
       await expect(extension).toHaveAttribute('target', '_blank');
+    });
+
+    test(`/connect leads to ${browser.href === STORE ? 'the Chrome Web Store' : 'the guide'} (FRU-409)`, async ({
+      page,
+    }) => {
+      // The page asks the worker nothing: whatever it would ask is refused.
+      await page.route(`${WORKER_ORIGIN}/**`, (route) =>
+        route.fulfill({ status: 401, json: { error: 'unauthorized' } }),
+      );
+      await page.goto(`${CONSOLE}/connect`);
+      await expect(page.locator('main h1')).toHaveText('Connect this browser');
+      const install = page.locator('main').getByRole('link', { name: 'Install the extension (beta)' });
+      await expect(install).toHaveAttribute('href', browser.href);
+      await expect(install).toHaveAttribute('target', '_blank');
     });
   });
 }

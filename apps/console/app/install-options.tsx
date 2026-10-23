@@ -28,12 +28,6 @@ export function snippetFor(site: Site): string {
 const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
 const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
 
-/**
- * Where the extension is explained: the page that walks somebody who is no developer through the
- * archive of the release. The rail sends Chrome and Edge to the store instead (`extension-store.ts`).
- */
-export { EXTENSION_GUIDE } from './extension-store';
-
 /** A text put in the clipboard: whether the browser took it. « refused »: it stays on screen to select. */
 export function useCopy(text: string): { copied: 'no' | 'yes' | 'refused'; copy: () => void } {
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');

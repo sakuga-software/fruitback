@@ -11,7 +11,7 @@ import {
   signOut,
 } from '../api';
 import { msg, t } from '../i18n';
-import { EXTENSION_GUIDE } from '../install-options';
+import { EXTENSION_GUIDE, extensionInstallFor } from '../extension-store';
 import { problemOf } from '../problems';
 import { withStrong } from '../sign-in-form';
 import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
@@ -365,7 +365,7 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
           : t('One more thing: the extension shows the notes on {site} and lets you leave yours.', { site: host })}
       </p>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
-        <Button href={EXTENSION_GUIDE} newTab>
+        <Button href={extensionInstallFor(navigator.userAgent)} newTab>
           {t('Install the extension (beta)')}
           <Away />
         </Button>

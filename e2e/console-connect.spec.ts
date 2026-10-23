@@ -480,11 +480,12 @@ test.describe('the way to connect a browser from the console of the Cloud (FRU-3
               'Vérifiez le mot, puis appuyez sur Connecter',
             ],
       );
+      // Chromium installs from the Chrome Web Store (FRU-409); `console-extension-store.spec.ts` holds Firefox.
       await expect(
         page.getByRole('link', {
           name: locale === 'en' ? 'Install the extension (beta)' : 'Installer l’extension (bêta)',
         }),
-      ).toHaveAttribute('href', 'https://fruitback.com/reviewing.html#1-install-it');
+      ).toHaveAttribute('href', 'https://chromewebstore.google.com/detail/fruitback/jjjemdloknmggncbickofjgbodplekoa');
       // No code is minted: the console asks the worker for nothing that pairs.
       expect(asked.filter((call) => call.endsWith('/connect') || call.includes('/session/'))).toEqual([]);
       expect(await sideScroll(page)).toBe(0);

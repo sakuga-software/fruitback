@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { t } from '../i18n';
-import { EXTENSION_GUIDE } from '../install-options';
+import { extensionInstallFor } from '../extension-store';
 import { Button, EntryPage, Lead, LinkButton, Title } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -49,7 +49,7 @@ export default function ConnectStart() {
       </ol>
       <p className="mb-6 text-small text-muted">
         {t('No extension in this browser yet?')}{' '}
-        <LinkButton space="inline" href={EXTENSION_GUIDE} newTab>
+        <LinkButton space="inline" href={extensionInstallFor(navigator.userAgent)} newTab>
           {t('Install the extension (beta)')}
         </LinkButton>
       </p>
