@@ -565,9 +565,10 @@ function StatusList({
       return setProblem(problemOf(removed, STATUS_PROBLEMS, msg('This status is still here. Try again.')));
     setOpen(undefined);
     onRows((current) => current.filter((row) => row.source !== status.source || row.key !== status.key));
-    // A worker that answers with no body (204) moved nothing this screen can count (lite review of PR 541).
+    // A worker that answers with no body (204) says no number: the target takes the notes the list
+    // counted in the status deleted (lite reviews of PR 541).
     const moved = removed.data?.moved;
-    onDeleted(status.key, typeof moved === 'number' ? moved : 0, moveTo?.key);
+    onDeleted(status.key, typeof moved === 'number' ? moved : (notes?.[status.key] ?? 0), moveTo?.key);
     onSay(
       moveTo === undefined
         ? t('« {name} » was deleted.', { name: nameOf(status) })

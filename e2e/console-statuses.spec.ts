@@ -496,6 +496,20 @@ test('a delete the worker answers with no body still ends: the row goes and it i
   await expect(page.locator('main [aria-live="polite"]')).toContainText('was deleted.');
 });
 
+test('a move the worker answers with no body still counts the notes in the status that took them (lite review of PR 541)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  worker.deleteAnswer = () => ({ status: 204 });
+  await open(page);
+
+  await item(page, 'waiting').getByRole('button', { name: 'Delete Waiting for client' }).click();
+  const move = page.getByRole('group', { name: 'Delete Waiting for client' });
+  await move.getByRole('button', { name: 'Move 12 notes and delete' }).click();
+  await expect(item(page, 'waiting')).toHaveCount(0);
+  await expect(item(page, 'todo')).toContainText('Built in · 12 notes');
+});
+
 test('a site that sends to GitHub shows its four states, beside a Linear list that could not be read', async ({
   page,
 }) => {
