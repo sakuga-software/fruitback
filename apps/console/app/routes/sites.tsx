@@ -1,6 +1,16 @@
 import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { type Destination, STAGES, type Site, type Visibility, type Workspace, type Writers, call } from '../api';
+import {
+  type Connector,
+  type Destination,
+  STAGES,
+  type Site,
+  type Visibility,
+  type Workspace,
+  type Writers,
+  call,
+  placesOf,
+} from '../api';
 import { Confirmation } from '../confirm';
 import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
@@ -9,6 +19,7 @@ import { Button, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBa
 import { ago } from '../ago';
 import { NotePages } from './notes';
 import { InstallOptions } from './setup';
+import { SitePlaces } from './site-places';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -32,7 +43,7 @@ const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' 
 const SITES_PER_PAGE = 12;
 
 /** What is open after the card of a site: one thing at a time, on one site at a time. */
-type Under = { site: string; what: 'install' | 'previews' | 'remove' };
+type Under = { site: string; what: 'install' | 'places' | 'previews' | 'remove' };
 
 /**
  * The sites of a workspace, as screen 09 of the mockup of 2026-10-13 draws them (FRU-243): a table,
@@ -97,6 +108,34 @@ export default function Sites() {
   }, [workspace.id]);
 
   useEffect(() => void read(), [read]);
+
+  // The sources of the workspace, for who sets where the notes of a site go (FRU-399): read once.
+  const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
+  const readConnectors = useCallback(async () => {
+    setConnectors('loading');
+    const answer = await call<{ connectors: Connector[] }>('GET', `/console/workspaces/${workspace.id}/connectors`);
+    setConnectors(listedOf(answer, (data) => data.connectors));
+  }, [workspace.id]);
+  useEffect(() => {
+    if (manages && seesTracker) void readConnectors();
+  }, [manages, seesTracker, readConnectors]);
+
+  /** The places the worker kept for a site, in place of the ones of the list: no read again. */
+  function placed(site: Site, places: Destination[]) {
+    setSites((current) =>
+      edited(current, (items) =>
+        items.map((each) =>
+          each.id === site.id
+            ? {
+                ...each,
+                destinations: places,
+                ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
+              }
+            : each,
+        ),
+      ),
+    );
+  }
 
   function added(site: Site) {
     // On a list that was never read, the site alone would hide the others: read them all.
@@ -253,6 +292,16 @@ export default function Sites() {
                   problem={stuck?.site === site.id ? stuck.problem : undefined}
                   onRemove={() => void remove(site)}
                   previews={<Domains workspace={workspace} sites={sites} />}
+                  places={
+                    <SitePlaces
+                      base={`/console/workspaces/${workspace.id}`}
+                      workspaceId={workspace.id}
+                      site={site}
+                      connectors={connectors}
+                      onRetry={() => void readConnectors()}
+                      onPlaced={(places) => placed(site, places)}
+                    />
+                  }
                 />
               ))}
             </ul>
@@ -428,6 +477,8 @@ type SiteCardProps = {
   onRemove: () => void;
   /** The proof of a domain (FRU-103), which covers the preview builds of a site. */
   previews: ReactNode;
+  /** Where the notes of the site go, and the places to add (FRU-399). */
+  places: ReactNode;
 };
 
 /**
@@ -444,6 +495,7 @@ function SiteCard({
   problem,
   onRemove,
   previews,
+  places,
 }: SiteCardProps) {
   useLocale();
   const navigate = useNavigate();
@@ -454,6 +506,8 @@ function SiteCard({
     { id: 'install', label: t('Install') },
     ...(manages
       ? [
+          // Where its notes go is set here, and no longer in the panel of a source (FRU-399).
+          ...(seesTracker ? [{ id: 'places', label: t('Destinations') }] : []),
           // The statuses of the site have a page of their own (FRU-371), not a panel under the card.
           { id: 'statuses', label: t('Statuses') },
           { id: 'previews', label: t('Preview builds') },
@@ -539,6 +593,18 @@ function SiteCard({
           <dt className="text-muted">{t('Last note')}</dt>
           <dd className="relative tabular-nums">{site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}</dd>
         </dl>
+        {/* FRU-382: a public repository says so to whoever reads where the notes go, a member too. */}
+        {seesTracker
+          ? placesOf(site)
+              .filter((each) => each.private === false)
+              .map((each) => (
+                <Problem key={`${each.connector}/${each.teamId}`}>
+                  {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
+                    repository: each.teamId ?? '',
+                  })}
+                </Problem>
+              ))
+          : null}
       </li>
       {under === undefined && problem === undefined ? null : (
         <li className="col-span-full flex min-w-0 flex-col gap-[16px] rounded-frame border border-line bg-subtle px-[20px] py-[18px]">
@@ -560,7 +626,8 @@ function SiteCard({
             </section>
           ) : null}
           {under === 'previews' ? previews : null}
-          {under === 'install' || under === 'previews' ? (
+          {under === 'places' ? places : null}
+          {under === 'install' || under === 'previews' || under === 'places' ? (
             <div>
               <LinkButton onClick={close}>{t('Close')}</LinkButton>
             </div>

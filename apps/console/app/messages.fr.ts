@@ -70,8 +70,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not sent yet': 'Pas encore envoyée',
   'The new attempt was not started. Try again.': 'La nouvelle tentative n’a pas démarré. Réessayez.',
   'Sends to {host}': 'Envoie à {host}',
-  'Fruitback only': 'Fruitback seulement',
-  'Fruitback, and this address': 'Fruitback, et cette adresse',
   'The request, and how to check its signature': 'La requête, et comment vérifier sa signature',
   'Notes that did not arrive': 'Notes qui ne sont pas arrivées',
   'Every note arrived.': 'Toutes les notes sont arrivées.',
@@ -83,8 +81,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Try now': 'Essayer maintenant',
   'Its sites keep their notes in the workspace, and the notes that waited are not sent.':
     'Ses sites gardent leurs notes dans le workspace, et les notes qui attendaient ne sont pas envoyées.',
-  'Linear did not answer for this connection. Disconnect it, then connect Linear again.':
-    'Linear n’a pas répondu pour cette connexion. Déconnectez-la, puis connectez Linear de nouveau.',
   'Linear was not connected: the consent was refused there.':
     'Linear n’a pas été connecté : le consentement y a été refusé.',
   'Fruitback could not start the connection to Linear. Try again.':
@@ -267,12 +263,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The GitHub App is no longer installed on {account}, and since {when} the notes of its sites do not reach GitHub. Disconnect it, then connect GitHub again.':
     'L’application GitHub n’est plus installée sur {account}, et depuis {when} les notes de ses sites n’arrivent pas dans GitHub. Déconnectez-la, puis connectez GitHub de nouveau.',
   'Open the App on GitHub': 'Ouvrir l’application sur GitHub',
-  'Private repositories': 'Dépôts privés',
-  'Public repositories: their issues are public': 'Dépôts publics : leurs tickets sont publics',
   '{repository} is public: each note of this site becomes an issue that anybody can read.':
     '{repository} est public : chaque note de ce site devient un ticket que tout le monde peut lire.',
-  'Add a repository for {site}': 'Ajouter un dépôt pour {site}',
-  'Add a repository…': 'Ajouter un dépôt…',
   'The GitHub App, installed on {account}': 'L’application GitHub, installée sur {account}',
   'Its sites keep their notes in the workspace again. The issues already on GitHub stay there, and the App stays installed until you remove it on GitHub.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les tickets déjà dans GitHub y restent, et l’application reste installée tant que vous ne la retirez pas sur GitHub.',
@@ -280,8 +272,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'L’application n’a accès à aucun dépôt de {account}. Sur GitHub, donnez-lui accès à l’un d’eux.',
   'Each note becomes an issue of the repository. Its files do not go: GitHub takes none by its API.':
     'Chaque note devient un ticket du dépôt. Ses fichiers ne partent pas : GitHub n’en prend aucun par son API.',
-  'GitHub did not answer with the repositories of this installation.':
-    'GitHub n’a pas répondu avec les dépôts de cette installation.',
   'POST each note to your own endpoint, with an address of one hour for each of its files.':
     'Chaque note envoyée en POST à votre propre adresse, avec une adresse valable une heure pour chacun de ses fichiers.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':
@@ -317,11 +307,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
-  'The destination of this site did not change. Try again.': 'La destination de ce site n’a pas changé. Réessayez.',
   'This source is still connected. Try again.': 'Cette source est toujours connectée. Réessayez.',
   'Connected with the key of {person}': 'Connectée avec la clé de {person}',
   'This workspace has no site yet.': 'Ce workspace n’a pas encore de site.',
-  'Another source': 'Une autre source',
   '{team}, no project': '{team}, sans projet',
 
   Owner: 'Propriétaire',
@@ -531,7 +519,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear n’a pas été connecté. Recommencez depuis « Connecter ».',
   'Sites sending here': 'Sites qui envoient ici',
   'No site sends its notes here yet.': 'Aucun site n’envoie encore ses notes ici.',
-  'Other sites': 'Autres sites',
   'Fruitback could not read the states of Linear. The statuses you set are not lost.':
     'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
@@ -797,6 +784,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No site matches « {search} ».': 'Aucun site ne correspond à « {search} ».',
   'Clear the search': 'Effacer la recherche',
   'Pages of sites': 'Pages de sites',
+  'Each site chooses where its notes go, on the Sites screen.':
+    'Chaque site choisit où vont ses notes, dans l’écran Sites.',
+  'Open the sites': 'Ouvrir les sites',
+  'GitHub, private repositories of {account}': 'GitHub, dépôts privés de {account}',
+  'GitHub, public repositories of {account}: their issues are public':
+    'GitHub, dépôts publics de {account} : leurs tickets sont publics',
+  'Where the notes of {site} go': 'Où vont les notes de {site}',
+  'The sources of this workspace did not load.': 'Les sources de cet espace ne se sont pas chargées.',
+  'No source is connected.': 'Aucune source n’est connectée.',
+  '{source} did not answer with its places.': '{source} n’a pas répondu avec ses destinations.',
+  'Some sources did not answer with their places.': 'Des sources n’ont pas répondu avec leurs destinations.',
+  Destinations: 'Destinations',
   '{from} to {to} of {total}': '{from} à {to} sur {total}',
   Previous: 'Précédentes',
   Next: 'Suivantes',

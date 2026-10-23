@@ -1,21 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  type Connector,
-  type ConnectorSettings,
-  type Destination,
-  MAX_DESTINATIONS,
-  type Site,
-  type Team,
-  UNREACHABLE,
-  call,
-  placesOf,
-  samePlace,
-  setPlaces,
-} from '../api';
+import { useRef, useState } from 'react';
+import { type Connector, type ConnectorSettings, type Site, UNREACHABLE, call, placesOf } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { known } from '../listed';
-import { Chip, Choice, LinkButton, Problem, SidePanel, Toggle } from '../ui';
+import { LinkButton, Problem, SidePanel, Toggle } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import {
@@ -24,15 +12,12 @@ import {
   KINDS,
   OAUTH_LABEL,
   type PanelProps,
-  SitesState,
+  SendersList,
   moment,
   personOf,
   sourceLine,
 } from './connector-parts';
 import { useWorkspace } from './workspace';
-
-/** The value of the list « Add a destination… » before a place is chosen. */
-const NONE = 'fruitback';
 
 /**
  * What to do about a source that its tracker refuses (FRU-102), by what the tracker said. `{when}` is
@@ -128,61 +113,14 @@ function Settings({
   );
 }
 
-/** The panel of a Linear: which sites send their notes there, to which team, and its settings. */
-export function LinearPanel({ id, base, connector, connectors, sites, manages, onChanged, onRemoved }: PanelProps) {
+/**
+ * The panel of a Linear: the sites that send their notes there (read only: a site chooses its places
+ * on the Sites screen, FRU-399), and its settings.
+ */
+export function LinearPanel({ id, base, connector, sites, manages, onRemoved }: PanelProps) {
   useLocale();
-  const [teams, setTeams] = useState<Team[] | undefined>();
+  const { workspace } = useWorkspace();
   const [problem, setProblem] = useState<string | undefined>();
-  const [silent, setSilent] = useState(false);
-  // A list is written whole, from the list on the screen. A second change before the first one is
-  // kept and read again would be made from the list of before, and would take the first one away:
-  // the controls wait.
-  const [writing, setWriting] = useState(false);
-
-  useEffect(() => {
-    if (!manages) return;
-    setSilent(false);
-    void call<{ teams: Team[] }>('GET', `${base}/connectors/${connector.id}/teams`).then((answer) => {
-      if (answer.ok) return setTeams(answer.data.teams);
-      setTeams([]);
-      setSilent(true);
-      // This read is what told the worker that Linear refuses the source: the list is read again, and
-      // the reason takes the place of the sentence below.
-      void onChanged();
-    });
-    // `onChanged` is not a reason to ask Linear again: the read above runs once for a connector.
-  }, [base, connector.id, manages]);
-
-  /** Writes the whole list of a site: the worker keeps all of it, or none of it. */
-  async function place(site: Site, places: Destination[]) {
-    // One write at a time: see `writing`.
-    if (writing) return;
-    setWriting(true);
-    setProblem(undefined);
-    const set = await setPlaces(base, site, places, connectors);
-    if (!set.ok) setProblem(writeProblemOf(set, msg('The destinations of this site did not change. Try again.')));
-    await onChanged();
-    setWriting(false);
-  }
-
-  /** The place a value of the list of teams names: `team`, or `team/project`. */
-  function placeOf(value: string): Destination | undefined {
-    const [teamId, projectId] = value.split('/');
-
-    return teamId === undefined || teamId === ''
-      ? undefined
-      : { connector: connector.id, teamId, ...(projectId === undefined ? {} : { projectId }) };
-  }
-
-  /** The words of a place: what the worker wrote for it, or the name of its team while that is all there is. */
-  function nameOf(each: Destination): string {
-    if (each.label !== undefined) return each.label;
-    if (each.connector !== connector.id) return t('Another source');
-    const team = teams?.find((one) => one.id === each.teamId);
-    const project = team?.projects.find((one) => one.id === each.projectId);
-
-    return [t('Linear'), team?.name, project?.name].filter(Boolean).join(' · ');
-  }
 
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
@@ -190,92 +128,7 @@ export function LinearPanel({ id, base, connector, connectors, sites, manages, o
     setProblem(writeProblemOf(removed, msg('This source is still connected. Try again.')));
   }
 
-  const listed = known(sites) ?? [];
-  const sendsHere = (site: Site) => placesOf(site).some((each) => each.connector === connector.id);
-  const senders = listed.filter(sendsHere);
-  // Somebody who manages the sources also sees the sites that do not send here, to add this place.
-  const others = manages ? listed.filter((site) => !sendsHere(site)) : [];
-
-  /** A site: its places in their order, and what somebody who manages the sources does with them. */
-  function row(site: Site) {
-    const places = placesOf(site);
-    const host = new URL(site.origin).host;
-    // A place that is already in the list is not offered again: the worker refuses it twice.
-    const free = (value: string): boolean => {
-      const wanted = placeOf(value);
-
-      return wanted !== undefined && !places.some((each) => samePlace(each, wanted));
-    };
-    const offered = (teams ?? [])
-      .map((team) => ({
-        heading: team.name,
-        options: [
-          { value: team.id, label: t('{team}, no project', { team: team.name }) },
-          ...team.projects.map((project) => ({
-            value: `${team.id}/${project.id}`,
-            label: `${team.name} · ${project.name}`,
-          })),
-        ].filter((option) => free(option.value)),
-      }))
-      .filter((group) => group.options.length > 0);
-
-    return (
-      <li key={site.id} className="border-b border-line py-[8px] text-small" data-site={host}>
-        <p className="font-semibold [overflow-wrap:anywhere]">{siteLabel(site.origin)}</p>
-        {places.length === 0 ? (
-          <p className="text-hint text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
-        ) : null}
-        <ol className="flex flex-col">
-          {places.map((each, index) => {
-            const own = each.connector === connector.id;
-            const rest = places.filter((_, position) => position !== index);
-
-            return (
-              <li key={`${each.connector}/${each.teamId}/${each.projectId}`}>
-                <span className="flex items-center gap-[8px] text-muted">
-                  <span className="min-w-0 flex-1 truncate">{nameOf(each)}</span>
-                  {index === 0 ? <Chip>{t('Default')}</Chip> : null}
-                </span>
-                {manages && own ? (
-                  <span className="flex flex-wrap gap-x-[16px]">
-                    {index === 0 ? null : (
-                      <LinkButton disabled={writing} onClick={() => void place(site, [each, ...rest])}>
-                        {t('Make it the default')}
-                      </LinkButton>
-                    )}
-                    <LinkButton disabled={writing} onClick={() => void place(site, rest)}>
-                      {t('Remove')}
-                    </LinkButton>
-                  </span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-        {manages && places.length < MAX_DESTINATIONS && offered.length > 0 ? (
-          <div className="mt-[6px]">
-            <Choice
-              compact
-              label={t('Add a destination for {site}', { site: host })}
-              labelHidden
-              value={NONE}
-              disabled={teams === undefined || writing}
-              onChange={(value) => {
-                const added = placeOf(value);
-                if (value !== NONE && added !== undefined) void place(site, [...places, added]);
-              }}
-              options={[{ value: NONE, label: t('Add a destination…') }, ...offered]}
-            />
-          </div>
-        ) : null}
-        {manages && places.length >= MAX_DESTINATIONS ? (
-          <p className="mt-[4px] text-hint text-muted">
-            {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
-          </p>
-        ) : null}
-      </li>
-    );
-  }
+  const senders = (known(sites) ?? []).filter((site) => placesOf(site).some((each) => each.connector === connector.id));
 
   return (
     <SidePanel
@@ -305,42 +158,8 @@ export function LinearPanel({ id, base, connector, connectors, sites, manages, o
       {connector.attention === undefined ? null : (
         <Problem>{t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since) })}</Problem>
       )}
-      <section>
-        <BlockTitle>{t('Sites sending here')}</BlockTitle>
-        <div className="mt-[8px]">
-          <SitesState sites={sites} />
-          {typeof sites !== 'string' && sites.length > 0 && senders.length === 0 ? (
-            <p className="text-small text-muted">{t('No site sends its notes here yet.')}</p>
-          ) : null}
-          <ul>{senders.map(row)}</ul>
-        </div>
-        {others.length === 0 ? null : (
-          <div className="mt-[16px]">
-            <BlockTitle>{t('Other sites')}</BlockTitle>
-            <ul>{others.map(row)}</ul>
-          </div>
-        )}
-        {listed.length === 0 ? null : (
-          <p className="mt-[8px] text-hint text-muted">
-            {t(
-              'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
-            )}
-          </p>
-        )}
-        {/* A source with a reason says it above: this sentence is for a Linear that only did not answer. */}
-        {silent && connector.attention === undefined ? (
-          <div className="mt-[12px]">
-            <Problem>
-              {t('Linear did not answer for this connection. Disconnect it, then connect Linear again.')}
-            </Problem>
-          </div>
-        ) : null}
-        {problem === undefined ? null : (
-          <div className="mt-[12px]">
-            <Problem>{t(problem)}</Problem>
-          </div>
-        )}
-      </section>
+      <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       {manages && connector.settings !== undefined ? (
         <Settings
           key={connector.id}

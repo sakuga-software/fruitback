@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import type { Connector, Site, Stage } from '../api';
+import { type Connector, type Site, type Stage, placesOf } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import type { Listed } from '../listed';
-import { LinkButton } from '../ui';
+import { Chip, LinkButton, Problem } from '../ui';
+import { siteLabel } from '../site-address';
 import { useLocale } from '../use-locale';
 
 /**
@@ -183,5 +184,82 @@ export function Disconnect({
         setAsking(false);
       }}
     />
+  );
+}
+
+/**
+ * The sites that send their notes to a source, and where in it (FRU-399): read only. A site chooses
+ * its places on the Sites screen, which the last line leads to.
+ */
+export function SendersList({
+  connector,
+  sites,
+  workspaceId,
+}: {
+  connector: Connector;
+  sites: Listed<Site>;
+  workspaceId: string;
+}) {
+  useLocale();
+  const senders = (typeof sites === 'string' ? [] : sites).filter((site) =>
+    placesOf(site).some((each) => each.connector === connector.id),
+  );
+
+  return (
+    <section>
+      <BlockTitle>{t('Sites sending here')}</BlockTitle>
+      <div className="mt-[8px]">
+        <SitesState sites={sites} />
+        {typeof sites !== 'string' && sites.length > 0 && senders.length === 0 ? (
+          <p className="text-small text-muted">{t('No site sends its notes here yet.')}</p>
+        ) : null}
+        <ul>
+          {senders.map((site) => {
+            const places = placesOf(site);
+
+            return (
+              <li
+                key={site.id}
+                className="border-b border-line py-[8px] text-small"
+                data-site={new URL(site.origin).host}
+              >
+                <p className="font-semibold [overflow-wrap:anywhere]">{siteLabel(site.origin)}</p>
+                <ul className="flex flex-col">
+                  {places.map((each, index) =>
+                    each.connector === connector.id ? (
+                      <li key={`${each.teamId}/${each.projectId}`}>
+                        <span className="flex items-center gap-[8px] text-muted">
+                          <span className="min-w-0 flex-1 truncate">{each.label ?? t(KINDS[connector.kind].name)}</span>
+                          {index === 0 ? <Chip>{t('Default')}</Chip> : null}
+                        </span>
+                        {/* FRU-382: the worker's word on the repository, for every role that reads it. */}
+                        {each.private === false ? (
+                          <div className="my-[4px]" data-public>
+                            <Problem>
+                              {t(
+                                '{repository} is public: each note of this site becomes an issue that anybody can read.',
+                                {
+                                  repository: each.teamId ?? '',
+                                },
+                              )}
+                            </Problem>
+                          </div>
+                        ) : null}
+                      </li>
+                    ) : null,
+                  )}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <p className="mt-[8px] text-hint text-muted">
+        {t('Each site chooses where its notes go, on the Sites screen.')}{' '}
+        <LinkButton space="inline" to={`/w/${workspaceId}/sites`}>
+          {t('Open the sites')}
+        </LinkButton>
+      </p>
+    </section>
   );
 }

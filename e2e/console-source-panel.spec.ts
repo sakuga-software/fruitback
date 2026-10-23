@@ -133,13 +133,8 @@ for (const { width, height, locale, name } of [
       await region.evaluate((panel) => panel.contains(document.activeElement) && panel !== document.activeElement),
     ).toBe(true);
 
-    // Escape in something of the panel that is open closes that thing, and the panel stays.
-    const list = region.getByRole('button', { name: /staging\.acme\.dev/ });
-    await list.click();
-    await expect(page.getByRole('listbox')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('listbox')).toHaveCount(0);
-    await expect(region).toBeVisible();
+    // Escape in something of the panel that is open closes that thing, and the panel stays. The
+    // places of a site are chosen on the Sites screen since FRU-399: the confirmation is that thing.
     const disconnect = region.getByRole('button', { name: /^(Disconnect|Déconnecter) Linear$/ });
     await disconnect.click();
     await page.keyboard.press('Escape');

@@ -73,7 +73,9 @@ const screens = [
       await page.keyboard.press('Enter');
       await expect(page.getByRole('menu')).toBeVisible();
       await expect(page.getByRole('menuitem').first()).toBeFocused();
-      // « Statuses » (FRU-371) is the second item: « Remove » is three steps down.
+      // « Destinations » (FRU-399), « Statuses » (FRU-371) and « Preview builds » come first:
+      // « Remove » is four steps down.
+      await page.keyboard.press('ArrowDown');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('ArrowDown');
