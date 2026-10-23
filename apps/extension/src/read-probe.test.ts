@@ -79,3 +79,22 @@ describe('a worker that is not at the address of the rule (FRU-395)', () => {
     ]);
   });
 });
+
+describe('a 404 of the read, as the worker or a proxy writes it (review of #539)', () => {
+  const answering404 = (body: unknown, json = true) => ({
+    fetch: async () => ({
+      status: 404,
+      ok: false,
+      ...(json ? { json: async () => body } : { json: async () => Promise.reject(new SyntaxError('not json')) }),
+    }),
+  });
+
+  it('is « not found » for a path the worker does not serve, and for a 404 that is not JSON', async () => {
+    assert.equal(await probeRead(SITE, PAGE, answering404({ error: 'not-found' })), 'not-found');
+    assert.equal(await probeRead(SITE, PAGE, answering404(undefined, false)), 'not-found');
+  });
+
+  it('says nothing for a 404 that names another error', async () => {
+    assert.equal(await probeRead(SITE, PAGE, answering404({ error: 'unknown-client' })), 'unknown');
+  });
+});

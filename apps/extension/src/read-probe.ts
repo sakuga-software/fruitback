@@ -65,8 +65,16 @@ export async function probeRead(
       return closed ? 'members-only' : 'wants-a-session';
     }
 
-    // FRU-395: no route at that address. A worker that is there answers its read, or refuses it.
-    if (response.status === 404) return 'not-found';
+    // FRU-395: no route at that address. A worker that is there answers its read, or refuses it:
+    // an unknown client and a missing one are `400` (`routingFailure`), a page with no note is `200`
+    // with no issue. Its only `404` on this path is the one of a path it does not serve,
+    // `{ error: 'not-found' }`. A `404` that names another error is said to be nothing (review of #539).
+    if (response.status === 404) {
+      const body = await response.json?.().catch(() => undefined);
+      const error = typeof body === 'object' && body !== null ? (body as { error?: unknown }).error : undefined;
+
+      return error === undefined || error === 'not-found' ? 'not-found' : 'unknown';
+    }
 
     return response.ok ? 'answers' : 'unknown';
   } catch {
