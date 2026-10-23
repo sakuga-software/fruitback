@@ -442,7 +442,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and « Remove », and « Add a destination… » offers what every source of the workspace has: the
   teams and projects of each Linear, the repositories of each GitHub, each address. The sources are
   read once with the screen, their teams and repositories when the panel opens; a read that failed
-  says which source and offers « Try again ». The answer of a write is the list the worker keeps:
+  says which source and offers « Try again ». **No list is written before the sources are read**: a
+  list is sent with the kind of each source, and with none a GitHub place would go as a team, which
+  the worker refuses. The panel of a GitHub on the Connectors screen reads its repositories too, for
+  who manages the sources, so the list wins there as here (FRU-382). The answer of a write is the
+  list the worker keeps:
   the card takes it at once, and the sites are not read again. No route of the worker is new.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this

@@ -96,9 +96,13 @@ export function SitePlaces({
 
   const places = placesOf(site);
 
+  // A list is written with the kind of each source (`setPlaces`): with no list of the sources, a
+  // GitHub place would go as a team, and the worker would refuse the whole list (raised in review).
+  const blocked = writing || typeof connectors === 'string';
+
   async function place(next: Destination[]) {
-    // One write at a time: see the warning above.
-    if (writing) return;
+    // One write at a time: see the warning above. And none before the sources are read.
+    if (blocked) return;
     setWriting(true);
     setProblem(undefined);
     const set = await setPlaces(base, site, next, sources);
@@ -240,11 +244,11 @@ export function SitePlaces({
                 ) : null}
                 <span className="flex flex-wrap gap-x-[16px]">
                   {index === 0 ? null : (
-                    <LinkButton disabled={writing} onClick={() => void place([each, ...rest])}>
+                    <LinkButton disabled={blocked} onClick={() => void place([each, ...rest])}>
                       {t('Make it the default')}
                     </LinkButton>
                   )}
-                  <LinkButton disabled={writing} onClick={() => void place(rest)}>
+                  <LinkButton disabled={blocked} onClick={() => void place(rest)}>
                     {t('Remove')}
                   </LinkButton>
                 </span>

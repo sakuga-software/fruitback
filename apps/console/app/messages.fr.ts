@@ -784,6 +784,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No site matches « {search} ».': 'Aucun site ne correspond à « {search} ».',
   'Clear the search': 'Effacer la recherche',
   'Pages of sites': 'Pages de sites',
+  'GitHub did not answer with the repositories of this installation.':
+    'GitHub n’a pas répondu avec les dépôts de cette installation.',
   'Each site chooses where its notes go, on the Sites screen.':
     'Chaque site choisit où vont ses notes, dans l’écran Sites.',
   'Open the sites': 'Ouvrir les sites',

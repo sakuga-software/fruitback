@@ -392,6 +392,31 @@ test('with no source, and with a read of the sources that failed, the panel says
   await expect(add(page)).toBeEnabled();
 });
 
+test('the places wait for the sources: a list written without them would send GitHub as a team', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.places = [
+    { connector: 'g1', teamId: 'acme/web' },
+    { connector: 'c1', teamId: 't1' },
+  ];
+  worker.connectorsFail = true;
+  await openPlaces(page);
+  await expect(panel(page).getByRole('alert')).toHaveText('The sources of this workspace did not load.');
+  const remove = panel(page).getByRole('button', { name: 'Remove', exact: true });
+  const first = panel(page).getByRole('button', { name: 'Make it the default', exact: true });
+  await expect(remove.nth(1)).toBeDisabled();
+  await expect(first).toBeDisabled();
+  await remove.nth(1).click({ force: true });
+  await first.click({ force: true });
+  expect(worker.sent).toEqual([]);
+
+  // Once the sources are read, the same gesture sends the GitHub place as a repository.
+  worker.connectorsFail = false;
+  await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(remove.nth(1)).toBeEnabled();
+  await remove.nth(1).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'g1', repository: 'acme/web' }]]);
+});
+
 test('the panel of a source lists the sites that send there, and leads to the Sites screen to change them', async ({
   page,
 }) => {

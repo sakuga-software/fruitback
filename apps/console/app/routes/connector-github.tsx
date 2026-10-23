@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { type Connector, call } from '../api';
+import { useEffect, useState } from 'react';
+import { type Connector, type Repository, call } from '../api';
 import { msg, t } from '../i18n';
 import { writeProblemOf } from '../problems';
 import { known } from '../listed';
-import { LinkButton, Problem, SidePanel } from '../ui';
+import { Button, LinkButton, Problem, SidePanel } from '../ui';
 import { useLocale } from '../use-locale';
 import { Disconnect, KINDS, type PanelProps, SendersList, accountOf, moment, sourceLine } from './connector-parts';
 import { useWorkspace } from './workspace';
@@ -36,6 +36,22 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
   const { workspace } = useWorkspace();
   const [problem, setProblem] = useState<string | undefined>();
   const account = accountOf(connector);
+  // The repositories, for the warning of a public one (FRU-382): read for who manages the sources,
+  // once for a connector and again on « Try again ». A member reads the worker's word only.
+  const [repositories, setRepositories] = useState<Repository[] | undefined>();
+  const [silent, setSilent] = useState(false);
+  const [reads, setReads] = useState(0);
+  useEffect(() => {
+    if (!manages) return;
+    setSilent(false);
+    void call<{ repositories: Repository[] }>('GET', `${base}/connectors/${connector.id}/repositories`).then(
+      (answer) => {
+        if (answer.ok) return setRepositories(answer.data.repositories);
+        setRepositories(undefined);
+        setSilent(true);
+      },
+    );
+  }, [base, connector.id, manages, reads]);
 
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
@@ -76,7 +92,21 @@ export function GithubPanel({ id, base, connector, sites, manages, onRemoved }: 
           </p>
         </div>
       )}
-      <SendersList connector={connector} sites={sites} workspaceId={workspace.id} />
+      <SendersList
+        connector={connector}
+        sites={sites}
+        workspaceId={workspace.id}
+        {...(repositories === undefined ? {} : { repositories })}
+      />
+      {/* A list that failed leaves the worker's word on each repository, and says so. */}
+      {silent ? (
+        <div className="flex flex-col items-start gap-[8px]">
+          <Problem>{t('GitHub did not answer with the repositories of this installation.')}</Problem>
+          <Button tone="outline" onClick={() => setReads((count) => count + 1)}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
       {known(sites)?.length ? (
         <p className="text-hint text-muted">
           {t('Each note becomes an issue of the repository. Its files do not go: GitHub takes none by its API.')}

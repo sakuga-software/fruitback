@@ -292,6 +292,51 @@ test('the row of an installation names its account, and one that needs repair li
 /** The warning of a public repository, and its words for acme/docs. */
 const PUBLIC_DOCS = 'acme/docs is public: each note of this site becomes an issue that anybody can read.';
 
+test('in the panel, once the list names the repository, it wins over an older word of the worker (FRU-382)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // The worker last read acme/web public; GitHub's list says it is private. And acme/docs the other way.
+  worker.places = [{ connector: 'g1', teamId: 'acme/web' }];
+  worker.repositoriesWait = true;
+  const stale = { connector: 'g1', teamId: 'acme/web', label: 'GitHub · acme/web', private: false };
+  await page.route('**/console/workspaces/w1/sites', (route) =>
+    route.fulfill({
+      json: { sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members', destinations: [stale] }] },
+    }),
+  );
+  await openGithub(page);
+  // While the list is read, the worker's word.
+  await expect(panel(page).locator('[data-public]')).toHaveCount(1);
+
+  worker.repositoriesWait = false;
+  await page.reload();
+  await rows(page).nth(1).click();
+  await expect(panel(page)).toBeVisible();
+  await expect.poll(() => worker.listed).toBeGreaterThan(1);
+  await expect(panel(page).locator('[data-public]')).toHaveCount(0);
+});
+
+test('in the panel, a list of the repositories that failed keeps the warning, says so, and reads again', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
+  // Every read fails: a development build runs the effect twice.
+  worker.silentReads = 2;
+  await openGithub(page);
+  await expect(
+    panel(page).getByText('GitHub did not answer with the repositories of this installation.'),
+  ).toBeVisible();
+  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+  await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(panel(page).getByText('GitHub did not answer with the repositories of this installation.')).toHaveCount(
+    0,
+  );
+  // acme/docs is public in the list too: the warning stays.
+  await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+});
+
 test('a member reads the warning too, and asks for no list (FRU-382)', async ({ page }) => {
   const worker = await workerWith(page, 'member');
   worker.places = [

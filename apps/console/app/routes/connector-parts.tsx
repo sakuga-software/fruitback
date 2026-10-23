@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { type Connector, type Site, type Stage, placesOf } from '../api';
+import { type Connector, type Destination, type Repository, type Site, type Stage, placesOf } from '../api';
 import { Confirmation } from '../confirm';
 import { locale, msg, t } from '../i18n';
 import type { Listed } from '../listed';
@@ -195,12 +195,23 @@ export function SendersList({
   connector,
   sites,
   workspaceId,
+  repositories,
 }: {
   connector: Connector;
   sites: Listed<Site>;
   workspaceId: string;
+  /**
+   * The repositories of a GitHub, as GitHub lists them now: once the list names a repository, its
+   * word wins over the worker's, which can be older (FRU-382). Absent: not read, or not GitHub.
+   */
+  repositories?: readonly Repository[];
 }) {
   useLocale();
+  const isPublic = (each: Destination): boolean => {
+    const listed = repositories?.find((one) => one.fullName.toLowerCase() === each.teamId);
+
+    return (listed?.private ?? each.private) === false;
+  };
   const senders = (typeof sites === 'string' ? [] : sites).filter((site) =>
     placesOf(site).some((each) => each.connector === connector.id),
   );
@@ -233,7 +244,7 @@ export function SendersList({
                           {index === 0 ? <Chip>{t('Default')}</Chip> : null}
                         </span>
                         {/* FRU-382: the worker's word on the repository, for every role that reads it. */}
-                        {each.private === false ? (
+                        {isPublic(each) ? (
                           <div className="my-[4px]" data-public>
                             <Problem>
                               {t(
