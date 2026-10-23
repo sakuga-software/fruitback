@@ -49,12 +49,15 @@ const ROWS: Row[] = [
   }),
 ];
 
+/** The notes in each status of the worker store, as `GET …/statuses` says them (FRU-386). */
+const NOTES = { new: 3, todo: 0, progress: 1, done: 0, closed: 0, waiting: 12, legal: 0 };
+
 const SITE = { id: 's1', origin: 'https://preview.client.fr', visibility: 'members' };
 
 type Worker = {
   sent: Sent[];
   rows: Row[];
-  deleteAnswer?: (path: string) => { status: number; json: unknown };
+  deleteAnswer?: (path: string) => { status: number; json?: unknown };
   /** Holds the answer to a written status this long, in ms: a write that is still on its way. */
   slow?: number;
 };
@@ -69,6 +72,8 @@ async function workerWith(
     rows?: Row[];
     /** What `GET …/statuses/tracker` answers (FRU-368). */
     tracker?: unknown;
+    /** The notes in each status, as `GET …/statuses` says them (FRU-386). Absent: a worker of before. */
+    notes?: Record<string, number>;
   } = {},
 ): Promise<Worker> {
   const worker: Worker = { sent: [], rows: [...(options.rows ?? ROWS)] };
@@ -81,12 +86,15 @@ async function workerWith(
     const path = `${pathname}${new URL(request.url()).search}`;
     if (pathname === `${STATUSES}/tracker`)
       return route.fulfill({ json: options.tracker ?? { trackerColours: false, trackers: [] } });
-    if (method === 'GET') return route.fulfill({ json: { statuses: worker.rows } });
+    if (method === 'GET')
+      return route.fulfill({
+        json: { statuses: worker.rows, ...(options.notes === undefined ? {} : { notes: options.notes }) },
+      });
     const body = method === 'POST' ? request.postDataJSON() : undefined;
     worker.sent.push({ method, path, body });
     if (method === 'DELETE') {
       const answered = worker.deleteAnswer?.(path) ?? { status: 200, json: { moved: 0 } };
-      if (answered.status === 200) {
+      if (answered.status === 200 || answered.status === 204) {
         const key = decodeURIComponent(pathname.split('/').at(-1) ?? '');
         worker.rows = worker.rows.filter((each) => each.key !== key);
       }
@@ -415,6 +423,93 @@ test('a status that holds notes asks where they go, the built-in of its stage fi
   );
 });
 
+test('each status says its notes, and « Delete » on one that holds some asks where they go at once (FRU-386)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  worker.deleteAnswer = (path) =>
+    path.includes('moveTo=')
+      ? { status: 200, json: { moved: 12 } }
+      : { status: 409, json: { error: 'status-in-use', notes: 12 } };
+  await open(page);
+
+  await expect(item(page, 'new')).toContainText('Built in · 3 notes');
+  await expect(item(page, 'progress')).toContainText('Built in · 1 note');
+  await expect(item(page, 'todo')).toContainText('Built in · No notes');
+  await expect(item(page, 'waiting')).toContainText('Added by your team · 12 notes');
+  await expect(item(page, 'legal')).toContainText('Added by your team · No notes');
+
+  await item(page, 'waiting').getByRole('button', { name: 'Delete Waiting for client' }).click();
+  const move = page.getByRole('group', { name: 'Delete Waiting for client' });
+  await expect(move).toContainText('12 notes are in « Waiting for client ».');
+  await expect(move.getByRole('button', { name: 'Keep it' })).toBeFocused();
+  // Nothing was asked of the worker yet: the list said the notes.
+  expect(worker.sent).toEqual([]);
+
+  await move.getByRole('button', { name: 'Move 12 notes and delete' }).click();
+  await expect(item(page, 'waiting')).toHaveCount(0);
+  expect(worker.sent.map((each) => each.path)).toEqual([`${STATUSES}/own/waiting?moveTo=todo`]);
+  // The status that took them counts them.
+  await expect(item(page, 'todo')).toContainText('Built in · 12 notes');
+});
+
+test('a status the list says is empty still asks where its notes go when the worker finds some (FRU-386)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  // A note written in « Waiting for the client's legal team… » since the list was read.
+  worker.deleteAnswer = (path) =>
+    path.includes('moveTo=')
+      ? { status: 200, json: { moved: 1 } }
+      : { status: 409, json: { error: 'status-in-use', notes: 1 } };
+  await open(page);
+
+  await item(page, 'legal')
+    .getByRole('button', { name: /^Delete Waiting for the client's legal/ })
+    .click();
+  const step = page.getByRole('group', { name: /^Delete Waiting for the client's legal/ });
+  await step.getByRole('button', { name: /^Delete/ }).click();
+  await expect(step).toContainText('1 note is in');
+  await step.getByRole('button', { name: 'Move 1 note and delete' }).click();
+  await expect(item(page, 'legal')).toHaveCount(0);
+  expect(worker.sent.map((each) => each.path)).toEqual([
+    `${STATUSES}/own/legal`,
+    `${STATUSES}/own/legal?moveTo=progress`,
+  ]);
+});
+
+test('a delete the worker answers with no body still ends: the row goes and it is said (lite review of PR 541)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  worker.deleteAnswer = () => ({ status: 204 });
+  await open(page);
+
+  await item(page, 'legal')
+    .getByRole('button', { name: /^Delete Waiting for the client's legal/ })
+    .click();
+  await page
+    .getByRole('group', { name: /^Delete Waiting for the client's legal/ })
+    .getByRole('button', { name: /^Delete/ })
+    .click();
+  await expect(item(page, 'legal')).toHaveCount(0);
+  await expect(page.locator('main [aria-live="polite"]')).toContainText('was deleted.');
+});
+
+test('a move the worker answers with no body still counts the notes in the status that took them (lite review of PR 541)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, { notes: NOTES });
+  worker.deleteAnswer = () => ({ status: 204 });
+  await open(page);
+
+  await item(page, 'waiting').getByRole('button', { name: 'Delete Waiting for client' }).click();
+  const move = page.getByRole('group', { name: 'Delete Waiting for client' });
+  await move.getByRole('button', { name: 'Move 12 notes and delete' }).click();
+  await expect(item(page, 'waiting')).toHaveCount(0);
+  await expect(item(page, 'todo')).toContainText('Built in · 12 notes');
+});
+
 test('a site that sends to GitHub shows its four states, beside a Linear list that could not be read', async ({
   page,
 }) => {
@@ -477,11 +572,13 @@ test('a site that sends to two repositories of one GitHub connector has one list
 
 test('at 390 px in French: one card per status, no sideways scroll, and the words of the phase', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await workerWith(page, { locale: 'fr' });
+  await workerWith(page, { locale: 'fr', notes: NOTES });
   await open(page);
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuts');
   await expect(item(page, 'new')).toContainText('Couleur de la phase');
+  await expect(item(page, 'new')).toContainText('· 3 notes');
+  await expect(item(page, 'todo')).toContainText('· Aucune note');
   await expect(item(page, 'new')).toContainText('Phase');
   await expect(item(page, 'waiting')).toContainText('Auto · 10,63:1');
   expect(await sideScroll(page)).toBe(0);

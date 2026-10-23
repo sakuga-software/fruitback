@@ -1145,6 +1145,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'On a light page': 'Sur une page claire',
   'On a dark page': 'Sur une page sombre',
   'Add the status': 'Ajouter le statut',
+  // FRU-386: the notes of each status, on its row.
+  'No notes': 'Aucune note',
+  '1 note': '1 note',
+  '{count} notes': '{count} notes',
   '1 note is in « {name} ».': '1 note est dans « {name} ».',
   '{count} notes are in « {name} ».': '{count} notes sont dans « {name} ».',
   'Choose where they go, then it is deleted. They take the stage of their new status.':
