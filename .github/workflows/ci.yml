@@ -438,7 +438,9 @@ jobs:
           echo "$code: $body"
           test "$code" = 503
           echo "$body" | grep -q 'FRUITBACK_DATABASE_URL'
-          echo "$body" | grep -q 'docs/self-hosting.md'
+          # The page that says how to copy the files of before: a section of docs/self-hosting.md, then a
+          # page of its own since FRU-427. Either passes, so this change can land before the split.
+          echo "$body" | grep -qE 'docs/self-hosting(/upgrade)?\.md'
           echo "$body" | grep -q 'migrate-to-postgres'
           for path in '/feedback?url=http%3A%2F%2Flocalhost%3A5173%2F' /session/sites /console/me; do
             status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: http://localhost:5173' "http://127.0.0.1:8080$path")
