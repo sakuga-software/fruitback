@@ -29,11 +29,13 @@ describe('zod without the Function constructor (FRU-389)', () => {
 
   it('makes the probe of zod answer that eval is refused, as the CSP of the extension does', async () => {
     const code = withoutEval(fs.readFileSync(UTIL, 'utf8'), UTIL) as string;
-    // The probe alone, out of the file: it tries `new F("")` in a `try`.
-    const probe = /export const allowsEval = cached\(\(\) => \{([\s\S]*?)\n\}\);/.exec(code)?.[1];
+    // The probe alone, out of the file: it reads `globalConfig`, then tries `new F("")` in a `try`.
+    const probe = /export const allowsEval = (?:\/\* @__PURE__\*\/ )?cached\(\(\) => \{([\s\S]*?)\n\}\);/.exec(
+      code,
+    )?.[1];
     assert.ok(probe !== undefined, 'the probe of zod moved: read src/no-eval.ts');
     // oxlint-disable-next-line no-new-func -- the probe of zod, run here as the build leaves it.
-    assert.equal(new Function(probe)(), false);
+    assert.equal(new Function('globalConfig', probe)({ jitless: false }), false);
   });
 
   it('leaves every other file alone, and fails on a version of zod that writes the line otherwise', () => {
