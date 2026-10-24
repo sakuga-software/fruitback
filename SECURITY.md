@@ -219,7 +219,7 @@ the issues of each client, and read their metadata. What holds it:
 - **One token reaches every repository of an installation: the token of the list** (FRU-361).
   The console lists the repositories of an installation for an owner or an admin who chooses a
   destination (`GET …/connectors/<id>/repositories`). That token asks for `permissions: { metadata:
-'read' }` and nothing else, so it reads the names and the visibility of the repositories, and
+  'read' }` and nothing else, so it reads the names and the visibility of the repositories, and
   writes nothing. A token that GitHub answers with another permission is not used. No cache keeps
   it: each list mints its own, and no note, reply or label call ever gets it. The list stops at
   1000 repositories (10 pages of 100). The condition: GitHub gives an installation token only the
@@ -758,27 +758,27 @@ names it.** What bounds this way in:
   dead. Ten minutes (`ADMIN_LINK_TTL_SECONDS`), where the link of an e-mail lives fifteen; spent
   once; and when it is spent the worker writes who signed in, so an operator who did not open it
   reads that somebody did: test:`is refused after ten minutes, where the link of an e-mail lives
-fifteen`, test:`is spent once: the same link opened again is refused`.
+  fifteen`, test:`is spent once: the same link opened again is refused`.
 - **No request makes one.** Only the start of the worker and the command call the function that
   does: test:`whatever the path, the method and the body, on a worker that names a first
-administrator` sends every path the routes spell, and reads that no mark of a link was written.
+  administrator` sends every path the routes spell, and reads that no mark of a link was written.
 - **The log writes one only while no workspace has an owner**, and a link kept from before is
   refused once one has, however that owner signed in: test:`writes nothing once a workspace has an
-owner: the variable left in the environment opens nothing`, test:`is refused once somebody else owns
-a workspace, however they signed in`. A link that was refused stays refused.
+  owner: the variable left in the environment opens nothing`, test:`is refused once somebody else owns
+  a workspace, however they signed in`. A link that was refused stays refused.
 - **One link at a time.** Two replicas that start together write one link (test:`is one link when
-two replicas start together, and the other one says that it was written`), and a new link ends the
+  two replicas start together, and the other one says that it was written`), and a new link ends the
   one before (test:`cancels the link before with each new one, whoever asked for each`).
 - **The command makes a link for an instance with no owner, or for an owner who lost their
   session, and for nobody else**: no second owner, and no admin or member made one
   (test:`refuses every other address once there is an owner: no second owner, and nobody
-promoted`). It ends no session (test:`gives an owner who lost their session a link, and ends no
-session that is open`). It needs a shell in the container, which already reads the database. Each
+  promoted`). It ends no session (test:`gives an owner who lost their session a link, and ends no
+  session that is open`). It needs a shell in the container, which already reads the database. Each
   link it makes leaves a line in the log of the worker: the address and the time, and never the link.
 - **The token is on one line, and nowhere else.** It is after the `#` of the link, which a browser
   sends to no server: no access log, no proxy and no error line of the worker holds it, and the
   database holds a digest (test:`writes its token on one line of the log, and nothing else of the
-worker ever writes it`).
+  worker ever writes it`).
 - **The secret of the sign-in is asked for, and never made by the worker**: with
   `FRUITBACK_FIRST_ADMIN` and no `FRUITBACK_AUTH_SECRET`, the worker refuses to start.
 
@@ -1169,20 +1169,20 @@ and accepted (FRU-139, point 3 of 2026-10-11):
   out », by « sign out everywhere » (`/console/auth/revoke-sessions`) or by its id
   (`DELETE /console/sessions/<id>`), is refused at the next call, and so is a member who was removed
   from a workspace: the role is read at each call too. test:`refuses a member who was removed at the
-next call, and a session that was ended`. A session is named by its id, never by its token: the
+  next call, and a session that was ended`. A session is named by its id, never by its token: the
   list of `GET /console/sessions` holds no token.
 - **The link of the e-mail keeps its token after the `#`.** `POST /console/auth/email` sends
   `<console>/sign-in#<token>`, and `POST /console/auth/email/redeem` takes the token in its body. The
   routes of better-auth that carry it in an address (`/sign-in/magic-link`, `/magic-link/verify`) are
   closed to a request: test:`opens a session with a link asked for, then spent, and the token reaches
-the worker in no address`. A link works once, for 15 minutes, and two calls at the same moment open
+  the worker in no address`. A link works once, for 15 minutes, and two calls at the same moment open
   one session (test:`opens one session for a link spent twice, or by two calls at the same moment`).
   It answers the same with or without an account, and is limited to 3 links per address per
   15 minutes, on top of the limit per IP of every route. The redeem hands the browser the cookie, and not the answer of
   better-auth, which holds the token of the session. **It answers the console only**, and not a
   request with no `Origin`: another page that spent a link of its own in this browser would sign the
   person in to its account (test:`spends a link for the console only, and not for a request with no
-Origin`).
+  Origin`).
 - **A tab that waited for the link goes on by itself, on the answer of the worker and never on the
   word of another tab** (FRU-235). The tab that opened the link tells the other tabs of the console,
   on a `BroadcastChannel` of its origin, that the browser is signed in. The message is one word: it
@@ -1193,12 +1193,12 @@ Origin`).
   it can do everything else there; all it gets is one question to the worker.
 - **The database keeps the link as a digest of a digest of a digest**, and a copy of the row opens
   nothing: test:`keeps the link as a digest of a digest, which opens nothing when a copy presents
-it`. The value of the row is the address it was sent to.
+  it`. The value of the row is the address it was sent to.
 - **A call with the cookie that changes something must come from the console.** `SameSite=Strict`
   does not keep out a page of the same site, and `demo.fruitback.com` is one. The routes under
   `/console/` refuse a request with the cookie from another origin (`403`), and a request with the
   cookie and no `Origin` that is not a read (`403 origin-not-allowed`): test:`refuses a change with
-the cookie from another origin, or from none, and takes it from the console`. **The routes of
+  the cookie from another origin, or from none, and takes it from the console`. **The routes of
   better-auth are under the same rule, applied by the worker before better-auth reads the request**
   (FRU-212): a call that is not a read answers `403 origin-not-allowed` unless its `Origin` is the
   console. better-auth 1.7.7 alone takes a `Referer` in place of an `Origin` that is missing, and
@@ -1304,7 +1304,7 @@ accounts, and one secret. Four of them hold the accounts since FRU-146.
   `/revoke-other-sessions` answer `404`, and a call to them in the process throws: a list of
   sessions has no token, so they would end nothing and say that they did.
   test:`throws on a call in the process to a route that names a session by its token, and ends
-nothing` plants each call. `/get-access-token`, `/refresh-token` and `/account-info` are closed the
+  nothing` plants each call. `/get-access-token`, `/refresh-token` and `/account-info` are closed the
   same way: there is no token of a provider to answer. Signing out, and « sign out everywhere »
   (`/revoke-sessions`), end the session at the next call:
   test:`ends a session at once on sign-out, and every session of a person with « sign out everywhere »`.
@@ -1318,7 +1318,7 @@ nothing` plants each call. `/get-access-token`, `/refresh-token` and `/account-i
   the console keeps it in a cookie that no script reads. Without the layer, the row of a copy was
   that token:
   test:`opens no session with the row of the session table, and the bearer plugin opens one with the
-token alone` keeps both measured.
+  token alone` keeps both measured.
 - **The environment cannot widen it.** better-auth reads `BETTER_AUTH_TRUSTED_ORIGINS`,
   `BETTER_AUTH_SECRETS` and `BETTER_AUTH_TELEMETRY` from the environment of the process, over what
   the worker gives it (measured). A worker that has better-auth on refuses to start with any
@@ -1332,7 +1332,7 @@ token alone` keeps both measured.
 - **By default better-auth counts no request and keeps no address and no user agent.** Its limit is
   off, so the limit of the worker is the only one, with the address `TRUSTED_PROXY_HOPS` decides,
   and a row of `session` holds neither: test:`keeps neither when the switch is off, whatever the
-caller writes`. Left alone, better-auth takes an `X-Forwarded-For` that holds one value as the
+  caller writes`. Left alone, better-auth takes an `X-Forwarded-For` that holds one value as the
   caller wrote it (measured). **With `FRUITBACK_AUTH_TRACK_IP=1`** (decision of 2026-10-11) it keeps
   both and counts by address too, with the address the worker read: the worker writes it in a
   header of its own, over anything the caller sent, and better-auth reads no other one. It counts in
@@ -1389,7 +1389,7 @@ sets the list in the console, and a note goes to the first place unless a member
   which the worker reads strictly from the request. GitHub is asked when a note goes, not here.
 - **A member chooses with `POST /feedback?destination=<id>`.** The body stays the seed. An id the
   site does not have, and a caller who may not see the tracker, both get `403
-destination-not-allowed`, and nothing is written, in the first place either.
+  destination-not-allowed`, and nothing is written, in the first place either.
 - **What says that a caller is a person of the workspace is the worker key, never a claim.** A site
   signs its own identity tokens and can write a workspace in them. `verifyForClient` marks a token as
   a session only when the worker key verified it.
@@ -1573,7 +1573,7 @@ identity is asked for (`openid email profile`).
   request of the worker.
 - **An address is used only when Google says it is verified** (`email_verified`). Another one makes
   no account and joins none: test:`creates no account for an address that Google did not
-verify`.
+  verify`.
 - A person who signs in with Google, with GitHub or with a link for the same verified address is one
   account. That is the rule of FRU-97, and it means the account is as safe as the weakest of the
   providers that can prove the address.
@@ -1585,21 +1585,21 @@ verify`.
 
 - **A person names themself, and nobody else.** `POST /console/me/name` sets the name of the
   account of the cookie, from the console (its `Origin`), and no route takes an id: test:`sets the
-name of the person of the cookie only, by a POST of the console`. The token of an extension opens
+  name of the person of the cookie only, by a POST of the console`. The token of an extension opens
   no route of the console. A name is one line of 1 to 80 characters, in NFC, and **holds no control
   character, no format character (a direction mark, a character of no width), no character of
   private use and none that is unassigned**: such a name would draw one name and hold another, as
   the author of a note in a tracker. test:`refuses what is not a name of one line, and keeps the name
-the account had`. A later sign-in with a provider does not write over it. There is no list of
+  the account had`. A later sign-in with a provider does not write over it. There is no list of
   reserved names: a name is a claim of the person, as the name in a note always was, and the
   address beside it is the one the worker proved.
 - **An extension signs the new name from its next access token**, at its next refresh, within ten
   minutes: the rename writes it on the live sessions of the person and on their codes that wait:
   test:`signs the next access token of an extension with the new name, and leaves the token in hand
-as it was`. A refresh or a redemption at the same moment as the rename gets the new name too: the
+  as it was`. A refresh or a redemption at the same moment as the rename gets the new name too: the
   rename holds the codes and the chains of the person first, as the end of their sessions does, and
   the redemption reads the name in the statement that spends the code: test:`gives the new name
-to a refresh in flight, on a real server, with the store as it is`. The notes already in a
+  to a refresh in flight, on a real server, with the store as it is`. The notes already in a
   tracker keep the name they were sent with.
 - **A provider is linked only for the address of the account, verified by the provider.**
   `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same
@@ -1607,12 +1607,12 @@ to a refresh in flight, on a real server, with the store as it is`. The notes al
   refuses another address, an address the provider did not verify, and a provider account that is
   another person's: no account is joined to another, and the person comes back to « My account »
   with an error (read in `oauth2/link-account.mjs` of 1.7.7): test:`refuses a provider whose address
-is another one, or is not verified, and joins no account`. No token of the provider is kept, as for
+  is another one, or is not verified, and joins no account`. No token of the provider is kept, as for
   a sign-in. better-auth's own `/link-social`, `/unlink-account` and `/list-accounts` stay closed.
 - **A provider goes only while another way to sign in stays** (`DELETE /console/me/sign-in/<provider>`):
   the link of the e-mail on a worker that sends it, or the other provider, linked and set up on this
   worker. Otherwise `409 last-sign-in`: test:`keeps the last way to sign in on a worker that sends no
-link`. **The session must be of the last day** (`freshAge`, the default of better-auth, written):
+  link`. **The session must be of the last day** (`freshAge`, the default of better-auth, written):
   an older one answers `403 sign-in-again`, so a cookie copied a week ago takes no way to sign in
   away: test:`asks a session older than a day to sign in again before a provider goes`. Two unlinks
   of one person run one after the other, so two at the same moment cannot take both providers:
@@ -1628,16 +1628,16 @@ seen » is shown to owners and admins only.
   `GET /console/workspaces/<id>/members/seen` answers `{seen: {<account>: <day>}}` with the right to
   manage the members; a member or a guest gets `403`, a person of another workspace `404`, as for
   every route of a workspace: test:`answers nothing of it to a member, a guest, another workspace,
-nobody, or an extension`. **It is a day, never an hour**: an hour would tell a colleague when
+  nobody, or an extension`. **It is a day, never an hour**: an hour would tell a colleague when
   somebody works. It is written by a call of the person to the console in that workspace, or by a
   refresh of their extension for it, at most once every ten minutes in a process, and it goes
   with the membership: test:`writes once for a person in a workspace while the day is remembered, and forgets the day when they
-leave`. The days of one workspace say nothing of another one: test:`sees a member in the
-workspace they called, and in no other one`.
+  leave`. The days of one workspace say nothing of another one: test:`sees a member in the
+  workspace they called, and in no other one`.
 - **A session of the console keeps the label of its browser, « Chrome on macOS », and not its user
   agent.** The label is two words of closed lists (`browser-label.ts`), so nothing a browser writes,
   no version and no device, reaches the database: test:`keeps « Firefox on Linux », and not the user
-agent, and lists it with the session`. The user agent is kept beside it only when the operator
+  agent, and lists it with the session`. The user agent is kept beside it only when the operator
   keeps addresses (`FRUITBACK_AUTH_TRACK_IP`), as before.
 
 ### The statuses of a site (FRU-366)
@@ -1678,7 +1678,7 @@ agent, and lists it with the session`. The user agent is kept beside it only whe
   hidden from (a guest, FRU-250): the key of such a status holds the id of the state at Linear, so that
   reader gets the statuses of the worker's store only, and no `status` of a tracker on a note
   (`withoutTrackerStatus`). test:`lists the states for the
-statuses page, with the switch, and refuses who does not manage the sites`.
+  statuses page, with the switch, and refuses who does not manage the sites`.
 
 ### The status of a note that the worker keeps (FRU-367)
 
@@ -1840,7 +1840,7 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
 - **An invitation gives `admin`, `member`, or `guest` with the sites it names, never `owner`**
   (FRU-250): « The guest of one site » below. The role of an accepted invitation is
   refused again when its row holds two roles: test:`refuses an invitation whose row holds two roles,
-when it is accepted`. An invitation waits 7 days; one address gets one invitation of a workspace at a
+  when it is accepted`. An invitation waits 7 days; one address gets one invitation of a workspace at a
   time, sent again on request; and **3 messages from one workspace to one address in 15 minutes**,
   the numbers of the sign-in link. Past them the invitation is kept and no message goes: the answer
   says `mailed: false`, and the console gives the link to send by hand. The count is by workspace

@@ -186,7 +186,7 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
   issue have no answer. Decision 4: no labels, four fixed statuses (FRU-369).
 - What is honest at GitHub is the **Status field of a Project v2**: a single select, with a name and
   one of eight colour names (`GRAY` … `PURPLE`). It is GraphQL only, needs the `Organization
-projects: read` permission of the GitHub App (every installation must approve the change), and the
+  projects: read` permission of the GitHub App (every installation must approve the change), and the
   webhook `projects_v2_item` is an organisation event in public preview. A later ticket, on demand.
 - GitHub's eight colour names need a hex table of our own to be drawn; Issue types use the same
   eight names and are not statuses.
@@ -394,7 +394,7 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **Two routes of the console, `manage-sites` like the others**: `GET …/statuses/tracker`, the states
   of each Linear team of the site (named by its connector and its `teamId`, as a site can send to two
   teams of one connector) with their stage and their colour, and the switch; `POST
-…/statuses/settings`, `{ trackerColours }`. A team Linear did not answer for says
+  …/statuses/settings`, `{ trackerColours }`. A team Linear did not answer for says
   `tracker-unreachable`, and the others are listed.
 - **A page's cached read keeps its stages for `CACHE_TTL_MS`** (15 s) after a row of the site changes:
   the stage of a Linear issue is computed when the page is read from Linear.

@@ -379,7 +379,7 @@ What it took was mostly measuring, because four things the documentation said we
   is the ticket's own test, a stranger on a clean machine: the package is still private.
 - **`.restore` from a missing file erases the database, and reports success.** Found while answering
   a review that asked to stop the worker during a restore. `sqlite3 /data/fruitback.db ".restore
-/data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
+  /data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
   with no pins. The guide's restore ran its copy step and its `.restore` as separate lines, so a
   failed copy was one line away from that. Every documented restore now chains its steps with `&&`
   and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both

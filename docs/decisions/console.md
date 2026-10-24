@@ -494,7 +494,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`409 last-sign-in`, `403 sign-in-again`). The three rows of « How you sign in » are drawn before
   the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
   not « Linked as ». **The browsers of the extension are rows of the same list** (`GET
-/console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
+  /console/me/browsers`, FRU-238): « Extension · Chrome on macOS », « Connected 12 Oct · used 2 h ago »,
   after the browsers of the console. The two lists are read together and drawn once, so nothing under
   them moves when the second answer comes. A list of the console that could not be read is no list; a
   list of the extension that could not be read leaves the browsers of the console and their

@@ -207,7 +207,7 @@ How this repository is formatted, tested and documented, and which test holds ea
   `node --test` did not. Under them better-auth leaves out its check of the origin, and three cases
   of `auth-instance.test.ts` failed.
 - **StrykerJS runs the worker with `@stryker-mutator/vitest-runner` and `coverageAnalysis:
-"perTest"`**: a mutant runs only the tests that reach it, in workers that stay up. `vitest.related`
+  "perTest"`**: a mutant runs only the tests that reach it, in workers that stay up. `vitest.related`
   is `false`: `related` would keep only the tests that import a mutated file, and leave out a test
   that starts the worker in a process or reads a document. `mutation.test.ts` holds both.
 - **vitest is 5.0.5, the same in the workspace and in `tools/mutation`.** The runner of StrykerJS
@@ -281,7 +281,7 @@ Node 25.8.1, two workers)
   file and of each package, measured by a full run in CI. `tools/mutation/ratchet.ts` fails a run
   when a file scores under its line, a new file under the line of its package, or a full run under
   the line of the package. A line moves up by a commit that says why: `node tools/mutation/ratchet.ts
-write <package> <mutation.json>` prints it from the report of a full run.
+  write <package> <mutation.json>` prints it from the report of a full run.
 - **A pull request mutates the files of the scope that it changes, and those whose test it changes**
   (`src/x.test.ts` for `src/x.ts`), deleted or renamed included: a pull request that deletes a test is
   measured too. A test of another name that also kills those mutants (`app.test.ts` for `identity.ts`),

@@ -104,7 +104,7 @@ peut créer un compte quoiqu'il arrive aussi pour la partie admin ». FRU-184 is
 - **The code of before is still there, and no process reaches it.** `WITHOUT_DATABASE` in `env.ts`
   turns the refusals above off. It is a symbol, and `process.env` holds strings: only a test can set
   it, through `before-postgres.fixture.ts`. test:`keeps the worker of before out of any environment a
-process can be given` holds it, with the scan that finds no file of the bundle but `env.ts` naming
+  process can be given` holds it, with the scan that finds no file of the bundle but `env.ts` naming
   it. The SQLite code went with FRU-226. The symbol stays for the client map of the tests: see
   _The SQLite stores go_.
 - **`pnpm dev` and the E2E suite have their sign-in on**: `devEnvironment` gives the worker of
@@ -418,7 +418,7 @@ degradation the ticket asked to have written down rather than discovered.
   reach one source, and their `label` is the worker's (`Linear · Camille`, `GitHub App · acme`), which
   the console reads to say how each is connected. So the name is its own column, `connectors.name`
   (migration 0029), NULL for none, and `renameConnector` writes it alone. `POST
-/console/workspaces/<id>/connectors/<connector>` `{ name }` answers the connector, for
+  /console/workspaces/<id>/connectors/<connector>` `{ name }` answers the connector, for
   `manage-workspace`, with the rule and the code of the name of a workspace (`invalid-name`); `null`
   or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
   installed again keeps the name, as it keeps its connector.
@@ -528,7 +528,7 @@ degradation the ticket asked to have written down rather than discovered.
 - **A store names its own environment variables.** `envNames` is required per field, so a boot
   diagnostic says `LINEAR_API_KEY` and never `apiKey` — mutation-tested, and the mutation also trips
   three older tests, which is how load-bearing that diagnostic is. test:`never reports a field name from
-any store` asks it of every spec rather than of Linear.
+  any store` asks it of every spec rather than of Linear.
 - **An unknown provider and a dev-only one in production are both refused, never defaulted.** A typo
   falling back to Linear would send a worker configured for SQLite to an API it has no key for; and
   feedback accepted into RAM behind a green health check is worse than a worker that will not start.
@@ -815,7 +815,7 @@ any store` asks it of every spec rather than of Linear.
   the comparison removed. The case now asks the store directly, at the expiry and one millisecond
   each side.
 - **Two cases were made stricter when they moved.** test:`leaves the token a client just received
-alone when its predecessor is retired` checked the answer of the rotation and not the token in it:
+  alone when its predecessor is retired` checked the answer of the rotation and not the token in it:
   a store that revoked the whole chain and still answered `rotated` passed. It now uses the token.
   test:`tells a logged-out token apart from a replayed one` checked a refusal, which a replay gets too:
   it now reads `gone` from the store.
@@ -906,7 +906,7 @@ same database since FRU-142: see the section after this one.
   request got no answer. The pool of `pg-pool` 3.14 removes its listener from a connection when it
   hands it out, and puts it back when the connection is released. `postgres.ts` now adds one
   listener to each connection when the pool makes it. test:`answers an error for that request, stays
-up, and serves the next one` runs that worker in a process of its own: the defect stops a process.
+  up, and serves the next one` runs that worker in a process of its own: the defect stops a process.
 - **An outage of the accounts is in the log now.** `handleRequest` answered `502` and wrote nothing,
   for SQLite too. That is how the missing banner looked like a database that was down.
 
@@ -1000,7 +1000,7 @@ better-auth: it holds the session of the extension, and it stays.
   reproduced on a developer machine (25 runs of 25, then 12 of 12 with the server at half a CPU):
   the cause is read from the code, and CI is what says the fix holds.
 - **No code and no token is in a row.** test:`holds no code and no token in clear, in any row of any
-table` reads every table of the schema after a code was spent, a session refreshed and one logged
+  table` reads every table of the schema after a code was spent, a session refreshed and one logged
   out. test:`finds a token that a row holds in clear` is its control.
 - **`pair` ends.** test:`writes the digest of its code in the database, and ends` runs the command as
   a process against a server, with 8 seconds to end. Measured without the line that closes the pool:
@@ -1074,11 +1074,11 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   (`connect-postgres.test.ts`, 16 cases, 22 violations). The races are planted twice: on PGlite by a
   store that reads, lets a turn go and writes; on a server by the real store with the claim read in a
   subquery, held by a trigger (`outcomeOnChangedStore`). test:`fails on a real server with a claim
-that is read apart from the statement that spends it`.
+  that is read apart from the statement that spends it`.
 - **Two replicas are two pools on one database**: a request made on one, answered and claimed on the
   other, with one session for claims on both, and the pace shared through the `Kv` of the database
   (test:`makes a request on one replica, answers it on the other, and gives one session to claims on
-both`).
+  both`).
 - **The guard of raw fragments counted `sql` and not `sql<number>`.** The browsers of « My account »
   select `min` and `max` of an instant, typed: `postgres-numbers.test.ts` now counts a typed fragment
   too, and `mapWith` of the column reads the driver's string as a number on both sides of 2^32.
@@ -1099,14 +1099,14 @@ is its configuration, its tables and the guards, so the slice that signs a perso
   `hasAuth(config)`, as you ask `hasAccounts(config)`.
 - **Off, better-auth serves no route.** No path under `/console/auth/` answers anything but `404`,
   with or without a database: test:`answers 404 on every route of better-auth when it is off, with
-or without a database`. On, it serves the paths of `SERVED_PATHS` and no other (FRU-147: see _The
+  or without a database`. On, it serves the paths of `SERVED_PATHS` and no other (FRU-147: see _The
   console signs in with better-auth_). A worker whose database does not answer says `502` there, as
   on every route: the accounts are read before the dispatch.
 - **`auth.ts` is the one file that names better-auth**, as types, and it loads the library when the
   instance is built, as `postgres.ts` does for its driver. A lint rule holds the import, for `kysely`
   too. test:`loads no file of better-auth for a worker that is refused, and answers 500 under
-/console/auth` holds the rest in a process of its own, and test:`keeps better-auth and the driver
-behind a dynamic import, so the image runs none of them at boot` holds it on the graph of the bundle.
+  /console/auth` holds the rest in a process of its own, and test:`keeps better-auth and the driver
+  behind a dynamic import, so the image runs none of them at boot` holds it on the graph of the bundle.
 - **It does not take the place of the session of the extension.** `session.ts` stays as it is: a
   token that rotates, and a replay that ends the chain. A session of better-auth is one token that
   does not rotate.
@@ -1114,7 +1114,7 @@ behind a dynamic import, so the image runs none of them at boot` holds it on the
   either. `REFUSED_PLUGINS` in `auth.ts` gives each its reason, and `startAuth` refuses to build an
   instance that has one. With `bearer`, a session opens with its token in an `Authorization` header,
   which a script can send: test:`opens no session with the row of the session table, and the bearer
-plugin opens one with the token alone` keeps it measured, with and without the layer below.
+  plugin opens one with the token alone` keeps it measured, with and without the layer below.
 - **The database keeps no usable secret of better-auth, even with `FRUITBACK_AUTH_SECRET` beside it**
   (FRU-181). The plugin `fruitback-at-rest` (`auth-at-rest.ts`) puts a layer between better-auth and
   its database adapter: `session.token` and `verification.identifier` are kept as their SHA-256,
@@ -1142,12 +1142,12 @@ plugin opens one with the token alone` keeps it measured, with and without the l
 - **The adapter is read before a version of better-auth is trusted.** The layer knows the members of
   the adapter of 1.7.7 (`ADAPTER_MEMBERS`) and refuses an adapter with another one, which could read
   or write a row around it: test:`knows every member of the adapter that better-auth builds, and no
-other`.
+  other`.
 - **One tool migrates the database, and it is Drizzle** (FRU-180, section below). The tables of
   better-auth are written in `auth-schema.ts`, in Drizzle: the tables that better-auth compiles for
   the options of `auth.ts`, and two constraints more: `UNIQUE ("organizationId", "userId")` on
   `member`, and `UNIQUE ("providerId", "accountId")` on `account` (FRU-146). `drizzle-kit generate` writes their migration with the tables of the worker. `auth
-migrate` and `runMigrations()` never run on a database of the worker. **A plugin, a field or a
+  migrate` and `runMigrations()` never run on a database of the worker. **A plugin, a field or a
   version of better-auth that changes its schema is a change of `auth-schema.ts` and a migration
   that `drizzle-kit` generates**: the tests of the schema say what is missing.
 - **better-auth keeps its own adapter, Kysely, on the pool of `postgres.ts`.** It does not read the
@@ -1197,7 +1197,7 @@ whether it was read there, read in the source of the package, or measured.
   « including in production »). On an empty database it writes « Database schema mismatch » in the
   log before any request. So `authFor` applies the migrations of the worker first, and builds
   nothing when they fail: test:`loads nothing of better-auth while the database of a worker that has
-it on does not answer`.
+  it on does not answer`.
 - **A context that is built is not an instance that is ready** (measured). On a schema that is wrong,
   better-auth builds its context all the same. It is the first request that is rejected, and every
   one after it: `auth.handler` rejects with `SCHEMA_MISMATCH`, it does not answer `500`. So
@@ -1205,9 +1205,9 @@ it on does not answer`.
   and the line of the boot then says what is missing in place of « ready ». The message of
   better-auth ends with « Run `npx auth migrate` », which is the one thing not to do on a database
   of the worker: the worker writes its own words. test:`refuses to call better-auth ready on a
-schema that lost a column, and names the column` holds it. **The mount catches that rejection**
+  schema that lost a column, and names the column` holds it. **The mount catches that rejection**
   (FRU-147), and answers `502` with the reason in the log: test:`answers 502, and says why in its
-log, when better-auth rejects`.
+  log, when better-auth rejects`.
 - **A pool of `pg` is what better-auth takes** (read: adapters/postgresql). `postgres.ts` hands over
   the pool of the process, `PgDatabase.pool()`, and nothing else may take it. The tests on PGlite
   give better-auth a pool made of the instance of the case, in `postgres.fixture.ts`: one client out
@@ -1227,7 +1227,7 @@ log, when better-auth rejects`.
   is a list of addresses and not a count. Two limits with two readings of the address are two
   answers to « who is this caller »: its limit is off. The address in a row of `session` comes from
   the same reading, so none is kept. test:`takes a lone X-Forwarded-For as the caller wrote it, and
-refuses a chain, when it tracks addresses` keeps the reason measured. A slice that wants the address
+  refuses a chain, when it tracks addresses` keeps the reason measured. A slice that wants the address
   in the `session` table gives better-auth the one that `resolveClientIp` read, in one header that
   the worker writes over anything the caller sent, and names that header in `ipAddressHeaders`.
 - **The variables better-auth reads by itself** (read in the source, and measured).
@@ -1239,7 +1239,7 @@ refuses a chain, when it tracks addresses` keeps the reason measured. A slice th
   when the option is absent, and the worker always writes both. The refusal is on the prefix, so a
   variable that a later version adds is refused too.
   test:`takes an origin and a secret from the environment over its options, when the worker lets one
-in` keeps the first two measured.
+  in` keeps the first two measured.
 - **`FRUITBACK_PUBLIC_URL` has no path when better-auth is on.** better-auth takes a path in its
   address as the path its routes are under, in place of `basePath` (read in `utils/url.mjs`). The
   worker refuses such an address at boot and gives better-auth the origin.
@@ -1291,7 +1291,7 @@ in` keeps the first two measured.
   each by none, and better-auth took the refusal of the layer for « no such session »: it answered
   `{ status: true }` and ended nothing (measured). A hook of the plugin throws before the endpoint
   runs: test:`throws on a call in the process to a route that names a session by its token, and ends
-nothing`.
+  nothing`.
 - **The tables have the names better-auth gives them**: `user`, `session`, `account`,
   `verification`, `organization`, `member`, `invitation`. They are made in every database of a
   worker, with better-auth on or off, because the database has one list of migrations. Names that
@@ -1414,7 +1414,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   value, and the types forbid it. `accounts-postgres.ts` refuses them with a `TypeError` that names
   the value: test:`refuses undefined in place of a value it writes, and changes no row`,
   test:`refuses a limit of due deliveries that is not a positive integer, where Drizzle drops the
-LIMIT`.
+  LIMIT`.
 - **A write that must say whether it changed a row returns that row** (`returning`), and the store
   counts what comes back. The two drivers do not count the rows of a statement in the same way.
 - **The tables are in `public`, and so is the journal** (`__drizzle_migrations`). A test that needs
@@ -1428,7 +1428,7 @@ LIMIT`.
   `afterEach` runs (`postgres-numbers.test.ts`, twice in CI on 2026-10-12). `drop` of `ownDatabase`
   now waits until `pg_stat_activity` lists no client on the database, two seconds at most, and
   `FORCE` stays for a process that a test killed. test:`ends no connection of a pool that has just
-ended` holds it, and test:`ended one when it did not wait, which is what failed a test in CI` is its
+  ended` holds it, and test:`ended one when it did not wait, which is what failed a test in CI` is its
   control.
 - **`drizzle/` is not formatted.** `drizzle-kit` writes it again at the next `generate`, in its own
   form: the `format` scripts of the worker and the pre-commit hook leave the folder out.
@@ -1457,7 +1457,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   connection, and Drizzle works on that connection (`alone` of `Database`): the journal is made
   inside the lock too. test:`applies each migration once` starts two Node processes, and the first
   migration sleeps so the second arrives inside it. test:`fails for one of the two when nothing holds
-the lock` is its control: the same two processes, with the line of the lock removed.
+  the lock` is its control: the same two processes, with the line of the lock removed.
 - **The third defect: the digest is written and never read.** Drizzle keeps a SHA-256 of each SQL
   file, and a migration that was edited after it shipped is not run again on a database that has
   it. test:`refuses a folder in which a migration that shipped was edited` holds the check that
@@ -1494,15 +1494,15 @@ the lock` is its control: the same two processes, with the line of the lock remo
   `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282, thirty-nine since FRU-331), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
-number through the schema`. No store sends a raw statement
+  number through the schema`. No store sends a raw statement
   (test:`sends no raw statement from a store: a column is read through the schema, where it is a
-number`), and test:`reads an instant that is a string as no instant, and says 1970 with no error`
+  number`), and test:`reads an instant that is a string as no instant, and says 1970 with no error`
   is why that matters. Every column is read at 2^31, past 2^32 and at the last exact integer, and as
   `NULL`: test:`is the number that was written, in every column, at 2^31, past 2^32 and at the last
-exact integer`, test:`is null when the column holds no instant, and never 0`. The two stores are
+  exact integer`, test:`is null when the column holds no instant, and never 0`. The two stores are
   read at the same values: test:`reaches the console as the instant that was given, through the
-store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
-2^32`.
+  store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
+  2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
   have none (test:`knows the thirty-nine BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
@@ -1522,7 +1522,7 @@ store of the accounts`, test:`decides a pairing and a session by their instants,
   test:`is refused with the schema to name, and nothing is written in the empty one`. It looks only
   where the role may read: a `schema_migrations` of another application in a schema closed to it is
   left alone (test:`is enough: no right on public, none on the database, and the worker signs a
-person in` plants one).
+  person in` plants one).
 - **The baseline makes the database that the tool of before made, to the last name.** One database
   made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
   compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the
@@ -1547,10 +1547,10 @@ person in` plants one).
   `pg_constraint` for « not null » are left out. PostgreSQL 18 writes one for each such column (85
   for the baseline), and 17 writes none: with them a database on 18 was never adopted. A table
   that the baseline does not make is another application's: test:`leaves alone a table that the
-baseline does not make: it is adopted with it`.
+  baseline does not make: it is adopted with it`.
 - **Why the baseline is marked and not run on a database of before.** Drizzle alone runs it, and
   fails on the first `CREATE TABLE`: test:`fails on its first CREATE TABLE when Drizzle alone meets
-it, and writes no row of its journal` is the control of the adoption. Rows cannot be replayed into
+  it, and writes no row of its journal` is the control of the adoption. Rows cannot be replayed into
   new tables without a copy, and a copy is a second way to lose them. The two catalogues are the same,
   so the database has what the baseline makes: the row of the journal is the one thing missing.
   test:`is adopted: nothing is run again, every row stays, and the stores read them` plants rows in
@@ -1571,7 +1571,7 @@ it, and writes no row of its journal` is the control of the adoption. Rows canno
   (FRU-183 asks Mathieu to confirm it). Adopting them would keep the SQL of the tool of before in the
   worker. The message says what to do: start an image from FRU-144 to
   before Drizzle on it once, then this one. test:`refuses a database that the tool of before left at
-an earlier migration, and writes nothing`.
+  an earlier migration, and writes nothing`.
 - **The migrations of `drizzle-kit` name `public` in every foreign key.** A case of a test does not
   have a schema of its own, as it had (a worker can: FRU-219). On a server it has a database. PGlite has one database: a
   case empties `public`, so a process holds one PGlite database at a time.
@@ -1606,7 +1606,7 @@ an earlier migration, and writes nothing`.
 - **The switch takes `FRUITBACK_DATABASE_SCHEMA` as any database does** (FRU-219): the PGlite is
   made in that schema, and `public` holds nothing
   (test:`keeps its tables, its workspace and its notes in a schema of its own when one is named
-(FRU-219)`).
+  (FRU-219)`).
 - **`migrate-to-postgres` does not read the switch.** It copies files into a server, and takes
   `FRUITBACK_DATABASE_URL` alone.
 
@@ -1646,10 +1646,10 @@ an earlier migration, and writes nothing`.
   the address and the visibility again to change the visibility: it must not close a site that an
   admin opened.
 - **One rule, `writesWith`, for the note, the batch, the reply and the read.** With `write:
-'authenticated'`, a write needs a token that verifies **and** is a session of the worker key
+  'authenticated'`, a write needs a token that verifies **and** is a session of the worker key
   (`verified.session`). A token that a site signs verifies for a read and is refused for a write.
 - **The refusal of a write is the refusal of a read**: `401 { error: 'identity-required', reason:
-'identity-required' }` with no token, and `reason: 'session-required'` for a token that is no
+  'identity-required' }` with no token, and `reason: 'session-required'` for a token that is no
   session. A token that does not verify keeps its `invalid-identity`.
 - **The read says `canWrite: false` where this reader may not write**, in a `200` and in a `401`, and
   says nothing where they may: a worker of before says nothing, and the widget offers a note.
@@ -1733,10 +1733,10 @@ removes its own SQL file, snapshot and entry, and generates again.
   operator's to keep or to forget.
 - **The same file twice writes nothing; the same file under another `--client` is refused**
   (test:`holds the same rows under another name of site as other rows: a second run with another
---client is refused`): the comparison is on the rows as they would be written.
+  --client is refused`): the comparison is on the rows as they would be written.
 - **`--sessions` alone does not exist.** The ticket asked for it only if a session of a worker with
   no accounts can be given to a member. It cannot: test:`reads no site for members, whatever
-workspace it names: each reviewer pairs again, once` measures `401` for a session that names no
+  workspace it names: each reviewer pairs again, once` measures `401` for a session that names no
   workspace or the one of `FRUITBACK_CLIENTS`, and `401` at the first refresh of one whose
   workspace was rewritten. Each reviewer pairs again.
 
@@ -1745,7 +1745,7 @@ workspace it names: each reviewer pairs again, once` measures `401` for a sessio
 - **The sequence is set before the commit, and is not in the transaction.** A commit that fails
   leaves the sequence forward and no row: a gap in the numbers, and nothing else. A dry run does
   not touch it: test:`keeps nothing on a dry run, not even a number, and says what the next one
-would be`.
+  would be`.
 - **Played backwards**, on PGlite and PostgreSQL 17.11: with `sqlite_sequence` ignored, 2 tests
   fail; with no `setval`, 4; with no comparison after the copy, 2.
 - **The copy holds every row in memory**, as the copy of the accounts does. The size of the file
@@ -1783,7 +1783,7 @@ are in `apps/worker/cloud/README.md`.
   A row in `user`, `account`, `organization` or `member` is refused too: those tables are empty
   until the worker starts. **Once a worker started on the database, the copy is refused**: the
   tables of the files are gone. test:`refuses a database on which a worker started since the copy,
-and says why`.
+  and says why`.
 - **The end is a count and a digest of the rows of each table, file against database**, read again
   inside the transaction through the schema. A difference rolls back and ends with 1. `--dry-run`
   does everything and rolls back.
@@ -1799,7 +1799,7 @@ and says why`.
   2026-10-11). The rows of a worker that was just stopped can be in the journal only: the same test
   reads the file without its `-wal` and finds no table, and with the line that copies the `-wal`
   removed, test:`copies every row: a session opened before refreshes after, and a sealed connector
-opens` fails. So the copy reads a folder that it cannot write:
+  opens` fails. So the copy reads a folder that it cannot write:
   test:`reads the two files in a folder that it cannot write`.
 - **What « the same » means after the copy.** The digests of the tokens and the sealed keys are
   copied as they are, so the test reads them as a worker would: the refresh token of a session of
@@ -1811,14 +1811,14 @@ opens` fails. So the copy reads a folder that it cannot write:
   process: SQLite and PostgreSQL do not sort text in the same way.
 - **The interruption is planted, and so is the lost row.** A trigger stops the insert of the last
   table: test:`leaves nothing when it stops in the middle, and gives the same result when it runs
-again`. Another one removes a pairing as soon as it is written:
+  again`. Another one removes a pairing as soon as it is written:
   test:`fails its final count when a row goes missing in the target, and keeps nothing`.
 - **Idempotence is « the same rows », not « a mark that the copy ran ».** A mark would say nothing
   of what a worker wrote after it: test:`writes nothing again when it runs a second time`,
   test:`refuses a database that holds other rows, and writes nothing`. A row in a table that
   is not copied counts too (raised in review): a sign-in link made since the copy is a row that
   the files do not have, test:`refuses a database that holds these rows and a sign-in link made
-since`.
+  since`.
 - **The command runs as a process against a server** in
   test:`copies, ends with 0, and never prints the address of the database`: a dry run, the copy, a
   second run, and a file that does not exist, which `node:sqlite` would otherwise make.
@@ -1841,7 +1841,7 @@ fixture, `accounts-sqlite.fixture.ts`.
   `deleteWorkspace`. better-auth does not run for these calls, so its layer (`auth-at-rest.ts`) is
   not between this store and the table. **No statement of the store gives a value to a token column
   of `account`, to its scope or to its password**: test:`writes each row as better-auth expects it,
-and no token of a provider`, test:`writes a new sign-in and a new workspace as it writes a moved one`.
+  and no token of a provider`, test:`writes a new sign-in and a new workspace as it writes a moved one`.
 - **The ids do not change.** `acc_…` is the id of a `user` and `ws_…` the id of an `organization`.
   They are in the access tokens, in `reporter.id` of the notes already written, and in the sessions
   of the extensions. A row of `account` and of `member` gets an id it did not have: `lgn_` and
@@ -1874,7 +1874,7 @@ and no token of a provider`, test:`writes a new sign-in and a new workspace as i
 - **One identity at a provider is one row**: `UNIQUE ("providerId", "accountId")` on `account`,
   which the DDL of better-auth does not have. It is what the primary key of `logins` said, and the
   insert of a sign-in names it as its conflict. test:`refuses a second row for one identity at a
-provider`.
+  provider`.
 - **A site and a connector are of an `organization`**, with `ON DELETE CASCADE`. Removing a
   workspace is one `DELETE` of its `organization`: its members, its invitations, its sites and
   their destinations, its connectors and their deliveries go with it.
@@ -1899,7 +1899,7 @@ was, and the worker answers `502` until somebody acts.
   no route serves better-auth. A person who is already in `user`, with the address or the id of an
   account, is a row that nobody can explain, and the unique constraints refuse the copy: nothing
   moves and nothing is dropped. test:`moves nothing and drops nothing when a person is already in
-the table of better-auth`.
+  the table of better-auth`.
 - **An instant keeps its millisecond**: `'epoch' + created_at * interval '1 millisecond'`, which is
   exact, where `to_timestamp(created_at / 1000.0)` goes through a float. The memberships of a
   person are read in the order they were made, as before:
@@ -1921,7 +1921,7 @@ wrote them, and applies the migrations as a worker does when it starts, on PGlit
 - A session of the extension that was opened before reads its sites after, and refreshes:
   test:`lets a session of the extension that was opened before read its sites, and refresh`. Its
   control removes the membership: test:`refuses that session the moment its person is no member any
-more`.
+  more`.
 - better-auth has nothing to create on the database that was moved:
   test:`leaves better-auth nothing to create and nothing to add on the database it moved`.
 - The two conformance suites pass on the store with no change to a case.
@@ -2029,7 +2029,7 @@ Read on better-auth 1.7.7, in `plugins/magic-link/index.mjs`, `@better-auth/core
 - **better-auth creates an account for an address that GitHub did not verify, and opens its session**
   (measured on 1.7.7, `emailVerified` false in the row). It links no such address to an account that
   exists (`account_not_linked`). test:`makes an account for an address that GitHub did not verify,
-without the hook of the worker` is the control of the hook.
+  without the hook of the worker` is the control of the hook.
 - **GitHub: better-auth takes the address of the profile**, or the primary one when the profile shows
   none, and reads its `verified` in `/user/emails`. The path of before took the primary verified
   address. The two differ for a person whose public address is another verified one: they then
@@ -2038,7 +2038,7 @@ without the hook of the worker` is the control of the hook.
   checks no signature. The path of before asked Google's user info. The token comes from Google over
   TLS in the answer to the worker's own request, so nobody else wrote it.
 - **The digest of a link, three times.** `storeToken: 'hashed'` keeps `magic-link:<base64url of the
-SHA-256 of the token>`, `verification.storeIdentifier: 'hashed'` digests that, and the layer of
+  SHA-256 of the token>`, `verification.storeIdentifier: 'hashed'` digests that, and the layer of
   FRU-181 digests it again. None of the three, nor the token, is in a row:
   test:`keeps the link as a digest of a digest, which opens nothing when a copy presents it`. The
   value of the row is `{"type":"magic-link","email":…}`: no secret.
@@ -2157,7 +2157,7 @@ Read on better-auth 1.7.7, in `plugins/organization/routes/crud-members.mjs`, `c
   not measured). The route gives the plugin what it validated, and needs no hook.
 - **An invitation with a role that is not one of the four is refused by the plugin itself**
   (`ROLE_NOT_FOUND`), and one with two roles by the hook: test:`keeps an invitation to one role
-too, for the day its route opens`. The route that accepts an invitation runs no `beforeAddMember`
+  too, for the day its route opens`. The route that accepts an invitation runs no `beforeAddMember`
   (read): FRU-104 adds `beforeAcceptInvitation`, which refuses the same.
 - **`endSessionsOf` on PostgreSQL, measured on two connections.** A refresh holds the head of its
   chain, writes its successor, and commits. One `UPDATE` that started meanwhile waits for the head,
@@ -2222,7 +2222,7 @@ Read in `routes/crud-invites.mjs` of 1.7.7; measured in `auth-organization.test.
 
 - **Accepting runs `beforeAcceptInvitation` and no `beforeAddMember`**, and writes the role of the
   row. So the hook refuses a row with two roles: test:`refuses an invitation whose row holds two
-roles, when it is accepted`.
+  roles, when it is accepted`.
 - **With the ids of the worker (`generateId`), the plugin asks a verified address** to read, accept
   or decline by id. It is written (`requireEmailVerificationOnInvitation: true`): a later default
   changes nothing.
@@ -2704,11 +2704,11 @@ ticket removes; it adds no route and no table.
   rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
   `revoke` still fails test:`revokes on the worker, so the refresh token stops working everywhere`, and
   dropping the chain revocation from `revokeSession` fails test:`ends the whole chain on log out, not only
-the token it was handed` and test:`ends a chain from any link, including the token nobody is holding`,
+  the token it was handed` and test:`ends a chain from any link, including the token nobody is holding`,
   and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
   fails both test:`answers an extension origin that is on no allowlist` and test:`lets the preflight through,
-or the POST never happens`. What says the exemption is not a hole in the gate is
+  or the POST never happens`. What says the exemption is not a hole in the gate is
   test:`leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
   origin that is on no allowlist is still refused there.
   - Two of those three names were quoted here **truncated**, and the second was quoted with a
@@ -3046,7 +3046,7 @@ workspace too: the reason is free text, « impayé » for example.
 
 - **`POST /console/admin/workspaces/<id>/suspension`, body `{ suspended: true | false, reason? }`**,
   behind `instanceAdminOf`, in `ADMIN_WRITE_ROUTES`. `200 { workspace: { id, suspended,
-suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
+  suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
   `400 invalid-suspended`. A `reason` that is not text, or longer than `SUSPENSION_REASON_LENGTH`
   (200 characters) once it is one line, answers `400 invalid-reason` with `maxLength`. An empty
   reason is none. A workspace that does not exist answers `404 not-found`.
@@ -3159,7 +3159,7 @@ suspendedAt?, reason? }, changed }`. A `suspended` that is not a boolean answers
 
 - **`POST /console/admin/workspaces/<id>/deletion`, body `{ name }`**, behind `instanceAdminOf`, in
   `ADMIN_WRITE_ROUTES`. `200 { workspace: { id, name }, gone: { sites, members, invitations,
-connectors, keptNotes } }`. A `name` that is not text, or is blank, answers `400 invalid-name`. A
+  connectors, keptNotes } }`. A `name` that is not text, or is blank, answers `400 invalid-name`. A
   name that is not the one of the workspace answers `409 name-mismatch`: the comparison is exact,
   case included, after the spaces at both ends are dropped. A workspace that does not exist, and a
   caller who is no longer an administrator, answer `404 not-found`.
@@ -3226,7 +3226,7 @@ D5 of FRU-260, and decision 3 of 2026-10-19: « Refusé tant qu'il y a des works
 
 - **`POST /console/admin/users/<id>/deletion`, body `{ email }`**, behind `instanceAdminOf`. The
   address is the confirmation, as the name is for a workspace (FRU-284). `200 { user: { id, email },
-workspaces }`; `409 sole-owner` with `workspaces`, `409 self-deletion`, `409 last-admin`,
+  workspaces }`; `409 sole-owner` with `workspaces`, `409 self-deletion`, `409 last-admin`,
   `409 email-mismatch`; `400 invalid-email`; `404` for an account that does not exist.
 - **One transaction** (`deleteAccount` of `instance-admin-postgres.ts`): the lock of the role, the
   account `FOR UPDATE`, the rule of the last administrator before the check of the caller (as in
@@ -3260,7 +3260,7 @@ committed. The workspace had no owner, which nobody repairs from the console.
   each other, and PostgreSQL ended one of them on a deadlock after a second (measured: the two cases
   « neither ends on a deadlock » of `workspace-keeps-owner.test.ts` fail without `holdMembers`).
 - **The refusal is a failure of better-auth.** The plugin answers `500`, and the worker `502
-auth-unavailable`. An owner who asks to leave again gets the refusal of better-auth of the last
+  auth-unavailable`. An owner who asks to leave again gets the refusal of better-auth of the last
   owner, `400`, since better-auth reads the owners first. It is the answer of a race with an administrator, not of a click alone.
 - **The sessions of the extension** are in another store: `endSessionsOf({ subject })` runs before the
   transaction (after a first pass of the checks alone, so a refusal ends nothing) and after it.
@@ -3401,7 +3401,7 @@ replies, and on a public site mounted by the extension with no session, only the
   console shows, or « Fruitback » with none; for a role with `see-tracker` only (`destinationFor`).
   A first destination with no label gives no field: absent, never a guess.
 - **`toCheck` is read from the index** (`NoteIndex.toCheck`): rows of the account (`author_kind =
-'member'`), at `done`, whose `confirmed` is not true. For the session of an account only.
+  'member'`), at `done`, whose `confirmed` is not true. For the session of an account only.
 - **`confirmed` is written by `refresh`** from the replies of the read (`checkedOf`), **only where a
   verdict can be given** (`verdicts`: the read shows the replies and `takesChecks` of the place).
   Elsewhere it is emptied, and `toCheck` counts `confirmed = false` only: a count that nobody can
@@ -3461,7 +3461,7 @@ refused by its sentence. What follows is the history.
   does not answer stops the command with nothing deleted. **And again after**: a read of their page
   that asked the store before the deletion may have written a row back in between (found in the
   review of #300, test:`leaves no row of a forgotten note that a read of its page wrote back during
-the command`). A read that starts after the deletion does not find the note. A read that asked the
+  the command`). A read that starts after the deletion does not find the note. A read that asked the
   store before it and writes after the second removal can still write a row back: a window of one
   read, not closed here. A row is named by the reference of the note **and** the id the widget gave
   it: a tracker of another workspace may call an issue `FB-12` as well, and its row stays.
@@ -3538,8 +3538,8 @@ the command`). A read that starts after the deletion does not find the note. A r
 - **`GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` is the list of FRU-244 for one site,
   with the session of the extension** (`session-notes.ts`). It calls the same `queryOf` and the
   same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{seed,
-excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,
-searched, next?}`. `seed` is the id the widget gave the note: the panel opens `page.url` and the
+  excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,
+  searched, next?}`. `seed` is the id the widget gave the note: the panel opens `page.url` and the
   widget finds the note there.
 - **The session is read again in the store** (`sessionWrites`), not only verified: the side panel
   reads several pages of notes, and a session that ended must stop at the next call, as for a write.
@@ -3587,11 +3587,11 @@ and `account` are names that such a database has already.
   statements between double quotes and is never a parameter, so anything else is refused when the
   worker starts, with the rule and not the value:
   test:`refuses a name that needs a quote, a name of PostgreSQL itself, and one that PostgreSQL
-would cut`. Set with no `FRUITBACK_DATABASE_URL`, it is refused too: it would say nothing.
+  would cut`. Set with no `FRUITBACK_DATABASE_URL`, it is refused too: it would say nothing.
 - **Everything of the worker is in that schema**: its tables, the ones of better-auth, the indexes,
   the sequences, and the journal `__drizzle_migrations`. Nothing is written in another schema:
   test:`signs a person in and keeps a note, in its schema, and changes no table and no row of
-public` compares the catalogue and the rows of `public` before and after, with tables `user`,
+  public` compares the catalogue and the rows of `public` before and after, with tables `user`,
   `session` and `sites` of another application in it.
 - **The worker sets the search path of each connection, to its schema alone.** `SET search_path` in
   the `onConnect` of the pool (pg-pool 3.14), which the pool waits for before it gives the
@@ -3607,10 +3607,10 @@ public` compares the catalogue and the rows of `public` before and after, with t
   another application's table.
 - **The role needs `CREATE` and `USAGE` on its schema, and nothing else.** No right on `public`, none on the
   database: test:`is enough: no right on public, none on the database, and the worker signs a
-person in`. A schema that is not there is made, which needs `CREATE` on the database; without it
+  person in`. A schema that is not there is made, which needs `CREATE` on the database; without it
   the worker refuses with what to grant
   (test:`is refused a schema that is not there, with what to grant, and with no name of the role
-(FRU-219)`, `is refused, with what to grant, when it has … alone on its schema`, for `USAGE` alone and for
+  (FRU-219)`, `is refused, with what to grant, when it has … alone on its schema`, for `USAGE` alone and for
   `CREATE` alone). Both rights are asked together: with `CREATE` and no `USAGE`, PostgreSQL 17.11
   leaves the schema out of the search path, and the worker said that a pooler had lost the session
   (raised in review).
@@ -3645,7 +3645,7 @@ person in`. A schema that is not there is made, which needs `CREATE` on the data
 - **The lock of the migrations is on the database, not on the schema.** Two workers in two schemas
   of one database migrate one after the other. That costs a wait at a first start and no more.
 - **Two workers in one database do not see each other**: test:`do not see each other: each has its
-tables, its journal and its people`. A person of one is not a person of the other, and each
+  tables, its journal and its people`. A person of one is not a person of the other, and each
   journal holds its own rows.
 - **Played backwards.** Without the `SET search_path`, seven tests of `postgres-own-schema.test.ts`
   fail; without the replacement of `"public".`, ten do.
