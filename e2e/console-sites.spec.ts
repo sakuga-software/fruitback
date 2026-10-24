@@ -409,7 +409,11 @@ test('the sites come 12 to a page, and a search or a new site shows its page (FR
   await expect(page.getByRole('region', { name: 'Install on new.acme.dev' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
   await expect(search(page)).toHaveValue('');
+  // Each page is drawn before the next press: « Next » reads the page it was drawn on, so a second
+  // press before the first page is drawn turns to the same page again (CI, run 40136362608).
+  await expect(pages).toContainText('1 to 12 of 31');
   await pages.getByRole('button', { name: 'Next' }).click();
+  await expect(pages).toContainText('13 to 24 of 31');
   await pages.getByRole('button', { name: 'Next' }).click();
   await expect(pages).toContainText('25 to 31 of 31');
   await expect(card(page, 'new.acme.dev')).toBeVisible();
