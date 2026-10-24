@@ -24,6 +24,8 @@ import { useTypedSearch } from '../typed-search';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 import { type StatusChoice, offeredFor, statusName, statusProblemOf } from '../note-status';
+import { boardColumns } from '../board-columns';
+import { NotesBoard } from './notes-board';
 
 /** Who left a note, as the index of the notes says it (FRU-244). A name only for an account of the workspace. */
 export type NoteAuthor = {
@@ -78,6 +80,9 @@ export type NotesAnswer = {
 
 /** The filters of the page, in its address: a reload keeps the view, and a link shares it. */
 const FILTERS = ['place', 'site', 'stage', 'mine', 'q'] as const;
+
+/** How the notes are drawn (FRU-436): the table, or the board, as `?view=board` keeps it. */
+type View = 'table' | 'board';
 
 const AUTHOR_WORDS: Readonly<Record<NoteAuthor['kind'], string>> = {
   you: msg('You'),
@@ -136,6 +141,7 @@ export default function Notes() {
     [params],
   );
   const cursor = params.get('cursor') ?? '';
+  const view: View = params.get('view') === 'board' ? 'board' : 'table';
   const from = Math.max(1, Number(params.get('from')) || 1);
 
   // The answer that is shown, and whether a read is on its way. A read again keeps the rows on the
@@ -196,6 +202,15 @@ export default function Notes() {
     setParams(next);
   }
 
+  /** Shows the table or the board. The filters and the page stay: the board draws the same notes. */
+  function show(next: View) {
+    const changed = new URLSearchParams(latest.current);
+    if (next === 'board') changed.set('view', 'board');
+    else changed.delete('view');
+    latest.current = changed;
+    setParams(changed);
+  }
+
   const [typed, setTyped] = useTypedSearch(filters.q, (q) => filter({ q }, true));
 
   const hostOf = (id: string) => {
@@ -204,6 +219,13 @@ export default function Notes() {
     return origin === undefined ? undefined : siteLabel(origin);
   };
   const filtered = FILTERS.some((name) => filters[name] !== '');
+  const listed = typeof shown === 'object' && (shown.counts.all > 0 || filtered);
+  // The site whose statuses make the columns of the board: the one chosen, or the only one there is.
+  let siteInView: string | undefined = filters.site === '' ? undefined : filters.site;
+  if (siteInView === undefined && typeof sites === 'object' && sites.length === 1) siteInView = sites[0]?.id;
+  const choose = (note: IndexedNote, status: string) =>
+    call<{ status: string; stage: Stage }>('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status });
+  const sourceOf = (note: IndexedNote) => connectors.find((each) => each.id === note.place?.connector);
 
   return (
     <>
@@ -211,6 +233,7 @@ export default function Notes() {
         title={t('Notes')}
         lead={t('Every note left on the sites of {workspace}, and where it went.', { workspace: workspace.name })}
         className="mb-[24px]"
+        {...(listed ? { action: <ViewChoice view={view} onChoose={show} /> } : {})}
       />
 
       {shown === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
@@ -301,39 +324,67 @@ export default function Notes() {
             </div>
           ) : (
             <>
-              <div aria-busy={reading}>
-                <DataTable label={t('Notes')} minWidth={960} hover>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('Note')}</th>
-                      <th scope="col">{t('Status')}</th>
-                      <th scope="col">{t('Left by')}</th>
-                      {/* The worker tells a guest nothing of where a note went (FRU-244). */}
-                      {seesTracker ? <th scope="col">{t('Went to')}</th> : null}
-                      <th scope="col" data-align="end">
-                        {t('When')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shown.notes.map((note) => (
-                      <NoteRow
-                        key={note.id}
-                        note={note}
-                        site={hostOf(note.site.id)}
-                        source={connectors.find((each) => each.id === note.place?.connector)}
-                        manages={manages}
-                        retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
-                        statuses={shown.statuses?.[note.site.id]}
-                        choose={(status) =>
-                          call('POST', `${base}/notes/${encodeURIComponent(note.id)}/status`, { status })
-                        }
-                        onSent={() => void read()}
-                      />
-                    ))}
-                  </tbody>
-                </DataTable>
-              </div>
+              {view === 'board' ? (
+                <NotesBoard
+                  columns={boardColumns(
+                    shown.notes,
+                    siteInView === undefined ? undefined : shown.statuses?.[siteInView],
+                  )}
+                  busy={reading}
+                  movable={(note) =>
+                    note.canSetStatus === true && siteInView !== undefined && shown.statuses?.[siteInView] !== undefined
+                  }
+                  move={async (note, status) => {
+                    const answer = await choose(note, status);
+                    if (!answer.ok) return statusProblemOf(answer);
+                    await read();
+
+                    return undefined;
+                  }}
+                  card={(note) => (
+                    <NoteCard
+                      note={note}
+                      source={sourceOf(note)}
+                      seesTracker={seesTracker}
+                      statuses={shown.statuses?.[note.site.id]}
+                      choose={(status) => choose(note, status)}
+                      onSaved={() => void read()}
+                    />
+                  )}
+                />
+              ) : (
+                <div aria-busy={reading}>
+                  <DataTable label={t('Notes')} minWidth={960} hover>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t('Note')}</th>
+                        <th scope="col">{t('Status')}</th>
+                        <th scope="col">{t('Left by')}</th>
+                        {/* The worker tells a guest nothing of where a note went (FRU-244). */}
+                        {seesTracker ? <th scope="col">{t('Went to')}</th> : null}
+                        <th scope="col" data-align="end">
+                          {t('When')}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shown.notes.map((note) => (
+                        <NoteRow
+                          key={note.id}
+                          note={note}
+                          site={hostOf(note.site.id)}
+                          source={sourceOf(note)}
+                          manages={manages}
+                          retry={() => call('POST', `${base}/notes/${encodeURIComponent(note.id)}/retry`)}
+                          statuses={shown.statuses?.[note.site.id]}
+                          choose={(status) => choose(note, status)}
+                          onSent={() => void read()}
+                        />
+                      ))}
+                    </tbody>
+                  </DataTable>
+                </div>
+              )}
               <NotePages
                 from={from}
                 shown={shown.notes.length}
@@ -535,10 +586,13 @@ function NoteStatus({
   note,
   statuses,
   choose,
+  onSaved,
 }: {
   note: IndexedNote;
   statuses: readonly StatusChoice[] | undefined;
   choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
+  /** Saved: the board reads the notes again, and the card goes to its column (FRU-436). */
+  onSaved?: () => void;
 }) {
   useLocale();
   const [chosen, setChosen] = useState(note.status);
@@ -556,6 +610,7 @@ function NoteStatus({
     setSaving(false);
     if (!answer.ok) return setRefused(statusProblemOf(answer));
     setStage(answer.data.stage);
+    onSaved?.();
   }
 
   // A note of a tracker, or a list read without the statuses of the site: the stage.
@@ -598,6 +653,83 @@ function NoteStatus({
           <Problem>{t(refused)}</Problem>
         </span>
       )}
+    </div>
+  );
+}
+
+/** The choice between the table and the board (FRU-436): two buttons, the one on screen pressed. */
+function ViewChoice({ view, onChoose }: { view: View; onChoose: (view: View) => void }) {
+  useLocale();
+
+  return (
+    <div role="group" aria-label={t('Show the notes as')} className="flex flex-none gap-[8px]">
+      <FilterChip pressed={view === 'table'} onChange={() => onChoose('table')}>
+        {t('Table')}
+      </FilterChip>
+      <FilterChip pressed={view === 'board'} onChange={() => onChoose('board')}>
+        {t('Board')}
+      </FilterChip>
+    </div>
+  );
+}
+
+/**
+ * A note on the board (FRU-436): what a row of the table says, one under the other. Its status is a
+ * select for whoever may change it: the way of the keyboard to another column.
+ */
+function NoteCard({
+  note,
+  source,
+  seesTracker,
+  statuses,
+  choose,
+  onSaved,
+}: {
+  note: IndexedNote;
+  source: Connector | undefined;
+  seesTracker: boolean;
+  statuses: readonly StatusChoice[] | undefined;
+  choose: (status: string) => Promise<Answer<{ status: string; stage: Stage }>>;
+  onSaved: () => void;
+}) {
+  useLocale();
+  const opened = note.seed ?? note.ref;
+  const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
+  const visitor = note.author.kind === 'verified' || note.author.kind === 'anonymous';
+  const who = visitor ? t('Visitor') : (note.author.name ?? t('Somebody of the workspace'));
+
+  return (
+    <div className="flex flex-col gap-[8px]">
+      <p className="line-clamp-3 text-body [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</p>
+      <p className="flex flex-wrap gap-x-[12px] gap-y-[2px] text-hint text-muted">
+        <span className="[overflow-wrap:anywhere]">{`${note.page.host}${note.page.path}`}</span>
+        <LinkButton space="inline" href={show} newTab>
+          {t('Show on the page')}
+        </LinkButton>
+      </p>
+      <NoteStatus note={note} statuses={statuses} choose={choose} onSaved={onSaved} />
+      {seesTracker && note.place !== undefined ? (
+        <div className="text-hint">
+          <Place
+            place={note.place}
+            source={source}
+            reference={note.ref}
+            address={note.url}
+            late={note.delivery !== undefined}
+          />
+          {note.delivery === undefined ? null : (
+            <span className="font-semibold text-accent">
+              {note.delivery.state === 'gave-up'
+                ? t('Not delivered: Fruitback stopped trying')
+                : t('Not delivered yet')}
+            </span>
+          )}
+        </div>
+      ) : null}
+      <p className="flex flex-wrap justify-between gap-x-[12px] text-hint text-muted">
+        <span className="[overflow-wrap:anywhere]">{who}</span>
+        <span className="tabular-nums">{ago(note.createdAt)}</span>
+      </p>
     </div>
   );
 }

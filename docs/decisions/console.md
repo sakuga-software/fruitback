@@ -430,6 +430,24 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   yet ». The reference in a tracker is a link at 400, where a link of the kit is at 600 for an
   action. `e2e/console-notes.spec.ts` holds the values, every filter, the pages, « Send again », the
   states, the roles, 390 px and axe.
+- **The notes are a table or a board, and the address says which** (FRU-436, decided by Mathieu on
+  2026-10-24). « Table » and « Board », two pressed buttons at the right of the head, write
+  `?view=board` (the table writes nothing); the filters, the search and the page are the same, and the
+  board draws the notes of the page that is shown. **A column is a status of the site in view, in
+  the order of its statuses** (`board-columns.ts`, which has its own test): the site of the filter
+  « Site », or the only site of the workspace. A hidden status has a column only while a note is in
+  it, and takes no note. A note of a tracker has a stage only: it is in the built-in status of its
+  stage (`own:<stage>`), or the first shown status of that stage. **With several sites in view, or
+  no status read for the site, a column is a stage**: the statuses of two sites do not line up.
+  **A note moves by a drag, and by the select of its card**: the console already changes the status
+  of a note it keeps (`POST …/notes/<note>/status`, FRU-384), for its author or an owner or an
+  admin, so the drag adds no right; the keyboard moves it with the same select as the table. A drag
+  is offered only where a column is a status. The card moves once the worker saved it (the list is
+  read again); a refusal is said above the board, and the card stays. **At 390 px the board scrolls
+  in its frame** (columns of 272 px; the frame takes focus, and is `relative` so that what is placed
+  absolutely in a card, the hidden select of HeroUI, does not widen the page). « Send again » stays
+  in the table. `e2e/console-notes-board.spec.ts` holds the view in the address, the columns, the
+  filters, the drag, the refusal, the keyboard, the stages, 1440 and 390 px, axe and French.
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
   `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
