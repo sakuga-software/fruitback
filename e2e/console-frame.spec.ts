@@ -42,6 +42,9 @@ async function open(page: Page, screen = 'sites', workspace = 'w1'): Promise<voi
 
 /** The rail with the five sections of the mockup, « Notes » on screen: a page of the development server. */
 async function openProbe(page: Page): Promise<void> {
+  // The rail asks the worker which browsers of the extension are connected (FRU-441): with no worker,
+  // the console says it cannot reach it, above the rail.
+  await stubWorker(page);
   await page.goto(`${CONSOLE}/kit/frame`);
   await expect(sections(page)).toBeVisible();
 }
