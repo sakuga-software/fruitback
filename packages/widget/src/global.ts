@@ -1,3 +1,4 @@
+import { parseDockPosition } from './dock-position.ts';
 import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
 
 /**
@@ -10,7 +11,8 @@ import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
  *             data-fruitback-endpoint="https://feedback.acme.dev"
  *             data-fruitback-client="acme" defer></script>
  *
- * `data-fruitback-label` and `data-fruitback-include-env="true"` are optional. The second one is the
+ * `data-fruitback-label`, `data-fruitback-position` (the corner of the dock, FRU-443) and
+ * `data-fruitback-include-env="true"` are optional. The second one is the
  * only way a tag can send the environment of the reporter, which is off by default (FRU-84).
  *
  * `defer` matters: the widget mounts into `<body>`, so running before it exists would throw. The
@@ -35,7 +37,15 @@ if (script !== null) {
     // Only the word `true` turns it on. An empty attribute or a typo must not start to send the user
     // agent of every reporter.
     const includeEnv = script.dataset.fruitbackIncludeEnv === 'true';
-    const mount = (): void => void init({ endpoint, clientId, label: script.dataset.fruitbackLabel, includeEnv });
+    const position = parseDockPosition(script.dataset.fruitbackPosition);
+    const mount = (): void =>
+      void init({
+        endpoint,
+        clientId,
+        label: script.dataset.fruitbackLabel,
+        includeEnv,
+        ...(position === undefined ? {} : { position }),
+      });
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
     else mount();

@@ -1677,3 +1677,27 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   line and show another name on the page: they are people of the team of the site.
 - **Two « Send » can be on screen**, the one of the composer and this one: this one is named « Send
   reply », and its visible word is in its name.
+
+## The corner of the dock (FRU-443)
+
+### The rules, in short
+
+- **`position` of `init` puts the dock in a corner of the window**: `bottom-right`, `bottom-left`,
+  `top-right` or `top-left` (`src/dock-position.ts`). A script tag says it with
+  `data-fruitback-position`. Anything else is ignored, as if left out.
+- **Left out, nothing changes**: the dock is at the bottom, at the end of the line, so at the bottom
+  left of a page written right to left (FRU-38). **A corner that is given is a corner of the window**,
+  whatever the direction: the person who chose « top left » sees it at the top left.
+- **The corner is an attribute of the host element**, `data-fruitback-position`, and each stylesheet
+  of the Shadow root reads it with `:host(...)`: the dock 24 px from the corner, the settings 84 px
+  from its edge and 16 px from its side, the list of the detached notes under the capsule when the
+  dock is at the top. Nothing is measured in script.
+- **`moveDock(position)` of the handle moves it with no new widget**: the composer, what is written in
+  it and the pins stay. `undefined` puts it back where it stands by default. The extension calls it
+  when its reviewer changes the corner in its options (FRU-443), so a change never builds the widget
+  again over a note being written.
+- **It is a choice of the host, not a preference of the reporter**: the config store of FRU-14 keeps
+  nothing of it.
+- `e2e/dock-position.spec.ts` measures the dock and the settings in the four corners, the default, a
+  corner it does not know, a move over a note being written, and axe in the top left corner. Not
+  measured: the list of the detached notes in a top corner (a rule of `orphans.ts`, read by no spec).

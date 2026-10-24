@@ -4,6 +4,7 @@ export * from './attachments.ts';
 export * from './capture.ts';
 export * from './composer.ts';
 export * from './config.ts';
+export * from './dock-position.ts';
 export * from './dom.ts';
 export * from './embed.ts';
 export * from './engine.ts';

@@ -36,6 +36,12 @@ const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
   'sidebar.ts': [],
 };
 
+/**
+ * A corner of the window that the host chose (FRU-443): « top left » is the top left, whatever the
+ * direction, so these rules name physical sides on purpose. Only under the attribute of a chosen corner.
+ */
+const CORNER = /^:host\(\[data-fruitback-position[$^]?=?[^\]]*\]\) /;
+
 const LOGICAL = /\b(inset-inline|inset-block|margin-inline|padding-inline|border-inline)|text-align:\s*(start|end)\b/;
 const PHYSICAL_SIDE = /(^|[\s;{])(left|right)\s*:|-(left|right)\s*:|text-align:\s*(left|right)\b/;
 
@@ -63,7 +69,7 @@ describe('the stylesheets and the reading direction (FRU-38)', () => {
       for (const { selector, body } of await rulesOf(file)) {
         if (!PHYSICAL_SIDE.test(body)) continue;
         physicalSeen += 1;
-        if (!GEOMETRY[file].includes(selector)) offenders.push(`${file} ${selector}`);
+        if (!GEOMETRY[file].includes(selector) && !CORNER.test(selector)) offenders.push(`${file} ${selector}`);
       }
     }
 

@@ -358,6 +358,10 @@ const STYLES = `
   box-shadow: var(--fruitback-shadow-lg);
 }
 .fruitback-panel-config[hidden] { display: none; }
+/* FRU-443: the settings open from the corner of the dock, above it or under it. */
+:host([data-fruitback-position$='-right']) .fruitback-panel-config { right: 16px; left: auto; }
+:host([data-fruitback-position$='-left']) .fruitback-panel-config { left: 16px; right: auto; }
+:host([data-fruitback-position^='top-']) .fruitback-panel-config { top: 84px; bottom: auto; }
 /* The head of the mock-up of 2026-10-20 (FRU-305): the drop in the accent, « Settings », the cross. */
 .fruitback-config-head {
   display: flex;
@@ -527,6 +531,7 @@ const STYLES = `
 }
 @media (max-width: 480px) {
   .fruitback-panel-config { inset-inline: 8px; width: auto; }
+  :host([data-fruitback-position]) .fruitback-panel-config { left: 8px; right: 8px; }
 }
 /* A thumb, not a pointer (FRU-157): the copy button is 44 px. */
 @media (pointer: coarse) {

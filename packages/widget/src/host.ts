@@ -1,3 +1,4 @@
+import { type DockPosition, parseDockPosition } from './dock-position.ts';
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
@@ -70,6 +71,8 @@ export type CaptureHostOptions = {
   theme?: FruitbackTheme;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+  /** The corner of the dock (FRU-443). Left out: the bottom corner at the end of the line. */
+  position?: DockPosition;
 };
 
 export type CaptureHost = {
@@ -82,6 +85,8 @@ export type CaptureHost = {
    * one capsule, and no chip that floats over it.
    */
   dock: HTMLElement;
+  /** Moves the dock, and what opens from it, to another corner (FRU-443). `undefined`: back to the default. */
+  moveDock(position: DockPosition | undefined): void;
   start(): void;
   stop(): void;
   capturing(): boolean;
@@ -138,6 +143,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // Positioned at the document origin with no size of its own: children can then use document
   // coordinates directly, and nothing about it disturbs the page's layout.
   container.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';
+  // FRU-443: the corner of the dock, read by the rules of every stylesheet of this root.
+  const moveDock = (position: DockPosition | undefined): void => {
+    const corner = parseDockPosition(position);
+    if (corner === undefined) delete container.dataset.fruitbackPosition;
+    else container.dataset.fruitbackPosition = corner;
+  };
+  moveDock(options.position);
   document.body.append(container);
 
   // Written on the host element rather than into the stylesheet, so an inline custom property wins
@@ -612,6 +624,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     root,
     panel,
     dock,
+    moveDock,
     start,
     stop,
     capturing: () => capturing,
@@ -855,6 +868,13 @@ li { display: list-item; }
   background: var(--fruitback-color-surface);
   box-shadow: var(--fruitback-shadow-md);
 }
+/*
+  FRU-443: a corner that was chosen is a corner of the window, whatever the direction of the page.
+  The settings and the list of the detached notes open from the dock: see panel.ts and orphans.ts.
+*/
+:host([data-fruitback-position$='-right']) .fruitback-dock { right: 24px; left: auto; }
+:host([data-fruitback-position$='-left']) .fruitback-dock { left: 24px; right: auto; }
+:host([data-fruitback-position^='top-']) .fruitback-dock { top: 24px; bottom: auto; }
 .fruitback-launch {
   display: flex;
   align-items: center;
