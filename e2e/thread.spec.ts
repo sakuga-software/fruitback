@@ -166,7 +166,7 @@ test('the bubble hides the CSS selector by default, and shows it when the host a
   await expect(page.locator('.fruitback-thread-selector')).toHaveCount(0);
 });
 
-test('the bubble of a note has the measures of the mock-up, and opens beside its drop (FRU-256, FRU-304)', async ({
+test('the bubble of a note has the measures of the mock-up, and opens under its element (FRU-256, FRU-421)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -334,21 +334,26 @@ test('the bubble of a note has the measures of the mock-up, and opens beside its
   await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveCount(1);
   await expect(thread.getByRole('button', { name: 'Send reply' })).toHaveCount(1);
 
-  // Beside the drop: 26 px past its point, 8 px above the top of the drop, and 24 px or more from
-  // the top of the window.
+  // Around its element, never on it (FRU-421): here under it, the arrow on its top edge under the
+  // point of the drop.
   const place = await page.evaluate(() => {
     const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
     const pin = root.querySelector('[data-fruitback-pin][data-fruitback-open]') as HTMLElement;
     const frame = pin.getBoundingClientRect();
-    const bubble = root.querySelector('.fruitback-thread')!.getBoundingClientRect();
+    const node = root.querySelector('.fruitback-thread') as HTMLElement;
+    const bubble = node.getBoundingClientRect();
     const tipX = frame.left + Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x'));
-    const tipY = frame.top + Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y'));
 
-    return { beside: bubble.left - tipX, above: tipY - bubble.top, top: bubble.top };
+    return {
+      arrow: node.dataset.fruitbackArrow,
+      under: bubble.top - frame.bottom,
+      arrowX: bubble.left + Number.parseFloat(node.style.getPropertyValue('--fruitback-arrow-at')),
+      tipX,
+    };
   });
-  expect(place.beside).toBeCloseTo(26, 0);
-  if (place.top > 24.5) expect(place.above).toBeCloseTo(42, 0);
-  else expect(place.top).toBeCloseTo(24, 0);
+  expect(place.arrow).toBe('top');
+  expect(place.under).toBeCloseTo(14, 0);
+  expect(place.arrowX).toBeCloseTo(place.tipX, 0);
 
   // The cross answers a pointer with the sunken surface.
   await page.locator('.fruitback-thread-close').hover();

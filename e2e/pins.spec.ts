@@ -37,33 +37,51 @@ async function plant(page: Page, selector: string, note: string): Promise<void> 
   await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 10_000 });
 }
 
-/** Where the thread is, against the point of the open drop. */
+/** Where the thread is, against its element and the point of the open drop. */
 function placeOf(page: Page) {
   return page.evaluate(() => {
     const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
     const pin = root.querySelector('[data-fruitback-pin][data-fruitback-open]') as HTMLElement;
     const frame = pin.getBoundingClientRect();
-    const bubble = root.querySelector('.fruitback-thread')!.getBoundingClientRect();
+    const node = root.querySelector('.fruitback-thread') as HTMLElement;
+    const bubble = node.getBoundingClientRect();
     const tipX = frame.left + Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x'));
+    const apart =
+      bubble.right <= frame.left ||
+      frame.right <= bubble.left ||
+      bubble.bottom <= frame.top ||
+      frame.bottom <= bubble.top;
 
-    return { after: bubble.left - tipX, before: tipX - bubble.right, right: bubble.right };
+    return {
+      arrow: node.dataset.fruitbackArrow,
+      apart,
+      arrowX: bubble.left + Number.parseFloat(node.style.getPropertyValue('--fruitback-arrow-at')),
+      tipX,
+      right: bubble.right,
+    };
   });
 }
 
-test('the thread opens 26 px past the point of the drop, and on the other side near the edge', async ({ page }) => {
+test('the thread opens around its element, never on it, and stays in the window near its edge (FRU-421)', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mount(page, 'pins-sides');
   await plant(page, '[data-testid="card-espresso"] .add', 'Left of the page');
   await plant(page, 'main header button', 'Right of the page');
 
   await page.getByRole('button', { name: /Left of the page/ }).click();
-  expect((await placeOf(page)).after).toBeCloseTo(26, 0);
+  const left = await placeOf(page);
+  expect(left.arrow).toBeDefined();
+  expect(left.apart).toBe(true);
+  expect(left.arrowX).toBeCloseTo(left.tipX, 0);
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: /Right of the page/ }).click();
   const near = await placeOf(page);
-  expect(near.before).toBeCloseTo(26, 0);
-  expect(near.right).toBeLessThanOrEqual(1440);
+  expect(near.arrow).toBeDefined();
+  expect(near.apart).toBe(true);
+  expect(near.right).toBeLessThanOrEqual(1440 - 8 + 0.5);
 });
 
 for (const [width, height] of [
