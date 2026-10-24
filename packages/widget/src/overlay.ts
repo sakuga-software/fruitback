@@ -8,6 +8,7 @@ import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
+import { besideElement } from './thread-place.ts';
 
 /**
  * The pins on the page: one box over each element someone left a note on, coloured by where the
@@ -360,7 +361,17 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   /** Beside its pin, then moved by the offset the handle gave it (FRU-420). */
   function placeThread(node: HTMLElement, pin: HTMLElement | undefined): void {
-    positionThread(node, pin, t.direction);
+    const side = pin === undefined ? undefined : sideOfElement(node, pin);
+    if (side === undefined) {
+      // No room on any side of the element: beside the pin, as before (FRU-304), with no arrow.
+      positionThread(node, pin, t.direction);
+      delete node.dataset.fruitbackArrow;
+    } else {
+      node.style.left = `${side.left}px`;
+      node.style.top = `${side.top}px`;
+      node.dataset.fruitbackArrow = side.edge;
+      node.style.setProperty('--fruitback-arrow-at', `${side.arrow}px`);
+    }
     threadPlace = {
       left: Number.parseFloat(node.style.left) || 0,
       top: Number.parseFloat(node.style.top) || 0,
@@ -368,6 +379,46 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       height: node.offsetHeight,
     };
     showOffset(node, pin);
+  }
+
+  /** Under, above or beside the element of the pin, where the window has the room (FRU-421). */
+  function sideOfElement(node: HTMLElement, pin: HTMLElement) {
+    const frame = {
+      left: Number.parseFloat(pin.style.left) || 0,
+      top: Number.parseFloat(pin.style.top) || 0,
+      width: Number.parseFloat(pin.style.width) || 0,
+      height: Number.parseFloat(pin.style.height) || 0,
+    };
+    const tip = {
+      x: frame.left + (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-x')) || 0),
+      y: frame.top + (Number.parseFloat(pin.style.getPropertyValue('--fruitback-pin-tip-y')) || 0),
+    };
+    const dropOf = (other: HTMLElement) => {
+      const badge = other.querySelector('.fruitback-pin-badge');
+      const box = badge === null ? undefined : documentRect(badge);
+      return box !== undefined && box.width > 0 ? box : undefined;
+    };
+    const drop = dropOf(pin) ?? {
+      left: tip.x - BADGE_HALF,
+      top: tip.y - BADGE_RISE,
+      width: 2 * BADGE_HALF,
+      height: BADGE_RISE,
+    };
+
+    return besideElement(
+      frame,
+      drop,
+      tip,
+      { width: node.offsetWidth || THREAD_WIDTH, height: node.offsetHeight },
+      {
+        left: view?.scrollX ?? 0,
+        top: view?.scrollY ?? 0,
+        width: document.documentElement.clientWidth || (view?.innerWidth ?? 0),
+        height: document.documentElement.clientHeight || (view?.innerHeight ?? 0),
+      },
+      placed.filter((entry) => entry.pin !== pin).flatMap((entry) => dropOf(entry.pin) ?? []),
+      t.direction,
+    );
   }
 
   function showOffset(node: HTMLElement, pin: HTMLElement | undefined): void {
@@ -580,6 +631,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     for (const entry of placed) {
       if (entry.resolution.element !== null) anchors.observe(entry.resolution.element);
     }
+    if (thread !== null && threadHome === null) anchors.observe(thread);
   }
 
   function render(issues: SeedIssue[]): void {
@@ -789,6 +841,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     }
     container.append(node);
     placeThread(node, entry.pin);
+    // The thread grows after it opens (its replies, the form of a reply), and a side that had the room
+    // for its first height can lack it for the next (FRU-421): it is placed again when it grows.
+    anchors?.observe(node);
   }
 
   function openThread(entry: Placed, home: HTMLElement | null = null): void {
@@ -1731,6 +1786,48 @@ const STYLES = `
   border-radius: 0;
   box-shadow: none;
 }
+/*
+  The arrow from the edge that faces the element to its pin (FRU-421): a square of 12 px turned by 45
+  degrees, half out of the bubble, with the two lines of its outer corner. Gone once the thread is moved
+  by its handle, where the dashed line takes its place, and in a panel of the widget.
+*/
+.fruitback-thread[data-fruitback-arrow]::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--fruitback-color-border);
+  background: var(--fruitback-color-surface);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.fruitback-thread[data-fruitback-arrow='top']::before {
+  top: -7px;
+  left: calc(var(--fruitback-arrow-at) - 6px);
+  border-right: 0;
+  border-bottom: 0;
+}
+.fruitback-thread[data-fruitback-arrow='bottom']::before {
+  bottom: -7px;
+  left: calc(var(--fruitback-arrow-at) - 6px);
+  border-top: 0;
+  border-left: 0;
+}
+.fruitback-thread[data-fruitback-arrow='left']::before {
+  left: -7px;
+  top: calc(var(--fruitback-arrow-at) - 6px);
+  border-top: 0;
+  border-right: 0;
+}
+.fruitback-thread[data-fruitback-arrow='right']::before {
+  right: -7px;
+  top: calc(var(--fruitback-arrow-at) - 6px);
+  border-bottom: 0;
+  border-left: 0;
+}
+.fruitback-thread[data-fruitback-moved]::before,
+.fruitback-thread[data-fruitback-home]::before { display: none; }
 /* A shadow is not drawn in forced colours: the bubble then needs an edge of its own. */
 @media (forced-colors: active) {
   .fruitback-thread { outline: 1px solid CanvasText; }
