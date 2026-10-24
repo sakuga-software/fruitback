@@ -179,7 +179,7 @@ It also says how to report a vulnerability.
 | [docs/reviewing.md](docs/reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                       |
 | [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment                                  |
 | [docs/privacy.md](docs/privacy.md)           | What a note carries, where it goes, how to delete it. Not legal advice                 |
-| [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands                            |
+| [docs/architecture.md](docs/architecture.md) | Why this shape, the note contract, the layout, the commands                            |
 | [docs/decisions/](docs/decisions/)           | Per-subject rules and histories: what was measured, what failed first                  |
 | [SECURITY.md](SECURITY.md)                   | The threat model, stated rather than implied                                           |
 | [CONTRIBUTING.md](CONTRIBUTING.md)           | Running the project, what must pass, the conventions, adding a connector               |

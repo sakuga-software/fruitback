@@ -38,7 +38,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   fail). `FRUITBACK_STORE=postgres pnpm dev` keeps the notes in the database instead. `/health`
   answers `{ ok: true, store: 'memory' }`. It is
   **not** a mock: an issue is stored as the description `buildIssueDescription` produces and read
-  back through the same `toSeedIssue` as production, so a broken round trip breaks the playground
+  back through the same `toNoteIssue` as production, so a broken round trip breaks the playground
   too. `FRUITBACK_FAKE_LINEAR=1` is the older spelling of that store: see _Which store, and who
   validates it_ ([worker.md](worker.md)).
 - **`POST /__dev/pair` answers a pairing code for the workspace**, with its link. The `pair`
@@ -52,7 +52,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
   widget mounts in an effect, so it arrives _after_ hydration. A client-side navigation changes the
   page identity with no page load to notice it. And `source` finally has a fiber to read, which is
-  the half of a seed that says _which component_ a note is about. Each of those found a real defect
+  the half of a note that says _which component_ a note is about. Each of those found a real defect
   the moment it first ran — see below.
 - **A re-render used to be invisible to the widget**, and the playground re-resolved by hand because
   the host had caused it and therefore knew. A client's app cannot know, so FRU-21 moved that into
@@ -182,7 +182,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 
 - It exists for the two things happy-dom cannot vouch for: a **real selector engine** and **real
   layout**. Everything else stays in `node --test`, which is where it is faster and clearer.
-- Specs share one worker process, so each captures on **its own page URL** (`/?case=…`) — the seed's
+- Specs share one worker process, so each captures on **its own page URL** (`/?case=…`) — the note's
   page identity is what keeps them apart. There is no reset between specs.
 - **A cold Vite cache is the difference between your machine and CI.** Vite binds its port — so it
   answers Playwright's readiness probe — before it has optimized dependencies, and it discovers most
@@ -255,7 +255,7 @@ persistent Chromium context. Measured on Chromium 151 before the specs were writ
 What the specs rest on:
 
 - **The site is `/?case=…&widget=off`**, the playground without its own widget. The parameters are in
-  canonical order, so the stored seeds are read with the raw URL. They are read from Node, so the
+  canonical order, so the stored notes are read with the raw URL. They are read from Node, so the
   page's own requests to the worker can be counted.
 - **Team mode needs a site that ships a dormant widget**, and the playground has none. The spec
   mounts the built IIFE as such a site does: on `fruitback:extension`, with
@@ -277,7 +277,7 @@ Each guard was run against a mutant, and each mutant failed a check:
 
 | Mutant                                                    | Failed on                           |
 | --------------------------------------------------------- | ----------------------------------- |
-| `registration.ts` registers the page script in `ISOLATED` | the stored seed has no `source`     |
+| `registration.ts` registers the page script in `ISOLATED` | the stored note has no `source`     |
 | a stored token written to the page's `localStorage`       | the token search                    |
 | the site's widget mounted with no `transport`             | `reporter` is not `verified`        |
 | `relay.ts` sends no `Authorization` on a GET              | the pin read back through the relay |

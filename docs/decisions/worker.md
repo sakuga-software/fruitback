@@ -1,6 +1,6 @@
-# The worker, and where a seed is stored
+# The worker, and where a note is stored
 
-The Node service, who may read a pin, and the store interface — what `SeedStore` is, who validates a
+The Node service, who may read a pin, and the store interface — what `NoteStore` is, who validates a
 connector's environment, and what a second connector with no markdown body actually proved.
 
 ## The worker
@@ -60,11 +60,11 @@ connector's environment, and what a second connector with no markdown body actua
   three tests fail.
 - The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
   `/health`, not as an opaque Linear error per request.
-- `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
+- `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds notes by
   matching that URL inside the description, so a client that skipped normalization would plant a pin
   nobody can find again. `GET /feedback` canonicalizes its `url` parameter for the same reason.
-- **The `description contains` filter is a substring match**, so `/pricing` also matches the seeds of
-  `/pricing?tab=annual`. `fetchSeedIssues` therefore re-checks `seed.page.url` exactly before
+- **The `description contains` filter is a substring match**, so `/pricing` also matches the notes of
+  `/pricing?tab=annual`. `fetchNoteIssues` therefore re-checks `seed.page.url` exactly before
   returning an issue — dropping that check silently mixes two pages' pins.
 - The read cache (`cache.ts`) holds the in-flight promise **in this process** and the settled answer
   in the `Kv`, so a burst of visitors on one page costs one Linear call and N replicas cost at most N.
@@ -319,20 +319,20 @@ degradation the ticket asked to have written down rather than discovered.
   sends its notes one by one, so a worker of before never receives an array.
 - **`max` is half the limit of a minute, ten at most** (`maxBatch`), and `maxBytes` is the cap of the
   body, which does not move for a batch. The widget cuts its drafts into as many requests as it needs.
-- **Every seed is read before anything is written**: a batch with one thing that is not a seed, the
-  same seed twice, or two clients is refused whole (`400`). One identity, one place (`?destination=`)
+- **Every note is read before anything is written**: a batch with one thing that is not a note, the
+  same note twice, or two clients is refused whole (`400`). One identity, one place (`?destination=`)
   for the whole batch.
 - **The N − 1 other notes are counted by the limiter after the body is read** (`chargeRateLimit`, with
   the amount of `Kv.incr`), before any write.
-- **A store groups a batch with `createBatch?`**: Linear writes a parent issue, which holds no seed
-  and is no pin, and one sub-issue for each note, which keeps its seed and its state. A store without
-  it gets one `create` for each seed (`createAll` in `batch.ts`).
-- **One answer for each seed, in order**: `201` when every note was kept, `207` when some were, `502`
-  when none was. **A seed kept in the last ten minutes answers its issue again** and is not planted
+- **A store groups a batch with `createBatch?`**: Linear writes a parent issue, which holds no note
+  and is no pin, and one sub-issue for each note, which keeps its note and its state. A store without
+  it gets one `create` for each note (`createAll` in `batch.ts`).
+- **One answer for each note, in order**: `201` when every note was kept, `207` when some were, `502`
+  when none was. **A note kept in the last ten minutes answers its issue again** and is not planted
   twice: `seed.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
 - **A parent whose sub-issues Linear all refused is kept, and used again** (FRU-195). The request
   answers `502` and the parent stays in the team with no sub-issue. The worker remembers it in the
-  `Kv` for the ten minutes of a seed, by seed and by place (`batchMemory` in `batch.ts`), and the next
+  `Kv` for the ten minutes of a note, by note and by place (`batchMemory` in `batch.ts`), and the next
   attempt for one of those notes writes its sub-issues under it: one parent for a batch, not one for
   each attempt. The note of a `207` that is sent again goes under the same parent too. **The worker
   archives nothing and changes nothing in the workspace of a team**: it calls `issueCreate` and no
@@ -381,7 +381,7 @@ degradation the ticket asked to have written down rather than discovered.
 - **A `401` on a read leaves the pins where they are.** Same rule as an unreachable worker: losing
   what is correctly on screen reads as "my notes are gone". Mutation-tested — blanking on a failed
   read fails `embed.test.ts`.
-- The switch is applied in **`toSeedIssue`**, which both the real Linear and the in-memory one go
+- The switch is applied in **`toNoteIssue`**, which both the real Linear and the in-memory one go
   through, rather than only through the query's `first:` argument. `first: 0` is an assumption about
   what Linear accepts, and this promise should not rest on a backend behaving a particular way.
 - **A comment body is `textContent`, never markup.** It is Linear markdown written by anyone who can
@@ -423,7 +423,7 @@ degradation the ticket asked to have written down rather than discovered.
   or an empty name takes it away. `connectorView` answers `name` only when there is one. A GitHub App
   installed again keeps the name, as it keeps its connector.
 
-## Where a seed is stored
+## Where a note is stored
 
 ### The rules, in short
 
@@ -449,10 +449,10 @@ degradation the ticket asked to have written down rather than discovered.
   what it receives. A step a store cannot do is a string reason, reported as skipped, never as passed.
   The outage case goes through `handleRequest`, because the promise is the `502`, not the throw. The
   store matrix in `docs/self-hosting.md` is compared with each store's `stages`, reply cap and `devOnly`.
-  On a worker without `FRUITBACK_CLIENTS`, a read that names no client gets every seed on the page, on
+  On a worker without `FRUITBACK_CLIENTS`, a read that names no client gets every note on the page, on
   every store. A store that routes by client is tested with a second tenant, and a remote store with a
   rejected `fetch` and an unreadable body as well as an error status.
-- **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
+- **`linear-memory.ts` keeps its name and its import of `toNoteIssue` on purpose.** That coupling is
   the feature.
 - **`github.ts` signs in as a GitHub App, never with a personal token** (FRU-32). An RS256 JWT from
   `node:crypto` buys an installation token narrowed to **one repository**, cached per repository until
@@ -463,8 +463,8 @@ degradation the ticket asked to have written down rather than discovered.
   page size proves nothing: the first check compared three counts of 100. GitHub also splits the value
   on commas, caps a label at 50 characters and ignores case, so `githubLabelName` hashes any client
   label that is not plain lowercase, or that already has the shape of a hash — on the write and the read
-  alike. `matchPage` rechecks every label on the row, and the client the seed names.
-- **A Linear read selects by team and page, never by label, and reads the client in the seed**
+  alike. `matchPage` rechecks every label on the row, and the client the note names.
+- **A Linear read selects by team and page, never by label, and reads the client in the note**
   (FRU-138). A team can refuse `issueLabelCreate` to the key, and it does to an application that is a
   member of no team (measured). The write then makes the issue with no label, and a read that
   selected by label never showed that note again. The labels stay, when Linear allows them, for the
@@ -474,7 +474,7 @@ degradation the ticket asked to have written down rather than discovered.
 - **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
   searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
   stopped at 1,000 issues, and the read cache is what protects the hourly budget.
-- **A label that cannot be created stops a GitHub write.** A read finds a seed by its labels, so an
+- **A label that cannot be created stops a GitHub write.** A read finds a note by its labels, so an
   issue without them is a note nobody sees again. A `502` keeps the note in the widget.
 - **No parameter properties in the worker.** `constructor(readonly status: number)` is TypeScript that
   Node's type stripping refuses, and every test file that imports the module fails to load. `tsc`
@@ -484,8 +484,8 @@ degradation the ticket asked to have written down rather than discovered.
 
 - **`store.ts` is the interface, and it existed before it was named** (FRU-29). `app.ts` used to
   select between the real and the in-memory module through
-  `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — two methods, two
-  implementations, an interface discovered by accident. `SeedStore` writes it down so SQLite
+  `Pick<typeof realLinear, 'createNoteIssue' | 'fetchNoteIssues'>` — two methods, two
+  implementations, an interface discovered by accident. `NoteStore` writes it down so SQLite
   (FRU-31) and GitHub (FRU-32) are implementations rather than new branches.
 - **`findForPage` states the intention, not the method.** Linear filters server-side with
   `description: { contains: … }`, GitHub lists issues by label, SQL does a `WHERE`, and a store with no
@@ -500,7 +500,7 @@ degradation the ticket asked to have written down rather than discovered.
   knows what identifies a tenant — a team for Linear, an `owner/repo` for GitHub, nothing for a
   single-file SQLite. The client id stays in the key regardless, which is what keeps two clients
   sharing one team from sharing an entry.
-- **`linear-memory.ts` is a `SeedStore` now but keeps importing `toSeedIssue` from the real
+- **`linear-memory.ts` is a `NoteStore` now but keeps importing `toNoteIssue` from the real
   connector, on purpose.** That coupling is the feature: an issue is stored as the description
   `buildIssueDescription` produces and read back through production's own mapping, so a broken round
   trip breaks the playground too. Renaming the file to something provider-agnostic would advertise an
@@ -567,16 +567,16 @@ degradation the ticket asked to have written down rather than discovered.
   here, and test:`answers no empty diagnostic` walks every way of making the config invalid rather than the
   one that was noticed.
 - **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
-  keeps its name and its import of `toSeedIssue`. See _Where a seed is stored_ — that coupling is the
+  keeps its name and its import of `toNoteIssue`. See _Where a note is stored_ — that coupling is the
   feature.
 
 ## SQLite, and what a second connector actually proved
 
 - **`sqlite.ts` is the connector that had to be uncomfortable** (FRU-31). One implementation of
-  `SeedStore` proved nothing; GitHub Issues would have proved almost as little, since markdown bodies,
+  `NoteStore` proved nothing; GitHub Issues would have proved almost as little, since markdown bodies,
   labels and full-text search are Linear's shape under another name. SQLite shares none of it — no
   description, no `contains` filter, no labels, no workflow states.
-- **It found exactly two places the interface leaked, and both were ours.** `SeedIssue.url` was
+- **It found exactly two places the interface leaked, and both were ours.** `NoteIssue.url` was
   required, and the only way to satisfy it was to invent a URL for a store with no web page; it is
   optional now. And the widget's thread said **"sur Linear"** — a vendor name in a widget that is not
   supposed to know which store answers, the same defect `store-unavailable` fixed in the error codes.
@@ -589,7 +589,7 @@ degradation the ticket asked to have written down rather than discovered.
   many handles were opened**, not `connections.size`: the map is keyed by path, so a `connect` that
   stopped reusing overwrites the entry and leaves the size at one. Both weaker spellings were measured
   passing against the mutation before this one was written.
-- **There is nothing to project onto `SeedStage`.** The column _is_ a stage, so `stageOf` only applies
+- **There is nothing to project onto `NoteStage`.** The column _is_ a stage, so `stageOf` only applies
   the contract's own tolerance — an unrecognised value colours the pin rather than hiding the note.
 - **A row is parsed, never trusted.** The file sits on a volume an operator can edit and a restore can
   be older than the code. A malformed row costs that one pin; the page keeps its other notes.
@@ -603,8 +603,8 @@ degradation the ticket asked to have written down rather than discovered.
   Measured in a container: `fruitback.db` was 4 KB while `fruitback.db-wal` held 53 KB, so a `cp`
   of the `.db` alone would have lost the note that had just been planted.
 - **Verified in the container, not only in `node --test`**: boot on `FRUITBACK_STORE=sqlite`, `/health`
-  answering `store: sqlite`, a seed posted and read back, the pin surviving `docker restart`, and the
-  documented backup command producing a file that holds the seed.
+  answering `store: sqlite`, a note posted and read back, the pin surviving `docker restart`, and the
+  documented backup command producing a file that holds the note.
 - **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
   the **right** of `X-Forwarded-For`, because the left of an appended chain is what the caller wrote.
   Reading the leftmost entry makes the rate limit bypassable with one header. An earlier version of
@@ -615,14 +615,14 @@ degradation the ticket asked to have written down rather than discovered.
   changes: one team, one project, `client` optional on a read.
 - **Configured, a client has to be named on both paths** — the `client` parameter on a read,
   `seed.client.id` on a write — and an unknown one is refused. A read that named nobody used to
-  answer with every seed on that URL, which on a shared worker is one client reading another's
+  answer with every note on that URL, which on a shared worker is one client reading another's
   feedback; a write that names nobody would land in the default team, which is the same leak facing
   the other way. The read cache key carries the team for the same reason.
 - **`normalizeClientId` runs before the id is used for anything**, and that ordering is the whole
   point. The id does three jobs — it picks the route, it builds the `fruitback:<id>` label a read
   filters on, and it keys the cache. Normalising it for the route alone put a note in the right team
   under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
-  nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
+  nothing: authorised at both ends, invisible in between. The write path normalises it into the note
   the same way it re-canonicalises `page.url`, and for the same reason.
 - **`clientId` is client-asserted**, and FRU-9 did not change that: identity tokens say who the
   _reporter_ is, not which client the page is. `origins` is what turns the claim into something
@@ -634,7 +634,7 @@ degradation the ticket asked to have written down rather than discovered.
   ceiling by N.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
   (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
-  description parses back into the exact seed that was posted.
+  description parses back into the exact note that was posted.
 - **`reporter.verified` is the worker's word, never the client's** (FRU-9). Anything arriving with
   that flag has it stripped, whatever else it says: without that, a browser posting
   `reporter: { name: 'CEO', verified: true }` reads in Linear exactly like an identity this worker
@@ -646,7 +646,7 @@ degradation the ticket asked to have written down rather than discovered.
   and validates everything. Anything but `HS256` is refused before a byte of the signature is looked
   at, and the signing input is `header.payload` so swapping the header breaks the signature. Both are
   tested, and both tests fail if the check is removed.
-- **The identity token arrives in an `Authorization` header, never in the seed.** The seed is stored
+- **The identity token arrives in an `Authorization` header, never in the note.** The note is stored
   verbatim in an issue description anyone with workspace access can read, so a credential in there
   would outlive its expiry by months.
 - A token that fails to verify is a **401**, not a downgrade to anonymous: a site that meant to
@@ -657,10 +657,10 @@ degradation the ticket asked to have written down rather than discovered.
 
 ## GitHub Issues, and the stages it cannot say (FRU-32)
 
-- **The ticket's own test was the cost, and the cost was low.** `SeedStore` gained one optional field,
+- **The ticket's own test was the cost, and the cost was low.** `NoteStore` gained one optional field,
   `stages`, and `app.ts`'s read path one line. Everything else is `github.ts`, one entry in
   `STORE_SPECS`, and the configuration around it.
-- **What did not project was the vocabulary.** There are five `SeedStage` values because Linear has five
+- **What did not project was the vocabulary.** There are five `NoteStage` values because Linear has five
   state types. GitHub has `open` and `closed`, plus a `state_reason` on a close. Three stages come out
   of that honestly: `open` is `new`; closed `not_planned` or `duplicate` is `closed`; any other
   close is `done`, a close with no reason included, because those predate `state_reason` and meant
@@ -677,7 +677,7 @@ degradation the ticket asked to have written down rather than discovered.
   to a connector of its workspace is read there, so `createRoutedStore` answers `stagesFor(client)`
   from the store of that connector, and the store of the worker only for a site with no destination.
   A worker on GitHub (three stages) whose site sends to Linear (five) offered three until then. A
-  site read in several places gets every stage one of them reports, in the order of `SEED_STAGES`.
+  site read in several places gets every stage one of them reports, in the order of `NOTE_STAGES`.
   The other direction has its test too (FRU-357): no connector of a workspace says three stages yet,
   so a fake one stands for GitHub, and a worker with five offers its site the three of GitHub.
 - **A GitHub App, never a personal token.** A personal token does not expire and reaches every
@@ -714,8 +714,8 @@ degradation the ticket asked to have written down rather than discovered.
   50 characters or fewer stays, anything else becomes `fruitback:` and 32 hex characters of its
   SHA-256. `matchPage` still checks every label on the row, without case as GitHub does. A plain name
   that already has the shape of a hash is hashed too, so a client ID cannot take the label of another
-  client, and `matchPage` also requires the seed to name the client it is read for (both found in
-  review). The write stores the normalized client ID in the seed, so the check drops no note of its own.
+  client, and `matchPage` also requires the note to name the client it is read for (both found in
+  review). The write stores the normalized client ID in the note, so the check drops no note of its own.
 - **A late `401` drops only the token it refused.** Evicting whatever the map held could throw away a
   newer token a concurrent read had just minted.
 - **The comment count is a hint.** It comes from the issue list, and a reply can arrive after it;
@@ -737,7 +737,7 @@ degradation the ticket asked to have written down rather than discovered.
   calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
   `store-conformance.test.ts` store the write and apply the filter of the read. A Linear label belongs
   to one team, and GitHub serves comments oldest first, as the real services do. So client isolation is
-  tested where each store puts it: the label filter on Linear, the labels and the seed's client on
+  tested where each store puts it: the label filter on Linear, the labels and the note's client on
   GitHub, the `client_id` column on SQLite.
 - **The outage case goes through `handleRequest`.** A connector throws `StoreError`, and `app.ts`
   turns it into `502 store-unavailable`. A case that checks only the throw passes with the mapping
@@ -761,10 +761,10 @@ degradation the ticket asked to have written down rather than discovered.
   client in a second tenant and checks that the default tenant does not see it. SQLite and the memory
   store have one tenant, and say so.
 - **Defence in depth shows as a surviving mutation.** Removing only GitHub's client label, or only the
-  memory store's client filter, passes: each store has a second layer, the seed's client re-check or
+  memory store's client filter, passes: each store has a second layer, the note's client re-check or
   the client label. Removing both fails.
-- **A read that names no client.** The memory store returned only the seeds with no client. Linear,
-  GitHub and SQLite return every seed on the page. The suite made the difference visible, and the
+- **A read that names no client.** The memory store returned only the notes with no client. Linear,
+  GitHub and SQLite return every note on the page. The suite made the difference visible, and the
   memory store now follows the other three. Only a worker without `FRUITBACK_CLIENTS` accepts such a
   read.
 - **The ticket's matrix was wrong in three cells.** GitHub has three stages, not two. Nothing in the
@@ -1697,7 +1697,7 @@ SQLite out while the notes have no other home: this is that home. It is a store 
   takes its notes by itself (FRU-194), so `forget` has no filter by site.
 - **A batch is one transaction**: every note, or none and a `StoreError`. No parent: a row is not
   an issue of a tracker.
-- **The store is loaded at its first call** (`postgresSeedStore` in `postgres-stores.ts`), like the
+- **The store is loaded at its first call** (`postgresNoteStore` in `postgres-stores.ts`), like the
   accounts. `name` and `scope` are read with no call, so they are written there too, and
   test:`says its name and its scope before any call, as the store it loads says them` holds them
   equal.
@@ -2376,7 +2376,7 @@ ticket removes; it adds no route and no table.
 
 ### The rules, in short
 
-- **`pageQueryTerm` lives beside it**, because the term works only where `buildSeedBlock` writes the
+- **`pageQueryTerm` lives beside it**, because the term works only where `buildNoteBlock` writes the
   canonical URL verbatim into the JSON.
 - **The prose of a description is written in the team's language, never the reporter's** (FRU-39).
   `FRUITBACK_TEAM_LOCALE` (English by default) reaches the stores through `ClientPolicy.locale`, and
@@ -2389,19 +2389,19 @@ ticket removes; it adds no route and no table.
 
 ### The reasons, and the history
 
-- **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
-  (FRU-30) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
-  `parseSeedFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
+- **`markdown-description.ts` holds "put a note in a markdown body and keep the issue readable"**
+  (FRU-30) — `buildIssueTitle`, `buildIssueMetadata`, `buildNoteBlock`, `buildIssueDescription`,
+  `parseNoteFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
   worth connecting to stores a markdown body and lets something search it.
-- **It is a strategy connectors share, not part of `SeedStore`.** Putting it on the interface would
+- **It is a strategy connectors share, not part of `NoteStore`.** Putting it on the interface would
   have obliged a store that has columns to implement a codec it has no use for — and `sqlite.ts` is
   the standing proof that such a store exists. A connector picks this up; it is not required to.
 - **`pageQueryTerm` moved with it, and that is the reason it is a separate point.** The term works
-  only because `buildSeedBlock` writes the canonical URL verbatim into the JSON — a property of the
+  only because `buildNoteBlock` writes the canonical URL verbatim into the JSON — a property of the
   _writer_, not of any provider. Beside the code that makes it true, it cannot drift from it.
 - **The round-trip test travelled with the code rather than being rewritten**, which is what the
   ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
-  `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
+  `parseNoteFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
   same fixture.
 - **`packages/shared/src/linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
   Linear's workflow states out of it, FRU-24 took the words a human reads, and this ticket took the
@@ -2419,8 +2419,8 @@ ticket removes; it adds no route and no table.
 
 ### The rules, in short
 
-- **A session is credentials, and credentials are not seeds** (FRU-42). `FRUITBACK_SESSION_PATH` is
-  its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
+- **A session is credentials, and credentials are not notes** (FRU-42). `FRUITBACK_SESSION_PATH` is
+  its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its notes in Linear still
   keeps its sessions on a disk it owns. A worker with `FRUITBACK_DATABASE_URL` keeps them in that
   database instead, beside its accounts (FRU-142): see _The sessions in PostgreSQL_.
 - **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the _seeds_ migrations and
@@ -2731,7 +2731,7 @@ ticket removes; it adds no route and no table.
   SQLite whatever the store does, and its control is a store that reads, waits, then writes.
 - **The digest guard reads the `-wal` file too.** A row just written is in `sessions.db-wal` and
   nowhere else, so a check that read only the `.db` would pass against a store writing codes in the
-  clear. Same trap as the seed store's backup note, arriving from the other side.
+  clear. Same trap as the note store's backup note, arriving from the other side.
 
 ### What this deliberately does not do
 
@@ -3319,7 +3319,7 @@ under a client that is not a site looks the same. `forget` deletes them.
 
 **The rules, in short:**
 
-- **`SeedStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
+- **`NoteStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
   Linear (`commentCreate`), the database (`seed_comments`) and the store of the dev loop take one.
   GitHub does not: it is a store of the environment, and no connector of a workspace yet (FRU-188).
 - **A site takes no reply when nobody would read it back**: an address that only receives (REST),
@@ -3365,7 +3365,7 @@ replies, and on a public site mounted by the extension with no session, only the
 - **One route, `POST /feedback/<id>/check?client=<site>`, body `{ url, verdict, body? }`**, and not
   `/check` and `/reopen`: the guards, the read of the note and the answer are the same, and only the
   store call differs. `verdict` is `fixed` or `wrong`.
-- **`SeedStore.check` writes the verdict; `takesChecks` says where.** Linear, the database and the
+- **`NoteStore.check` writes the verdict; `takesChecks` says where.** Linear, the database and the
   store of the dev loop take one. GitHub does not, as for a reply. A store with `check` has `reply`:
   a site that takes no reply (`withSettings`, `receivingStore`) takes no verdict.
 - **« wrong » writes the reply first, then moves the note** (Linear: `reopenStateOf`, the first
@@ -3379,7 +3379,7 @@ replies, and on a public site mounted by the extension with no session, only the
   note reopened and done again can be checked again.
 - **Who: the author the index keeps, or `manage-sites`** (arbitration of 2026-10-20, option A). The
   author is `NoteIndex.authors`, the account of a member that a session of the extension planted;
-  nothing that the page or the seed claims.
+  nothing that the page or the note claims.
 - **The stage is read for the request, never from the cache**, and must be `done`. The cache of the
   page is emptied after the verdict, and the index gets the stage that the store answered.
 - **One verdict at a time on a note** (heavy review): the guards read the store, then the store
@@ -3467,16 +3467,16 @@ refused by its sentence. What follows is the history.
   it: a tracker of another workspace may call an issue `FB-12` as well, and its row stays.
 - **`forget --seed <id>` removes the row of a note that went to a tracker**, whatever the store
   (decided by the orchestrator, 2026-10-13): the index keeps no address and no name, so the
-  operator reads the `id` of the seed in the issue. The command says so when it cannot find a note
+  operator reads the `id` of the note in the issue. The command says so when it cannot find a note
   of a tracker by `--email` or `--name`.
 - **The account of a member goes with the account**: `author_account_id` is a foreign key to
   `user`, `ON DELETE SET NULL`, and the row stays with `member` and no account (`0010`). Before it,
   `0009` empties the ids of accounts already removed, which the key would refuse: a migration of
   its own, made by `drizzle-kit generate --custom`, and no generated file is edited. There is no
   `forget` of an account in the index: nothing called it.
-- **One row for one note in one statement**: two issues of one page that carry one seed id (two
+- **One row for one note in one statement**: two issues of one page that carry one note id (two
   places of one team, or one note sent twice) are written once, the first of them. Before, the
-  statement failed and wrote nothing of the page. A `POST` of a seed id that the site has already
+  statement failed and wrote nothing of the page. A `POST` of a note id that the site has already
   is not refused: the index keeps the first row, and the store keeps what it keeps today.
 
 ### What it does not do, and the measurements
@@ -3509,7 +3509,7 @@ refused by its sentence. What follows is the history.
 - **Filters**: `site`, `stage`, `place` (`fruitback`, a connector id, or `removed`), `mine` (the
   notes whose author is the account that asks). Anything that is not one of these values is `400`.
 - **Pages of 8 to 50 notes (25 by default), the newest first, after an opaque cursor.** The order is
-  the date the worker took the note, then the site and the seed ids in their bytes (`COLLATE "C"`),
+  the date the worker took the note, then the site and the note ids in their bytes (`COLLATE "C"`),
   so it is total and the same on every server. A cursor is the place of the last note shown, so a
   note that arrives during a walk is not shown twice and pushes nothing out: a newer one is not in
   the walk, an older one is met in its place.
@@ -3850,7 +3850,7 @@ client map were refused together at boot.
   the cache, **never in the cached answer**, and only to a session whose role has `see-tracker`
   (`seesTracker`, the role is read at each request). A place has an opaque id (`destinationId`) and a
   label that the worker writes from the tracker. The choice is `POST /feedback?destination=<id>`:
-  the body stays the seed, and the relay carries a query. **`verifyForClient` says `session` only for
+  the body stays the note, and the relay carries a query. **`verifyForClient` says `session` only for
   a token that the worker key verified**: a site can write a workspace in its own tokens.
 - **`GET /feedback` answers `identified: true` to a reader whose token it verified** (FRU-112), so
   the composer of the widget asks for no name that `attributionFor` would replace. `signsNotes` asks
@@ -3891,9 +3891,9 @@ client map were refused together at boot.
 - **`FRUITBACK_CLIENTS` maps a `clientId` to a team, a project and the origins that client may be
   embedded on** (FRU-15). Configured, a client has to be named on **both** paths — the `client`
   parameter on a read, `seed.client.id` on a write — and an unknown one is refused. A read that named
-  nobody used to answer with every seed on that URL.
+  nobody used to answer with every note on that URL.
 - **`normalizeClientId` runs before the id is used for anything.** It picks the route, builds the
-  `fruitback:<id>` label of the issue, is the client a read compares each seed with, and keys the cache. Normalising it for the route alone
+  `fruitback:<id>` label of the issue, is the client a read compares each note with, and keys the cache. Normalising it for the route alone
   put a note in the right team under a label its owner's clean read never asked for: authorised at
   both ends, invisible in between.
 - **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
@@ -3990,9 +3990,9 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   with the row, a row past it reads as absent everywhere, and `sweep` deletes it: on each new file
   and on each pass of the deliveries. Nothing else is needed for the promise to hold: a sweep that
   does not run leaves bytes that no route reads.
-- **The ids travel in the query of `POST /feedback`, never in the seed.** The seed is the round trip
+- **The ids travel in the query of `POST /feedback`, never in the note.** The note is the round trip
   of the description of the issue (`contract.md`): an id in transit there would be a dead word in the
-  tracker for ever. The relay of the extension carries a query, so the body stays the seed. A batch
+  tracker for ever. The relay of the extension carries a query, so the body stays the note. A batch
   takes no file: its query could not say which note a file is of.
 - **A store says whether it takes files** (`attachments: true`, `attachmentsFor` for the routed store),
   as it says whether it takes a reply. The worker's own store (« Kept in Fruitback ») and GitHub take
@@ -4047,7 +4047,7 @@ does.** `attachments.ts` is the mechanism, `SECURITY.md` says what is protected 
   after the migration, whatever its age, and the sweep removes it then. Two versions deleted rows
   first, by age, then by a match of their id in `seeds.seed` and `deliveries.body` (`strpos`): each
   review found a note on its way that the match could miss. Until the end, `withSignedFiles` carries
-  the picture that the seed of a waiting delivery names, and `legacyFileOf` in `postFeedback` the
+  the picture that the note of a waiting delivery names, and `legacyFileOf` in `postFeedback` the
   picture of a note of before sent again by its sender.
 - **The limits of a person are read before the write, not reserved** (`admitFile`). The count of a
   minute is one `incr`, atomic, and counted after the size and the type passed: a refused file costs

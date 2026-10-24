@@ -32,7 +32,7 @@ and nothing outside that schema is sent.
 | `id`, `createdAt`                          | a random identifier and the time of writing                                      | always                                  | nothing                                                                   |
 
 The excerpt of the element's text (`anchor.text`) is the site's own text, not the reporter's. It can
-still be personal data: an element that shows a customer's name carries that name into the seed.
+still be personal data: an element that shows a customer's name carries that name into the note.
 If your staging site shows real customer records, keep that in mind before you invite reviewers.
 
 ### What is right by default
@@ -43,11 +43,11 @@ If your staging site shows real customer records, keep that in mind before you i
   the reporter ticks « Remember me on this site », and unticking the box erases it at once.
 - **No picture leaves the page unless somebody chose it.** The widget bundles no screen capture.
   The setting is absent unless the integrator supplied `captureScreenshot`, and present, it starts
-  off: the reporter turns it on. The picture goes to **your** storage, and the seed holds only its
+  off: the reporter turns it on. The picture goes to **your** storage, and the note holds only its
   URL — whether that URL is public is your decision. A file that a person joins to a note through
-  the worker goes to the ticket of the tracker, never into the seed (FRU-331): see below.
-- **The identity token never enters the seed.** It travels in an `Authorization` header and is
-  verified, not stored. The seed is kept verbatim for as long as the issue exists, and a credential
+  the worker goes to the ticket of the tracker, never into the note (FRU-331): see below.
+- **The identity token never enters the note.** It travels in an `Authorization` header and is
+  verified, not stored. The note is kept verbatim for as long as the issue exists, and a credential
   in it would outlive its expiry by months.
 - **A typed name is never presented as checked.** Only a signed token makes `reporter.verified`
   true; the worker removes the flag from anything a browser sends.
@@ -66,13 +66,13 @@ If your staging site shows real customer records, keep that in mind before you i
 
 The widget talks to one address: the worker the integrator, or the reviewer in the extension, named.
 On a self-hosted instance that worker is yours, and Fruitback receives nothing. On the Cloud it is
-the worker that Sakuga Software runs for you. The worker then writes the seed to the store it is
+the worker that Sakuga Software runs for you. The worker then writes the note to the store it is
 configured with:
 
 | Store      | Where a note lands                                       | Who runs it                         |
 | ---------- | -------------------------------------------------------- | ----------------------------------- |
-| `linear`   | an issue in your Linear workspace, the seed in its body  | Linear, outside your infrastructure |
-| `github`   | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
+| `linear`   | an issue in your Linear workspace, the note in its body  | Linear, outside your infrastructure |
+| `github`   | an issue in your GitHub repository, the note in its body | GitHub, outside your infrastructure |
 | `postgres` | a row in the database of the worker, beside the accounts | you                                 |
 
 A workspace can connect **its own GitHub** (FRU-359), on the Cloud or on an instance that sets
@@ -95,12 +95,12 @@ server, and whoever holds a backup. [SECURITY.md](https://github.com/sakuga-soft
 says it in full.
 
 In the two trackers, the issue description also states the reporter's name and e-mail in a line
-your team reads, and the seed below it repeats them. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-seed-is-stored-in-the-clear-in-your-database-or-your-tracker)
+your team reads, and the note below it repeats them. [SECURITY.md](https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md#a-note-is-stored-in-the-clear-in-your-database-or-your-tracker)
 says who can read each store. **On a public GitHub repository, that is everyone.**
 
 ### Who can read a note back
 
-The widget reads the notes of a page to draw their pins, and the answer carries **the whole seed**,
+The widget reads the notes of a page to draw their pins, and the answer carries **the whole note**,
 name and e-mail included, and the replies of your team with their authors' names. Who can read
 them is the visibility of the site, chosen in the console when it is added (FRU-225): `members`, a
 session of its workspace and nobody else, which is what a site added with no visibility gets; or
@@ -250,7 +250,7 @@ visitor's typed name is in the tracker and never in the index**: the console sho
 notes that Fruitback keeps for the site (FRU-194). **`forget` removes the rows of the notes it deletes**,
 before it deletes them and again after, so a read of their page during the command does not leave
 one behind. **A note that went to a tracker** is not found by an address or a name, since the index
-keeps neither: `forget --seed <id>`, with the `id` of the seed that its issue holds, removes its row,
+keeps neither: `forget --seed <id>`, with the `id` of the note that its issue holds, removes its row,
 whatever the store, and the issue is deleted in the tracker. **A note deleted in a tracker keeps its row**, excerpt included, until its
 site goes: the worker is not told of a deletion there, and a read of the page cannot tell a note
 that was deleted from one that a tracker did not list. That is the one place where up to 64
@@ -374,7 +374,7 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
 - `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): **the notes a
-  reporter chose to keep for later and has not sent yet** (FRU-124), each a whole seed, with the name
+  reporter chose to keep for later and has not sent yet** (FRU-124), each a whole note, with the name
   they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
   the tab. Any script of the page can read them while they are there.
 - `sessionStorage`, under `fruitback:config:typing` (or the `configKey` with `:typing`): **the note

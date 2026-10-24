@@ -1,6 +1,6 @@
 # The widget
 
-The browser half: how a seed is captured, why everything lives in one Shadow root, what a host may
+The browser half: how a note is captured, why everything lives in one Shadow root, what a host may
 restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ## The widget
@@ -23,14 +23,14 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **The place of a note is read at the click, not at the send** (FRU-152). The page stays live while
   the popover is open, and a link of a single-page app or the back button changes its address. So
   `embed.ts` reads the page, the viewport, the anchor and the source with `capturePlace` when the
-  reporter chooses the element, and `captureSeed` takes them as `place`. The note goes to the page
+  reporter chooses the element, and `captureNote` takes them as `place`. The note goes to the page
   where it was written. The picture is still taken at the send, so it is left out when the address
   changed or the element left the page. `e2e/navigation.spec.ts` sends a note after a navigation of
   the client.
 
 ### The reasons, and the history
 
-- **`captureSeed` is the only place a seed is built.** It goes through `createSeed`, so a malformed
+- **`captureNote` is the only place a note is built.** It goes through `createNote`, so a malformed
   anchor fails in the reporter's browser instead of as a `400` after the note was typed.
 - The anchor is deliberately redundant — selector, `domPath`, text, attrs, bounds — because the site
   will be redeployed between writing the note and reading it. `selector.ts` does not answer "what
@@ -40,9 +40,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - When nothing identifies an element that repeats (three identical cards), the selector is **scoped
   under the nearest identifiable ancestor** rather than pathed from `<html>`.
 - `page.url` is canonicalized here too. The worker re-does it — it cannot trust a client — but doing
-  it on this side is what makes the widget query the read path with the key its seeds were stored
+  it on this side is what makes the widget query the read path with the key its notes were stored
   under.
-- **react-grab owns `source`, but only field by field.** `captureSeed({ source })` wins per field
+- **react-grab owns `source`, but only field by field.** `captureNote({ source })` wins per field
   and `readReactSource` fills the gaps — a best-effort walk over React's `__reactFiber$` internals
   that returns `undefined` at the first surprise rather than guessing a file name. Merging rather
   than choosing is not tidiness: on a design system react-grab gets `file`/`line` right and the
@@ -55,7 +55,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   component: that would report `PlanCard` for anything nested, which is less true and no more useful
   now that `file`/`line` point at the JSX.
 - **The owner chain ends in `null`, not `undefined`.** Both walks stop on either. Checking only for
-  `undefined` dereferences the root, throws out of `captureSeed`, and a click silently stops planting
+  `undefined` dereferences the root, throws out of `captureNote`, and a click silently stops planting
   anything — which is what happened the first time the widget met a real React tree.
 
 ## The host, and why everything lives in one Shadow root
@@ -566,7 +566,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     - **Sent**: a card takes the place of the composer for 4 s, or until a click anywhere else: the
       drop of « new » with the number of its pin, « Sent as DEV-3 », « The pin stays here and
       follows the issue's status. » in green, and « Open → » when the reader may open the issue.
-      `init` finds them in the read that follows the send, by the id of the seed (`onSeed` of
+      `init` finds them in the read that follows the send, by the id of the note (`onNote` of
       `plant`). It said « Sent » for 1.1 s before. A note kept for later still says so in the foot.
     - **Failed**: a card above the foot, `role="alert"`: « Did not go through », then the sentence of
       its cause (FRU-156). The text stays in the field.
@@ -584,7 +584,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     « Sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
     at 16 px; the dark scheme.
 - **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
-  `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
+  `verified` — that flag is the worker's to set. `reporter.email` stays in the note contract, because
   an identity token can carry one.
 - **The widget remembers a name only for a reporter who ticked the box.** `NameMemory` is a seam like
   `onSubmit`: the composer does not know where the name is kept, and `embed.ts` gives it the config
@@ -599,7 +599,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   in `ConfigStore`; the id chosen last does (`destination`), and it is followed only while the worker
   offers it. `DestinationChoice` is a seam like `NameMemory`.
 - **The choice travels as `POST /feedback?destination=<id>`, and only when it is not the first
-  place** (`destinationToSend`). The body stays the seed. `apps/extension/src/relay.test.ts` reads
+  place** (`destinationToSend`). The body stays the note. `apps/extension/src/relay.test.ts` reads
   the paths of `embed.ts` up to the `?`: write the two addresses as two whole templates. A refusal
   with a choice reads again, so the composer shows the list of now and says which place is gone.
 - **A failed send says what to do next, by its cause** (FRU-156). `plant` answers `true` or a
@@ -706,7 +706,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     that writes the key chooses first among the places its reviewer may use, and no more. The id of
     another site is offered by no read here, so one key for an origin is one choice for a site.
   - **Only a choice travels, in the query.** `POST /feedback?destination=<id>` when the place is not
-    the first, and the request of everybody else when it is. The body is the seed and nothing more:
+    the first, and the request of everybody else when it is. The body is the note and nothing more:
     the relay of the extension compares no query and carries no header but two. An older worker gets
     no parameter, because it sent no list.
   - **A refusal with a choice reads again.** The worker answers `403` for a place the site no longer
@@ -763,7 +763,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 ## The optional picture
 
 - **The widget does not bundle a rasteriser** (FRU-6). `captureScreenshot` is a seam the embedder
-  fills, for two reasons that each stand alone: the seed contract stores a **URL**, so the image has
+  fills, for two reasons that each stand alone: the note contract stores a **URL**, so the image has
   to live in someone's storage, and html2canvas weighs more than this entire widget — bundling it
   would break `package.test.ts`'s 150 kB tripwire and the promise that tripwire guards.
 - **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
@@ -813,7 +813,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **A file goes on its way when it is joined**, through the transport (`POST /attachments`, its bytes
   in base64 for any transport). A refusal is said under its name at once, and a file over its limit
   (`MAX_ATTACHMENT_BYTES`, the same constants as the worker) or a sixth file is refused before it is
-  sent. The note names the files the worker took, in `?attachments=`, never in the seed; it waits for
+  sent. The note names the files the worker took, in `?attachments=`, never in the note; it waits for
   a file still on its way.
 - **Each file shows its name, its size and a button to remove it**, named by the file. Nothing is
   lost on a failure: a refused file, a `410 attachment-gone` or a `409 attachments-not-taken` of the
@@ -870,7 +870,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - `config.ts` is the store, `panel.ts` the UI. It writes on every change rather than behind a Save
   button, and **reading `localStorage` can throw** rather than return `null` — Safari in private
   browsing raises on the property itself, so the widget must still start with storage refused.
-- **The stored config is parsed like a seed**: tolerant, field by field. It is a string a human can
+- **The stored config is parsed like a note**: tolerant, field by field. It is a string a human can
   edit in devtools, and a malformed one costs the reporter their preferences, never the widget.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
   the issues already held, so hiding a stage costs no request — and, as with FRU-21, a client's app
@@ -934,7 +934,7 @@ Asked for as a « basic » text mode: the comments of a page in a form somebody 
 with no context and no instruction added.
 
 - **Markdown, because the two readers both take it.** A person pastes it in a ticket; a model reads
-  headings and lists without being told the format. JSON was not taken: the seed is already JSON,
+  headings and lists without being told the format. JSON was not taken: the note is already JSON,
   and the request was for text.
 - **One block per note**: a heading with the identifier and the status, a list of facts, the note
   quoted, then each reply quoted under one line that names its author. A fact with nothing to say
@@ -1293,11 +1293,11 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 
 ## Re-anchoring, and why a pin says how sure it is
 
-- `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
+- `resolveAnchor` walks the anchor's claims in the order `NOTE_ANCHOR_STRATEGIES` declares:
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
-  roughly where the seed said it was — a structural path always resolves to _something_, and after
+  roughly where the note said it was — a structural path always resolves to _something_, and after
   an insertion that something is the neighbour.
 - **Detached is not the same as unsure** (FRU-12). A pin found only by `bounds` is still placed,
   dashed, and marked unconfident — that is FRU-11's answer and the orphan list does not touch it.
@@ -1312,7 +1312,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   top of their cookie banner — it went under the playground's toolbar the first time.
 - **`confident` is the field that matters.** `selector`, `testId` and `text` identify an element;
   `domPath` and `bounds` only locate a spot. Delete a card from a grid and its neighbour slides into
-  the vacated slot with the same tag, the same text and the same box — nothing a seed stores can
+  the vacated slot with the same tag, the same text and the same box — nothing a note stores can
   separate them. So the pin is still placed, drawn dashed with a `≈`, and its thread says it was
   found by position rather than recognised. Do not "fix" this by making the cascade stricter without
   reading `resolve.test.ts` first: refusing outright throws away the many cases where position is
@@ -1462,13 +1462,13 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   2026-10-12, on delegation from Mathieu: the ticket listed this option as recommended, and set aside
   a mode « several notes » to switch on (one more state, and a note one believes sent is not) and a
   draft forced from the second note (« Send » would change its meaning unasked).
-- **A draft is a whole seed**, built when it is kept: the element, the place and the picture are
+- **A draft is a whole note**, built when it is kept: the element, the place and the picture are
   those of that moment. The picture is the address the host already uploaded, so a draft holds no
   image of its own.
 - **`sessionStorage`, per tab** (`drafts.ts`), under `<configKey>:drafts`: the drafts outlive a reload
   and a navigation in the tab, and go with the tab. A storage that refuses keeps them in memory for
-  the page. A stored value is read through `parseSeed`: what is not a seed is dropped, because the
-  worker refuses a whole batch for one thing that is not a seed.
+  the page. A stored value is read through `parseNote`: what is not a note is dropped, because the
+  worker refuses a whole batch for one thing that is not a note.
 - **On its page, a draft is a pin** with a neutral colour (`--fruitback-color-text-muted`), the mark
   `data-fruitback-draft`, and a thread that says « Not sent yet », with no identifier and no link. No
   stage the reporter hid hides it. It is not in the list of notes, nor in the copied text.
@@ -1477,7 +1477,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   made of the parts of the list. A board is still to ask the design for.
 - **As few requests as the worker allows** (`cutIntoRequests`): one place for each request, because
   `?destination=` is for the whole batch, then the number and the bytes the worker offers. A worker
-  that offers no batch gets one seed for each request, never an array.
+  that offers no batch gets one note for each request, never an array.
 - **Only the notes answered « kept » leave the drafts.** After a `207` the others are sent again, never
   the whole batch: the worker protects a kept note against a second copy for ten minutes, one minute
   when its `Kv` refuses the trace. A request that fails stops the others and its sentence is the one

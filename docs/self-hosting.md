@@ -374,7 +374,7 @@ them: [rest-connector.md](rest-connector.md)), and a site can choose where its n
 
 The accounts, the sites and the sessions are in the database whatever this variable says. To get the
 Linear key and ids, see [install.md](install.md#a-linear-team-for-the-whole-instance). To create the
-GitHub App, see [Storing the seeds in GitHub Issues](self-hosting/github-issues.md).
+GitHub App, see [Storing the notes in GitHub Issues](self-hosting/github-issues.md).
 
 What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
 Replies column and the last column with the code. A stage is named here as it is stored, in the

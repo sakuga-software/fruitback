@@ -54,7 +54,7 @@ Coming back to the page, they see their pins again, coloured by that issue's sta
 **Fruitback does not reinvent issue tracking — but it no longer requires somebody else's account.**
 That is a change, and FRU-31 made it deliberately. This file used to say _there is no Fruitback
 backend, Linear is the database_, and until the SQLite connector that was exactly true. It is not any
-more: `FRUITBACK_STORE=sqlite` puts the seeds in a file on a volume, and a self-hoster who wants no
+more: `FRUITBACK_STORE=sqlite` puts the notes in a file on a volume, and a self-hoster who wants no
 third party has a door.
 
 What has **not** changed is the instinct behind that sentence. Status, threads, assignees and history
@@ -119,7 +119,7 @@ empty directory on every pull request, and the guide was replayed by hand on the
 ### The rules, in short
 
 - `packages/widget` (`@fruitback/widget`) — the browser half, and the whole of it: capture
-  (`captureSeed`), the overlay (`resolveAnchor` + `createOverlay`), the Shadow DOM host
+  (`captureNote`), the overlay (`resolveAnchor` + `createOverlay`), the Shadow DOM host
   (`createCaptureHost`), the note popover (`createComposer`) and the settings panel.
 - `packages/fruitback` — the front door a client installs. It re-exports the two above and defines
   nothing.
@@ -132,14 +132,14 @@ empty directory on every pull request, and the guide was replayed by hand on the
 
 ### The reasons, and the history
 
-- `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
-  no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests
-  against the same seed instead of keeping a drifting copy.
-- `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
-  `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
+- `packages/shared` (`@fruitback/shared`) — the note contract. Browser- and server-safe: no Node API,
+  no DOM API beyond `URL`. Also exports `@fruitback/shared/note.fixture`, so every package tests
+  against the same note instead of keeping a drifting copy.
+- `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a note,
+  `GET /feedback?url=…` returns the notes of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
 - `packages/widget` (`@fruitback/widget`) — the browser half, and now the whole of it: **capture**
-  (`captureSeed`, FRU-5), **the overlay** (`resolveAnchor` + `createOverlay`, FRU-11), **the
+  (`captureNote`, FRU-5), **the overlay** (`resolveAnchor` + `createOverlay`, FRU-11), **the
   Shadow DOM host** (`createCaptureHost`, FRU-3) and **the note popover** (`createComposer`,
   FRU-4). The playground only says where the worker is.
 
@@ -160,7 +160,7 @@ one is [the Linear project](https://linear.app/sakuga-software/project/fruitback
 
 | Milestone            | Scope                                                     |
 | -------------------- | --------------------------------------------------------- |
-| 🌱 M1 Foundation     | monorepo, seed schema + Linear mapping                    |
+| 🌱 M1 Foundation     | monorepo, note schema + Linear mapping                    |
 | 🍓 M2 Capture        | react-grab in Shadow DOM, popover, anchor, screenshot     |
 | 🍊 M3 Write → Linear | worker, issue creation, anonymous/identified attribution  |
 | 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments |

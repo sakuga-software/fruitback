@@ -27,7 +27,7 @@ pnpm lint                                   # oxlint
 pnpm format:fix                             # oxfmt
 
 pnpm --filter @fruitback/shared test         # one package
-node --test src/seed.test.ts                 # one file, from the package directory
+node --test src/note.test.ts                 # one file, from the package directory
 pnpm exec vitest run src/cache.test.ts       # one file of the worker, from apps/worker
 ```
 
@@ -45,7 +45,7 @@ pnpm exec vitest run src/cache.test.ts       # one file of the worker, from apps
 | You are about to change                                     | Read first                                                |
 | ----------------------------------------------------------- | --------------------------------------------------------- |
 | what the project is, the role of a package                  | [project.md](docs/decisions/project.md)                   |
-| `packages/shared`, a field of the seed                      | [contract.md](docs/decisions/contract.md)                 |
+| `packages/shared`, a field of the note                      | [contract.md](docs/decisions/contract.md)                 |
 | `packages/widget`                                           | [widget.md](docs/decisions/widget.md)                     |
 | an icon, a glyph, anything that looks like an emoji         | [icons.md](docs/decisions/icons.md)                       |
 | a `package.json` of a published package, a licence          | [packaging.md](docs/decisions/packaging.md)               |

@@ -1925,7 +1925,7 @@ CORS headers on the refusal for an extension origin.
 - **`relay-transport.ts` exists so `node --test` can reach the correlation**: the widget reads and
   writes independently, so two calls are in flight in the ordinary case. Its ids come from
   `randomId`, not `crypto.randomUUID` — that one needs a **secure context** and this script runs on
-  `http://` staging too. `capture.ts` already carried the same fallback for the seed id, and the trap
+  `http://` staging too. `capture.ts` already carried the same fallback for the note id, and the trap
   was walked back into here.
 - **An extension origin is exempt from `ALLOWED_ORIGINS` on every route, by scheme.** The relay
   calls `/feedback` from the service worker, which sends `chrome-extension://<id>`. See

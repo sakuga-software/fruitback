@@ -1,7 +1,7 @@
 # GitHub Issues as a store
 
 Each note becomes an issue in one repository, labelled `fruitback`, and also `fruitback:<client>` when
-the note names a client. The seed is in a fenced block at the end of the body. GitHub compares label
+the note names a client. The note is in a fenced block at the end of the body. GitHub compares label
 names without case and limits them to 50 characters, so a client ID with a capital letter, a comma or
 another character outside `a-z`, `0-9`, `.`, `_` and `-`, or a long one, gets `fruitback:` and a hash of
 the ID instead. The worker signs in as a GitHub App, never with a

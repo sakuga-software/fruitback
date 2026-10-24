@@ -92,7 +92,7 @@ that keep the generated file honest.
   snippet, in `README.md` and `docs/install.md`, which no longer suggests one. The first version of
   this bullet named one file and called it the only one; run
   `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than trusting a number written here, which is the
-  same rule the FRU-24 emoji inventory in _The seed contract_ ([contract.md](contract.md)) had to
+  same rule the FRU-24 emoji inventory in _The note contract_ ([contract.md](contract.md)) had to
   learn twice.
 - **The guard is `icons.test.ts`'s test:`has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
