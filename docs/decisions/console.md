@@ -73,8 +73,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
   and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
-  admin, the domains of the workspace (`domains.tsx`), under the row of a site, behind « Preview
-  builds » of its menu (FRU-243): the `TXT` record to write, « Check the DNS »,
+  admin, the domains of the workspace (`domains.tsx`), in a section of the page of a site (FRU-433,
+  `…/sites/<site>#previews`): the `TXT` record to write, « Check the DNS »,
   and for a domain the worker says is proven, the site whose previews it covers. `state` is the
   worker's word; a DNS that did not answer is said as such, never as « not found »; a proof that is
   lost shows since when, and its record again. `e2e/console-domains.spec.ts` holds it.
@@ -351,25 +351,39 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   A search that keeps nothing says so, with « Clear the search ». A new site is the last one: its
   page is shown, with no search. **This holds while a workspace has a few hundred sites**: past
   200, the answer of `GET …/sites` is the place for `q` and a cursor, a route of the worker.
-  **A card has one menu, and what it opens is after the card**, over the whole width of the grid:
-  « Install », for every role; « Destinations », « Preview builds », which is the proof of a domain
-  of FRU-103, and « Remove », for who manages the sites. One thing is open at a time, and what
-  closes gives focus back to the button of the card. « Remove » asks twice: the menu is the first
-  time, and
-  `Confirmation` (`confirm.tsx`) the second; once the site is gone, focus goes to the search.
-  **No item changes who sees the notes of a site**: the worker has no route for it, and a button
-  that does nothing is not drawn; so the form that adds a site asks it, in the card of a workspace
-  with no site too, where the mockup draws the address alone. **The address of a site is no link**
-  until a site has a page. A host breaks after its dots first (`<wbr>`). The card and the alert are
-  sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px inside their
-  padding. `e2e/console-sites.spec.ts` holds the three states, the counts, the search, the pages,
-  the form, the menu, the roles, 390 px and axe.
+  **The grid unfolds nothing under a card** (FRU-433, Mathieu: a panel over the whole width of the
+  grid, between two rows of cards, read as a stray card). **A site has a page of its own**,
+  `/w/<workspace>/sites/<site>` (`routes/site.tsx`), reached from the name of its card, which is a
+  link, and from its menu: « Settings » and « Install », for every role; « Statuses » and « Remove »,
+  for who manages the sites. « Install » and « Remove » lead to their section of the page
+  (`#install`, `#remove`). A new site opens its page at `#install`. « Remove » asks twice: the menu
+  is the first time, and `Confirmation` (`confirm.tsx`) on the page the second; once the site is
+  gone, the grid comes back with focus on its search, or on the field of the card when it was the
+  last one. **No item changes who sees the notes of a site, nor who writes them**: the worker has
+  no route for it, and a button that does nothing is not drawn; so the form that adds a site asks
+  it, in the card of a workspace with no site too, where the mockup draws the address alone, and the
+  page of the site says them, read only. A host breaks after its dots first (`<wbr>`). The card and
+  the alert are sized by their content (`box-content`), as the mockup sizes them: 640 px and 760 px
+  inside their padding. `e2e/console-sites.spec.ts` holds the three states, the counts, the search,
+  the pages, the form, the menu, the roles, 390 px and axe.
+- **The page of a site** (FRU-433, `routes/site.tsx`) has the crumbs « Sites › site » of the page
+  of the statuses, and its title is the name of the site, at the place of every title (FRU-405). Its
+  sections, in this order: the site (its address, who sees its notes, who can leave one, read only);
+  « Install », for every role; where its notes go (`site-places.tsx`) for who manages the sites and
+  sees the tracker; « Statuses », a link to the page of the statuses (FRU-371), which is too large
+  to be a section, and whose crumbs lead back here; the preview builds (`domains.tsx`); « Remove
+  this site ». A member and a guest read the first two only. **It reads the list of the sites**, as
+  the page of the statuses does: the worker has no route for one site, and no route of the worker
+  is new. A site that is not in the list says « This site is not in the workspace any more. », and
+  a read that failed is the alert of the Sites screen, with « Try again ». A hash of the address
+  scrolls to its section once the site is drawn. `e2e/console-site-page.spec.ts` holds the
+  sections, the roles, the hash, the two failures, 390 px in English and in French, and axe.
 - **The statuses of a site have a page of their own** (FRU-371, `routes/site-statuses.tsx`), reached
-  from « Statuses » in the menu of a site row, for an owner or an admin. It is the board
+  from « Statuses » in the menu of a card and on the page of a site, for an owner or an admin. It is the board
   `design/site-statuses/`; [statuses.md](statuses.md) says what it does and why. Its crumbs are in the
   room above the title, so **the title of every page of a frame is at one place** (FRU-405): 40 px
   under the top of the screen, at the left of its padding, 28 px. `e2e/console-titles.spec.ts` reads
-  it on the ten pages of a workspace and of the administration, at 1440, 1492 and 390 px. Two things of the kit
+  it on the eleven pages of a workspace and of the administration, at 1440, 1492 and 390 px. Two things of the kit
   came with it: `Field` takes `error` (the sentence a field is described by, `aria-invalid`) and
   `inputRef`, so a refused press gives focus to the field it names; and `.kit-pin`,
   `.kit-status-chip` and `.kit-swatch` in `app.css` draw a status as the widget does. Its colours
@@ -456,18 +470,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   workspace**: the whole list of a site is sent, and a GitHub place sent as a team makes the worker
   refuse that list. `e2e/console-github.spec.ts` holds the card, every word, the panel, 390 px and
   axe; `e2e/console-site-places.spec.ts` the places and the bodies sent.
-- **A site chooses where its notes go on the Sites screen** (FRU-399, Mathieu), and no longer in the
-  panel of a source: « Destinations » of the menu of a card, for an owner or an admin
+- **A site chooses where its notes go on its page** (FRU-399, Mathieu; FRU-433), and no longer in the
+  panel of a source: a section of the page of the site, for an owner or an admin
   (`site-places.tsx`). It lists the places of the site in their order, with « Make it the default »
   and « Remove », and « Add a destination… » offers what every source of the workspace has: the
   teams and projects of each Linear, the repositories of each GitHub, each address. The sources are
-  read once with the screen, their teams and repositories when the panel opens; a read that failed
+  read once with the page, their teams and repositories once both the site and the sources are read; a read that failed
   says which source and offers « Try again ». **No list is written before the sources are read**: a
   list is sent with the kind of each source, and with none a GitHub place would go as a team, which
   the worker refuses. The panel of a GitHub on the Connectors screen reads its repositories too, for
   who manages the sources, so the list wins there as here (FRU-382). The answer of a write is the
   list the worker keeps:
-  the card takes it at once, and the sites are not read again. No route of the worker is new.
+  the page takes it at once, and the sites are not read again. No route of the worker is new.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

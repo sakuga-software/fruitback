@@ -150,11 +150,9 @@ const card = (page: Page) => page.locator('li[data-site]').first();
 const panel = (page: Page) => page.getByRole('region', { name: `Where the notes of ${SITE} go` });
 const add = (page: Page) => panel(page).getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) });
 
-/** Opens the Sites screen, then « Destinations » in the menu of the card. */
-async function openPlaces(page: Page, words = { more: 'More for', item: 'Destinations' }): Promise<void> {
-  await page.goto(`${CONSOLE}/w/w1/sites`);
-  await page.getByRole('button', { name: `${words.more} ${SITE}`, exact: true }).click();
-  await page.getByRole('menuitem', { name: words.item, exact: true }).click();
+/** Opens the page of the site (FRU-433), where its destinations are. */
+async function openPlaces(page: Page): Promise<void> {
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
   await expect(panel(page)).toBeVisible();
 }
 
@@ -168,7 +166,7 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
     .toEqual([]);
 }
 
-test('an owner chooses where the notes of a site go, on the Sites screen (FRU-399)', async ({ page }) => {
+test('an owner chooses where the notes of a site go, on the page of the site (FRU-399, FRU-433)', async ({ page }) => {
   const worker = await workerWith(page);
   await openPlaces(page);
   await expect(panel(page)).toContainText('Its notes stay in Fruitback, in this workspace.');
@@ -192,8 +190,6 @@ test('an owner chooses where the notes of a site go, on the Sites screen (FRU-39
   await expect.poll(() => worker.sent).toEqual([[{ connector: 'c1', teamId: 't1' }]]);
   await expect(panel(page).getByText('Linear · Web', { exact: true })).toBeVisible();
   await expect(panel(page).getByText('Default', { exact: true })).toBeVisible();
-  // The card says it at once, from the answer of the write: the list is not read again.
-  await expect(card(page).locator('dd').nth(1)).toHaveText('LinearTeam Web');
   await expectNoViolation(page, 'the places of a site');
 
   // The address goes after the place of before.
@@ -203,10 +199,9 @@ test('an owner chooses where the notes of a site go, on the Sites screen (FRU-39
   expect(worker.sent[1]).toEqual([{ connector: 'c1', teamId: 't1' }, { connector: 'r1' }]);
   await expect(panel(page).getByText('REST API · hooks.acme.dev', { exact: true })).toBeVisible();
 
-  // « Close » gives focus back to the button of the card.
-  await panel(page).locator('..').getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(panel(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: `More for ${SITE}`, exact: true })).toBeFocused();
+  // Back on the grid, the card of the site says where its notes go now.
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
+  await expect(card(page).locator('dd').nth(1)).toHaveText('LinearTeam Web and 1 more');
 });
 
 test('the places wait for a list to be kept before the next gesture (FRU-123)', async ({ page }) => {
@@ -257,8 +252,6 @@ test('a repository is sent as a repository, and a public one says its issues are
   // The choice comes back from `teamId`, in lower case.
   await expect(panel(page).getByText('GitHub · acme/docs', { exact: true })).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
-  // The card says it too, to whoever reads where the notes go.
-  await expect(card(page).getByRole('alert')).toHaveText(PUBLIC_DOCS);
 
   // A private repository says nothing of the kind.
   await panel(page).getByRole('button', { name: 'Remove', exact: true }).click();
@@ -267,7 +260,6 @@ test('a repository is sent as a repository, and a public one says its issues are
   await page.getByRole('option', { name: 'acme/web', exact: true }).click();
   await expect(panel(page).getByText('GitHub · acme/web', { exact: true })).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveCount(0);
-  await expect(card(page).getByRole('alert')).toHaveCount(0);
   await expectNoViolation(page, 'a repository chosen');
 });
 
@@ -285,12 +277,14 @@ test('a place of Linear that is removed sends the GitHub place of the site as a 
 
 test('a read of the repositories that failed says so, and « Try again » reads them again', async ({ page }) => {
   const worker = await workerWith(page);
-  // Two: a development build runs the effect twice, and only the read of the second run is shown.
-  worker.silentReads = 2;
+  // Every read fails until « Try again »: a development build runs the effect once or twice, as the
+  // sources arrive before or after the site.
+  worker.silentReads = 99;
   await openPlaces(page);
   await expect(panel(page).getByRole('alert')).toHaveText(
     'GitHub Issues · Installed on acme did not answer with its places.',
   );
+  worker.silentReads = 0;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
 
   await expect(panel(page).getByRole('alert')).toHaveCount(0);
@@ -337,8 +331,6 @@ test('once the list names the repository, it wins over an older word of the work
 
   worker.repositoriesWait = false;
   await page.reload();
-  await page.getByRole('button', { name: `More for ${SITE}`, exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Destinations', exact: true }).click();
   await expect(add(page)).toBeEnabled();
   await expect(panel(page).locator('[data-public]')).toHaveCount(0);
 });
@@ -354,8 +346,12 @@ test('a member reads where the notes go and the warning, chooses nothing, and as
   // The public one only: acme/web is private.
   await expect(card(page).getByRole('alert')).toHaveText([PUBLIC_DOCS]);
   await page.getByRole('button', { name: `More for ${SITE}`, exact: true }).click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
   await page.keyboard.press('Escape');
+  // The page of the site does not offer to change them either (FRU-433).
+  await page.goto(`${CONSOLE}/w/w1/sites/s1`);
+  await expect(page.getByRole('region', { name: `Install on ${SITE}` })).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
   expect(worker.listed).toBe(0);
   await expectNoViolation(page, 'the card of a member');
 });
@@ -441,11 +437,7 @@ for (const locale of ['en', 'fr'] as const) {
       { connector: 'g1', teamId: 'acme/docs' },
       { connector: 'c1', teamId: 't1', projectId: 'p1' },
     ];
-    await page.goto(`${CONSOLE}/w/w1/sites`);
-    await page
-      .getByRole('button', { name: `${locale === 'en' ? 'More for' : 'Plus pour'} ${SITE}`, exact: true })
-      .click();
-    await page.getByRole('menuitem', { name: 'Destinations', exact: true }).click();
+    await page.goto(`${CONSOLE}/w/w1/sites/s1`);
     const opened = page.getByRole('region', {
       name: locale === 'en' ? `Where the notes of ${SITE} go` : `Où vont les notes de ${SITE}`,
     });

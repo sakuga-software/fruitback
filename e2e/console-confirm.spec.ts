@@ -48,40 +48,20 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
   return deleted;
 }
 
-const MORE = { en: 'More for staging.acme.dev', fr: 'Plus pour staging.acme.dev' } as const;
-
 /**
  * What a screen needs to ask the first time, and the `DELETE` its second button sends.
  *
- * A source asks with a button of its panel. A site asks from the menu of its row (FRU-243): the
- * button of the menu is what has focus before, and what takes it back.
+ * A source asks with a button of its panel, and a site with a button of its page (FRU-433): that
+ * button is what has focus before, and what takes it back.
  */
 const screens = [
   {
     name: 'a site',
-    path: '/w/w1/sites',
-    back: (page: Page, locale: Locale) => page.getByRole('button', { name: MORE[locale], exact: true }),
-    ask: async (page: Page, locale: Locale) => {
-      await page.getByRole('button', { name: MORE[locale], exact: true }).click();
-      await page.getByRole('menuitem', { name: WORDS[locale].remove, exact: true }).click();
-    },
-    // From the button of the menu, with the keyboard alone: the menu, its fourth and last item, Enter.
-    askWithKeys: async (page: Page) => {
-      // Measured: a menu opened less than 100 ms after « Keep it » opens with focus on nothing. A
-      // person does not press twice that fast; the test waits as a person does.
-      await page.waitForTimeout(250);
-      await page.keyboard.press('Enter');
-      await expect(page.getByRole('menu')).toBeVisible();
-      await expect(page.getByRole('menuitem').first()).toBeFocused();
-      // « Destinations » (FRU-399), « Statuses » (FRU-371) and « Preview builds » come first:
-      // « Remove » is four steps down.
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('ArrowDown');
-      await page.keyboard.press('ArrowDown');
-      await expect(page.getByRole('menuitem').last()).toBeFocused();
-      await page.keyboard.press('Enter');
-    },
+    // The page of the site asks (FRU-433): its button « Remove » is what has focus before, and takes it back.
+    path: '/w/w1/sites/s1',
+    back: (page: Page, locale: Locale) => page.getByRole('button', { name: WORDS[locale].remove, exact: true }),
+    ask: (page: Page, locale: Locale) => page.getByRole('button', { name: WORDS[locale].remove, exact: true }).click(),
+    askWithKeys: (page: Page) => page.keyboard.press('Enter'),
     second: (locale: Locale) => (locale === 'en' ? 'Remove staging.acme.dev' : 'Retirer staging.acme.dev'),
     open: async (_page: Page) => {},
     deletes: '/console/workspaces/w1/sites/s1',

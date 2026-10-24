@@ -1,7 +1,6 @@
-import { type FormEvent, Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
-  type Connector,
   type Destination,
   STAGES,
   type Site,
@@ -11,15 +10,11 @@ import {
   call,
   placesOf,
 } from '../api';
-import { Confirmation } from '../confirm';
-import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
-import { type Listed, edited, listedOf } from '../listed';
+import { type Listed, listedOf } from '../listed';
 import { Button, Field, LinkButton, Menu, type MenuItem, Pick, Problem, StatusBar } from '../ui';
 import { ago } from '../ago';
 import { NotePages } from './notes';
-import { InstallOptions } from './setup';
-import { SitePlaces } from './site-places';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -27,11 +22,6 @@ import { siteAddress, siteName } from '../site-address';
 import { SiteIcon } from '../site-icon';
 import { useTypedSearch } from '../typed-search';
 import { WritersPick } from '../writers-pick';
-
-const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
-  forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
-};
-const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
 
 /** What somebody is typing in the form that adds a site. */
 type Draft = { url: string; visibility: Visibility; writers: Writers };
@@ -41,9 +31,6 @@ const EMPTY_DRAFT: Draft = { url: '', visibility: 'members', writers: 'members' 
 
 /** How many cards a page shows: 12 fills rows of 1, 2, 3 or 4 cards. */
 const SITES_PER_PAGE = 12;
-
-/** What is open after the card of a site: one thing at a time, on one site at a time. */
-type Under = { site: string; what: 'install' | 'places' | 'previews' | 'remove' };
 
 /**
  * The sites of a workspace, as screen 09 of the mockup of 2026-10-13 draws them (FRU-243): a table,
@@ -58,12 +45,10 @@ export default function Sites() {
   useLocale();
   const { workspace } = useWorkspace();
   const [sites, setSites] = useState<Listed<Site>>('loading');
-  const [under, setUnder] = useState<Under | undefined>();
   const [adding, setAdding] = useState(false);
   // What is typed in the form that adds a site is kept here, above every state of the list: the
   // form goes when the list is read again, and what somebody typed must not go with it.
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [stuck, setStuck] = useState<{ site: string; problem: string } | undefined>();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
   const seesTracker = workspace.role !== 'guest';
@@ -96,7 +81,6 @@ export default function Sites() {
     if (to <= 1) next.delete('page');
     else next.set('page', String(to));
     latest.current = next;
-    setUnder(undefined);
     setParams(next);
   };
 
@@ -109,78 +93,25 @@ export default function Sites() {
 
   useEffect(() => void read(), [read]);
 
-  // The sources of the workspace, for who sets where the notes of a site go (FRU-399): read once.
-  const [connectors, setConnectors] = useState<Listed<Connector>>('loading');
-  const readConnectors = useCallback(async () => {
-    setConnectors('loading');
-    const answer = await call<{ connectors: Connector[] }>('GET', `/console/workspaces/${workspace.id}/connectors`);
-    setConnectors(listedOf(answer, (data) => data.connectors));
-  }, [workspace.id]);
-  useEffect(() => {
-    if (manages && seesTracker) void readConnectors();
-  }, [manages, seesTracker, readConnectors]);
-
-  /** The places the worker kept for a site, in place of the ones of the list: no read again. */
-  function placed(site: Site, places: Destination[]) {
-    setSites((current) =>
-      edited(current, (items) =>
-        items.map((each) =>
-          each.id === site.id
-            ? {
-                ...each,
-                destinations: places,
-                ...(places[0] === undefined ? { destination: undefined } : { destination: places[0] }),
-              }
-            : each,
-        ),
-      ),
-    );
-  }
-
+  // A new site opens its page, at how to put Fruitback on it (FRU-433): the grid unfolds nothing.
+  const navigate = useNavigate();
   function added(site: Site) {
-    // On a list that was never read, the site alone would hide the others: read them all.
-    if (typeof sites === 'string') void read();
-    else {
-      const items = [...sites.filter((each) => each.id !== site.id), site];
-      setSites(items);
-      // The new site is the last one: with no search, on the last page, where its card is seen.
-      const next = new URLSearchParams(latest.current);
-      next.delete('q');
-      const last = Math.ceil(items.length / SITES_PER_PAGE);
-      if (last <= 1) next.delete('page');
-      else next.set('page', String(last));
-      latest.current = next;
-      setParams(next, { replace: true });
-    }
     setAdding(false);
-    // The new site shows how to put Fruitback on it.
-    setUnder({ site: site.id, what: 'install' });
+    navigate(`/w/${workspace.id}/sites/${site.id}#install`);
   }
 
-  async function remove(site: Site) {
-    setStuck(undefined);
-    const removed = await call('DELETE', `/console/workspaces/${workspace.id}/sites/${site.id}`);
-    // A site that is still there says so on its own row (FRU-164).
-    if (!removed.ok)
-      return setStuck({ site: site.id, problem: problemOf(removed, REMOVAL_PROBLEMS, SITE_NOT_REMOVED) });
-    setUnder(undefined);
-    // A list that was not read stays what it is (`edited`).
-    setSites((current) => edited(current, (items) => items.filter((each) => each.id !== site.id)));
-    setRemoved((count) => count + 1);
-  }
-
-  // The row of a site that was removed is gone, and the button that had focus with it. Focus goes to
-  // the table, or to the field of the card when the last site went: a keyboard does not start again
-  // from the top of the page.
-  const [removed, setRemoved] = useState(0);
+  // A site removed on its page comes back here: focus goes to the search, or to the field of the card
+  // when the last site went, so a keyboard does not start again from the top of the page.
+  const { state } = useLocation();
+  const removed = typeof state === 'object' && state !== null && 'removed' in state ? String(state.removed) : '';
+  const drawn = typeof sites !== 'string';
   useEffect(() => {
-    if (removed === 0) return;
-    // The search, and not the form « Add a site » that can be open above it (raised in review).
+    if (removed === '' || !drawn) return;
     const next =
       document.querySelector<HTMLElement>('main input[type="search"]') ??
       document.querySelector<HTMLElement>('main input');
     next?.focus();
-  }, [removed]);
+  }, [removed, drawn]);
 
   const listed = typeof sites !== 'string' && sites.length > 0;
 
@@ -278,31 +209,7 @@ export default function Sites() {
               className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-[16px]"
             >
               {shown.map((site) => (
-                <SiteCard
-                  key={site.id}
-                  workspace={workspace}
-                  site={site}
-                  manages={manages}
-                  seesTracker={seesTracker}
-                  under={under?.site === site.id ? under.what : undefined}
-                  onUnder={(what) => {
-                    setStuck(undefined);
-                    setUnder(what === undefined ? undefined : { site: site.id, what });
-                  }}
-                  problem={stuck?.site === site.id ? stuck.problem : undefined}
-                  onRemove={() => void remove(site)}
-                  previews={<Domains workspace={workspace} sites={sites} />}
-                  places={
-                    <SitePlaces
-                      base={`/console/workspaces/${workspace.id}`}
-                      workspaceId={workspace.id}
-                      site={site}
-                      connectors={connectors}
-                      onRetry={() => void readConnectors()}
-                      onPlaced={(places) => placed(site, places)}
-                    />
-                  }
-                />
+                <SiteCard key={site.id} workspace={workspace} site={site} manages={manages} seesTracker={seesTracker} />
               ))}
             </ul>
           )}
@@ -470,73 +377,54 @@ type SiteCardProps = {
   site: Site;
   manages: boolean;
   seesTracker: boolean;
-  under: Under['what'] | undefined;
-  onUnder: (what: Under['what'] | undefined) => void;
-  /** Why the site is still here, when its removal failed. */
-  problem: string | undefined;
-  onRemove: () => void;
-  /** The proof of a domain (FRU-103), which covers the preview builds of a site. */
-  previews: ReactNode;
-  /** Where the notes of the site go, and the places to add (FRU-399). */
-  places: ReactNode;
 };
 
 /**
- * The card of a site (FRU-408), and after it what its menu opened, over the whole width of the grid:
- * the cards after it go under it.
+ * The card of a site (FRU-408). Its name and « Settings » lead to the page of the site (FRU-433),
+ * where everything else is: the grid unfolds nothing under a card.
  */
-function SiteCard({
-  workspace,
-  site,
-  manages,
-  seesTracker,
-  under,
-  onUnder,
-  problem,
-  onRemove,
-  previews,
-  places,
-}: SiteCardProps) {
+function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   useLocale();
   const navigate = useNavigate();
-  const more = useRef<HTMLSpanElement>(null);
   const name = siteName(site.origin);
-  // Every role puts Fruitback on a site with its own browser. The rest is of who manages the sites.
+  const page = `/w/${workspace.id}/sites/${site.id}`;
+  // Every role reads the page of a site and installs Fruitback on it. The rest is of who manages them.
   const items: MenuItem[] = [
+    { id: 'settings', label: t('Settings') },
     { id: 'install', label: t('Install') },
     ...(manages
       ? [
-          // Where its notes go is set here, and no longer in the panel of a source (FRU-399).
-          ...(seesTracker ? [{ id: 'places', label: t('Destinations') }] : []),
-          // The statuses of the site have a page of their own (FRU-371), not a panel under the card.
           { id: 'statuses', label: t('Statuses') },
-          { id: 'previews', label: t('Preview builds') },
+          // The menu is the first time a removal is asked, and the page asks the second.
           { id: 'remove', label: t('Remove'), danger: true },
         ]
       : []),
   ];
-  // What closes gives focus back to the button of the card, so a keyboard finds the card as it was.
-  const close = () => {
-    onUnder(undefined);
-    more.current?.querySelector('button')?.focus();
+  const go = (id: string) => {
+    if (id === 'statuses') navigate(`${page}/statuses`);
+    else if (id === 'settings') navigate(page);
+    else navigate(`${page}#${id}`);
   };
 
   return (
-    <>
-      <li
-        data-site={site.id}
-        className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[18px]"
-      >
-        <div className="flex items-start gap-[12px]">
-          <SiteIcon
-            origin={site.origin}
-            className="mt-[2px] size-[28px] flex-none rounded-button object-contain"
-            letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
-          />
-          <div className="min-w-0 flex-1">
-            {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
+    <li
+      data-site={site.id}
+      className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[18px]"
+    >
+      <div className="flex items-start gap-[12px]">
+        <SiteIcon
+          origin={site.origin}
+          className="mt-[2px] size-[28px] flex-none rounded-button object-contain"
+          letterClassName="grid place-items-center border border-line bg-subtle text-hint font-bold text-ink"
+        />
+        <div className="min-w-0 flex-1">
+          {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
                 dot first, and inside a name only when one name is wider than the card. */}
-            <h2 className="text-body leading-[1.4] font-semibold">
+          <h2 className="text-body leading-[1.4] font-semibold">
+            <Link
+              to={page}
+              className="rounded-[2px] text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
               {name.split('.').map((part, index) => (
                 <Fragment key={index}>
                   {index === 0 ? null : (
@@ -547,94 +435,57 @@ function SiteCard({
                   {part}
                 </Fragment>
               ))}
-            </h2>
-            <p className="text-hint text-muted">
-              {site.visibility === 'members'
-                ? t('Members of {workspace}', { workspace: workspace.name })
-                : t('Everyone who visits')}
-            </p>
-            {/* FRU-330: the card says the exception only. « Members only » is the default of a new site,
+            </Link>
+          </h2>
+          <p className="text-hint text-muted">
+            {site.visibility === 'members'
+              ? t('Members of {workspace}', { workspace: workspace.name })
+              : t('Everyone who visits')}
+          </p>
+          {/* FRU-330: the card says the exception only. « Members only » is the default of a new site,
                 and a worker of before, which sends no `writers`, says nothing it could be wrong about. */}
-            {site.visibility === 'members' && site.writers === 'anyone' ? (
-              <p className="text-hint text-muted">{t('Notes from anyone on the page')}</p>
-            ) : null}
-          </div>
-          <span ref={more} className="-mt-[4px] -mr-[8px] inline-flex flex-none">
-            <Menu
-              trigger="icon"
-              triggerLabel={t('More for {site}', { site: name })}
-              items={items}
-              onAction={(id) =>
-                id === 'statuses'
-                  ? navigate(`/w/${workspace.id}/sites/${site.id}/statuses`)
-                  : onUnder(id as Under['what'])
-              }
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-                <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-                <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-              </svg>
-            </Menu>
-          </span>
+          {site.visibility === 'members' && site.writers === 'anyone' ? (
+            <p className="text-hint text-muted">{t('Notes from anyone on the page')}</p>
+          ) : null}
         </div>
-        <Counts site={site} />
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[14px] gap-y-[6px] text-hint">
-          <dt className="text-muted">{t('On the page with')}</dt>
-          <dd className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</dd>
-          {seesTracker ? (
-            <>
-              <dt className="text-muted">{t('Notes go to')}</dt>
-              <dd>
-                <GoesTo site={site} />
-              </dd>
-            </>
-          ) : null}
-          <dt className="text-muted">{t('Last note')}</dt>
-          <dd className="relative tabular-nums">{site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}</dd>
-        </dl>
-        {/* FRU-382: a public repository says so to whoever reads where the notes go, a member too. */}
-        {seesTracker
-          ? placesOf(site)
-              .filter((each) => each.private === false)
-              .map((each) => (
-                <Problem key={`${each.connector}/${each.teamId}`}>
-                  {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
-                    repository: each.teamId ?? '',
-                  })}
-                </Problem>
-              ))
-          : null}
-      </li>
-      {under === undefined && problem === undefined ? null : (
-        <li className="col-span-full flex min-w-0 flex-col gap-[16px] rounded-frame border border-line bg-subtle px-[20px] py-[18px]">
-          {under === 'remove' ? (
-            <Confirmation
-              confirmLabel={t('Remove {site}', { site: name })}
-              consequence={t(
-                'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.',
-                { site: name },
-              )}
-              onConfirm={onRemove}
-              onKeep={close}
-            />
-          ) : null}
-          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-          {under === 'install' ? (
-            <section aria-label={t('Install on {site}', { site: name })} className="min-w-0">
-              <InstallOptions workspace={workspace} site={site} />
-            </section>
-          ) : null}
-          {under === 'previews' ? previews : null}
-          {under === 'places' ? places : null}
-          {under === 'install' || under === 'previews' || under === 'places' ? (
-            <div>
-              <LinkButton onClick={close}>{t('Close')}</LinkButton>
-            </div>
-          ) : null}
-        </li>
-      )}
-    </>
+        <span className="-mt-[4px] -mr-[8px] inline-flex flex-none">
+          <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+              <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+            </svg>
+          </Menu>
+        </span>
+      </div>
+      <Counts site={site} />
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[14px] gap-y-[6px] text-hint">
+        <dt className="text-muted">{t('On the page with')}</dt>
+        <dd className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</dd>
+        {seesTracker ? (
+          <>
+            <dt className="text-muted">{t('Notes go to')}</dt>
+            <dd>
+              <GoesTo site={site} />
+            </dd>
+          </>
+        ) : null}
+        <dt className="text-muted">{t('Last note')}</dt>
+        <dd className="relative tabular-nums">{site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}</dd>
+      </dl>
+      {/* FRU-382: a public repository says so to whoever reads where the notes go, a member too. */}
+      {seesTracker
+        ? placesOf(site)
+            .filter((each) => each.private === false)
+            .map((each) => (
+              <Problem key={`${each.connector}/${each.teamId}`}>
+                {t('{repository} is public: each note of this site becomes an issue that anybody can read.', {
+                  repository: each.teamId ?? '',
+                })}
+              </Problem>
+            ))
+        : null}
+    </li>
   );
 }
 

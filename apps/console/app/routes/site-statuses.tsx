@@ -255,7 +255,12 @@ export default function SiteStatuses() {
       {host === undefined ? null : (
         <>
           <span aria-hidden="true">›</span>
-          <span className="min-w-0 [overflow-wrap:anywhere]">{host}</span>
+          {/* The site has a page of its own (FRU-433), and the crumbs lead back to it. */}
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            <LinkButton space="inline" to={`/w/${workspace.id}/sites/${encodeURIComponent(siteId)}`}>
+              {host}
+            </LinkButton>
+          </span>
         </>
       )}
     </nav>

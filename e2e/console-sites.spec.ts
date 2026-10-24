@@ -134,22 +134,30 @@ async function workerWith(
     worker.sent.push({ method, pathname, body: method === 'POST' ? request.postDataJSON() : undefined });
     if (worker.refuses !== undefined)
       return route.fulfill({ status: worker.refuses.status, json: { error: worker.refuses.error } });
-    if (method === 'DELETE') return route.fulfill({ status: 204 });
+    if (method === 'DELETE') {
+      // The worker forgets a site it removed: the grid that comes back reads it without it.
+      kept.splice(
+        kept.findIndex((each) => (each as { id: string }).id === one[1]),
+        1,
+      );
+
+      return route.fulfill({ status: 204 });
+    }
     const { url, visibility, writers } = request.postDataJSON() as {
       url: string;
       visibility: string;
       writers?: string;
     };
+    // The worker keeps a site it added: the page of the site reads it in the list (FRU-433).
+    const added = {
+      id: `n${worker.sent.length}`,
+      origin: new URL(url).origin,
+      visibility,
+      ...(writers === undefined ? {} : { writers }),
+    };
+    kept.push(added);
 
-    return route.fulfill({
-      status: 201,
-      json: {
-        id: `n${worker.sent.length}`,
-        origin: new URL(url).origin,
-        visibility,
-        ...(writers === undefined ? {} : { writers }),
-      },
-    });
+    return route.fulfill({ status: 201, json: added });
   };
   await stubWorker(page, { locale, workspaces: [{ ...ACME, role }], answer });
 
@@ -393,14 +401,18 @@ test('the sites come 12 to a page, and a search or a new site shows its page (FR
   await expect(pages).toHaveCount(0);
   await expect(page).not.toHaveURL(/[?&]page=/);
 
-  // A new site is the last one: the search goes, and its page is shown with its installation.
+  // A new site opens its own page, at its installation (FRU-433); back on the grid, it is the last one.
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await page.getByRole('textbox', { name: 'Site address' }).fill('new.acme.dev');
   await page.getByRole('button', { name: 'Add site', exact: true }).click();
-  await expect(card(page, 'new.acme.dev')).toBeVisible();
-  await expect(pages).toContainText('25 to 31 of 31');
-  await expect(search(page)).toHaveValue('');
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/n1#install`);
   await expect(page.getByRole('region', { name: 'Install on new.acme.dev' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
+  await expect(search(page)).toHaveValue('');
+  await pages.getByRole('button', { name: 'Next' }).click();
+  await pages.getByRole('button', { name: 'Next' }).click();
+  await expect(pages).toContainText('25 to 31 of 31');
+  await expect(card(page, 'new.acme.dev')).toBeVisible();
 });
 
 test('a site keeps its scheme only where the address alone would read another one (FRU-408)', async ({ page }) => {
@@ -507,9 +519,9 @@ test('a workspace with no site shows the card of the mockup, and its form adds t
         body: { url: 'https://acme.dev', visibility: 'everyone' },
       },
     ]);
-  // The site is a card of the grid, and how to put Fruitback on it is open after it.
-  await expect(card(page, 'acme.dev').getByText('Everyone who visits')).toBeVisible();
+  // The site opens its page, at how to put Fruitback on it (FRU-433).
   await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
+  await expect(page.locator('main h1')).toHaveText('acme.dev');
   await expect(empty).toHaveCount(0);
 });
 
@@ -637,13 +649,13 @@ test('« Add a site » opens the form above the grid, and a refusal keeps what w
   await expect(form).toHaveCount(0);
   expect(worker.sent.length).toBe(before);
 
-  // Added: the form closes, the site is a row, and how to put Fruitback on it is open.
+  // Added: the page of the site opens, at how to put Fruitback on it (FRU-433).
   worker.refuses = undefined;
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
-  await expect(card(page, 'docs.acme.dev').getByText('Members of Acme')).toBeVisible();
   await expect(page.getByRole('region', { name: 'Install on docs.acme.dev' })).toBeVisible();
+  await expect(page.getByText('Members of Acme', { exact: true })).toBeVisible();
   await expect(form).toHaveCount(0);
   expect(worker.sent.at(-1)).toEqual({
     method: 'POST',
@@ -672,17 +684,22 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   await expect(writers).toHaveCount(0);
   await form.getByRole('textbox', { name: 'Site address' }).fill('help.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
-  await expect(card(page, 'help.acme.dev')).toBeVisible();
+  await expect(page.locator('main h1')).toHaveText('help.acme.dev');
   expect(worker.sent.at(-1)?.body).toEqual({ url: 'https://help.acme.dev', visibility: 'everyone' });
+  const back = () => page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
+  await back();
+  await expect(card(page, 'help.acme.dev')).toBeVisible();
   await expect(card(page, 'help.acme.dev').getByText(/Notes from/)).toHaveCount(0);
 
-  // « Anyone on the page », chosen, is sent and said on the row.
+  // « Anyone on the page », chosen, is sent and said on the card.
   await page.getByRole('button', { name: 'Add a site', exact: true }).click();
   await expect(form.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
   await writers.getByText('Anyone on the page', { exact: true }).click();
   await expect(writers.getByRole('radio', { name: 'Anyone on the page' })).toBeChecked();
   await form.getByRole('textbox', { name: 'Site address' }).fill('review.acme.dev');
   await form.getByRole('button', { name: 'Add site', exact: true }).click();
+  await expect(page.locator('main h1')).toHaveText('review.acme.dev');
+  await back();
   await expect(card(page, 'review.acme.dev').getByText('Notes from anyone on the page')).toBeVisible();
   expect(worker.sent.at(-1)?.body).toEqual({
     url: 'https://review.acme.dev',
@@ -695,7 +712,9 @@ test('« Who can leave a note? » is asked for a site that its members read, « 
   await expect(writers.getByRole('radio', { name: 'Members only' })).toBeChecked();
 });
 
-test('the menu of a card is walked with the keyboard, and what it opens gives focus back', async ({ page }) => {
+test('the menu of a card is walked with the keyboard, and leads to the page of the site (FRU-433)', async ({
+  page,
+}) => {
   await workerWith(page);
   await open(page);
   const button = more(page, 'staging.acme.dev');
@@ -703,16 +722,9 @@ test('the menu of a card is walked with the keyboard, and what it opens gives fo
   await button.focus();
   await page.keyboard.press('Enter');
   const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
-  // « Statuses » leads to the page of the statuses of the site (FRU-371).
-  // « Destinations » sets where the notes of the site go (FRU-399).
-  await expect(menu.getByRole('menuitem')).toHaveText([
-    'Install',
-    'Destinations',
-    'Statuses',
-    'Preview builds',
-    'Remove',
-  ]);
-  await expect(menu.getByRole('menuitem', { name: 'Install' })).toBeFocused();
+  // « Settings » is the page of the site; « Statuses » the page of its statuses (FRU-371).
+  await expect(menu.getByRole('menuitem')).toHaveText(['Settings', 'Install', 'Statuses', 'Remove']);
+  await expect(menu.getByRole('menuitem', { name: 'Settings' })).toBeFocused();
   await page.waitForTimeout(250);
   const opened = await new AxeBuilder({ page }).include('.kit-menu').analyze();
   expect
@@ -722,29 +734,24 @@ test('the menu of a card is walked with the keyboard, and what it opens gives fo
   await expect(menu).toBeHidden();
   await expect(button).toBeFocused();
 
-  // « Install »: the two ways to put Fruitback on the site, after its card.
+  // The grid unfolds nothing under a card: « Install » is a section of the page of the site.
   await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1#install`);
   const install = page.getByRole('region', { name: 'Install on staging.acme.dev' });
   await expect(install.getByRole('button', { name: 'Copy the script' })).toBeVisible();
-  await expect(install.getByRole('button', { name: 'Connect this browser' })).toBeVisible();
-  expect((await box(install)).y).toBeGreaterThanOrEqual((await box(card(page, 'staging.acme.dev'))).y);
-  await expectNoViolation(page, 'the installation after a card');
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(install).toHaveCount(0);
-  await expect(button).toBeFocused();
+  await expect(grid(page)).toHaveCount(0);
 
-  // « Preview builds »: the proof of a domain (FRU-103), which did not go away.
+  // « Settings » is the top of the same page, and the name of the card a link to it.
+  await page.goBack();
   await button.click();
-  await menu.getByRole('menuitem', { name: 'Preview builds' }).click();
-  const previews = page.getByRole('region', { name: 'Preview deploys' });
-  await expect(previews.getByRole('textbox', { name: 'Domain' })).toBeVisible();
-  await expect(previews.getByText('No domain yet. A site covers its own address only.')).toBeVisible();
-  // One thing is open at a time, on one site at a time.
-  await more(page, 'acme.dev').click();
-  await page.getByRole('menu', { name: 'More for acme.dev' }).getByRole('menuitem', { name: 'Install' }).click();
-  await expect(previews).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
+  await menu.getByRole('menuitem', { name: 'Settings' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1`);
+  await page.goBack();
+  await card(page, 'acme.dev').getByRole('link', { name: 'acme.dev', exact: true }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s2`);
+  await expect(page.locator('main h1')).toHaveText('acme.dev');
 });
 
 test('what is typed in the form stays when the form goes and comes back', async ({ page }) => {
@@ -779,16 +786,14 @@ test('a destination with no words of the worker reads as a tracker, and not as n
   await expect(card(page, 'staging.acme.dev').getByRole('img')).toHaveCount(0);
 });
 
-test('removing a site asks twice, and a site that is still there says so after its card', async ({ page }) => {
+test('removing a site asks twice, and the grid it comes back to has focus on its search', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
-  const button = more(page, 'staging.acme.dev');
-  const ask = async () => {
-    await button.click();
-    await page.getByRole('menuitem', { name: 'Remove' }).click();
-  };
 
-  await ask();
+  // « Remove » of the menu is the first time; the page of the site asks the second (FRU-433).
+  await more(page, 'staging.acme.dev').click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites/s1#remove`);
   const group = page.getByRole('group', { name: 'Remove staging.acme.dev' });
   await expect(group.getByText(/The widget stops on staging\.acme\.dev,/)).toBeVisible();
   await expect(group.getByRole('button', { name: 'Keep it' })).toBeFocused();
@@ -796,33 +801,28 @@ test('removing a site asks twice, and a site that is still there says so after i
   await expectNoViolation(page, 'the second time of a removal');
   await group.getByRole('button', { name: 'Keep it' }).click();
   await expect(group).toHaveCount(0);
-  await expect(button).toBeFocused();
+  const ask = page
+    .getByRole('region', { name: 'Remove this site' })
+    .getByRole('button', { name: 'Remove', exact: true });
+  await expect(ask).toBeFocused();
 
-  // The worker refuses: the site stays, and what is after its card says why.
+  // The worker refuses: the site stays, and the page says why.
   worker.refuses = { status: 403, error: 'forbidden' };
-  await ask();
+  await ask.click();
   await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
   await expect(page.getByRole('alert')).toHaveText('Only an owner or an admin of the workspace removes a site.');
-  await expect(card(page, 'staging.acme.dev')).toBeVisible();
+  await expect(page.locator('main h1')).toHaveText('staging.acme.dev');
 
   worker.refuses = undefined;
   await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites`);
   await expect(card(page, 'staging.acme.dev')).toHaveCount(0);
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  // The card and its button are gone: focus is on the search, and not back at the top of the page.
-  await expect(search(page)).toBeFocused();
-
-  // With the form « Add a site » open above the search, focus still goes to the search.
-  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
-  await more(page, 'acme.dev').click();
-  await page.getByRole('menuitem', { name: 'Remove' }).click();
-  await page.getByRole('button', { name: 'Remove acme.dev', exact: true }).click();
-  await expect(card(page, 'acme.dev')).toHaveCount(0);
+  await expect(card(page, 'acme.dev')).toBeVisible();
+  // Its card and its button are gone: focus is on the search, and not back at the top of the page.
   await expect(search(page)).toBeFocused();
   expect(worker.sent.map(({ method, pathname }) => `${method} ${pathname}`)).toEqual([
     'DELETE /console/workspaces/w1/sites/s1',
     'DELETE /console/workspaces/w1/sites/s1',
-    'DELETE /console/workspaces/w1/sites/s2',
   ]);
 });
 
@@ -846,7 +846,7 @@ test('a member installs and changes nothing; a guest does not read where the not
     'Last note',
   ]);
   await more(page, 'staging.acme.dev').click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
   await page.keyboard.press('Escape');
 
   // The worker sends a guest no destination, and a card says nothing of one.
@@ -884,10 +884,7 @@ for (const locale of ['en', 'fr'] as const) {
     await page.setViewportSize({ width: 390, height: 844 });
     const worker = await workerWith(page, 'owner', SITES, locale);
     await open(page);
-    const words =
-      locale === 'en'
-        ? { more: 'More for', install: 'Install', previews: 'Preview builds', add: 'Add a site' }
-        : { more: 'Plus pour', install: 'Installer', previews: 'Previews', add: 'Ajouter un site' };
+    const words = locale === 'en' ? { add: 'Add a site' } : { add: 'Ajouter un site' };
     expect.soft(await sideScroll(page), 'the list').toBe(0);
     // One card in a row, as wide as the column of the page.
     const cards = grid(page).locator('li[data-site]');
@@ -895,24 +892,6 @@ for (const locale of ['en', 'fr'] as const) {
     expect.soft((await box(cards.nth(1))).y).toBeGreaterThan((await box(cards.nth(0))).y);
     expect.soft((await box(cards.nth(0))).width).toBeCloseTo(column.width, 0);
 
-    // What opens after a card is as wide as the grid, and no wider.
-    const inside = async (name: string) => {
-      const opened = await box(grid(page).locator('li:not([data-site])'));
-      expect.soft(opened.x, `${name}: left`).toBeGreaterThanOrEqual(column.x);
-      expect.soft(opened.x + opened.width, `${name}: right`).toBeLessThanOrEqual(column.x + column.width + 0.5);
-    };
-    const button = page.getByRole('button', { name: `${words.more} staging.acme.dev`, exact: true });
-    await button.click();
-    await page.getByRole('menuitem', { name: words.install, exact: true }).click();
-    expect.soft(await sideScroll(page), 'the installation').toBe(0);
-    await inside('the installation');
-    // The script breaks inside its attributes (FRU-321): nothing of it is past its block.
-    expect.soft(await page.locator('pre').evaluate((pre) => pre.scrollWidth <= pre.clientWidth)).toBe(true);
-    await button.click();
-    await page.getByRole('menuitem', { name: words.previews, exact: true }).click();
-    await expect(page.getByRole('textbox').first()).toBeVisible();
-    expect.soft(await sideScroll(page), 'the proof of a domain').toBe(0);
-    await inside('the proof of a domain');
     await page.getByRole('button', { name: words.add, exact: true }).click();
     expect.soft(await sideScroll(page), 'the form').toBe(0);
 
