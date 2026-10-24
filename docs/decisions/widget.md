@@ -415,6 +415,21 @@ schemes, outside the ring of the pin (FRU-334)`.
     « Fruitback settings », which is the name of the dialog it opens, and two controls with one
     name cannot be told apart (`docs/translating.md`).
 
+- **A pin under a mouse, or with the focus of the keyboard, shows a preview of its note** (FRU-422),
+  in place of the `title` of the browser, which is gone: the two would show together. The preview
+  has the drop and the state, the identifier in the tracker when the note has a link there, the first
+  two lines of the note, and « Click to open » (« Press Enter to open » for the keyboard).
+  - **A finger shows none**: a tap opens the thread, as before. The focus that a tap or a click gives
+    the pin shows none either, nor the focus that a closed thread gives back: only the pointer type
+    of a `pointerdown` tells them from the keyboard, because happy-dom resolves no `:focus-visible`.
+  - **It is `aria-hidden` and takes no pointer.** The name of the pin already says the number, the
+    stage and the note, and does not change.
+  - **Escape takes the preview away first**, then closes the thread. The open pin shows none.
+  - **It goes on the end side of the drop, then the start side, then above, then below** (`previewPlace`
+    of `pin-preview.ts`): the first side that stays in the window and covers no other drop, so the
+    fan of a spot stays readable.
+  - Held by `pin-preview.test.ts`, `overlay.test.ts` and `e2e/pin-preview.spec.ts`, contrasts included.
+
 - **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
   held by `e2e/thread.spec.ts` on computed styles.
   - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
