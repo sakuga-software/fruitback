@@ -11,10 +11,10 @@ import {
   openBareSite,
   openPopup,
   pairFromPopup,
-  readSeeds,
+  readNoteIssues,
   readableByThePage,
   recordPageMessages,
-  seedsOn,
+  notesOn,
   storedTokens,
   test,
   type StoredToken,
@@ -122,7 +122,7 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
 
   // The component name comes from the React fiber, which only the page's own world can see. A widget
   // mounted from the isolated world would store the note with no source.
-  const [seed] = await seedsOn(page);
+  const [seed] = await notesOn(page);
   expect(seed?.note).toBe('Planté par le mode privé');
   expect(seed?.source).toMatchObject({ component: 'Button', file: expect.stringContaining('site.tsx') });
 
@@ -254,7 +254,7 @@ test('private mode: no file and no picture of the element are offered without a 
 
   await plantOnTheLatteCard(page, /Leave feedback/, 'Sans fichier, et pourtant envoyée');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  const [seed] = await seedsOn(page);
+  const [seed] = await notesOn(page);
   expect(seed?.note).toBe('Sans fichier, et pourtant envoyée');
   expect(seed && 'screenshot' in seed).toBe(false);
 });
@@ -434,7 +434,7 @@ test('team mode: paired from the popup, the site reads and writes through the re
   await expectNoCredentialReadable(page, tokens);
 
   // This worker refuses a read with no identity, so the pin read back below came through the relay.
-  expect((await readSeeds(page, AUTHENTICATED_WORKER_ORIGIN)).status).toBe(401);
+  expect((await readNoteIssues(page, AUTHENTICATED_WORKER_ORIGIN)).status).toBe(401);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
@@ -454,7 +454,7 @@ test('team mode: paired from the popup, the site reads and writes through the re
 
   // Signed by the worker from the session: only the relay carries it.
   const access = tokens.find((token) => token.area === 'session')?.value;
-  const [seed] = await seedsOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
+  const [seed] = await notesOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
   expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
 });
 

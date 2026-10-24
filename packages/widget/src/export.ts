@@ -1,4 +1,4 @@
-import type { SeedComment, SeedIssue, SeedStatus } from '@fruitback/shared';
+import type { NoteComment, NoteIssue, NoteStatus } from '@fruitback/shared';
 import type { Translator } from './messages.ts';
 import { statusLabel } from './status-paint.ts';
 
@@ -16,7 +16,7 @@ import { statusLabel } from './status-paint.ts';
 export type FeedbackPlacement = 'found' | 'approximate' | 'detached';
 
 /** `status`: the status of the note in its read (FRU-370), when it has one. */
-export type FeedbackEntry = { issue: SeedIssue; placement: FeedbackPlacement; status?: SeedStatus };
+export type FeedbackEntry = { issue: NoteIssue; placement: FeedbackPlacement; status?: NoteStatus };
 
 /** How sure the place of a note is, from what the cascade answered for it. */
 export function placementOf(resolution: { strategy: string; confident: boolean }): FeedbackPlacement {
@@ -61,14 +61,14 @@ function block({ issue, placement, status }: FeedbackEntry, position: number, t:
 }
 
 /** The tag, the text the element showed, and the selector that found it. */
-function element(issue: SeedIssue): string {
+function element(issue: NoteIssue): string {
   const anchor = issue.seed.anchor;
   const text = oneLine(anchor.text ?? '');
 
   return [text.length > 0 ? `${anchor.tag} "${text}"` : anchor.tag, code(anchor.selector)].join(' · ');
 }
 
-function component(issue: SeedIssue, t: Translator): string | undefined {
+function component(issue: NoteIssue, t: Translator): string | undefined {
   const source = issue.seed.source;
   if (source === undefined) return undefined;
 
@@ -78,7 +78,7 @@ function component(issue: SeedIssue, t: Translator): string | undefined {
   return parts.length > 0 ? t.text('export.component', { component: parts.join(' · ') }) : undefined;
 }
 
-function signature(issue: SeedIssue, t: Translator): string | undefined {
+function signature(issue: NoteIssue, t: Translator): string | undefined {
   const name = issue.seed.reporter?.name ?? issue.seed.reporter?.email;
   const date = day(issue.seed.createdAt);
   if (name !== undefined) return dated(t.text('export.by', { name: oneLine(name) }), date);
@@ -86,7 +86,7 @@ function signature(issue: SeedIssue, t: Translator): string | undefined {
   return date === '' ? undefined : t.text('export.written', { date });
 }
 
-function reply(comment: SeedComment, t: Translator): string {
+function reply(comment: NoteComment, t: Translator): string {
   const head = t.text('export.reply', { author: oneLine(comment.author ?? t.text('thread.team')) });
 
   return `${dated(head, day(comment.createdAt))}\n${quote(comment.body)}`;

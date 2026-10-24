@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedAnchor } from '@fruitback/shared';
+import type { NoteAnchor } from '@fruitback/shared';
 import { overlap, resolveAnchor } from './resolve.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
@@ -29,7 +29,7 @@ function mountCards(): MountedPage {
   return page;
 }
 
-function anchorFor(overrides: Partial<SeedAnchor> = {}): SeedAnchor {
+function anchorFor(overrides: Partial<NoteAnchor> = {}): NoteAnchor {
   return {
     selector: '[data-testid="card-latte"] > button',
     domPath: 'html > body > ul > li:nth-child(2) > button',

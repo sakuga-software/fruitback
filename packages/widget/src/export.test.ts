@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
 import { ENGLISH, type FruitbackMessages, createTranslator } from './messages.ts';
 
@@ -15,12 +15,12 @@ const ANCHOR = {
   bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
 };
 
-function note(overrides: Parameters<typeof seedIssueFixture>[0] = {}, seed: Parameters<typeof seedFixture>[0] = {}) {
-  return seedIssueFixture({
+function note(overrides: Parameters<typeof noteIssueFixture>[0] = {}, seed: Parameters<typeof noteFixture>[0] = {}) {
+  return noteIssueFixture({
     identifier: 'FB-12',
     stateName: 'To do',
     ...overrides,
-    seed: seedFixture({
+    seed: noteFixture({
       note: 'The price is cut off on mobile',
       createdAt: '2026-10-06T09:30:00.000Z',
       anchor: ANCHOR,

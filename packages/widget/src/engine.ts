@@ -1,4 +1,4 @@
-import type { SeedSource } from '@fruitback/shared';
+import type { NoteSource } from '@fruitback/shared';
 import { sourceFromContext } from './source.ts';
 import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabbable } from 'react-grab/primitives';
 
@@ -24,7 +24,7 @@ export type CaptureEngine = {
   /** Viewport bounds, correct through transformed iframes. */
   boundsOf(element: Element): { left: number; top: number; width: number; height: number };
   /** Component and source file behind the element, when the build kept them. */
-  sourceOf(element: Element): Promise<SeedSource | undefined>;
+  sourceOf(element: Element): Promise<NoteSource | undefined>;
 };
 
 export const reactGrabEngine: CaptureEngine = {
@@ -50,7 +50,7 @@ export const reactGrabEngine: CaptureEngine = {
       // The name is the one field react-grab gets wrong on a design system: pointing at a HeroUI
       // button reports `bound $7230ffa83bc0c2cf$var$DOMElement`, the react-aria internal that
       // rendered the host node, while `filePath`/`lineNumber` correctly point at the app's own JSX.
-      // Dropping the name keeps the half that is right — and leaves `captureSeed`'s fiber walk free
+      // Dropping the name keeps the half that is right — and leaves `captureNote`'s fiber walk free
       // to supply a name someone can search for. `sourceFromContext` holds the rule.
       return sourceFromContext(await getElementContext(element));
     } catch {

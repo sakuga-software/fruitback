@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_ATTACHMENTS_PER_NOTE, MAX_ATTACHMENT_BYTES } from '@fruitback/shared';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type AttachSeam, type Composer, createComposer } from './composer.ts';
 import {
   type AttachRefusal,
@@ -740,7 +740,7 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
     const host = page.document.createElement('div');
     page.document.body.append(host);
     const overlay = createOverlay({ document: page.document, host });
-    const seed = seedFixture({
+    const seed = noteFixture({
       id: 'sd_files',
       anchor: {
         selector: '[data-testid="cta"]',
@@ -754,7 +754,7 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
       { name: 'log.txt', url: 'https://uploads.linear.app/a/log.txt' },
     ];
     overlay.render([
-      seedIssueFixture({ identifier: 'DEV-3', url: 'https://linear.app/x/DEV-3', attachments: files, seed }),
+      noteIssueFixture({ identifier: 'DEV-3', url: 'https://linear.app/x/DEV-3', attachments: files, seed }),
     ]);
     overlay.select('sd_files');
 
@@ -786,11 +786,11 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
       text: 'Commander',
       bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
     };
-    const { url: _url, ...guest } = seedIssueFixture({
+    const { url: _url, ...guest } = noteIssueFixture({
       attachments: [{ name: 'page.png' }],
-      seed: seedFixture({ id: 'sd_guest', anchor }),
+      seed: noteFixture({ id: 'sd_guest', anchor }),
     });
-    overlay.render([guest, seedIssueFixture({ id: 'other', seed: seedFixture({ id: 'sd_none', anchor }) })]);
+    overlay.render([guest, noteIssueFixture({ id: 'other', seed: noteFixture({ id: 'sd_none', anchor }) })]);
     overlay.select('sd_guest');
     assert.equal(host.querySelector('[data-fruitback-files]')?.textContent, '1 attachment');
     overlay.select('sd_none');

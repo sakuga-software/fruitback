@@ -1,10 +1,10 @@
-import type { SeedSource } from '@fruitback/shared';
+import type { NoteSource } from '@fruitback/shared';
 
 /**
  * The react-grab payoff: the component and the source file behind the clicked element.
  *
  * `react-grab/primitives` owns this properly — it instruments the app and knows the mapping. The
- * widget host (FRU-3) will pass what it resolved through `captureSeed({ source })`, and that always
+ * widget host (FRU-3) will pass what it resolved through `captureNote({ source })`, and that always
  * wins over what is here.
  *
  * What is here is the fallback for a page where react-grab is not mounted: React attaches its fiber
@@ -28,11 +28,11 @@ type Fiber = {
   return?: Fiber;
 };
 
-export function readReactSource(element: Element): SeedSource | undefined {
+export function readReactSource(element: Element): NoteSource | undefined {
   const fiber = findFiber(element);
   if (fiber === undefined) return undefined;
 
-  const source: SeedSource = {};
+  const source: NoteSource = {};
 
   const component = findComponentName(fiber);
   if (component !== undefined) source.component = component;
@@ -144,8 +144,8 @@ export type EngineContext = {
  * Field by field: on a design system the engine gets the file right and the name wrong, so one bad
  * field must not cost the others. A line and a column belong to their file, and go with it.
  */
-export function sourceFromContext(context: EngineContext): SeedSource | undefined {
-  const source: SeedSource = {};
+export function sourceFromContext(context: EngineContext): NoteSource | undefined {
+  const source: NoteSource = {};
 
   if (context.componentName && !isMangledComponentName(context.componentName)) {
     source.component = context.componentName.replace(BOUND_PREFIX, '');

@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react';
-import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@fruitback/shared';
+import { canonicalizePageUrl, type NoteIssue, type NoteReporter } from '@fruitback/shared';
 import {
   type CaptureHost,
   type CaptureTarget,
@@ -8,7 +8,7 @@ import {
   type ConfigStore,
   type Overlay,
   aboutTarget,
-  captureSeed,
+  captureNote,
   createCaptureHost,
   createComposer,
   createConfigPanel,
@@ -195,11 +195,11 @@ async function plant(
   note: string,
   target: CaptureTarget | null,
   setStatus: (message: string) => void,
-  reporter: SeedReporter | undefined,
+  reporter: NoteReporter | undefined,
 ): Promise<string | null> {
   if (target === null) return null;
 
-  const seed = captureSeed({
+  const seed = captureNote({
     element: target.element,
     note,
     client: { id: CLIENT_ID, name: 'Playground' },
@@ -254,7 +254,7 @@ function createRefresher(overlay: Overlay, setStatus: (message: string) => void)
         return;
       }
 
-      const { issues } = (await response.json()) as { issues: SeedIssue[] };
+      const { issues } = (await response.json()) as { issues: NoteIssue[] };
       if (!current()) return;
 
       overlay.render(issues);

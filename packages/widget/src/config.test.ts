@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedStage } from '@fruitback/shared';
+import type { NoteStage } from '@fruitback/shared';
 import { CONFIG_STORAGE_KEY, createConfigStore, type WidgetConfig } from './config.ts';
 
 const DEFAULTS: WidgetConfig = {
@@ -204,7 +204,7 @@ describe('the config is nobody else’s to mutate', () => {
     // The caller keeps their array and pushes to it later. Without a copy, the store's state would
     // change with nothing persisted and nobody told.
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
-    const stages: SeedStage[] = ['done'];
+    const stages: NoteStage[] = ['done'];
 
     store.set({ hiddenStages: stages });
     stages.push('closed');
@@ -221,7 +221,7 @@ describe('the config is nobody else’s to mutate', () => {
     assert.throws(() => {
       (config as { screenshot: boolean }).screenshot = true;
     }, TypeError);
-    assert.throws(() => (config.hiddenStages as SeedStage[]).push('done'), TypeError);
+    assert.throws(() => (config.hiddenStages as NoteStage[]).push('done'), TypeError);
     assert.equal(store.get().screenshot, false);
   });
 });

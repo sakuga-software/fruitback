@@ -1,10 +1,10 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSeed } from '@fruitback/shared';
+import { parseNote } from '@fruitback/shared';
 import { failureOf, init, plant, sendDrafts } from './embed.ts';
 import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type MountedPage, globalNavigatorSpeaks, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { readFile } from 'node:fs/promises';
 
@@ -174,8 +174,8 @@ describe('reading pins', () => {
   }
 
   function onCta() {
-    return seedIssueFixture({
-      seed: seedFixture({
+    return noteIssueFixture({
+      seed: noteFixture({
         anchor: {
           selector: '[data-testid="checkout-cta"]',
           tag: 'button',
@@ -409,7 +409,7 @@ describe('reading pins', () => {
 
   it('gives the notes on screen as text, without the stages the reporter hid (FRU-109)', async () => {
     const page = mountWithCta();
-    const closed = seedIssueFixture({
+    const closed = noteIssueFixture({
       ...onCta(),
       id: 'closed',
       identifier: 'FB-2',
@@ -437,8 +437,8 @@ describe('reading pins', () => {
 
   it('counts the notes the page shows by stage, from the last read, and nothing before one (FRU-254)', async () => {
     const page = mountWithCta();
-    const closed = seedIssueFixture({ ...onCta(), id: 'closed', identifier: 'FB-2', stage: 'closed' });
-    const fresh = seedIssueFixture({ ...onCta(), id: 'fresh', identifier: 'FB-3', stage: 'new' });
+    const closed = noteIssueFixture({ ...onCta(), id: 'closed', identifier: 'FB-2', stage: 'closed' });
+    const fresh = noteIssueFixture({ ...onCta(), id: 'fresh', identifier: 'FB-3', stage: 'new' });
     const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1', stage: 'progress' }, closed, fresh]));
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme', locale: 'en' });
 
@@ -535,8 +535,8 @@ describe('coming back to the tab (FRU-87)', () => {
   });
 
   function onCta() {
-    return seedIssueFixture({
-      seed: seedFixture({
+    return noteIssueFixture({
+      seed: noteFixture({
         anchor: {
           selector: '[data-testid="checkout-cta"]',
           tag: 'button',
@@ -840,7 +840,7 @@ describe('who carries the calls', () => {
     assert.equal(kept?.anchor.text, 'Commander');
     assert.equal(kept?.anchor.selector, '#cta');
     assert.equal(late?.page.url, 'https://preview.acme.test/checkout');
-    assert.equal(parseSeed(kept).ok, true);
+    assert.equal(parseNote(kept).ok, true);
   });
 
   it('sends no picture of the page of now beside a place of the page before (FRU-152)', async () => {
@@ -981,7 +981,7 @@ describe('who carries the calls', () => {
     };
     assert.deepEqual(fields(chosen), fields(plain));
     assert.equal(chosen?.body?.includes('destination'), false);
-    assert.equal(parseSeed(JSON.parse(chosen?.body ?? '{}')).ok, true);
+    assert.equal(parseNote(JSON.parse(chosen?.body ?? '{}')).ok, true);
   });
 
   it('keeps the note when the worker refuses the place with a 403, like any other refusal (FRU-123)', async () => {
@@ -1319,7 +1319,7 @@ describe('why a send failed', () => {
 describe('sending the drafts', () => {
   const ENDPOINT = 'https://worker.test';
   const draftOf = (id: string, destination?: string) => ({
-    seed: seedFixture({ id, client: { id: 'acme' } }),
+    seed: noteFixture({ id, client: { id: 'acme' } }),
     ...(destination === undefined ? {} : { destination }),
   });
 
@@ -1363,7 +1363,7 @@ describe('sending the drafts', () => {
     assert.equal(requests[0]?.url, `${ENDPOINT}/feedback`);
     const body = JSON.parse(requests[0]?.body ?? '') as unknown[];
     assert.deepEqual(
-      body.map((seed) => (parseSeed(seed).ok ? (seed as { id: string }).id : 'not a seed')),
+      body.map((seed) => (parseNote(seed).ok ? (seed as { id: string }).id : 'not a seed')),
       ['sd_a', 'sd_b'],
     );
   });
@@ -1452,7 +1452,7 @@ describe('sending the drafts', () => {
 
     assert.deepEqual(outcome, { kept: ['sd_a'], failure: 'retry' });
     assert.equal(requests[0]?.url, `${ENDPOINT}/feedback?destination=dst_design`);
-    assert.equal(parseSeed(JSON.parse(requests[0]?.body ?? '')).ok, true, 'the body of a single note is not a seed');
+    assert.equal(parseNote(JSON.parse(requests[0]?.body ?? '')).ok, true, 'the body of a single note is not a seed');
   });
 
   it('keeps every note when the worker cannot be reached', async () => {
@@ -1500,11 +1500,11 @@ describe('a link that opens a note on its page (FRU-253)', () => {
     return { page, widget, shadow, thread, reads: () => reads };
   }
 
-  const note = (overrides: Parameters<typeof seedIssueFixture>[0] = {}) =>
-    seedIssueFixture({
+  const note = (overrides: Parameters<typeof noteIssueFixture>[0] = {}) =>
+    noteIssueFixture({
       id: 'issue_linked',
       identifier: 'ACM-142',
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_linked',
         note: 'The linked note',
         anchor: {
@@ -1565,7 +1565,7 @@ describe('a link that opens a note on its page (FRU-253)', () => {
 
   it('opens the list on « Could not be placed » for a note whose element is gone, and its thread', async () => {
     const gone = note({
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_linked',
         note: 'The linked note',
         anchor: { selector: '#gone', tag: 'input', text: 'Gone', bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 } },

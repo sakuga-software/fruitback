@@ -1,4 +1,4 @@
-import { type SeedBounds, type SeedComment, type SeedIssue, type SeedStatus } from '@fruitback/shared';
+import { type NoteBounds, type NoteComment, type NoteIssue, type NoteStatus } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { type Box, type Offset, NO_OFFSET, attachHandle, clampOffset, moved, tether } from './bubble-drag.ts';
@@ -105,27 +105,27 @@ export type OverlayOptions = {
    * Which pins to draw. Re-read on `refilter`, so a preference change does not need the issues to be
    * fetched again (FRU-14). Defaults to drawing everything.
    */
-  shouldShow?: (issue: SeedIssue) => boolean;
+  shouldShow?: (issue: NoteIssue) => boolean;
   /**
    * Which issues are notes kept for later, not sent yet (FRU-124). Their pin is neutral, because no
    * tracker gave them a state, and their thread says they are not sent. Defaults to none.
    */
-  isDraft?: (issue: SeedIssue) => boolean;
+  isDraft?: (issue: NoteIssue) => boolean;
   /**
    * The status of an issue, from the `statuses` of its read (FRU-370). Its pin, its thread and its
    * entry in the detached notes take its colour and its name. `undefined`: the stage, as before.
    * Asked at each render. Left out: every pin is drawn by its stage.
    */
-  statusOf?: (issue: SeedIssue) => SeedStatus | undefined;
+  statusOf?: (issue: NoteIssue) => NoteStatus | undefined;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
-  onSelect?: (issue: SeedIssue) => void;
+  onSelect?: (issue: NoteIssue) => void;
   /** Called when a thread opens or closes: the list of the page marks the note that is open (FRU-259). */
   onThread?: () => void;
   /**
    * Called after the overlay re-resolves its pins on its own. The host is told, so it never has to
    * detect the change itself — which a client's app cannot do.
    */
-  onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
+  onResolve?: (resolutions: { issue: NoteIssue; strategy: AnchorResolution['strategy'] }[]) => void;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
   /** How a reader replies to a note from its thread (FRU-257). Left out: no thread has a field. */
@@ -145,13 +145,13 @@ export type ReplyFailure = 'retry' | 'wait' | 'signed-out';
  * is asked when a thread is built, and `send` answers the reply as the store wrote it.
  */
 export type ReplySeam = {
-  allowed(issue: SeedIssue): boolean;
-  send(issue: SeedIssue, body: string): Promise<SeedComment | ReplyFailure>;
+  allowed(issue: NoteIssue): boolean;
+  send(issue: NoteIssue, body: string): Promise<NoteComment | ReplyFailure>;
 };
 
 export type Overlay = {
   /** Draw this set of pins, replacing whatever was there. */
-  render(issues: SeedIssue[]): void;
+  render(issues: NoteIssue[]): void;
   /** Re-measure every pin. Called for you on scroll and resize. */
   reposition(): void;
   /**
@@ -166,7 +166,7 @@ export type Overlay = {
   refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
   resolutions(): {
-    issue: SeedIssue;
+    issue: NoteIssue;
     strategy: AnchorResolution['strategy'];
     confident: boolean;
     /** The number its pin carries (FRU-252). A note kept for later has none. */
@@ -210,7 +210,7 @@ export type Overlay = {
 };
 
 type Placed = {
-  issue: SeedIssue;
+  issue: NoteIssue;
   resolution: AnchorResolution;
   pin: HTMLElement;
 };
@@ -249,7 +249,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   });
 
   // What `render` was last given, before filtering — `refilter` draws from here.
-  let source: SeedIssue[] = [];
+  let source: NoteIssue[] = [];
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
   /** Where the open thread is drawn when it is not on the page: a panel of the widget (FRU-312). */
@@ -634,7 +634,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     if (thread !== null && threadHome === null) anchors.observe(thread);
   }
 
-  function render(issues: SeedIssue[]): void {
+  function render(issues: NoteIssue[]): void {
     // A copy: `refilter` draws from this later, and a caller who keeps mutating the array they
     // passed would otherwise change what is on screen with no render of their own.
     source = [...issues];
@@ -783,7 +783,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const repliesInFlight = new Set<string>();
   const replySaid = new Map<string, string>();
   /** Shows the end of a reply in the thread of its note, if that thread is open now. */
-  const replySettled = (issue: SeedIssue, answer: SeedComment | ReplyFailure): void => {
+  const replySettled = (issue: NoteIssue, answer: NoteComment | ReplyFailure): void => {
     const entry = placed.find((candidate) => candidate.issue.id === issue.id);
     if (entry === undefined || thread?.dataset.fruitbackThread !== issue.seed.id) return;
     // A read may have drawn the note again since: the reply goes on the issue that is on screen too.
@@ -795,7 +795,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const field = thread?.querySelector<HTMLTextAreaElement>('.fruitback-thread-reply-field');
     if (focused) field?.focus();
   };
-  const replyFor = (issue: SeedIssue): ReplyFooter | undefined =>
+  const replyFor = (issue: NoteIssue): ReplyFooter | undefined =>
     options.reply === undefined || DRAFTS.has(issue) || !options.reply.allowed(issue)
       ? undefined
       : { seam: options.reply, texts: replyTexts, inFlight: repliesInFlight, said: replySaid, settled: replySettled };
@@ -1017,26 +1017,26 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 }
 
 /** The number an overlay gave a note: its place among the notes of the page (FRU-252). */
-const NUMBERS = new WeakMap<SeedIssue, number>();
+const NUMBERS = new WeakMap<NoteIssue, number>();
 
 /** The issues an overlay was told are drafts. Marked on the object, which the overlay draws as it got it. */
-const DRAFTS = new WeakSet<SeedIssue>();
+const DRAFTS = new WeakSet<NoteIssue>();
 
 /**
  * The status an overlay was told each issue is in (FRU-370). Written at each draw, like the two marks
  * above: a note whose status leaves the list is drawn by its stage again.
  */
-const STATUSES = new WeakMap<SeedIssue, SeedStatus>();
+const STATUSES = new WeakMap<NoteIssue, NoteStatus>();
 
 /**
  * The colour of its status, the stage's token, or a neutral one for a draft: it has no state in any
  * tracker yet (FRU-124).
  */
-function pinColor(issue: SeedIssue): string {
+function pinColor(issue: NoteIssue): string {
   return DRAFTS.has(issue) ? 'var(--fruitback-color-text-muted)' : statusPaint(issue, STATUSES.get(issue)).fill;
 }
 
-function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
+function buildPin(document: Document, issue: NoteIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
   const pin = document.createElement('div');
 
   pin.className = 'fruitback-pin';
@@ -1078,7 +1078,7 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
  * follow. Written once at build time, a pin that fell from `selector` to `bounds` kept claiming it
  * had been recognised.
  */
-function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution, t: Translator): void {
+function applyResolution(pin: HTMLElement, issue: NoteIssue, resolution: AnchorResolution, t: Translator): void {
   // Three looks, because they mean three different things: found by identity, placed by position,
   // and not found at all.
   pin.classList.toggle('fruitback-pin-uncertain', !resolution.confident);
@@ -1110,7 +1110,7 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
   if (glyph !== null) glyph.textContent = number === undefined ? '' : String(number);
 }
 
-function summarise(issue: SeedIssue): string {
+function summarise(issue: NoteIssue): string {
   const firstLine = issue.seed.note
     .split('\n')
     .find((line) => line.trim().length > 0)
@@ -1143,7 +1143,7 @@ export function shortened(text: string, max: number): string {
  * were none. In both cases the thread shows no section (FRU-419): a title over nothing is noise, and
  * the field to reply is below. Anything else is the thread.
  */
-function replies(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
+function replies(document: Document, issue: NoteIssue, t: Translator): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
   // No reply yet: no section at all (FRU-419). The field to reply, and its placeholder, say enough.
@@ -1208,7 +1208,7 @@ function initialOf(name: string): string {
  * Both show only when the host asks for the selectors (FRU-349, FRU-419): a reviewer reads the note,
  * and these lines are for a developer.
  */
-function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean): HTMLElement[] {
+function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean): HTMLElement[] {
   if (!showSelector) return [];
   const source = issue.seed.source;
   const selector = issue.seed.anchor.selector;
@@ -1238,7 +1238,7 @@ function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean
  *
  * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
  */
-function stateLabel(issue: SeedIssue, t: Translator): string {
+function stateLabel(issue: NoteIssue, t: Translator): string {
   if (DRAFTS.has(issue)) return t.text('thread.draft');
 
   return statusLabel(issue, STATUSES.get(issue), t);
@@ -1247,7 +1247,7 @@ function stateLabel(issue: SeedIssue, t: Translator): string {
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
 function buildThread(
   document: Document,
-  issue: SeedIssue,
+  issue: NoteIssue,
   resolution: AnchorResolution,
   t: Translator,
   reply: ReplyFooter | undefined,
@@ -1325,7 +1325,7 @@ type ReplyFooter = {
   texts: Map<string, string>;
   inFlight: Set<string>;
   said: Map<string, string>;
-  settled: (issue: SeedIssue, answer: SeedComment | ReplyFailure) => void;
+  settled: (issue: NoteIssue, answer: NoteComment | ReplyFailure) => void;
 };
 
 /**
@@ -1363,7 +1363,7 @@ const REPLY_FAILURES = {
  * WARNING: nothing here clears the field but a reply that the store kept. A failure keeps the text
  * and says why. The text lives in `texts` too, so a thread built again shows it again.
  */
-function replyForm(document: Document, issue: SeedIssue, t: Translator, reply: ReplyFooter): HTMLElement {
+function replyForm(document: Document, issue: NoteIssue, t: Translator, reply: ReplyFooter): HTMLElement {
   const form = document.createElement('form');
   form.className = 'fruitback-thread-reply-form';
   const field = document.createElement('textarea');
@@ -1445,7 +1445,7 @@ function uncertaintyNote(document: Document, resolution: AnchorResolution, t: Tr
  * « In Progress since 10/23/2026 », from the last change the store reports (FRU-304, FRU-419). A
  * draft has no store, and a date the store wrote in a shape `Date` cannot read says nothing.
  */
-function stateSince(issue: SeedIssue, t: Translator): string | undefined {
+function stateSince(issue: NoteIssue, t: Translator): string | undefined {
   if (DRAFTS.has(issue)) return undefined;
   const date = new Date(issue.updatedAt);
   if (Number.isNaN(date.getTime())) return undefined;
@@ -1488,7 +1488,7 @@ function closeButton(document: Document, t: Translator): HTMLElement {
  *
  * Returns an array so the caller spreads nothing when there is nowhere to go.
  */
-function link(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
+function link(document: Document, issue: NoteIssue, t: Translator): HTMLElement[] {
   if (issue.url === undefined) return [];
 
   const anchor = document.createElement('a');
@@ -1507,7 +1507,7 @@ function link(document: Document, issue: SeedIssue, t: Translator): HTMLElement[
  * ticket, where they are. **No file is shown here**: the files are the tracker's, and Fruitback serves
  * none. A reader with no link to the tracker (a guest) reads the count alone.
  */
-function attachmentsLine(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
+function attachmentsLine(document: Document, issue: NoteIssue, t: Translator): HTMLElement[] {
   const count = issue.attachments?.length ?? 0;
   if (count === 0) return [];
   const line = document.createElement('p');
@@ -1623,7 +1623,7 @@ function documentRect(element: Element): { left: number; top: number; width: num
 }
 
 function boundsToPixels(
-  bounds: SeedBounds,
+  bounds: NoteBounds,
   document: Document,
 ): { left: number; top: number; width: number; height: number } {
   const view = document.defaultView;

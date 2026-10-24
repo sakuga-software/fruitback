@@ -222,10 +222,10 @@ describe('a consumer installing this from npm', () => {
           // here would notice a broken `exports` in `packages/fruitback`, and an `export *` collision
           // between the two packages it forwards is dropped silently by the module spec rather than
           // reported.
-          'import { init, type Seed } from "fruitback";',
+          'import { init, type Note } from "fruitback";',
           // And the scoped packages directly, because they stay published and someone will.
           'import { init as initScoped } from "@fruitback/widget";',
-          'import type { SeedIssue } from "@fruitback/shared";',
+          'import type { NoteIssue } from "@fruitback/shared";',
           // The theme type, because `FruitbackOptions.theme` names it (FRU-35). It resolves through
           // `theme.d.ts`, which ships but is not reachable through the package's `exports` — so
           // "the option is documented" and "the consumer can describe what they pass" are two
@@ -252,8 +252,8 @@ describe('a consumer installing this from npm', () => {
           'import { Fruitback as FruitbackComponent, type FruitbackProps } from "@fruitback/react";',
           'export const props: FruitbackProps = { endpoint: "https://w.test", clientId: "acme", theme: palette, onMount: (widget) => void widget.refresh() };',
           'export const render = () => FruitbackComponent(props);',
-          'export type Payload = Seed;',
-          'export type Pin = SeedIssue;',
+          'export type Payload = Note;',
+          'export type Pin = NoteIssue;',
           '',
         ].join('\n'),
       );

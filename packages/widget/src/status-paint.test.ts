@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type SeedStatus } from '@fruitback/shared';
+import { type NoteStatus } from '@fruitback/shared';
 import { STATUS_INK, statusLabel, statusPaint } from './status-paint.ts';
 import { createTranslator } from './messages.ts';
 import { THEME_STYLES } from './theme.ts';
@@ -8,7 +8,7 @@ import { THEME_STYLES } from './theme.ts';
 /** How a note is painted and named by its status (FRU-370). See docs/decisions/statuses.md. */
 
 const t = createTranslator({ language: 'en' });
-const status = (fields: Partial<SeedStatus>): SeedStatus => ({ key: 'own:x', name: '', stage: 'progress', ...fields });
+const status = (fields: Partial<NoteStatus>): NoteStatus => ({ key: 'own:x', name: '', stage: 'progress', ...fields });
 
 describe('statusPaint', () => {
   it('draws the stage with no status, or with a status that has no colour', () => {

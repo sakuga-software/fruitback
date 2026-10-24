@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground, plantPin, sendNote, storedSeeds } from './pin.ts';
+import { WORKER_ORIGIN, openPlayground, plantPin, sendNote, storedNotes } from './pin.ts';
 
 /**
  * Attribution (FRU-9), through the popover a reporter actually uses.
@@ -19,7 +19,7 @@ test('a note is anonymous unless the reporter says otherwise', async ({ page }) 
   await page.getByPlaceholder('What should change?').fill('Personne ne saura qui je suis');
   await sendNote(page);
 
-  const [seed] = await storedSeeds(page);
+  const [seed] = await storedNotes(page);
   expect(seed?.reporter).toBeUndefined();
 });
 
@@ -32,7 +32,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
   await page.getByPlaceholder('What should change?').fill('Signé Alice');
   await sendNote(page);
 
-  const [seed] = await storedSeeds(page);
+  const [seed] = await storedNotes(page);
   expect(seed?.reporter).toEqual({ name: 'Alice' });
   // No `verified`: the widget never claims it, whatever was typed.
   expect(seed?.reporter && 'verified' in seed.reporter).toBe(false);
@@ -66,7 +66,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await page.getByPlaceholder('What should change?').fill('Signé sans rien retaper');
   await sendNote(page);
 
-  const seeds = await storedSeeds(page);
+  const seeds = await storedNotes(page);
   expect(seeds.find((seed) => seed.note === 'Signé sans rien retaper')?.reporter).toEqual({ name: 'Alice' });
 
   // Unticked, the name leaves storage at once.
@@ -84,7 +84,7 @@ test('a browser cannot promote itself to a verified identity', async ({ page }) 
   const button = page.locator('[data-testid="card-latte"] .add');
   await plantPin(page, button, 'Un pin ordinaire');
 
-  const [planted] = await storedSeeds(page);
+  const [planted] = await storedNotes(page);
   const forged = await page.evaluate(
     async ([origin, seed]) => {
       const body = {
@@ -106,7 +106,7 @@ test('a browser cannot promote itself to a verified identity', async ({ page }) 
 
   expect(forged, 'the worker accepts the note itself').toBe(201);
 
-  const stored = await storedSeeds(page);
+  const stored = await storedNotes(page);
   const impostor = stored.find((seed) => seed.note === 'Je prétends être vérifié');
   expect(impostor?.reporter).toEqual({ name: 'Le PDG' });
   expect(impostor?.reporter && 'verified' in impostor.reporter).toBe(false);

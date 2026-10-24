@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type NotesChange, init } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -17,19 +17,19 @@ const ANCHOR = {
   text: 'Commander',
   bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
 };
-const MINE = seedIssueFixture({
+const MINE = noteIssueFixture({
   id: 'issue_1',
   identifier: 'FB-1',
   stage: 'todo',
   mine: true,
   comments: [{ id: 'c0', body: 'Planned.', createdAt: '2026-10-19T16:00:00.000Z', author: 'Marc' }],
-  seed: seedFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
+  seed: noteFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
 });
-const CLOSED = seedIssueFixture({
+const CLOSED = noteIssueFixture({
   id: 'issue_2',
   identifier: 'FB-2',
   stage: 'closed',
-  seed: seedFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR, reporter: { name: 'Léa' } }),
+  seed: noteFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR, reporter: { name: 'Léa' } }),
 });
 
 const cleanup: (() => void)[] = [];

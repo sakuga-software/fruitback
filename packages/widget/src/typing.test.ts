@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedAnchor } from '@fruitback/shared';
+import type { NoteAnchor } from '@fruitback/shared';
 import { MAX_TYPING, createTypingStore } from './typing.ts';
 
 /** The note being written, saved per page and per element (FRU-311). */
@@ -20,7 +20,7 @@ function memoryStorage(): Storage {
   };
 }
 
-const anchor = (selector: string): SeedAnchor => ({
+const anchor = (selector: string): NoteAnchor => ({
   selector,
   domPath: `main > ${selector}`,
   tag: 'button',

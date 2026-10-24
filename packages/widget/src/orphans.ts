@@ -1,4 +1,4 @@
-import { type SeedIssue, type SeedStatus } from '@fruitback/shared';
+import { type NoteIssue, type NoteStatus } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { statusPaint } from './status-paint.ts';
@@ -23,7 +23,7 @@ import { CAPTURE_START } from './events.ts';
 
 export type OrphanList = {
   /** Replace the contents. Hides itself when the list is empty. */
-  update(issues: SeedIssue[]): void;
+  update(issues: NoteIssue[]): void;
   /**
    * Whether this node is part of the list's own DOM.
    *
@@ -47,9 +47,9 @@ export type OrphanListOptions = {
    */
   dock?: Element;
   /** The reporter asked to look at this note. */
-  onSelect?: (issue: SeedIssue) => void;
+  onSelect?: (issue: NoteIssue) => void;
   /** The status of a note (FRU-370): its mark takes its colour, and its entry its name. Left out: the stage. */
-  statusOf?: (issue: SeedIssue) => SeedStatus | undefined;
+  statusOf?: (issue: NoteIssue) => NoteStatus | undefined;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
@@ -172,10 +172,10 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
 function entry(
   document: Document,
-  issue: SeedIssue,
-  status: SeedStatus | undefined,
+  issue: NoteIssue,
+  status: NoteStatus | undefined,
   t: Translator,
-  onSelect?: (issue: SeedIssue) => void,
+  onSelect?: (issue: NoteIssue) => void,
 ): HTMLElement {
   const item = document.createElement('li');
   item.className = 'fruitback-orphans-item';
@@ -213,7 +213,7 @@ function entry(
  * reporter was doing. The identifier is still worth showing, so it degrades to a span rather than
  * disappearing with the link.
  */
-function handle(document: Document, issue: SeedIssue): HTMLElement[] {
+function handle(document: Document, issue: NoteIssue): HTMLElement[] {
   if (issue.url === undefined) {
     const label = document.createElement('span');
     label.className = 'fruitback-orphans-link';
@@ -232,7 +232,7 @@ function handle(document: Document, issue: SeedIssue): HTMLElement[] {
   return [link];
 }
 
-function excerpt(issue: SeedIssue): string {
+function excerpt(issue: NoteIssue): string {
   const line = issue.seed.note
     .split('\n')
     .map((value) => value.trim())

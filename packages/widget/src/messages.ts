@@ -1,4 +1,4 @@
-import type { SeedStage } from '@fruitback/shared';
+import type { NoteStage } from '@fruitback/shared';
 import { FRENCH } from './locale-fr.ts';
 
 /**
@@ -261,7 +261,7 @@ export const ENGLISH = {
   'stage.progress': 'In progress',
   'stage.done': 'Done',
   'stage.closed': 'Closed',
-} as const satisfies Record<string, string | PluralMessage> & Record<`stage.${SeedStage}`, string>;
+} as const satisfies Record<string, string | PluralMessage> & Record<`stage.${NoteStage}`, string>;
 
 export type MessageKey = keyof typeof ENGLISH;
 
@@ -292,7 +292,7 @@ export type Translator = {
   readonly direction: Direction;
   text(key: TextKey, values?: Values): string;
   plural(key: PluralKey, count: number, values?: Values): string;
-  stage(stage: SeedStage): string;
+  stage(stage: NoteStage): string;
   date(date: Date): string;
   /** "3 hours ago", in the language of the words. */
   relative(date: Date): string;

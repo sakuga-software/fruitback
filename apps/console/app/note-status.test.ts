@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGES as STAGES } from '@fruitback/shared';
+import { NOTE_STAGES as STAGES } from '@fruitback/shared';
 import {
   STATUS_NOT_SAVED,
   STATUS_PROBLEMS,

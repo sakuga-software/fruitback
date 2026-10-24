@@ -7,7 +7,7 @@ import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fix
 import { createTranslator } from './messages.ts';
 import { createTypingStore } from './typing.ts';
 import { createDraftStore } from './drafts.ts';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { canonicalizePageUrl } from '@fruitback/shared';
 
 /**
@@ -255,7 +255,7 @@ describe('a host that signs in, past the composer (FRU-394, second review of #52
   it('says the session ended for the notes kept for later, not « members only »', async () => {
     const page = mounted();
     const store = createDraftStore({ storage: page.view.sessionStorage, key: 'fruitback:config:drafts' });
-    store.add({ seed: seedFixture({ id: 'sd_kept', note: NOTE }) });
+    store.add({ seed: noteFixture({ id: 'sd_kept', note: NOTE }) });
     const widget = init({
       document: page.document,
       endpoint: ENDPOINT,

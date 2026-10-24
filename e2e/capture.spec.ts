@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, expectPinOn, openPlayground, pinFor, plantPin, storedSeeds, waitForPins } from './pin.ts';
+import { WORKER_ORIGIN, expectPinOn, openPlayground, pinFor, plantPin, storedNotes, waitForPins } from './pin.ts';
 
 /** Capture → worker → back again, in a browser that does its own layout and its own CSS parsing. */
 
@@ -78,7 +78,7 @@ test('a note carries the component and the file it came from', async ({ page }) 
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le bouton Ajouter est trop discret');
   await plantPin(page, page.getByRole('heading', { name: 'Nos formules' }), 'Ce titre pourrait être plus clair');
 
-  const seeds = await storedSeeds(page);
+  const seeds = await storedNotes(page);
   const button = seeds.find((seed) => seed.note.startsWith('Le bouton'));
   const heading = seeds.find((seed) => seed.note.startsWith('Ce titre'));
 

@@ -1,4 +1,4 @@
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { DESTINATION_ID_MAX } from './destinations.ts';
 
 /**
@@ -19,7 +19,7 @@ import { DESTINATION_ID_MAX } from './destinations.ts';
 
 export type WidgetConfig = {
   /** Stages whose pins are not drawn. `done` and `closed` are what "resolved" means. */
-  hiddenStages: SeedStage[];
+  hiddenStages: NoteStage[];
   /**
    * Attach an image of the element to the note (FRU-6). **Off by default**, and only offered when
    * the embedder gave `init` something to capture with — a switch that controls nothing is worse
@@ -69,7 +69,7 @@ export type ConfigStoreOptions = {
 export const CONFIG_STORAGE_KEY = 'fruitback:config';
 
 /** The stages a reporter usually stops caring about: done, and cancelled. */
-export const RESOLVED_STAGES: SeedStage[] = ['done', 'closed'];
+export const RESOLVED_STAGES: NoteStage[] = ['done', 'closed'];
 
 export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const key = options.key ?? CONFIG_STORAGE_KEY;
@@ -135,7 +135,7 @@ function defaultStorage(): Storage | null {
 }
 
 /**
- * Tolerant on the way in, like `parseSeed`: this is a string a human can edit in devtools, and a
+ * Tolerant on the way in, like `parseNote`: this is a string a human can edit in devtools, and a
  * malformed one must cost the reporter their preferences, not the widget.
  */
 function readStored(storage: Storage | null, key: string): Partial<WidgetConfig> {
@@ -170,6 +170,6 @@ function write(storage: Storage | null, key: string, config: WidgetConfig): void
   }
 }
 
-function isStage(value: unknown): value is SeedStage {
-  return typeof value === 'string' && (SEED_STAGES as readonly string[]).includes(value);
+function isStage(value: unknown): value is NoteStage {
+  return typeof value === 'string' && (NOTE_STAGES as readonly string[]).includes(value);
 }

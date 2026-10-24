@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES } from '@fruitback/shared';
 import { THEME_STYLES, onStageToken } from './theme.ts';
 
 /**
@@ -126,7 +126,7 @@ const PAIRS: Pair[] = [
   },
   { foreground: 'color-accent', background: 'color-surface-raised', minimum: 3, where: 'the focus ring' },
   // What a pin writes on its drop. Three stages have a foreground of their own (FRU-334): `onStageToken`.
-  ...SEED_STAGES.map((stage) => ({
+  ...NOTE_STAGES.map((stage) => ({
     foreground: ON_STAGE[stage] ?? 'color-on-stage',
     background: `stage-${stage}`,
     minimum: 4.5,
@@ -240,7 +240,7 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     // The « Texte » column of the ticket: black on the three light fills, white on the two dark ones.
     const written = { new: '#18181b', todo: '#18181b', progress: '#18181b', done: '#fff', closed: '#fff' };
     for (const tokens of [light, dark]) {
-      const read = Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[ON_STAGE[stage] ?? 'color-on-stage']]));
+      const read = Object.fromEntries(NOTE_STAGES.map((stage) => [stage, tokens[ON_STAGE[stage] ?? 'color-on-stage']]));
       assert.deepEqual(read, written);
     }
     for (const stage of ['new', 'todo', 'progress'] as const) {
@@ -253,7 +253,7 @@ describe('the contrast of the default tokens (FRU-51)', () => {
   it('holds the five statuses chosen by Mathieu, in both schemes (FRU-334)', () => {
     const chosen = { new: '#bec2c8', todo: '#d9dbdf', progress: '#f3bb3d', done: '#5560c4', closed: '#a52a3a' };
     for (const tokens of [light, dark]) {
-      assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), chosen);
+      assert.deepEqual(Object.fromEntries(NOTE_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), chosen);
     }
   });
 

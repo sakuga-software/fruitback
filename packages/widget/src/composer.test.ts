@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedReporter } from '@fruitback/shared';
+import type { NoteReporter } from '@fruitback/shared';
 import {
   type Composer,
   type ComposerOptions,
@@ -35,7 +35,7 @@ let mounted: MountedPage | null = null;
 function mount(
   onSubmit: (
     note: string,
-    reporter?: SeedReporter,
+    reporter?: NoteReporter,
   ) => Promise<boolean | void | SendFailure | SentWithoutPicture | SentAs>,
   more: Pick<
     ComposerOptions,
@@ -738,7 +738,7 @@ describe('saying who you are, or not', () => {
   it('is anonymous by default: the name is empty, and nothing is claimed', async () => {
     // Anonymous has to stay the path of least resistance. It is the default in the contract too —
     // an absent reporter, not an empty one. The field is in sight since FRU-305, and empty.
-    const seen: (SeedReporter | undefined)[] = [];
+    const seen: (NoteReporter | undefined)[] = [];
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
@@ -761,7 +761,7 @@ describe('saying who you are, or not', () => {
   });
 
   it('passes what was typed, trimmed, and leaves an empty field out', async () => {
-    const seen: (SeedReporter | undefined)[] = [];
+    const seen: (NoteReporter | undefined)[] = [];
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
@@ -775,7 +775,7 @@ describe('saying who you are, or not', () => {
   });
 
   it('never claims to be verified, because that is the worker word', async () => {
-    const seen: (SeedReporter | undefined)[] = [];
+    const seen: (NoteReporter | undefined)[] = [];
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
@@ -925,7 +925,7 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
   });
 
   it('asks for no name when the worker names the reporter, and sends none', async () => {
-    const seen: (SeedReporter | undefined)[] = [];
+    const seen: (NoteReporter | undefined)[] = [];
     const { memory, writes } = memoryHolding('Alice');
     const { page } = mount(async (_note, reporter) => void seen.push(reporter), { memory, identified: true });
     composer?.open(ANCHOR);
@@ -939,7 +939,7 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
 
   it('asks whether the worker names the reporter at each open, and never under an open composer (FRU-112)', async () => {
     // In team mode the widget learns it from a read, after the composer is built, and a session ends.
-    const seen: (SeedReporter | undefined)[] = [];
+    const seen: (NoteReporter | undefined)[] = [];
     let identified = false;
     const { page } = mount(async (_note, reporter) => void seen.push(reporter), { identified: () => identified });
     const asked = () => !query(page, '[data-fruitback-who]').hidden;

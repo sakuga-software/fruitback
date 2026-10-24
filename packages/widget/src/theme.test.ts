@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES } from '@fruitback/shared';
 import { THEME_STYLES, THEME_TOKENS, applyTheme, missingStageTokens, stageToken } from './theme.ts';
 import { mountPage } from './dom.fixture.ts';
 
@@ -31,7 +31,7 @@ describe('the token declarations', () => {
     // A stage with no token renders a pin with no colour at all — `var()` falls back to nothing.
     assert.deepEqual(missingStageTokens(), []);
 
-    for (const stage of SEED_STAGES) {
+    for (const stage of NOTE_STAGES) {
       assert.ok(baseBlock.includes(`--fruitback-stage-${stage}:`), `${stage} has no unconditional declaration`);
       assert.equal(stageToken(stage), `var(--fruitback-stage-${stage})`);
     }

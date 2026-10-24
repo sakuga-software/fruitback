@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import type { FeedbackEntry } from './export.ts';
 import type { SidebarEntry } from './sidebar.ts';
 import { keyboardEventCtor, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -16,10 +16,10 @@ afterEach(() => {
 });
 
 function note(id: string, text: string, stage: FeedbackEntry['issue']['stage'] = 'new'): FeedbackEntry['issue'] {
-  return seedIssueFixture({
+  return noteIssueFixture({
     identifier: id.toUpperCase(),
     stage,
-    seed: seedFixture({ id, note: text, createdAt: '2026-10-09T10:00:00.000Z', reporter: { name: 'Alice' } }),
+    seed: noteFixture({ id, note: text, createdAt: '2026-10-09T10:00:00.000Z', reporter: { name: 'Alice' } }),
   });
 }
 
@@ -630,9 +630,9 @@ describe('the way into the list (FRU-129)', () => {
     const overlay = createOverlay({ document: page.document, host: host.root });
     cleanup.push(() => overlay.destroy());
     overlay.render([
-      seedIssueFixture({
+      noteIssueFixture({
         identifier: 'ID-1',
-        seed: seedFixture({
+        seed: noteFixture({
           id: 'sd_one',
           note: 'On the button',
           anchor: {
@@ -665,10 +665,10 @@ describe('the thread of a note in place of the rows (FRU-312)', () => {
     const host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
     cleanup.push(() => host.destroy());
     const issues = ['sd_one', 'sd_two'].map((id, index) =>
-      seedIssueFixture({
+      noteIssueFixture({
         id: `issue_${id}`,
         identifier: `ID-${index + 1}`,
-        seed: seedFixture({
+        seed: noteFixture({
           id,
           note: `Note ${index + 1}`,
           anchor: {
@@ -920,7 +920,7 @@ describe('the notes kept for later, in the list (FRU-124)', () => {
     const page = mountPage('<main></main>');
     const host = page.document.createElement('div');
     page.document.body.append(host);
-    const kept = [{ seed: seedFixture({ id: 'sd_a' }) }, { seed: seedFixture({ id: 'sd_b' }) }];
+    const kept = [{ seed: noteFixture({ id: 'sd_a' }) }, { seed: noteFixture({ id: 'sd_b' }) }];
     let outcome: { sent: number; failure?: 'wait' } = { sent: 1, failure: 'wait' };
     const sidebar = createSidebar({
       document: page.document,

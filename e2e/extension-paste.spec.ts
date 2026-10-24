@@ -1,5 +1,5 @@
 import { type Page, expect } from '@playwright/test';
-import { mintPairing, openBareSite, pairFromPopup, readSeeds, storedTokens, test, addRule } from './extension.ts';
+import { mintPairing, openBareSite, pairFromPopup, readNoteIssues, storedTokens, test, addRule } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -87,7 +87,7 @@ test('a screenshot pasted in the note goes through the relay to the ticket of th
 
   // The double of the tracker holds the pasted file of the note.
   const access = (await storedTokens(extension.worker)).find((token) => token.area === 'session')?.value;
-  const read = await readSeeds(page, WORKER_ORIGIN, access);
+  const read = await readNoteIssues(page, WORKER_ORIGIN, access);
   const { issues } = (await read.json()) as { issues: { seed: { note: string }; attachments?: { name: string }[] }[] };
   const note = issues.find((issue) => issue.seed.note === 'Une capture collée');
   expect(note?.attachments?.map((file) => file.name)).toEqual(['image.png']);

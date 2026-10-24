@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type OrphanList, createOrphanList } from './orphans.ts';
 import { mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
@@ -26,7 +26,7 @@ function mount() {
   return page;
 }
 
-const issue = (id: string, note: string) => seedIssueFixture({ seed: seedFixture({ id, note }) });
+const issue = (id: string, note: string) => noteIssueFixture({ seed: noteFixture({ id, note }) });
 
 describe('createOrphanList', () => {
   it('writes nothing when the set has not changed', () => {
@@ -47,7 +47,7 @@ describe('createOrphanList', () => {
     // vanishing with the link.
     const page = mount();
 
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), url: undefined, identifier: 'FB-7' })]);
+    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), url: undefined, identifier: 'FB-7' })]);
 
     const handle = page.document.querySelector('.fruitback-orphans-link');
     assert.equal(handle?.textContent, 'FB-7');
@@ -76,11 +76,11 @@ describe('createOrphanList', () => {
     // honest again and this can assert what a reader sees. Drop `:${stage}` from the key in
     // `orphans.ts` and a note that changes stage keeps the colour it had — which is what this catches.
     const page = mount();
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'new' })]);
+    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), stage: 'new' })]);
     const before = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
     assert.equal(before.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-new)');
 
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'closed' })]);
+    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), stage: 'closed' })]);
 
     const after = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
     assert.equal(after.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-closed)');
@@ -94,7 +94,7 @@ describe('createOrphanList', () => {
       host: page.document.body,
       statusOf: () => ({ key: 'own:wait', name: 'Waiting for the client', stage: 'done', color }),
     });
-    const done = seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' });
+    const done = noteIssueFixture({ seed: noteFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' });
     list.update([done]);
 
     const mark = () => page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
@@ -115,7 +115,7 @@ describe('createOrphanList', () => {
     // nobody who cannot separate the five colours either.
     const page = mount();
 
-    list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' })]);
+    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' })]);
 
     assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Done · Une note');
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');
