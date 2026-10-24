@@ -2,8 +2,9 @@ import type { Site, Workspace } from '../api';
 import { ago } from '../ago';
 import { locale, t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
+import { useConnectedExtension } from '../extension-connected';
 import { BY_SIGN_IN, CONNECT_PAGE, snippetFor, useConnect, useCopy } from '../install-options';
-import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet } from '../ui';
+import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet, StatusDot } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 
@@ -17,6 +18,9 @@ import { siteLabel } from '../site-address';
  * code that nobody types (FRU-238). The step waits
  * for the first note (`setup.tsx` reads the site again), and « Open the console » stays, for a person
  * who does not send one now.
+ *
+ * With a browser of the extension already connected to the account, the card says so and names it,
+ * and « Connect another browser » is the only way on (FRU-441): nothing asks to install it again.
  */
 export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
@@ -24,6 +28,15 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
   const { copied, copy } = useCopy(snippet);
   const { link, problem, connect } = useConnect(workspace);
   const host = siteLabel(site.origin);
+  const connected = useConnectedExtension();
+  const connectLabel = connected === undefined ? t('Connect this browser') : t('Connect another browser');
+  const connectLink = BY_SIGN_IN ? (
+    <LinkButton href={CONNECT_PAGE} newTab>
+      {connectLabel}
+    </LinkButton>
+  ) : (
+    <LinkButton onClick={connect}>{connectLabel}</LinkButton>
+  );
 
   return (
     <>
@@ -31,24 +44,28 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
       <AutoGrid min={230}>
         <OptionCard title={t('Browser extension')}>
           <p className="text-small text-muted">{t("Nothing to deploy. Right for a client's site you cannot touch.")}</p>
-          <p className="mb-1.5 text-hint">
-            {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
-          </p>
-          <div className="mt-auto flex flex-col gap-2">
-            <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
-              {t('Install the extension (beta)')}
-              <Away />
-            </Button>
-            <div>
-              {BY_SIGN_IN ? (
-                <LinkButton href={CONNECT_PAGE} newTab>
-                  {t('Connect this browser')}
-                </LinkButton>
-              ) : (
-                <LinkButton onClick={connect}>{t('Connect this browser')}</LinkButton>
-              )}
-            </div>
-          </div>
+          {connected === undefined ? (
+            <>
+              <p className="mb-1.5 text-hint">
+                {t('Add it, then connect this browser: a page opens, and you click the Fruitback icon there.')}
+              </p>
+              <div className="mt-auto flex flex-col gap-2">
+                <Button tone="outline" size="page" wide href={extensionInstallFor(navigator.userAgent)} newTab>
+                  {t('Install the extension (beta)')}
+                  <Away />
+                </Button>
+                <div>{connectLink}</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="mb-1.5 flex items-center gap-2 text-small font-semibold">
+                <StatusDot status="done" size={10} />
+                {t('Extension connected · {browser}', { browser: connected.browser })}
+              </p>
+              <div className="mt-auto">{connectLink}</div>
+            </>
+          )}
           {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
           {link === undefined ? null : (
             <p className="text-hint text-muted">

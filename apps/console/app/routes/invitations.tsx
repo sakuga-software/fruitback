@@ -12,9 +12,11 @@ import {
 } from '../api';
 import { msg, t } from '../i18n';
 import { EXTENSION_GUIDE, extensionInstallFor } from '../extension-store';
+import { useConnectedExtension } from '../extension-connected';
+import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { problemOf } from '../problems';
 import { withStrong } from '../sign-in-form';
-import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, SuccessMark, Title } from '../ui';
+import { Button, EntryPage, Initial, KeyValue, Lead, LinkButton, Problem, StatusDot, SuccessMark, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { siteLabel } from '../site-address';
 
@@ -337,10 +339,14 @@ function Away() {
  * The mockup goes on with « It signs in with this account. ». That is not so today: a browser is
  * connected from the console, with a code. The sentence waits for the decision on that (Q8 of
  * FRU-230), and the way to the console is here in its place.
+ *
+ * With a browser of the extension already connected to the account, nothing asks to install it: the
+ * screen names that browser, and « Connect another browser » is a link at the foot (FRU-441).
  */
 function Joined({ workspace, name, site }: { workspace: string; name: string; site: Site | undefined }) {
   useLocale();
   const host = site === undefined ? undefined : siteLabel(site.origin);
+  const connected = useConnectedExtension();
   // Not on the mockup, which leaves no way on but the extension: the console is where the person
   // connects their browser today.
   const console = (
@@ -348,6 +354,32 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
       {t('Go to the console')}
     </LinkButton>
   );
+  let lead: string;
+  if (connected === undefined) {
+    lead =
+      host === undefined
+        ? t('One more thing: the extension shows the notes on the sites of {workspace} and lets you leave yours.', {
+            workspace: name,
+          })
+        : t('One more thing: the extension shows the notes on {site} and lets you leave yours.', { site: host });
+  } else {
+    lead =
+      host === undefined
+        ? t('Your extension shows the notes on the sites of {workspace} and lets you leave yours.', { workspace: name })
+        : t('Your extension shows the notes on {site} and lets you leave yours.', { site: host });
+  }
+  // The extension is there: the site is what comes next, so it is the button.
+  const openSite = (origin: string, label: string) =>
+    connected === undefined ? (
+      <LinkButton space="loose" href={origin} newTab>
+        {t('Open {site}', { site: label })}
+      </LinkButton>
+    ) : (
+      <Button href={origin} newTab>
+        {t('Open {site}', { site: label })}
+        <Away />
+      </Button>
+    );
 
   return (
     <>
@@ -358,31 +390,37 @@ function Joined({ workspace, name, site }: { workspace: string; name: string; si
         <Title>{t('You are in')}</Title>
       </div>
       <p role="status" className="mb-7 text-lead text-muted wrap-anywhere">
-        {host === undefined
-          ? t('One more thing: the extension shows the notes on the sites of {workspace} and lets you leave yours.', {
-              workspace: name,
-            })
-          : t('One more thing: the extension shows the notes on {site} and lets you leave yours.', { site: host })}
+        {lead}
       </p>
+      {connected === undefined ? null : (
+        <p className="mb-5 flex items-center gap-2 text-body font-semibold">
+          <StatusDot status="done" size={10} />
+          {t('Extension connected · {browser}', { browser: connected.browser })}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
-        <Button href={extensionInstallFor(navigator.userAgent)} newTab>
-          {t('Install the extension (beta)')}
-          <Away />
-        </Button>
-        {site === undefined || host === undefined ? (
-          console
-        ) : (
-          <LinkButton space="loose" href={site.origin} newTab>
-            {t('Open {site}', { site: host })}
-          </LinkButton>
-        )}
+        {connected === undefined ? (
+          <Button href={extensionInstallFor(navigator.userAgent)} newTab>
+            {t('Install the extension (beta)')}
+            <Away />
+          </Button>
+        ) : null}
+        {site === undefined || host === undefined ? console : openSite(site.origin, host)}
       </div>
-      <p className="mt-7 border-t border-line pt-4.5 text-small text-muted">
-        {t('Using Firefox?')}{' '}
-        <LinkButton space="inline" href={EXTENSION_GUIDE} newTab>
-          {t('Install it in Firefox (beta)')}
-        </LinkButton>
-      </p>
+      {connected === undefined ? (
+        <p className="mt-7 border-t border-line pt-4.5 text-small text-muted">
+          {t('Using Firefox?')}{' '}
+          <LinkButton space="inline" href={EXTENSION_GUIDE} newTab>
+            {t('Install it in Firefox (beta)')}
+          </LinkButton>
+        </p>
+      ) : (
+        <p className="mt-7 border-t border-line pt-4.5 text-small text-muted">
+          <LinkButton space="inline" href={BY_SIGN_IN ? CONNECT_PAGE : extensionInstallFor(navigator.userAgent)} newTab>
+            {t('Connect another browser')}
+          </LinkButton>
+        </p>
+      )}
       {/* With a site to open beside the button, the way to the console has its own line. */}
       {site === undefined ? null : <p className="mt-1">{console}</p>}
     </>

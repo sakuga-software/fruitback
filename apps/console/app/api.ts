@@ -540,9 +540,12 @@ export async function renameMe(name: string): Promise<Answer<{ account: Account 
   return call<{ account: Account }>('POST', '/console/me/name', { name });
 }
 
-/** The sessions of the console of the person. A refusal is no list: the screen says it could not read. */
-export async function consoleSessions(): Promise<Answer<ConsoleSession[]>> {
-  const listed = await call<{ sessions?: ConsoleSession[] }>('GET', '/console/sessions');
+/**
+ * The sessions of the console of the person. A refusal is no list: the screen says it could not read.
+ * `quiet`: a `401` does not end the session of the screen (`/connect` reads it signed out too, FRU-441).
+ */
+export async function consoleSessions(options: { quiet?: boolean } = {}): Promise<Answer<ConsoleSession[]>> {
+  const listed = await call<{ sessions?: ConsoleSession[] }>('GET', '/console/sessions', undefined, options);
   if (!listed.ok) return listed;
 
   return Array.isArray(listed.data?.sessions)

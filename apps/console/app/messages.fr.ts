@@ -677,6 +677,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'One more thing: the extension shows the notes on {site} and lets you leave yours.':
     'Une dernière chose : l’extension affiche les notes sur {site} et vous permet de laisser les vôtres.',
   'Install the extension (beta)': 'Installer l’extension (bêta)',
+  // The extension is already connected to the account (FRU-441).
+  'Extension connected · {browser}': 'Extension connectée · {browser}',
+  'Connect another browser': 'Connecter un autre navigateur',
+  'Your extension shows the notes on the sites of {workspace} and lets you leave yours.':
+    'Votre extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
+  'Your extension shows the notes on {site} and lets you leave yours.':
+    'Votre extension affiche les notes sur {site} et vous permet de laisser les vôtres.',
+  'This browser is already connected': 'Ce navigateur est déjà connecté',
+  'The extension is signed in with your account here. Click the Fruitback icon on a site to see its notes.':
+    'L’extension est connectée à votre compte ici. Cliquez sur l’icône Fruitback sur un site pour voir ses notes.',
   'Open {site}': 'Ouvrir {site}',
   'Using Firefox?': 'Vous utilisez Firefox ?',
   'Install it in Firefox (beta)': 'L’installer dans Firefox (bêta)',
