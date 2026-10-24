@@ -39,7 +39,8 @@ test('the bench sends a note in team mode, with a capture after the click on the
     await site.keyboard.press('Enter');
     const refused = site.locator('.fruitback-composer-file');
     await expect(refused).toHaveAttribute('data-fruitback-file', 'refused');
-    await expect(refused).toContainText('The capture was not taken');
+    // FRU-423: a refusal for want of a gesture says what to do.
+    await expect(refused).toContainText('Click the Fruitback icon in the toolbar, then try again.');
     await site.getByRole('button', { name: 'Cancel', exact: true }).click();
   }
 
