@@ -212,9 +212,9 @@ How this repository is formatted, tested and documented, and which test holds ea
   that starts the worker in a process or reads a document. `mutation.test.ts` holds both.
 - **vitest is 5.0.5, the same in the workspace and in `tools/mutation`.** The runner of StrykerJS
   loads vitest from `tools/mutation` while the tests import the one of the workspace.
-  `mutation.test.ts` fails when the two differ. The runner 10.0.0 kills 3 of the 38 mutants of
-  `cache.ts` under vitest 5.0.5, and the runner 10.1.1 kills all 38 (measured on 2026-10-24): the
-  mutation job needs StrykerJS 10.1.1 or later.
+  `mutation.test.ts` fails when the two differ. The repo is on StrykerJS 10.1.1, which kills all 38
+  mutants of `cache.ts` under vitest 5.0.5. The runner 10.0.0 killed 3 of them (measured on
+  2026-10-24).
 - **`pnpm audit --prod` reads vitest as a production dependency of the worker.** better-auth 1.7.7
   names vitest as an optional peer, and pnpm links it once vitest is in the workspace: the job
   `dependencies` then failed on vite 8.2.1 and source-map-js 1.2.1. An override `'-'` does not cut a
