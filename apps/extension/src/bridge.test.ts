@@ -25,6 +25,35 @@ function gated() {
 }
 
 describe('createApply', () => {
+  // FRU-444: « Show Fruitback on this page » turned off, the rule still on.
+  it('unmounts on an origin where the widget is hidden, and mounts again when it is shown', async () => {
+    const posts: BridgeMessage[] = [];
+    let hidden = false;
+    const apply = createApply({
+      readSite: async () => SITE,
+      readHidden: async () => hidden,
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    hidden = true;
+    await apply();
+    hidden = false;
+    await apply();
+
+    assert.deepEqual(posts, [MOUNT, UNMOUNT, MOUNT]);
+  });
+
+  it('shows the widget when the read of the hidden origins fails', async () => {
+    const posts: BridgeMessage[] = [];
+    await createApply({
+      readSite: async () => SITE,
+      readHidden: async () => Promise.reject(new Error('closed')),
+      post: (m) => void posts.push(m),
+    })();
+
+    assert.deepEqual(posts, [MOUNT]);
+  });
+
   it('sends the language of the account with a mount, and none when the extension knows none (FRU-131)', async () => {
     const posts: BridgeMessage[] = [];
     const post = (m: BridgeMessage): void => void posts.push(m);

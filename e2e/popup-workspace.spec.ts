@@ -1,6 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect } from '@playwright/test';
-import { type LoadedExtension, clickThatClosesPopup, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import {
+  type LoadedExtension,
+  clickThatClosesPopup,
+  mintPairing,
+  openBareSite,
+  openPopup,
+  test,
+  SITE_SWITCH,
+} from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -111,7 +119,7 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
     .poll(
       async () => {
         popup = await reopen(extension, page, popup);
-        await expect(popup.getByRole('switch')).toBeVisible();
+        await expect(popup.getByRole('switch', { name: SITE_SWITCH })).toBeVisible();
 
         return popup
           .locator('.site-lines .kit-row-title')
@@ -136,7 +144,11 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
     ),
   ).toEqual(['12px 12px rgb(243, 187, 61)']);
   // The boxes of the mock-up (`popup-3-site-on.png`).
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 312, width: 44, height: 26 }, 'switch');
+  expectNear(
+    await boxOf(popup.getByRole('switch', { name: SITE_SWITCH })),
+    { x: 312, width: 44, height: 26 },
+    'switch',
+  );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
     { x: 24, width: 332, height: 56 },
@@ -152,10 +164,11 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   expect(await popup.locator('.shortcut-line kbd').count()).toBeGreaterThanOrEqual(2);
   // A session of a pairing keeps its row.
   await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
-  // The keyboard: the gear, the switch, « Leave feedback », the line, then the side panel.
+  // The keyboard: the gear, the switch, « Show Fruitback on this page » (FRU-444), « Leave feedback »,
+  // the line, then the side panel.
   await popup.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   const stops: string[] = [];
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < 6; index += 1) {
     await popup.keyboard.press('Tab');
     stops.push(
       await popup.evaluate(
@@ -169,9 +182,10 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
   }
   expect(stops[0]).toBe('Account and settings');
   expect(stops[1]).toBe('Fruitback on localhost:5177');
-  expect(stops[2]).toBe('Leave feedback');
-  expect(stops[3]).toMatch(/open notes?$/);
-  expect(stops[4]).toBe('Show all notes in a sidebar');
+  expect(stops[2]).toBe('Show Fruitback on this page');
+  expect(stops[3]).toBe('Leave feedback');
+  expect(stops[4]).toMatch(/open notes?$/);
+  expect(stops[5]).toBe('Show all notes in a sidebar');
   expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
   await clean(popup, 'the popup on a site that is on');
 
@@ -209,14 +223,14 @@ test('2 then 3: a site of the workspace turns on in one click, then the switch, 
 
   // The switch, twice: the widget leaves, then comes back once.
   popup = await reopen(extension, page);
-  await popup.getByRole('switch').click();
-  await expect(popup.getByRole('switch')).not.toBeChecked();
+  await popup.getByRole('switch', { name: SITE_SWITCH }).click();
+  await expect(popup.getByRole('switch', { name: SITE_SWITCH })).not.toBeChecked();
   await expect(popup.getByText('Off · Playground')).toBeVisible();
   await expect(popup.locator('.site-lines')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Leave feedback' })).toHaveCount(0);
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(0);
-  await popup.getByRole('switch').click();
-  await expect(popup.getByRole('switch')).toBeChecked();
+  await popup.getByRole('switch', { name: SITE_SWITCH }).click();
+  await expect(popup.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);

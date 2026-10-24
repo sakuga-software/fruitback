@@ -676,6 +676,33 @@ did not change: the fields of 760 px and the file input of the browser are as th
   was and the card says « This preference could not be saved. Try again. », so the page never shows
   a value the extension did not keep.
 
+## « Show Fruitback on this page », in the popup (FRU-444)
+
+### The rules, in short
+
+- **A switch under the switch of the site**, on screen 3 and on the screen of a rule, while the site
+  is on: « Show Fruitback on this page » (« Afficher Fruitback sur cette page »). Off, the widget
+  leaves every tab of that **origin**; the rule stays on, keeps its access, and the other origins of
+  a wildcard keep the widget. On again, it comes back with no prompt and no reload.
+- **Kept per origin in `chrome.storage.local`, under `hiddenOrigins`**, a list of origins
+  (`src/page-visibility.ts`). It is no credential and no rule: it is not in the copy of the rules in
+  the account of the browser (FRU-72). A read that fails shows the widget, as before the switch.
+- **Hidden, nothing runs on the page.** The background registers the scripts of a rule with the
+  hidden origins it covers in `excludeMatches` (`syncRegistration`): a page loaded while it is hidden
+  gets neither script, so no widget and no `__fruitbackPageScript`. A pair whose hidden origins
+  changed is unregistered and registered again, in its own call, like a new origin (FRU-74).
+- **A tab already open gets `unmount`.** The bridge reads the list with the rule, and a change of the
+  key applies its decision again: hidden is an `unmount`, the message of a site turned off. No new
+  message crosses to the page, and `protocol.ts` is unchanged.
+- **Shown again, the popup injects both scripts into the open tabs of the origin**, as a site turned on
+  does (`injectIntoOpenTabs`): a tab loaded while it was hidden has no bridge to hear the change.
+- **Hidden, the screen offers neither « Leave feedback » nor the side panel**: the page has no widget
+  to take them. The switch is a `role="switch"` of the kit, named by its words, in the order of the
+  keyboard after the switch of the site. `e2e/popup-hide-widget.spec.ts` hides, reloads, reads the
+  registered scripts, and shows again; axe runs on the popup in both schemes.
+- **Not verified on Firefox**: `excludeMatches` of `scripting.registerContentScripts` is in its
+  documentation, and was not measured here.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test, SITE_SWITCH } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
@@ -133,15 +133,15 @@ for (const language of ['en', 'fr'] as const) {
     await expect(turnOn).toBeVisible();
     await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on (FRU-298): the gear, the switch, « Leave feedback » and « Show all notes in
-    // a sidebar »; the head names the person of the pairing. The worker of this spec says nothing of
+    // 5. The site turned on (FRU-298): the gear, the switch, « Show Fruitback on this page » (FRU-444),
+    // « Leave feedback » and « Show all notes in a sidebar »; the head names the person of the pairing. The worker of this spec says nothing of
     // the notes of the site, so no line of what waits.
     await turnOn.click();
-    await expect(offered.getByRole('switch')).toBeChecked();
+    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toBeChecked();
     await expect(offered.getByRole('button', { name: /^(Account and settings|Compte et réglages)$/ })).toHaveText('Q');
     // The row of the pairing stays, with its log out.
     await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
-    await expectLaidOut(offered, 'site turned on', 5);
+    await expectLaidOut(offered, 'site turned on', 6);
 
     // The kit (FRU-293), read on computed styles in both schemes: the measures of the mock-up of
     // 2026-10-20, the accent of the extension, and no word cut.
@@ -151,7 +151,12 @@ for (const language of ['en', 'fr'] as const) {
       // fixed wait of 0.4 s read it half-way on CI once.
       await offered.mouse.move(0, 0);
       await expect
-        .poll(() => offered.locator('.kit-switch').evaluate((node) => getComputedStyle(node).backgroundColor))
+        .poll(() =>
+          offered
+            .locator('.kit-switch')
+            .first()
+            .evaluate((node) => getComputedStyle(node).backgroundColor),
+        )
         .toBe(ACCENT[colorScheme]);
       await expect
         .poll(() => offered.locator('.kit-primary').evaluate((node) => getComputedStyle(node).backgroundColor))
@@ -178,15 +183,15 @@ for (const language of ['en', 'fr'] as const) {
     await offered.emulateMedia({ colorScheme: 'light' });
 
     // A switch is a button: Space and Enter press it.
-    const onOff = offered.getByRole('switch');
+    const onOff = offered.getByRole('switch', { name: SITE_SWITCH });
     await onOff.focus();
     await offered.keyboard.press('Space');
-    await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toHaveAttribute('aria-checked', 'false');
     // The screen of a site that is off is drawn again, with no action: the next key goes to its switch.
     await expect(offered.locator('.kit-primary')).toHaveCount(0);
-    await offered.getByRole('switch').focus();
+    await offered.getByRole('switch', { name: SITE_SWITCH }).focus();
     await offered.keyboard.press('Enter');
-    await expect(offered.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    await expect(offered.getByRole('switch', { name: SITE_SWITCH })).toHaveAttribute('aria-checked', 'true');
     await expect(offered.locator('.kit-primary')).toHaveCount(1);
   });
 }

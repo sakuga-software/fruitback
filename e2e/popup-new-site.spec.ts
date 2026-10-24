@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Locator, type Page, expect } from '@playwright/test';
-import { type LoadedExtension, PLAYGROUND_ORIGIN, openBareSite, openPopup, test } from './extension.ts';
+import { type LoadedExtension, PLAYGROUND_ORIGIN, openBareSite, openPopup, test, SITE_SWITCH } from './extension.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -184,7 +184,11 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
     'New, to do or in progress',
   ]);
   // Screen 3 of an account, against the mock-up (`popup-3-site-on.png`).
-  expectNear(await boxOf(popup.getByRole('switch')), { x: 312, width: 44, height: 26 }, 'switch');
+  expectNear(
+    await boxOf(popup.getByRole('switch', { name: SITE_SWITCH })),
+    { x: 312, width: 44, height: 26 },
+    'switch',
+  );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
     { x: 24, width: 332, height: 56 },

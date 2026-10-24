@@ -431,6 +431,11 @@ export type SiteOnOptions = {
   /** The foot, in place of the one of an account: a session of a pairing and its log out (FRU-319). */
   foot?: HTMLElement;
   onToggle: (on: boolean) => void;
+  /**
+   * « Show Fruitback on this page » (FRU-444), for a site that is on. Absent: shown, and no switch.
+   * Hidden, the screen offers neither « Leave feedback » nor the side panel: the page has no widget.
+   */
+  visibility?: { shown: boolean; onChange: (shown: boolean) => void };
   onLeaveFeedback: () => void;
   /** Opens the side panel: « Show all notes in a sidebar », and a click on a line. */
   onOpenPanel: () => void;
@@ -463,6 +468,30 @@ function onState(workspace: string, on: boolean, destination: string | undefined
     : t('On · notes go to {tracker}', { tracker });
 }
 
+/**
+ * « Show Fruitback on this page » (FRU-444): the words, and the switch they name. The rule stays on;
+ * only this origin loses the widget, and gets it back with no prompt.
+ */
+export function visibilityRow(
+  document: Document,
+  options: { shown: boolean; onChange: (shown: boolean) => void },
+): HTMLElement {
+  const row = element(document, 'div', '', 'visibility-row');
+  const words = element(document, 'span', t('Show Fruitback on this page'), 'visibility-words');
+  // The visible words are the name of the switch, so a voice command says what it reads.
+  words.setAttribute('aria-hidden', 'true');
+  row.append(
+    words,
+    toggle(document, {
+      checked: options.shown,
+      label: t('Show Fruitback on this page'),
+      onChange: options.onChange,
+    }),
+  );
+
+  return row;
+}
+
 /** 3 · Site on (FRU-298): the switch, « Leave feedback », what waits, and the side panel. */
 export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
   const host = hostOf(options.origin);
@@ -484,8 +513,9 @@ export function siteOn(document: Document, options: SiteOnOptions): HTMLElement 
   );
 
   const body: Node[] = [row];
-  // Off: the widget left the tab, so there is nothing to leave and nothing to show.
-  if (options.on) {
+  if (options.on && options.visibility !== undefined) body.push(visibilityRow(document, options.visibility));
+  // Off, or hidden here: the widget left the tab, so there is nothing to leave and nothing to show.
+  if (options.on && options.visibility?.shown !== false) {
     const leave = element(document, 'div', '', 'leave-block');
     leave.append(primaryButton(document, t('Leave feedback'), options.onLeaveFeedback, { size: 'tall' }));
     const keyNames = options.shortcut ?? [];

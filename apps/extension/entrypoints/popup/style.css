@@ -583,6 +583,14 @@ body.popup-page {
   min-width: 0;
 }
 
+.popup .visibility-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+}
+
 .popup .leave-block {
   display: flex;
   flex-direction: column;

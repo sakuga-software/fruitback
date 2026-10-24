@@ -428,6 +428,40 @@ describe('3 · a site on (FRU-298)', () => {
     );
   });
 
+  // FRU-444: the widget hidden on this page, its rule still on.
+  it('has « Show Fruitback on this page », and offers nothing of the page while it is hidden', () => {
+    const calls: string[] = [];
+    const shown = on({ visibility: { shown: true, onChange: (value) => calls.push(`shown:${value}`) } }, calls);
+    const named = shown.querySelectorAll('[role="switch"]')[1];
+
+    assert.equal(named?.getAttribute('aria-label'), 'Show Fruitback on this page');
+    assert.equal(named?.getAttribute('aria-checked'), 'true');
+    assert.equal(shown.querySelector('.visibility-words')?.textContent, 'Show Fruitback on this page');
+    assert.ok(stops(shown).includes('button: Leave feedback'));
+    (named as HTMLElement).click();
+    assert.deepEqual(calls, ['shown:false']);
+
+    const hidden = on({ visibility: { shown: false, onChange: nothing } });
+    assert.equal(hidden.querySelectorAll('[role="switch"]')[1]?.getAttribute('aria-checked'), 'false');
+    assert.equal(stops(hidden).includes('button: Leave feedback'), false);
+    assert.equal(
+      stops(hidden).some((stop) => stop.includes('sidebar')),
+      false,
+    );
+
+    // Off: the rule is off, so there is no page to show it on.
+    assert.equal(
+      on({ on: false, visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-row'),
+      null,
+    );
+
+    setLanguage('fr');
+    assert.equal(
+      on({ visibility: { shown: true, onChange: nothing } }).querySelector('.visibility-words')?.textContent,
+      'Afficher Fruitback sur cette page',
+    );
+  });
+
   it('has the site and its named switch, « Leave feedback » with its keys, and the side panel', () => {
     const calls: string[] = [];
     const screen = on({}, calls);

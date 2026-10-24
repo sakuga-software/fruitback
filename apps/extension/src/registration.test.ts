@@ -11,20 +11,29 @@ import {
   syncRegistration,
 } from './registration.ts';
 
-function registrar(initial: string[] = []): ScriptRegistrar & { calls: string[]; ids: Set<string> } {
+function registrar(initial: string[] = []): ScriptRegistrar & {
+  calls: string[];
+  ids: Set<string>;
+  excluded: Map<string, string[]>;
+} {
   const ids = new Set(initial);
   const calls: string[] = [];
+  const excluded = new Map<string, string[]>();
 
   return {
     ids,
     calls,
-    getRegisteredContentScripts: async () => [...ids].map((id) => ({ id })),
+    excluded,
+    getRegisteredContentScripts: async () =>
+      [...ids].map((id) => (excluded.has(id) ? { id, excludeMatches: excluded.get(id) } : { id })),
     registerContentScripts: async (scripts: RegisteredScript[]) => {
       for (const script of scripts) {
         // The real API throws on a duplicate id, and a test that let it pass would hide exactly the
         // bug this module exists to avoid.
         assert.equal(ids.has(script.id), false, `registered ${script.id} twice`);
         ids.add(script.id);
+        if (script.excludeMatches === undefined) excluded.delete(script.id);
+        else excluded.set(script.id, script.excludeMatches);
       }
       calls.push(`register:${scripts.map((s) => s.id).join(',')}`);
     },
@@ -46,6 +55,32 @@ describe('syncRegistration', () => {
 
   beforeEach(() => {
     scripting = registrar();
+  });
+
+  // FRU-444: « Show Fruitback on this page » turned off. The rule stays on; that origin gets no script.
+  it('leaves a hidden origin out of the scripts of the rule that covers it, and gives it back when shown', async () => {
+    const shop = scriptIdsFor('https://*.acme.dev');
+    await syncRegistration(scripting, ['https://*.acme.dev', 'https://other.dev']);
+    scripting.calls.length = 0;
+
+    await syncRegistration(scripting, ['https://*.acme.dev', 'https://other.dev'], ['https://shop.acme.dev']);
+
+    assert.deepEqual(scripting.calls, [
+      `unregister:${shop.bridge},${shop.page}`,
+      `register:${shop.bridge},${shop.page}`,
+    ]);
+    assert.deepEqual(scripting.excluded.get(shop.page), ['https://shop.acme.dev/*']);
+    assert.deepEqual(scripting.excluded.get(shop.bridge), ['https://shop.acme.dev/*']);
+    // The other rule covers no hidden origin: its pair is untouched.
+    assert.equal(scripting.excluded.has(other.page), false);
+
+    scripting.calls.length = 0;
+    await syncRegistration(scripting, ['https://*.acme.dev', 'https://other.dev'], ['https://shop.acme.dev']);
+    assert.deepEqual(scripting.calls, [], 'an unchanged hidden list changes nothing');
+
+    await syncRegistration(scripting, ['https://*.acme.dev', 'https://other.dev']);
+    assert.equal(scripting.excluded.has(shop.page), false);
+    assert.equal(scripting.ids.has(shop.page), true);
   });
 
   it('registers both scripts of an origin the first time', async () => {

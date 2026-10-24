@@ -8,6 +8,7 @@ import { createBrowserPending } from '../src/pending-site-browser.ts';
 import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
 import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
+import { HIDDEN_ORIGINS_KEY, readHidden } from '../src/page-visibility.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
 import { createSessionPreviews } from '../src/session-previews.ts';
 import { touchesARefreshToken } from '../src/session-storage.ts';
@@ -87,7 +88,12 @@ export default defineBackground(() => {
     try {
       // FRU-103: a team wildcard is registered only while its worker lists it, so a proof that is lost
       // takes the scripts off the previews at the next sync.
-      const [sites, proven] = await Promise.all([readAll(), readFreshPreviews()]);
+      // FRU-444: the origins where the reviewer hid the widget get no script.
+      const [sites, proven, hidden] = await Promise.all([
+        readAll(),
+        readFreshPreviews(),
+        readHidden(browser.storage.local),
+      ]);
       // A key that is not a pattern covers nothing in `resolveSite`, so it registers nothing here.
       const wanted = Object.entries(sites)
         .filter(
@@ -105,7 +111,7 @@ export default defineBackground(() => {
       );
       const granted = wanted.filter((_, index) => held[index]);
 
-      await syncRegistration(browser.scripting, granted);
+      await syncRegistration(browser.scripting, granted, hidden);
     } catch (error) {
       console.error('[fruitback] could not sync the content script registration', error);
     }
@@ -430,7 +436,13 @@ export default defineBackground(() => {
           console.error('[fruitback] could not forget the rules of the browser account', error),
         );
     }
-    if (changes.sites !== undefined || touchesPreviews(Object.keys(changes))) void sync();
+    if (
+      changes.sites !== undefined ||
+      changes[HIDDEN_ORIGINS_KEY] !== undefined ||
+      touchesPreviews(Object.keys(changes))
+    ) {
+      void sync();
+    }
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,
     // which writes every endpoint at once. Each re-entry settles at once: the next run finds the

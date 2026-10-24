@@ -21,6 +21,11 @@ export type BridgeSeams = {
   readName?: () => Promise<string | undefined>;
   /** « Show CSS selectors » (FRU-349): said to a widget we mount, in either mode. */
   readShowSelectors?: () => Promise<boolean>;
+  /**
+   * « Show Fruitback on this page » turned off for this origin (FRU-444): the widget leaves the page,
+   * and the rule stays on. A read that fails shows it.
+   */
+  readHidden?: () => Promise<boolean>;
   post: (message: BridgeMessage) => void;
 };
 
@@ -30,6 +35,7 @@ export function createApply({
   readSignedOut,
   readName,
   readShowSelectors,
+  readHidden,
   post,
 }: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
@@ -56,16 +62,17 @@ export function createApply({
 
   return async (force = false): Promise<void> => {
     const mine = ++generation;
-    const [site, locale, name, selectors] = await Promise.all([
+    const [site, locale, name, selectors, hidden] = await Promise.all([
       readSite(),
       readLanguage?.().catch(() => undefined),
       readName?.().catch(() => undefined),
       // A read that fails keeps what was said last: the selector is a help, never a reason to stop.
       readShowSelectors?.().catch(() => selectorsSaid ?? false),
+      readHidden?.().catch(() => false),
     ]);
     // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
     // widget offers without building it again over a note being written.
-    const message = decide(site, locale, name);
+    const message = hidden === true ? ({ channel: CHANNEL, kind: 'unmount' } as const) : decide(site, locale, name);
     const relayed =
       message.kind === 'mount' && message.relay === true && site !== undefined && readSignedOut !== undefined;
     // A read of storage that fails keeps what was said last, and says why in the console: forcing

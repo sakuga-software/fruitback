@@ -10,6 +10,7 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createApply } from '../src/bridge.ts';
+import { HIDDEN_ORIGINS_KEY, isHidden } from '../src/page-visibility.ts';
 import { cloudEndpoint, wantsSession } from '../src/popup-state.ts';
 import { createSessionArea, touchesARefreshToken } from '../src/session-storage.ts';
 import { SIGN_IN_REQUEST } from '../src/sign-in-request.ts';
@@ -81,6 +82,7 @@ export default defineContentScript({
 
         return typeof stored === 'string' ? stored : undefined;
       },
+      readHidden: () => isHidden(browser.storage.local, origin),
       readShowSelectors: async () => (await browser.storage.local.get(SHOW_SELECTORS_KEY))[SHOW_SELECTORS_KEY] === true,
       readSignedOut: async (site) => {
         const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
@@ -211,6 +213,7 @@ export default defineContentScript({
         (changes.sites !== undefined ||
           changes[LANGUAGE_KEY] !== undefined ||
           changes[SHOW_SELECTORS_KEY] !== undefined ||
+          changes[HIDDEN_ORIGINS_KEY] !== undefined ||
           touchesARefreshToken(keys))
       ) {
         void apply();
