@@ -484,6 +484,7 @@ test('« Preferences »: the name fills the composer in private mode, and the ic
     'Open notes in the sidebar',
     'Name on my notes',
     'Show CSS selectors',
+    'Corner of the widget',
     'Allow captures on every site',
     'Leave feedback shortcut',
     'Keep my rules in the account of this browser',

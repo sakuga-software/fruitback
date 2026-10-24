@@ -415,3 +415,58 @@ describe('« Show CSS selectors » the widget is told of (FRU-349)', () => {
     assert.deepEqual(posts, [MOUNT, SELECTORS(true)]);
   });
 });
+
+describe('« Corner of the widget » (FRU-443)', () => {
+  const MOUNT_SITE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
+  const DOCK = (position?: string) => ({
+    channel: CHANNEL,
+    kind: 'dock',
+    ...(position === undefined ? {} : { position }),
+  });
+
+  it('says the corner after each mount, and again when it changes, with no new mount', async () => {
+    const posts: BridgeMessage[] = [];
+    let corner: 'top-left' | 'bottom-left' | undefined = 'top-left';
+    const apply = createApply({
+      readSite: async () => MOUNT_SITE,
+      readDockPosition: async () => corner,
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    await apply();
+    corner = 'bottom-left';
+    await apply();
+    corner = undefined;
+    await apply();
+    await apply(true);
+
+    assert.deepEqual(
+      posts.map((m) => m.kind),
+      ['mount', 'dock', 'dock', 'dock', 'mount', 'dock'],
+    );
+    assert.deepEqual(posts[1], DOCK('top-left'));
+    assert.deepEqual(posts[2], DOCK('bottom-left'));
+    assert.deepEqual(posts[3], DOCK());
+  });
+
+  it('keeps the corner said last when the read fails, and says nothing to no widget', async () => {
+    const posts: BridgeMessage[] = [];
+    let fails = false;
+    let site: SiteConfig | undefined = MOUNT_SITE;
+    const apply = createApply({
+      readSite: async () => site,
+      readDockPosition: async () => (fails ? Promise.reject(new Error('closed')) : 'top-right'),
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    fails = true;
+    await apply();
+    site = undefined;
+    await apply();
+
+    assert.deepEqual(
+      posts.map((m) => m.kind),
+      ['mount', 'dock', 'unmount'],
+    );
+  });
+});

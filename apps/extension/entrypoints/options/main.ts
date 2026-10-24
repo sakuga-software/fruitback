@@ -43,13 +43,19 @@ import { CAPTURE_EVERYWHERE, browserWarning, setCaptureEverywhere } from '../../
 import { holdsSiteAccess } from '../../src/site-grant.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { CHROMIUM_SHORTCUTS_URL, currentShortcut } from '../../src/shortcut.ts';
-import { type Pairing, type WorkerCard, preferencesSection, redrawWorkers } from '../../src/workers-page.ts';
+import {
+  DEFAULT_DOCK_POSITION,
+  type Pairing,
+  type WorkerCard,
+  preferencesSection,
+  redrawWorkers,
+} from '../../src/workers-page.ts';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
 import { touchesARefreshToken } from '../../src/session-storage.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_PROBLEM } from '../../src/remedy.ts';
-import { NOTES_NAME_KEY, SHOW_SELECTORS_KEY } from '../../src/protocol.ts';
+import { DOCK_POSITION_KEY, NOTES_NAME_KEY, SHOW_SELECTORS_KEY, parseDockPosition } from '../../src/protocol.ts';
 import { PANEL_ON_CLICK_KEY } from '../../src/side-panel.ts';
 
 /**
@@ -700,6 +706,7 @@ async function preferences(): Promise<HTMLElement> {
     NOTES_NAME_KEY,
     SYNC_SETTING,
     SHOW_SELECTORS_KEY,
+    DOCK_POSITION_KEY,
   ]);
   const shortcut = currentShortcut(await browser.commands.getAll().catch(() => []));
   // Firefox 137 opens its own page. Chromium browsers have one, at an address the extension may open.
@@ -731,6 +738,12 @@ async function preferences(): Promise<HTMLElement> {
     // Absent is off: turning it off removes the key rather than keeping a `false`.
     onSelectors: (on) =>
       on ? browser.storage.local.set({ [SHOW_SELECTORS_KEY]: true }) : browser.storage.local.remove(SHOW_SELECTORS_KEY),
+    dockPosition: parseDockPosition(stored[DOCK_POSITION_KEY]) ?? DEFAULT_DOCK_POSITION,
+    // The corner by default is no key: a widget of before reads the same.
+    onDockPosition: (position) =>
+      position === DEFAULT_DOCK_POSITION
+        ? browser.storage.local.remove(DOCK_POSITION_KEY)
+        : browser.storage.local.set({ [DOCK_POSITION_KEY]: position }),
     capturesEverywhere,
     captureWarning: browserWarning(import.meta.env.FIREFOX),
     onCapturesEverywhere: (on) =>

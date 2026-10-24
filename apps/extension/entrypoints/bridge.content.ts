@@ -5,7 +5,9 @@ import {
   NOTES_NAME_KEY,
   type RelayRequestMessage,
   SHOW_SELECTORS_KEY,
+  DOCK_POSITION_KEY,
   parseBridgeMessage,
+  parseDockPosition,
   parseRelayResponse,
   relayRefusal,
 } from '../src/protocol.ts';
@@ -83,6 +85,8 @@ export default defineContentScript({
         return typeof stored === 'string' ? stored : undefined;
       },
       readHidden: () => isHidden(browser.storage.local, origin),
+      readDockPosition: async () =>
+        parseDockPosition((await browser.storage.local.get(DOCK_POSITION_KEY))[DOCK_POSITION_KEY]),
       readShowSelectors: async () => (await browser.storage.local.get(SHOW_SELECTORS_KEY))[SHOW_SELECTORS_KEY] === true,
       readSignedOut: async (site) => {
         const held = Object.fromEntries(Object.keys(await sessions.read()).map((endpoint) => [endpoint, true]));
@@ -214,6 +218,7 @@ export default defineContentScript({
           changes[LANGUAGE_KEY] !== undefined ||
           changes[SHOW_SELECTORS_KEY] !== undefined ||
           changes[HIDDEN_ORIGINS_KEY] !== undefined ||
+          changes[DOCK_POSITION_KEY] !== undefined ||
           touchesARefreshToken(keys))
       ) {
         void apply();
