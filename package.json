@@ -23,7 +23,7 @@
     "@playwright/test": "1.58.2",
     "@types/node": "catalog:",
     "addons-linter": "10.14.0",
-    "nx": "^23.1.0",
+    "nx": "^23.2.1",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:"
