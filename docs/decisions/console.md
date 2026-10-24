@@ -132,6 +132,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `/pair` held a session of one workspace, in the words of a worker. **A self-hosted console keeps
   the pairing link** (`useConnect`): the extension of the store signs in to the Cloud alone
   (`WXT_FRUITBACK_CLOUD`), so it cannot sign in to that worker.
+- **Nothing offers to install or to connect the extension once a browser of the account is
+  connected** (FRU-441, decided by Mathieu on 2026-10-24). `useConnectedExtension`
+  (`extension-connected.ts`) reads `GET /console/me/browsers` once, and again when the tab is shown
+  again. With at least one browser, the foot of both rails, the card « Browser extension » of step 3
+  of the setup and « You are in » say « Extension connected · Chrome on macOS » (the browser used
+  last), and « Connect another browser » is a quiet link: no « Install the extension », no « Connect
+  this browser ». The card is not hidden: another computer, or a colleague, still needs a way in. A
+  list that could not be read, or is empty, shows the offers of before. **`/connect`, opened in a
+  browser that is already connected, says so** (« This browser is already connected ») and leads to
+  the console, with « Connect another browser » to show the three steps. « This browser » is a
+  browser of the extension whose label is the label of the session of the console in this tab
+  (`current` of `GET /console/sessions`): the label is a family and a system, so another computer
+  with the same browser and system reads the same, and the steps stay one press away. No route of
+  the worker was added. The Sites screen (`install-options.tsx`) still offers « Connect this
+  browser ». `e2e/console-extension-connected.spec.ts` holds each screen with a browser and with none.
 - **« Connect this browser » answers the extension, and only on a press** (FRU-240, screen 04 of the
   mockup of 2026-10-13, routes of FRU-238). The extension opens `/connect/<request>`; the page reads
   `GET /console/connect/<request>` and shows the word, the browser, the account and its workspaces

@@ -12,6 +12,8 @@ import {
 import { dayOf } from '../ago';
 import { adoptLanguage, msg, t } from '../i18n';
 import { extensionInstallFor } from '../extension-store';
+import { useConnectedExtension } from '../extension-connected';
+import { BY_SIGN_IN, CONNECT_PAGE } from '../install-options';
 import { PageHead as KitPageHead, Logo, Menu } from '../ui';
 import { useLocale } from '../use-locale';
 
@@ -256,7 +258,7 @@ export function RailFrame({
 }: {
   head: ReactNode;
   children: ReactNode;
-  foot: readonly { href: string; label: string }[];
+  foot: readonly RailLink[];
 }) {
   return (
     // From 888 px the rail is beside the screen, as high as the window, and stays in place while the
@@ -265,17 +267,31 @@ export function RailFrame({
       {head}
       {children}
       <div className="mt-auto flex flex-col gap-[14px] p-[8px] max-[900px]:hidden">
-        {foot.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            target="_blank"
-            rel="noreferrer"
-            className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
-          >
-            {link.label}
-          </a>
-        ))}
+        {foot.map((link) => {
+          const anchor = (
+            <a
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="self-start text-small leading-auto text-rail-text underline decoration-1 underline-offset-[3px] hover:text-white"
+            >
+              {link.label}
+            </a>
+          );
+          if (link.status === undefined) return anchor;
+
+          // The line of the extension and its link read as one entry: 6 px apart, 14 px from the next.
+          return (
+            <div key={link.href} className="flex flex-col gap-[6px]">
+              <p className="flex items-center gap-[8px] text-small leading-auto text-white">
+                <span aria-hidden="true" className="kit-drop bg-status-done" data-size="9" />
+                {link.status}
+              </p>
+              {anchor}
+            </div>
+          );
+        })}
         <Logo on="rail" />
       </div>
     </aside>
@@ -349,8 +365,10 @@ export function Rail({
       </Link>
     );
 
+  const extension = useExtensionLink();
+
   return (
-    <RailFrame head={head} foot={[extensionLink(), { href: 'https://fruitback.com', label: t('Help and docs') }]}>
+    <RailFrame head={head} foot={[extension, { href: 'https://fruitback.com', label: t('Help and docs') }]}>
       <RailNav
         label={t('Workspace')}
         entries={sections.map((section) => ({
@@ -366,13 +384,28 @@ export function Rail({
   );
 }
 
+/** A link at the foot of a rail, which opens a new tab. `status`: a line above it, which is no link. */
+export type RailLink = { href: string; label: string; status?: string };
+
 /**
  * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
  * Chrome Web Store, where 0.3.0 is public. Firefox is not on AMO yet: it, and every other browser,
  * goes to the page that installs the archive of the release.
+ *
+ * With a browser of the extension connected to the account, the rail says so and names it, and the
+ * link is « Connect another browser » (FRU-441): `/connect` on Fruitback Cloud, the page that installs
+ * it elsewhere, as a self-hosted console connects a browser from a site.
  */
-export function extensionLink(): { href: string; label: string } {
-  return { href: extensionInstallFor(navigator.userAgent), label: t('Install the extension (beta)') };
+export function useExtensionLink(): RailLink {
+  const connected = useConnectedExtension();
+  const install = extensionInstallFor(navigator.userAgent);
+  if (connected === undefined) return { href: install, label: t('Install the extension (beta)') };
+
+  return {
+    href: BY_SIGN_IN ? CONNECT_PAGE : install,
+    label: t('Connect another browser'),
+    status: t('Extension connected · {browser}', { browser: connected.browser }),
+  };
 }
 
 /** Whether a row that scrolls holds more before its start and after its end. */
