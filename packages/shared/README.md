@@ -1,6 +1,6 @@
 # @fruitback/shared
 
-The contract of [Fruitback](https://fruitback.com): the shape of a note (a _seed_) that the widget
+The contract of [Fruitback](https://fruitback.com): the shape of a note that the widget
 writes and the server stores, with its schema, and the format of the issue description that carries
 it.
 
@@ -18,24 +18,28 @@ npm i @fruitback/shared
 ## Usage
 
 ```ts
-import { parseSeed } from '@fruitback/shared';
+import { parseNote } from '@fruitback/shared';
 
 // The body of a request of the REST connector carries the note in `seed`.
-const parsed = parseSeed(JSON.parse(body).seed);
+const parsed = parseNote(JSON.parse(body).seed);
 if (parsed.ok) {
-  console.log(parsed.seed.note, parsed.seed.page.url, parsed.seed.anchor.selector);
+  console.log(parsed.note.note, parsed.note.page.url, parsed.note.anchor.selector);
 }
 ```
 
-`parseSeed` never throws: a value that is not a valid seed gives `{ ok: false, reason }`. The types
-(`Seed`, `SeedAnchor`, `SeedPage`, …) come with the schemas.
+`parseNote` never throws: a value that is not a valid note gives `{ ok: false, reason }`. The types
+(`Note`, `NoteAnchor`, `NotePage`, …) come with the schemas.
+
+A note was called a _seed_ until 0.4.0. The names of before (`parseSeed`, `Seed`, `seedSchema`,
+`@fruitback/shared/seed.fixture`, …) still work, marked deprecated, and go in a later version. An
+issue written before then holds `"kind": "fruitback.seed"`, and `parseNote` reads it for good.
 
 ## Guides
 
 - [Receiving notes on your own address](https://fruitback.com/rest-connector.html): the request
   for each note, and its signature.
-- [What the widget collects](https://fruitback.com/privacy.html): every field of a seed.
-- [Architecture](https://fruitback.com/architecture.html): the seed contract, and why it is a
+- [What the widget collects](https://fruitback.com/privacy.html): every field of a note.
+- [Architecture](https://fruitback.com/architecture.html): the note contract, and why it is a
   package of its own.
 
 ## Licence

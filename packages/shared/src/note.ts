@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 /**
- * A **seed** is one piece of visual feedback planted on an element of a live page.
+ * A **note** is one piece of visual feedback planted on an element of a live page. Its payload was
+ * called a « seed » until FRU-378, and the notes written before then say so in their `kind`.
  *
  * It is the only contract shared by the three moving parts of Fruitback:
  * the widget writes it, the worker relays it into Linear, and the widget reads it back to
@@ -12,15 +13,27 @@ import { z } from 'zod';
  * no schema default values, and no field the widget cannot rebuild from the stored payload.
  */
 
-/** Bump only when the payload shape changes. Readers accept older versions, refuse newer ones. */
 /**
+ * The last version of the kind `fruitback.seed`, the one a note is written with today.
+ *
  * 2 since FRU-9 added `reporter.verified`. Readers accept older versions and refuse newer ones,
- * so a v1 seed still parses: it simply carries no verified identity, which is exactly what it meant.
+ * so a v1 note still parses: it simply carries no verified identity, which is exactly what it meant.
+ * The issues already in the trackers hold this kind, so a reader accepts it for good (FRU-378).
  */
 export const SEED_VERSION = 2;
 
 /** Discriminator that lets us recognise our own JSON among anything else in a description. */
 export const SEED_KIND = 'fruitback.seed';
+
+/**
+ * The kind of a note from version 3 on (FRU-378): the version 2 of `fruitback.seed`, with its text in
+ * `text` rather than in `note`. Readers accept it already; the writers move to it in a later change,
+ * so a worker that reads it is out before a widget that writes it.
+ */
+export const NOTE_KIND = 'fruitback.note';
+
+/** The version of `NOTE_KIND`. It starts at 3, after the two versions of `fruitback.seed`. */
+export const NOTE_VERSION = 3;
 
 /** Text excerpts are a re-anchoring hint, not content — keep them short. */
 export const TEXT_EXCERPT_MAX_LENGTH = 160;
@@ -54,7 +67,7 @@ const httpUrl = z.string().refine(
  * different window size. Used to re-place a pin whose element can no longer be resolved, and to
  * detect drift when it can.
  */
-export const seedBoundsSchema = z.object({
+export const noteBoundsSchema = z.object({
   xPct: finite,
   yPct: finite,
   wPct: finite,
@@ -64,9 +77,9 @@ export const seedBoundsSchema = z.object({
 /**
  * Deliberately redundant: every field is an independent way to find the element again after the
  * site has been redeployed. Resolution order lives in the widget, not here — see
- * `SEED_ANCHOR_STRATEGIES` for the intended precedence.
+ * `NOTE_ANCHOR_STRATEGIES` for the intended precedence.
  */
-export const seedAnchorSchema = z.object({
+export const noteAnchorSchema = z.object({
   /** Most specific selector we could build that still looked stable (ids and test ids favoured). */
   selector: z.string().min(1),
   /** Structural fallback: `:nth-child` chain from `<html>`. Brittle alone, useful as a tiebreak. */
@@ -85,25 +98,25 @@ export const seedAnchorSchema = z.object({
     })
     .partial()
     .optional(),
-  bounds: seedBoundsSchema,
+  bounds: noteBoundsSchema,
 });
 
 /** Precedence the widget applies when re-planting a pin (M4 / FRU-11). */
-export const SEED_ANCHOR_STRATEGIES = ['selector', 'testId', 'text', 'domPath', 'bounds'] as const;
-export type SeedAnchorStrategy = (typeof SEED_ANCHOR_STRATEGIES)[number];
+export const NOTE_ANCHOR_STRATEGIES = ['selector', 'testId', 'text', 'domPath', 'bounds'] as const;
+export type NoteAnchorStrategy = (typeof NOTE_ANCHOR_STRATEGIES)[number];
 
 /**
  * `url` is the canonical form produced by `canonicalizePageUrl` and is the grouping key for
- * "show me the seeds of this page". It appears verbatim in the Linear description, which is what
+ * "show me the notes of this page". It appears verbatim in the Linear description, which is what
  * makes a `description contains <url>` filter usable server-side.
  */
-export const seedPageSchema = z.object({
+export const notePageSchema = z.object({
   url: httpUrl,
   path: z.string().min(1),
   title: z.string().optional(),
 });
 
-export const seedViewportSchema = z.object({
+export const noteViewportSchema = z.object({
   width: finite,
   height: finite,
   /** `devicePixelRatio`, needed to read screenshots taken on a retina screen. */
@@ -111,15 +124,15 @@ export const seedViewportSchema = z.object({
 });
 
 /** react-grab's payoff: the component and file behind the element. Dev/preview builds only. */
-export const seedSourceSchema = z.object({
+export const noteSourceSchema = z.object({
   component: z.string().optional(),
   file: z.string().optional(),
   line: finite.optional(),
   column: finite.optional(),
 });
 
-/** Which client site this seed came from — drives the Linear team/label mapping (M5). */
-export const seedClientSchema = z.object({
+/** Which client site this note came from — drives the Linear team/label mapping (M5). */
+export const noteClientSchema = z.object({
   id: z.string().min(1),
   name: z.string().optional(),
 });
@@ -135,27 +148,27 @@ export const seedClientSchema = z.object({
  * It is a `true` literal rather than a boolean so that "not verified" stays *absent* rather than
  * `false`: the round-trip forbids a field the caller did not provide.
  */
-export const seedReporterSchema = z.object({
+export const noteReporterSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   email: z.string().optional(),
   verified: z.literal(true).optional(),
 });
 
-export const seedEnvSchema = z.object({
+export const noteEnvSchema = z.object({
   userAgent: z.string().optional(),
   locale: z.string().optional(),
   platform: z.string().optional(),
 });
 
 /** Filled in by the worker once the capture is uploaded as a Linear attachment (M2 / FRU-6). */
-export const seedScreenshotSchema = z.object({
+export const noteScreenshotSchema = z.object({
   url: httpUrl.optional(),
   width: finite.optional(),
   height: finite.optional(),
 });
 
-export const seedSchema = z.object({
+export const noteSchema = z.object({
   kind: z.literal(SEED_KIND),
   v: z.number().int().positive(),
   /** Generated client-side. Dedupes retries and keys the pin across reloads. */
@@ -163,50 +176,62 @@ export const seedSchema = z.object({
   createdAt: isoTimestamp,
   /** What the visitor actually wrote. Stored here too so the round-trip stays lossless. */
   note: z.string().max(NOTE_MAX_LENGTH),
-  page: seedPageSchema,
-  viewport: seedViewportSchema,
-  anchor: seedAnchorSchema,
-  source: seedSourceSchema.optional(),
-  client: seedClientSchema.optional(),
-  reporter: seedReporterSchema.optional(),
-  env: seedEnvSchema.optional(),
-  screenshot: seedScreenshotSchema.optional(),
+  page: notePageSchema,
+  viewport: noteViewportSchema,
+  anchor: noteAnchorSchema,
+  source: noteSourceSchema.optional(),
+  client: noteClientSchema.optional(),
+  reporter: noteReporterSchema.optional(),
+  env: noteEnvSchema.optional(),
+  screenshot: noteScreenshotSchema.optional(),
 });
 
-export type Seed = z.infer<typeof seedSchema>;
-export type SeedAnchor = z.infer<typeof seedAnchorSchema>;
-export type SeedBounds = z.infer<typeof seedBoundsSchema>;
-export type SeedPage = z.infer<typeof seedPageSchema>;
-export type SeedViewport = z.infer<typeof seedViewportSchema>;
-export type SeedSource = z.infer<typeof seedSourceSchema>;
-export type SeedClient = z.infer<typeof seedClientSchema>;
-export type SeedReporter = z.infer<typeof seedReporterSchema>;
-export type SeedEnv = z.infer<typeof seedEnvSchema>;
-export type SeedScreenshot = z.infer<typeof seedScreenshotSchema>;
+export type Note = z.infer<typeof noteSchema>;
+export type NoteAnchor = z.infer<typeof noteAnchorSchema>;
+export type NoteBounds = z.infer<typeof noteBoundsSchema>;
+export type NotePage = z.infer<typeof notePageSchema>;
+export type NoteViewport = z.infer<typeof noteViewportSchema>;
+export type NoteSource = z.infer<typeof noteSourceSchema>;
+export type NoteClient = z.infer<typeof noteClientSchema>;
+export type NoteReporter = z.infer<typeof noteReporterSchema>;
+export type NoteEnv = z.infer<typeof noteEnvSchema>;
+export type NoteScreenshot = z.infer<typeof noteScreenshotSchema>;
 
-/** What a caller supplies; `kind` and `v` are stamped by `createSeed`. */
-export type SeedInput = Omit<Seed, 'kind' | 'v'>;
+/** What a caller supplies; `kind` and `v` are stamped by `createNote`. */
+export type NoteInput = Omit<Note, 'kind' | 'v'>;
 
-export type SeedParseFailure =
+export type NoteParseFailure =
   /** No Fruitback payload in there at all. */
   | { ok: false; reason: 'not-found' }
   /** Written by a newer Fruitback than this one — refuse rather than silently drop fields. */
   | { ok: false; reason: 'unsupported-version'; version: number }
   | { ok: false; reason: 'invalid'; message: string };
 
-export type SeedParseResult = { ok: true; seed: Seed } | SeedParseFailure;
+export type NoteParseResult = { ok: true; note: Note } | NoteParseFailure;
 
-/** Build a validated seed, stamping the current kind and version. Throws on an invalid input. */
-export function createSeed(input: SeedInput): Seed {
-  return seedSchema.parse({ ...input, kind: SEED_KIND, v: SEED_VERSION });
+/**
+ * A note as `NOTE_KIND` writes it: `text` for the words of the visitor. The parser reads it into a
+ * `Note` of `SEED_KIND`, the shape every reader holds until the writers move.
+ */
+const noteV3Schema = noteSchema.omit({ kind: true, note: true }).extend({
+  kind: z.literal(NOTE_KIND),
+  text: z.string().max(NOTE_MAX_LENGTH),
+});
+
+/** Build a validated note, stamping the current kind and version. Throws on an invalid input. */
+export function createNote(input: NoteInput): Note {
+  return noteSchema.parse({ ...input, kind: SEED_KIND, v: SEED_VERSION });
 }
 
 /**
- * Validate an untrusted value as a seed. Never throws — the caller is usually parsing a Linear
+ * Validate an untrusted value as a note. Never throws — the caller is usually parsing a Linear
  * description a human may have edited.
+ *
+ * It reads both kinds: `fruitback.seed` up to `SEED_VERSION`, and `fruitback.note` at `NOTE_VERSION`,
+ * whose `text` it answers as `note`.
  */
-export function parseSeed(value: unknown): SeedParseResult {
-  if (!isSeedShaped(value)) {
+export function parseNote(value: unknown): NoteParseResult {
+  if (!isNoteShaped(value)) {
     return { ok: false, reason: 'not-found' };
   }
 
@@ -217,35 +242,60 @@ export function parseSeed(value: unknown): SeedParseResult {
     typeof version !== 'number' ||
     version < 1
   ) {
-    return { ok: false, reason: 'invalid', message: 'missing or malformed seed version' };
+    return { ok: false, reason: 'invalid', message: 'missing or malformed note version' };
   }
+
+  if (value.kind === NOTE_KIND) return parseVersion3(value, version);
+
   if (version > SEED_VERSION) {
     return { ok: false, reason: 'unsupported-version', version };
   }
 
-  const result = seedSchema.safeParse(value);
+  const result = noteSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, reason: 'invalid', message: formatIssues(result.error) };
   }
 
-  return { ok: true, seed: result.data };
+  return { ok: true, note: result.data };
+}
+
+/** A note of `NOTE_KIND`, answered in the shape of `SEED_KIND` at `SEED_VERSION`. */
+function parseVersion3(value: Record<string, unknown>, version: number): NoteParseResult {
+  if (version > NOTE_VERSION) {
+    return { ok: false, reason: 'unsupported-version', version };
+  }
+  if (version < NOTE_VERSION) {
+    return { ok: false, reason: 'invalid', message: `v: ${NOTE_KIND} starts at version ${NOTE_VERSION}` };
+  }
+
+  const result = noteV3Schema.safeParse(value);
+  if (!result.success) {
+    return { ok: false, reason: 'invalid', message: formatIssues(result.error) };
+  }
+
+  // `noteSchema` drops `text` and puts the fields back in the order of the version 2.
+  const { text, ...rest } = result.data;
+
+  return { ok: true, note: noteSchema.parse({ ...rest, kind: SEED_KIND, v: SEED_VERSION, note: text }) };
 }
 
 /** Cheap `kind` check, so an unrelated JSON block reports `not-found` rather than `invalid`. */
-function isSeedShaped(value: unknown): value is Record<string, unknown> {
+function isNoteShaped(value: unknown): value is Record<string, unknown> {
   // A string or a number has no `kind` either; only `null` and `undefined` need the `?.`.
-  return (value as { kind?: unknown } | null | undefined)?.kind === SEED_KIND;
+  const kind = (value as { kind?: unknown } | null | undefined)?.kind;
+
+  return kind === SEED_KIND || kind === NOTE_KIND;
 }
 
 function formatIssues(error: z.ZodError): string {
-  // `isSeedShaped` lets only an object through, and no rule of `seedSchema` sits on the object itself,
+  // `isNoteShaped` lets only an object through, and no rule of either schema sits on the object itself,
   // so every issue has a path.
   return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
 }
 
 /**
  * Query parameters that identify a campaign, not a page. Two visitors landing on the same screen
- * through different ads must produce seeds that group together.
+ * through different ads must produce notes that group together.
  */
 const TRACKING_PARAMS = [
   /^utm_/i,

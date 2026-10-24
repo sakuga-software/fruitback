@@ -1,23 +1,23 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DEFAULT_SEED_STAGE,
+  DEFAULT_NOTE_STAGE,
   FRUITBACK_LABEL,
-  SEED_STAGES,
+  NOTE_STAGES,
   buildIssueLabels,
   MAX_STATUSES,
   offeredStages,
   offeredStatuses,
-  seedCommentSchema,
-  seedIssueSchema,
+  noteCommentSchema,
+  noteIssueSchema,
   statusOf,
 } from './issue.ts';
-import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
+import { minimalNoteFixture, noteFixture } from './note.fixture.ts';
 
 describe('labels', () => {
   it('tags every issue, and the client when there is one', () => {
-    assert.deepEqual(buildIssueLabels(seedFixture()), [FRUITBACK_LABEL, 'fruitback:acme']);
-    assert.deepEqual(buildIssueLabels(minimalSeedFixture()), [FRUITBACK_LABEL]);
+    assert.deepEqual(buildIssueLabels(noteFixture()), [FRUITBACK_LABEL, 'fruitback:acme']);
+    assert.deepEqual(buildIssueLabels(minimalNoteFixture()), [FRUITBACK_LABEL]);
   });
 });
 
@@ -27,15 +27,15 @@ describe('the stage vocabulary', () => {
   // them depend on Linear. `apps/worker/src/linear.test.ts` owns that mapping's tests now. What is
   // still the contract's is the vocabulary itself and the fallback every connector uses.
   it('is the five stages the widget draws, in their order', () => {
-    assert.deepEqual([...SEED_STAGES], ['new', 'todo', 'progress', 'done', 'closed']);
+    assert.deepEqual([...NOTE_STAGES], ['new', 'todo', 'progress', 'done', 'closed']);
   });
 
   it('falls back to a stage that exists, and to that one', () => {
-    assert.ok(SEED_STAGES.includes(DEFAULT_SEED_STAGE));
+    assert.ok(NOTE_STAGES.includes(DEFAULT_NOTE_STAGE));
     // The value is pinned here rather than in a connector's tests, because every connector reads
     // this constant: this is the one place a change to it should be heard. Moving it silently
     // repaints every pin whose state a provider renamed.
-    assert.equal(DEFAULT_SEED_STAGE, 'new');
+    assert.equal(DEFAULT_NOTE_STAGE, 'new');
   });
 });
 
@@ -51,13 +51,13 @@ describe('offeredStages (FRU-32)', () => {
   it('offers every stage if the worker sends nothing usable', () => {
     // A worker from before FRU-32 sends no field. Its panel must not lose a box.
     for (const value of [undefined, null, 'new', [], ['blue']]) {
-      assert.deepEqual(offeredStages(value), [...SEED_STAGES], JSON.stringify(value));
+      assert.deepEqual(offeredStages(value), [...NOTE_STAGES], JSON.stringify(value));
     }
   });
 });
 
 describe('the read envelope (FRU-10, FRU-13)', () => {
-  /** A planted seed as a worker answers it, with one reply from the team. */
+  /** A planted note as a worker answers it, with one reply from the team. */
   function realisticIssue(overrides: Record<string, unknown> = {}) {
     return {
       id: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
@@ -70,7 +70,7 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
       comments: [
         { id: 'c_1', body: 'Corrigé sur la preview.', createdAt: '2026-08-05T11:00:00.000Z', author: 'Mathieu' },
       ],
-      seed: seedFixture(),
+      seed: noteFixture(),
       ...overrides,
     };
   }
@@ -78,7 +78,7 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
   it('reads a realistic answer of a worker', () => {
     const issue = realisticIssue();
 
-    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+    assert.deepEqual(noteIssueSchema.parse(issue), issue);
   });
 
   it('reads checked and mine, and refuses a checked with no name or no instant, and a mine that is not true (FRU-294)', () => {
@@ -88,32 +88,32 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
       mine: true,
     });
 
-    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+    assert.deepEqual(noteIssueSchema.parse(issue), issue);
     for (const checked of [{ by: 'Bob' }, { at: '2026-10-20T10:00:00.000Z' }, {}, 'Bob']) {
-      assert.equal(seedIssueSchema.safeParse({ ...issue, checked }).success, false, JSON.stringify(checked));
+      assert.equal(noteIssueSchema.safeParse({ ...issue, checked }).success, false, JSON.stringify(checked));
     }
     for (const mine of [false, 'true', 1]) {
-      assert.equal(seedIssueSchema.safeParse({ ...issue, mine }).success, false, String(mine));
+      assert.equal(noteIssueSchema.safeParse({ ...issue, mine }).success, false, String(mine));
     }
   });
 
   it('reads an answer with no URL, as a store with no web interface gives it', () => {
     const { url: _none, ...issue } = realisticIssue();
 
-    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+    assert.deepEqual(noteIssueSchema.parse(issue), issue);
   });
 
   it('refuses an empty id, identifier or URL', () => {
     for (const field of ['id', 'identifier', 'url']) {
-      assert.equal(seedIssueSchema.safeParse(realisticIssue({ [field]: '' })).success, false, field);
+      assert.equal(noteIssueSchema.safeParse(realisticIssue({ [field]: '' })).success, false, field);
     }
   });
 
   it('reads a realistic comment, and refuses one with an empty id', () => {
     const comment = { id: 'c_42', body: 'On regarde ça demain.', createdAt: '2026-08-05T11:00:00.000Z' };
 
-    assert.deepEqual(seedCommentSchema.parse(comment), comment);
-    assert.equal(seedCommentSchema.safeParse({ ...comment, id: '' }).success, false);
+    assert.deepEqual(noteCommentSchema.parse(comment), comment);
+    assert.equal(noteCommentSchema.safeParse({ ...comment, id: '' }).success, false);
   });
 });
 
@@ -121,18 +121,18 @@ describe('the statuses of a read (FRU-364)', () => {
   const doing = { key: 'linear:st_1', name: 'In Review', stage: 'progress', color: '#7dd3fc', textColor: '#18181b' };
 
   it('reads an issue with no status, as every worker before FRU-364 sends it', () => {
-    const issue = { ...seedIssueFixtureLike(), stage: 'done', stateName: 'Done' };
-    const parsed = seedIssueSchema.parse(issue);
+    const issue = { ...noteIssueFixtureLike(), stage: 'done', stateName: 'Done' };
+    const parsed = noteIssueSchema.parse(issue);
 
     assert.deepEqual(parsed, issue);
     assert.equal('status' in parsed, false, 'no default fills the field in');
   });
 
   it('reads an issue that names its status, and refuses an empty key', () => {
-    const issue = { ...seedIssueFixtureLike(), status: 'linear:st_1' };
+    const issue = { ...noteIssueFixtureLike(), status: 'linear:st_1' };
 
-    assert.deepEqual(seedIssueSchema.parse(issue), issue);
-    assert.equal(seedIssueSchema.safeParse({ ...issue, status: '' }).success, false);
+    assert.deepEqual(noteIssueSchema.parse(issue), issue);
+    assert.equal(noteIssueSchema.safeParse({ ...issue, status: '' }).success, false);
   });
 
   it('gives no status for a read with no list, or with something else than a list', () => {
@@ -223,7 +223,7 @@ describe('the statuses of a read (FRU-364)', () => {
 });
 
 /** A valid issue with no field of FRU-364. */
-function seedIssueFixtureLike() {
+function noteIssueFixtureLike() {
   return {
     id: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
     identifier: 'FRU-2',
@@ -231,6 +231,6 @@ function seedIssueFixtureLike() {
     stage: 'progress',
     stateName: 'In Review',
     updatedAt: '2026-10-21T10:00:00.000Z',
-    seed: seedFixture(),
+    seed: noteFixture(),
   };
 }

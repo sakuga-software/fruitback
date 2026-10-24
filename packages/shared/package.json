@@ -1,7 +1,7 @@
 {
   "name": "@fruitback/shared",
   "version": "0.3.0",
-  "description": "The Fruitback seed contract — the payload the widget writes and the worker stores.",
+  "description": "The Fruitback note contract — the payload the widget writes and the worker stores.",
   "homepage": "https://github.com/sakuga-software/fruitback#readme",
   "bugs": "https://github.com/sakuga-software/fruitback/issues",
   "license": "MIT",
@@ -21,6 +21,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./note.fixture": "./src/note.fixture.ts",
     "./seed.fixture": "./src/seed.fixture.ts"
   },
   "publishConfig": {
@@ -30,6 +31,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js"
+      },
+      "./note.fixture": {
+        "types": "./dist/note.fixture.d.ts",
+        "import": "./dist/note.fixture.js"
       },
       "./seed.fixture": {
         "types": "./dist/seed.fixture.d.ts",

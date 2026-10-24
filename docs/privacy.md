@@ -11,8 +11,8 @@ decide.
 
 ## What a note carries
 
-A note is one **seed**: a JSON object the widget builds in the reporter's browser and posts to your
-worker. Its shape is `seedSchema` in [`packages/shared/src/seed.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/seed.ts),
+A note is a JSON object the widget builds in the reporter's browser and posts to your
+worker. Its shape is `noteSchema` in [`packages/shared/src/note.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/note.ts),
 and nothing outside that schema is sent.
 
 | Field                                      | What it is                                                                       | Sent                                    | What controls it                                                          |
