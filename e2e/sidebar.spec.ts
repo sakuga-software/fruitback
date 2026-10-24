@@ -308,7 +308,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   expect(await read('.fruitback-sidebar-search svg', [])).toMatchObject({ x: 1077, y: 115, width: 15, height: 15 });
   const chips = list.getByRole('group', { name: 'Status' }).getByRole('button');
   // « Closed » is not on the board: it shows because the fifth note is closed.
-  await expect(chips).toHaveText(['All8', 'New2', 'To do2', 'In progress2', 'Done1', 'Closed1']);
+  await expect(chips).toHaveText(['All 8', 'New 2', 'To do 2', 'In progress 2', 'Done 1', 'Closed 1']);
   await expect(list.getByRole('button', { name: 'All 8', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(
     await read('[data-fruitback-chip="all"]', [
@@ -423,7 +423,7 @@ test('the list is the board « Sidebar mode »: its measures, its chips, its sea
   // The search reads the whole text of the notes; the chips count what it found.
   await search.fill('note 5');
   await expect(rows.locator('.fruitback-sidebar-pin')).toHaveText(['5']);
-  await expect(chips).toHaveText(['All1', 'New0', 'To do0', 'In progress0', 'Done0', 'Closed1']);
+  await expect(chips).toHaveText(['All 1', 'New 0', 'To do 0', 'In progress 0', 'Done 0', 'Closed 1']);
   await search.fill('nothing like this');
   await expect(list.getByText('No note matches.')).toBeVisible();
   await search.fill('');

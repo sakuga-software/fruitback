@@ -89,6 +89,8 @@ test('with several workspaces, their menu ends with « Workspace settings »', a
   await expect(page).toHaveURL(/\/w\/w1\/settings$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Workspace settings' })).toBeVisible();
 
+  // The menu closes after the click. Wait for it: a key that arrives sooner reaches a trigger without its focus.
+  await expect(menu).toBeHidden();
   // The keyboard reaches it too, and a workspace is still chosen from the same menu.
   await rail(page).getByRole('button', { name: /^Acme/ }).press('Enter');
   await page.keyboard.press('ArrowDown');
