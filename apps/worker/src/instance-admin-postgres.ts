@@ -31,6 +31,7 @@ import type {
   WorkspaceSuspensionChange,
 } from './instance-admin.ts';
 import { ADMIN_ACTIONS, ADMIN_INVITATION_MS, ADMIN_PAGE, ADMIN_READS, isWorkspaceAction } from './instance-admin.ts';
+import { omit } from './omit.ts';
 import { suspensionView } from './workspace-suspension.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -456,7 +457,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             members: number(row.members),
             sites: number(row.sites),
             notes: notes.get(String(row.id)) ?? noStages(),
-            destinations: (destinations.get(String(row.id)) ?? []).map(({ createdAt: _, ...connector }) => connector),
+            destinations: (destinations.get(String(row.id)) ?? []).map((connector) => omit(connector, 'createdAt')),
             pendingDeliveries: number(row.pending),
           }),
         ),

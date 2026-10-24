@@ -11,6 +11,7 @@ import { runPair } from './cli.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { adminLinkFor } from './first-admin.ts';
 import { ADMIN_PATH } from './instance-admin.ts';
+import { omit } from './omit.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { digest } from './session.ts';
@@ -600,7 +601,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         const { reads, actions } = (await read.json()) as { reads: unknown[]; actions: Record<string, unknown>[] };
         assert.ok(Array.isArray(reads));
         assert.deepEqual(
-          sorted(actions.map(({ at: _, ...action }) => action)),
+          sorted(actions.map((action) => omit(action, 'at'))),
           sorted([
             { action: 'account-restored', admin: { email: 'ana@acme.dev' }, target: { email: 'carl@beta.dev' } },
             { action: 'account-suspended', admin: { email: 'ana@acme.dev' }, target: { email: 'carl@beta.dev' } },
@@ -643,7 +644,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
             (await (await as(worker, bob.cookie, `/console/workspaces/${beta}/admin-reads`)).json()) as {
               actions: { action: string; at: string; admin: unknown; target: unknown }[];
             }
-          ).actions.map(({ at: _, ...action }) => action);
+          ).actions.map((action) => omit(action, 'at'));
         const suspended = {
           action: 'account-suspended',
           admin: { email: 'ana@acme.dev' },
