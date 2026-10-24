@@ -495,6 +495,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
   Settings: 'Réglages',
+  '1 new': '1 nouvelle',
+  '{count} new': '{count} nouvelles',
   'No destination matches this search.': 'Aucune destination ne correspond à cette recherche.',
   'Search the destinations': 'Chercher une destination',
   'Show {more} more ({left} left)': 'En afficher {more} de plus ({left} restantes)',
@@ -504,7 +506,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Address: 'Adresse',
   'Who sees the notes': 'Qui voit les notes',
   'Who can leave a note': 'Qui peut laisser une note',
-  'These are set when the site is added.': 'Ils sont fixés quand le site est ajouté.',
+  'Who sees the notes and who leaves them are set when the site is added.':
+    'Qui voit les notes et qui les laisse sont fixés quand le site est ajouté.',
   'Edit the statuses': 'Modifier les statuts',
   'Remove this site': 'Retirer ce site',
   'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':

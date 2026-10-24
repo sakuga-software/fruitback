@@ -16,6 +16,7 @@ const SITES = [
     visibility: 'members',
     writers: 'anyone',
     destinations: [{ connector: 'c1', teamId: 't1', label: 'Linear · Web' }],
+    via: ['script', 'extension'],
   },
   { id: 's2', origin: 'https://acme.dev', visibility: 'everyone' },
 ];
@@ -81,7 +82,12 @@ test('an owner reads everything of a site on its page, under the crumbs « Sites
 
   // Its address, who sees its notes and who writes them, which the worker sets when it is added.
   const about = page.getByRole('region', { name: 'Site', exact: true });
-  await expect(about.locator('dd')).toHaveText(['https://staging.acme.dev', 'Members of Acme', 'Anyone on the page']);
+  await expect(about.locator('dd')).toHaveText([
+    'https://staging.acme.dev',
+    'Members of Acme',
+    'Anyone on the page',
+    'Extension, script',
+  ]);
   await expect(about.getByRole('textbox')).toHaveCount(0);
   await expect(about.getByRole('radio')).toHaveCount(0);
 
@@ -104,6 +110,7 @@ test('a site that everyone reads takes a note from anybody, and says so', async 
     'https://acme.dev',
     'Everyone who visits',
     'Anyone on the page',
+    'None yet',
   ]);
 });
 

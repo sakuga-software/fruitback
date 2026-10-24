@@ -232,9 +232,10 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
   expect.soft(await painted(first, 'borderTopColor')).toEqual(rgb(LINE));
   expect.soft(await painted(first, 'backgroundColor')).toEqual(rgb(WHITE));
 
-  // The site: its address at 600, and who sees its notes under it.
+  // The site: its address at 600 and 17 px, the largest words of the card (FRU-432), and who sees its
+  // notes under it.
   const name = first.getByRole('heading', { level: 2 });
-  expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '15px' });
+  expect.soft(await styles(name, ['font-weight', 'font-size'])).toEqual({ 'font-weight': '600', 'font-size': '17px' });
   expect.soft(await painted(name, 'color')).toEqual(rgb(INK));
   const audience = first.getByText('Members of Acme', { exact: true });
   expect.soft(await styles(audience, ['font-size'])).toEqual({ 'font-size': '13px' });
@@ -272,29 +273,39 @@ test('the list is a grid of cards, each named by its address and its icon (FRU-4
       .getByRole('img', { name: '4 notes: 2 new, 1 to do, 0 in progress, 1 done, 0 closed', exact: true })
       .locator('span'),
   ).toHaveCount(3);
+  // The status of the card (FRU-432): the count, large, and the new notes, which are the ones to read.
   const total = first.getByText('12', { exact: true });
-  expect.soft(await styles(total, ['font-weight', 'font-variant-numeric'])).toEqual({
+  expect.soft(await styles(total, ['font-weight', 'font-size', 'font-variant-numeric'])).toEqual({
     'font-weight': '600',
+    'font-size': '20px',
     'font-variant-numeric': 'tabular-nums',
   });
+  await expect(first.getByText('3 new', { exact: true })).toBeVisible();
+  expect
+    .soft(contrast(await painted(first.getByText('3 new', { exact: true }), 'color'), rgb(WHITE)))
+    .toBeGreaterThanOrEqual(4.5);
+  await expect(card(page, 'acme.dev').getByText('6 new', { exact: true })).toBeVisible();
   const waiting = card(page, 'preview.lumen.studio').getByText('Waiting for the first note', { exact: true });
   expect.soft(await styles(waiting, ['font-size'])).toEqual({ 'font-size': '13px' });
   expect.soft(await painted(waiting, 'color')).toEqual(rgb(MUTED));
 
-  // What the table said in its columns, each after its term.
-  await expect(first.locator('dt')).toHaveText(['On the page with', 'Notes go to', 'Last note']);
-  expect.soft(await painted(first.locator('dt').first(), 'color')).toEqual(rgb(MUTED));
-  await expect(value(first, 'On the page with')).toHaveText('Extension, script');
-  await expect(value(card(page, 'acme.dev'), 'On the page with')).toHaveText('Script');
+  // The foot of the card (FRU-432): where the notes go, and the last note at the right. Their terms
+  // are for a screen reader; how the notes came is on the page of the site.
+  await expect(first.locator('dt')).toHaveText(['Notes go to', 'Last note']);
+  await expect(first.locator('dt').first()).toHaveClass(/sr-only/);
+  await expect(first.getByText('On the page with')).toHaveCount(0);
+  const last = await box(value(first, 'Last note'));
+  const goes = await box(value(first, 'Notes go to'));
+  expect.soft(last.y, 'the last note is on the line of the place').toBeCloseTo(goes.y, 0);
+  expect.soft(last.x, 'the last note is at the right').toBeGreaterThan(goes.x + goes.width);
+  expect.soft(await painted(value(first, 'Last note'), 'color')).toEqual(rgb(MUTED));
   await expect(value(first, 'Last note')).toHaveText('2 h ago');
   await expect(value(card(page, 'acme.dev'), 'Last note')).toHaveText('12 min ago');
   await expect(value(card(page, 'support.acme.dev'), 'Last note')).toHaveText('40 min ago');
   // A site with no note yet: a dot for the eye, and words for a screen reader.
   const lumen = card(page, 'preview.lumen.studio');
-  for (const term of ['On the page with', 'Last note']) {
-    await expect(value(lumen, term).locator('[aria-hidden="true"]')).toHaveText('·');
-    await expect(value(lumen, term).locator('.sr-only')).toHaveText('None yet');
-  }
+  await expect(value(lumen, 'Last note').locator('[aria-hidden="true"]')).toHaveText('·');
+  await expect(value(lumen, 'Last note').locator('.sr-only')).toHaveText('None yet');
 
   // Where the notes go: the tracker, and the place in it, or the notes an address did not take.
   await expect(value(first, 'Notes go to')).toHaveText('LinearTeam Acme web');
@@ -844,11 +855,7 @@ test('a member installs and changes nothing; a guest does not read where the not
   await workerWith(page, 'member');
   await open(page);
   await expect(page.getByRole('button', { name: 'Add a site', exact: true })).toHaveCount(0);
-  await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText([
-    'On the page with',
-    'Notes go to',
-    'Last note',
-  ]);
+  await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText(['Notes go to', 'Last note']);
   await more(page, 'staging.acme.dev').click();
   await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
   await page.keyboard.press('Escape');
@@ -869,7 +876,7 @@ test('a member installs and changes nothing; a guest does not read where the not
   );
   await open(page);
   // The notes of the sites shared with a guest are theirs to count; where they go is not.
-  await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText(['On the page with', 'Last note']);
+  await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText(['Last note']);
   await expect(card(page, 'staging.acme.dev').getByRole('img', { name: /^12 notes/ })).toBeVisible();
   await expect(page.getByText('Kept in Fruitback')).toHaveCount(0);
   await expect(page.getByText('A site with no tracker keeps its notes in Fruitback.')).toHaveCount(0);
@@ -958,7 +965,7 @@ test('every text of the list is at 4.5:1 on what is behind it', async ({ page })
   await open(page);
   const first = card(page, 'staging.acme.dev');
   const texts: [string, Locator][] = [
-    ['a term', first.locator('dt').first()],
+    ['the last note', value(first, 'Last note')],
     ['an address', first.getByRole('heading', { level: 2 })],
     ['who sees the notes', first.getByText('Members of Acme', { exact: true })],
     ['a tracker', first.getByText('Linear', { exact: true })],

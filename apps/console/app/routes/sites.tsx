@@ -409,7 +409,7 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
   return (
     <li
       data-site={site.id}
-      className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[18px]"
+      className="flex min-w-0 flex-col gap-[14px] rounded-frame border border-line bg-surface px-[20px] pt-[16px] pb-[14px]"
     >
       <div className="flex items-start gap-[12px]">
         <SiteIcon
@@ -420,7 +420,7 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
         <div className="min-w-0 flex-1">
           {/* The host is what a person looks for here, so it wraps rather than being cut (FRU-159): after a
                 dot first, and inside a name only when one name is wider than the card. */}
-          <h2 className="text-body leading-[1.4] font-semibold">
+          <h2 className="text-[17px] leading-[1.35] font-semibold">
             <Link
               to={page}
               className="rounded-[2px] text-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -437,16 +437,23 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
               ))}
             </Link>
           </h2>
-          <p className="text-hint text-muted">
-            {site.visibility === 'members'
-              ? t('Members of {workspace}', { workspace: workspace.name })
-              : t('Everyone who visits')}
+          {/* Who reads and who writes, on one line (FRU-432). FRU-330: the card says the exception only.
+              « Members only » is the default of a new site, and a worker of before, which sends no
+              `writers`, says nothing it could be wrong about. */}
+          <p className="mt-[2px] text-hint text-muted">
+            <span>
+              {site.visibility === 'members'
+                ? t('Members of {workspace}', { workspace: workspace.name })
+                : t('Everyone who visits')}
+            </span>
+            {site.visibility === 'members' && site.writers === 'anyone' ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span className="sr-only">, </span>
+                <span>{t('Notes from anyone on the page')}</span>
+              </>
+            ) : null}
           </p>
-          {/* FRU-330: the card says the exception only. « Members only » is the default of a new site,
-                and a worker of before, which sends no `writers`, says nothing it could be wrong about. */}
-          {site.visibility === 'members' && site.writers === 'anyone' ? (
-            <p className="text-hint text-muted">{t('Notes from anyone on the page')}</p>
-          ) : null}
         </div>
         <span className="-mt-[4px] -mr-[8px] inline-flex flex-none">
           <Menu trigger="icon" triggerLabel={t('More for {site}', { site: name })} items={items} onAction={go}>
@@ -459,19 +466,24 @@ function SiteCard({ workspace, site, manages, seesTracker }: SiteCardProps) {
         </span>
       </div>
       <Counts site={site} />
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-[14px] gap-y-[6px] text-hint">
-        <dt className="text-muted">{t('On the page with')}</dt>
-        <dd className="relative">{site.via === undefined || site.via.length === 0 ? <None /> : viaOf(site.via)}</dd>
+      {/* The foot of the card (FRU-432): where the notes go at the left, the last one at the right. The
+          terms are for a screen reader: the place and the moment say what they are to the eye. How the
+          notes came is on the page of the site. */}
+      <dl className="mt-auto flex items-start justify-between gap-[12px] border-t border-line pt-[12px] text-hint">
         {seesTracker ? (
-          <>
-            <dt className="text-muted">{t('Notes go to')}</dt>
+          <div className="min-w-0">
+            <dt className="sr-only">{t('Notes go to')}</dt>
             <dd>
               <GoesTo site={site} />
             </dd>
-          </>
+          </div>
         ) : null}
-        <dt className="text-muted">{t('Last note')}</dt>
-        <dd className="relative tabular-nums">{site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}</dd>
+        <div className="ml-auto flex-none text-right">
+          <dt className="sr-only">{t('Last note')}</dt>
+          <dd className="relative text-muted tabular-nums">
+            {site.lastNoteAt === undefined ? <None /> : ago(site.lastNoteAt)}
+          </dd>
+        </div>
       </dl>
       {/* FRU-382: a public repository says so to whoever reads where the notes go, a member too. */}
       {seesTracker
@@ -509,14 +521,10 @@ function None() {
   );
 }
 
-/** How the notes of a site came: the script pasted on its pages, the extension, or both. */
-function viaOf(via: readonly ('script' | 'extension')[]): string {
-  if (via.includes('script') && via.includes('extension')) return t('Extension, script');
-
-  return via.includes('extension') ? t('Extension') : t('Script');
-}
-
-/** The notes of a site: how many, and a bar of their statuses that the words say again. */
+/**
+ * The notes of a site, the status of the card (FRU-432): how many, large, a bar of their statuses
+ * that the words say again, and how many are new, which are the ones to read.
+ */
 function Counts({ site }: { site: Site }) {
   useLocale();
   const notes = site.notes;
@@ -537,8 +545,8 @@ function Counts({ site }: { site: Site }) {
       : t('{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed', values);
 
   return (
-    <span className="flex items-center gap-[10px]">
-      <span aria-hidden="true" className="w-[22px] text-right font-semibold tabular-nums">
+    <span className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
+      <span aria-hidden="true" className="text-[20px] leading-none font-semibold tabular-nums">
         {total}
       </span>
       <StatusBar
@@ -551,6 +559,11 @@ function Counts({ site }: { site: Site }) {
           closed: notes.closed,
         }}
       />
+      {notes.new === 0 ? null : (
+        <span aria-hidden="true" className="text-hint font-semibold text-accent-strong">
+          {notes.new === 1 ? t('1 new') : t('{count} new', { count: notes.new })}
+        </span>
+      )}
     </span>
   );
 }
