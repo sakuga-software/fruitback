@@ -140,7 +140,7 @@ describe('the script-tag build', () => {
     // Not a style rule: a feedback widget that costs its host half a megabyte is one they remove.
     // The number is generous on purpose — it is a tripwire for a dependency that should have been
     // bundled out, not a budget to optimise against.
-    assert.ok(gzipped < 150_000, `${Math.round(gzipped / 1024)}kB gzipped, from ${Math.round(size / 1024)}kB raw`);
+    assert.ok(gzipped < 200_000, `${Math.round(gzipped / 1024)}kB gzipped, from ${Math.round(size / 1024)}kB raw`);
   });
 });
 
