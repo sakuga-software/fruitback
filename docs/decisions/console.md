@@ -105,7 +105,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   arrives after the screen, and a form that opened on a guest would grow a field under a press, and
   would send a role nobody chose. A site the worker refuses (removed meanwhile) is said, and the list
   is read again. **Not copied from the mockup**: « Now » and « 1 h ago » (the worker keeps no hour).
-  What a guest does is in the legend when a guest is on the screen, or can be invited. **Kept, though the mockup
+  **No legend of the roles** under the table (FRU-437, Mathieu), though the mockup draws one: the
+  name of a role says enough, and the legend took room under every table. **Kept, though the mockup
   draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
   (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
   every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation

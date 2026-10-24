@@ -348,29 +348,8 @@ test('the list is the table of the mockup, with what the worker of today says of
   expect.soft(await painted(resend, 'color')).toEqual(rgb(ACCENT_STRONG));
   await page.mouse.move(700, 800);
 
-  // What each role does, under the table. A guest is on the screen, so what a guest does is said.
-  const legend = page.locator('main dl');
-  expect
-    .soft(await styles(legend, ['margin-top', 'column-gap', 'row-gap', 'font-size', 'line-height', 'display']))
-    .toEqual({
-      'margin-top': '28px',
-      'column-gap': '32px',
-      'row-gap': '16px',
-      'font-size': '14px',
-      'line-height': '21px',
-      display: 'grid',
-    });
-  await expect(legend.locator('dt')).toHaveText(['Admin', 'Member', 'Guest']);
-  await expect(legend.locator('dd')).toHaveText([
-    'Sites, connectors and members.',
-    'Every site. Sees the links to the tracker.',
-    'Only the sites shared with them. Free, and never sees the tracker.',
-  ]);
-  expect.soft(await styles(legend.locator('dt').first(), ['font-weight'])).toEqual({ 'font-weight': '600' });
-  expect.soft(await styles(legend.locator('dd').first(), ['margin-top'])).toEqual({ 'margin-top': '2px' });
-  expect.soft(await painted(legend.locator('dd').first(), 'color')).toEqual(rgb(MUTED));
-  expectBox(await box(legend), { x: 296.5, y: 610.7, width: 1095.5, height: 65 }, 2, 'the legend');
-  expectBox(await box(legend.locator('> div').nth(1)), { x: 672.4, width: 343.8 }, 2, 'the second role of the legend');
+  // No legend of the roles under the table (FRU-437).
+  await expect(page.locator('main dl')).toHaveCount(0);
 
   await expectNoViolation(page, 'the list');
 });
@@ -489,7 +468,6 @@ test('a guest of one site: the list « Site » where the mockup draws it, and th
   expectBox(await box(invite(page)), { x: 1307.3, y: 148.2, width: 85.2, height: 44 }, 2, '« Invite »');
   const label = form(page).locator('.label', { hasText: 'Site' }).first();
   expect.soft(await styles(label, ['font-size', 'font-weight'])).toEqual({ 'font-size': '13px', 'font-weight': '600' });
-  await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
   await expectNoViolation(page, 'the form of a guest');
 
   await sitesList(page).click();
@@ -767,8 +745,6 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
   await expect(page.getByText('paul@client.fr')).toHaveCount(0);
   // The development build runs an effect twice: what matters is which lists are asked for.
   expect([...new Set(read.read)]).toEqual(['list-members']);
-  // Nobody is a guest here, and a member invites nobody: what a guest does is not said.
-  await expect(page.locator('main dt')).toHaveText(['Admin', 'Member']);
   await expectNoViolation(page, 'the screen of a member');
 
   // A guest: the worker refuses them the list, so the screen asks for none and draws their row.
@@ -784,7 +760,6 @@ test('an admin invites; a member reads; a guest sees their own row and nothing o
     'https://staging.acme.dev',
   ]);
   await expect(page.getByRole('form')).toHaveCount(0);
-  await expect(page.locator('main dt')).toHaveText(['Admin', 'Member', 'Guest']);
   expect(refused.read).toEqual([]);
   await expectNoViolation(page, 'the screen of a guest');
 });
@@ -839,8 +814,7 @@ test('a read made again keeps the rows on the screen, and a press on one of them
   await open(page);
   await expect(row(page, 'paul@client.fr')).toBeVisible();
   const shown = await table(page).locator('tbody tr').count();
-  const roleLegend = page.locator('main dl');
-  const before = { table: await box(table(page)), legend: await box(roleLegend) };
+  const before = { table: await box(table(page)) };
 
   // A message that did not leave makes the screen read its lists again; the worker is slow to answer.
   const reads = () => worker.read.filter((each) => each === 'list-members').length;
@@ -852,13 +826,12 @@ test('a read made again keeps the rows on the screen, and a press on one of them
   await expect.poll(reads).toBe(read + 1);
   // The alert of the refusal took its room above the table, once: from here nothing moves.
   await expect(page.getByRole('alert')).toBeVisible();
-  const during = { table: await box(table(page)), legend: await box(roleLegend) };
+  const during = { table: await box(table(page)) };
 
   // The rows stay while the lists are read again: no « Loading… » in their place.
   await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
   await expect(table(page).locator('tbody tr')).toHaveCount(shown);
   expect(during.table.height).toBe(before.table.height);
-  expect(during.legend.y - during.table.y).toBe(before.legend.y - before.table.y);
   // An action of a row is still there to press.
   await row(page, 'paul@client.fr').getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Cancel the invitation of paul@client.fr' })).toBeVisible();
@@ -949,10 +922,6 @@ test('at 390 px the form stacks, and each part is where the mockup draws it', as
     4,
     'the chip of the second row',
   );
-  // One role under the other, each as wide as the screen allows.
-  const legend = page.locator('main dl');
-  expectBox(await box(legend), { x: 16, y: top + 786.7 - less, width: 358, height: 185 }, 4, 'the legend');
-  expectBox(await box(legend.locator('> div').nth(1)), { x: 16, y: top + 846.7 - less, width: 358 }, 4, 'a role');
   expect(await sideScroll(page)).toBe(0);
   await expectNoViolation(page, 'the list at 390 px');
 });
@@ -975,7 +944,6 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
     ['« Invitation sent »', paul.nth(0).getByText('Invitation sent', { exact: true })],
     ['the day an invitation ends', paul.nth(3).getByText('Until 10 Oct', { exact: true })],
     ['the initial of somebody invited', paul.nth(0).locator('.kit-avatar')],
-    ['a role of the legend', page.locator('main dt').first()],
     ['what a role does', page.locator('main dd').first()],
   ];
   for (const [name, text] of onWhite) {
