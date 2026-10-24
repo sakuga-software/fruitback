@@ -144,7 +144,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the console, with « Connect another browser » to show the three steps. « This browser » is a
   browser of the extension whose label is the label of the session of the console in this tab
   (`current` of `GET /console/sessions`): the label is a family and a system, so another computer
-  with the same browser and system reads the same, and the steps stay one press away. No route of
+  with the same browser and system reads the same, and the steps stay one press away. `/connect` says
+  « Loading… » while it reads, two seconds at most, then decides once: an answer that comes after the
+  steps are shown changes nothing, so they never turn into « already connected » while somebody reads
+  them. When the tab is shown again and again, only the answer of the last read of the browsers counts. No route of
   the worker was added. The Sites screen (`install-options.tsx`) still offers « Connect this
   browser ». `e2e/console-extension-connected.spec.ts` holds each screen with a browser and with none.
 - **« Connect this browser » answers the extension, and only on a press** (FRU-240, screen 04 of the
