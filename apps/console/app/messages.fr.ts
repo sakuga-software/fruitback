@@ -495,6 +495,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{place} and {count} more': '{place} et {count} de plus',
   'More for {site}': 'Plus pour {site}',
   Settings: 'Réglages',
+  'No destination matches this search.': 'Aucune destination ne correspond à cette recherche.',
+  'Search the destinations': 'Chercher une destination',
+  'Show {more} more ({left} left)': 'En afficher {more} de plus ({left} restantes)',
   'Its address, where its notes go, and how to install Fruitback on it.':
     'Son adresse, où vont ses notes, et comment y installer Fruitback.',
   'The site did not load': 'Le site n’a pas chargé',

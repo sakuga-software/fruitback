@@ -497,6 +497,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   who manages the sources, so the list wins there as here (FRU-382). The answer of a write is the
   list the worker keeps:
   the page takes it at once, and the sites are not read again. No route of the worker is new.
+  **« Add a destination… » has a search, and pages** (FRU-438, Mathieu; `SearchChoice` in `ui.tsx`):
+  a search field above the list, as the one of the grid of the Sites screen, keeps the places whose
+  name holds what is typed, with no case and no accent (« equipe » finds « Équipe Web »), and drops
+  the sources with nothing left; a cross in the field empties it and gives it focus back; a search
+  that keeps nothing says so in the list, which offers nothing. The list shows 50 places, then a
+  last option « Show 50 more (70 left) », which chooses nothing. The search and the pages are the
+  console's, on the lists the worker answered whole: no route of the worker is new. **It is not a
+  combo box**, which typed in the list itself: measured on 2026-10-25, the combo box of HeroUI
+  (react-aria 3.53) throws « childNodes is not supported » under React 19.3 in development when its
+  options change while it is open, and its list then stops following what is typed. A `Select`
+  changes its options only while it is closed. `e2e/console-site-places.spec.ts` holds the search,
+  the cross, the pages and the place sent.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

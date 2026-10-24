@@ -14,13 +14,10 @@ import {
 import { msg, t } from '../i18n';
 import type { Listed } from '../listed';
 import { writeProblemOf } from '../problems';
-import { Button, Chip, Choice, LinkButton, type OptionGroup, Problem } from '../ui';
+import { Button, Chip, LinkButton, type OptionGroup, Problem, SearchChoice } from '../ui';
 import { useLocale } from '../use-locale';
 import { KINDS, accountOf, hostOf, sourceLine } from './connector-parts';
 import { GITHUB_APP_PAGE } from './connector-github';
-
-/** The value of the list « Add a destination… » before a place is chosen. */
-const NONE = 'none';
 
 /** What a source offers: its teams, its repositories, or nothing to choose for an address. */
 type Offer =
@@ -278,20 +275,19 @@ export function SitePlaces({
 
       {places.length < MAX_DESTINATIONS && sources.length > 0 ? (
         <div className="max-w-[420px]">
-          <Choice
-            compact
+          <SearchChoice
             label={t('Add a destination for {site}', { site: host })}
-            labelHidden
-            value={NONE}
+            searchLabel={t('Search the destinations')}
+            placeholder={reading && offered.length === 0 ? t('Loading…') : t('Add a destination…')}
             disabled={writing || offered.length === 0}
-            onChange={(value) => {
+            groups={offered}
+            clearLabel={t('Clear the search')}
+            noMatch={t('No destination matches this search.')}
+            moreLabel={(more, left) => t('Show {more} more ({left} left)', { more, left })}
+            onChoose={(value) => {
               const added = placeOf(value);
-              if (value !== NONE && added !== undefined) void place([...places, added]);
+              if (added !== undefined) void place([...places, added]);
             }}
-            options={[
-              { value: NONE, label: reading && offered.length === 0 ? t('Loading…') : t('Add a destination…') },
-              ...offered,
-            ]}
           />
         </div>
       ) : null}
