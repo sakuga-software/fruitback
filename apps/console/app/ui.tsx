@@ -16,7 +16,15 @@ import {
   Switch,
   TextField,
 } from '@heroui/react';
-import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, Ref } from 'react';
+import {
+  type ChangeEvent,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type Ref,
+  useRef,
+  useState,
+} from 'react';
 import { Link } from 'react-router';
 import { Logo } from './logo';
 
@@ -1141,5 +1149,148 @@ export function BrowserFrame({ address, empty, caption, children }: BrowserFrame
       </div>
       {caption === undefined ? null : <p className="kit-browser__caption">{caption}</p>}
     </>
+  );
+}
+
+/** A word as a search compares it: no case, no accent. « Équipe » holds « equi ». */
+export function folded(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+/** The options of the groups whose label holds the search, the groups left empty dropped. */
+export function searched(groups: readonly OptionGroup[], search: string): OptionGroup[] {
+  const wanted = folded(search.trim());
+
+  return groups
+    .map((group) => ({
+      ...group,
+      options: wanted === '' ? group.options : group.options.filter((each) => folded(each.label).includes(wanted)),
+    }))
+    .filter((group) => group.options.length > 0);
+}
+
+/** The first `limit` options of the groups, in their order, and how many are left after them. */
+export function firstOf(groups: readonly OptionGroup[], limit: number): { groups: OptionGroup[]; left: number } {
+  let room = limit;
+  let left = 0;
+  const shown: OptionGroup[] = [];
+  for (const group of groups) {
+    if (room <= 0) left += group.options.length;
+    else {
+      shown.push({ ...group, options: group.options.slice(0, room) });
+      left += Math.max(0, group.options.length - room);
+    }
+    room -= group.options.length;
+  }
+
+  return { groups: shown, left };
+}
+
+/** The value of the last option of a `SearchChoice` that has more: it shows them, and chooses nothing. */
+const MORE = 'kit-search-choice-more';
+
+type SearchChoiceProps = {
+  /** The name of the list: « Add a destination for acme.dev ». */
+  label: string;
+  /** The name of the search, and what its empty field says: « Search the destinations ». */
+  searchLabel: string;
+  /** The first option of the list, which chooses nothing: « Add a destination… ». */
+  placeholder: string;
+  groups: readonly OptionGroup[];
+  /** An option chosen. */
+  onChoose: (value: string) => void;
+  /** The name of the button that empties the search. */
+  clearLabel: string;
+  /** The words of the list when no option holds the search. */
+  noMatch: string;
+  /** The words of the last option while some are not shown: « Show 50 more (70 left) ». */
+  moreLabel: (more: number, left: number) => string;
+  disabled?: boolean;
+  /** How many options the list shows, and how many more « Show more » adds. */
+  page?: number;
+};
+
+/**
+ * A list with a search (FRU-438): a search field, as the one of the grid of the Sites screen, with a
+ * cross that empties it, above a `Choice` that offers the options whose label holds what is typed,
+ * with no case and no accent. The list shows `page` options, then a last option that shows `page`
+ * more, so a GitHub account of hundreds of repositories does not draw them all at once.
+ *
+ * Measured on 2026-10-25: a combo box of HeroUI (react-aria 3.53) whose options change while its list
+ * is open throws « childNodes is not supported » under React 19.3 in development, and its list stops
+ * following what is typed. A `Select` changes its options only while it is closed.
+ */
+export function SearchChoice({
+  label,
+  searchLabel,
+  placeholder,
+  groups,
+  onChoose,
+  clearLabel,
+  noMatch,
+  moreLabel,
+  disabled = false,
+  page = 50,
+}: SearchChoiceProps) {
+  const [search, setSearch] = useState('');
+  const [limit, setLimit] = useState(page);
+  const field = useRef<HTMLInputElement>(null);
+  const found = searched(groups, search);
+  const shown = firstOf(found, limit);
+  const type = (value: string) => {
+    setSearch(value);
+    setLimit(page);
+  };
+  const empty = { value: placeholder, label: found.length === 0 ? noMatch : placeholder };
+
+  return (
+    <div className="kit-search-choice">
+      <div className="kit-search-choice__search">
+        <Field
+          label={searchLabel}
+          labelHidden
+          compact
+          type="search"
+          placeholder={searchLabel}
+          value={search}
+          disabled={disabled}
+          inputRef={field}
+          onChange={(event) => type(event.target.value)}
+        />
+        {search === '' ? null : (
+          <IconButton
+            label={clearLabel}
+            size="small"
+            onClick={() => {
+              type('');
+              field.current?.focus();
+            }}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </IconButton>
+        )}
+      </div>
+      <Choice
+        compact
+        label={label}
+        labelHidden
+        value={empty.value}
+        disabled={disabled || found.length === 0}
+        onChange={(value) => {
+          if (value === MORE) setLimit((current) => current + page);
+          else if (value !== empty.value) onChoose(value);
+        }}
+        options={[
+          empty,
+          ...shown.groups,
+          ...(shown.left === 0 ? [] : [{ value: MORE, label: moreLabel(Math.min(page, shown.left), shown.left) }]),
+        ]}
+      />
+    </div>
   );
 }

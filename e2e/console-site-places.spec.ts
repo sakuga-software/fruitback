@@ -57,6 +57,10 @@ function labelled(place: Place, privacy: 'known' | 'unknown' = 'known'): Place &
 
 type Worker = {
   connectors: unknown[];
+  /** The repositories the GitHub source reaches. */
+  repositories: { fullName: string; private: boolean }[];
+  /** The teams of the Linear source. */
+  teams: typeof TEAMS;
   /** The read of the sources fails. */
   connectorsFail: boolean;
   /** The places of the one site, as the worker keeps them: a repository is in `teamId`. */
@@ -81,6 +85,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
   let released = () => {};
   const worker: Worker = {
     connectors: [LINEAR, GITHUB, REST],
+    repositories: REPOSITORIES,
+    teams: TEAMS,
     connectorsFail: false,
     places: [],
     sent: [],
@@ -131,12 +137,12 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (pathname.endsWith('/g1/repositories')) {
       worker.listed += 1;
       if (worker.repositoriesWait) return new Promise<void>(() => {});
-      if (worker.silentReads === 0) return json({ repositories: REPOSITORIES });
+      if (worker.silentReads === 0) return json({ repositories: worker.repositories });
       worker.silentReads -= 1;
 
       return json({ error: 'connector-failed' }, 502);
     }
-    if (pathname.endsWith('/c1/teams')) return json({ teams: TEAMS });
+    if (pathname.endsWith('/c1/teams')) return json({ teams: worker.teams });
     if (pathname.endsWith('/r1/deliveries')) return json({ deliveries: [] });
 
     return undefined;
@@ -149,6 +155,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
 const card = (page: Page) => page.locator('li[data-site]').first();
 const panel = (page: Page) => page.getByRole('region', { name: `Where the notes of ${SITE} go` });
 const add = (page: Page) => panel(page).getByRole('button', { name: new RegExp(`Add a destination for ${SITE}`) });
+/** The search above « Add a destination… » (FRU-438). */
+const search = (page: Page) => panel(page).getByRole('searchbox', { name: 'Search the destinations', exact: true });
 
 /** Opens the page of the site (FRU-433), where its destinations are. */
 async function openPlaces(page: Page): Promise<void> {
@@ -427,6 +435,92 @@ test('the panel of a source lists the sites that send there, and leads to the Si
   await expect(linear.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
   await linear.getByRole('link', { name: 'Open the sites' }).click();
   await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites`);
+});
+
+/** Closes the open list with the keyboard, and waits until it is gone. */
+async function close(page: Page): Promise<void> {
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('listbox')).toBeHidden();
+}
+
+test('the search keeps the places whose name holds what is typed, and a cross empties it (FRU-438)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.teams = [{ id: 't1', name: 'Équipe Web', key: 'WEB', projects: [{ id: 'p1', name: 'Site' }] }];
+  await openPlaces(page);
+  await expect(add(page)).toBeEnabled();
+  const options = page.getByRole('option');
+
+  // No case and no accent: « equipe » finds « Équipe Web », and the sources with nothing left go.
+  await search(page).fill('equipe');
+  await add(page).click();
+  await expect(options).toHaveText(['Add a destination…', 'Équipe Web, no project', 'Équipe Web · Site']);
+  await expect(page.getByText('GitHub, private repositories of acme')).toHaveCount(0);
+  await close(page);
+  await search(page).fill('ACME/D');
+  await add(page).click();
+  await expect(options).toHaveText(['Add a destination…', 'acme/Docs']);
+  await close(page);
+  await expectNoViolation(page, 'a search of the destinations');
+
+  // Nothing holds it: the list says so, and offers nothing.
+  await search(page).fill('nothing like it');
+  await expect(add(page)).toBeDisabled();
+  await expect(add(page)).toContainText('No destination matches this search.');
+
+  // The cross empties the search, gives it focus, and every place is offered again.
+  const clear = panel(page).getByRole('button', { name: 'Clear the search', exact: true });
+  await clear.click();
+  await expect(search(page)).toHaveValue('');
+  await expect(search(page)).toBeFocused();
+  await expect(clear).toHaveCount(0);
+  await add(page).click();
+  await expect(options).toHaveCount(7);
+  await close(page);
+
+  // A place chosen from a search is sent.
+  await search(page).fill('hooks');
+  await add(page).click();
+  await page.getByRole('option', { name: 'hooks.acme.dev/fruitback', exact: true }).click();
+  await expect.poll(() => worker.sent).toEqual([[{ connector: 'r1' }]]);
+  await expect(panel(page).getByText('REST API · hooks.acme.dev', { exact: true })).toBeVisible();
+});
+
+test('the list shows 50 places, and « Show 50 more » the next ones (FRU-438)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.connectors = [GITHUB];
+  worker.repositories = Array.from({ length: 120 }, (_, index) => ({
+    fullName: `acme/repo-${String(index + 1).padStart(3, '0')}`,
+    private: true,
+  }));
+  await openPlaces(page);
+  const repositories = page.getByRole('option', { name: /^acme\/repo-/ });
+  await add(page).click();
+  await expect(repositories).toHaveCount(50);
+  await expect(repositories.last()).toHaveText('acme/repo-050');
+
+  // The last option shows the next 50, then the last 20, and chooses nothing.
+  await page.getByRole('option', { name: 'Show 50 more (70 left)', exact: true }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await add(page).click();
+  await expect(repositories).toHaveCount(100);
+  await page.getByRole('option', { name: 'Show 20 more (20 left)', exact: true }).click();
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await add(page).click();
+  await expect(repositories).toHaveCount(120);
+  await expect(page.getByRole('option', { name: /^Show / })).toHaveCount(0);
+  await close(page);
+  expect(worker.sent).toEqual([]);
+
+  // A search counts from the first page again, among every repository.
+  await search(page).fill('repo-11');
+  await add(page).click();
+  await expect(repositories).toHaveText(Array.from({ length: 10 }, (_, index) => `acme/repo-11${index}`));
+  await close(page);
+  await panel(page).getByRole('button', { name: 'Clear the search', exact: true }).click();
+  await add(page).click();
+  await expect(repositories).toHaveCount(50);
 });
 
 for (const locale of ['en', 'fr'] as const) {
