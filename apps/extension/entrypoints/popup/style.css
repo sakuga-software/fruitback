@@ -591,6 +591,11 @@ body.popup-page {
   font-size: 14px;
 }
 
+/* Under the row of a rule, apart from its buttons. */
+.popup .row + .visibility-row {
+  margin-top: 12px;
+}
+
 .popup .leave-block {
   display: flex;
   flex-direction: column;
