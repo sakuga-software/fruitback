@@ -31,6 +31,12 @@ export const BUILT_EXTENSION = 'apps/extension/.output/chrome-mv3';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
+/**
+ * The switch of the site on screen 3 of the popup, by its name in either language. Since FRU-444 the
+ * screen has a second one, « Show Fruitback on this page ».
+ */
+export const SITE_SWITCH = /^Fruitback (on|sur) /;
+
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
 export const test = base.extend<{

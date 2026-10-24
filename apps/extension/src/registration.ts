@@ -1,3 +1,5 @@
+import { hiddenUnder } from './page-visibility.ts';
+
 /**
  * Which origins the two content scripts are registered for, kept in step with what is switched on.
  *
@@ -39,10 +41,12 @@ export type RegisteredScript = {
   runAt: 'document_idle';
   world?: 'MAIN' | 'ISOLATED';
   allFrames?: boolean;
+  /** FRU-444: the origins of the pattern where the reviewer hid the widget. */
+  excludeMatches?: string[];
 };
 
 export type ScriptRegistrar = {
-  getRegisteredContentScripts(): Promise<{ id: string }[]>;
+  getRegisteredContentScripts(): Promise<{ id: string; excludeMatches?: string[] }[]>;
   registerContentScripts(scripts: RegisteredScript[]): Promise<void>;
   updateContentScripts(scripts: RegisteredScript[]): Promise<void>;
   unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
@@ -94,16 +98,21 @@ function isOurs(id: string): boolean {
  * browser refuses stopped the extension on every site, with one line in the console. Each origin has
  * its own pair now, registered in its own call: a refusal costs that origin, and is said.
  *
- * The scripts of an origin never change: an origin that stays keeps its pair, one that goes is
- * unregistered, a new one is registered. The pair of before FRU-74 (one id for every origin) is
- * unregistered at the first sync.
+ * The scripts of an origin change only with the hidden origins it covers (FRU-444): an origin that
+ * stays keeps its pair, one that goes is unregistered, a new one is registered. A pair whose hidden
+ * origins changed is unregistered and registered again, in its own call. The pair of before FRU-74
+ * (one id for every origin) is unregistered at the first sync.
  *
  * Answers the origins the browser refused.
  */
-export async function syncRegistration(scripting: ScriptRegistrar, origins: readonly string[]): Promise<string[]> {
-  const existing = new Set(
-    (await scripting.getRegisteredContentScripts()).map((script) => script.id).filter((id) => isOurs(id)),
-  );
+export async function syncRegistration(
+  scripting: ScriptRegistrar,
+  origins: readonly string[],
+  hidden: readonly string[] = [],
+): Promise<string[]> {
+  const registered = (await scripting.getRegisteredContentScripts()).filter((script) => isOurs(script.id));
+  const existing = new Set(registered.map((script) => script.id));
+  const excludedNow = new Map(registered.map((script) => [script.id, [...(script.excludeMatches ?? [])].sort()]));
   const wanted = new Set(origins.flatMap((origin) => Object.values(scriptIdsFor(origin))));
 
   const stale = [...existing].filter((id) => !wanted.has(id));
@@ -112,7 +121,17 @@ export async function syncRegistration(scripting: ScriptRegistrar, origins: read
   const refused: string[] = [];
   for (const origin of origins) {
     const ids = scriptIdsFor(origin);
-    const missing = scriptsFor(origin, ids).filter((script) => !existing.has(script.id));
+    const excluded = hiddenUnder(origin, hidden).map((each) => matchPatternFor(each));
+    const scripts = scriptsFor(origin, ids, excluded);
+    // The browser answers the patterns it holds, in its own order.
+    const changed = scripts.filter(
+      (script) => existing.has(script.id) && excludedNow.get(script.id)?.join(' ') !== excluded.join(' '),
+    );
+    if (changed.length > 0) {
+      await scripting.unregisterContentScripts({ ids: changed.map((script) => script.id) });
+      for (const script of changed) existing.delete(script.id);
+    }
+    const missing = scripts.filter((script) => !existing.has(script.id));
     if (missing.length === 0) continue;
     try {
       await scripting.registerContentScripts(missing);
@@ -125,13 +144,15 @@ export async function syncRegistration(scripting: ScriptRegistrar, origins: read
   return refused;
 }
 
-function scriptsFor(origin: string, ids: { bridge: string; page: string }): RegisteredScript[] {
+function scriptsFor(origin: string, ids: { bridge: string; page: string }, excluded: string[]): RegisteredScript[] {
   const matches = [matchPatternFor(origin)];
+  // Absent rather than empty: the pair of an origin with nothing hidden is the pair of before FRU-444.
+  const leftOut = excluded.length === 0 ? {} : { excludeMatches: excluded };
 
   return [
-    { id: ids.bridge, matches, js: [BRIDGE_FILE], runAt: 'document_idle', world: 'ISOLATED' },
+    { id: ids.bridge, matches, ...leftOut, js: [BRIDGE_FILE], runAt: 'document_idle', world: 'ISOLATED' },
     // The widget, in the page's own world. See entrypoints/page.content.ts for why that is not a
     // preference: from the isolated world every fiber the seed's `source` comes from is invisible.
-    { id: ids.page, matches, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN' },
+    { id: ids.page, matches, ...leftOut, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN' },
   ];
 }

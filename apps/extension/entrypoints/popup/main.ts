@@ -13,6 +13,7 @@ import { complaint, pairingFragment, pairingLinkIn, siteFrom } from '../../src/s
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
 import { type SiteConfig, type SiteMode, findSite, readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
+import { isHidden, setHidden } from '../../src/page-visibility.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
@@ -70,6 +71,7 @@ import {
   shell,
   signInStop,
   signedOut,
+  visibilityRow,
 } from '../../src/popup-view.ts';
 
 /**
@@ -336,7 +338,7 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
         title(origin),
         // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
         element('p', found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }), 'rule'),
-        open || found === undefined ? form(origin, found, draft) : status(found),
+        open || found === undefined ? form(origin, found, draft) : status(found, await visibility(origin)),
       ];
       // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
       // named. A reviewer holds one session per worker however many of its sites they have turned on.
@@ -709,6 +711,7 @@ async function siteOfWorkspaceOn(
     origin,
     workspace,
     on: site.enabled,
+    visibility: await visibility(origin),
     ...(shortcut === undefined ? {} : { shortcut: keysOfShortcut(shortcut) }),
     ...(person === undefined ? {} : { account: person }),
     ...(paired === undefined || account !== undefined ? {} : { foot: pairedFoot(site.endpoint, paired.identity) }),
@@ -1237,8 +1240,28 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
   return true;
 }
 
+/**
+ * « Show Fruitback on this page » (FRU-444). Hidden, the bridge of each tab of the origin posts
+ * `unmount` and the background leaves the origin out of the scripts. Shown again, the tabs that
+ * loaded while it was hidden get the scripts now, as a site turned on does.
+ */
+async function visibility(origin: string): Promise<{ shown: boolean; onChange: (shown: boolean) => void }> {
+  const shown = !(await isHidden(browser.storage.local, origin));
+
+  return {
+    shown,
+    onChange: (next) =>
+      void setHidden(browser.storage.local, origin, !next)
+        .then(() => (next ? activateOpenTabs(origin) : undefined))
+        .then(
+          () => render(),
+          (error: unknown) => console.error('[fruitback] could not show or hide the widget on this page', error),
+        ),
+  };
+}
+
 /** Configured: the switch, and what it is switching. */
-function status({ pattern, site }: ResolvedSite): HTMLElement {
+function status({ pattern, site }: ResolvedSite, shown?: Awaited<ReturnType<typeof visibility>>): HTMLElement {
   // A wildcard entry switches every site it covers, so the button must not say "here".
   const wide = isWildcardPattern(pattern);
   const off = wide ? t('Turn off for every site this rule covers') : t('Turn off here');
@@ -1270,7 +1293,9 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   row.append(element('span', `${site.enabled ? t('On') : t('Off')} · ${describeSite(site)}`, 'state'), buttons);
 
   const wrapper = document.createElement('div');
-  wrapper.append(row, problem);
+  wrapper.append(row);
+  if (site.enabled && shown !== undefined) wrapper.append(visibilityRow(document, shown));
+  wrapper.append(problem);
 
   return wrapper;
 }
