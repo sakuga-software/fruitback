@@ -101,7 +101,7 @@ It runs since switch 1 (2026-10-12). « What to do on the host » says what was 
 ### What is backed up
 
 1. **02:40, `snapshot-pg.sh`**, from the crontab of the host. It dumps the database with `pg_dump
--Fc` where the database runs, reads the dump to its end (`pg_restore -f /dev/null`), and copies it
+   -Fc` where the database runs, reads the dump to its end (`pg_restore -f /dev/null`), and copies it
    into the volume of the worker, as `/data/snapshots/fruitback.pgdump`. It compares the copy with
    the dump, and only then replaces the copy before. A dump that cannot be read to its end replaces
    nothing, and the script exits 1.
@@ -435,7 +435,7 @@ cannot send a note. `$PG` and `$WORKER` are as in Switch 1.
 
 1. **`D_bis`, with the configuration unchanged.** Check `/health` and a pin on a page, then that
    the command is in the image: `docker exec <container of the worker> node server.mjs
-migrate-to-postgres` prints two lines of usage, the second with `--seeds`, and exits 1.
+   migrate-to-postgres` prints two lines of usage, the second with `--seeds`, and exits 1.
    Way back: the digest before.
 2. **A fresh copy, then stop the worker.** `sh snapshot.sh` and `sh snapshot-pg.sh`, then:
 

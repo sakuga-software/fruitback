@@ -35,7 +35,7 @@ What the three modes differ on is **who can produce that session**.
 - **Private mode cannot.** The extension mounts the widget with no token and no transport, so it has
   nothing to attach and the site embeds nothing that could supply one. On a site that members read,
   those reads answer `401`, and the page shows no pins. The popup says why: `This worker answers a
-signed-in reader only, and private mode carries no session.` On a site that everyone reads, the pins
+  signed-in reader only, and private mode carries no session.` On a site that everyone reads, the pins
   are the same pins on the same open path: private mode changes **who is shown** the feedback, never
   **who may fetch** it.
 - **Team mode is the only one where the reviewer supplies it, and the only one that keeps it out of

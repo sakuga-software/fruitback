@@ -445,22 +445,20 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
 
       return {
         total: number(rows[0]?.total),
-        workspaces: rows.map(
-          (row): AdminWorkspace => ({
-            id: String(row.id),
-            name: String(row.name),
-            ...suspensionIn(row),
-            createdAt: iso(row.created_at),
-            owners: owners
-              .filter((owner) => owner.workspace === row.id)
-              .map((owner) => ({ id: String(owner.id), ...named(owner.name), email: String(owner.email) })),
-            members: number(row.members),
-            sites: number(row.sites),
-            notes: notes.get(String(row.id)) ?? noStages(),
-            destinations: (destinations.get(String(row.id)) ?? []).map((connector) => omit(connector, 'createdAt')),
-            pendingDeliveries: number(row.pending),
-          }),
-        ),
+        workspaces: rows.map((row): AdminWorkspace => ({
+          id: String(row.id),
+          name: String(row.name),
+          ...suspensionIn(row),
+          createdAt: iso(row.created_at),
+          owners: owners
+            .filter((owner) => owner.workspace === row.id)
+            .map((owner) => ({ id: String(owner.id), ...named(owner.name), email: String(owner.email) })),
+          members: number(row.members),
+          sites: number(row.sites),
+          notes: notes.get(String(row.id)) ?? noStages(),
+          destinations: (destinations.get(String(row.id)) ?? []).map((connector) => omit(connector, 'createdAt')),
+          pendingDeliveries: number(row.pending),
+        })),
       };
     },
 
@@ -586,29 +584,27 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
 
       return {
         total: number(rows[0]?.total),
-        users: rows.map(
-          (row): AdminUser => ({
-            id: String(row.id),
-            ...named(row.name),
-            email: String(row.email),
-            createdAt: iso(row.created_at),
-            instanceAdmin: row.admin === true,
-            suspended: row.suspended === true,
-            workspaces: of(memberships, row.id).map((each) => ({
-              id: String(each.id),
-              name: String(each.name),
-              role: String(each.role),
-              // The account owns this workspace alone (FRU-285): it cannot be deleted before another owner.
-              ...(each.sole === true ? { soleOwner: true as const } : {}),
-            })),
-            providers: of(providers, row.id).map((each) => String(each.provider)),
-            ...(typeof row.seen === 'string' ? { lastSeen: row.seen } : {}),
-            pendingInvitations: of(invitations, row.id).map((each) => ({
-              workspace: { id: String(each.id), name: String(each.name) },
-              ...(typeof each.role === 'string' ? { role: each.role } : {}),
-            })),
-          }),
-        ),
+        users: rows.map((row): AdminUser => ({
+          id: String(row.id),
+          ...named(row.name),
+          email: String(row.email),
+          createdAt: iso(row.created_at),
+          instanceAdmin: row.admin === true,
+          suspended: row.suspended === true,
+          workspaces: of(memberships, row.id).map((each) => ({
+            id: String(each.id),
+            name: String(each.name),
+            role: String(each.role),
+            // The account owns this workspace alone (FRU-285): it cannot be deleted before another owner.
+            ...(each.sole === true ? { soleOwner: true as const } : {}),
+          })),
+          providers: of(providers, row.id).map((each) => String(each.provider)),
+          ...(typeof row.seen === 'string' ? { lastSeen: row.seen } : {}),
+          pendingInvitations: of(invitations, row.id).map((each) => ({
+            workspace: { id: String(each.id), name: String(each.name) },
+            ...(typeof each.role === 'string' ? { role: each.role } : {}),
+          })),
+        })),
       };
     },
 

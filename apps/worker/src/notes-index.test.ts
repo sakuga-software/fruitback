@@ -32,17 +32,15 @@ function storeOfStages() {
     async findForPage({ url, clientId }) {
       return kept
         .filter((seed) => seed.page.url === url && seed.client?.id === clientId)
-        .map(
-          (seed, index): SeedIssue => ({
-            id: `issue_${index + 1}`,
-            identifier: `FB-${kept.indexOf(seed) + 1}`,
-            title: seed.note.slice(0, 20),
-            stage: stages.get(seed.id) ?? 'new',
-            stateName: 'Whatever',
-            updatedAt: '2026-10-13T00:00:00.000Z',
-            seed,
-          }),
-        );
+        .map((seed, index): SeedIssue => ({
+          id: `issue_${index + 1}`,
+          identifier: `FB-${kept.indexOf(seed) + 1}`,
+          title: seed.note.slice(0, 20),
+          stage: stages.get(seed.id) ?? 'new',
+          stateName: 'Whatever',
+          updatedAt: '2026-10-13T00:00:00.000Z',
+          seed,
+        }));
     },
   };
 

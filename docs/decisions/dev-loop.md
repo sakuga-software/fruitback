@@ -356,8 +356,8 @@ Nothing here changes the demonstration of today, and nothing was deployed.
   `reset.sh` takes the place of `../reset.sh`: it empties the notes, their replies and their
   pictures in the container of the database, gives the numbers back to 1, and runs `seed.sql`. The
   worker is not restarted. test:`gets its workspace and its site from seed.sql, twice with one
-result, and the worker serves the site` and test:`empties tables that the schema has, and no other,
-in reset.sh` hold the two files to the schema. `reset.sh` itself ran once by hand, on PostgreSQL 17
+  result, and the worker serves the site` and test:`empties tables that the schema has, and no other,
+  in reset.sh` hold the two files to the schema. `reset.sh` itself ran once by hand, on PostgreSQL 17
   in a container: see the pull request.
 - **What that option costs, and why it is a decision.** A worker with a database refuses to start
   without `FRUITBACK_IDENTITY_SECRET` and `FRUITBACK_CONSOLE_URL`: the instance would hold a secret
