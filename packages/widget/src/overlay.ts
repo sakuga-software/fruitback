@@ -7,6 +7,7 @@ import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
+import { PREVIEW_STYLES, PREVIEW_WIDTH, buildPreview, previewPlace } from './pin-preview.ts';
 
 /**
  * The pins on the page: one box over each element someone left a note on, coloured by where the
@@ -222,7 +223,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   container.dataset.fruitbackOverlay = '';
 
   const style = document.createElement('style');
-  style.textContent = STYLES;
+  style.textContent = STYLES + PREVIEW_STYLES;
 
   const host = options.host ?? document.body;
   host.append(style, container);
@@ -265,6 +266,15 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let threadPlace: Box | undefined;
   /** The dashed line from the pin to the thread, while the thread is away from its place. */
   let tetherLine: HTMLElement | null = null;
+  /** The preview of the pin under the pointer or with the keyboard focus (FRU-422). */
+  let preview: { node: HTMLElement; entry: Placed } | null = null;
+  /**
+   * The kind of pointer that last pressed a pin. A tap or a click gives the pin the focus too, and
+   * that focus shows no preview: only the focus of the keyboard does.
+   */
+  let pressedWith: string | undefined;
+  /** True while a closed thread gives the focus back to its pin: that focus shows no preview. */
+  let givingBack = false;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStartedAt = 0;
@@ -296,6 +306,52 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     fan();
     // A thread in a panel of the widget (FRU-312) has no place on the page.
     if (thread !== null && threadHome === null) placeThread(thread, openPin());
+    if (preview !== null) placePreview(preview.node, preview.entry);
+  }
+
+  /** Shows the preview of a pin, unless its thread is open (FRU-422). */
+  function showPreview(entry: Placed, by: 'pointer' | 'keyboard'): void {
+    hidePreview();
+    if (entry.pin.dataset.fruitbackOpen !== undefined) return;
+    const node = buildPreview(document, {
+      color: pinColor(entry.issue),
+      state: stateLabel(entry.issue, t),
+      identifier: entry.issue.url === undefined ? undefined : entry.issue.identifier,
+      note: entry.issue.seed.note.trim() || entry.issue.identifier,
+      hint: t.text(by === 'keyboard' ? 'pin.previewKey' : 'pin.previewClick'),
+    });
+    container.append(node);
+    preview = { node, entry };
+    placePreview(node, entry);
+  }
+
+  function hidePreview(): void {
+    preview?.node.remove();
+    preview = null;
+  }
+
+  function placePreview(node: HTMLElement, entry: Placed): void {
+    const drop = (pin: HTMLElement) => {
+      const badge = pin.querySelector('.fruitback-pin-badge');
+      return badge === null ? undefined : documentRect(badge);
+    };
+    const own = drop(entry.pin);
+    if (own === undefined) return;
+    const others = placed.filter((other) => other !== entry).flatMap((other) => drop(other.pin) ?? []);
+    const where = previewPlace(
+      own,
+      { width: node.offsetWidth || PREVIEW_WIDTH, height: node.offsetHeight },
+      {
+        left: view?.scrollX ?? 0,
+        top: view?.scrollY ?? 0,
+        width: document.documentElement.clientWidth || (view?.innerWidth ?? 0),
+        height: document.documentElement.clientHeight || (view?.innerHeight ?? 0),
+      },
+      others,
+      t.direction,
+    );
+    node.style.left = `${where.left}px`;
+    node.style.top = `${where.top}px`;
   }
 
   function openPin(): HTMLElement | undefined {
@@ -547,6 +603,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // below on the new pin of its note, or closed if the note is no longer drawn.
     const homed = threadHome === null ? undefined : thread?.dataset.fruitbackThread;
     if (homed === undefined) closeThread(false);
+    // The preview is a child of the container, and goes with the pins it was about.
+    preview = null;
     container.replaceChildren();
     // A note has the number of its place among the notes of the page, before any is hidden: hiding a
     // stage must not give « note 3 » to another note. A note kept for later is not counted.
@@ -576,10 +634,30 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         if (marked !== undefined && issue.seed.id === marked) pin.dataset.fruitbackMarked = '';
         const entry = { issue, resolution, pin };
 
-        pin.querySelector('.fruitback-pin-badge')?.addEventListener('click', (event) => {
+        const badge = pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+        badge?.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
           openThread(entry);
+        });
+        // The preview (FRU-422): a mouse or a pen that comes over the drop, or the focus of the
+        // keyboard. A finger shows none: a tap opens the thread, as before.
+        badge?.addEventListener('pointerenter', (event) => {
+          if (event.pointerType !== 'touch') showPreview(entry, 'pointer');
+        });
+        badge?.addEventListener('pointerleave', () => {
+          if (preview?.entry === entry && !badge.matches(':focus')) hidePreview();
+        });
+        badge?.addEventListener('pointerdown', (event) => {
+          pressedWith = event.pointerType || 'mouse';
+          if (pressedWith === 'touch') hidePreview();
+        });
+        badge?.addEventListener('focus', () => {
+          if (pressedWith === undefined && !givingBack) showPreview(entry, 'keyboard');
+        });
+        badge?.addEventListener('blur', () => {
+          pressedWith = undefined;
+          if (preview?.entry === entry) hidePreview();
         });
 
         container.append(pin);
@@ -715,6 +793,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function openThread(entry: Placed, home: HTMLElement | null = null): void {
     const active = deepActiveElement(document);
+    hidePreview();
     closeThread();
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     threadHome = home;
@@ -762,7 +841,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
     }
     const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+    givingBack = true;
     if (focused && !homed) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
+    givingBack = false;
     threadOpener = null;
     if (wasOpen) options.onThread?.();
   }
@@ -786,7 +867,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') closeThread();
+    if (event.key !== 'Escape') return;
+    // Escape closes the preview first, and the thread when no preview is shown.
+    if (preview !== null) hidePreview();
+    else closeThread();
   }
 
   view?.addEventListener('scroll', schedule, { passive: true, capture: true });
@@ -867,6 +951,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       document.removeEventListener('click', onDocumentClick, true);
       document.removeEventListener('keydown', onKeyDown);
       closeThread();
+      hidePreview();
       orphans.destroy();
       container.remove();
       style.remove();
@@ -919,8 +1004,7 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   badge.className = 'fruitback-pin-badge';
   // A pin opens its note: a screen reader is told which one is open, and is not told it twice.
   badge.setAttribute('aria-expanded', 'false');
-  // « In progress · The Add button is almost invisible… », as the mock-up writes it (FRU-304).
-  badge.title = `${stateLabel(issue, t)} · ${summarise(issue)}`;
+  // No `title` (FRU-422): the preview of the widget takes its place, and the two would show together.
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
@@ -1095,7 +1179,7 @@ function sourceBlock(document: Document, issue: SeedIssue, showSelector: boolean
  *
  * **A function and not the expression inlined twice**, because the second site is how this was found:
  * the header was fixed in review and the badge's `title` was left behind. Two copies of a fallback
- * are two chances to fix only one of them.
+ * are two chances to fix only one of them. The preview of a pin (FRU-422) reads it too.
  *
  * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
  */

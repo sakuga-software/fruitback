@@ -105,6 +105,8 @@ export const FRENCH: Catalog = {
   'pin.label': 'Note {number}, {stage} : {note}',
   'pin.labelUncertain': 'Note {number}, {stage}, position approximative : {note}',
   'pin.labelDraft': 'Pas encore envoyée · {note}',
+  'pin.previewClick': 'Cliquer pour ouvrir',
+  'pin.previewKey': 'Entrée pour ouvrir',
 
   'thread.close': 'Fermer la note',
   'thread.move':
