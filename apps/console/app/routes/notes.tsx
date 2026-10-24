@@ -16,6 +16,7 @@ import {
   StatusDot,
 } from '../ui';
 import { KINDS, STAGE_NAMES, connectorName } from './connector-parts';
+import { ConnectorMark } from '../connector-marks';
 import { useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { DID_NOT_ANSWER, writeProblemOf } from '../problems';
@@ -625,7 +626,10 @@ function Place({
 
   return (
     <>
-      <span className="block font-semibold">{name}</span>
+      <span className="flex items-center gap-[6px] font-semibold">
+        <ConnectorMark kind={place.kind} />
+        {name}
+      </span>
       <Reference reference={reference} address={address} />
       {host === undefined ? null : (
         <span className="block text-hint text-muted">{t('Delivered to {host}', { host })}</span>

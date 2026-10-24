@@ -455,6 +455,15 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
     'The headline runs to three lines on a phone. Can it be shorter?',
   );
   await expect(row(page, 'checkout button').locator('td').nth(3)).toHaveText('Kept in Fruitback');
+  // Each source has its mark before its name, 14 px, hidden from a screen reader (FRU-435).
+  // A note kept in Fruitback went to no source, and has none.
+  for (const cell of [went, row(page, 'chat bubble').locator('td').nth(3)]) {
+    const mark = cell.locator('span').first().locator('svg');
+    await expect(mark).toHaveAttribute('aria-hidden', 'true');
+    const size = await box(mark);
+    expect.soft({ width: size.width, height: size.height }).toEqual({ width: 14, height: 14 });
+  }
+  await expect(row(page, 'checkout button').locator('td').nth(3).locator('svg')).toHaveCount(0);
   // Not delivered: the words in the accent, and « Send again » at 32 px.
   const late = row(page, 'The order form').locator('td').nth(3);
   const words = late.getByText('Not delivered yet', { exact: true });
