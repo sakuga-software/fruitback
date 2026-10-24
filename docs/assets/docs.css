@@ -31,7 +31,23 @@
 }
 
 html {
+  scroll-behavior: smooth;
   scroll-padding-top: 24px;
+}
+
+/* A link to another guide fades from one page to the next, where the browser can (FRU-440). */
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  @view-transition {
+    navigation: none;
+  }
 }
 
 body {

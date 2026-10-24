@@ -260,6 +260,17 @@ describe('the guides (FRU-417)', () => {
     );
   });
 
+  it('scrolls and goes from page to page with a transition, and with none for less motion (FRU-440)', () => {
+    for (const sheet of ['assets/docs.css', 'assets/landing.css']) {
+      const css = readFileSync(new URL(sheet, DOCS), 'utf8');
+      const [always, reduced = ''] = css.split('@media (prefers-reduced-motion: reduce)');
+      assert.match(always ?? '', /html \{[^}]*scroll-behavior: smooth;/, `${sheet}: no smooth scroll`);
+      assert.match(always ?? '', /@view-transition \{\s*navigation: auto;/, `${sheet}: no transition between pages`);
+      assert.match(reduced, /scroll-behavior: auto;/, `${sheet}: the scroll stays smooth for less motion`);
+      assert.match(reduced, /@view-transition \{\s*navigation: none;/, `${sheet}: the pages fade for less motion`);
+    }
+  });
+
   it('keeps the text of the pages at 4.5:1 on the page and on a card', () => {
     const css = readFileSync(new URL('assets/docs.css', DOCS), 'utf8');
     const token = (name: string) => new RegExp(`--${name}: (#[0-9a-f]{6});`).exec(css)?.[1] ?? 'none';

@@ -42,9 +42,18 @@ html {
   scroll-padding-top: 80px;
 }
 
+/* The guides fade in from the landing, as they do from one another (FRU-440). */
+@view-transition {
+  navigation: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  @view-transition {
+    navigation: none;
   }
 }
 
