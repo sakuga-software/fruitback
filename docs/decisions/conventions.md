@@ -210,10 +210,11 @@ How this repository is formatted, tested and documented, and which test holds ea
 "perTest"`**: a mutant runs only the tests that reach it, in workers that stay up. `vitest.related`
   is `false`: `related` would keep only the tests that import a mutated file, and leave out a test
   that starts the worker in a process or reads a document. `mutation.test.ts` holds both.
-- **vitest is 4.1.12, the same in the workspace and in `tools/mutation`.** The runner of StrykerJS
-  10.0.0 found no test under vitest 5.0.5, so every mutant survived (6.82 on `cache.ts`), and it
+- **vitest is 5.0.5, the same in the workspace and in `tools/mutation`.** The runner of StrykerJS
   loads vitest from `tools/mutation` while the tests import the one of the workspace.
-  `mutation.test.ts` fails when the two differ.
+  `mutation.test.ts` fails when the two differ. The runner 10.0.0 kills 3 of the 38 mutants of
+  `cache.ts` under vitest 5.0.5, and the runner 10.1.1 kills all 38 (measured on 2026-10-24): the
+  mutation job needs StrykerJS 10.1.1 or later.
 - **`pnpm audit --prod` reads vitest as a production dependency of the worker.** better-auth 1.7.7
   names vitest as an optional peer, and pnpm links it once vitest is in the workspace: the job
   `dependencies` then failed on vite 8.2.1 and source-map-js 1.2.1. An override `'-'` does not cut a
