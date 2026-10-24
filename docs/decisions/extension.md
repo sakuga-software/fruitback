@@ -703,6 +703,19 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **Not verified on Firefox**: `excludeMatches` of `scripting.registerContentScripts` is in its
   documentation, and was not measured here.
 
+## « Corner of the widget », in the preferences (FRU-443)
+
+### The rules, in short
+
+- **The corner is said apart from the mount, in a message of its own**: `dock`, with `position`, one of
+  the four corners of the widget (`DOCK_POSITIONS`, written in `protocol.ts` so the bridge does not
+  import the widget, and held equal to the widget's by `protocol.test.ts`). Absent: the corner by
+  default. The page script calls `moveDock` of the widget it mounted: no new widget, so a note being
+  written stays, as with `selectors` (FRU-349).
+- **A value that is not a corner is no message**: it moves nothing. The page can read and forge it on
+  its channel; it moves the dock on that page, and nothing else.
+- **Kept in the local area, under `dockPosition`**, for every site. No credential.
+
 ## The rules in the reviewer's other browsers (FRU-72)
 
 ### The rules, in short

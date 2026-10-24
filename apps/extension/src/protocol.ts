@@ -15,7 +15,7 @@
  */
 
 import { STATUS_COLOR } from '@fruitback/shared';
-import type { TransportRequest, TransportResponse } from '@fruitback/widget';
+import type { DockPosition, TransportRequest, TransportResponse } from '@fruitback/widget';
 import { isWorkerEndpoint } from './endpoint.ts';
 
 /**
@@ -135,6 +135,36 @@ export type SelectorsMessage = {
   kind: 'selectors';
   shown: boolean;
 };
+
+/**
+ * « Corner of the widget » of the preferences (FRU-443), for the widget we mounted: the dock moves to
+ * that corner of the window. Absent: the corner of the widget by default. Said apart from the mount,
+ * like `selectors`, so a change does not build the widget again over a note being written. The page
+ * can read and forge it: it moves the dock on this page, and nothing else.
+ */
+export type DockMessage = {
+  channel: typeof CHANNEL;
+  kind: 'dock';
+  position?: DockPosition;
+};
+
+/**
+ * The corners the widget knows (`DOCK_POSITIONS` of `@fruitback/widget`), written here so the bridge
+ * does not import the widget. `protocol.test.ts` holds the two lists equal.
+ */
+export const DOCK_POSITIONS = [
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+] as const satisfies readonly DockPosition[];
+
+/** A corner the widget knows, or `undefined`. */
+export function parseDockPosition(value: unknown): DockPosition | undefined {
+  return typeof value === 'string' && (DOCK_POSITIONS as readonly string[]).includes(value)
+    ? (value as DockPosition)
+    : undefined;
+}
 
 /**
  * The widget asks for the sign-in (FRU-315): « Sign in to leave notes », « Sign in », « Sign in
@@ -508,6 +538,7 @@ export type BridgeMessage =
   | CaptureResponseMessage
   | SessionMessage
   | SelectorsMessage
+  | DockMessage
   | SignInMessage;
 
 /**
@@ -532,6 +563,13 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   }
   if (data.kind === 'selectors') {
     return typeof data.shown === 'boolean' ? { channel: CHANNEL, kind: 'selectors', shown: data.shown } : undefined;
+  }
+  if (data.kind === 'dock') {
+    // Absent is the default corner. A value that is not a corner is no message: it moves nothing.
+    if (data.position === undefined) return { channel: CHANNEL, kind: 'dock' };
+    const position = parseDockPosition(data.position);
+
+    return position === undefined ? undefined : { channel: CHANNEL, kind: 'dock', position };
   }
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
@@ -588,6 +626,9 @@ export const NOTES_NAME_KEY = 'notesName';
 
 /** The storage key of « Show CSS selectors » (FRU-349), in the local area. Absent: off. */
 export const SHOW_SELECTORS_KEY = 'showSelectors';
+
+/** The storage key of « Corner of the widget » (FRU-443), in the local area. Absent: the default corner. */
+export const DOCK_POSITION_KEY = 'dockPosition';
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
