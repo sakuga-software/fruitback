@@ -211,9 +211,10 @@ export type NoteParseResult = { ok: true; note: Note } | NoteParseFailure;
 
 /**
  * A note as `NOTE_KIND` writes it: `text` for the words of the visitor. The parser reads it into a
- * `Note` of `SEED_KIND`, the shape every reader holds until the writers move.
+ * `Note` of `SEED_KIND`, the shape every reader holds until the writers move. `extend` replaces
+ * `kind`, so only `note` is omitted.
  */
-const noteV3Schema = noteSchema.omit({ kind: true, note: true }).extend({
+const noteV3Schema = noteSchema.omit({ note: true }).extend({
   kind: z.literal(NOTE_KIND),
   text: z.string().max(NOTE_MAX_LENGTH),
 });

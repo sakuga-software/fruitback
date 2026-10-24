@@ -24,7 +24,7 @@
       },
       "src/deprecated.ts": {
         "score": 100,
-        "mutants": 6
+        "mutants": 5
       }
     }
   },
