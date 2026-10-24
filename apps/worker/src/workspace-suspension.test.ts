@@ -1,9 +1,9 @@
-import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE } from '@fruitback/shared';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'vitest';
-import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { newId } from './account-rows.ts';
 import { DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
 import { type RequestContext, handleRequest } from './app.ts';
@@ -24,7 +24,7 @@ import { rowsOf } from './postgres.fixture.ts';
 import { deliverDue, deliveryBody, sealTarget } from './rest-connector.ts';
 import { createMemoryAttachmentStore } from './attachments.ts';
 import { seal } from './secrets.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
 import { ALLOWED_WHILE_SUSPENDED, SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
 
@@ -75,8 +75,8 @@ async function accountSession(world: World, who: Who): Promise<string> {
   return ((await claimed.json()) as { accessToken: string }).accessToken;
 }
 
-function noteOn(site: string, id: string): Seed {
-  const seed = seedFixture({ id, page: { url: PAGE, path: '/pricing' } });
+function noteOn(site: string, id: string): Note {
+  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
 
   return { ...seed, client: { id: site, name: 'Acme' } };
 }
@@ -102,7 +102,7 @@ async function anInstance() {
     ...base,
     context: {
       ...base.context,
-      store: createPostgresSeedStore(base.database),
+      store: createPostgresNoteStore(base.database),
       attachments: createMemoryAttachmentStore(),
       connectStore: base.connectStore,
       resolveTxt: async () => [],
@@ -681,7 +681,7 @@ async function fixtures(on: Instance): Promise<Fixtures> {
       workspace: on.acme,
       site: { id: on.site.id },
       identifier: 'FB-1',
-      seed: seedFixture({ id: 'sd_late' }),
+      seed: noteFixture({ id: 'sd_late' }),
     }),
     1,
   );
@@ -716,7 +716,7 @@ const CONSOLE_WRITES: readonly Write[] = [
   {
     method: 'POST',
     rest: (fx) => `/sites/${fx.site.id}/statuses`,
-    body: () => ({ source: 'own', key: 'waiting', stage: DEFAULT_SEED_STAGE }),
+    body: () => ({ source: 'own', key: 'waiting', stage: DEFAULT_NOTE_STAGE }),
     status: 200,
   },
   {
@@ -754,7 +754,7 @@ const CONSOLE_WRITES: readonly Write[] = [
   {
     method: 'POST',
     rest: (fx) => `/notes/${fx.kept}/status`,
-    body: () => ({ status: `own:${DEFAULT_SEED_STAGE}` }),
+    body: () => ({ status: `own:${DEFAULT_NOTE_STAGE}` }),
     status: 200,
   },
   // A path that no route serves: the guard answers before the routes.

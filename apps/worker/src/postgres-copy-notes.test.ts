@@ -8,8 +8,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterAll, afterEach, describe, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { type Seed, SEED_STAGES, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, NOTE_STAGES, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { IDENTITY_SECRET, envWith } from './auth-worker.fixture.ts';
@@ -17,11 +17,11 @@ import { parseMigrateArgs } from './cli.ts';
 import type { ClientPolicy } from './clients.ts';
 import { createMemoryKv } from './kv.ts';
 import { type PgDatabase, createPgDatabase } from './postgres.ts';
-import { SEEDS_FILE_VERSION, copySeedsFile } from './postgres-copy.ts';
-import { closeFrozenFiles, frozenFile, issuesOfFile, writeSeed } from './postgres-copy.fixture.ts';
+import { NOTES_FILE_VERSION, copyNotesFile } from './postgres-copy.ts';
+import { closeFrozenFiles, frozenFile, issuesOfFile, writeNote } from './postgres-copy.fixture.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
@@ -52,8 +52,8 @@ afterAll(() => {
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
-function seedOf(id: string, page: string, client: string | undefined, note: string): Seed {
-  const seed = seedFixture({ id, note, page: { url: page, path: new URL(page).pathname, title: 'A page' } });
+function noteFixtureOf(id: string, page: string, client: string | undefined, note: string): Note {
+  const seed = noteFixture({ id, note, page: { url: page, path: new URL(page).pathname, title: 'A page' } });
   const { client: _own, ...rest } = seed;
 
   return { ...rest, ...(client === undefined ? {} : { client: { id: client, name: client } }) };
@@ -66,8 +66,8 @@ function seedOf(id: string, page: string, client: string | undefined, note: stri
 async function fileOfAWorker() {
   const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
   folders.push(folder);
-  const seedsPath = join(folder, 'fb.db');
-  const store = frozenFile(seedsPath, 'seeds');
+  const notesPath = join(folder, 'fb.db');
+  const store = frozenFile(notesPath, 'seeds');
   const notes: [string, string | undefined, string][] = [
     [PAGES[0] ?? '', 'acme', 'Le bouton « Commander » est trop petit'],
     [PAGES[0] ?? '', 'acme', 'Une note avec une apostrophe : l’été, et un emoji 🍓'],
@@ -78,11 +78,11 @@ async function fileOfAWorker() {
     [PAGES[1] ?? '', 'acme', 'La dernière'],
   ];
   for (const [index, [page, client, note]] of notes.entries()) {
-    writeSeed(store, seedOf(`sd_${index + 1}`, page, client, note));
+    writeNote(store, noteFixtureOf(`sd_${index + 1}`, page, client, note));
   }
   // A second connection, as `sqlite3` beside a worker: the store keeps its own open.
-  const file = new DatabaseSync(seedsPath);
-  for (const [index, stage] of SEED_STAGES.entries()) {
+  const file = new DatabaseSync(notesPath);
+  for (const [index, stage] of NOTE_STAGES.entries()) {
     file
       .prepare('UPDATE seeds SET stage = ?, updated_at = ? WHERE id = ?')
       .run(stage, `2026-09-0${index + 1}T08:00:00.000Z`, index + 1);
@@ -97,7 +97,7 @@ async function fileOfAWorker() {
   file.prepare('DELETE FROM seeds WHERE id = 6').run();
   file.close();
 
-  return { folder, seedsPath };
+  return { folder, notesPath };
 }
 
 type Read = (query: { url: string; clientId: string | undefined }) => Promise<unknown>;
@@ -155,18 +155,18 @@ for (const subject of SUBJECTS) {
       });
 
       it('gives each reader the notes the file gave, byte for byte, with their numbers, stages and replies', async () => {
-        const { seedsPath } = await fileOfAWorker();
-        assert.ok(existsSync(`${seedsPath}-wal`), 'the rows are not in a journal: this case would prove less');
+        const { notesPath } = await fileOfAWorker();
+        assert.ok(existsSync(`${notesPath}-wal`), 'the rows are not in a journal: this case would prove less');
         database = await subject.open();
         const clients = ['acme', 'globex', undefined];
-        const before = await everyRead(async (query) => issuesOfFile(seedsPath, query, POLICY), clients);
+        const before = await everyRead(async (query) => issuesOfFile(notesPath, query, POLICY), clients);
 
-        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.equal(outcome.ok, true, outcome.lines.join('\n'));
         assert.match(outcome.lines.join('\n'), /seeds\s+6\s+6\s+same/);
         assert.match(outcome.lines.join('\n'), /seed_comments\s+3\s+3\s+same/);
-        const store = createPostgresSeedStore(database);
+        const store = createPostgresNoteStore(database);
         const after = await everyRead((query) => store.findForPage(query, undefined, POLICY), clients);
         // The SQLite store gives a reader that names no client every note of the page, and the store of
         // the database gives it the notes that name none (FRU-218): that read is compared apart.
@@ -180,9 +180,9 @@ for (const subject of SUBJECTS) {
         // The five stages came through, and the text of a seed is the text of the file.
         assert.deepEqual(
           (await rowsOf(database, 'SELECT stage FROM seeds ORDER BY id')).map((row) => row.stage),
-          [...SEED_STAGES, 'new'],
+          [...NOTE_STAGES, 'new'],
         );
-        const file = new DatabaseSync(seedsPath, { readOnly: true });
+        const file = new DatabaseSync(notesPath, { readOnly: true });
         const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
         file.close();
         assert.deepEqual(
@@ -195,15 +195,15 @@ for (const subject of SUBJECTS) {
       });
 
       it('goes on after the largest number the file ever gave, a deleted note included', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
 
-        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.match(outcome.lines.at(-1) ?? '', /^copied: the counts are equal\. The next note is FB-8\./);
-        const store = createPostgresSeedStore(database);
+        const store = createPostgresNoteStore(database);
         const next = await store.create(
-          seedOf('sd_new', PAGES[0] ?? '', 'acme', 'Une note d’après'),
+          noteFixtureOf('sd_new', PAGES[0] ?? '', 'acme', 'Une note d’après'),
           undefined,
           POLICY,
         );
@@ -215,7 +215,7 @@ for (const subject of SUBJECTS) {
       });
 
       it('serves the copied notes through GET /feedback of a worker with a database, to the site that --client names', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
         await migrate(database);
         // The operator made the site in the console first: its id is the one of the database.
@@ -224,8 +224,8 @@ for (const subject of SUBJECTS) {
         const workspace = await accounts.createWorkspace('Acme', owner.id);
         const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
 
-        const outcome = await copySeedsFile({
-          seedsPath,
+        const outcome = await copyNotesFile({
+          notesPath,
           clients: new Map<string | null, string>([
             ['acme', site.id],
             [null, site.id],
@@ -253,7 +253,7 @@ for (const subject of SUBJECTS) {
                 accounts,
                 sessionStore: createPostgresSessionStore(database as PgDatabase),
                 kv: createMemoryKv(),
-                store: createPostgresSeedStore(database as PgDatabase),
+                store: createPostgresNoteStore(database as PgDatabase),
               },
             )
           ).json()) as { issues: { identifier: string; stage: string; seed: { note: string } }[] };
@@ -266,20 +266,20 @@ for (const subject of SUBJECTS) {
       });
 
       it('writes nothing beside the file, and leaves it as it was', async () => {
-        const { folder, seedsPath } = await fileOfAWorker();
+        const { folder, notesPath } = await fileOfAWorker();
         database = await subject.open();
         const before = fingerprint(folder);
 
-        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+        assert.equal((await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
 
         assert.equal(fingerprint(folder), before);
       });
 
       it('keeps nothing on a dry run, not even a number, and says what the next one would be', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
 
-        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: true });
+        const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: true });
 
         assert.equal(outcome.ok, true, outcome.lines.join('\n'));
         assert.match(
@@ -287,8 +287,8 @@ for (const subject of SUBJECTS) {
           /^dry run: the counts are equal, and nothing was kept\. The next note would be FB-8\./,
         );
         assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
-        const first = await createPostgresSeedStore(database).create(
-          seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première note de cette base'),
+        const first = await createPostgresNoteStore(database).create(
+          noteFixtureOf('sd_first', PAGES[0] ?? '', 'acme', 'La première note de cette base'),
           undefined,
           POLICY,
         );
@@ -296,21 +296,21 @@ for (const subject of SUBJECTS) {
       });
 
       it('writes nothing again when it runs a second time, and refuses once a note was planted since', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
-        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+        assert.equal((await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
 
-        const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const again = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
         assert.equal(again.ok, true);
         assert.match(again.lines[0] ?? '', /already holds exactly these notes: nothing is written/);
         assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
 
-        await createPostgresSeedStore(database).create(
-          seedOf('sd_since', PAGES[0] ?? '', 'acme', 'Depuis'),
+        await createPostgresNoteStore(database).create(
+          noteFixtureOf('sd_since', PAGES[0] ?? '', 'acme', 'Depuis'),
           undefined,
           POLICY,
         );
-        const late = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const late = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
         assert.equal(late.ok, false);
         assert.match(
           late.lines.at(-1) ?? '',
@@ -320,12 +320,12 @@ for (const subject of SUBJECTS) {
       });
 
       it('holds the same rows under another name of site as other rows: a second run with another --client is refused', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
-        assert.equal((await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
+        assert.equal((await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false })).ok, true);
 
-        const renamed = await copySeedsFile({
-          seedsPath,
+        const renamed = await copyNotesFile({
+          notesPath,
           clients: new Map<string | null, string>([['acme', 'site_other']]),
           database,
           dryRun: false,
@@ -339,7 +339,7 @@ for (const subject of SUBJECTS) {
       });
 
       it('leaves nothing when it stops in the middle, and gives the same result when it runs again', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
         await migrate(database);
         await rowsOf(
@@ -353,19 +353,19 @@ for (const subject of SUBJECTS) {
         );
 
         await assert.rejects(
-          copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false }),
+          copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false }),
           /the copy stops here/,
         );
         assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
 
         await rowsOf(database, 'DROP TRIGGER stop_the_copy ON seed_comments');
-        const again = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const again = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
         assert.equal(again.ok, true, again.lines.join('\n'));
         assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
       });
 
       it('fails its final count when a note goes missing in the target, and keeps nothing', async () => {
-        const { seedsPath } = await fileOfAWorker();
+        const { notesPath } = await fileOfAWorker();
         database = await subject.open();
         await migrate(database);
         // The violation: one note disappears as soon as the notes are written.
@@ -379,7 +379,7 @@ for (const subject of SUBJECTS) {
           'CREATE TRIGGER lose_a_note AFTER INSERT ON seeds FOR EACH STATEMENT EXECUTE FUNCTION lose_a_note()',
         );
 
-        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.equal(outcome.ok, false);
         assert.match(outcome.lines.join('\n'), /seeds\s+6\s+5\s+DIFFERENT/);
@@ -391,7 +391,7 @@ for (const subject of SUBJECTS) {
         const cases: [string, (file: DatabaseSync) => void, Map<string | null, string>, RegExp][] = [
           [
             'another version',
-            (file) => file.exec(`PRAGMA user_version = ${SEEDS_FILE_VERSION + 1}`),
+            (file) => file.exec(`PRAGMA user_version = ${NOTES_FILE_VERSION + 1}`),
             NO_RENAME,
             /the seeds file is at version 2, and this worker reads version 1/,
           ],
@@ -415,14 +415,14 @@ for (const subject of SUBJECTS) {
           ],
         ];
         for (const [label, change, clients, said] of cases) {
-          const { seedsPath } = await fileOfAWorker();
+          const { notesPath } = await fileOfAWorker();
           closeFrozenFiles();
-          const file = new DatabaseSync(seedsPath);
+          const file = new DatabaseSync(notesPath);
           change(file);
           file.close();
           database = await subject.open();
 
-          const outcome = await copySeedsFile({ seedsPath, clients, database, dryRun: false });
+          const outcome = await copyNotesFile({ notesPath, clients, database, dryRun: false });
 
           assert.equal(outcome.ok, false, label);
           assert.match(outcome.lines.at(-1) ?? '', said, label);
@@ -435,16 +435,16 @@ for (const subject of SUBJECTS) {
       it('copies a file that holds no note, and the first note is FB-1', async () => {
         const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-seeds-test-'));
         folders.push(folder);
-        const seedsPath = join(folder, 'fb.db');
-        frozenFile(seedsPath, 'seeds');
-        assert.deepEqual(issuesOfFile(seedsPath, { url: PAGES[0] ?? '', clientId: undefined }, POLICY), []);
+        const notesPath = join(folder, 'fb.db');
+        frozenFile(notesPath, 'seeds');
+        assert.deepEqual(issuesOfFile(notesPath, { url: PAGES[0] ?? '', clientId: undefined }, POLICY), []);
         database = await subject.open();
 
-        const outcome = await copySeedsFile({ seedsPath, clients: NO_RENAME, database, dryRun: false });
+        const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-        const first = await createPostgresSeedStore(database).create(
-          seedOf('sd_first', PAGES[0] ?? '', 'acme', 'La première'),
+        const first = await createPostgresNoteStore(database).create(
+          noteFixtureOf('sd_first', PAGES[0] ?? '', 'acme', 'La première'),
           undefined,
           POLICY,
         );
@@ -538,7 +538,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
         ok: true,
         args: {
           copy: 'seeds',
-          seedsPath: 'fb.db',
+          notesPath: 'fb.db',
           clients: new Map<string | null, string>([
             ['acme', 'site_1'],
             ['a', 'b=c'],
@@ -550,7 +550,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
     );
     assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db']), {
       ok: true,
-      args: { copy: 'seeds', seedsPath: 'fb.db', clients: new Map(), dryRun: false },
+      args: { copy: 'seeds', notesPath: 'fb.db', clients: new Map(), dryRun: false },
     });
   });
 
@@ -581,12 +581,12 @@ describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () =
     'tries, copies, ends with 0, never prints the address of the database, and ends with 1 on a refusal',
     { skip: NO_REAL_POSTGRES !== false, timeout: 60_000 },
     async () => {
-      const { folder, seedsPath } = await fileOfAWorker();
+      const { folder, notesPath } = await fileOfAWorker();
       closeFrozenFiles();
       const own = await ownDatabase();
       try {
         const env = { PATH: process.env.PATH, FRUITBACK_DATABASE_URL: own.url };
-        const argv = ['src/main.ts', 'migrate-to-postgres', '--seeds', seedsPath, '--client', 'acme=site_1'];
+        const argv = ['src/main.ts', 'migrate-to-postgres', '--seeds', notesPath, '--client', 'acme=site_1'];
         const cwd = fileURLToPath(new URL('..', import.meta.url));
 
         const dry = await run(process.execPath, [...argv, '--dry-run'], { cwd, env, timeout: 15_000 });

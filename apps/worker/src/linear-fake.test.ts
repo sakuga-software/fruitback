@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createLinearStore } from './linear.ts';
 import { LINEAR_FAKE_TEAM, createLinearFake, installLinearFake } from './linear-fake.fixture.ts';
 
@@ -29,7 +29,7 @@ describe('the fake Linear of the bench (FRU-426)', () => {
     const fake = createLinearFake();
     installLinearFake(fake);
     const content = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-    const seed = seedFixture();
+    const seed = noteFixture();
     const store = createLinearStore(config);
 
     await store.create(seed, undefined, POLICY, [{ id: 'att_1', name: 'area.png', type: 'image/png', content }]);

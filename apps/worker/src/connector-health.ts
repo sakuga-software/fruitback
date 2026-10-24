@@ -3,7 +3,7 @@ import { createAll } from './batch.ts';
 import { GithubInstallationGone, GithubRepositoryRefused } from './github-connector.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 
 /**
  * Whether a connector works, as its tracker last said (FRU-102).
@@ -57,10 +57,10 @@ export async function noteConnectorCall(
  * accounts there is no connector at all, and the store is answered as it is.
  */
 export function watchedStore(
-  store: SeedStore,
+  store: NoteStore,
   accounts: AccountStore | undefined,
   now: () => number = Date.now,
-): SeedStore {
+): NoteStore {
   if (accounts === undefined) return store;
 
   async function watched<T>(connector: string | undefined, call: () => Promise<T>): Promise<T> {
@@ -91,7 +91,7 @@ export function watchedStore(
       : {
           reply: (target, reply, client, policy) =>
             watched(client?.connector, () =>
-              (store.reply as NonNullable<SeedStore['reply']>)(target, reply, client, policy),
+              (store.reply as NonNullable<NoteStore['reply']>)(target, reply, client, policy),
             ),
         }),
     ...(store.check === undefined
@@ -99,7 +99,7 @@ export function watchedStore(
       : {
           check: (target, check, client, policy) =>
             watched(client?.connector, () =>
-              (store.check as NonNullable<SeedStore['check']>)(target, check, client, policy),
+              (store.check as NonNullable<NoteStore['check']>)(target, check, client, policy),
             ),
         }),
     ...(store.setStatus === undefined
@@ -107,7 +107,7 @@ export function watchedStore(
       : {
           setStatus: (target, status, client) =>
             watched(client?.connector, () =>
-              (store.setStatus as NonNullable<SeedStore['setStatus']>)(target, status, client),
+              (store.setStatus as NonNullable<NoteStore['setStatus']>)(target, status, client),
             ),
         }),
     ...(store.statusesFor === undefined ? {} : { statusesFor: store.statusesFor }),

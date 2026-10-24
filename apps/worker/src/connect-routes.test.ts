@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { Role } from './accounts.ts';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
@@ -174,7 +174,7 @@ function read(worker: Worker, site: string, origin: string, token?: string): Pro
 
 /** A note on a page of a site, as the relay sends it. */
 function write(worker: Worker, site: string, origin: string, token: string): Promise<Response> {
-  const seed = seedFixture();
+  const seed = noteFixture();
 
   return worker.call('/feedback', {
     body: { ...seed, page: { ...seed.page, url: `${origin}/pricing` }, client: { id: site } },
@@ -971,7 +971,7 @@ async function endedWritesNothing(worker: Worker): Promise<void> {
   const alice = await person(worker, 'alice@acme.dev');
   const acme = await workspaceOf(worker, alice, 'acme');
   const session = await connected(worker, alice);
-  const seed = seedFixture();
+  const seed = noteFixture();
   const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
   const picture = () =>
@@ -1111,7 +1111,7 @@ async function storeDownKeepsTheNote(worker: Worker): Promise<void> {
   const alice = await person(worker, 'alice@acme.dev');
   const acme = await workspaceOf(worker, alice, 'acme');
   const session = await connected(worker, alice);
-  const seed = seedFixture();
+  const seed = noteFixture();
   const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
   const down = mockMethod(worker.sessions, 'liveIdentity', async () => {

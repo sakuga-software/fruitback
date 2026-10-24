@@ -51,7 +51,7 @@ Measured on `main` at a00f5d57, 2026-10-21.
 | `apps/console/app/routes/connector-linear.tsx` | The screen of FRU-102: one row per state of the teams that sites send to, with a select of the stage.                                                                                               |
 | `apps/worker/src/github.ts`                    | Three stages from `state` and `state_reason` (FRU-32). Labels are used only as the read filter.                                                                                                     |
 | `apps/worker/src/rest-connector.ts`            | **Sends only.** The notes stay in the worker, and the body of the receiver's answer is not read (FRU-122). A REST site is read from the worker's own store.                                         |
-| `apps/worker/src/seeds-postgres.ts`            | The worker's own store: a `stage` column. **No route changes it**, except the « not fixed » verdict, which sets it back to `new`.                                                                   |
+| `apps/worker/src/notes-postgres.ts`            | The worker's own store: a `stage` column. **No route changes it**, except the « not fixed » verdict, which sets it back to `new`.                                                                   |
 | `apps/extension/src/site-notes.ts`             | The extension draws statuses itself, from copies of the stage tokens that `design-tokens.test.ts` compares with `theme.ts`. Its `PanelNote` carries no `stateName`: it always shows the stage word. |
 
 So half of the ticket is already there: Linear states are read, named, and re-attached to a stage

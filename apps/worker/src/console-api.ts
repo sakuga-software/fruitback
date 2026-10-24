@@ -58,7 +58,7 @@ import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } fro
 import { seal } from './secrets.ts';
 import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses.ts';
 import { invalidatePages } from './note-helpers.ts';
-import { DEFAULT_SEED_STAGE, MAX_STATUSES, SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, MAX_STATUSES, NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
@@ -165,7 +165,7 @@ function statusIdsOf(asked: readonly unknown[]): { source: string; key: string }
   const seen = new Set<string>();
   for (const each of asked) {
     const entry = typeof each === 'object' && each !== null ? (each as Record<string, unknown>) : undefined;
-    const read = readSiteStatus({ source: entry?.source, key: entry?.key, stage: DEFAULT_SEED_STAGE });
+    const read = readSiteStatus({ source: entry?.source, key: entry?.key, stage: DEFAULT_NOTE_STAGE });
     if (!read.ok) return undefined;
     const id = JSON.stringify([read.status.source, read.status.key]);
     if (seen.has(id)) return undefined;
@@ -834,7 +834,7 @@ export async function handleConsoleApi(
         if (listed === undefined || held === undefined) return notFound();
         // FRU-386: the notes in each status of the worker's store, 0 included, so the console shows
         // them and asks where they go before a delete. A state of a tracker has its notes there.
-        const own = [...SEED_STAGES, ...listed.filter((row) => row.source === OWN_SOURCE).map((row) => row.key)];
+        const own = [...NOTE_STAGES, ...listed.filter((row) => row.source === OWN_SOURCE).map((row) => row.key)];
         const notes = Object.fromEntries(own.map((key) => [key, held[key] ?? 0]));
 
         return json(200, { statuses: listed, notes }, headers);
@@ -919,7 +919,7 @@ export async function handleConsoleApi(
             name: state.name,
             type: state.type,
             stage: Object.hasOwn(kept.settings.stages, state.id)
-              ? (kept.settings.stages[state.id] as SeedStage)
+              ? (kept.settings.stages[state.id] as NoteStage)
               : state.stage,
             ...(state.color === undefined ? {} : { color: state.color }),
           }));

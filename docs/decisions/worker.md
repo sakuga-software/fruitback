@@ -170,7 +170,7 @@ database.
 ### The reasons, and what was measured
 
 - **Each case that went held SQLite alone**, or the file of the sessions, and the pull request names
-  each one with its reason. The others run on PGlite: `seeds-postgres.test.ts` took eight cases of
+  each one with its reason. The others run on PGlite: `notes-postgres.test.ts` took eight cases of
   `sqlite.test.ts` that no suite held on PostgreSQL. The rule of #222 was the method: list the cases
   of a file before it goes, and decide case by case.
 - **Found, and not fixed here: `pair --workspace` refuses on a worker with a database.**
@@ -1370,7 +1370,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
 - **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
-  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `attachments-postgres.ts` and `seeds-postgres.ts`,
+  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `attachments-postgres.ts` and `notes-postgres.ts`,
   and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
   holds both. (A test held the rest for a worker with no database, which refuses to start since
@@ -1673,9 +1673,9 @@ SQLite out while the notes have no other home: this is that home. It is a store 
 
 ### The rules, in short
 
-- **`seeds-postgres.ts` is `sqlite.ts` on two tables of the database**, `seeds` and `seed_comments`:
+- **`notes-postgres.ts` is `sqlite.ts` on two tables of the database**, `seeds` and `seed_comments`:
   the same columns, the same `FB-<n>`, no page to open, its own stages, and nothing in the worker
-  that writes a reply. `seed-rows.ts` reads a row of either database, and imports neither.
+  that writes a reply. `note-rows.ts` reads a row of either database, and imports neither.
 - **Every read names its site.** One database holds the notes of every workspace, so a read that
   names no site gets the notes that name none, where `sqlite.ts` answers the whole page. The
   conformance suite takes the reason from the subject (`readWithNoClient`) and reports that case as

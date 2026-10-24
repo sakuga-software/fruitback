@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { describe, it } from 'vitest';
-import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { envWith } from './auth-worker.fixture.ts';
 import { runForget } from './cli.ts';
@@ -10,14 +10,14 @@ import type { ClientPolicy } from './clients.ts';
 import { callOn, signInTo, worlds } from './console-world.fixture.ts';
 import { readConfig } from './env.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { postgresSeedStore } from './postgres-stores.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { postgresNoteStore } from './postgres-stores.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { StoreError } from './store.ts';
 import { readStoreConfig } from './stores.ts';
 
 /**
  * The notes in the database of the worker (FRU-218). `store-conformance.test.ts` runs the promises of
- * every `SeedStore` on this store, on PGlite and on a real server. This file holds what is its own:
+ * every `NoteStore` on this store, on PGlite and on a real server. This file holds what is its own:
  * the sites of two workspaces in one database, `forget`, a batch, and the rows it does not trust.
  */
 
@@ -31,8 +31,8 @@ const POLICY: ClientPolicy = {
 const SITE = 'https://preview.shared.test';
 const PAGE = canonicalizePageUrl(`${SITE}/pricing`);
 
-function seedOf(id: string, client: string | undefined, more: Partial<Seed> = {}): Seed {
-  const seed = seedFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+function noteFixtureOf(id: string, client: string | undefined, more: Partial<Note> = {}): Note {
+  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
   const { client: _own, ...rest } = seed;
 
   return { ...rest, ...(client === undefined ? {} : { client: { id: client, name: client } }), ...more };
@@ -45,14 +45,14 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     async function opened() {
       const database = await opening(open);
 
-      return { database, store: createPostgresSeedStore(database) };
+      return { database, store: createPostgresNoteStore(database) };
     }
 
     it('numbers the notes of the whole instance, FB-1 then FB-2, whatever their site', async () => {
       const { store } = await opened();
 
-      const first = await store.create(seedOf('sd_1', 'site_a'), undefined, POLICY);
-      const second = await store.create(seedOf('sd_2', 'site_b'), undefined, POLICY);
+      const first = await store.create(noteFixtureOf('sd_1', 'site_a'), undefined, POLICY);
+      const second = await store.create(noteFixtureOf('sd_2', 'site_b'), undefined, POLICY);
 
       assert.deepEqual(
         [first, second],
@@ -65,7 +65,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('writes a reply under a note of its site only, and under no number that is not a note (FRU-257)', async () => {
       const { database, store } = await opened();
-      const ours = await store.create(seedOf('sd_ours', 'site_a'), undefined, POLICY);
+      const ours = await store.create(noteFixtureOf('sd_ours', 'site_a'), undefined, POLICY);
       const reply = { body: 'Seen.', author: { kind: 'visitor' as const } };
 
       assert.equal(await store.reply?.({ issue: ours.id, clientId: 'site_b' }, reply, undefined, POLICY), undefined);
@@ -81,8 +81,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
       const { store } = await opened();
-      await store.create(seedOf('sd_site', 'site_a'), undefined, POLICY);
-      await store.create(seedOf('sd_nobody', undefined), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_site', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_nobody', undefined), undefined, POLICY);
 
       const found = await store.findForPage({ url: PAGE, clientId: undefined }, undefined, POLICY);
 
@@ -94,7 +94,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('writes every note of a batch, in order, or none of them', async () => {
       const { database, store } = await opened();
-      const batch = [seedOf('sd_a', 'site_a'), seedOf('sd_b', 'site_a'), seedOf('sd_c', 'site_a')];
+      const batch = [noteFixtureOf('sd_a', 'site_a'), noteFixtureOf('sd_b', 'site_a'), noteFixtureOf('sd_c', 'site_a')];
 
       const answers = await store.createBatch?.(batch, undefined, POLICY);
 
@@ -104,7 +104,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         { issue: { id: '3', identifier: 'FB-3' } },
       ]);
       // A batch whose second note the database refuses: a text column takes no NUL byte.
-      const refused = [seedOf('sd_d', 'site_a'), seedOf('sd_e', 'site_\u0000'), seedOf('sd_f', 'site_a')];
+      const refused = [
+        noteFixtureOf('sd_d', 'site_a'),
+        noteFixtureOf('sd_e', 'site_\u0000'),
+        noteFixtureOf('sd_f', 'site_a'),
+      ];
       await assert.rejects(Promise.resolve(store.createBatch?.(refused, undefined, POLICY)), StoreError);
       assert.deepEqual(
         (await rowsOf(database, 'SELECT id FROM seeds ORDER BY id')).map((row) => Number(row.id)),
@@ -118,7 +122,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       // a B-tree took 6 000 times the same letter (measured on 17.11).
       const query = Array.from({ length: 200 }, (_, index) => createHash('md5').update(String(index)).digest('hex'));
       const url = canonicalizePageUrl(`${SITE}/search?q=${query.join('')}`);
-      const seed = seedOf('sd_long', 'site_a', { page: { url, path: '/search', title: 'Search' } });
+      const seed = noteFixtureOf('sd_long', 'site_a', { page: { url, path: '/search', title: 'Search' } });
 
       await store.create(seed, undefined, POLICY);
 
@@ -131,7 +135,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('keeps a note that holds a NUL character, as it was written', async () => {
       const { store } = await opened();
-      const seed = seedOf('sd_nul', 'site_a', { note: 'before\u0000after' });
+      const seed = noteFixtureOf('sd_nul', 'site_a', { note: 'before\u0000after' });
 
       await store.create(seed, undefined, POLICY);
 
@@ -142,7 +146,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('loses one note, and not the page, to a row that is not a note of that page', async () => {
       const { database, store } = await opened();
       for (const id of ['sd_good', 'sd_not_json', 'sd_other_page']) {
-        await store.create(seedOf(id, 'site_a'), undefined, POLICY);
+        await store.create(noteFixtureOf(id, 'site_a'), undefined, POLICY);
       }
       await rowsOf(database, `UPDATE seeds SET seed = 'not json' WHERE id = 2`);
       await rowsOf(database, `UPDATE seeds SET page_url = '${PAGE}?moved=1' WHERE id = 3`);
@@ -161,7 +165,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('reports no url, because there is no interface to open', async () => {
       const { store } = await opened();
 
-      const created = await store.create(seedOf('sd_no_url', 'site_a'), undefined, POLICY);
+      const created = await store.create(noteFixtureOf('sd_no_url', 'site_a'), undefined, POLICY);
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
       assert.equal(created.url, undefined);
@@ -171,7 +175,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('names no state, so the widget writes the stage in its own words (FRU-114)', async () => {
       const { store } = await opened();
-      await store.create(seedOf('sd_no_state', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_no_state', 'site_a'), undefined, POLICY);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
@@ -181,8 +185,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('keeps each thread on its own seed', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('first', 'site_a'), undefined, POLICY);
-      await store.create(seedOf('second', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('first', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('second', 'site_a'), undefined, POLICY);
       await rowsOf(
         database,
         `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'pour la premiere', 1), (2, 'pour la seconde', 1)`,
@@ -201,7 +205,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('leaves the author out when nobody signed it', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('sd_unsigned', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_unsigned', 'site_a'), undefined, POLICY);
       await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'sans signature', 1)`);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
@@ -213,8 +217,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('drops a row that parses but is not a seed', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('sd_good', 'site_a'), undefined, POLICY);
-      await store.create(seedOf('sd_hello', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_good', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_hello', 'site_a'), undefined, POLICY);
       await rowsOf(database, `UPDATE seeds SET seed = '{ "hello": "world" }' WHERE id = 2`);
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
@@ -227,8 +231,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('drops a row whose column and seed disagree about which page it is on', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('sd_here', 'site_a'), undefined, POLICY);
-      const elsewhere = seedOf('sd_elsewhere', 'site_a', {
+      await store.create(noteFixtureOf('sd_here', 'site_a'), undefined, POLICY);
+      const elsewhere = noteFixtureOf('sd_elsewhere', 'site_a', {
         page: { url: canonicalizePageUrl(`${SITE}/autre`), path: '/autre', title: 'Autre' },
       });
       await store.create(elsewhere, undefined, POLICY);
@@ -245,7 +249,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('says when a note was written and changed, as dates', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('sd_dated', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_dated', 'site_a'), undefined, POLICY);
       await rowsOf(database, `UPDATE seeds SET updated_at = ${Date.UTC(2026, 9, 13, 8, 30)}`);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
@@ -257,9 +261,9 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     async function withAliceAndBob() {
       const { database, store } = await opened();
       const alice = { name: 'Alice', email: 'Alice@Example.com' };
-      await store.create(seedOf('sd_alice_a', 'site_a', { reporter: alice }), undefined, POLICY);
-      await store.create(seedOf('sd_bob', 'site_a', { reporter: { name: 'Bob' } }), undefined, POLICY);
-      await store.create(seedOf('sd_alice_b', 'site_b', { reporter: alice }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_alice_a', 'site_a', { reporter: alice }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_bob', 'site_a', { reporter: { name: 'Bob' } }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_alice_b', 'site_b', { reporter: alice }), undefined, POLICY);
       await rowsOf(
         database,
         `INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES (1, 'Team', 'one', 1), (2, 'Team', 'two', 2), (3, 'Team', 'three', 3)`,
@@ -315,9 +319,9 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('finds the seeds signed with a name, whatever its case and the spaces around it', async () => {
       const { database, store } = await opened();
-      await store.create(seedOf('sd_a', 'site_a', { reporter: { name: ' Alice ' } }), undefined, POLICY);
-      await store.create(seedOf('sd_b', 'site_a', { reporter: { name: 'Alicia' } }), undefined, POLICY);
-      await store.create(seedOf('sd_c', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_a', 'site_a', { reporter: { name: ' Alice ' } }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_b', 'site_a', { reporter: { name: 'Alicia' } }), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_c', 'site_a'), undefined, POLICY);
 
       const listed = await store.forget?.({ name: 'ALICE' }, { dryRun: true });
 
@@ -331,11 +335,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {
       const { database, store } = await opened();
       await store.create(
-        seedOf('sd_alice', 'site_a', { reporter: { name: 'Alice', email: 'alice@example.com' } }),
+        noteFixtureOf('sd_alice', 'site_a', { reporter: { name: 'Alice', email: 'alice@example.com' } }),
         undefined,
         POLICY,
       );
-      await store.create(seedOf('sd_broken', 'site_a'), undefined, POLICY);
+      await store.create(noteFixtureOf('sd_broken', 'site_a'), undefined, POLICY);
       await rowsOf(database, `UPDATE seeds SET seed = '{not json' WHERE id = 2`);
 
       const forgotten = await store.forget?.({ email: 'alice@example.com' }, { dryRun: false });
@@ -390,9 +394,9 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
 
   it('says its name and its scope before any call, as the store it loads says them', async () => {
     const world = await envOf();
-    const real = createPostgresSeedStore(world.database);
+    const real = createPostgresNoteStore(world.database);
     // Nothing listens on port 1: these two are read with no call to the database.
-    const lazy = postgresSeedStore('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
+    const lazy = postgresNoteStore('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
 
     assert.deepEqual([lazy.name, lazy.scope(undefined), lazy.stages], [real.name, real.scope(undefined), real.stages]);
     assert.deepEqual(
@@ -404,7 +408,7 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
 
   it('never gives a site of one workspace the notes of a site of another, on one page of one address', async () => {
     const world = await envOf({ env: { FRUITBACK_STORE: 'postgres' } });
-    const store = createPostgresSeedStore(world.database);
+    const store = createPostgresNoteStore(world.database);
     // Two workspaces review the same site: one database, one page, two sites.
     const sites: string[] = [];
     for (const who of ['alice@acme.dev', 'bob@globex.dev']) {
@@ -413,7 +417,7 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
       sites.push((await world.accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' })).id);
     }
     const [acme, globex] = sites as [string, string];
-    const note = { ...seedOf('sd_acme', acme), note: 'A note of Acme.' };
+    const note = { ...noteFixtureOf('sd_acme', acme), note: 'A note of Acme.' };
 
     const written = await callOn(world, 'POST', '/feedback', { origin: SITE, body: note }, { store });
     assert.equal(written.status, 201, await written.clone().text());

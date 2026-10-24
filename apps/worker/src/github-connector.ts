@@ -13,7 +13,7 @@ import {
   signAppJwt,
 } from './github.ts';
 import { open, seal } from './secrets.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 
 /**
  * The `github` connector of a workspace, on the Cloud (FRU-359, decision of Mathieu of 2026-10-21 on
@@ -407,7 +407,7 @@ export function createGithubConnectorStore(
    * is told whether a repository is private, when a note goes there.
    */
   statuses: Pick<IssueStoreOptions, 'statusSource' | 'stages' | 'privacy'> = {},
-): SeedStore {
+): NoteStore {
   return createIssueStore({
     ...statuses,
     repositoryOf: (client) => {

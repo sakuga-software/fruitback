@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import {
   FAKE_LINEAR_LOST_TO_PRODUCTION,
   FAKE_LINEAR_SELECTED_MEMORY,
@@ -10,7 +10,7 @@ import {
 /**
  * Which store this process runs on, and who validates its configuration (FRU-33).
  *
- * FRU-29 named the `SeedStore` interface but left the worker Linear-shaped anyway: `WorkerConfig`
+ * FRU-29 named the `NoteStore` interface but left the worker Linear-shaped anyway: `WorkerConfig`
  * carried `linearApiKey`, `linearTeamId` and `linearProjectId`, so every module that could read the
  * config could read one provider's credentials. `readConfig` also validated those three fields for
  * every deployment, including the ones that will not have them — a SQLite worker (FRU-31) would
@@ -42,7 +42,7 @@ export type StoreEnv = Record<string, string | undefined>;
  * this is the value that travels in `WorkerConfig`. It is called **once per process** by the
  * transport — see `RequestContext.store`.
  */
-export type StoreConfig = { readonly provider: string; create(): SeedStore };
+export type StoreConfig = { readonly provider: string; create(): NoteStore };
 
 export type StoreConfigResult = { ok: true; config: StoreConfig } | { ok: false; missing: string[] };
 
@@ -76,7 +76,7 @@ export function defineStore<TOptions>(spec: {
   envNames: Record<keyof TOptions & string, string>;
   read(env: StoreEnv): Record<string, unknown>;
   schema: z.ZodType<TOptions>;
-  create(options: TOptions): SeedStore;
+  create(options: TOptions): NoteStore;
 }): StoreSpec {
   return {
     provider: spec.provider,

@@ -1,7 +1,7 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { AccountStore, ConnectorAttention } from './accounts.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { noteConnectorCall, troubleOf, watchedStore } from './connector-health.ts';
@@ -9,7 +9,7 @@ import { type CallOptions, type World, callOn, signInTo, worlds } from './consol
 import { createMemoryKv } from './kv.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const SITE = 'https://staging.acme.dev';
@@ -98,7 +98,7 @@ async function acme(env: World) {
   await accounts.setDestination(workspace.id, site.id, { connector, teamId: 'team_design' });
 
   const write = () => {
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     return call(env, 'POST', '/feedback', {
       origin: SITE,
@@ -246,12 +246,12 @@ describe('the store that notes its connector', () => {
 
   it('answers what the store answered when the state cannot be kept: the note exists', async () => {
     mockMethod(console, 'error', () => {});
-    const store = { name: 'fake', scope: () => '', create: async () => created } as unknown as SeedStore;
+    const store = { name: 'fake', scope: () => '', create: async () => created } as unknown as NoteStore;
     const accounts = accountsThat(async () => {
       throw new Error('the accounts file is locked');
     });
 
-    assert.deepEqual(await watchedStore(store, accounts).create(seedFixture(), routed, policy), created);
+    assert.deepEqual(await watchedStore(store, accounts).create(noteFixture(), routed, policy), created);
   });
 
   it('throws the error of the store, and not the one of the accounts, when both fail', async () => {
@@ -263,31 +263,31 @@ describe('the store that notes its connector', () => {
       create: async () => {
         throw refusal;
       },
-    } as unknown as SeedStore;
+    } as unknown as NoteStore;
     const accounts = accountsThat(async () => {
       throw new Error('the accounts file is locked');
     });
 
     await assert.rejects(
-      watchedStore(store, accounts).create(seedFixture(), routed, policy),
+      watchedStore(store, accounts).create(noteFixture(), routed, policy),
       (error) => error === refusal,
     );
   });
 
   it('notes nothing for a client with no connector, and is the store itself with no accounts', async () => {
     const noted: unknown[] = [];
-    const store = { name: 'fake', scope: () => '', create: async () => created } as unknown as SeedStore;
+    const store = { name: 'fake', scope: () => '', create: async () => created } as unknown as NoteStore;
     const accounts = accountsThat(async (...call) => void noted.push(call));
 
-    await watchedStore(store, accounts).create(seedFixture(), {} as ClientConfig, policy);
-    await watchedStore(store, accounts).create(seedFixture(), undefined, policy);
+    await watchedStore(store, accounts).create(noteFixture(), {} as ClientConfig, policy);
+    await watchedStore(store, accounts).create(noteFixture(), undefined, policy);
 
     assert.deepEqual(noted, []);
     assert.equal(watchedStore(store, undefined), store);
   });
 
   it('keeps the name, the stages and the scope of the store it watches', () => {
-    const store = { name: 'fake', stages: ['new'], scope: () => 'a-scope' } as unknown as SeedStore;
+    const store = { name: 'fake', stages: ['new'], scope: () => 'a-scope' } as unknown as NoteStore;
     const watched = watchedStore(
       store,
       accountsThat(async () => {}),

@@ -1,17 +1,17 @@
 import {
-  type Seed,
-  type SeedComment,
-  type SeedIssue,
+  type Note,
+  type NoteComment,
+  type NoteIssue,
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
-import { ATTACHMENT_SUBTITLE, type IssueNode, stageForLinearState, toSeedIssue } from './linear.ts';
+import { ATTACHMENT_SUBTITLE, type IssueNode, stageForLinearState, toNoteIssue } from './linear.ts';
 import type { OutgoingFile } from './attachments.ts';
 import { checkText, replyText } from './reply-text.ts';
-import type { CheckAnswer, CreatedWithFiles, NewCheck, NewReply, SeedIssueQuery, SeedStore } from './store.ts';
+import type { CheckAnswer, CreatedWithFiles, NewCheck, NewReply, NoteIssueQuery, NoteStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -23,7 +23,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  * `devOnly` flag is the whole of that guard since FRU-33.
  *
  * It is deliberately not a mock: an issue is stored as the **description string**
- * `buildIssueDescription` produces, and read back through the same `toSeedIssue` the real path uses.
+ * `buildIssueDescription` produces, and read back through the same `toNoteIssue` the real path uses.
  * So the dev loop exercises the round trip for real, and a seed that stops parsing breaks the
  * playground the same way it would break production — which is the entire point of having one.
  *
@@ -64,8 +64,8 @@ const DEV_STATES = [
   { name: 'Canceled', type: 'canceled' },
 ] as const;
 
-async function createSeedIssue(
-  seed: Seed,
+async function createNoteIssue(
+  seed: Note,
   locale?: string,
   files: readonly OutgoingFile[] = [],
 ): Promise<CreatedWithFiles> {
@@ -86,7 +86,7 @@ async function createSeedIssue(
     updatedAt: new Date().toISOString(),
     description: buildIssueDescription(seed, { locale }),
     state: { name: state.name, type: state.type },
-    // Deliberately newest-first, like Linear's own default: the ordering is `toSeedComments`'s job,
+    // Deliberately newest-first, like Linear's own default: the ordering is `toNoteComments`'s job,
     // and a fake that hands back an already-sorted list would never exercise it.
     comments: {
       nodes:
@@ -119,18 +119,18 @@ async function createSeedIssue(
     : { ...issue, files: { sent: files.map((file) => file.id), lost: [], waiting: [] } };
 }
 
-async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Promise<SeedIssue[]> {
+async function fetchNoteIssues(query: NoteIssueQuery, policy: ClientPolicy): Promise<NoteIssue[]> {
   return (
     issues
       // Same isolation as the real filter, by the key this store actually holds. A read that names no
       // client gets every seed on the page, as on the other stores (FRU-34).
       .filter((issue) => query.clientId === undefined || issue.clientId === query.clientId)
-      // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
+      // `contains`, like the real filter — the exact URL check is `toNoteIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))
-      // Same `toSeedIssue` as production, the policy included — which is what makes the dev loop
+      // Same `toNoteIssue` as production, the policy included — which is what makes the dev loop
       // show exactly what a client with replies switched off would see.
-      .map((issue) => toSeedIssue(issue, query.url, policy))
-      .filter((issue): issue is SeedIssue => issue !== null)
+      .map((issue) => toNoteIssue(issue, query.url, policy))
+      .filter((issue): issue is NoteIssue => issue !== null)
   );
 }
 
@@ -140,7 +140,7 @@ async function createReply(
   reply: NewReply,
   clientId: string | undefined,
   locale?: string,
-): Promise<SeedComment | undefined> {
+): Promise<NoteComment | undefined> {
   const issue = issues.find((each) => each.id === id && (clientId === undefined || each.clientId === clientId));
   if (issue === undefined) return undefined;
   const comment = {
@@ -204,9 +204,9 @@ export function memoryIssues(): { description?: string | null }[] {
 }
 
 /**
- * The dev-loop store, as a `SeedStore` (FRU-29).
+ * The dev-loop store, as a `NoteStore` (FRU-29).
  *
- * It stays in this file, and it stays built on `toSeedIssue` from the real connector. That coupling
+ * It stays in this file, and it stays built on `toNoteIssue` from the real connector. That coupling
  * is the feature: an issue is stored as the description `buildIssueDescription` produces and read
  * back through production's own mapping, so a broken round trip breaks the playground too. Renaming
  * the file to something provider-agnostic would advertise an independence it does not have, and
@@ -215,7 +215,7 @@ export function memoryIssues(): { description?: string | null }[] {
  * What did change is that `app.ts` no longer special-cases it through a `fakeLinear` boolean: it is
  * one implementation among several, selected the same way any other is.
  */
-export function createMemoryStore(): SeedStore {
+export function createMemoryStore(): NoteStore {
   return {
     name: 'memory',
     // The client id is already part of the worker's cache key, so there is nothing further to
@@ -223,8 +223,8 @@ export function createMemoryStore(): SeedStore {
     scope: () => 'memory',
     // FRU-331: it stands in for Linear, which takes the files of a note.
     attachments: true,
-    create: (seed, _client, policy, files) => createSeedIssue(seed, policy.locale, files),
-    findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
+    create: (seed, _client, policy, files) => createNoteIssue(seed, policy.locale, files),
+    findForPage: (query, _client, policy) => fetchNoteIssues(query, policy),
     reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
     check: (target, check, _client, policy) => createCheck(target.issue, check, target.clientId, policy.locale),
   };

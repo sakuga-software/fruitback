@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { ACTIONS, ROLES, type Role, can } from './accounts.ts';
 import {
   callOn as call,
@@ -145,7 +145,7 @@ describe('from a link in a mailbox to a note on the page (FRU-99, FRU-100)', () 
     assert.equal(paired.status, 200);
     const session = (await paired.json()) as { accessToken: string };
 
-    const seed = seedFixture();
+    const seed = noteFixture();
     const written = await call(env, 'POST', '/feedback', {
       origin: SITE,
       token: session.accessToken,

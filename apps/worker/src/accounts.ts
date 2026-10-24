@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { SiteStatus } from './site-statuses.ts';
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 
 /**
@@ -281,7 +281,7 @@ export type ConnectorAttention = { reason: ConnectorTrouble; since: string };
  *   by its name. A state that is renamed keeps its colour. A state with no entry takes the stage of
  *   its type, as before.
  */
-export type ConnectorSettings = { showComments: boolean; stages: Readonly<Record<string, SeedStage>> };
+export type ConnectorSettings = { showComments: boolean; stages: Readonly<Record<string, NoteStage>> };
 
 export const DEFAULT_CONNECTOR_SETTINGS: ConnectorSettings = { showComments: true, stages: {} };
 
@@ -303,10 +303,10 @@ export function readConnectorSettings(value: unknown): ConnectorSettings | undef
   if (typeof stages !== 'object' || stages === null || Array.isArray(stages)) return undefined;
   const entries = Object.entries(stages);
   if (entries.length > MAX_STAGE_EXCEPTIONS) return undefined;
-  const kept: Record<string, SeedStage> = {};
+  const kept: Record<string, NoteStage> = {};
   for (const [state, stage] of entries) {
-    if (!STATE_ID.test(state) || !(SEED_STAGES as readonly unknown[]).includes(stage)) return undefined;
-    kept[state] = stage as SeedStage;
+    if (!STATE_ID.test(state) || !(NOTE_STAGES as readonly unknown[]).includes(stage)) return undefined;
+    kept[state] = stage as NoteStage;
   }
 
   return { showComments, stages: kept };
@@ -503,7 +503,7 @@ export type AccountStore = {
     key: string,
     who: { account: string; manages: boolean },
   ): Promise<
-    | { set: true; stage: SeedStage; page: string }
+    | { set: true; stage: NoteStage; page: string }
     | { set: false; reason: 'not-found' | 'not-kept' | 'not-allowed' | 'unknown-status' | 'status-hidden' }
   >;
   /**

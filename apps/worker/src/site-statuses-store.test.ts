@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { MAX_STATUSES, SEED_STAGES } from '@fruitback/shared';
+import { MAX_STATUSES, NOTE_STAGES } from '@fruitback/shared';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -12,7 +12,7 @@ import type { SiteStatus } from './site-statuses.ts';
  */
 
 const { opening } = databasesOfACase();
-const [NEW, , , DONE, CLOSED] = SEED_STAGES as unknown as SiteStatus['stage'][];
+const [NEW, , , DONE, CLOSED] = NOTE_STAGES as unknown as SiteStatus['stage'][];
 
 const status = (key: string, more: Partial<SiteStatus> = {}): SiteStatus => ({
   source: 'own',

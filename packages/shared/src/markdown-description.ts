@@ -13,7 +13,7 @@ import {
  *
  * Nothing here belongs to one provider. Every tracker worth connecting to stores a markdown body and
  * lets something search it, so this is a strategy connectors share rather than part of the store.
- * A connector picks it up or ignores it: `seeds-postgres.ts` has columns and uses none of this.
+ * A connector picks it up or ignores it: `notes-postgres.ts` has columns and uses none of this.
  *
  * Two layers. Prose on top for the human in the tracker; a fenced JSON block underneath for the
  * widget that re-plants the pin. The body rather than a custom field, because a body needs no

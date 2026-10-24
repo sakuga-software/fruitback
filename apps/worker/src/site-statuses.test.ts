@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { SEED_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES } from '@fruitback/shared';
 import {
   type SiteStatus,
   envelopeStatuses,
@@ -120,7 +120,7 @@ describe('a status of a site, as a write holds it (FRU-365)', () => {
 });
 
 describe('the built-in statuses, the origin, and the statuses of a read (FRU-366)', () => {
-  const [first, , , done] = SEED_STAGES;
+  const [first, , , done] = NOTE_STAGES;
 
   it('calls built-in a status of the worker store whose key is a stage, and nothing else', () => {
     assert.equal(isBuiltIn('own', done as string), true);
@@ -163,11 +163,11 @@ describe('the built-in statuses, the origin, and the statuses of a read (FRU-366
     ]);
     assert.deepEqual(
       listed.slice(3).map((status) => status.key),
-      SEED_STAGES.filter((stage) => stage !== done).map((stage) => `own:${stage}`),
+      NOTE_STAGES.filter((stage) => stage !== done).map((stage) => `own:${stage}`),
     );
     assert.deepEqual(
       envelopeStatuses([]),
-      SEED_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
+      NOTE_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
     );
   });
 });
@@ -230,7 +230,7 @@ describe('the states of a tracker in the statuses of a read (FRU-368)', () => {
 
     assert.deepEqual(
       statuses.map((status) => status.key),
-      ['con_linear:state_done', ...SEED_STAGES.map((stage) => `own:${stage}`)],
+      ['con_linear:state_done', ...NOTE_STAGES.map((stage) => `own:${stage}`)],
     );
   });
 });

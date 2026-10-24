@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { envWith } from './auth-worker.fixture.ts';
 import { parseForgetArgs, runForget } from './cli.ts';
 import type { PgDatabase } from './postgres.ts';
 import { createPgliteDatabase } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
-import type { SeedStore } from './store.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
+import type { NoteStore } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 let databases: PgDatabase[] = [];
@@ -16,12 +16,12 @@ afterEach(async () => {
   databases = [];
 });
 
-async function storeWithAlice(): Promise<SeedStore> {
+async function storeWithAlice(): Promise<NoteStore> {
   const database = await createPgliteDatabase();
   databases.push(database);
-  const store = createPostgresSeedStore(database);
+  const store = createPostgresNoteStore(database);
   await store.create(
-    seedFixture({ note: 'Le bouton ne répond pas', reporter: { name: 'Alice', email: 'alice@example.com' } }),
+    noteFixture({ note: 'Le bouton ne répond pas', reporter: { name: 'Alice', email: 'alice@example.com' } }),
     undefined,
     { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
   );

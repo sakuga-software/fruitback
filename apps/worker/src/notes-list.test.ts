@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { cursorOf, noteIdOf } from './console-notes.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import type { NoteEntry, Place } from './notes-index.ts';
@@ -20,7 +20,7 @@ type Planted = {
   note: string;
   url: string;
   origin: string;
-  stage: SeedStage;
+  stage: NoteStage;
   place: string;
   reference: string;
   author?: string;
@@ -88,13 +88,13 @@ async function sixtyNotes() {
     const site = sites[i % 3] as (typeof sites)[number];
     const place: Place =
       i % 2 === 0 ? { kind: 'connector', connector: linear.id } : { kind: 'connector', connector: rest.id };
-    const stage = SEED_STAGES[i % 5] as SeedStage;
+    const stage = NOTE_STAGES[i % 5] as NoteStage;
     const words = i % 7 === 0 ? 'The checkout button is hidden' : `Note number ${i}`;
     const url = `${site.origin}/page-${i % 4}`;
     const reference = i % 2 === 0 ? `ACM-${100 + i}` : `FB-${i}`;
     const author = i % 6 === 0 ? bob.id : undefined;
     const at = BASE + Math.floor(i / 2) * 1_000;
-    const seed = seedFixture({
+    const seed = noteFixture({
       id: `sd_${String(i).padStart(2, '0')}`,
       note: words,
       page: { url, path: `/page-${i % 4}` },
@@ -133,7 +133,7 @@ async function sixtyNotes() {
       {
         workspace: other,
         site: otherSite.id,
-        seed: seedFixture({ id: 'sd_other', note: 'The checkout of another workspace' }),
+        seed: noteFixture({ id: 'sd_other', note: 'The checkout of another workspace' }),
         channel: 'script',
         author: { kind: 'visitor' },
         place: { kind: 'fruitback' },
@@ -239,7 +239,7 @@ describe('the notes of a workspace (FRU-244)', () => {
           {
             workspace,
             site: (sites[0] as { id: string }).id,
-            seed: seedFixture({ id, note: 'Late' }),
+            seed: noteFixture({ id, note: 'Late' }),
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -414,7 +414,7 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
         workspace,
         site: { id: note.site },
         identifier: note.reference,
-        seed: seedFixture({ id: note.seed }),
+        seed: noteFixture({ id: note.seed }),
       }),
       BASE,
     );
@@ -474,7 +474,7 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
         workspace,
         site: { id: note.site },
         identifier: note.reference,
-        seed: seedFixture({ id: note.seed }),
+        seed: noteFixture({ id: note.seed }),
       }),
       BASE,
     );

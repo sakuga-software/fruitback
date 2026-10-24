@@ -20,7 +20,7 @@ import {
 } from './postgres-stores.ts';
 import { type Send, deliverDue } from './rest-connector.ts';
 import type { SessionStore } from './session.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 
 /**
  * What this worker opens from its configuration (FRU-363): its stores, its `Kv`, what sends its mail,
@@ -31,7 +31,7 @@ import type { SeedStore } from './store.ts';
 /**
  * Which store this process writes to (FRU-29, FRU-33).
  *
- * It was a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
+ * It was a `Pick<typeof realLinear, 'createNoteIssue' | 'fetchNoteIssues'>` — an interface
  * discovered by accident — then a branch on a `fakeLinear` boolean with Linear's three credentials
  * read straight off the config. Both are gone: the provider was selected and validated at boot
  * (`stores.ts`), and this is only where it is built. SQLite (FRU-31) and GitHub (FRU-32) each
@@ -40,7 +40,7 @@ import type { SeedStore } from './store.ts';
  * A dev-only store cannot win in production: `readStoreConfig` refuses it at boot rather than
  * letting the process start.
  */
-export function storeFor(config: WorkerConfig): SeedStore {
+export function storeFor(config: WorkerConfig): NoteStore {
   return config.store.create();
 }
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import type { ClientConfig } from './clients.ts';
 import { createMemoryKv } from './kv.ts';
-import type { SeedStore, TrackerState } from './store.ts';
+import type { NoteStore, TrackerState } from './store.ts';
 import {
   TRACKER_FAILURE_TTL_MS,
   TRACKER_STATES_TTL_MS,
@@ -35,7 +35,7 @@ function counted(answer: () => Promise<TrackerState[]> = async () => STATES) {
 
       return client?.connector === 'con_rest' ? undefined : answer();
     },
-  } as unknown as SeedStore;
+  } as unknown as NoteStore;
 
   return { store, asked };
 }
@@ -121,7 +121,7 @@ describe('the states of the trackers of a site (FRU-368)', () => {
     const { store, asked } = counted();
 
     assert.deepEqual(await trackerSourcesOf(createMemoryKv(), store, { workspace: 'w1' } as ClientConfig), []);
-    assert.deepEqual(await trackerSourcesOf(createMemoryKv(), {} as SeedStore, CLIENT), []);
+    assert.deepEqual(await trackerSourcesOf(createMemoryKv(), {} as NoteStore, CLIENT), []);
     assert.deepEqual(asked, []);
   });
 });

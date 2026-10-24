@@ -1,4 +1,4 @@
-import type { SeedIssue, SeedReporter } from '@fruitback/shared';
+import type { NoteIssue, NoteReporter } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
@@ -14,7 +14,7 @@ import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type GithubApp, githubAppFor } from './github-connector.ts';
 import { DELIVERY_HEADER, LOOP_STATUS } from './rest-connector.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type ReplyAuthor, type SeedStore, StoreError } from './store.ts';
+import { type ReplyAuthor, type NoteStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH } from './pair-page.ts';
@@ -125,7 +125,7 @@ async function notesOfReader(
   policy: ClientPolicy,
   workspace: string | undefined,
   site: string | undefined,
-  issues: readonly SeedIssue[],
+  issues: readonly NoteIssue[],
   noteIndex: NoteIndex | undefined,
 ): Promise<Set<string>> {
   if (noteIndex === undefined || workspace === undefined || site === undefined || issues.length === 0) {
@@ -369,7 +369,7 @@ async function routed(
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const storeOfRequest = (): SeedStore => {
+  const storeOfRequest = (): NoteStore => {
     const own = context.store ?? storeFor(served);
 
     // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
@@ -766,9 +766,9 @@ async function authorizeRead(
 async function attributionFor(
   request: Request,
   policy: ClientPolicy,
-  claimed: SeedReporter | undefined,
+  claimed: NoteReporter | undefined,
 ): Promise<
-  | { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean }
+  | { ok: true; reporter: NoteReporter | undefined; channel: Channel; account: boolean }
   | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
 > {
   const token = readBearerToken(request.headers.get('Authorization'));

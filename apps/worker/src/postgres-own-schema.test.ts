@@ -5,7 +5,7 @@ import { describe, it, onTestFinished } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import { sql } from 'drizzle-orm';
 import { canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { databasesOfACase } from './auth.fixture.ts';
 import { envWith, workerOf } from './auth-worker.fixture.ts';
@@ -28,7 +28,7 @@ import {
 } from './postgres.fixture.ts';
 import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
 import { APPLIED, PUBLIC_IS_OPEN, inSchema, migrate, migrationsFolder } from './postgres-migrate.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -110,8 +110,8 @@ for (const { label, open, skip } of [
       const me = await worker.call('/console/me', { headers: { Cookie: cookie } });
       assert.equal(me.status, 200, await me.clone().text());
       const page = canonicalizePageUrl('https://staging.acme.dev/pricing');
-      const seed = seedFixture({ id: 'sd_1', page: { url: page, path: '/pricing', title: 'Pricing' } });
-      const store = createPostgresSeedStore(database);
+      const seed = noteFixture({ id: 'sd_1', page: { url: page, path: '/pricing', title: 'Pricing' } });
+      const store = createPostgresNoteStore(database);
       await store.create({ ...seed, client: { id: 'site_1', name: 'Acme' } }, undefined, POLICY);
       assert.equal((await store.findForPage({ url: page, clientId: 'site_1' }, undefined, POLICY)).length, 1);
 
@@ -227,12 +227,12 @@ describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL
         subject: 'alice@acme.dev',
         email: 'alice@acme.dev',
       });
-      const seed = seedFixture({ id: 'sd_a' });
-      await createPostgresSeedStore(a).create(seed, undefined, POLICY);
+      const seed = noteFixture({ id: 'sd_a' });
+      await createPostgresNoteStore(a).create(seed, undefined, POLICY);
 
       assert.equal((await createPostgresAccountStore(b).account(alice.id)) === undefined, true);
       assert.deepEqual(
-        await createPostgresSeedStore(b).findForPage(
+        await createPostgresNoteStore(b).findForPage(
           { url: seed.page.url, clientId: seed.client?.id },
           undefined,
           POLICY,

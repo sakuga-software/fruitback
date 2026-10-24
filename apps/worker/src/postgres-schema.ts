@@ -521,7 +521,7 @@ export const kv = pgTable(
  * - `seed` is the note as JSON, in a `TEXT`: the reader parses a row and never trusts it, as for a
  *   file. `JSONB` refuses the `\u0000` that a note may hold, and `TEXT` holds its six characters.
  * - **It holds what a person wrote, in the clear**: a name, sometimes an address, the note.
- *   `forget` of `seeds-postgres.ts` deletes them.
+ *   `forget` of `notes-postgres.ts` deletes them.
  *
  * **The page is under a hash index, not a B-tree.** An address has no bound but the 64 KiB of a
  * request, and a B-tree refuses a row over 2704 bytes once compressed (« index row size 6432 exceeds

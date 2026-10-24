@@ -16,7 +16,7 @@ import { deliveries, email_links, pairings, seed_comments } from './postgres-sch
  */
 export const ACCOUNTS_FILE_VERSION = 8;
 export const SESSIONS_FILE_VERSION = 3;
-export const SEEDS_FILE_VERSION = 1;
+export const NOTES_FILE_VERSION = 1;
 
 /**
  * The accounts and the sessions of the two SQLite files, copied into PostgreSQL (FRU-145).
@@ -466,8 +466,8 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
  *   that holds exactly these rows is a run that went to its end. Any other row in the two tables is
  *   refused. `dryRun` does everything and rolls back.
  */
-export type SeedsCopyInput = {
-  seedsPath: string;
+export type NotesCopyInput = {
+  notesPath: string;
   /** The site of a note, by the client it names in the file. `null`: the notes that name none. */
   clients: ReadonlyMap<string | null, string>;
   database: Database;
@@ -489,7 +489,7 @@ const seeds = pgTable('seeds', {
 });
 
 /** The two tables of the file, with the table of the database each one goes to. */
-const SEED_TABLES = [
+const NOTE_TABLES = [
   { name: 'seeds', table: seeds, dates: ['created_at', 'updated_at'] },
   { name: 'comments', table: seed_comments, dates: ['created_at'] },
 ] as const;
@@ -505,16 +505,16 @@ function instantOf(text: unknown, where: string): number {
 }
 
 /** The rows of the two tables of the file, as the database takes them, and the last number each table gave. */
-function readSeedsFile(
+function readNotesFile(
   copy: string,
   clients: ReadonlyMap<string | null, string>,
 ): { rows: Map<PgTable, Row[]>; last: Map<PgTable, number>; byClient: Map<string | null, number> } {
   const source = new DatabaseSync(copy);
   try {
     const found = (source.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-    if (found !== SEEDS_FILE_VERSION) {
+    if (found !== NOTES_FILE_VERSION) {
       throw new Refused(
-        `the seeds file is at version ${found}, and this worker reads version ${SEEDS_FILE_VERSION}: ` +
+        `the seeds file is at version ${found}, and this worker reads version ${NOTES_FILE_VERSION}: ` +
           'it is not a file that the SQLite store of a worker of before FRU-225 wrote',
       );
     }
@@ -527,7 +527,7 @@ function readSeedsFile(
         (row) => [row.name, row.seq] as const,
       ),
     );
-    for (const { name, table, dates } of SEED_TABLES) {
+    for (const { name, table, dates } of NOTE_TABLES) {
       const expected = columnsOf(table);
       const present = (source.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map(
         (column) => column.name,
@@ -579,14 +579,14 @@ function readSeedsFile(
 }
 
 /** One line for each of the two tables, and whether the two sides are the same. */
-async function compareSeeds(
+async function compareNotes(
   db: Db,
   source: Map<PgTable, Row[]>,
 ): Promise<{ same: boolean; empty: boolean; lines: string[] }> {
   const lines: string[] = [];
   let same = true;
   let empty = true;
-  for (const { table } of SEED_TABLES) {
+  for (const { table } of NOTE_TABLES) {
     const columns = columnsOf(table);
     const there = tallyOf(await targetRows(db, table), columns);
     const here = tallyOf(source.get(table) ?? [], columns);
@@ -602,11 +602,11 @@ async function compareSeeds(
   return { same, empty, lines };
 }
 
-export async function copySeedsFile(input: SeedsCopyInput): Promise<CopyOutcome> {
+export async function copyNotesFile(input: NotesCopyInput): Promise<CopyOutcome> {
   const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-'));
   const lines: string[] = [];
   try {
-    const source = readSeedsFile(snapshotOf(input.seedsPath, folder, 'seeds.db'), input.clients);
+    const source = readNotesFile(snapshotOf(input.notesPath, folder, 'seeds.db'), input.clients);
 
     // Every migration, as a worker applies them when it starts: the two tables are in the last ones.
     await migrate(input.database);
@@ -632,7 +632,7 @@ export async function copySeedsFile(input: SeedsCopyInput): Promise<CopyOutcome>
           );
         });
 
-        const before = await compareSeeds(db, source.rows);
+        const before = await compareNotes(db, source.rows);
         if (!before.empty) {
           if (before.same) {
             lines.push('PostgreSQL already holds exactly these notes: nothing is written.', HEADER, ...before.lines);
@@ -646,9 +646,9 @@ export async function copySeedsFile(input: SeedsCopyInput): Promise<CopyOutcome>
           );
         }
 
-        for (const { table } of SEED_TABLES) await insertAll(db, table, source.rows.get(table) ?? []);
+        for (const { table } of NOTE_TABLES) await insertAll(db, table, source.rows.get(table) ?? []);
 
-        const after = await compareSeeds(db, source.rows);
+        const after = await compareNotes(db, source.rows);
         lines.push(HEADER, ...after.lines, 'the site of each note:', ...sitesLines);
         if (!after.same) throw new Refused('a table of PostgreSQL differs from the file after the copy');
 
@@ -661,7 +661,7 @@ export async function copySeedsFile(input: SeedsCopyInput): Promise<CopyOutcome>
         }
         // A sequence is outside the transaction: it goes forward for good, which is harmless if the
         // commit fails. `false` for a table that gave no number: its first one is 1.
-        for (const { table } of SEED_TABLES) {
+        for (const { table } of NOTE_TABLES) {
           const last = source.last.get(table) ?? 0;
           await db.execute(
             sql`SELECT setval(pg_get_serial_sequence(${getTableName(table)}, 'id'), ${Math.max(last, 1)}, ${last > 0})`,

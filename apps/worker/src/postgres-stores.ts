@@ -7,7 +7,7 @@ import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from '.
 import type { AttachmentStore } from './attachments.ts';
 import type { SessionStore } from './session.ts';
 import type { ConnectStore } from './connect.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -249,17 +249,17 @@ export function postgresInstanceAdmin(url: string, schema: string): InstanceAdmi
 }
 
 /**
- * The notes of this database (FRU-218): `createPostgresSeedStore` of `seeds-postgres.ts`, loaded at
+ * The notes of this database (FRU-218): `createPostgresNoteStore` of `notes-postgres.ts`, loaded at
  * the first call. `name` and `scope` are read with no call, by `/health` and by the key of the read
  * cache, so they are written here and held equal to the real ones by a test.
  */
-export function postgresSeedStore(url: string, schema: string): SeedStore {
+export function postgresNoteStore(url: string, schema: string): NoteStore {
   const database = databaseFor(url, schema);
   type Calls = Required<
-    Pick<SeedStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply' | 'check' | 'setStatus'>
+    Pick<NoteStore, 'create' | 'createBatch' | 'findForPage' | 'forget' | 'reply' | 'check' | 'setStatus'>
   >;
   const store = later<Calls>(
-    async () => (await import('./seeds-postgres.ts')).createPostgresSeedStore(database) as Calls,
+    async () => (await import('./notes-postgres.ts')).createPostgresNoteStore(database) as Calls,
     {
       create: true,
       createBatch: true,
@@ -290,18 +290,18 @@ export function createPostgresStoreSpec(): StoreSpec {
       schema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA),
     }),
     schema: z.object({ url: z.string().min(1), schema: z.string().min(1) }),
-    create: ({ url, schema }) => postgresSeedStore(url, schema),
+    create: ({ url, schema }) => postgresNoteStore(url, schema),
   });
 }
 
-/** The copy of the notes of a SQLite file (FRU-220): `copySeedsFile` of `postgres-copy.ts`, loaded at the call. */
-export async function copySeedsFile(copy: {
-  seedsPath: string;
+/** The copy of the notes of a SQLite file (FRU-220): `copyNotesFile` of `postgres-copy.ts`, loaded at the call. */
+export async function copyNotesFile(copy: {
+  notesPath: string;
   clients: ReadonlyMap<string | null, string>;
   database: Database;
   dryRun: boolean;
 }): Promise<{ ok: boolean; lines: string[] }> {
-  return (await import('./postgres-copy.ts')).copySeedsFile(copy);
+  return (await import('./postgres-copy.ts')).copyNotesFile(copy);
 }
 
 /** What `migrate-to-postgres` copies, and where (FRU-145). */

@@ -424,7 +424,7 @@ node server.mjs migrate-to-postgres --seeds <file> [--client <id in the file>=<i
 **The sessions of a worker that had no accounts are not copied.** Such a session names a person
 the operator typed and a workspace of `FRUITBACK_CLIENTS`, or none, and a site for members is read
 by a session of its workspace, held by a member. Measured
-(`postgres-copy-seeds.test.ts`): such a session reads nothing (`401`), and one whose workspace was
+(`postgres-copy-notes.test.ts`): such a session reads nothing (`401`), and one whose workspace was
 rewritten is ended by its first refresh. **Each reviewer pairs again, once.** On the Cloud the
 sessions went with Switch 1.
 
@@ -514,7 +514,7 @@ written, with `docker kill` and `docker run` in place of `docker service scale` 
   on SQLite gave, with `FB-1` to `FB-3`, and a note sent after took `FB-4`;
 - the way back: the worker on SQLite again read the three notes of before, and not the fourth.
 
-The command is also held by `postgres-copy-seeds.test.ts`, on PGlite and on PostgreSQL 17: the five
+The command is also held by `postgres-copy-notes.test.ts`, on PGlite and on PostgreSQL 17: the five
 stages, replies, a note deleted before the copy, two clients and the notes of none, a planted
 interruption, a planted lost row, a second run, a note planted since, a file of another version, a
 column on one side only, a date that does not come back, and a file with no note.

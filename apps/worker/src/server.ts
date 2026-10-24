@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import { announceFirstAdmin, handleRequest, kvFor, storeFor, deliverPending, recheckPending } from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
 import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, hasAccounts, readConfig, readPort } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
@@ -30,7 +30,7 @@ export const DOMAIN_PASS_MS = 10 * 60_000;
 /** How long to let in-flight requests finish before giving up on a graceful stop. */
 const SHUTDOWN_GRACE_MS = 10_000;
 
-export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Server {
+export function createFruitbackServer(env: WorkerEnv, provided?: NoteStore): Server {
   const config = readConfig(env);
   // A misconfigured service still answers /health and the 500 diagnostic, so it still needs a hop
   // count to key the limiter with.
@@ -56,7 +56,7 @@ async function respond(
   response: ServerResponse,
   env: WorkerEnv,
   trustedProxyHops: number,
-  store: SeedStore | undefined,
+  store: NoteStore | undefined,
   kv: Kv | undefined,
 ): Promise<void> {
   try {

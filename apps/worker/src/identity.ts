@@ -1,5 +1,5 @@
 import { timingSafeEqual as sameBytes } from 'node:crypto';
-import type { SeedReporter } from '@fruitback/shared';
+import type { NoteReporter } from '@fruitback/shared';
 
 /**
  * Turning a claim into an identity (FRU-9).
@@ -59,7 +59,7 @@ export type IdentityFailure =
   | 'invalid-claims';
 
 export type IdentityResult =
-  | { ok: true; reporter: SeedReporter; workspace?: string; account?: true; chain?: string }
+  | { ok: true; reporter: NoteReporter; workspace?: string; account?: true; chain?: string }
   | { ok: false; reason: IdentityFailure };
 
 const encoder = new TextEncoder();
@@ -168,7 +168,7 @@ export async function verifyIdentityToken(
  * A browser posting `reporter: { name: 'CEO', verified: true }` would otherwise read in Linear as an
  * identity this worker checked. Stripping it is not defence in depth; it is the check.
  */
-export function stripClaimedVerification(reporter: SeedReporter | undefined): SeedReporter | undefined {
+export function stripClaimedVerification(reporter: NoteReporter | undefined): NoteReporter | undefined {
   if (reporter === undefined) return undefined;
 
   const { verified: _claimed, ...claimed } = reporter;

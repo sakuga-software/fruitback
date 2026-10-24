@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { SEED_STAGES } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createMemoryStore } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 
 /**
  * `POST /feedback/<id>/status` (FRU-367): the status of a note that the worker keeps. The person who
@@ -18,7 +18,7 @@ import type { SeedStore } from './store.ts';
 const open = worlds();
 const ORIGIN = 'https://acme.dev';
 const PAGE = 'https://acme.dev/pricing';
-const [NEW, TODO, , DONE] = SEED_STAGES;
+const [NEW, TODO, , DONE] = NOTE_STAGES;
 
 type Answer = { status: number; body: Record<string, any> };
 
@@ -41,7 +41,7 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
  */
 async function aNote() {
   const world = await open();
-  const store = createPostgresSeedStore(world.database);
+  const store = createPostgresNoteStore(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
   const site = (await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'members' })).id;
@@ -63,7 +63,7 @@ async function aNote() {
     ...team,
     hidden: true,
   });
-  const seed = seedFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+  const seed = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
   const planted = await answerOf(
     await callOn(
       world,
@@ -84,7 +84,7 @@ function setStatus(
   note: string,
   status: unknown,
   token: string | undefined,
-  store: SeedStore,
+  store: NoteStore,
 ): Promise<Answer> {
   return callOn(
     world,
@@ -99,7 +99,7 @@ function setStatus(
   ).then(answerOf);
 }
 
-async function pin(world: World, site: string, token: string, store: SeedStore) {
+async function pin(world: World, site: string, token: string, store: NoteStore) {
   const answer = await answerOf(
     await callOn(
       world,
@@ -180,7 +180,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
   it('refuses the note of a tracker: its status changes in the tracker', async () => {
     const { world, site, tokens } = await aNote();
     const tracker = createMemoryStore();
-    const seed = seedFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+    const seed = noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
     const planted = await answerOf(
       await callOn(
         world,

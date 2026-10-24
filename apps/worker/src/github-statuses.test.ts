@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, vi } from 'vitest';
-import { SEED_STAGES, buildIssueDescription, offeredStatuses, statusOf } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES, buildIssueDescription, offeredStatuses, statusOf } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { ClientPolicy } from './clients.ts';
 import { GITHUB_STATES, createIssueStore, githubStateKey, stageForGithubIssue } from './github.ts';
 import { mockMethod } from './mock.fixture.ts';
 import { envelopeStatuses } from './site-statuses.ts';
 import { trackerSourcesOf } from './tracker-states.ts';
 import { createRoutedStore } from './connectors.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import { callOn, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
 
@@ -17,8 +17,8 @@ import { rowsOf } from './postgres.fixture.ts';
  * connector they are read through, and re-staged by a site. Decision 4: no label is a status.
  */
 
-const [NEW, TODO, , DONE, CLOSED] = SEED_STAGES;
-const PAGE = seedFixture().page.url;
+const [NEW, TODO, , DONE, CLOSED] = NOTE_STAGES;
+const PAGE = noteFixture().page.url;
 const POLICY: ClientPolicy = {
   showComments: false,
   identitySecret: undefined,
@@ -30,7 +30,7 @@ const POLICY: ClientPolicy = {
 afterEach(() => vi.restoreAllMocks());
 
 function row(id: number, state: string, stateReason: string | null) {
-  const seed = seedFixture({ id: `sd_${id}` });
+  const seed = noteFixture({ id: `sd_${id}` });
 
   return {
     id,
@@ -50,7 +50,7 @@ function row(id: number, state: string, stateReason: string | null) {
 function storeOf(
   rows: unknown[],
   options: { statusSource?: string; stages?: Record<string, never> | Record<string, string> } = {},
-): SeedStore {
+): NoteStore {
   mockMethod(globalThis, 'fetch', async (input: string) =>
     new URL(input).pathname === '/repos/acme/site/issues'
       ? new Response(JSON.stringify(rows), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -164,7 +164,7 @@ describe('one list of states for each connector (FRU-369, heavy review of pull r
         client?.teamId?.includes('/')
           ? [...GITHUB_STATES]
           : [{ id: `st_${client?.teamId}`, name: client?.teamId ?? '', stage: NEW }],
-    } as unknown as SeedStore;
+    } as unknown as NoteStore;
     const client = {
       id: 'site_1',
       name: 'Acme',
@@ -196,7 +196,7 @@ describe('the four states reach the read through the routed store (FRU-369, lite
   it('gives trackerSourcesOf the four states of a GitHub connector, through createRoutedStore as GET /feedback has it', async () => {
     // The store of a GitHub connector says `trackerStates`; the routed store asks it as `trackerStatesFor`.
     const github = storeOf([], { statusSource: 'con_github' });
-    const routed = createRoutedStore({ name: 'own', scope: () => 'own' } as unknown as SeedStore, async () => github);
+    const routed = createRoutedStore({ name: 'own', scope: () => 'own' } as unknown as NoteStore, async () => github);
     const client = {
       id: 'site_1',
       name: 'Acme',

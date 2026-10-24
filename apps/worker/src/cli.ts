@@ -9,8 +9,8 @@ import type { IndexedNote, NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
 import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
-import { copySeedsFile, copySqliteFiles } from './postgres-stores.ts';
-import type { ForgetSelector, ForgottenSeed, SeedStore } from './store.ts';
+import { copyNotesFile, copySqliteFiles } from './postgres-stores.ts';
+import type { ForgetSelector, ForgottenNote, NoteStore } from './store.ts';
 
 /**
  * Minting a pairing code, as a command rather than a route (FRU-42).
@@ -336,7 +336,7 @@ export async function runForget(
   argv: readonly string[],
   env: WorkerEnv,
   /** The store a test opened. Absent, the one of the environment. */
-  held?: SeedStore,
+  held?: NoteStore,
   /**
    * The index a test opened (FRU-237). Absent, the one of the environment when the store is the one
    * of the environment too: a test that hands a store hands its index, or none.
@@ -353,7 +353,7 @@ export async function runForget(
   // The index of the environment when the store is the one of the environment too: a test that
   // hands a store hands its index, or none.
   const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
-  if ('seeds' in which) return forgetSeeds(which.seeds, dryRun, index);
+  if ('seeds' in which) return forgetNotes(which.seeds, dryRun, index);
 
   const { that, none, search } = describe(which);
   const store = held ?? config.config.store.create();
@@ -372,7 +372,7 @@ export async function runForget(
     };
   }
 
-  let found: ForgottenSeed[];
+  let found: ForgottenNote[];
   try {
     // Listed first, whatever was asked: an identifier that names no note stops the deletion of the
     // others, because a list with a typing error in it is not the list the operator read.
@@ -442,7 +442,7 @@ const TRACKER_NOTES =
   'Notes that went to a tracker are not found by an address or a name here: delete each issue in its tracker, and remove what the worker holds of it, its row in the index with up to 64 characters of its text, with --seed <id> (the "id" of the seed in the issue).';
 
 /** `--seed`: the rows of the index of these notes, whatever the store (FRU-237). */
-async function forgetSeeds(
+async function forgetNotes(
   seeds: readonly string[],
   dryRun: boolean,
   index: NoteIndex | undefined,
@@ -504,7 +504,7 @@ function excerpt(note: string): string {
  */
 export type MigrateArgs =
   | { copy: 'accounts'; accountsPath: string; sessionsPath: string; dryRun: boolean }
-  | { copy: 'seeds'; seedsPath: string; clients: Map<string | null, string>; dryRun: boolean };
+  | { copy: 'seeds'; notesPath: string; clients: Map<string | null, string>; dryRun: boolean };
 
 export type MigrateArgsResult = { ok: true; args: MigrateArgs } | { ok: false; error: string };
 
@@ -555,13 +555,13 @@ export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
 
   const accountsPath = paths.get('--accounts');
   const sessionsPath = paths.get('--sessions');
-  const seedsPath = paths.get('--seeds');
-  if (seedsPath !== undefined) {
+  const notesPath = paths.get('--seeds');
+  if (notesPath !== undefined) {
     if (accountsPath !== undefined || sessionsPath !== undefined) {
       return refuse('--seeds is a run of its own: copy the accounts and the sessions first, then the notes');
     }
 
-    return { ok: true, args: { copy: 'seeds', seedsPath, clients, dryRun } };
+    return { ok: true, args: { copy: 'seeds', notesPath, clients, dryRun } };
   }
   if (clients.size > 0) return refuse('--client and --no-client go with --seeds');
   if (accountsPath === undefined || sessionsPath === undefined) {
@@ -584,7 +584,7 @@ export async function runMigrateToPostgres(
     return { ok: false, lines: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host) is required'] };
 
   const { args } = parsed;
-  const files = args.copy === 'seeds' ? [args.seedsPath] : [args.accountsPath, args.sessionsPath];
+  const files = args.copy === 'seeds' ? [args.notesPath] : [args.accountsPath, args.sessionsPath];
   // Checked here: `node:sqlite` makes an empty database of a path that names no file.
   const absent = files.filter((path) => !existsSync(path));
   if (absent.length > 0) return { ok: false, lines: [`no file at ${absent.join(', ')}. Nothing was written.`] };
@@ -595,7 +595,7 @@ export async function runMigrateToPostgres(
   const database = createPgDatabase(url, schema, { max: 1 });
   try {
     return args.copy === 'seeds'
-      ? await copySeedsFile({ seedsPath: args.seedsPath, clients: args.clients, database, dryRun: args.dryRun })
+      ? await copyNotesFile({ notesPath: args.notesPath, clients: args.clients, database, dryRun: args.dryRun })
       : await copySqliteFiles({ ...args, database });
   } catch (error) {
     return { ok: false, lines: [`${String(error instanceof Error ? error.message : error)}. Nothing was written.`] };

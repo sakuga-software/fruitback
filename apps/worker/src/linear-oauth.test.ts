@@ -2,7 +2,7 @@ import { afterEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import {
   WORKER as API,
   CONSOLE,
@@ -16,7 +16,7 @@ import { type WorkerEnv, readConfig } from './env.ts';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { open } from './secrets.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
@@ -43,7 +43,7 @@ async function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
     },
   });
 
-  return { ...world, context: { ...world.context, store: createPostgresSeedStore(world.database) } };
+  return { ...world, context: { ...world.context, store: createPostgresNoteStore(world.database) } };
 }
 
 /**
@@ -214,7 +214,7 @@ async function connected(env: Env, linear: ReturnType<typeof fakeLinear>, world:
 }
 
 function note(site: string) {
-  const seed = seedFixture();
+  const seed = noteFixture();
 
   return { ...seed, page: { ...seed.page, url: `${SITE}/pricing` }, client: { id: site } };
 }

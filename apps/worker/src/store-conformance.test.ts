@@ -3,17 +3,17 @@ import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
-import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import type { ClientPolicy } from './clients.ts';
 import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './github.ts';
 import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
 import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, createMigratedPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
-import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './seed-rows.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
-import type { CreatedIssue, SeedStore } from './store.ts';
+import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './note-rows.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
+import type { CreatedIssue, NoteStore } from './store.ts';
 import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst } from './store-conformance.fixture.ts';
 import { REFUSED_SINCE_POSTGRES } from './env.ts';
 import { isDevOnlyProvider, storeProviders } from './stores.ts';
@@ -326,8 +326,8 @@ function unreadableAnswers(): void {
 
 /** Write a seed, then store replies on it. */
 async function writeWithReplies(
-  store: SeedStore,
-  seed: Parameters<SeedStore['create']>[0],
+  store: NoteStore,
+  seed: Parameters<NoteStore['create']>[0],
   reply: (created: CreatedIssue) => void,
 ): Promise<void> {
   reply(await store.create(seed, undefined, POLICY));
@@ -354,7 +354,7 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
     provider: 'postgres',
     on,
     skip,
-    writtenStage: DEFAULT_SEED_STAGE,
+    writtenStage: DEFAULT_NOTE_STAGE,
     replyCap: POSTGRES_REPLY_CAP,
     otherTenant: 'one database holds the seeds of every site, so there is no other tenant',
     readWithNoClient:
@@ -363,7 +363,7 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
       const database = await create();
       databases.push(database);
 
-      return createPostgresSeedStore(database);
+      return createPostgresNoteStore(database);
     },
     async close() {
       for (const database of databases.splice(0)) await database.close();
@@ -389,7 +389,7 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
         throw Object.assign(new Error('relation "seeds" does not exist'), { code: '42P01' });
       };
 
-      return createPostgresSeedStore({
+      return createPostgresNoteStore({
         schema: 'public',
         run: refuses,
         transaction: refuses,
@@ -402,10 +402,10 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
       const database = createPgDatabase('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
       databases.push(database);
 
-      return createPostgresSeedStore(database);
+      return createPostgresNoteStore(database);
     },
     garbled:
-      'a row the store cannot read costs that one note, and the read answers the others: seeds-postgres.test.ts holds it',
+      'a row the store cannot read costs that one note, and the read answers the others: notes-postgres.test.ts holds it',
   };
 }
 
@@ -415,7 +415,7 @@ const GITHUB_CONFIG = { appId: '12345', privateKey: GITHUB_KEY, repository: 'acm
 const SUBJECTS: ConformanceSubject[] = [
   {
     provider: 'linear',
-    writtenStage: DEFAULT_SEED_STAGE,
+    writtenStage: DEFAULT_NOTE_STAGE,
     replyCap: LINEAR_REPLY_CAP,
     otherTenant: { teamId: 'team_2' },
     open() {
@@ -465,7 +465,7 @@ const SUBJECTS: ConformanceSubject[] = [
       'GitHub is a store of the environment and no connector of a workspace yet (FRU-188): no route writes to it',
     noCheck: 'a verdict is a reply (FRU-294), and GitHub takes no reply: see noReply',
     markDone: 'GitHub takes no verdict',
-    writtenStage: DEFAULT_SEED_STAGE,
+    writtenStage: DEFAULT_NOTE_STAGE,
     replyCap: GITHUB_REPLY_CAP,
     otherTenant: { repository: 'acme/other' },
     open() {
@@ -576,7 +576,7 @@ describe('the store matrix in docs/self-hosting.md', () => {
   for (const subject of first) {
     it(`gives the stages, the reply cap and the production answer of ${subject.provider}`, async () => {
       const store = await subject.open();
-      const stages = [...(store.stages ?? SEED_STAGES)];
+      const stages = [...(store.stages ?? NOTE_STAGES)];
       await subject.close();
       const cells = rows.find((row) => row.provider === subject.provider)?.cells ?? [];
 
@@ -595,8 +595,8 @@ describe('the store matrix in docs/self-hosting.md', () => {
 });
 
 describe('Linear, in a team that refuses the labels (FRU-138)', () => {
-  const seedOf = (id: string, client: string | undefined) => {
-    const seed = seedFixture({ id });
+  const noteFixtureOf = (id: string, client: string | undefined) => {
+    const seed = noteFixture({ id });
 
     return client === undefined ? { ...seed, client: undefined } : { ...seed, client: { id: client } };
   };
@@ -605,8 +605,8 @@ describe('Linear, in a team that refuses the labels (FRU-138)', () => {
     fakeLinear({ refuseLabels: true });
     const store = createLinearStore(LINEAR_CONFIG);
     try {
-      const mine = seedOf('sd_mine00000001', 'acme');
-      const theirs = seedOf('sd_theirs000001', 'globex');
+      const mine = noteFixtureOf('sd_mine00000001', 'acme');
+      const theirs = noteFixtureOf('sd_theirs000001', 'globex');
       await store.create(mine, undefined, POLICY);
       await store.create(theirs, undefined, POLICY);
       const read = async (clientId: string | undefined) =>

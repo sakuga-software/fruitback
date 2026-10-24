@@ -1,7 +1,7 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { IDENTITY_SECRET, envWith as workerEnv } from './auth-worker.fixture.ts';
 import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
@@ -142,7 +142,7 @@ async function connected(env: World, world: Awaited<ReturnType<typeof acme>>): P
 }
 
 function note(site: string, path = '/pricing') {
-  const seed = seedFixture();
+  const seed = noteFixture();
 
   return { ...seed, page: { ...seed.page, url: `${SITE}${path}` }, client: { id: site } };
 }
@@ -400,7 +400,7 @@ describe('who may touch a connector (FRU-121)', () => {
          VALUES ('${theirs.id}', 0, '${connector}', 'team_design')`,
     );
     linear.asked.length = 0;
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     const written = await call(env, 'POST', '/feedback', {
       origin: 'https://else.dev',

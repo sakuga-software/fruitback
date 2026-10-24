@@ -1,16 +1,16 @@
 import {
-  DEFAULT_SEED_STAGE,
-  type Seed,
-  type SeedComment,
-  type SeedIssue,
-  type SeedStage,
+  DEFAULT_NOTE_STAGE,
+  type Note,
+  type NoteComment,
+  type NoteIssue,
+  type NoteStage,
   STATUS_COLOR,
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
   pageQueryTerm,
-  parseSeedFromDescription,
-  seedIssueSchema,
+  parseNoteFromDescription,
+  noteIssueSchema,
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
@@ -21,8 +21,8 @@ import {
   type CreatedIssue,
   type NewCheck,
   type NewReply,
-  type SeedIssueQuery,
-  type SeedStore,
+  type NoteIssueQuery,
+  type NoteStore,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
@@ -165,14 +165,14 @@ export async function createReply(
   issueId: string,
   reply: NewReply,
   locale?: string,
-): Promise<SeedComment> {
+): Promise<NoteComment> {
   const created = await graphql<CreateCommentResult>(config, CREATE_COMMENT_MUTATION, {
     input: { issueId, body: replyText(reply, locale) },
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
 
-  return seedCommentOf(comment);
+  return noteCommentOf(comment);
 }
 
 /**
@@ -241,7 +241,7 @@ export async function createCheck(
   });
   const comment = created.commentCreate.comment;
   if (!created.commentCreate.success || comment === null) throw new StoreError('Linear refused the reply');
-  if (check.verdict === 'fixed') return { comment: seedCommentOf(comment), stage: 'done' };
+  if (check.verdict === 'fixed') return { comment: noteCommentOf(comment), stage: 'done' };
 
   const found = await graphql<IssueStatesResult>(config, ISSUE_STATES_QUERY, { id: issueId });
   if (found.issue === null) throw new StoreError('Linear lost the issue between the reply and its move');
@@ -253,7 +253,7 @@ export async function createCheck(
   });
   if (!moved.issueUpdate.success) throw new StoreError('Linear refused to reopen the issue');
 
-  return { comment: seedCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
+  return { comment: noteCommentOf(comment), stage: stageOf(moved.issueUpdate.issue?.state ?? state, stages) };
 }
 
 /**
@@ -432,10 +432,10 @@ async function createLabel(config: LinearConfig, routing: LinearRouting, name: s
 }
 
 /** Plant a seed in Linear: one issue, readable title, round-trip-able description, labels applied. */
-export async function createSeedIssue(
+export async function createNoteIssue(
   config: LinearConfig,
   routing: LinearRouting,
-  seed: Seed,
+  seed: Note,
   /** The language the description's prose is written in (FRU-39). English when nothing says. */
   locale?: string,
   /** The issue of the batch this seed belongs to (FRU-124): the seed becomes one of its sub-issues. */
@@ -480,10 +480,10 @@ const BATCH_WORDS: Record<'en' | 'fr', { title: (count: number, host: string) =>
 
 /**
  * The parent of a batch (FRU-124): a title, a sentence and the list of the notes. **It holds no
- * seed**: `parseSeedFromDescription` finds none in it, so no read draws it as a pin. Its state is the
+ * seed**: `parseNoteFromDescription` finds none in it, so no read draws it as a pin. Its state is the
  * team's business, and the widget never reads it.
  */
-export function batchParent(seeds: readonly Seed[], locale?: string): { title: string; description: string } {
+export function batchParent(seeds: readonly Note[], locale?: string): { title: string; description: string } {
   const words = BATCH_WORDS[locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
   const hosts = [...new Set(seeds.map((seed) => new URL(seed.page.url).host))];
   const list = seeds.map((seed) => `- ${buildIssueTitle(seed)} (${seed.page.url})`);
@@ -495,11 +495,11 @@ export function batchParent(seeds: readonly Seed[], locale?: string): { title: s
 async function createBatchParent(
   config: LinearConfig,
   routing: LinearRouting,
-  seeds: readonly Seed[],
+  seeds: readonly Note[],
   locale?: string,
 ): Promise<string> {
   const parent = batchParent(seeds, locale);
-  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seeds[0] as Seed));
+  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seeds[0] as Note));
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
     input: { teamId: routing.teamId, projectId: routing.projectId, ...parent, labelIds },
   });
@@ -521,10 +521,10 @@ async function createBatchParent(
  * that was used again and still kept no note is forgotten: it may be one the team deleted, and a
  * worker that held on to it would refuse the notes for as long as it remembered.
  */
-export async function createSeedBatch(
+export async function createNoteBatch(
   config: LinearConfig,
   routing: LinearRouting,
-  seeds: readonly Seed[],
+  seeds: readonly Note[],
   locale?: string,
   memory?: BatchMemory,
 ): Promise<BatchAnswer[]> {
@@ -538,7 +538,7 @@ export async function createSeedBatch(
   const answers: BatchAnswer[] = [];
   for (const seed of seeds) {
     try {
-      answers.push({ issue: await createSeedIssue(config, routing, seed, locale, parentId) });
+      answers.push({ issue: await createNoteIssue(config, routing, seed, locale, parentId) });
     } catch (error) {
       // WARNING: nothing is thrown from here. The parent exists, and the notes before this one are
       // kept: an error that left this loop would answer `500`, lose their answers, and the next
@@ -615,7 +615,7 @@ type IssuesResult = {
 const ISSUES_PAGE_SIZE = 50;
 
 /** Spread, so "not asked for" stays absent rather than becoming an empty list that means "none". */
-function optionalComments(comments: SeedComment[] | undefined): { comments?: SeedComment[] } {
+function optionalComments(comments: NoteComment[] | undefined): { comments?: NoteComment[] } {
   return comments === undefined ? {} : { comments };
 }
 
@@ -655,16 +655,16 @@ const ISSUES_MAX_PAGES = 10;
  * the key or to the application. An issue found by its labels only was a note that Linear kept and
  * no page showed again.
  */
-export async function fetchSeedIssues(
+export async function fetchNoteIssues(
   config: LinearConfig,
   routing: LinearRouting,
-  query: SeedIssueQuery,
+  query: NoteIssueQuery,
   policy: ClientPolicy,
   stages: StageExceptions = {},
   statusSource?: string,
-): Promise<SeedIssue[]> {
-  const filter = buildSeedIssueFilter(routing, query);
-  const found: SeedIssue[] = [];
+): Promise<NoteIssue[]> {
+  const filter = buildNoteIssueFilter(routing, query);
+  const found: NoteIssue[] = [];
   let after: string | null = null;
 
   for (let page = 0; page < ISSUES_MAX_PAGES; page += 1) {
@@ -672,7 +672,7 @@ export async function fetchSeedIssues(
       filter,
       first: ISSUES_PAGE_SIZE,
       after,
-      // One, not zero, when this client has replies turned off. `toSeedIssue` is what keeps the
+      // One, not zero, when this client has replies turned off. `toNoteIssue` is what keeps the
       // promise — it drops them whatever comes back — so this number only decides how much is
       // fetched. `first: 0` may or may not be accepted by Linear, and a read that fails outright for
       // those clients would be a far worse bug than one wasted comment on the wire.
@@ -682,7 +682,7 @@ export async function fetchSeedIssues(
     });
 
     for (const node of result.issues.nodes) {
-      const issue = toSeedIssue(node, query.url, policy, stages, statusSource);
+      const issue = toNoteIssue(node, query.url, policy, stages, statusSource);
       // The write path stores the normalized client id in the seed, so the two are equal for every
       // note of this client. A read that names no client gets every seed of the page, as before.
       if (issue === null || (query.clientId !== undefined && issue.seed.client?.id !== query.clientId)) continue;
@@ -696,15 +696,15 @@ export async function fetchSeedIssues(
   return found;
 }
 
-function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
+function buildNoteIssueFilter(routing: LinearRouting, { url, clientId }: NoteIssueQuery): Record<string, unknown> {
   return {
     // The API key can see the whole workspace; a seed only ever lives on the team its client routes
     // to, which on a multi-tenant worker is what keeps one client's read off another's issues.
     team: { id: { eq: routing.teamId } },
-    // No clause on the labels: see `fetchSeedIssues`. The page and the client are both looked for
+    // No clause on the labels: see `fetchNoteIssues`. The page and the client are both looked for
     // in the description, where the seed is written. The client narrows what Linear sends, so the
     // notes of another client of the team do not fill the pages this read walks. It is a substring,
-    // like the page: `fetchSeedIssues` compares both exactly.
+    // like the page: `fetchNoteIssues` compares both exactly.
     and: [
       { description: { contains: pageQueryTerm(url) } },
       ...(clientId === undefined ? [] : [{ description: { contains: clientId } }]),
@@ -718,13 +718,13 @@ function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIss
  * Linear returns comments newest-first by default and the widget renders what it is given, so the
  * order is settled here rather than in two places later.
  */
-function toSeedComments(node: IssueNode): SeedComment[] | undefined {
+function toNoteComments(node: IssueNode): NoteComment[] | undefined {
   if (node.comments == null) return undefined;
 
-  return node.comments.nodes.map(seedCommentOf).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return node.comments.nodes.map(noteCommentOf).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
-function seedCommentOf(comment: CommentNode): SeedComment {
+function noteCommentOf(comment: CommentNode): NoteComment {
   return {
     id: comment.id,
     body: comment.body,
@@ -737,7 +737,7 @@ function seedCommentOf(comment: CommentNode): SeedComment {
  * Linear's workflow state types, projected onto the stage of the pin.
  *
  * This is the connector's half of the status story, and it lives here rather than in
- * `@fruitback/shared` because it is Linear's vocabulary (FRU-23). The contract owns `SeedStage`;
+ * `@fruitback/shared` because it is Linear's vocabulary (FRU-23). The contract owns `NoteStage`;
  * every connector owns the projection onto it. GitHub's projection gives three stages, not five: see
  * `stageForGithubIssue` in `github.ts` (FRU-32).
  */
@@ -753,7 +753,7 @@ export const LINEAR_STATE_TYPES = [
 ] as const;
 export type LinearStateType = (typeof LINEAR_STATE_TYPES)[number];
 
-const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
+const STAGE_BY_STATE_TYPE: Record<LinearStateType, NoteStage> = {
   triage: 'new',
   backlog: 'new',
   unstarted: 'todo',
@@ -763,24 +763,24 @@ const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
   duplicate: 'closed',
 };
 
-/** An unrecognised state colours the pin rather than hiding it — see `DEFAULT_SEED_STAGE`. */
-export function stageForLinearState(stateType: string): SeedStage {
-  return STAGE_BY_STATE_TYPE[stateType as LinearStateType] ?? DEFAULT_SEED_STAGE;
+/** An unrecognised state colours the pin rather than hiding it — see `DEFAULT_NOTE_STAGE`. */
+export function stageForLinearState(stateType: string): NoteStage {
+  return STAGE_BY_STATE_TYPE[stateType as LinearStateType] ?? DEFAULT_NOTE_STAGE;
 }
 
 /**
  * The stages a connector gives to some states, by the **id** of the state (FRU-102). A state with no
  * entry takes the stage of its type.
  */
-export type StageExceptions = Readonly<Record<string, SeedStage>>;
+export type StageExceptions = Readonly<Record<string, NoteStage>>;
 
 /**
  * The stage of a state: its exception, or the stage of its type. `Object.hasOwn`, so a state whose
  * id is `constructor` is not read from the prototype.
  */
-function stageOf(state: IssueNode['state'], stages: StageExceptions): SeedStage {
+function stageOf(state: IssueNode['state'], stages: StageExceptions): NoteStage {
   const id = state?.id;
-  if (id !== undefined && Object.hasOwn(stages, id)) return stages[id] as SeedStage;
+  if (id !== undefined && Object.hasOwn(stages, id)) return stages[id] as NoteStage;
 
   return stageForLinearState(state?.type ?? '');
 }
@@ -794,21 +794,21 @@ function stageOf(state: IssueNode['state'], stages: StageExceptions): SeedStage 
  * has them returned — should not rest on a backend behaving a particular way. The query still asks
  * for none, so nothing is fetched only to be discarded.
  */
-export function toSeedIssue(
+export function toNoteIssue(
   node: IssueNode,
   canonicalUrl: string,
   policy?: Pick<ClientPolicy, 'showComments'>,
   stages: StageExceptions = {},
   statusSource?: string,
-): SeedIssue | null {
-  const parsed = parseSeedFromDescription(node.description);
+): NoteIssue | null {
+  const parsed = parseNoteFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
   // than one we do not show.
   if (!parsed.ok) return null;
 
   // `description contains` is a substring match, so a query for `/pricing` also brings back the
   // seeds of `/pricing?tab=annual`. The seed itself is the authority on which page it belongs to.
-  if (parsed.seed.page.url !== canonicalUrl) return null;
+  if (parsed.note.page.url !== canonicalUrl) return null;
 
   const candidate = {
     id: node.id,
@@ -824,14 +824,14 @@ export function toSeedIssue(
       ? {}
       : { status: `${statusSource}:${node.state.id}` }),
     updatedAt: node.updatedAt,
-    ...optionalComments(policy?.showComments === false ? undefined : toSeedComments(node)),
+    ...optionalComments(policy?.showComments === false ? undefined : toNoteComments(node)),
     ...attachmentsOf(node),
-    seed: parsed.seed,
+    seed: parsed.note,
   };
 
   // Validated against the shared contract rather than trusted: this is the exact shape the widget
   // parses on the other side, and a field Linear stopped returning must not reach it as `undefined`.
-  const result = seedIssueSchema.safeParse(candidate);
+  const result = noteIssueSchema.safeParse(candidate);
 
   return result.success ? result.data : null;
 }
@@ -908,7 +908,7 @@ export type LinearState = {
   type: string;
   teamId: string;
   team: string;
-  stage: SeedStage;
+  stage: NoteStage;
   color?: string;
 };
 
@@ -964,7 +964,7 @@ export async function listLinearStates(apiKey: string, teamIds: readonly string[
 }
 
 /**
- * Linear, as a `SeedStore` (FRU-29).
+ * Linear, as a `NoteStore` (FRU-29).
  *
  * Everything above already existed; this is the adapter that lets `app.ts` stop importing it by
  * name. Bound to its configuration at construction rather than handed the worker's config per call,
@@ -975,7 +975,7 @@ export function createLinearStore(
   stages: StageExceptions = {},
   /** The connector the store reads through (FRU-368): the source of the status of each issue. */
   statusSource?: string,
-): SeedStore {
+): NoteStore {
   return {
     name: 'linear',
     // The team, because that is what separates one tenant's issues from another's here. The worker
@@ -984,11 +984,11 @@ export function createLinearStore(
     // FRU-331: the files of a note go to the issue.
     attachments: true,
     create: (seed, client, policy, files) =>
-      createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale, undefined, files),
+      createNoteIssue(config, linearRoutingFor(config, client), seed, policy.locale, undefined, files),
     createBatch: (seeds, client, policy, memory) =>
-      createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
+      createNoteBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>
-      fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
+      fetchNoteIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
     // FRU-368: the states of the team of the client, as Linear says them: the stage of their type. The
     // exceptions of the connector are applied by the read, at each request (`trackerSourcesOf`), so
     // what is kept of a team holds nothing that a change of the settings could leave behind.

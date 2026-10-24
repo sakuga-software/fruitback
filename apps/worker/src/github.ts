@@ -1,25 +1,25 @@
 import { type KeyObject, createPrivateKey, sign, createHash } from 'node:crypto';
 import {
-  DEFAULT_SEED_STAGE,
+  DEFAULT_NOTE_STAGE,
   FRUITBACK_LABEL,
-  type Seed,
-  type SeedComment,
-  type SeedIssue,
-  type SeedStage,
+  type Note,
+  type NoteComment,
+  type NoteIssue,
+  type NoteStage,
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
   clientLabelName,
-  parseSeedFromDescription,
-  seedIssueSchema,
+  parseNoteFromDescription,
+  noteIssueSchema,
 } from '@fruitback/shared';
 import { z } from 'zod';
 import { type ClientConfig, type ClientPolicy, REPOSITORY_PATTERN } from './clients.ts';
-import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError, type TrackerState } from './store.ts';
+import { type CreatedIssue, type NoteIssueQuery, type NoteStore, StoreError, type TrackerState } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
- * GitHub Issues, as a `SeedStore` (FRU-32).
+ * GitHub Issues, as a `NoteStore` (FRU-32).
  *
  * The worker signs in as a GitHub App, not with a personal token. A personal token does not expire
  * and reaches every repository of its owner. An installation token expires after one hour, and this
@@ -120,8 +120,8 @@ export type GithubStoreOptions = {
   now?: () => number;
 };
 
-/** The stages `stageForGithubIssue` can return, in `SEED_STAGES` order. */
-export const GITHUB_STAGES: readonly SeedStage[] = ['new', 'done', 'closed'];
+/** The stages `stageForGithubIssue` can return, in `NOTE_STAGES` order. */
+export const GITHUB_STAGES: readonly NoteStage[] = ['new', 'done', 'closed'];
 
 /**
  * An issue's state and `state_reason`, projected onto the stage of the pin.
@@ -129,9 +129,9 @@ export const GITHUB_STAGES: readonly SeedStage[] = ['new', 'done', 'closed'];
  * An issue closed before GitHub added `state_reason` has no reason. Closed then meant done, so it is
  * `done`. A state this store does not know gets the contract's default, so the pin stays visible.
  */
-export function stageForGithubIssue(state: string, stateReason: string | null | undefined): SeedStage {
+export function stageForGithubIssue(state: string, stateReason: string | null | undefined): NoteStage {
   if (state === 'open') return 'new';
-  if (state !== 'closed') return DEFAULT_SEED_STAGE;
+  if (state !== 'closed') return DEFAULT_NOTE_STAGE;
 
   return stateReason === 'not_planned' || stateReason === 'duplicate' ? 'closed' : 'done';
 }
@@ -401,7 +401,7 @@ function commentPages(count: number): number[] {
  * which keeps it in the history of the code for ever, where nobody can delete it at the end of a
  * transit: refused. Not measured on a real repository: no App of a test repository is installed.
  */
-export function createGithubStore(config: GithubConfig, options: GithubStoreOptions = {}): SeedStore {
+export function createGithubStore(config: GithubConfig, options: GithubStoreOptions = {}): NoteStore {
   return createIssueStore({
     repositoryOf: (client) => repositoryFor(config, client),
     tokens: createTokenSource(config, options.now ?? Date.now),
@@ -430,7 +430,7 @@ export type IssueStoreOptions = {
    */
   statusSource?: string;
   /** The stage a site gives a status, by its key, over the one of `stageForGithubIssue` (FRU-369). */
-  stages?: Readonly<Record<string, SeedStage>>;
+  stages?: Readonly<Record<string, NoteStage>>;
   /**
    * FRU-382: told whether the repository is private, read with the token of the note once its issue
    * is made. A repository that turned public since its destination was written is then said in the
@@ -449,7 +449,7 @@ export function createIssueStore({
   statusSource,
   stages = {},
   privacy,
-}: IssueStoreOptions): SeedStore {
+}: IssueStoreOptions): NoteStore {
   async function call(repository: string, path: string, init: Omit<GithubCall, 'token'> = {}): Promise<unknown> {
     const token = await tokens.get(repository);
     try {
@@ -496,7 +496,7 @@ export function createIssueStore({
     }
   }
 
-  async function fetchComments(repository: string, number: number, count: number): Promise<SeedComment[]> {
+  async function fetchComments(repository: string, number: number, count: number): Promise<NoteComment[]> {
     if (count === 0) return [];
 
     const rows: unknown[] = [];
@@ -556,7 +556,7 @@ export function createIssueStore({
     stages: GITHUB_STAGES,
     scope: (client) => repositoryOf(client),
 
-    async create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue> {
+    async create(seed: Note, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue> {
       const repository = repositoryOf(client);
       const labels = buildIssueLabels(seed).map(githubLabelName);
 
@@ -577,7 +577,7 @@ export function createIssueStore({
     // FRU-369: the four states, for the statuses of a site that sends here. Read from no call to GitHub.
     ...(statusSource === undefined ? {} : { trackerStates: async () => [...GITHUB_STATES] }),
 
-    async findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
+    async findForPage(query: NoteIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
       const repository = repositoryOf(client);
       const labels = (query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL]).map(
         githubLabelName,
@@ -596,7 +596,7 @@ export function createIssueStore({
           ? await fetchComments(repository, issue.number, issue.comments)
           : undefined;
 
-        return seedIssueSchema.safeParse({
+        return noteIssueSchema.safeParse({
           id: String(issue.id),
           identifier: `#${issue.number}`,
           url: issue.html_url,
@@ -613,7 +613,7 @@ export function createIssueStore({
         });
       });
 
-      return issues.flatMap((result): SeedIssue[] => (result.success ? [result.data] : []));
+      return issues.flatMap((result): NoteIssue[] => (result.success ? [result.data] : []));
     },
   };
 }
@@ -630,20 +630,20 @@ function matchPage(
   canonicalUrl: string,
   labels: string[],
   clientId: string | undefined,
-): { issue: IssueRow; seed: Seed } | null {
+): { issue: IssueRow; seed: Note } | null {
   const issue = issueRowSchema.safeParse(row);
   if (!issue.success || issue.data.pull_request !== undefined) return null;
 
   const carried = labelNames(issue.data).map((name) => name.toLowerCase());
   if (!labels.every((name) => carried.includes(name.toLowerCase()))) return null;
 
-  const parsed = parseSeedFromDescription(issue.data.body);
-  if (!parsed.ok || parsed.seed.page.url !== canonicalUrl) return null;
+  const parsed = parseNoteFromDescription(issue.data.body);
+  if (!parsed.ok || parsed.note.page.url !== canonicalUrl) return null;
   // The labels select the issues, and the seed confirms the client. The write path stores the
   // normalized client ID in the seed, so the two values are equal for every note of this client.
-  if (clientId && parsed.seed.client?.id !== clientId) return null;
+  if (clientId && parsed.note.client?.id !== clientId) return null;
 
-  return { issue: issue.data, seed: parsed.seed };
+  return { issue: issue.data, seed: parsed.note };
 }
 
 function isAlreadyExists(payload: unknown): boolean {

@@ -1,4 +1,4 @@
-import type { SeedComment } from '@fruitback/shared';
+import type { NoteComment } from '@fruitback/shared';
 import type { CheckVerdict, NewCheck, NewReply } from './store.ts';
 
 /**
@@ -115,7 +115,7 @@ export function verdictOf(body: string): { verdict: CheckVerdict; by: string } |
  * « fixed ». A « wrong » after it, or no verdict, is no confirmation. `undefined` for comments that
  * were not read.
  */
-export function checkedOf(comments: readonly SeedComment[] | undefined): { by: string; at: string } | undefined {
+export function checkedOf(comments: readonly NoteComment[] | undefined): { by: string; at: string } | undefined {
   let newest: { verdict: CheckVerdict; by: string; at: string } | undefined;
   for (const comment of comments ?? []) {
     const verdict = verdictOf(comment.body);

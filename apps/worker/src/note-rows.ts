@@ -1,18 +1,18 @@
 import { OWN_SOURCE } from './site-statuses.ts';
 import {
-  DEFAULT_SEED_STAGE,
-  SEED_STAGES,
-  type SeedComment,
-  type SeedIssue,
-  type SeedStage,
+  DEFAULT_NOTE_STAGE,
+  NOTE_STAGES,
+  type NoteComment,
+  type NoteIssue,
+  type NoteStage,
   buildIssueTitle,
-  seedIssueSchema,
-  seedSchema,
+  noteIssueSchema,
+  noteSchema,
 } from '@fruitback/shared';
 import type { ForgetSelector } from './store.ts';
 
 /**
- * A row of a store that keeps the notes itself, read (FRU-218): `seeds-postgres.ts`, and the file of
+ * A row of a store that keeps the notes itself, read (FRU-218): `notes-postgres.ts`, and the file of
  * before that `postgres-copy.ts` copies, with the same columns. A row is parsed here and never
  * trusted: an operator can edit a row, and a restore can be older than the code.
  *
@@ -23,7 +23,7 @@ import type { ForgetSelector } from './store.ts';
 export const COMMENTS_PER_ISSUE = 20;
 
 /** A note, as both databases hand it over. `updatedAt` is an ISO date. */
-export type SeedRow = {
+export type NoteRecord = {
   id: number;
   page_url: string;
   stage: string;
@@ -55,7 +55,7 @@ export function rowOfIdentifier(identifier: string): number | undefined {
  * The row of `seeds` that a note of the index names, when the worker's store keeps it (FRU-384): in
  * Fruitback, or sent on to an address (a `rest` connector), whose notes the worker keeps too and
  * whose reference is `FB-<id>` (heavy review of #505). A note of a tracker, or of a connector removed
- * since, is the tracker's. The row is only where to look: `isSameSeed` says whether it is this note.
+ * since, is the tracker's. The row is only where to look: `isSameNote` says whether it is this note.
  */
 export function keptRowOf(
   place: string,
@@ -68,7 +68,7 @@ export function keptRowOf(
 }
 
 /** Whether the `seed` column of a row is the note the widget named `seed`: its id is in the JSON. */
-export function isSameSeed(column: string, seed: string): boolean {
+export function isSameNote(column: string, seed: string): boolean {
   try {
     const parsed: unknown = JSON.parse(column);
 
@@ -82,21 +82,21 @@ export function isSameSeed(column: string, seed: string): boolean {
  * The states are ours, so there is nothing to project.
  *
  * Linear needs `stageForLinearState` because its vocabulary is its own and the contract's is the
- * contract's. Here the column *is* a `SeedStage`, and the only translation left is the one the
+ * contract's. Here the column *is* a `NoteStage`, and the only translation left is the one the
  * contract already owns: an unrecognised value colours the pin rather than hiding someone's note.
  */
-export function stageOf(value: string): SeedStage {
-  return (SEED_STAGES as readonly string[]).includes(value) ? (value as SeedStage) : DEFAULT_SEED_STAGE;
+export function stageOf(value: string): NoteStage {
+  return (NOTE_STAGES as readonly string[]).includes(value) ? (value as NoteStage) : DEFAULT_NOTE_STAGE;
 }
 
 /**
  * A row back into the read envelope, or `null` for a row that is not a note of its page.
  *
- * Parsed through `seedSchema` rather than trusted: a malformed row must cost that one pin instead of
+ * Parsed through `noteSchema` rather than trusted: a malformed row must cost that one pin instead of
  * the whole page. Same reasoning as the tolerant parser on Linear descriptions.
  */
-export function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIssue | null {
-  const seed = seedSchema.safeParse(readJson(row.seed));
+export function toNoteIssue(row: NoteRecord, comments: NoteComment[] | undefined): NoteIssue | null {
+  const seed = noteSchema.safeParse(readJson(row.seed));
   if (!seed.success) return null;
 
   // The row was selected on `page_url`, and the seed carries its own `page.url`. They are written
@@ -104,7 +104,7 @@ export function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): 
   // another page, and returning it puts one page's note on top of another's element.
   if (seed.data.page.url !== row.page_url) return null;
 
-  const result = seedIssueSchema.safeParse({
+  const result = noteIssueSchema.safeParse({
     id: String(row.id),
     identifier: identifierFor(row.id),
     // No `url`: there is no interface to open. See the field's own note in the contract.
@@ -131,8 +131,8 @@ export function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): 
  * every new answer became unreachable — and these stores report no `url`, so the pin's thread is the
  * only interface there is.
  */
-export function threadsOf(rows: readonly CommentRow[]): Map<number, SeedComment[]> {
-  const byId = new Map<number, SeedComment[]>();
+export function threadsOf(rows: readonly CommentRow[]): Map<number, NoteComment[]> {
+  const byId = new Map<number, NoteComment[]>();
 
   for (const row of rows) {
     const thread = byId.get(row.seed_id) ?? [];
@@ -187,7 +187,7 @@ export function noteOf(text: string): string {
 }
 
 /** The id the widget gave the note of a row (FRU-237: the index of the notes is keyed on it). */
-export function seedIdOf(text: string): string {
+export function widgetIdOf(text: string): string {
   const id = (readJson(text) as { id?: unknown } | undefined)?.id;
 
   return typeof id === 'string' ? id : '';

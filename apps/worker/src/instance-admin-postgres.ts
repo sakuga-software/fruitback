@@ -1,4 +1,4 @@
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { type SQL, and, asc, count, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { connectorOf, newId, roleOf } from './account-rows.ts';
@@ -47,7 +47,7 @@ import {
   sites,
   workspace_suspensions,
 } from './postgres-schema.ts';
-import { noteOf, rowOfIdentifier, seedIdOf } from './seed-rows.ts';
+import { noteOf, rowOfIdentifier, widgetIdOf } from './note-rows.ts';
 
 /**
  * What the administrator of the instance reads, in the database of the worker (FRU-261). See
@@ -136,7 +136,7 @@ const roleIn = (detail: string | null): { role?: string } => {
 };
 
 function noStages(): StageCounts {
-  return Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])) as StageCounts;
+  return Object.fromEntries(NOTE_STAGES.map((stage) => [stage, 0])) as StageCounts;
 }
 
 /** `text`, for `ILIKE` with no wildcard of its own: `%`, `_` and `\` match themselves. */
@@ -227,7 +227,7 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
     const id = row.reference === null ? undefined : rowOfIdentifier(row.reference);
     const seed = id === undefined ? undefined : byId.get(id);
     if (seed === undefined || seed.client_id !== row.site_id) continue;
-    const widgetId = seedIdOf(seed.seed);
+    const widgetId = widgetIdOf(seed.seed);
     if (widgetId === '' || widgetId !== row.seed_id) continue;
     texts.set(keyOf(row), noteOf(seed.seed));
   }
@@ -297,8 +297,8 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
     );
     for (const row of rows) {
       const stages = counts.get(String(row.id)) ?? noStages();
-      if ((SEED_STAGES as readonly string[]).includes(String(row.stage))) {
-        stages[row.stage as SeedStage] += number(row.n);
+      if ((NOTE_STAGES as readonly string[]).includes(String(row.stage))) {
+        stages[row.stage as NoteStage] += number(row.n);
       }
       counts.set(String(row.id), stages);
     }

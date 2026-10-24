@@ -1,4 +1,4 @@
-import { type Seed, type SeedIssue, type SeedReporter, canonicalizePageUrl } from '@fruitback/shared';
+import { type Note, type NoteIssue, type NoteReporter, canonicalizePageUrl } from '@fruitback/shared';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
 import { type ClientConfig, type ClientDestination, type ClientResolution, normalizeClientId } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
@@ -32,7 +32,7 @@ export function placedAt(client: ClientConfig, place: ClientDestination): Client
  * id of the tracker. Its handle is the id the widget gave the note, which is Fruitback's own.
  */
 export function withoutTracker<
-  T extends { id: string; identifier: string; url?: string; attachments?: SeedIssue['attachments'] },
+  T extends { id: string; identifier: string; url?: string; attachments?: NoteIssue['attachments'] },
 >(issue: T, seed: string): T {
   const { url: _url, attachments, ...rest } = issue;
 
@@ -65,7 +65,7 @@ export async function indexed(index: NoteIndex | undefined, work: (index: NoteIn
 export function noteEntry(
   workspace: string,
   site: string,
-  seed: Seed,
+  seed: Note,
   channel: Channel,
   target: ClientConfig | undefined,
   issue: CreatedIssue,
@@ -88,7 +88,7 @@ export function placeOf(target: ClientConfig | undefined): NoteEntry['place'] {
 }
 
 /** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
-export function optionalReporter(reporter: SeedReporter | undefined): { reporter?: SeedReporter } {
+export function optionalReporter(reporter: NoteReporter | undefined): { reporter?: NoteReporter } {
   return reporter === undefined ? {} : { reporter };
 }
 
@@ -124,7 +124,7 @@ export function canonicalizeRequestedPage(requested: string): string | null {
  * The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
  * label the read filters on, so a padded id here means an issue nobody can query back.
  */
-export function canonicalSeed(seed: Seed): Seed {
+export function canonicalNote(seed: Note): Note {
   const clientId = normalizeClientId(seed.client?.id);
 
   return {

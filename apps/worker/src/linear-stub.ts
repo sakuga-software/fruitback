@@ -1,5 +1,5 @@
 import { mockMethod } from './mock.fixture.ts';
-import { type Seed, buildIssueDescription, buildIssueTitle } from '@fruitback/shared';
+import { type Note, buildIssueDescription, buildIssueTitle } from '@fruitback/shared';
 
 /**
  * A fake Linear GraphQL endpoint, dispatching on the operation name. It records every call so a test
@@ -81,7 +81,7 @@ export type LinearStubOptions = {
 export type PutCall = { url: string; headers: Record<string, string>; body: Uint8Array };
 
 /** A stored issue built from a seed, the way `POST /feedback` would have written it. */
-export function storedIssueFromSeed(seed: Seed, overrides: Partial<StoredIssue> = {}): StoredIssue {
+export function storedIssueFromNote(seed: Note, overrides: Partial<StoredIssue> = {}): StoredIssue {
   return {
     id: `issue_${seed.id}`,
     identifier: 'SKG-901',

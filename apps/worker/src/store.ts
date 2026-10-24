@@ -1,4 +1,4 @@
-import type { Seed, SeedComment, SeedIssue, SeedStage } from '@fruitback/shared';
+import type { Note, NoteComment, NoteIssue, NoteStage } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { OutgoingFile } from './attachments.ts';
 
@@ -6,7 +6,7 @@ import type { OutgoingFile } from './attachments.ts';
  * Where a seed is stored, behind one interface (FRU-29).
  *
  * The seam already existed and was not named: `app.ts` selected between `linear.ts` and
- * `linear-memory.ts` through a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>`,
+ * `linear-memory.ts` through a `Pick<typeof realLinear, 'createNoteIssue' | 'fetchNoteIssues'>`,
  * which is an interface discovered by accident. This is that interface written down, so a second
  * store — SQLite (FRU-31), GitHub Issues (FRU-32) — is an implementation rather than a rewrite.
  *
@@ -29,7 +29,7 @@ export class StoreError extends Error {}
 /**
  * What a store hands back after planting a seed.
  *
- * `url` is optional for the same reason it is on `SeedIssue`: a store may have no interface to open
+ * `url` is optional for the same reason it is on `NoteIssue`: a store may have no interface to open
  * (FRU-31). The widget does not read it — this travels in the `201` body, where an empty string
  * would be a URL the caller could follow to nowhere.
  */
@@ -67,24 +67,24 @@ export type BatchMemory = {
 };
 
 /** The read the worker asks for: every seed on one page, for one client. */
-export type SeedIssueQuery = { url: string; clientId: string | undefined };
+export type NoteIssueQuery = { url: string; clientId: string | undefined };
 
-export type SeedStore = {
+export type NoteStore = {
   /** For `/health` and the boot log. Never for an error code — see `StoreError`. */
   readonly name: string;
   /**
-   * The stages this store can report. Absent means every stage in `SEED_STAGES`.
+   * The stages this store can report. Absent means every stage in `NOTE_STAGES`.
    *
    * `GET /feedback` sends this list, and the settings panel offers a filter only for these stages
    * (FRU-32). A filter for a stage that no pin can have does nothing.
    */
-  readonly stages?: readonly SeedStage[];
+  readonly stages?: readonly NoteStage[];
   /**
    * The stages for one client, when they depend on it (FRU-188): a worker whose sites send to the
    * trackers of their workspaces reports the stages of the tracker of each site, not its own.
    * Absent: `stages`, for every client.
    */
-  stagesFor?(client: ClientConfig | undefined): Promise<readonly SeedStage[] | undefined>;
+  stagesFor?(client: ClientConfig | undefined): Promise<readonly NoteStage[] | undefined>;
   /**
    * What tells one tenant's answers from another's, for the read cache.
    *
@@ -102,7 +102,7 @@ export type SeedStore = {
    * widget sends the note again. Once the note is written, a file that fails is `lost`, never a throw.
    */
   create(
-    seed: Seed,
+    seed: Note,
     client: ClientConfig | undefined,
     policy: ClientPolicy,
     files?: readonly OutgoingFile[],
@@ -122,19 +122,19 @@ export type SeedStore = {
    * each seed: `createAll` in `batch.ts`. `memory` is absent when the caller keeps none.
    */
   createBatch?(
-    seeds: readonly Seed[],
+    seeds: readonly Note[],
     client: ClientConfig | undefined,
     policy: ClientPolicy,
     memory?: BatchMemory,
   ): Promise<BatchAnswer[]>;
-  findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<SeedIssue[]>;
+  findForPage(query: NoteIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<NoteIssue[]>;
   /**
    * Delete the seeds that `which` selects, and the replies to them (FRU-85, FRU-111).
    *
    * Only a store that holds the rows itself has this. A tracker keeps the issues in the team's own
    * workspace, and the team deletes them there. `node server.mjs forget` refuses a store without it.
    */
-  forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenSeed[]>;
+  forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenNote[]>;
   /**
    * Write a reply under one note (FRU-257), as the text of `replyText`, and answer it as a read will
    * show it. `undefined`: this store holds no such note for this client. Absent: this store takes no
@@ -145,7 +145,7 @@ export type SeedStore = {
     reply: NewReply,
     client: ClientConfig | undefined,
     policy: ClientPolicy,
-  ): Promise<SeedComment | undefined>;
+  ): Promise<NoteComment | undefined>;
   /**
    * Whether the store of this client takes a reply, for a store that routes by client. Absent: the
    * answer is whether `reply` is there.
@@ -174,9 +174,9 @@ export type SeedStore = {
    */
   setStatus?(
     target: ReplyTarget,
-    status: { key: string | null; stage: SeedStage },
+    status: { key: string | null; stage: NoteStage },
     client: ClientConfig | undefined,
-  ): Promise<{ stage: SeedStage; page: string } | 'status-changed' | undefined>;
+  ): Promise<{ stage: NoteStage; page: string } | 'status-changed' | undefined>;
   /** Whether the store of this client takes a status, for a store that routes by client. */
   statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
@@ -194,7 +194,7 @@ export type SeedStore = {
  * A state of a tracker (FRU-368): its id there, its name, the stage the store gives it (its type, or
  * an exception of its connector), and the colour the tracker draws it with, as `#rrggbb`.
  */
-export type TrackerState = { id: string; name: string; stage: SeedStage; color?: string };
+export type TrackerState = { id: string; name: string; stage: NoteStage; color?: string };
 
 /** What a person says of a note that the team marked done (FRU-294). */
 export type CheckVerdict = 'fixed' | 'wrong';
@@ -208,7 +208,7 @@ export type NewCheck = {
 };
 
 /** The marked reply that a verdict wrote, and the stage of the note after it. */
-export type CheckAnswer = { comment: SeedComment; stage: SeedStage };
+export type CheckAnswer = { comment: NoteComment; stage: NoteStage };
 
 /**
  * Who writes a reply, as the worker knows it (FRU-257). A member is a session of the workspace of the
@@ -223,17 +223,17 @@ export type ReplyTarget = { issue: string; clientId: string | undefined };
 export type NewReply = { body: string; author: ReplyAuthor };
 
 /** Whether a store takes the files of a note for this client (FRU-331). */
-export async function takesAttachments(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+export async function takesAttachments(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.attachmentsFor === undefined ? store.attachments === true : store.attachmentsFor(client);
 }
 
 /** Whether a store takes a reply for this client. */
-export async function takesReplies(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+export async function takesReplies(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.repliesFor === undefined ? store.reply !== undefined : store.repliesFor(client);
 }
 
 /** Whether a store sets the status of a note for this client (FRU-367): only the worker's own store does. */
-export async function takesStatuses(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+export async function takesStatuses(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.statusesFor === undefined ? store.setStatus !== undefined : store.statusesFor(client);
 }
 
@@ -241,7 +241,7 @@ export async function takesStatuses(store: SeedStore, client: ClientConfig | und
  * Whether a store takes a verdict for this client (FRU-294): it has `check`, and it takes a reply
  * there. A store that hides its replies would write a verdict that no read shows.
  */
-export async function takesChecks(store: SeedStore, client: ClientConfig | undefined): Promise<boolean> {
+export async function takesChecks(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
   if (store.checksFor !== undefined) return store.checksFor(client);
 
   return store.check !== undefined && (await takesReplies(store, client));
@@ -257,4 +257,4 @@ export type ForgetSelector = { email: string } | { name: string } | { identifier
 
 /** One seed that `forget` found, as the operator reads it before it goes. */
 /** A note `forget` found. `seed` is the id the widget gave it, which the index of the notes is keyed on. */
-export type ForgottenSeed = { identifier: string; seed: string; createdAt: string; pageUrl: string; note: string };
+export type ForgottenNote = { identifier: string; seed: string; createdAt: string; pageUrl: string; note: string };

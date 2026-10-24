@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { noteIdOf } from './console-notes.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 
 /**
  * `POST /console/workspaces/<id>/notes/<note>/status` (FRU-384): the status of a note the worker keeps,
@@ -20,7 +20,7 @@ import type { SeedStore } from './store.ts';
 const open = worlds();
 const ORIGIN = 'https://acme.dev';
 const PAGE = 'https://acme.dev/pricing';
-const [, TODO, , DONE] = SEED_STAGES;
+const [, TODO, , DONE] = NOTE_STAGES;
 
 type Answer = { status: number; body: Record<string, any> };
 
@@ -44,7 +44,7 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
  */
 async function aNote(options: { rest?: boolean } = {}) {
   const world = await open();
-  const store = createPostgresSeedStore(world.database);
+  const store = createPostgresNoteStore(world.database);
   const alice = await signInTo(world, 'alice@acme.dev');
   const workspace = await workspaceIn(world, alice.token, 'Acme');
   const site = (await world.accounts.addSite(workspace, { origin: ORIGIN, visibility: 'members' })).id;
@@ -80,7 +80,7 @@ async function aNote(options: { rest?: boolean } = {}) {
     ? (await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.dev', sealed: 'x' })).id
     : undefined;
   if (rest !== undefined) await world.accounts.setDestination(workspace, site, { connector: rest });
-  const seed = seedFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+  const seed = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
   const extension = await sessionOf(world, bob.id, workspace);
   const planted = await answerOf(
     await callOn(
@@ -123,7 +123,7 @@ async function listed(world: World, workspace: string, token: string) {
   return answer.body as { notes: Record<string, any>[]; statuses?: Record<string, Record<string, any>[]> };
 }
 
-async function pin(world: World, site: string, token: string, store: SeedStore) {
+async function pin(world: World, site: string, token: string, store: NoteStore) {
   const answer = await answerOf(
     await callOn(
       world,
@@ -148,7 +148,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     const { world, workspace, site, alice, bob, carol } = await aNote();
 
     const [mine] = (await listed(world, workspace, bob.token)).notes;
-    assert.equal(mine?.status, `own:${DEFAULT_SEED_STAGE}`);
+    assert.equal(mine?.status, `own:${DEFAULT_NOTE_STAGE}`);
     assert.equal(mine?.canSetStatus, true, 'the author may');
     assert.equal((await listed(world, workspace, carol.token)).notes[0]?.canSetStatus, false, 'another member may not');
     const managed = await listed(world, workspace, alice.token);
@@ -157,7 +157,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     const statuses = managed.statuses?.[site] ?? [];
     assert.deepEqual(
       statuses.map((one) => one.key),
-      ['own:waiting', 'own:parked', ...SEED_STAGES.map((stage) => `own:${stage}`)],
+      ['own:waiting', 'own:parked', ...NOTE_STAGES.map((stage) => `own:${stage}`)],
     );
     assert.deepEqual(statuses[0], {
       key: 'own:waiting',
@@ -173,7 +173,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
   it('lets the author put the note in a status the team added: the store, the index and the pin follow', async () => {
     const { world, store, workspace, site, bob, extension, note } = await aNote();
     // A read of the page first: the cache now holds it, and must not answer it again.
-    assert.deepEqual(await pin(world, site, extension, store), [DEFAULT_SEED_STAGE, `own:${DEFAULT_SEED_STAGE}`]);
+    assert.deepEqual(await pin(world, site, extension, store), [DEFAULT_NOTE_STAGE, `own:${DEFAULT_NOTE_STAGE}`]);
 
     const set = await choose(world, workspace, note, 'own:waiting', bob.token);
 
@@ -205,7 +205,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
       status: 403,
       body: { error: 'not-allowed' },
     });
-    assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
   });
 
   it('refuses a hidden status, and one the site no longer has, with the conflict the console says', async () => {
@@ -219,7 +219,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
       status: 409,
       body: { error: 'status-changed' },
     });
-    assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
   });
 
   it('refuses a status that is not of the worker, or not a status, and any method but POST', async () => {
@@ -237,7 +237,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     }
     const path = `/console/workspaces/${workspace}/notes/${note}/status`;
     assert.equal((await callOn(world, 'GET', path, { token: alice.token })).status, 405);
-    assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
   });
 
   it('takes the note of a site that sends to an address: the worker keeps it too (heavy review of #505)', async () => {
@@ -249,7 +249,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     );
 
     const [listedNote] = (await listed(world, workspace, bob.token)).notes;
-    assert.equal(listedNote?.status, `own:${DEFAULT_SEED_STAGE}`);
+    assert.equal(listedNote?.status, `own:${DEFAULT_NOTE_STAGE}`);
     assert.equal(listedNote?.canSetStatus, true);
     assert.deepEqual(await choose(world, workspace, note, 'own:waiting', bob.token), {
       status: 200,
@@ -270,13 +270,13 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
           {
             workspace,
             site,
-            seed: seedFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
+            seed: noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
             channel: 'extension',
             author: { kind: 'member', account: alice.id },
             place: { kind: 'connector', connector: connector.id },
             // The number of the note the worker keeps: a tracker can name an issue so.
             issue: { identifier: `FB-${id}` },
-            stage: DEFAULT_SEED_STAGE,
+            stage: DEFAULT_NOTE_STAGE,
           },
         ],
         Date.now() + 1_000,
@@ -295,7 +295,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
         },
         kind,
       );
-      assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+      assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
     }
   });
 
@@ -317,6 +317,6 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
       status: 404,
       body: { error: 'not-found' },
     });
-    assert.deepEqual(await stored(world), [{ stage: DEFAULT_SEED_STAGE, status_key: null }]);
+    assert.deepEqual(await stored(world), [{ stage: DEFAULT_NOTE_STAGE, status_key: null }]);
   });
 });

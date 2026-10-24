@@ -1,4 +1,4 @@
-import { SEED_STAGES } from '@fruitback/shared';
+import { NOTE_STAGES } from '@fruitback/shared';
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
@@ -6,7 +6,7 @@ import { type GithubApp, createGithubConnectorStore, openInstallation } from './
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
-import { type SeedStore, StoreError, takesAttachments, takesChecks, takesStatuses, takesReplies } from './store.ts';
+import { type NoteStore, StoreError, takesAttachments, takesChecks, takesStatuses, takesReplies } from './store.ts';
 
 /**
  * The store of a request on a worker whose workspaces connect their own trackers (FRU-121).
@@ -28,7 +28,7 @@ type TrackerAccess = {
   githubApp: GithubApp | undefined;
 };
 
-const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: TrackerAccess) => Promise<SeedStore>> = {
+const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: TrackerAccess) => Promise<NoteStore>> = {
   async linear({ connector, workspace, sealed, settings }, { accounts, secretsKey, oauth, now }) {
     // A token of OAuth near its end is refreshed here.
     const apiKey = await linearAuthorization(connector, sealed, { accounts, secretsKey, oauth, now });
@@ -38,7 +38,7 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: Trac
     // exceptions of the connector (FRU-102): they are what a site with no row of its own shows.
     const base = createLinearStore(config, settings.stages, connector);
     // FRU-368: the stage a site gives a state wins over the exception of the connector, for that site.
-    const forSite = async (site: string | undefined): Promise<SeedStore> => {
+    const forSite = async (site: string | undefined): Promise<NoteStore> => {
       const own = await siteStages(accounts, workspace, site, connector);
 
       return own === undefined ? base : createLinearStore(config, { ...settings.stages, ...own }, connector);
@@ -61,7 +61,7 @@ const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (kept: Kept, access: Trac
       accounts.noteRepositoryPrivacy(connector, repository, isPrivate);
     const base = createGithubConnectorStore(githubApp, installation, { statusSource: connector, privacy });
     // The stage a site gives a status wins over the one GitHub's state gives, for that site.
-    const forSite = async (site: string | undefined): Promise<SeedStore> => {
+    const forSite = async (site: string | undefined): Promise<NoteStore> => {
       const own = await siteStages(accounts, workspace, site, connector);
 
       return own === undefined
@@ -108,7 +108,7 @@ async function siteStages(
  * It is applied to the policy each store reads, so a store keeps the promise of `showComments`: the
  * replies are not asked for, and not returned.
  */
-function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore {
+function withSettings(store: NoteStore, settings: ConnectorSettings): NoteStore {
   if (settings.showComments) return store;
   const quiet = <P extends { showComments: boolean }>(policy: P): P => ({ ...policy, showComments: false });
   // A reply that nobody reads back on the page is a reply lost for its author (FRU-257), and so is a
@@ -122,14 +122,14 @@ function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore 
       ? {}
       : {
           createBatch: (seeds, client, policy) =>
-            (store.createBatch as NonNullable<SeedStore['createBatch']>)(seeds, client, quiet(policy)),
+            (store.createBatch as NonNullable<NoteStore['createBatch']>)(seeds, client, quiet(policy)),
         }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
   };
 }
 
 /** `own` is the worker's own store: a connector that only receives keeps its notes there. */
-export type ConnectorStores = (connector: string, workspace: string | undefined, own: SeedStore) => Promise<SeedStore>;
+export type ConnectorStores = (connector: string, workspace: string | undefined, own: NoteStore) => Promise<NoteStore>;
 
 /**
  * The store of a site whose connector is an address that receives (FRU-122).
@@ -140,7 +140,7 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  * note exists, and a failure here would make the widget send it again and keep it twice. The cost
  * is a note that is kept and never sent, which is logged.
  */
-function receivingStore(own: SeedStore, accounts: AccountStore, connector: string, now: () => number): SeedStore {
+function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
   // verdict (FRU-294).
   const { reply: _reply, check: _check, ...noReply } = own;
@@ -246,8 +246,8 @@ export function createConnectorStores(
 }
 
 /** The worker's own store for a client with no destination, the connector's store for the others. */
-export function createRoutedStore(base: SeedStore, connectors: ConnectorStores): SeedStore {
-  const pick = (client: ClientConfig | undefined): Promise<SeedStore> =>
+export function createRoutedStore(base: NoteStore, connectors: ConnectorStores): NoteStore {
+  const pick = (client: ClientConfig | undefined): Promise<NoteStore> =>
     client?.connector === undefined ? Promise.resolve(base) : connectors(client.connector, client.workspace, base);
 
   return {
@@ -256,7 +256,7 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     // The stages of the tracker that answers for the client: GitHub says three, Linear says five, and
     // the store of the worker can be either (FRU-188). `stages` above stays for a caller with no client.
     // A store with no `stages` reports every stage, so the answer is never left to the worker's own.
-    stagesFor: async (client) => (await pick(client)).stages ?? SEED_STAGES,
+    stagesFor: async (client) => (await pick(client)).stages ?? NOTE_STAGES,
     // The connector is in the key: two sites of one team in two workspaces must not share an entry.
     scope: (client) =>
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,

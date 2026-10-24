@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENTS_PER_NOTE, MAX_ATTACHMENT_BYTES_PER_NOTE, type Seed } from '@fruitback/shared';
+import { MAX_ATTACHMENTS_PER_NOTE, MAX_ATTACHMENT_BYTES_PER_NOTE, type Note } from '@fruitback/shared';
 import {
   ATTACHMENTS_PATH,
   type AttachmentStore,
@@ -21,7 +21,7 @@ import {
 import { readBoundedBytes } from './bounded-body.ts';
 import { type ClientConfig, normalizeClientId } from './clients.ts';
 import type { Kv } from './kv.ts';
-import { type FilesAnswer, type SeedStore, takesAttachments } from './store.ts';
+import { type FilesAnswer, type NoteStore, takesAttachments } from './store.ts';
 
 /**
  * The routes of the files of the notes in transit (FRU-331), out of `app.ts` so that a review reads
@@ -41,7 +41,7 @@ export type AttachmentSeams = {
   /** Where the files wait: `undefined` on a worker with no database, which answers `404`. */
   files: AttachmentStore | undefined;
   /** The store of the notes of the request, which says whether a place takes files. */
-  store: SeedStore;
+  store: NoteStore;
   headers: Record<string, string>;
   /** What signs the read of a file. `undefined`: no read is signed, and every read answers `404`. */
   secretsKey: string | undefined;
@@ -169,7 +169,7 @@ export async function handleAttachment(request: Request, pathname: string, seams
 export type NoteFileSeams = {
   files: AttachmentStore | undefined;
   /** The store of the notes of the request, which says whether a place takes files. */
-  store: SeedStore;
+  store: NoteStore;
   /** `undefined` when the request has no context to read a session in: nobody writes then. */
   writer: Writer | undefined;
 };
@@ -256,7 +256,7 @@ export async function legacyAttachment(
   seams: NoteFileSeams,
   target: ClientConfig | undefined,
   workspace: string | undefined,
-  seed: Seed,
+  seed: Note,
   named: readonly string[],
 ): Promise<{ id?: string; notTaken?: 'no-tracker' } | undefined> {
   const { files, store, writer } = seams;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { SEED_STAGES, type Seed, type SeedIssue, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES, type Note, type NoteIssue, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { MAX_GUEST_SITES } from './accounts.ts';
 import { type RequestContext, handleRequest } from './app.ts';
 import { GUEST_WITHOUT_SITE } from './auth-organization.ts';
@@ -10,7 +10,7 @@ import { mutatedModule } from './conformance.fixture.ts';
 import { digest } from './session.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createMemoryAttachmentStore } from './attachments.ts';
-import type { CreatedIssue, SeedStore } from './store.ts';
+import type { CreatedIssue, NoteStore } from './store.ts';
 
 /**
  * The guest of one site (FRU-250): an owner or an admin invites an address as a guest of the sites
@@ -42,16 +42,16 @@ type Handle = typeof handleRequest;
  * A tracker that numbers its issues `ACM-n` and gives each an address: what a guest must never read.
  * It keeps the notes in memory, by page and by site.
  */
-function trackerStore(): SeedStore {
-  const kept: SeedIssue[] = [];
-  const created = (seed: Seed): CreatedIssue => {
+function trackerStore(): NoteStore {
+  const kept: NoteIssue[] = [];
+  const created = (seed: Note): CreatedIssue => {
     const n = kept.length + 1;
-    const issue: SeedIssue = {
+    const issue: NoteIssue = {
       id: `lin_${n}`,
       identifier: `ACM-${n}`,
       url: `https://tracker.test/ACM-${n}`,
       title: seed.note.slice(0, 40),
-      stage: SEED_STAGES[0],
+      stage: NOTE_STAGES[0],
       stateName: 'Todo',
       updatedAt: '2026-10-14T10:00:00.000Z',
       comments: [],
@@ -72,7 +72,7 @@ function trackerStore(): SeedStore {
     async findForPage({ url, clientId }) {
       return kept.filter((issue) => issue.seed.page.url === url && issue.seed.client?.id === clientId);
     },
-  } as SeedStore;
+  } as NoteStore;
 }
 
 /** A PNG header and nothing more: the worker reads its size and keeps its bytes. */
@@ -198,8 +198,8 @@ async function accountSession(team: Acme, who: Who): Promise<string> {
   return ((await claimed.json()) as { accessToken: string }).accessToken;
 }
 
-function noteOn(site: string, origin: string, id: string): Seed {
-  const seed = seedFixture({ id, page: { url: canonicalizePageUrl(`${origin}/pricing`), path: '/pricing' } });
+function noteOn(site: string, origin: string, id: string): Note {
+  const seed = noteFixture({ id, page: { url: canonicalizePageUrl(`${origin}/pricing`), path: '/pricing' } });
 
   return { ...seed, client: { id: site, name: 'Acme' } };
 }
@@ -342,7 +342,7 @@ async function plantNotes(team: Acme): Promise<void> {
           author: { kind: 'member', account: team.alice.id },
           place: { kind: 'fruitback' },
           issue: { identifier: `ACM-${n}`, url: `https://tracker.test/ACM-${n}` },
-          stage: SEED_STAGES[0],
+          stage: NOTE_STAGES[0],
         },
       ],
       Date.now(),

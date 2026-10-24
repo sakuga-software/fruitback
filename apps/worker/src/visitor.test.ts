@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { describe, it } from 'vitest';
-import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type Verified, type handleRequest, verifyForClient, writesWith } from './app.ts';
 import type { ClientPolicy } from './clients.ts';
 import { mutatedModule } from './conformance.fixture.ts';
@@ -13,8 +13,8 @@ import { createPostgresAttachmentStore } from './attachments-postgres.ts';
 import { createMemoryAttachmentStore } from './attachments.ts';
 import type { AttachmentSeams } from './attachment-routes.ts';
 import { createMemoryKv } from './kv.ts';
-import type { SeedStore } from './store.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import type { NoteStore } from './store.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
 /**
@@ -40,8 +40,8 @@ const PAGE = canonicalizePageUrl(`${SITE}/pricing`);
 
 const envOf = worlds();
 
-function noteFor(site: string, more: Partial<Seed> = {}): Seed {
-  const seed = seedFixture({ id: 'sd_visitor', page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+function noteFor(site: string, more: Partial<Note> = {}): Note {
+  const seed = noteFixture({ id: 'sd_visitor', page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
   const { client: _own, ...rest } = seed;
 
   return { ...rest, client: { id: site, name: 'Acme' }, ...more };
@@ -61,14 +61,14 @@ async function workerWithASite(visibility: 'everyone' | 'members', writers?: 'me
   });
   assert.equal(made.status, 201, await made.clone().text());
   const site = ((await made.json()) as { id: string }).id;
-  const store = createPostgresSeedStore(world.database);
+  const store = createPostgresNoteStore(world.database);
 
   /**
    * What a page sends: an `Origin`, and no `Authorization` and no `Cookie`. `null` is no `Origin` at
    * all. `token` is what the relay of the extension adds: the session of a member (FRU-330).
    */
   const visitor = {
-    send: (origin: string | null, note: Seed | Seed[] = noteFor(site), token?: string) =>
+    send: (origin: string | null, note: Note | Note[] = noteFor(site), token?: string) =>
       callOn(world, 'POST', '/feedback', { origin, body: note, ...(token === undefined ? {} : { token }) }, { store }),
     read: (origin: string | null, client = site, token?: string) =>
       callOn(
@@ -133,7 +133,7 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
     const { site, visitor } = await workerWithASite('everyone');
     // A visitor can type anything, a `verified` of their own included.
     const typed = noteFor(site, {
-      reporter: { name: 'Alice', email: 'alice@acme.dev', verified: true } as Seed['reporter'],
+      reporter: { name: 'Alice', email: 'alice@acme.dev', verified: true } as Note['reporter'],
     });
 
     assert.equal((await visitor.send(SITE, typed)).status, 201);
@@ -237,7 +237,7 @@ describe('a visitor with no account, on a site that its members read (FRU-224, F
     assert.equal(((await read.json()) as { canWrite?: unknown }).canWrite, undefined);
     // The note is one that nobody vouched for.
     assert.notEqual(
-      (JSON.parse(String((await rowsOf(world.database, 'SELECT seed FROM seeds'))[0]?.seed)) as Seed).reporter
+      (JSON.parse(String((await rowsOf(world.database, 'SELECT seed FROM seeds'))[0]?.seed)) as Note).reporter
         ?.verified,
       true,
     );
@@ -352,7 +352,7 @@ type Handle = typeof handleRequest;
 function pageCall(
   handle: Handle,
   world: World,
-  store: ReturnType<typeof createPostgresSeedStore>,
+  store: ReturnType<typeof createPostgresNoteStore>,
   method: 'GET' | 'POST',
   site: string,
 ): Promise<Response> {
@@ -538,7 +538,7 @@ describe('a picture with a note, on a site that its members read (FRU-330)', () 
     // The route of the files, with a place that takes them and a request with no session.
     const seams = (): AttachmentSeams => ({
       files: createMemoryAttachmentStore(),
-      store: { attachments: true } as unknown as SeedStore,
+      store: { attachments: true } as unknown as NoteStore,
       headers: {},
       secretsKey: undefined,
       kv: () => createMemoryKv(),

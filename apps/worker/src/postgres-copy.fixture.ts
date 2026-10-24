@@ -1,8 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue } from '@fruitback/shared';
 import type { ClientPolicy } from './clients.ts';
-import { identifierFor, threadsOf, toSeedIssue } from './seed-rows.ts';
-import type { CreatedIssue, SeedIssueQuery } from './store.ts';
+import { identifierFor, threadsOf, toNoteIssue } from './note-rows.ts';
+import type { CreatedIssue, NoteIssueQuery } from './store.ts';
 
 /**
  * The three SQLite files of the last worker that wrote them, frozen: what `migrate-to-postgres` reads
@@ -182,24 +182,24 @@ export function closeFrozenFiles(): void {
 }
 
 /** A note, as the SQLite store wrote it: at the first stage, with its number given by the file. */
-export function writeSeed(file: DatabaseSync, seed: Seed): CreatedIssue {
+export function writeNote(file: DatabaseSync, seed: Note): CreatedIssue {
   const now = new Date().toISOString();
   const result = file
     .prepare('INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(seed.client?.id ?? null, seed.page.url, DEFAULT_SEED_STAGE, JSON.stringify(seed), now, now);
+    .run(seed.client?.id ?? null, seed.page.url, DEFAULT_NOTE_STAGE, JSON.stringify(seed), now, now);
   const id = Number(result.lastInsertRowid);
 
   return { id: String(id), identifier: identifierFor(id) };
 }
 
-type SeedRow = { id: number; page_url: string; stage: string; seed: string; updated_at: string };
+type NoteRecord = { id: number; page_url: string; stage: string; seed: string; updated_at: string };
 type CommentRow = { id: number; seed_id: number; author: string | null; body: string; created_at: string };
 
 /**
  * The notes of a page that the SQLite store gave a reader: every note of the page when the query
  * names no client. The replies are read the newest first, so the cap keeps the newest.
  */
-export function issuesOfFile(path: string, query: SeedIssueQuery, policy: ClientPolicy): SeedIssue[] {
+export function issuesOfFile(path: string, query: NoteIssueQuery, policy: ClientPolicy): NoteIssue[] {
   const file = open.get(path) ?? new DatabaseSync(path, { readOnly: true });
   try {
     const rows = (
@@ -208,7 +208,7 @@ export function issuesOfFile(path: string, query: SeedIssueQuery, policy: Client
         : file
             .prepare('SELECT id, page_url, stage, seed, updated_at FROM seeds WHERE page_url = ? AND client_id = ?')
             .all(query.url, query.clientId)
-    ) as SeedRow[];
+    ) as NoteRecord[];
     const placeholders = rows.map(() => '?').join(', ');
     const replies =
       !policy.showComments || rows.length === 0
@@ -230,12 +230,12 @@ export function issuesOfFile(path: string, query: SeedIssueQuery, policy: Client
 
     return rows
       .map((row) =>
-        toSeedIssue(
+        toNoteIssue(
           { id: row.id, page_url: row.page_url, stage: row.stage, seed: row.seed, updatedAt: row.updated_at },
           threads.get(row.id) ?? (policy.showComments ? [] : undefined),
         ),
       )
-      .filter((issue): issue is SeedIssue => issue !== null);
+      .filter((issue): issue is NoteIssue => issue !== null);
   } finally {
     if (!open.has(path)) file.close();
   }

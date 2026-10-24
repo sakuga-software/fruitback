@@ -1,8 +1,8 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { SEED_STAGES } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
@@ -11,7 +11,7 @@ import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
 import { createMemoryStore } from './linear-memory.ts';
-import { type SeedStore, StoreError, takesReplies } from './store.ts';
+import { type NoteStore, StoreError, takesReplies } from './store.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const opened = worlds();
@@ -157,7 +157,7 @@ async function tenant(env: World, name: string, origin: string, apiKey: string) 
 
   const page = `${origin}/pricing`;
   const write = (text: string) => {
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     return call(env, 'POST', '/feedback', {
       origin,
@@ -242,7 +242,7 @@ describe('the stages a read reports, for a site that sends to the tracker of its
       visibility: 'everyone',
     });
     // The store of the worker reports three stages, as GitHub does (`GITHUB_STAGES`).
-    const own: SeedStore = {
+    const own: NoteStore = {
       name: 'three-stages',
       stages: ['todo', 'done', 'closed'],
       scope: () => '',
@@ -276,22 +276,22 @@ describe('the stages a read reports, for a site that sends to the tracker of its
 
   // No connector of a workspace says three stages yet, so a fake one stands for GitHub (FRU-357).
   it('are the three of a connector like GitHub, on a worker whose own store says five', async () => {
-    const own = { name: 'five-stages', stages: SEED_STAGES } as unknown as SeedStore;
-    const github = { name: 'github', stages: GITHUB_STAGES } as unknown as SeedStore;
+    const own = { name: 'five-stages', stages: NOTE_STAGES } as unknown as NoteStore;
+    const github = { name: 'github', stages: GITHUB_STAGES } as unknown as NoteStore;
     const routed = createRoutedStore(own, async () => github);
 
     assert.deepEqual(await routed.stagesFor?.({ connector: 'conn_github', workspace: 'ws' } as ClientConfig), [
       ...GITHUB_STAGES,
     ]);
-    assert.deepEqual(await routed.stagesFor?.({} as ClientConfig), [...SEED_STAGES]);
-    assert.deepEqual(await createRoutedStore({ name: 'any' } as SeedStore, async () => github).stagesFor?.(undefined), [
-      ...SEED_STAGES,
+    assert.deepEqual(await routed.stagesFor?.({} as ClientConfig), [...NOTE_STAGES]);
+    assert.deepEqual(await createRoutedStore({ name: 'any' } as NoteStore, async () => github).stagesFor?.(undefined), [
+      ...NOTE_STAGES,
     ]);
   });
 });
 
 describe('the store of a connector, built for the request that asks for it (FRU-102)', () => {
-  const own = { name: 'own' } as unknown as SeedStore;
+  const own = { name: 'own' } as unknown as NoteStore;
   const client = { teamId: 'team_design' } as ClientConfig;
   const policy = { showComments: false, identitySecret: undefined, read: 'public' } as ClientPolicy;
 
@@ -696,7 +696,7 @@ describe('the states of Linear as the statuses of a site (FRU-368)', () => {
     assert.equal(set.status, 200);
     // A new note empties the cache of the page, in the Kv of this worker; the states kept for the team
     // went with the change of the settings.
-    const seed = seedFixture();
+    const seed = noteFixture();
     const written = await callOn(
       env,
       'POST',
