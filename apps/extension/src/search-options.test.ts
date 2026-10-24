@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
 import type { PanelNote } from './protocol.ts';
-import { type SearchHandlers, type SearchState, countsOf, matchesPage } from './search-options.ts';
+import { type SearchHandlers, type SearchState, countsOf, matchesPage, noteLink } from './search-options.ts';
 import { type PanelOptions, type PanelState, panelPage } from './side-panel.ts';
 import type { SiteNote } from './site-notes.ts';
 
@@ -206,7 +206,9 @@ describe('« Whole site » (FRU-307)', () => {
     const [first, second, third] = [...root.querySelectorAll<HTMLElement>('.site-row')];
     assert.equal(first?.querySelector('.kit-drop')?.getAttribute('data-hollow'), 'true');
     assert.match(first?.textContent ?? '', /In progress · Anonymous · \/subscriptions/);
-    const ref = first?.querySelector<HTMLAnchorElement>('a.site-row-ref');
+    const ref = [...(first?.querySelectorAll<HTMLAnchorElement>('a.site-row-ref') ?? [])].find((link) =>
+      link.textContent?.startsWith('Open '),
+    );
     assert.equal(ref?.textContent, 'Open FRU-128 →');
     assert.equal(ref?.target, '_blank');
     assert.equal(ref?.rel, 'noreferrer');
@@ -217,6 +219,37 @@ describe('« Whole site » (FRU-307)', () => {
     assert.match(third?.textContent ?? '', /Done · You · \/cart/);
     assert.equal(root.querySelector('.search-hint')?.textContent, 'Searches the first words of each note');
     assert.equal(root.querySelector('.search-detached'), null, 'the index knows no placement');
+  });
+
+  // FRU-434: « Show on the page » on each row, as the table of the notes of the console has it.
+  it('links each note to its page: another page in a new tab on the note, the page of the tab by a scroll', () => {
+    const { root, calls } = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } });
+    const [first, second, third] = [...root.querySelectorAll<HTMLElement>('.site-row')];
+    const show = (row: HTMLElement | undefined) =>
+      [...(row?.querySelectorAll<HTMLElement>('.site-row-ref') ?? [])].find(
+        (link) => link.textContent === 'Show on the page',
+      );
+
+    const elsewhere = show(first) as HTMLAnchorElement | undefined;
+    assert.equal(elsewhere?.tagName, 'A');
+    assert.equal(elsewhere?.getAttribute('href'), 'https://staging.acme.dev/subscriptions#fruitback-note=s1');
+    assert.equal(elsewhere?.target, '_blank');
+    assert.equal(elsewhere?.rel, 'noreferrer');
+    assert.equal(elsewhere?.getAttribute('aria-description'), 'Opens /subscriptions in a new tab');
+    assert.equal(show(third)?.getAttribute('href'), 'https://staging.acme.dev/cart#fruitback-note=s3');
+
+    // The page of the tab: a button, which scrolls to the note there, as a click on the row does.
+    const here = show(second);
+    assert.equal(here?.tagName, 'BUTTON');
+    here?.click();
+    assert.deepEqual(calls, ['site-note:s2']);
+
+    setLanguage('fr');
+    const french = draw({ scope: 'site', path: '/', site: { q: '', notes: SITE, total: 3 } }).root;
+    assert.equal(
+      [...french.querySelectorAll('.site-row')][0]?.querySelector('.site-row-ref')?.textContent,
+      'Voir sur la page',
+    );
   });
 
   it('opens a note from its row, filters it by a chip, and counts what was read', () => {
@@ -273,6 +306,15 @@ describe('« Whole site » (FRU-307)', () => {
     );
     assert.equal(root.querySelector('.search-input')?.getAttribute('placeholder'), 'Chercher dans les notes');
     assert.equal(root.querySelector('button.panel-search')?.getAttribute('aria-label'), 'Recherche et options');
+  });
+});
+
+describe('noteLink (FRU-434)', () => {
+  it('writes the link of FRU-253 after the fragment of the site, and encodes the id', () => {
+    assert.equal(noteLink('https://acme.dev/a', 'sd_1'), 'https://acme.dev/a#fruitback-note=sd_1');
+    assert.equal(noteLink('https://acme.dev/a?x=1', 'FB 12'), 'https://acme.dev/a?x=1#fruitback-note=FB%2012');
+    assert.equal(noteLink('https://acme.dev/a#pricing', 'sd_1'), 'https://acme.dev/a#pricing&fruitback-note=sd_1');
+    assert.equal(noteLink('https://acme.dev/a#', 'sd_1'), 'https://acme.dev/a#fruitback-note=sd_1');
   });
 });
 

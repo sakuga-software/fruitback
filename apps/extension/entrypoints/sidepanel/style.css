@@ -592,14 +592,31 @@ button.search-chip .kit-drop[data-size='mark'] {
 }
 
 .site-row-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
   margin: 6px 0 0 30px;
 }
 
-a.site-row-ref {
+.site-row-ref {
+  display: inline-flex;
+  align-items: center;
+  /* A target of 24 px at least (WCAG 2.5.8). */
+  min-height: 24px;
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
   text-underline-offset: 3px;
+}
+
+/* FRU-434: the link of a note of the page of the tab is a button, drawn as the others. */
+button.site-row-ref {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .site-more {
