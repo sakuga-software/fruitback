@@ -341,14 +341,17 @@ export default function Notes() {
 
                     return undefined;
                   }}
-                  card={(note) => (
+                  card={(note, moved) => (
                     <NoteCard
                       note={note}
                       source={sourceOf(note)}
                       seesTracker={seesTracker}
                       statuses={shown.statuses?.[note.site.id]}
                       choose={(status) => choose(note, status)}
-                      onSaved={() => void read()}
+                      onSaved={() => {
+                        moved();
+                        void read();
+                      }}
                     />
                   )}
                 />

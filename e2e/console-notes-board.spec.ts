@@ -226,6 +226,12 @@ test('the keyboard moves a note with the select of its card', async ({ page }) =
 
   await expect(column(page, 'Shipped').locator('li')).toHaveText([/The headline/]);
   expect(worker.sent).toEqual([{ path: '/console/workspaces/w1/notes/n1/status', body: { status: 'own:done' } }]);
+  // The card is drawn again in its new column: the keyboard is still on its select.
+  await expect(
+    column(page, 'Shipped')
+      .locator('li')
+      .getByRole('button', { name: /Status of this note/ }),
+  ).toBeFocused();
 });
 
 test('with several sites in view, a column is a stage', async ({ page }) => {

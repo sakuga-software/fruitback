@@ -1,4 +1,4 @@
-import { type DragEvent, type ReactNode, useId, useState } from 'react';
+import { type DragEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { type BoardColumn, type BoardNote, takesNotes } from '../board-columns';
 import { t } from '../i18n';
 import { statusName } from '../note-status';
@@ -28,8 +28,11 @@ export function NotesBoard<Note extends BoardNote>({
   columns: readonly BoardColumn<Note>[];
   /** A read is on its way: the board stays as it is until its answer. */
   busy: boolean;
-  /** What a card shows of its note. */
-  card: (note: Note) => ReactNode;
+  /**
+   * What a card shows of its note. `moved`: the card's own select saved a status, so the card goes to
+   * another column, and its select gets the focus back there.
+   */
+  card: (note: Note, moved: () => void) => ReactNode;
   movable: (note: Note) => boolean;
   /** Saves the status of a note; answers the sentence of a refusal, or `undefined` once saved. */
   move: (note: Note, status: string) => Promise<string | undefined>;
@@ -40,6 +43,19 @@ export function NotesBoard<Note extends BoardNote>({
   const [over, setOver] = useState<string | undefined>();
   const [moving, setMoving] = useState<string | undefined>();
   const [refused, setRefused] = useState<string | undefined>();
+  const frame = useRef<HTMLDivElement>(null);
+  // The note whose select moved it. Its card is drawn again in another column, and the focus of the
+  // keyboard went back to the page: it is given back to the select once the list is read again.
+  const [follow, setFollow] = useState<string | undefined>();
+  useEffect(() => {
+    if (follow === undefined || busy) return;
+    const moved = [...(frame.current?.querySelectorAll<HTMLElement>('li[data-note]') ?? [])].find(
+      (each) => each.dataset.note === follow,
+    );
+    const select = moved?.querySelector<HTMLElement>('button[aria-haspopup]');
+    if (select !== null && select !== undefined && document.activeElement !== select) select.focus();
+    setFollow(undefined);
+  }, [follow, busy, columns]);
 
   const accepts = (column: BoardColumn<Note>) =>
     dragged !== undefined && takesNotes(column) && !column.notes.some((note) => note.id === dragged.id);
@@ -70,6 +86,7 @@ export function NotesBoard<Note extends BoardNote>({
         </div>
       )}
       <div
+        ref={frame}
         role="region"
         aria-label={t('Notes by status')}
         tabIndex={0}
@@ -139,7 +156,7 @@ export function NotesBoard<Note extends BoardNote>({
                           draggable ? 'cursor-grab active:cursor-grabbing' : ''
                         } ${moving === note.id || dragged?.id === note.id ? 'opacity-60' : ''}`}
                       >
-                        {card(note)}
+                        {card(note, () => setFollow(note.id))}
                       </li>
                     );
                   })}
