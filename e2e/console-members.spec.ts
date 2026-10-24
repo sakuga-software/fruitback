@@ -15,7 +15,7 @@ import {
 
 /**
  * The Members screen (FRU-247), measured in a browser against screen 12 of the mockup of 2026-10-13:
- * the invitation on one line, the table of the people and of the invitations, and what each role does.
+ * the invitation on one line, and the table of the people and of the invitations.
  *
  * The values are read in the code of the mockup (`12-console-members.html`), and the boxes in its
  * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
@@ -944,7 +944,6 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
     ['« Invitation sent »', paul.nth(0).getByText('Invitation sent', { exact: true })],
     ['the day an invitation ends', paul.nth(3).getByText('Until 10 Oct', { exact: true })],
     ['the initial of somebody invited', paul.nth(0).locator('.kit-avatar')],
-    ['what a role does', page.locator('main dd').first()],
   ];
   for (const [name, text] of onWhite) {
     expect.soft(contrast(await painted(text, 'color'), rgb(WHITE)), name).toBeGreaterThanOrEqual(4.5);

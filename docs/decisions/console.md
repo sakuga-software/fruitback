@@ -90,8 +90,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   not on the setup that makes a workspace of their own.
   **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
   (FRU-247): the invitation on one line, a form named « Invite someone » with each field under its
-  label, the table of the people (760 px at the least, which scrolls in its frame on a phone), and
-  what each role does. **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
+  label, and the table of the people (760 px at the least, which scrolls in its frame on a phone).
+  **« Last seen » is for an owner or an admin** (FRU-249, Q7): a day of UTC and
   never an hour (« Today », « Yesterday », « 3 days ago », then the day; « Not seen yet » for who
   was not seen since it came), read beside the members: the table does not wait for it, and a day
   that arrives moves nothing of a row (the room of « Not seen yet » is kept), and the days of a read
