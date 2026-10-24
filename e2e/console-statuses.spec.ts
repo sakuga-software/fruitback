@@ -152,6 +152,10 @@ test('lists the five built-in statuses and the ones of the team, with stage, col
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Statuses');
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('preview.client.fr');
+  // The site in the crumbs leads back to its page (FRU-433).
+  await expect(
+    page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'https://preview.client.fr' }),
+  ).toHaveAttribute('href', '/w/w1/sites/s1');
   await expect(list(page).locator('> li')).toHaveCount(7);
   const keys = await list(page)
     .locator('> li')

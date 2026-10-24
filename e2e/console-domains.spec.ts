@@ -91,11 +91,10 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator('main h1')).toBeVisible();
 }
 
-/** The proof of a domain is under the row of a site, behind « Preview builds » of its menu (FRU-243). */
-async function openPreviews(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
-  await open(page);
-  await page.getByRole('button', { name: locale === 'en' ? 'More for acme.dev' : 'Plus pour acme.dev' }).click();
-  await page.getByRole('menuitem', { name: locale === 'en' ? 'Preview builds' : 'Previews' }).click();
+/** The proof of a domain is a section of the page of a site (FRU-103, FRU-433). */
+async function openPreviews(page: Page, _locale: 'en' | 'fr' = 'en'): Promise<void> {
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
+  await expect(page.locator('main h1')).toHaveText('acme.dev');
 }
 
 test('a domain is added, shows its record, is proven by the worker, and covers the previews of a site', async ({
@@ -173,9 +172,12 @@ test('a member who is no admin has no way to the domain section', async ({ page 
   await open(page);
   await expect(page.getByRole('heading', { name: 'acme.dev', exact: true })).toBeVisible();
 
-  // The menu of a site has « Install » alone for a member: no way to the proof of a domain.
+  // The menu of a site has « Settings » and « Install » for a member, and the page of the site no
+  // proof of a domain.
   await page.getByRole('button', { name: 'More for acme.dev' }).click();
-  await expect(page.getByRole('menuitem')).toHaveText(['Install']);
+  await expect(page.getByRole('menuitem')).toHaveText(['Settings', 'Install']);
   await page.keyboard.press('Escape');
+  await page.goto(`${CONSOLE}/w/w1/sites/s1#previews`);
+  await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toHaveCount(0);
 });

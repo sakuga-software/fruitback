@@ -32,7 +32,7 @@ type Offer =
 
 /**
  * Where the notes of a site go (FRU-399): its places in their order, and the places of every source
- * of the workspace to add. It is the Sites screen that sets them, and no longer the panel of a source.
+ * of the workspace to add. The page of the site sets them (FRU-433), and no longer the panel of a source.
  *
  * WARNING: the list is written whole, from the list on the screen (FRU-123). A second change made
  * before the first one is kept would start from the list of before, and take the first one away: the
@@ -64,7 +64,7 @@ export function SitePlaces({
   const sources = typeof connectors === 'string' ? [] : connectors;
   const ids = sources.map((each) => each.id).join();
 
-  // The teams of each Linear and the repositories of each GitHub are read when the panel opens, and
+  // The teams of each Linear and the repositories of each GitHub are read when the page draws them, and
   // again on « Try again ». An address has nothing to choose.
   useEffect(() => {
     let stale = false;
@@ -219,7 +219,7 @@ export function SitePlaces({
       aria-label={t('Where the notes of {site} go', { site: host })}
       className="flex min-w-0 flex-col gap-[12px]"
     >
-      <h3 className="text-small leading-auto font-semibold">{t('Where the notes of {site} go', { site: host })}</h3>
+      <h2 className="text-section font-bold">{t('Where the notes of {site} go', { site: host })}</h2>
       {places.length === 0 ? (
         <p className="text-small text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
       ) : (

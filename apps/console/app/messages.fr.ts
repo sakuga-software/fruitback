@@ -444,7 +444,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
 
   'Fruitback did not answer. The sources and their sites could not be read.':
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
-  Close: 'Fermer',
   Remove: 'Retirer',
   'Only an owner or an admin of the workspace adds a site.':
     'Seul un propriétaire ou un administrateur du workspace ajoute un site.',
@@ -494,8 +493,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Kept in Fruitback': 'Gardées dans Fruitback',
   'No tracker yet': 'Pas encore de tracker',
   '{place} and {count} more': '{place} et {count} de plus',
-  'Preview builds': 'Previews',
   'More for {site}': 'Plus pour {site}',
+  Settings: 'Réglages',
+  'Its address, where its notes go, and how to install Fruitback on it.':
+    'Son adresse, où vont ses notes, et comment y installer Fruitback.',
+  'The site did not load': 'Le site n’a pas chargé',
+  Address: 'Adresse',
+  'Who sees the notes': 'Qui voit les notes',
+  'Who can leave a note': 'Qui peut laisser une note',
+  'These are set when the site is added.': 'Ils sont fixés quand le site est ajouté.',
+  'Edit the statuses': 'Modifier les statuts',
+  'Remove this site': 'Retirer ce site',
+  'The widget stops on this site, and the notes that Fruitback keeps for it are deleted.':
+    'Le widget s’arrête sur ce site, et les notes que Fruitback garde pour lui sont supprimées.',
   'Install on {site}': 'Installer sur {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes that Fruitback keeps for it are deleted. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes que Fruitback garde pour lui sont supprimées. Les notes déjà dans un tracker y restent.',
@@ -793,7 +803,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No source is connected.': 'Aucune source n’est connectée.',
   '{source} did not answer with its places.': '{source} n’a pas répondu avec ses destinations.',
   'Some sources did not answer with their places.': 'Des sources n’ont pas répondu avec leurs destinations.',
-  Destinations: 'Destinations',
   '{from} to {to} of {total}': '{from} à {to} sur {total}',
   Previous: 'Précédentes',
   Next: 'Suivantes',

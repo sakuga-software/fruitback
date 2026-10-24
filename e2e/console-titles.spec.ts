@@ -11,6 +11,7 @@ const CONSOLE = 'http://localhost:5178';
 
 const PAGES = [
   '/w/w1/sites',
+  '/w/w1/sites/s1',
   '/w/w1/sites/s1/statuses',
   '/w/w1/notes',
   '/w/w1/connectors',
