@@ -261,6 +261,10 @@ const STYLES = `
   color: var(--fruitback-color-text);
 }
 .fruitback-orphans[hidden] { display: none; }
+/* FRU-443: above the corner of the dock, or under it at the top of the window. */
+:host([data-fruitback-position$='-right']) .fruitback-orphans:not([data-fruitback-docked]) { right: 16px; left: auto; }
+:host([data-fruitback-position$='-left']) .fruitback-orphans:not([data-fruitback-docked]) { left: 16px; right: auto; align-items: flex-start; }
+:host([data-fruitback-position^='top-']) .fruitback-orphans:not([data-fruitback-docked]) { top: 84px; bottom: auto; flex-direction: column; }
 .fruitback-orphans-announcer {
   position: absolute;
   width: 1px;
@@ -316,6 +320,19 @@ const STYLES = `
   */
   max-height: max(44px, min(220px, calc(100vh - 104px)));
   margin: 0;
+}
+/* FRU-443: a dock at the top of the window opens its list under it, and on its side. */
+:host([data-fruitback-position^='top-']) .fruitback-orphans[data-fruitback-docked] .fruitback-orphans-list {
+  top: calc(100% + 12px);
+  bottom: auto;
+}
+:host([data-fruitback-position$='-left']) .fruitback-orphans[data-fruitback-docked] .fruitback-orphans-list {
+  left: 0;
+  right: auto;
+}
+:host([data-fruitback-position$='-right']) .fruitback-orphans[data-fruitback-docked] .fruitback-orphans-list {
+  right: 0;
+  left: auto;
 }
 @media (forced-colors: active) {
   .fruitback-orphans-toggle { border-color: Canvas; outline: 1px solid ButtonText; outline-offset: -5px; }

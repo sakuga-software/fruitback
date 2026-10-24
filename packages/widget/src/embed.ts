@@ -1,3 +1,4 @@
+import type { DockPosition } from './dock-position.ts';
 import {
   canonicalizePageUrl,
   offeredStages,
@@ -213,6 +214,13 @@ export type FruitbackOptions = {
    * asks for it, so « Show CSS selectors » of its preferences governs the head too.
    */
   selectorInHead?: 'always' | 'with-selectors';
+  /**
+   * The corner of the window the dock stands in (FRU-443): `bottom-right`, `bottom-left`, `top-right`
+   * or `top-left`. The settings and the list of the detached notes open from it. Left out, the dock
+   * is at the bottom, at the end of the line: bottom right, or bottom left on a page written right to
+   * left. Anything else is ignored. Change it later with `moveDock`.
+   */
+  position?: DockPosition;
   document?: Document;
 };
 
@@ -300,6 +308,11 @@ export type Fruitback = {
    * does at `init`: « Show CSS selectors » of the extension. An open thread is drawn again.
    */
   showSelectors(shown: boolean): void;
+  /**
+   * Moves the dock to another corner (FRU-443), as the `position` option does at `init`, with no
+   * new widget: a note being written stays. `undefined` puts it back where it stands by default.
+   */
+  moveDock(position: DockPosition | undefined): void;
   /**
    * A reply under a note, by the path of its thread (FRU-257), then a read: the pins, the thread
    * and the list say it. `refused`: the worker does not let this reader reply, or the note is not here.
@@ -436,6 +449,7 @@ export function init(options: FruitbackOptions): Fruitback {
     ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
+    ...(options.position !== undefined ? { position: options.position } : {}),
     onConfigure: () => panel.toggle(),
     onList: () => sidebar.toggle(),
     onSelect: (selected) => {
@@ -1079,6 +1093,7 @@ export function init(options: FruitbackOptions): Fruitback {
       selectorsShown = shown;
       overlay.showSelectors(shown);
     },
+    moveDock: (position) => host.moveDock(position),
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.seed.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

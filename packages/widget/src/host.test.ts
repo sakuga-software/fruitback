@@ -981,3 +981,40 @@ describe('the launch button while the session of the host has ended (FRU-315)', 
     assert.equal(host?.capturing(), true);
   });
 });
+
+describe('the corner of the dock (FRU-443)', () => {
+  const corner = () => (host?.root.host as HTMLElement | undefined)?.dataset.fruitbackPosition;
+
+  it('stands in the corner it is given, moves to another, and goes back to the default', () => {
+    mount(() => null, undefined, { position: 'top-left' });
+    assert.equal(corner(), 'top-left');
+
+    host?.moveDock('bottom-left');
+    assert.equal(corner(), 'bottom-left');
+
+    host?.moveDock(undefined);
+    assert.equal(corner(), undefined);
+  });
+
+  it('ignores a corner it does not know', () => {
+    mount(() => null, undefined, { position: 'middle' as never });
+    assert.equal(corner(), undefined);
+
+    host?.moveDock('top-right');
+    host?.moveDock('left' as never);
+    assert.equal(corner(), undefined);
+  });
+
+  it('has a rule for each corner, for the dock, the settings and the list of the detached notes', () => {
+    mount(() => null);
+    const sheets = host?.root.querySelectorAll('style') ?? [];
+    const styles = [...sheets].map((style) => style.textContent).join('\n');
+    for (const selector of [
+      ":host([data-fruitback-position^='top-']) .fruitback-dock",
+      ":host([data-fruitback-position$='-left']) .fruitback-dock",
+      ":host([data-fruitback-position$='-right']) .fruitback-dock",
+    ]) {
+      assert.ok(styles.includes(selector), selector);
+    }
+  });
+});
