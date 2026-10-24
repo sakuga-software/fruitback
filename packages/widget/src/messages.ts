@@ -153,6 +153,8 @@ export const ENGLISH = {
   'pin.label': 'Note {number}, {stage}: {note}',
   'pin.labelUncertain': 'Note {number}, {stage}, approximate position: {note}',
   'pin.labelDraft': 'Not sent yet · {note}',
+  'pin.previewClick': 'Click to open',
+  'pin.previewKey': 'Press Enter to open',
 
   'thread.close': 'Close the note',
   // The handle of the bubble (FRU-420): its name says every way to use it.

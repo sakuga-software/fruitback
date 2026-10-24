@@ -15,6 +15,17 @@ afterEach(() => {
   overlay = null;
 });
 
+/** A pointer of `type` comes over the drop of a pin, or presses it (FRU-422). */
+function point(page: MountedPage, badge: Element, name: string, type: string): void {
+  const PointerEventCtor = (page.view as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent;
+  badge.dispatchEvent(new PointerEventCtor(name, { pointerType: type, bubbles: name === 'pointerdown' }));
+}
+
+/** What the preview of the pin says, or `undefined` when none is shown. */
+function previewText(page: MountedPage, part: string): string | undefined {
+  return page.document.querySelector(`.fruitback-preview-${part}`)?.textContent ?? undefined;
+}
+
 function mountWithCta(): MountedPage {
   const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
   setDocumentSize(page.document, 1_000, 1_000);
@@ -88,7 +99,8 @@ describe('createOverlay', () => {
     const pins = () => [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')];
     assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-color'), '#15803d');
     assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-on-color'), '#ffffff');
-    assert.match(pins()[0]?.querySelector('.fruitback-pin-badge')?.getAttribute('title') ?? '', /^Shipped · /);
+    point(page, pins()[0]?.querySelector('.fruitback-pin-badge') as Element, 'pointerenter', 'mouse');
+    assert.equal(previewText(page, 'state'), 'Shipped');
     assert.equal(pins()[1]?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-color-text-muted)');
     assert.equal(pins()[1]?.dataset.fruitbackStatus, undefined);
 
@@ -96,7 +108,8 @@ describe('createOverlay', () => {
     overlay.render([sent, draft]);
     assert.equal(pins()[0]?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
     assert.equal(pins()[0]?.dataset.fruitbackStatus, undefined);
-    assert.match(pins()[0]?.querySelector('.fruitback-pin-badge')?.getAttribute('title') ?? '', /^Done · /);
+    point(page, pins()[0]?.querySelector('.fruitback-pin-badge') as Element, 'pointerenter', 'mouse');
+    assert.equal(previewText(page, 'state'), 'Done');
   });
 
   it('draws a note kept for later as a neutral pin that says it is not sent (FRU-124)', () => {
@@ -438,7 +451,7 @@ describe('createOverlay', () => {
     assert.equal(header?.textContent, 'In progress');
   });
 
-  it('leaves no dangling separator in the badge tooltip when the state is unnamed', () => {
+  it('names the state of a note whose store gave none, in the preview of its pin', () => {
     // The second site of the same hole, and the reason `stateLabel` is a function: the header was
     // fixed and this one was left behind, giving `SKG-742 · ` with nothing after the separator.
     // Raised in review on FRU-24.
@@ -446,9 +459,112 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'closed' })]);
 
-    const badge = page.document.querySelector('.fruitback-pin-badge');
-    // « Closed · the note », as the mock-up writes it (FRU-304).
-    assert.match(badge?.getAttribute('title') ?? '', /^Closed · \S/);
+    const badge = page.document.querySelector('.fruitback-pin-badge') as Element;
+    // « Closed », the word of the stage, and never an empty word (FRU-304, FRU-422).
+    point(page, badge, 'pointerenter', 'mouse');
+    assert.equal(previewText(page, 'state'), 'Closed');
+  });
+
+  describe('the preview of a pin (FRU-422)', () => {
+    it('shows the state, the identifier, the note and how to open it, under a mouse, and leaves with it', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([
+        issueOnCta({ identifier: 'ACM-12', url: 'https://linear.app/acme/issue/ACM-12', stateName: 'In Progress' }),
+      ]);
+      const badge = page.document.querySelector('.fruitback-pin-badge') as Element;
+      // The browser draws no tooltip of its own over the preview.
+      assert.equal(badge.hasAttribute('title'), false);
+      const name = badge.getAttribute('aria-label');
+
+      point(page, badge, 'pointerenter', 'mouse');
+      const preview = page.document.querySelector('.fruitback-preview');
+      assert.equal(preview?.getAttribute('aria-hidden'), 'true');
+      assert.equal(previewText(page, 'state'), 'In Progress');
+      assert.equal(previewText(page, 'identifier'), 'ACM-12');
+      assert.ok((previewText(page, 'note') ?? '').length > 0);
+      assert.equal(previewText(page, 'hint'), 'Click to open');
+      // The name of the pin does not change.
+      assert.equal(badge.getAttribute('aria-label'), name);
+
+      point(page, badge, 'pointerleave', 'mouse');
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+    });
+
+    it('names no identifier for a note with no link to a tracker', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([issueOnCta({ url: undefined, identifier: 'FB-3' })]);
+      point(page, page.document.querySelector('.fruitback-pin-badge') as Element, 'pointerenter', 'pen');
+      assert.ok(previewText(page, 'state') !== undefined);
+      assert.equal(previewText(page, 'identifier'), undefined);
+    });
+
+    it('shows on the focus of the keyboard, and Escape takes it away', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([issueOnCta()]);
+      const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+
+      badge.focus();
+      assert.equal(previewText(page, 'hint'), 'Press Enter to open');
+      pressKey(page, 'Escape');
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+      badge.blur();
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+    });
+
+    it('shows nothing to a finger, and nothing on the focus a tap or a click gives', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([issueOnCta()]);
+      const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+
+      point(page, badge, 'pointerenter', 'touch');
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+      point(page, badge, 'pointerdown', 'touch');
+      badge.focus();
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+      badge.blur();
+
+      // The control: the same focus from the keyboard shows it.
+      badge.focus();
+      assert.ok(page.document.querySelector('.fruitback-preview') !== null);
+    });
+
+    it('goes away when the thread opens, and a pin whose thread is open shows none', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([issueOnCta()]);
+      const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+
+      point(page, badge, 'pointerenter', 'mouse');
+      assert.ok(page.document.querySelector('.fruitback-preview') !== null);
+      point(page, badge, 'pointerdown', 'mouse');
+      badge.click();
+      assert.ok(page.document.querySelector('.fruitback-thread') !== null);
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+
+      point(page, badge, 'pointerleave', 'mouse');
+      point(page, badge, 'pointerenter', 'mouse');
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+      point(page, badge, 'pointerleave', 'mouse');
+    });
+
+    it('shows none on the focus that a closed thread gives back to its pin', () => {
+      const page = mountWithCta();
+      overlay = createOverlay({ document: page.document });
+      overlay.render([issueOnCta()]);
+      const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+
+      badge.focus();
+      badge.click();
+      assert.ok(page.document.querySelector('.fruitback-thread') !== null);
+      pressKey(page, 'Escape');
+      assert.equal(page.document.querySelector('.fruitback-thread'), null);
+      assert.ok(page.document.activeElement === badge);
+      assert.equal(page.document.querySelector('.fruitback-preview'), null);
+    });
   });
 
   it('closes the thread with a drawing rather than a character (FRU-36)', () => {

@@ -345,6 +345,15 @@ describe('every word the widget shows', () => {
     overlay.render([found, detached, placedByPosition, kept]);
 
     const snapshots: string[] = [];
+    // The preview of a pin (FRU-422): under a mouse, then on the focus of the keyboard.
+    const badge = host.root.querySelector<HTMLElement>('.fruitback-pin-badge');
+    const PointerEventCtor = (page.view as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent;
+    badge?.dispatchEvent(new PointerEventCtor('pointerenter', { pointerType: 'mouse' }));
+    snapshots.push(...shown(host.root));
+    badge?.dispatchEvent(new PointerEventCtor('pointerleave', { pointerType: 'mouse' }));
+    badge?.focus();
+    snapshots.push(...shown(host.root));
+    badge?.blur();
     host.start();
     snapshots.push(...shown(host.root));
     // The keyboard cursor: onto the main element, then the button, then the empty element.
