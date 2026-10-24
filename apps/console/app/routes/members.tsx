@@ -12,7 +12,7 @@ import {
 } from '../api';
 import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
-import { type Listed, edited, known, listedOf } from '../listed';
+import { type Listed, edited, listedOf } from '../listed';
 import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
 import { Button, Choice, DataTable, Field, Initial, LinkButton, PageHead, Problem } from '../ui';
 import { useWorkspace } from './workspace';
@@ -97,8 +97,8 @@ function whileRead<T>(current: Listed<T>): Listed<T> {
 
 /**
  * Who belongs to the workspace, and who is invited, as screen 12 of the mockup of 2026-10-13 draws
- * them (FRU-247, on FRU-104): the invitation on one line, the table of the people, and what each
- * role does.
+ * them (FRU-247, on FRU-104): the invitation on one line and the table of the people. The legend of
+ * the roles under the table is gone (FRU-437).
  *
  * The lists come from the organization plugin of better-auth, through the worker. A guest reads only
  * their own row: the worker refuses them the list (FRU-149).
@@ -274,11 +274,6 @@ export default function Members() {
   const offersGuest = manages && sites !== undefined && sites.length > 0;
   const chosen: InvitedRole = role === 'guest' && !offersGuest ? 'member' : role;
   const shared = sites?.some((each) => each.id === site) ? site : sites?.[0]?.id;
-  // What a guest does is said where a guest is on the screen, or can be invited.
-  const guests =
-    offersGuest ||
-    workspace.role === 'guest' ||
-    [...(known(people) ?? []), ...(known(waiting) ?? [])].some((each) => each.role === 'guest');
 
   return (
     <>
@@ -442,25 +437,6 @@ export default function Members() {
           </tbody>
         </DataTable>
       ) : null}
-
-      <dl className="mt-[28px] grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-x-[32px] gap-y-[16px] text-small">
-        <div>
-          <dt className="font-semibold">{t('Admin')}</dt>
-          <dd className="mt-[2px] text-muted">{t('Sites, connectors and members.')}</dd>
-        </div>
-        <div>
-          <dt className="font-semibold">{t('Member')}</dt>
-          <dd className="mt-[2px] text-muted">{t('Every site. Sees the links to the tracker.')}</dd>
-        </div>
-        {guests ? (
-          <div>
-            <dt className="font-semibold">{t('Guest')}</dt>
-            <dd className="mt-[2px] text-muted">
-              {t('Only the sites shared with them. Free, and never sees the tracker.')}
-            </dd>
-          </div>
-        ) : null}
-      </dl>
     </>
   );
 }

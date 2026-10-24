@@ -382,10 +382,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Role: 'Rôle',
   Sites: 'Sites',
   'Every site': 'Tous les sites',
-  'Sites, connectors and members.': 'Sites, connecteurs et membres.',
-  'Every site. Sees the links to the tracker.': 'Tous les sites. Voit les liens vers le tracker.',
-  'Only the sites shared with them. Free, and never sees the tracker.':
-    'Seulement les sites partagés avec lui. Gratuit, et ne voit jamais le tracker.',
 
   Workspace: 'Workspace',
   Install: 'Installer',
