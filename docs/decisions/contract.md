@@ -89,7 +89,7 @@ first publish made it expensive.
   translated either; what is translated is the worker's word **about** that name, `verified` or
   `unverified — self-declared`.
 - **A test whose premise disappeared was rewritten, not deleted.** gone-test:`redraws when a note changed
-stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
+  stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
   now. What it really guarded — that the signature invalidates on a stage change — is still worth
   keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately
   over-invalidates by one field, because FRU-36 decides how a stage shows up there and a signature

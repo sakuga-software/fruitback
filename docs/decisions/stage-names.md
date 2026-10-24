@@ -99,7 +99,7 @@ The starting proposal was `new`, `todo`, `in_progress`, `done`, `closed`. The fr
   (`--fruitback-stage-progress`), a message key, an attribute value and a URL parameter.
   `in_progress` puts the only underscore into kebab-case tokens; `in-progress` cannot be a bare key.
 - **The code already says it.** The console kit has `Status = 'new' | 'todo' | 'progress' | 'done' |
-'closed'`, and `STAGE_STATUS` in `connector-parts.tsx` maps the stages onto it with the comment
+  'closed'`, and `STAGE_STATUS` in `connector-parts.tsx` maps the stages onto it with the comment
   « the worker keeps the names of before the mockup ». The same five keys are in `sites.tsx` and
   `admin-workspaces.tsx`. The rename removes that map instead of adding a third vocabulary.
 - **Against it:** `stage: "progress"` reads less well than `in_progress` in a JSON answer. That is

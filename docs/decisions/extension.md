@@ -208,7 +208,7 @@ it changes who is shown the feedback and never who may fetch it.
   rebuilt the widget under an open composer: the CI flake of `extension.spec.ts` in private mode
   (the composer field « not visible » for 30 s, twice in a row on `e47f5b0`). A page that posts
   `ready` itself got the same effect. test:`private mode: the same decision posted again keeps the
-open composer and its note` fails without the check, 3 runs out of 3.
+  open composer and its note` fails without the check, 3 runs out of 3.
 - **The first browser check of that guard proved nothing, and the mutation is what said so.** It
   marked `[data-fruitback-host]` at index 1 and called it the extension's — but the playground mounts
   its own and the order is not promised, so it may have been watching a host that never rebuilds. It
@@ -357,7 +357,7 @@ open composer and its note` fails without the check, 3 runs out of 3.
   for the edge of a field and a drawing. A grey that differs between the two surfaces fails it.
 - **No rule of either stylesheet writes a colour**: it names a token. The one exception is the drop
   of the mark, in the accent of the light scheme. test:`writes no colour outside the tokens, but
-the drop of the mark`.
+  the drop of the mark`.
 - **An action is a pill**, as on the boards (test:`draws an action as a pill`). A label that may take several lines (`button.long`)
   takes the corner of a field: a pill of two lines is a lozenge.
 - **The drop of the mark is beside the name**, in the accent of the extension in both schemes, as
@@ -538,7 +538,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
   does not hand that page over as a `Page`, so the spec reads the panel through that context.
 - **Firefox was not measured in a browser.** The suite loads extensions in Chromium only. The
   Firefox build, read by hand on 2026-10-20, holds `sidebar_action` (`default_panel:
-"sidepanel.html"`, `open_at_install: false`) and no `sidePanel`. MDN: `sidebarAction.open()` works
+  "sidepanel.html"`, `open_at_install: false`) and no `sidePanel`. MDN: `sidebarAction.open()` works
   only in the handler of a user action, which the popup button is, and the sidebar has the same
   `tabs` API. If a Firefox does not open it, the in-page list stays: the popup keeps it for a browser
   with no panel API.
@@ -697,7 +697,7 @@ did not change: the fields of 760 px and the file input of the browser are as th
 - **The access and the session do not travel.** A rule that arrives runs nowhere until access is
   granted in that browser; the options page says « No access in this browser » beside it, with the
   button. test:`the rules go to the account of the browser only when the reviewer asks, and a rule
-that arrives has no access`.
+  that arrives has no access`.
 
 ### The reasons, and what is not done
 
@@ -728,7 +728,7 @@ rule of 2026-10-12 (the orchestrator decides the current choices on Mathieu's de
   bytes, before the one `set` of a change or of a merge. The others go, and only they are marked as
   known. The options page shows the reason on the row of a rule that does not fit, while the copy is
   on: it calls the same `fits`, so no list of refused rules is stored. test:`copies the other rules of
-a change when the account refuses one of them, and marks only those as known`. One `set` for each
+  a change when the account refuses one of them, and marks only those as known`. One `set` for each
   rule was not taken: the browser also counts the `set` calls (120 a minute in Chrome), and a large
   import would then meet that quota. A rule that fits and is still refused (that quota, an account
   that is away) is logged, stays in `local`, and the next merge sends it.
@@ -749,7 +749,7 @@ a change when the account refuses one of them, and marks only those as known`. O
 - **Only for a site of a workspace, with a session**: a site in team mode, switched on, on an https
   worker (or loopback), with a session open for it. A page that asks for a capture elsewhere gets none.
 - **The relay carries a file to `POST /attachments` only**: its body in base64 (`encoding:
-'base64'`, 10 MB of bytes at most, `MAX_FILE_BASE64`), sent as bytes by the background. Base64 to any
+  'base64'`, 10 MB of bytes at most, `MAX_FILE_BASE64`), sent as bytes by the background. Base64 to any
   other path, a body of text to `/attachments`, and a read of `/attachments/<id>` are refused.
 - **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
   opens the popup on the page, until the page navigates. Without it the capture is refused.
@@ -1114,7 +1114,7 @@ the account is a member of. The pairing by code stays. `SECURITY.md` says what e
 ### The rules, in short
 
 - **`POST /session/connect {browser}`** answers `{request, claim, word, browser, verificationUri,
-expiresIn, interval}`. The extension opens `verificationUri` in a tab as it is, shows `word` in the
+  expiresIn, interval}`. The extension opens `verificationUri` in a tab as it is, shows `word` in the
   popup, and keeps `claim` where a page cannot read it (the background, or `chrome.storage.session`).
   **`claim` never goes in an address, a log or a message to a page.** `browser` is a short label
   (« Chrome on macOS »): the console shows it, so it names the browser and nothing else.
@@ -1126,7 +1126,7 @@ expiresIn, interval}`. The extension opens `verificationUri` in a tab as it is, 
   `POST /session/revoke`, one storage key per endpoint (FRU-63).
 - **`GET /session/sites` answers a session of an account in another shape**:
   `{account: true, workspaces: [{id, name, role}], sites: [{id, origin, visibility, workspace,
-previews?}], locale?}`, with no `workspace` in the singular. `parseWorkspaceSites` of the extension
+  previews?}], locale?}`, with no `workspace` in the singular. `parseWorkspaceSites` of the extension
   of before reads it as no list, and offers nothing: it breaks nothing, and FRU-251 reads it.
 - **The worker reads the memberships at each call.** A workspace the person left is gone from the next
   answer, and a note to one of its sites is refused with `401`: the extension shows that, and does not
@@ -1612,7 +1612,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `scriptIdsFor`). Chromium 145 refuses a whole call when one pattern is invalid; with one pair for
   every origin, one refused pattern stopped the extension on every site. A refusal now costs that
   origin, and is written in the console. test:`registers every other origin when the browser refuses
-one, and names the one it refused`.
+  one, and names the one it refused`.
 - **Only the background writes the sites map.** The popup and the options page send the change as a
   runtime message; `createSiteOwner` applies one at a time, because each change reads the whole map and
   replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
@@ -1634,7 +1634,7 @@ one, and names the one it refused`.
   refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
   background does not register it. A wildcard stays valid in private mode, which carries no token.
 - **One team wildcard serves: the previews a worker lists** (FRU-103). `lendsSession(pattern, site,
-proven)` answers no only when the worker of the rule listed that very wildcard for the site the
+  proven)` answers no only when the worker of the rule listed that very wildcard for the site the
   rule mounts, in an answer of `GET /session/sites` that is less than two hours old
   (`proven-previews.ts`). **The grant is not in the rule.** It is in `storage.local`, one key for each
   worker (`provenPreviews:<endpoint>`), written only by `cloud.ts` from an answer of that worker: the
@@ -1801,7 +1801,7 @@ on again, the browser asks again.
   stored.
 - **An update gives back the access of the rules that were already off**, once, on `onInstalled`.
 - **The options page does not call it a problem.** A rule that is off reads `No access while it is
-off`, with no **Grant access**: **Turn on** asks.
+  off`, with no **Grant access**: **Turn on** asks.
 
 **Not verified in a browser.** A prompt for an optional host permission cannot be answered by
 automation, so the E2E copy of the extension holds its hosts in the manifest, and a browser refuses to

@@ -99,7 +99,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   reaching their page. Neither direction is achievable with prefixed class names.
 - `:host { all: initial }` on top, because a Shadow root blocks the page's _selectors_ but not its
   **inherited** properties — `body { font-family: Papyrus }` reaches in otherwise. The catch: `all:
-initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
+  initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
   as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
   are covered by E2E tests, because neither is visible to a DOM emulator. The reset on every element
   inside stops inheritance too, so it declares `color` and `font` as `inherit` (FRU-51, in _The
@@ -335,7 +335,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     `color-on-stage-new` and `color-on-stage-todo` are new, beside `color-on-stage-progress`;
     `onStageToken` reads them, and `color-on-stage` stays the white of the two others and of the
     ring, so a host that set it keeps it. test:`writes new, to do and in progress black, and done and
-closed white (FRU-334)`.
+    closed white (FRU-334)`.
   - **Every drop has an edge, measured.** New is 1.79:1 on white, to do 1.39:1, the mango 1.75:1:
     a light pin on a white page stood out by its soft shadow only, and 1.4.11 asks 3:1 of a drawing.
     One pixel of `color-stage-edge` (`#8a8a93`, the field border of the console) outside the white
@@ -346,7 +346,7 @@ closed white (FRU-334)`.
     chips, the drop of a thread and the frame of a pointed note take the same edge; on the dark
     surface it is 5.18:1, where blueberry (3.25:1) and cherry (2.52:1) need it. `contrast.test.ts`
     measures the edge where it measured the fill. test:`draws the edge of a drop in one grey in both
-schemes, outside the ring of the pin (FRU-334)`.
+    schemes, outside the ring of the pin (FRU-334)`.
   - **A note with no place is grey, not the colour of « closed ».** It was the brown of closed; a
     detached note is not closed, and closed is a cherry now. `#71717a`: 4.83:1 on the surface, and
     white on its chip 4.83:1.
@@ -752,7 +752,7 @@ schemes, outside the ring of the pin (FRU-334)`.
   failed status identically, and swallowing it here would only hide an outage from an implementer who
   wanted to log it. Mutation-tested.
 - **One existing assertion changed, and it was asserting the mechanism.** test:`sends no Authorization
-header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
+  header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
   because the old code passed nothing there. Every call carries a method now, so it asserts the
   absence of the header, which is what its own comment always said it meant.
 - **`identityToken` and `transport` overlap and are left overlapping.** In the extension's mode the
