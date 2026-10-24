@@ -15,6 +15,7 @@ import {
   isAdminPath,
 } from './instance-admin.ts';
 import { createLinearStore } from './linear.ts';
+import { omit } from './omit.ts';
 import type { Place } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
@@ -841,7 +842,7 @@ describe('the trace of the actions of the administrators (FRU-280)', () => {
 
     const rows = await actionRows(on);
     assert.deepEqual(
-      rows.map(({ at: _, ...row }) => row),
+      rows.map((row) => omit(row, 'at')),
       [
         {
           action: 'admin-named',
@@ -872,7 +873,7 @@ describe('the trace of the actions of the administrators (FRU-280)', () => {
     assert.equal(answer.status, 200, answer.text);
     const { actions } = JSON.parse(answer.text) as { actions: Record<string, unknown>[] };
     assert.deepEqual(
-      actions.map(({ at: _, ...action }) => action),
+      actions.map((action) => omit(action, 'at')),
       [
         {
           action: 'admin-removed',

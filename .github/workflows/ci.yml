@@ -128,7 +128,7 @@ jobs:
     # can fix, and the official image removes the whole step: no cdn.playwright.dev, no apt, no
     # browser cache to key. The tag is the version, so image and `@playwright/test` cannot drift.
     container:
-      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
       # The runner's workspace belongs to uid 1001; as root, the actions trip over their own files.
       options: --user 1001
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which

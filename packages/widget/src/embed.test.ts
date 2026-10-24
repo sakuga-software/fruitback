@@ -1225,7 +1225,7 @@ describe('the list after a failed read (FRU-153)', () => {
     assert.equal(visible('.fruitback-sidebar-empty'), true);
     assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
     assert.equal(text('.fruitback-sidebar-scope'), 'This page · 0');
-    assert.equal(text('[data-fruitback-chip="all"]'), 'All0');
+    assert.equal(text('[data-fruitback-chip="all"]'), 'All 0');
 
     widget.destroy();
   });
