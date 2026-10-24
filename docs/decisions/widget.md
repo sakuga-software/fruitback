@@ -436,10 +436,22 @@ schemes, outside the ring of the pin (FRU-334)`.
     to the store, the cross), the note (its text, who and when, the lines of mono), the replies.
     344 px wide (FRU-304), a border of 1 px, 14 px of corner and the shadow of the thread. The
     colour of the status is the drop beside its word.
-  - **It opens beside the drop** (FRU-304): 26 px past its point on the end side of the reading
-    direction, or on the other side when the window has no room there; 8 px above the top of the
-    drop, and never nearer than 24 px to the top or the bottom of the window. When neither side has
-    the room, it opens under the pin as before, or above it. That is every phone.
+  - **It opens around its element, never on it** (FRU-421, proposal D of 2026-10-23): under the
+    element, above it (clear of the drop), on its end side, then on its start side, 14 px off its
+    frame. It takes the first side that keeps it whole in the window and covers no other drop, else
+    the first one in the window (`besideElement` of `thread-place.ts`). Along the element it starts
+    20 px before the point of the drop, inside the window. **An arrow** of 12 px on the edge that
+    faces the element points at the pin (`data-fruitback-arrow`, `--fruitback-arrow-at`). It is gone
+    once the thread is moved by its handle, where the dashed line takes its place.
+  - **The fallback is the place of FRU-304**: an element that leaves the room on no side (a whole
+    section, a phone) gets the bubble beside the drop, 26 px past its point on the end side of the
+    reading direction, or on the other side; 8 px above the top of the drop, and never nearer than
+    24 px to the top or the bottom of the window; else under the pin, or above it. No arrow then.
+  - **The thread is placed again when it grows** (FRU-421): its replies and the form of a reply come
+    after it opens, and a side that had the room for its first height lacked it for the next. The
+    `ResizeObserver` of the anchors watches it too. A click of Playwright on a locator scrolls the
+    page to its own liking, so `e2e/thread-side.spec.ts` clicks the drop where it is: the side that
+    has the room depends on the scroll.
   - **The head is a grid of two columns, `minmax(0, 1fr) auto`** (FRU-419). The cross has the
     second, at the top, always; the state and the way out wrap in the first. Before, the head was one
     line that wrapped: in French « In Progress · il y a 21 minutes · FRU-408 → » asked about 338 px

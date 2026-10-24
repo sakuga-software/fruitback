@@ -20,7 +20,16 @@ const FILES = ['host.ts', 'overlay.ts', 'composer.ts', 'panel.ts', 'orphans.ts',
 const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
   // The name on the frame is centred: the middle has no side (FRU-303).
   'host.ts': ['.fruitback-panel', '.fruitback-highlight', '.fruitback-highlight-tag'],
-  'overlay.ts': ['.fruitback-overlay', '.fruitback-pin', '.fruitback-pin-badge'],
+  // The arrow of a thread sits on the physical edge that its placement chose (FRU-421).
+  'overlay.ts': [
+    '.fruitback-overlay',
+    '.fruitback-pin',
+    '.fruitback-pin-badge',
+    ".fruitback-thread[data-fruitback-arrow='top']::before",
+    ".fruitback-thread[data-fruitback-arrow='bottom']::before",
+    ".fruitback-thread[data-fruitback-arrow='left']::before",
+    ".fruitback-thread[data-fruitback-arrow='right']::before",
+  ],
   'composer.ts': ['.fruitback-composer'],
   'panel.ts': [],
   'orphans.ts': [],
