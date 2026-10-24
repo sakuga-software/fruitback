@@ -211,7 +211,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   chipGroup.className = 'fruitback-sidebar-chips';
   chipGroup.setAttribute('role', 'group');
   chipGroup.setAttribute('aria-label', t.text('sidebar.stages'));
-  const chips = new Map<Chosen, { button: HTMLButtonElement; word: string; count: HTMLSpanElement }>();
+  const chips = new Map<Chosen, { button: HTMLButtonElement; word: string; gap: Text; count: HTMLSpanElement }>();
   for (const name of ['all', ...STAGES] as const) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -230,12 +230,13 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     label.textContent = word;
     const count = document.createElement('span');
     count.className = 'fruitback-sidebar-count';
-    button.append(label, count);
+    const gap = document.createTextNode('');
+    button.append(label, gap, count);
     button.addEventListener('click', () => {
       chosen = name;
       draw();
     });
-    chips.set(name, { button, word, count });
+    chips.set(name, { button, word, gap, count });
     chipGroup.append(button);
   }
   actions.append(scope, searchBox, chipGroup);
@@ -497,12 +498,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     // shows, like the chips: the detached ones have their own count, at the bottom.
     scopeWords.textContent =
       failing || !known ? t.text('sidebar.scope') : t.text('sidebar.scopeCount', { count: placed.length });
-    for (const [name, { button, word, count }] of chips) {
+    for (const [name, { button, word, gap, count }] of chips) {
       const number = found.filter((entry) => name === 'all' || entry.issue.stage === name).length;
       button.setAttribute('aria-pressed', String(name === chosen));
       // « Closed » is not on the board: shown while a note of the page is closed, or while chosen.
       button.hidden = name === 'closed' && number === 0 && chosen !== 'closed';
       count.textContent = failing || !known ? '' : String(number);
+      // The visible text has the space too. The rule label-content-name-mismatch of axe-core compares it with the aria-label.
+      gap.data = count.textContent === '' ? '' : ' ';
       // « All 4 », with its space: two spans read as one word, « All4 », in an accessible name.
       button.setAttribute('aria-label', count.textContent === '' ? word : `${word} ${number}`);
     }
