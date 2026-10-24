@@ -1,11 +1,11 @@
 import {
   MAX_STATUSES,
   MIN_TEXT_CONTRAST,
-  SEED_STAGES,
+  NOTE_STAGES,
   STATUS_COLOR,
-  type SeedIssue,
-  type SeedStage,
-  type SeedStatus,
+  type NoteIssue,
+  type NoteStage,
+  type NoteStatus,
   contrastRatio,
   readableTextColor,
 } from '@fruitback/shared';
@@ -27,7 +27,7 @@ const SOURCE = /^[A-Za-z0-9_-]{1,64}$/;
 /** An id of a state at a tracker, a fixed key such as GitHub's `closed:completed`, or a slug. */
 const KEY = /^[A-Za-z0-9_:-]{1,64}$/;
 
-/** What the read envelope lets a name be (`seedStatusSchema` of `shared`). */
+/** What the read envelope lets a name be (`noteStatusSchema` of `shared`). */
 export const MAX_STATUS_NAME = 200;
 
 export const STATUS_ORIGINS = ['tracker', 'team'] as const;
@@ -38,7 +38,7 @@ export type SiteStatus = {
   key: string;
   /** `null`: the name of the tracker, or the word of the widget for the stage. */
   name: string | null;
-  stage: SeedStage;
+  stage: NoteStage;
   /** `null`: the colour of the stage (FRU-334), which a host can still set. */
   color: string | null;
   /** `null`: computed from `color` with `readableTextColor`, or the foreground of the stage. */
@@ -90,7 +90,7 @@ export function readSiteStatus(
   if (typeof source !== 'string' || !SOURCE.test(source)) return refuse('invalid-source');
   if (typeof key !== 'string' || !KEY.test(key)) return refuse('invalid-key');
   if (name !== null && (typeof name !== 'string' || name.length > MAX_STATUS_NAME)) return refuse('invalid-name');
-  if (!(SEED_STAGES as readonly unknown[]).includes(stage)) return refuse('invalid-stage');
+  if (!(NOTE_STAGES as readonly unknown[]).includes(stage)) return refuse('invalid-stage');
   for (const one of [color, textColor]) {
     if (one !== null && (typeof one !== 'string' || !STATUS_COLOR.test(one))) return refuse('invalid-color');
   }
@@ -108,7 +108,7 @@ export function readSiteStatus(
       source,
       key,
       name: name === '' ? null : (name as string | null),
-      stage: stage as SeedStage,
+      stage: stage as NoteStage,
       color: color as string | null,
       textColor: textColor as string | null,
       position: position as number,
@@ -124,7 +124,7 @@ export function readSiteStatus(
  * its stage, so a built-in moved to another stage would draw that note with a stage it does not have.
  */
 export function isBuiltIn(source: string, key: string): boolean {
-  return source === OWN_SOURCE && (SEED_STAGES as readonly string[]).includes(key);
+  return source === OWN_SOURCE && (NOTE_STAGES as readonly string[]).includes(key);
 }
 
 /**
@@ -165,8 +165,8 @@ export function envelopeStatuses(
   rows: readonly SiteStatus[],
   trackers: readonly TrackerSource[] = [],
   trackerColours = false,
-): SeedStatus[] {
-  const entry = (key: string, name: string, stage: SeedStage, color: string | null, textColor: string | null) => {
+): NoteStatus[] {
+  const entry = (key: string, name: string, stage: NoteStage, color: string | null, textColor: string | null) => {
     const text = textColor ?? (color === null ? undefined : readableTextColor(color, STATUS_INK));
 
     return {
@@ -203,7 +203,7 @@ export function envelopeStatuses(
       .map(({ status }) => status),
   );
   const changed = new Set(listed.map((status) => status.key));
-  const builtIn = SEED_STAGES.filter((stage) => !changed.has(`${OWN_SOURCE}:${stage}`)).map((stage) => ({
+  const builtIn = NOTE_STAGES.filter((stage) => !changed.has(`${OWN_SOURCE}:${stage}`)).map((stage) => ({
     key: `${OWN_SOURCE}:${stage}`,
     name: '',
     stage,
@@ -217,7 +217,7 @@ export function envelopeStatuses(
  * store stays, a state of a tracker goes, as its key holds the tracker's id. The read gives such a reader
  * the statuses of the worker's store only.
  */
-export function withoutTrackerStatus<T extends Pick<SeedIssue, 'status'>>(issue: T): T {
+export function withoutTrackerStatus<T extends Pick<NoteIssue, 'status'>>(issue: T): T {
   if (issue.status === undefined || issue.status.startsWith(`${OWN_SOURCE}:`)) return issue;
   const { status: _status, ...rest } = issue;
 

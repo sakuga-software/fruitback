@@ -1,19 +1,19 @@
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
-import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { seed_comments, seeds, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
-import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, stageOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+import { forgetSelectorFor, identifierFor, noteOf, widgetIdOf, stageOf, threadsOf, toNoteIssue } from './note-rows.ts';
 import { checkText, replyText } from './reply-text.ts';
-import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type CreatedIssue, type NoteStore, StoreError } from './store.ts';
 
 /**
  * The notes in the database of the worker (FRU-218): `FRUITBACK_STORE=postgres`.
  *
  * The store of the SQLite file of before (FRU-31, gone with FRU-226), on the tables `seeds` and
  * `seed_comments`: the same columns, the same `FB-<n>`, no page to open, and stages that are its own.
- * `seed-rows.ts` reads a row.
+ * `note-rows.ts` reads a row.
  *
  * **One database holds the notes of every workspace, so every read names its site.** A worker on a
  * database takes its sites from it, and a call always names one. A read that names none gets the
@@ -23,7 +23,7 @@ import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from 
  * Every failure is a `StoreError`: the worker answers `502 store-unavailable`, and the widget keeps
  * the note and tries again.
  */
-export function createPostgresSeedStore(database: Database): SeedStore {
+export function createPostgresNoteStore(database: Database): NoteStore {
   /** `work` on the database with its schema, and its failure as the failure of a store. */
   const through = async <T>(what: string, work: (database: Database) => Promise<T>): Promise<T> => {
     try {
@@ -38,13 +38,13 @@ export function createPostgresSeedStore(database: Database): SeedStore {
   };
 
   /** One note written. `page.url` is already canonical: it is what the read asks for. */
-  const insert = async (db: Db, seed: Seed, now: number): Promise<CreatedIssue> => {
+  const insert = async (db: Db, seed: Note, now: number): Promise<CreatedIssue> => {
     const [row] = await db
       .insert(seeds)
       .values({
         client_id: seed.client?.id ?? null,
         page_url: seed.page.url,
-        stage: DEFAULT_SEED_STAGE,
+        stage: DEFAULT_NOTE_STAGE,
         seed: JSON.stringify(seed),
         created_at: now,
         updated_at: now,
@@ -129,7 +129,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
             // `undefined` when the worker was not asked for replies: the field is left out, and the
             // widget says nothing rather than that the team never answered.
             .map((row) =>
-              toSeedIssue(
+              toNoteIssue(
                 {
                   id: row.id,
                   page_url: row.page_url,
@@ -141,7 +141,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
                 policy.showComments ? (threads?.get(row.id) ?? []) : undefined,
               ),
             )
-            .filter((issue): issue is SeedIssue => issue !== null)
+            .filter((issue): issue is NoteIssue => issue !== null)
         );
       }),
     // A reply in the table of the replies, under a note of this client only (FRU-257). The table has
@@ -195,7 +195,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
             // FRU-367: back to the built-in status of the first stage, so its status and its stage agree.
             await tx
               .update(seeds)
-              .set({ stage: DEFAULT_SEED_STAGE, status_key: null, updated_at: now })
+              .set({ stage: DEFAULT_NOTE_STAGE, status_key: null, updated_at: now })
               .where(eq(seeds.id, id));
           }
           const [row] = await tx
@@ -206,7 +206,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
 
           return {
             comment: { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() },
-            stage: check.verdict === 'wrong' ? DEFAULT_SEED_STAGE : stageOf(note.stage),
+            stage: check.verdict === 'wrong' ? DEFAULT_NOTE_STAGE : stageOf(note.stage),
           };
         }),
       ),
@@ -274,7 +274,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
 
           return found.map((row) => ({
             identifier: identifierFor(row.id),
-            seed: seedIdOf(row.seed),
+            seed: widgetIdOf(row.seed),
             createdAt: new Date(row.created_at).toISOString(),
             pageUrl: row.page_url,
             note: noteOf(row.seed),

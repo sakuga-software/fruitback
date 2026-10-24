@@ -1,23 +1,23 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
-import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import type { Note, NoteIssue, NoteStage } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { EXCERPT_LENGTH, type NoteIndex, excerptOf } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 const open = worlds();
 
 /** A store that keeps the notes in memory, and answers each with the stage a test sets. */
 function storeOfStages() {
-  const kept: Seed[] = [];
-  const stages = new Map<string, SeedStage>();
-  const store: SeedStore = {
+  const kept: Note[] = [];
+  const stages = new Map<string, NoteStage>();
+  const store: NoteStore = {
     name: 'test',
     scope: () => 'test',
     async create(seed) {
@@ -32,7 +32,7 @@ function storeOfStages() {
     async findForPage({ url, clientId }) {
       return kept
         .filter((seed) => seed.page.url === url && seed.client?.id === clientId)
-        .map((seed, index): SeedIssue => ({
+        .map((seed, index): NoteIssue => ({
           id: `issue_${index + 1}`,
           identifier: `FB-${kept.indexOf(seed) + 1}`,
           title: seed.note.slice(0, 20),
@@ -78,7 +78,7 @@ async function leave(
   more: { token?: string; id?: string; origin?: string } = {},
 ) {
   const origin = more.origin ?? 'https://acme.dev';
-  const seed = seedFixture({
+  const seed = noteFixture({
     id: more.id ?? `sd_${Math.random().toString(36).slice(2, 10)}`,
     note,
     page: { url: `${origin}/pricing`, path: '/pricing', title: 'Pricing' },
@@ -184,7 +184,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
     const { world, alice, workspace, acme, kept, index } = await aWorkspace();
     // A note that a worker with no index planted: in the store, and not in the index.
     kept.push(
-      seedFixture({
+      noteFixture({
         id: 'sd_before',
         note: 'Planted before the index.',
         page: { url: 'https://acme.dev/pricing', path: '/pricing', title: 'Pricing' },
@@ -343,7 +343,7 @@ describe('forget, and the index (FRU-237)', () => {
   it('removes the rows of the notes it deletes, their excerpt with them, and no other, not even one of the same reference', async () => {
     const { createPgliteDatabase } = await import('./postgres.fixture.ts');
     const { createPostgresAccountStore } = await import('./accounts-postgres.ts');
-    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { createPostgresNoteStore } = await import('./notes-postgres.ts');
     const { runForget } = await import('./cli.ts');
     const database = await createPgliteDatabase();
 
@@ -352,14 +352,14 @@ describe('forget, and the index (FRU-237)', () => {
       const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
       const acme = await accounts.createWorkspace('Acme', alice.id);
       const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'everyone' });
-      const store = createPostgresSeedStore(database);
+      const store = createPostgresNoteStore(database);
       const index = createPostgresNoteIndex(database);
       const planted = [];
       for (const [id, name] of [
         ['sd_alice', 'Alice'],
         ['sd_bob', 'Bob'],
       ] as const) {
-        const seed = seedFixture({
+        const seed = noteFixture({
           id,
           note: `A note of ${name}.`,
           client: { id: site.id, name: 'Acme' },
@@ -393,7 +393,7 @@ describe('forget, and the index (FRU-237)', () => {
           {
             workspace: other.id,
             site: otherSite.id,
-            seed: seedFixture({ id: 'sd_other', note: 'A note of the other workspace.' }),
+            seed: noteFixture({ id: 'sd_other', note: 'A note of the other workspace.' }),
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -423,14 +423,14 @@ describe('forget, and the index (FRU-237)', () => {
 });
 
 describe('the index, against what the review of #300 found (FRU-237)', () => {
-  const issueOf = (seedId: string, identifier: string, note: string, stage: SeedStage): SeedIssue => ({
+  const issueOf = (seedId: string, identifier: string, note: string, stage: NoteStage): NoteIssue => ({
     id: identifier,
     identifier,
     title: note.slice(0, 20),
     stage,
     stateName: 'x',
     updatedAt: '2026-10-13T00:00:00.000Z',
-    seed: seedFixture({ id: seedId, note }),
+    seed: noteFixture({ id: seedId, note }),
   });
 
   async function oneSite() {
@@ -471,11 +471,11 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
   it('leaves no row of a forgotten note that a read of its page wrote back during the command', async () => {
     const { database, acme, site, index } = await oneSite();
-    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { createPostgresNoteStore } = await import('./notes-postgres.ts');
     const { runForget } = await import('./cli.ts');
     try {
-      const real = createPostgresSeedStore(database);
-      const seed = seedFixture({
+      const real = createPostgresNoteStore(database);
+      const seed = noteFixture({
         id: 'sd_alice',
         note: 'Secret note of Alice.',
         client: { id: site.id, name: 'Acme' },
@@ -500,7 +500,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       // A reader's GET that misses the cache between the index and the store: it reads the note in
       // the store, still there, and writes its row back.
       const forget = real.forget?.bind(real);
-      const store: SeedStore = {
+      const store: NoteStore = {
         ...real,
         forget: async (which, options) => {
           if (!options.dryRun) {
@@ -510,7 +510,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             await index.refresh(acme.id, site.id, { kind: 'fruitback' }, issues, Date.now());
           }
 
-          return (forget as NonNullable<SeedStore['forget']>)(which, options);
+          return (forget as NonNullable<NoteStore['forget']>)(which, options);
         },
       };
 
@@ -542,7 +542,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             {
               workspace: acme.id,
               site: site.id,
-              seed: seedFixture({ id, note }),
+              seed: noteFixture({ id, note }),
               channel: 'script',
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
@@ -554,7 +554,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         );
       }
       // A store that deletes nothing from this command: Linear, REST, memory.
-      const tracker: SeedStore = {
+      const tracker: NoteStore = {
         name: 'linear',
         scope: () => 'linear',
         create: async () => ({ id: 'x', identifier: 'x' }),
@@ -593,7 +593,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
           {
             workspace: acme.id,
             site: site.id,
-            seed: seedFixture({ id: 'sd_member', note: 'A note of a member.' }),
+            seed: noteFixture({ id: 'sd_member', note: 'A note of a member.' }),
             channel: 'extension',
             author: { kind: 'member', account: alice.id },
             place: { kind: 'fruitback' },
@@ -617,11 +617,11 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
   it('says that the notes are deleted, and how to end it, when the index fails after the store', async () => {
     const { database, acme, site, index } = await oneSite();
-    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { createPostgresNoteStore } = await import('./notes-postgres.ts');
     const { runForget } = await import('./cli.ts');
     try {
-      const store = createPostgresSeedStore(database);
-      const seed = seedFixture({
+      const store = createPostgresNoteStore(database);
+      const seed = noteFixture({
         id: 'sd_alice',
         note: 'A note of Alice.',
         client: { id: site.id, name: 'Acme' },
@@ -672,12 +672,12 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
   it('removes the row of a note of the same reporter that arrived between the list and the deletion', async () => {
     const { database, acme, site, index } = await oneSite();
-    const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
+    const { createPostgresNoteStore } = await import('./notes-postgres.ts');
     const { runForget } = await import('./cli.ts');
     try {
-      const real = createPostgresSeedStore(database);
+      const real = createPostgresNoteStore(database);
       const plant = async (id: string) => {
-        const seed = seedFixture({
+        const seed = noteFixture({
           id,
           note: `A note ${id}.`,
           client: { id: site.id, name: 'Acme' },
@@ -701,9 +701,9 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         );
       };
       await plant('sd_first');
-      const forget = real.forget?.bind(real) as NonNullable<SeedStore['forget']>;
+      const forget = real.forget?.bind(real) as NonNullable<NoteStore['forget']>;
       // A second note of Alice arrives after the list the command read, before it deletes.
-      const store: SeedStore = {
+      const store: NoteStore = {
         ...real,
         forget: async (which, options) => {
           if (!options.dryRun) await plant('sd_late');

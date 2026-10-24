@@ -1,4 +1,4 @@
-import { DEFAULT_SEED_STAGE, SEED_STAGES, type SeedStage, type SeedStatus } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStage, type NoteStatus } from '@fruitback/shared';
 import type { Action, AccountStore, Reach } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { invalidatePages } from './note-helpers.ts';
@@ -135,7 +135,7 @@ export function queryOf(params: URLSearchParams, account: string): Parsed {
   const site = params.get('site') ?? undefined;
   if (site !== undefined && !ID.test(site)) return { ok: false, error: 'invalid-site' };
   const stage = params.get('stage') ?? undefined;
-  if (stage !== undefined && !(SEED_STAGES as readonly string[]).includes(stage)) {
+  if (stage !== undefined && !(NOTE_STAGES as readonly string[]).includes(stage)) {
     return { ok: false, error: 'invalid-stage' };
   }
   const place = params.get('place') ?? undefined;
@@ -158,7 +158,7 @@ export function queryOf(params: URLSearchParams, account: string): Parsed {
     query: {
       limit,
       ...(site === undefined ? {} : { site }),
-      ...(stage === undefined ? {} : { stage: stage as SeedStage }),
+      ...(stage === undefined ? {} : { stage: stage as NoteStage }),
       ...(place === undefined ? {} : { place }),
       ...(mine === undefined ? {} : { author: account }),
       ...(q === undefined ? {} : { q }),
@@ -288,7 +288,7 @@ function readJson(base64url: string): unknown {
 }
 
 /** A status of a site as the list of the notes gives it: hidden ones are named, never offered. */
-export type StatusChoice = SeedStatus & { hidden?: true };
+export type StatusChoice = NoteStatus & { hidden?: true };
 
 /**
  * The statuses of the worker's store of each site with a note the worker keeps on this page
@@ -343,7 +343,7 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
   if (typeof asked !== 'string') return json(400, { error: 'invalid-status' }, headers);
   if (!asked.startsWith(prefix)) return json(400, { error: 'not-own' }, headers);
   const key = asked.slice(prefix.length);
-  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_SEED_STAGE }).ok) {
+  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_NOTE_STAGE }).ok) {
     return json(400, { error: 'invalid-status' }, headers);
   }
 

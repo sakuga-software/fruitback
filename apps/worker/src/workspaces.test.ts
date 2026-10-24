@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { IDENTITY_SECRET } from './auth-worker.fixture.ts';
 import { type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
@@ -75,7 +75,7 @@ function read(opened: World, site: string, origin: string, page: string, token?:
 }
 
 function write(opened: World, site: string, origin: string, page: string, token?: string): Promise<Response> {
-  const seed = seedFixture();
+  const seed = noteFixture();
   const body = { ...seed, page: { ...seed.page, url: `${page}/pricing` }, client: { id: site } };
 
   return callOn(opened, 'POST', '/feedback', { origin, body, ...(token === undefined ? {} : { token }) });

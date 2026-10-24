@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { SEED_STAGES, type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
-import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES, type NoteIssue, canonicalizePageUrl, parseNoteFromDescription } from '@fruitback/shared';
+import { minimalNoteFixture, noteFixture } from '@fruitback/shared/note.fixture';
 import { handleRequest } from './app.ts';
 import { DATABASE_REQUIRED, type WorkerEnv } from './env.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
-import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
+import { installLinearStub, storedIssueFromNote } from './linear-stub.ts';
 import { signIdentityToken } from './identity.ts';
-import type { SeedStore } from './store.ts';
+import type { NoteStore } from './store.ts';
 import { type Kv, KvError, createMemoryKv, resetSharedKv } from './kv.ts';
 import { resetCacheState } from './cache.ts';
 import { memoryIssues, resetMemoryLinear } from './linear-memory.ts';
@@ -34,7 +34,7 @@ type RequestOverrides = {
   /** Already resolved by the transport in production — see `resolveClientIp`. */
   clientIp?: string;
   /** Built once by the transport in production — see `RequestContext.store` (FRU-29). */
-  store?: SeedStore;
+  store?: NoteStore;
   /** Built once by the transport in production — see `RequestContext.kv` (FRU-49). */
   kv?: Kv;
 };
@@ -84,7 +84,7 @@ describe('POST /feedback', () => {
   it('creates a Linear issue and returns its identifier and URL', async () => {
     const stub = installLinearStub({ existingLabels: { fruitback: 'label_existing' } });
 
-    const response = await post(seedFixture());
+    const response = await post(noteFixture());
 
     assert.equal(response.status, 201);
     assert.deepEqual(await response.json(), {
@@ -97,11 +97,11 @@ describe('POST /feedback', () => {
   it('stores a description the widget can parse back into the exact same seed', async () => {
     // The whole read path depends on this. If it breaks, pins can never be re-planted.
     const stub = installLinearStub();
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     await post(seed);
 
-    assert.deepEqual(parseSeedFromDescription(stub.issueInput().description), { ok: true, seed });
+    assert.deepEqual(parseNoteFromDescription(stub.issueInput().description), { ok: true, note: seed });
   });
 
   /**
@@ -111,7 +111,7 @@ describe('POST /feedback', () => {
    */
   it('writes the description in the language the worker was configured with', async () => {
     const stub = installLinearStub();
-    const seed = seedFixture({ note: 'Le CTA est trop petit' });
+    const seed = noteFixture({ note: 'Le CTA est trop petit' });
 
     await post(seed, { env: { ...env, FRUITBACK_TEAM_LOCALE: 'fr' } });
 
@@ -121,13 +121,13 @@ describe('POST /feedback', () => {
     assert.equal(description.includes('**Reported by**'), false);
     // The note is the reporter's own word, and the block is the machine's half. Neither is translated.
     assert.ok(description.includes('Le CTA est trop petit'));
-    assert.deepEqual(parseSeedFromDescription(description), { ok: true, seed });
+    assert.deepEqual(parseNoteFromDescription(description), { ok: true, note: seed });
   });
 
   it('writes it in English when nothing says otherwise, as every worker did before', async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture());
+    await post(noteFixture());
 
     assert.match(stub.issueInput().description, /\*\*Reported by\*\*/);
   });
@@ -135,7 +135,7 @@ describe('POST /feedback', () => {
   it("titles the issue with the visitor's own words", async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture({ note: 'Le CTA est trop petit' }));
+    await post(noteFixture({ note: 'Le CTA est trop petit' }));
 
     assert.equal(stub.issueInput().title, 'Le CTA est trop petit');
   });
@@ -143,7 +143,7 @@ describe('POST /feedback', () => {
   it('applies the fruitback label and the client label, creating what is missing', async () => {
     const stub = installLinearStub({ existingLabels: { fruitback: 'label_existing' } });
 
-    await post(seedFixture());
+    await post(noteFixture());
 
     assert.deepEqual(stub.createdLabels(), ['fruitback:acme']);
     assert.deepEqual(stub.issueInput().labelIds, ['label_existing', 'label_1']);
@@ -153,7 +153,7 @@ describe('POST /feedback', () => {
     // Losing a label is a triage annoyance; losing the client's feedback is a bug.
     const stub = installLinearStub({ failLabelCreation: true });
 
-    const response = await post(seedFixture());
+    const response = await post(noteFixture());
 
     assert.equal(response.status, 201);
     assert.deepEqual(stub.issueInput().labelIds, []);
@@ -164,11 +164,11 @@ describe('POST /feedback', () => {
     const stub = installLinearStub();
     const raw = 'https://preview.acme.test/pricing/?utm_source=ads&tab=annual#cta';
 
-    await post(seedFixture({ page: { url: raw, path: '/pricing' } }));
+    await post(noteFixture({ page: { url: raw, path: '/pricing' } }));
 
-    const result = parseSeedFromDescription(stub.issueInput().description);
+    const result = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(result.ok);
-    assert.equal(result.seed.page.url, canonicalizePageUrl(raw));
+    assert.equal(result.note.page.url, canonicalizePageUrl(raw));
   });
 
   it('rejects a payload that is not a seed', async () => {
@@ -191,8 +191,8 @@ describe('POST /feedback', () => {
 
   it('rejects an oversized body', async () => {
     installLinearStub();
-    // Built as raw JSON: the schema caps a note at 5 000 chars, so `createSeed` would refuse this.
-    const oversized = JSON.stringify({ ...seedFixture(), note: 'x'.repeat(70_000) });
+    // Built as raw JSON: the schema caps a note at 5 000 chars, so `createNote` would refuse this.
+    const oversized = JSON.stringify({ ...noteFixture(), note: 'x'.repeat(70_000) });
 
     const response = await post(oversized);
 
@@ -230,7 +230,7 @@ describe('POST /feedback', () => {
   it('reports a Linear outage as 502 so the widget can keep the note and retry', async () => {
     installLinearStub({ failIssueCreation: true });
 
-    const response = await post(seedFixture());
+    const response = await post(noteFixture());
 
     assert.equal(response.status, 502);
     assert.partialDeepStrictEqual(await response.json(), { error: 'store-unavailable' });
@@ -241,7 +241,7 @@ describe('CORS', () => {
   it('echoes an allowed origin and varies on it', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture());
+    const response = await post(noteFixture());
 
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
     assert.equal(response.headers.get('Vary'), 'Origin');
@@ -250,7 +250,7 @@ describe('CORS', () => {
   it('refuses an origin that is not on the allowlist', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), { origin: 'https://evil.test' });
+    const response = await post(noteFixture(), { origin: 'https://evil.test' });
 
     assert.equal(response.status, 403);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
@@ -259,7 +259,7 @@ describe('CORS', () => {
   it('allows any origin when configured with a wildcard', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), {
+    const response = await post(noteFixture(), {
       origin: 'https://anything.test',
       env: { ...env, ALLOWED_ORIGINS: '*' },
     });
@@ -285,7 +285,7 @@ describe('CORS', () => {
   it('serves a request with no Origin at all (curl, health check)', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), { origin: null });
+    const response = await post(noteFixture(), { origin: null });
 
     assert.equal(response.status, 201);
   });
@@ -302,7 +302,7 @@ describe('CORS', () => {
   it('serves the extension, whose origin no allowlist can name', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), { origin: 'chrome-extension://ekjmfoaibpceoc' });
+    const response = await post(noteFixture(), { origin: 'chrome-extension://ekjmfoaibpceoc' });
 
     assert.equal(response.status, 201);
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'chrome-extension://ekjmfoaibpceoc');
@@ -313,7 +313,7 @@ describe('CORS', () => {
     installLinearStub();
 
     for (const origin of ['file://', 'null', 'chrome-extension:', 'https://chrome-extension.evil.dev']) {
-      const response = await post(seedFixture(), { origin });
+      const response = await post(noteFixture(), { origin });
       assert.equal(response.status, 403, origin);
     }
   });
@@ -325,7 +325,7 @@ describe('guard rails', () => {
 
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 21; attempt += 1) {
-      statuses.push((await post(seedFixture(), { clientIp: '203.0.113.7' })).status);
+      statuses.push((await post(noteFixture(), { clientIp: '203.0.113.7' })).status);
     }
 
     assert.ok(statuses.slice(0, 20).every((status) => status === 201));
@@ -336,9 +336,9 @@ describe('guard rails', () => {
     installLinearStub();
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      await post(seedFixture(), { clientIp: '203.0.113.7' });
+      await post(noteFixture(), { clientIp: '203.0.113.7' });
     }
-    const other = await post(seedFixture(), { clientIp: '203.0.113.8' });
+    const other = await post(noteFixture(), { clientIp: '203.0.113.8' });
 
     assert.equal(other.status, 201);
   });
@@ -346,7 +346,7 @@ describe('guard rails', () => {
   it('says what is missing when the service is misconfigured', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), { env: { ALLOWED_ORIGINS: ORIGIN } });
+    const response = await post(noteFixture(), { env: { ALLOWED_ORIGINS: ORIGIN } });
 
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), {
@@ -361,7 +361,7 @@ describe('guard rails', () => {
   it('still answers readably when even the allowlist is missing', async () => {
     installLinearStub();
 
-    const response = await post(seedFixture(), { env: {} });
+    const response = await post(noteFixture(), { env: {} });
 
     assert.equal(response.status, 500);
     assert.partialDeepStrictEqual(await response.json(), { missing: ['ALLOWED_ORIGINS'] });
@@ -372,7 +372,7 @@ describe('guard rails', () => {
 describe('GET /feedback', () => {
   const PAGE = 'https://preview.acme.test/pricing?tab=annual';
 
-  type ReadResponse = { url: string; issues: SeedIssue[] };
+  type ReadResponse = { url: string; issues: NoteIssue[] };
 
   function read(page: string, query = '') {
     return get(`/feedback?url=${encodeURIComponent(page)}${query}`);
@@ -383,8 +383,8 @@ describe('GET /feedback', () => {
   }
 
   it('returns the seeds of a page with the Linear state that colours the pin', async () => {
-    const seed = seedFixture();
-    installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const seed = noteFixture();
+    installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
 
     const response = await read(PAGE);
 
@@ -408,9 +408,9 @@ describe('GET /feedback', () => {
   it('says which stages the store can report, so the panel offers only those (FRU-32)', async () => {
     installLinearStub({ storedIssues: [] });
     const linear = (await readBody(PAGE)) as ReadResponse & { stages?: unknown };
-    assert.deepEqual(linear.stages, [...SEED_STAGES]);
+    assert.deepEqual(linear.stages, [...NOTE_STAGES]);
 
-    const partial: SeedStore = {
+    const partial: NoteStore = {
       name: 'partial',
       stages: ['new', 'done'],
       scope: () => 'partial',
@@ -438,8 +438,8 @@ describe('GET /feedback', () => {
   });
 
   it('reads every seed of the page when no client is given', async () => {
-    const seed = minimalSeedFixture();
-    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const seed = minimalNoteFixture();
+    const stub = installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
 
     const body = await readBody(seed.page.url);
 
@@ -463,9 +463,9 @@ describe('GET /feedback', () => {
   it('drops an issue whose seed belongs to a neighbouring page', async () => {
     // Linear's `contains` is a substring match, so `/pricing` also brings back `/pricing?tab=annual`.
     const page = 'https://preview.acme.test/pricing';
-    const mine = seedFixture({ id: 'sd_here', page: { url: page, path: '/pricing' } });
-    const neighbour = seedFixture({ id: 'sd_elsewhere' });
-    installLinearStub({ storedIssues: [storedIssueFromSeed(mine), storedIssueFromSeed(neighbour)] });
+    const mine = noteFixture({ id: 'sd_here', page: { url: page, path: '/pricing' } });
+    const neighbour = noteFixture({ id: 'sd_elsewhere' });
+    installLinearStub({ storedIssues: [storedIssueFromNote(mine), storedIssueFromNote(neighbour)] });
 
     const body = await readBody(page);
 
@@ -477,7 +477,7 @@ describe('GET /feedback', () => {
 
   it('skips an issue whose seed block someone edited away', async () => {
     // A pin we cannot place is worse than a pin we do not show.
-    installLinearStub({ storedIssues: [storedIssueFromSeed(seedFixture(), { description: 'Just prose now.' })] });
+    installLinearStub({ storedIssues: [storedIssueFromNote(noteFixture(), { description: 'Just prose now.' })] });
 
     const body = await readBody(PAGE);
 
@@ -485,8 +485,8 @@ describe('GET /feedback', () => {
   });
 
   it('walks every page of results', async () => {
-    const seeds = ['sd_1', 'sd_2', 'sd_3'].map((id) => seedFixture({ id }));
-    const stub = installLinearStub({ storedIssues: seeds.map((seed) => storedIssueFromSeed(seed)), issuesPageSize: 2 });
+    const seeds = ['sd_1', 'sd_2', 'sd_3'].map((id) => noteFixture({ id }));
+    const stub = installLinearStub({ storedIssues: seeds.map((seed) => storedIssueFromNote(seed)), issuesPageSize: 2 });
 
     const body = await readBody(PAGE);
 
@@ -498,7 +498,7 @@ describe('GET /feedback', () => {
   });
 
   it('serves a repeated read from cache instead of spending Linear quota again', async () => {
-    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seedFixture())] });
+    const stub = installLinearStub({ storedIssues: [storedIssueFromNote(noteFixture())] });
 
     const first = await read(PAGE);
     const second = await read(PAGE);
@@ -556,26 +556,26 @@ describe('the in-memory Linear (dev loop)', () => {
   });
 
   it('writes its descriptions in the team locale too, so the dev loop shows what production writes', async () => {
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     await post(seed, { env: { ...fakeEnv, FRUITBACK_TEAM_LOCALE: 'fr' } });
 
     const description = memoryIssues()[0]?.description ?? '';
     assert.match(description, /\*\*Signalé par\*\*/);
-    assert.deepEqual(parseSeedFromDescription(description), { ok: true, seed });
+    assert.deepEqual(parseNoteFromDescription(description), { ok: true, note: seed });
   });
 
   it('serves the whole loop with no API key at all', async () => {
     // The point of the playground: capture → issue → the pin comes back, without a Linear workspace.
     installLinearStub(); // installed to prove it is never called
-    const seed = seedFixture();
+    const seed = noteFixture();
 
     const created = await post(seed, { env: fakeEnv });
     const read = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}&client=acme`, { env: fakeEnv });
 
     assert.equal(created.status, 201);
     assert.equal(read.status, 200);
-    const body = (await read.json()) as { issues: SeedIssue[] };
+    const body = (await read.json()) as { issues: NoteIssue[] };
     assert.equal(body.issues.length, 1);
     // Stored as a description and parsed back, exactly like the real path — so a broken round trip
     // breaks the dev loop too, instead of being papered over by a mock that returns objects.
@@ -588,14 +588,14 @@ describe('the in-memory Linear (dev loop)', () => {
     const here = 'https://preview.acme.test/rank-here';
     const elsewhere = 'https://preview.acme.test/rank-elsewhere';
     for (let index = 0; index < 5; index += 1) {
-      await post(seedFixture({ id: `sd_here_${index}`, page: { url: here, path: '/rank-here' } }), { env: fakeEnv });
-      await post(seedFixture({ id: `sd_else_${index}`, page: { url: elsewhere, path: '/rank-elsewhere' } }), {
+      await post(noteFixture({ id: `sd_here_${index}`, page: { url: here, path: '/rank-here' } }), { env: fakeEnv });
+      await post(noteFixture({ id: `sd_else_${index}`, page: { url: elsewhere, path: '/rank-elsewhere' } }), {
         env: fakeEnv,
       });
     }
 
     const read = await get(`/feedback?url=${encodeURIComponent(here)}&client=acme`, { env: fakeEnv });
-    const issues = ((await read.json()) as { issues: SeedIssue[] }).issues;
+    const issues = ((await read.json()) as { issues: NoteIssue[] }).issues;
     const byRank = [0, 1, 2, 3, 4].map((index) => issues.find((issue) => issue.seed.id === `sd_here_${index}`));
 
     assert.equal(new Set(byRank.map((issue) => issue?.stage)).size, 5);
@@ -608,8 +608,8 @@ describe('the in-memory Linear (dev loop)', () => {
   it('never reaches the network', async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture(), { env: fakeEnv });
-    await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}`, { env: fakeEnv });
+    await post(noteFixture(), { env: fakeEnv });
+    await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}`, { env: fakeEnv });
 
     assert.deepEqual(stub.calls, []);
   });
@@ -640,19 +640,19 @@ describe('the in-memory Linear (dev loop)', () => {
 describe('cache invalidation', () => {
   it('shows a pin planted a moment ago instead of the cached answer', async () => {
     // Otherwise posting feedback and reloading reads as "my note was lost" for a whole TTL.
-    const seed = seedFixture();
-    const stored = storedIssueFromSeed(seed);
+    const seed = noteFixture();
+    const stored = storedIssueFromNote(seed);
     installLinearStub({ storedIssues: [] });
 
     const before = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
-    assert.deepEqual(((await before.json()) as { issues: SeedIssue[] }).issues, []);
+    assert.deepEqual(((await before.json()) as { issues: NoteIssue[] }).issues, []);
 
     // The stub answers from the same array, so a cached read would still report zero.
     installLinearStub({ storedIssues: [stored] });
     await post(seed);
 
     const after = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
-    assert.equal(((await after.json()) as { issues: SeedIssue[] }).issues.length, 1);
+    assert.equal(((await after.json()) as { issues: NoteIssue[] }).issues.length, 1);
   });
 });
 
@@ -676,7 +676,7 @@ describe('the Kv the transport hands over (FRU-49)', () => {
     const statuses: number[] = [];
 
     for (let attempt = 0; attempt < 21; attempt += 1) {
-      statuses.push((await post(seedFixture(), { clientIp: '203.0.113.7', ...replicas[attempt % 2] })).status);
+      statuses.push((await post(noteFixture(), { clientIp: '203.0.113.7', ...replicas[attempt % 2] })).status);
     }
 
     assert.equal(statuses.filter((status) => status === 201).length, 20);
@@ -689,13 +689,13 @@ describe('the Kv the transport hands over (FRU-49)', () => {
     const counted: string[] = [];
     const recording: Kv = { ...kv, incr: (key, ttl) => (counted.push(key), kv.incr(key, ttl)) };
 
-    await post(seedFixture(), { kv: recording });
+    await post(noteFixture(), { kv: recording });
 
     assert.equal(counted.length, 1, 'the handler counted somewhere else');
   });
 
   it('serves a second replica the answer the first one cached', async () => {
-    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seedFixture())] });
+    const stub = installLinearStub({ storedIssues: [storedIssueFromNote(noteFixture())] });
     const kv = createMemoryKv();
 
     await get(`/feedback?url=${encodeURIComponent(CACHED_PAGE)}`, { kv });
@@ -710,7 +710,7 @@ describe('the Kv the transport hands over (FRU-49)', () => {
     const stub = installLinearStub();
     mockMethod(console, 'error', () => {});
 
-    const response = await post(seedFixture(), { kv: unreachableKv() });
+    const response = await post(noteFixture(), { kv: unreachableKv() });
 
     assert.equal(response.status, 503);
     assert.deepEqual(await response.json(), { error: 'limiter-unavailable' });
@@ -740,7 +740,7 @@ describe('the Kv the transport hands over (FRU-49)', () => {
       },
     };
 
-    const response = await post(seedFixture(), { kv: refusingWrites });
+    const response = await post(noteFixture(), { kv: refusingWrites });
 
     assert.equal(response.status, 201);
   });
@@ -765,7 +765,7 @@ describe('one worker, several clients', () => {
   it('creates a client’s issue on that client’s team and project', async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture({ client: { id: 'acme', name: 'Acme' } }), { env: multi });
+    await post(noteFixture({ client: { id: 'acme', name: 'Acme' } }), { env: multi });
 
     assert.equal(stub.issueInput().teamId, 'team_acme');
     assert.equal(stub.issueInput().projectId, 'project_acme');
@@ -774,7 +774,7 @@ describe('one worker, several clients', () => {
   it('narrows a read to the team its client routes to', async () => {
     const stub = installLinearStub({ storedIssues: [] });
 
-    await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, { env: multi });
+    await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}&client=acme`, { env: multi });
 
     assert.partialDeepStrictEqual(stub.issueFilter(), { team: { id: { eq: 'team_acme' } } });
   });
@@ -784,7 +784,7 @@ describe('one worker, several clients', () => {
     // to put a note whose owner is unknown.
     installLinearStub();
 
-    const response = await post(seedFixture({ client: undefined }), { env: multi });
+    const response = await post(noteFixture({ client: undefined }), { env: multi });
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: 'client-required' });
@@ -796,14 +796,14 @@ describe('one worker, several clients', () => {
     // client's own clean read — filtering `fruitback:acme` — came back empty. Authorised at both
     // ends, invisible in between. So this asserts the round trip, not the routing.
     installLinearStub();
-    const url = seedFixture().page.url;
+    const url = noteFixture().page.url;
 
-    const created = await post(seedFixture({ id: 'sd_padded', client: { id: '  acme  ' } }), { env: fakeMulti });
+    const created = await post(noteFixture({ id: 'sd_padded', client: { id: '  acme  ' } }), { env: fakeMulti });
     const read = await get(`/feedback?url=${encodeURIComponent(url)}&client=acme`, { env: fakeMulti });
 
     assert.equal(created.status, 201);
     assert.deepEqual(
-      ((await read.json()) as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      ((await read.json()) as { issues: NoteIssue[] }).issues.map((issue) => issue.seed.id),
       ['sd_padded'],
     );
   });
@@ -811,7 +811,7 @@ describe('one worker, several clients', () => {
   it('stores the normalised client id, so the label matches what a read asks for', async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture({ client: { id: '  acme  ' } }), { env: multi });
+    await post(noteFixture({ client: { id: '  acme  ' } }), { env: multi });
 
     assert.equal(stub.issueInput().teamId, 'team_acme');
     assert.deepEqual(stub.createdLabels(), ['fruitback', 'fruitback:acme']);
@@ -821,7 +821,7 @@ describe('one worker, several clients', () => {
     // Answering the default was how one client read another's feedback.
     installLinearStub({ storedIssues: [] });
 
-    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}`, { env: multi });
+    const response = await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}`, { env: multi });
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: 'client-required' });
@@ -830,7 +830,7 @@ describe('one worker, several clients', () => {
   it('refuses a client it has never heard of', async () => {
     installLinearStub({ storedIssues: [] });
 
-    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=nobody`, {
+    const response = await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}&client=nobody`, {
       env: multi,
     });
 
@@ -841,7 +841,7 @@ describe('one worker, several clients', () => {
   it('refuses a client claimed from a site it is not embedded on', async () => {
     installLinearStub({ storedIssues: [] });
 
-    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+    const response = await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}&client=acme`, {
       env: { ...multi, ALLOWED_ORIGINS: '*' },
       origin: 'https://evil.test',
     });
@@ -853,9 +853,9 @@ describe('one worker, several clients', () => {
   it('keeps two clients on the same page from seeing each other', async () => {
     // The test this ticket exists for. Both plant a note on the same URL; each read returns one pin.
     installLinearStub();
-    const url = seedFixture().page.url;
-    await post(seedFixture({ id: 'sd_acme', client: { id: 'acme' } }), { env: fakeMulti });
-    await post(seedFixture({ id: 'sd_globex', client: { id: 'globex' } }), {
+    const url = noteFixture().page.url;
+    await post(noteFixture({ id: 'sd_acme', client: { id: 'acme' } }), { env: fakeMulti });
+    await post(noteFixture({ id: 'sd_globex', client: { id: 'globex' } }), {
       env: fakeMulti,
       origin: 'https://globex.test',
     });
@@ -869,11 +869,11 @@ describe('one worker, several clients', () => {
     ).json();
 
     assert.deepEqual(
-      (acme as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      (acme as { issues: NoteIssue[] }).issues.map((issue) => issue.seed.id),
       ['sd_acme'],
     );
     assert.deepEqual(
-      (globex as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      (globex as { issues: NoteIssue[] }).issues.map((issue) => issue.seed.id),
       ['sd_globex'],
     );
   });
@@ -883,7 +883,7 @@ describe('one worker, several clients', () => {
     installLinearStub({ storedIssues: [] });
     const onlyTheMap: WorkerEnv = { ...env, ALLOWED_ORIGINS: 'https://elsewhere.test', FRUITBACK_CLIENTS: CLIENTS };
 
-    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+    const response = await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}&client=acme`, {
       env: onlyTheMap,
     });
 
@@ -903,7 +903,7 @@ describe('one worker, several clients', () => {
       TRUSTED_PROXY_HOPS: 'not-a-number',
     };
 
-    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+    const response = await get(`/feedback?url=${encodeURIComponent(noteFixture().page.url)}&client=acme`, {
       env: broken,
     });
 
@@ -1011,22 +1011,22 @@ describe('attribution', () => {
   it('keeps an anonymous submission anonymous', async () => {
     const stub = installLinearStub();
 
-    const response = await post(seedFixture({ reporter: undefined }));
+    const response = await post(noteFixture({ reporter: undefined }));
 
     assert.equal(response.status, 201);
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.equal(stored.seed.reporter, undefined);
+    assert.equal(stored.note.reporter, undefined);
   });
 
   it('stores a typed name as the claim it is', async () => {
     const stub = installLinearStub();
 
-    await post(seedFixture({ reporter: { name: 'Alice', email: 'alice@acme.test' } }));
+    await post(noteFixture({ reporter: { name: 'Alice', email: 'alice@acme.test' } }));
 
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.deepEqual(stored.seed.reporter, { name: 'Alice', email: 'alice@acme.test' });
+    assert.deepEqual(stored.note.reporter, { name: 'Alice', email: 'alice@acme.test' });
     assert.match(stub.issueInput().description, /Reported by.*unverified — self-declared/);
   });
 
@@ -1035,11 +1035,11 @@ describe('attribution', () => {
     // worker checked — which is a way to put a colleague's name on a complaint.
     const stub = installLinearStub();
 
-    await post(seedFixture({ reporter: { name: 'CEO', verified: true } }));
+    await post(noteFixture({ reporter: { name: 'CEO', verified: true } }));
 
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.deepEqual(stored.seed.reporter, { name: 'CEO' });
+    assert.deepEqual(stored.note.reporter, { name: 'CEO' });
     assert.doesNotMatch(stub.issueInput().description, /\(verified\)/);
   });
 
@@ -1047,15 +1047,15 @@ describe('attribution', () => {
     const stub = installLinearStub();
     const token = await signIdentityToken({ sub: 'user_42', name: 'Alice', exp: inAnHour() }, SECRET);
 
-    const response = await post(seedFixture({ reporter: undefined }), {
+    const response = await post(noteFixture({ reporter: undefined }), {
       env: identityEnv,
       headers: { Authorization: `Bearer ${token}` },
     });
 
     assert.equal(response.status, 201);
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.deepEqual(stored.seed.reporter, { id: 'user_42', name: 'Alice', verified: true });
+    assert.deepEqual(stored.note.reporter, { id: 'user_42', name: 'Alice', verified: true });
     assert.match(stub.issueInput().description, /Reported by\*\* · Alice \(verified\)/);
   });
 
@@ -1063,14 +1063,14 @@ describe('attribution', () => {
     const stub = installLinearStub();
     const token = await signIdentityToken({ sub: 'user_42', name: 'Alice', exp: inAnHour() }, SECRET);
 
-    await post(seedFixture({ reporter: { name: 'Someone Else', verified: true } }), {
+    await post(noteFixture({ reporter: { name: 'Someone Else', verified: true } }), {
       env: identityEnv,
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.deepEqual(stored.seed.reporter, { id: 'user_42', name: 'Alice', verified: true });
+    assert.deepEqual(stored.note.reporter, { id: 'user_42', name: 'Alice', verified: true });
   });
 
   it('refuses a token that does not verify rather than downgrading it', async () => {
@@ -1078,7 +1078,7 @@ describe('attribution', () => {
     // the note as anonymous is how a broken integration goes unnoticed for a month.
     const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, 'a-different-secret-of-good-length');
 
-    const response = await post(seedFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
+    const response = await post(noteFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
 
     assert.equal(response.status, 401);
     assert.partialDeepStrictEqual(await response.json(), { error: 'invalid-identity', reason: 'bad-signature' });
@@ -1087,7 +1087,7 @@ describe('attribution', () => {
   it('refuses an expired token', async () => {
     const token = await signIdentityToken({ sub: 'user_42', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET);
 
-    const response = await post(seedFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
+    const response = await post(noteFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
 
     assert.equal(response.status, 401);
     assert.partialDeepStrictEqual(await response.json(), { reason: 'expired' });
@@ -1096,7 +1096,7 @@ describe('attribution', () => {
   it('refuses a token when no secret is configured, rather than ignoring it', async () => {
     const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, SECRET);
 
-    const response = await post(seedFixture(), { headers: { Authorization: `Bearer ${token}` } });
+    const response = await post(noteFixture(), { headers: { Authorization: `Bearer ${token}` } });
 
     assert.equal(response.status, 401);
     assert.partialDeepStrictEqual(await response.json(), { reason: 'identity-not-configured' });
@@ -1111,15 +1111,15 @@ describe('attribution', () => {
     const stub = installLinearStub();
     const token = await signIdentityToken({ sub: 'user_7', exp: inAnHour() }, clientSecret);
 
-    const response = await post(seedFixture({ client: { id: 'acme' } }), {
+    const response = await post(noteFixture({ client: { id: 'acme' } }), {
       env: mapped,
       headers: { Authorization: `Bearer ${token}` },
     });
 
     assert.equal(response.status, 201);
-    const stored = parseSeedFromDescription(stub.issueInput().description);
+    const stored = parseNoteFromDescription(stub.issueInput().description);
     assert.ok(stored.ok);
-    assert.partialDeepStrictEqual(stored.seed.reporter, { id: 'user_7', verified: true });
+    assert.partialDeepStrictEqual(stored.note.reporter, { id: 'user_7', verified: true });
   });
 });
 
@@ -1127,10 +1127,10 @@ describe('the team’s replies on the read path', () => {
   it('returns them oldest first, whatever order Linear gave', async () => {
     // Linear answers newest-first by default. The order is settled once, in the worker, so the
     // widget renders what it is handed rather than sorting it again on the other side.
-    const seed = seedFixture();
+    const seed = noteFixture();
     installLinearStub({
       storedIssues: [
-        storedIssueFromSeed(seed, {
+        storedIssueFromNote(seed, {
           comments: {
             nodes: [
               { id: 'c2', body: 'Puis celui-ci.', createdAt: '2026-08-02T10:00:00.000Z', user: { name: 'Bruno' } },
@@ -1142,7 +1142,7 @@ describe('the team’s replies on the read path', () => {
     });
 
     const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    const { issues } = (await response.json()) as { issues: NoteIssue[] };
 
     assert.deepEqual(
       issues[0]?.comments?.map((comment) => comment.body),
@@ -1154,17 +1154,17 @@ describe('the team’s replies on the read path', () => {
   it('keeps a comment whose author Linear no longer knows', async () => {
     // An integration, or a deleted account. Dropping the comment would lose the reply; inventing a
     // name would be worse.
-    const seed = seedFixture();
+    const seed = noteFixture();
     installLinearStub({
       storedIssues: [
-        storedIssueFromSeed(seed, {
+        storedIssueFromNote(seed, {
           comments: { nodes: [{ id: 'c1', body: 'Sans auteur.', createdAt: '2026-08-01T10:00:00.000Z', user: null }] },
         }),
       ],
     });
 
     const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    const { issues } = (await response.json()) as { issues: NoteIssue[] };
 
     assert.equal(issues[0]?.comments?.length, 1);
     assert.equal(issues[0]?.comments?.[0]?.author, undefined);
@@ -1173,21 +1173,21 @@ describe('the team’s replies on the read path', () => {
   it('says nothing rather than empty when a client turned replies off', async () => {
     // Absent and empty mean different things to the widget: one is "not asked", the other is "asked,
     // none". A client with comments off must not read as a team that never answered.
-    const seed = seedFixture({ client: { id: 'acme' } });
+    const seed = noteFixture({ client: { id: 'acme' } });
     const hidden: WorkerEnv = {
       ...env,
       FRUITBACK_CLIENTS: JSON.stringify({ acme: { teamId: 'team_1', showComments: false } }),
     };
     installLinearStub({
       storedIssues: [
-        storedIssueFromSeed(seed, {
+        storedIssueFromNote(seed, {
           comments: { nodes: [{ id: 'c1', body: 'Interne.', createdAt: '2026-08-01T10:00:00.000Z', user: null }] },
         }),
       ],
     });
 
     const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}&client=acme`, { env: hidden });
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    const { issues } = (await response.json()) as { issues: NoteIssue[] };
 
     assert.equal(issues.length, 1);
     assert.equal(issues[0]?.comments, undefined);
@@ -1200,8 +1200,8 @@ describe('who may read a pin (FRU-40)', () => {
   const closed: WorkerEnv = { ...env, FRUITBACK_READ: 'authenticated', FRUITBACK_IDENTITY_SECRET: SECRET };
 
   function planted() {
-    const seed = seedFixture();
-    installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const seed = noteFixture();
+    installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
 
     return `/feedback?url=${encodeURIComponent(seed.page.url)}`;
   }
@@ -1210,7 +1210,7 @@ describe('who may read a pin (FRU-40)', () => {
     const response = await get(planted());
 
     assert.equal(response.status, 200);
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    const { issues } = (await response.json()) as { issues: NoteIssue[] };
     assert.equal(issues.length, 1);
   });
 
@@ -1229,7 +1229,7 @@ describe('who may read a pin (FRU-40)', () => {
     const response = await get(planted(), { env: closed, headers: { Authorization: `Bearer ${token}` } });
 
     assert.equal(response.status, 200);
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    const { issues } = (await response.json()) as { issues: NoteIssue[] };
     assert.equal(issues.length, 1);
   });
 
@@ -1274,8 +1274,8 @@ describe('who may read a pin (FRU-40)', () => {
     // This is what actually pins the gate's *position*. A 401 returned after the fetch looks
     // identical from outside, so asserting the status cannot tell the two apart — but it lets an
     // anonymous caller spend the worker's Linear quota by hammering a closed endpoint.
-    const seed = seedFixture();
-    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const seed = noteFixture();
+    const stub = installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
 
     const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`, { env: closed });
 
@@ -1339,8 +1339,8 @@ describe('who may read a pin (FRU-40)', () => {
   });
 
   it('lets one client keep its reads open while another closes them', async () => {
-    const seed = seedFixture({ client: { id: 'acme' } });
-    installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const seed = noteFixture({ client: { id: 'acme' } });
+    installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
     const mixed: WorkerEnv = {
       ...env,
       FRUITBACK_CLIENTS: JSON.stringify({
@@ -1452,7 +1452,7 @@ describe('one store per process, not one per request (FRU-29)', () => {
     const stub = installLinearStub();
     const { seen, store } = countingStore();
 
-    const response = await post(seedFixture(), { store });
+    const response = await post(noteFixture(), { store });
 
     assert.equal(response.status, 201);
     assert.equal(seen.writes, 1);

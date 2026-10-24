@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import type { SeedStage } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import type { NoteStage } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import type { NoteEntry } from './notes-index.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
@@ -103,11 +103,11 @@ async function acme() {
     on: { workspace: string; site: string; origin: string },
     i: number,
     path: string,
-    stage: SeedStage,
+    stage: NoteStage,
     note: string,
     author?: string,
   ) => {
-    const seed = seedFixture({ id: `sd_${on.site}_${i}`, note, page: { url: `${on.origin}${path}`, path } });
+    const seed = noteFixture({ id: `sd_${on.site}_${i}`, note, page: { url: `${on.origin}${path}`, path } });
     const entry: NoteEntry = {
       workspace: on.workspace,
       site: on.site,

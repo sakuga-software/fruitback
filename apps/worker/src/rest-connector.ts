@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
-import type { Seed } from '@fruitback/shared';
+import type { Note } from '@fruitback/shared';
 import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
 import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
@@ -169,7 +169,7 @@ export type DeliveryBody = {
   site: { id: string; origin?: string };
   /** What Fruitback calls the note, as its thread shows it. */
   identifier: string;
-  seed: Seed;
+  seed: Note;
   /**
    * The files of the note (FRU-331), as the queue keeps them: an id in transit, a name, a type, a
    * size. Each attempt replaces this list with `SentAttachment`s: see `withSignedFiles`.

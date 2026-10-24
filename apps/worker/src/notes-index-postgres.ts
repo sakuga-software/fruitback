@@ -1,5 +1,5 @@
-import type { SeedIssue, SeedStage } from '@fruitback/shared';
-import { SEED_STAGES } from '@fruitback/shared';
+import type { NoteIssue, NoteStage } from '@fruitback/shared';
+import { NOTE_STAGES } from '@fruitback/shared';
 import { and, count, eq, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
 import { member, user } from './auth-schema.ts';
 import {
@@ -17,7 +17,7 @@ import {
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { connectors, deliveries, note_index, seeds, sites } from './postgres-schema.ts';
-import { isSameSeed, keptRowOf } from './seed-rows.ts';
+import { isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
 /** The index of the notes in the database of the worker (FRU-237). See `notes-index.ts`. */
@@ -71,7 +71,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       // one note twice). One statement cannot write one row twice, and would write nothing of the
       // page: the first is kept.
       const known = once(
-        issues.filter((issue) => (SEED_STAGES as readonly string[]).includes(issue.stage)),
+        issues.filter((issue) => (NOTE_STAGES as readonly string[]).includes(issue.stage)),
         (issue) => issue.seed.id,
       );
       if (known.length === 0) return;
@@ -79,7 +79,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
         db
           .insert(note_index)
           .values(
-            known.map((issue: SeedIssue) => ({
+            known.map((issue: NoteIssue) => ({
               site_id: site,
               seed_id: issue.seed.id,
               workspace_id: workspace,
@@ -180,8 +180,8 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           checked: Number.POSITIVE_INFINITY,
           ways: new Set(),
         };
-        if ((SEED_STAGES as readonly string[]).includes(row.stage))
-          site.notes[row.stage as SeedStage] += Number(row.notes);
+        if ((NOTE_STAGES as readonly string[]).includes(row.stage))
+          site.notes[row.stage as NoteStage] += Number(row.notes);
         site.last = Math.max(site.last, Number(row.last ?? 0));
         site.checked = Math.min(site.checked, Number(row.checked ?? Number.POSITIVE_INFINITY));
         if (row.script === true) site.ways.add('script');
@@ -310,7 +310,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
         return {
           notes: shown.map((row) =>
-            listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)), kept: kept.get(keyOfSeed(row.row)) }),
+            listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)), kept: kept.get(keyOfNoteId(row.row)) }),
           ),
           total:
             query.place === undefined
@@ -357,7 +357,7 @@ type Pending = {
 };
 
 /** A note of a page, by its site and the id the widget gave it. */
-function keyOfSeed(row: typeof note_index.$inferSelect): string {
+function keyOfNoteId(row: typeof note_index.$inferSelect): string {
   return JSON.stringify([row.site_id, row.seed_id]);
 }
 
@@ -389,9 +389,9 @@ async function keptOf(
   const kept = new Map<string, { statusKey: string | null; stage: string }>();
   for (const { id, row } of owned) {
     const seed = found.find(
-      (one) => Number(one.id) === id && one.site === row.site_id && isSameSeed(one.seed, row.seed_id),
+      (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.seed, row.seed_id),
     );
-    if (seed !== undefined) kept.set(keyOfSeed(row), { statusKey: seed.statusKey, stage: seed.stage });
+    if (seed !== undefined) kept.set(keyOfNoteId(row), { statusKey: seed.statusKey, stage: seed.stage });
   }
 
   return kept;

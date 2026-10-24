@@ -14,9 +14,9 @@ import type { NoteIndex } from './notes-index.ts';
 import { checkReplyLimit } from './rate-limit.ts';
 import { checkedOf } from './reply-text.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type CheckVerdict, type SeedStore, StoreError, takesChecks, takesReplies, takesStatuses } from './store.ts';
+import { type CheckVerdict, type NoteStore, StoreError, takesChecks, takesReplies, takesStatuses } from './store.ts';
 import { OWN_SOURCE, isBuiltIn, readSiteStatus } from './site-statuses.ts';
-import { DEFAULT_SEED_STAGE, type SeedStage } from '@fruitback/shared';
+import { DEFAULT_NOTE_STAGE, type NoteStage } from '@fruitback/shared';
 
 /**
  * The routes that write under a note (FRU-363), out of `app.ts` so that a review reads them in one
@@ -39,7 +39,7 @@ export async function postReply(
   request: Request,
   issue: string,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   context: { clientIp: string; accounts: AccountStore | undefined; stillWrites: () => Promise<boolean> },
@@ -155,7 +155,7 @@ export async function postCheck(
   request: Request,
   issue: string,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   context: {
@@ -318,7 +318,7 @@ export async function postStatus(
   request: Request,
   issue: string,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   context: {
@@ -347,7 +347,7 @@ export async function postStatus(
   if (typeof asked !== 'string') return json(400, { error: 'invalid-status' }, corsHeaders);
   if (!asked.startsWith(prefix)) return json(400, { error: 'not-own' }, corsHeaders);
   const key = asked.slice(prefix.length);
-  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_SEED_STAGE }).ok) {
+  if (!readSiteStatus({ source: OWN_SOURCE, key, stage: DEFAULT_NOTE_STAGE }).ok) {
     return json(400, { error: 'invalid-status' }, corsHeaders);
   }
 
@@ -377,8 +377,8 @@ export async function postStatus(
     const row = rows.find((one) => one.source === OWN_SOURCE && one.key === key);
     if (row?.hidden === true) return json(409, { error: 'status-hidden' }, corsHeaders);
     // A built-in status writes no key: a note with none is in the built-in status of its stage.
-    let chosen: { key: string | null; stage: SeedStage };
-    if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as SeedStage };
+    let chosen: { key: string | null; stage: NoteStage };
+    if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as NoteStage };
     else if (row !== undefined) chosen = { key, stage: row.stage };
     else return json(400, { error: 'unknown-status' }, corsHeaders);
 

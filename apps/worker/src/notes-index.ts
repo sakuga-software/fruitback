@@ -1,4 +1,4 @@
-import { SEED_STAGES, type Seed, type SeedIssue, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage } from '@fruitback/shared';
 
 /**
  * The index of the notes of a workspace (FRU-237): one row for each note this worker planted for a
@@ -66,18 +66,18 @@ export type Place = { kind: 'fruitback' } | { kind: 'connector'; connector: stri
 export type NoteEntry = {
   workspace: string;
   site: string;
-  seed: Seed;
+  seed: Note;
   channel: Channel;
   author: { kind: AuthorKind; account?: string };
   place: Place;
   issue: { identifier: string; url?: string };
   /** The stage of a note that was just planted. */
-  stage: SeedStage;
+  stage: NoteStage;
 };
 
 /** The notes of one site, as the console and the extension read them. */
 export type SiteNotes = {
-  notes: Record<SeedStage, number>;
+  notes: Record<NoteStage, number>;
   lastNoteAt?: string;
   via: Channel[];
   /** The oldest instant at which a tracker confirmed the stage of a note of this site. */
@@ -86,7 +86,7 @@ export type SiteNotes = {
 
 /** No note: five zeros, and nothing else. */
 export function noNotes(): SiteNotes {
-  return { notes: Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])) as Record<SeedStage, number>, via: [] };
+  return { notes: Object.fromEntries(NOTE_STAGES.map((stage) => [stage, 0])) as Record<NoteStage, number>, via: [] };
 }
 
 export type NoteIndex = {
@@ -101,7 +101,7 @@ export type NoteIndex = {
     workspace: string,
     site: string,
     place: Place,
-    issues: readonly SeedIssue[],
+    issues: readonly NoteIssue[],
     now: number,
     /**
      * Whether a person can give a verdict on these notes (FRU-295): the read shows the replies, and
@@ -159,7 +159,7 @@ export type NoteCursor = { at: number; site: string; seed: string };
 /** What `list` filters on. Each field narrows; an absent one does not. */
 export type NoteQuery = {
   site?: string;
-  stage?: SeedStage;
+  stage?: NoteStage;
   /** `fruitback`, or the id of a connector of the workspace. */
   place?: string;
   /** The account whose own notes are asked (`mine`). */
@@ -244,7 +244,7 @@ export type IndexedNote = {
 };
 
 /** The author of a note, from what the worker verified when it took it. */
-export function authorOf(seed: Seed, session: boolean): { kind: AuthorKind; account?: string } {
+export function authorOf(seed: Note, session: boolean): { kind: AuthorKind; account?: string } {
   if (seed.reporter?.verified !== true) return { kind: 'visitor' };
   if (session && seed.reporter.id !== undefined) return { kind: 'member', account: seed.reporter.id };
 

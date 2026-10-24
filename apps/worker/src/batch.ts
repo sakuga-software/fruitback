@@ -1,7 +1,7 @@
-import type { Seed } from '@fruitback/shared';
+import type { Note } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { Kv } from './kv.ts';
-import { type BatchAnswer, type BatchMemory, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type BatchMemory, type NoteStore, StoreError } from './store.ts';
 
 /**
  * Plants the seeds of a batch (FRU-124): through the store's own `createBatch`, or one `create` for
@@ -12,8 +12,8 @@ import { type BatchAnswer, type BatchMemory, type SeedStore, StoreError } from '
  * answers `502` as a single note does.
  */
 export async function createAll(
-  store: SeedStore,
-  seeds: readonly Seed[],
+  store: NoteStore,
+  seeds: readonly Note[],
   client: ClientConfig | undefined,
   policy: ClientPolicy,
   /** What an earlier attempt left for these seeds (FRU-195). */
@@ -21,7 +21,7 @@ export async function createAll(
 ): Promise<BatchAnswer[]> {
   const answers = store.createBatch === undefined ? await oneByOne(store, seeds, client, policy) : undefined;
   const found =
-    answers ?? (await (store.createBatch as NonNullable<SeedStore['createBatch']>)(seeds, client, policy, memory));
+    answers ?? (await (store.createBatch as NonNullable<NoteStore['createBatch']>)(seeds, client, policy, memory));
   if (found.length !== seeds.length) throw new StoreError('The store did not answer for every note of the batch');
   if (found.every((answer) => 'error' in answer)) throw new StoreError('The store kept no note of the batch');
 
@@ -30,8 +30,8 @@ export async function createAll(
 
 /** In order, one at a time: a tracker that refuses the first one is not asked the others at once. */
 async function oneByOne(
-  store: SeedStore,
-  seeds: readonly Seed[],
+  store: NoteStore,
+  seeds: readonly Note[],
   client: ClientConfig | undefined,
   policy: ClientPolicy,
 ): Promise<BatchAnswer[]> {
@@ -98,10 +98,10 @@ function parentKey(clientId: string | undefined, scope: string, seedId: string):
  */
 export function batchMemory(
   kv: Kv,
-  store: SeedStore,
+  store: NoteStore,
   clientId: string | undefined,
   target: ClientConfig | undefined,
-  seeds: readonly Seed[],
+  seeds: readonly Note[],
 ): BatchMemory {
   const keys = (): string[] => {
     const scope = store.scope(target);

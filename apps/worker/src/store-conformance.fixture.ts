@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'vitest';
-import { DEFAULT_SEED_STAGE, SEED_STAGES, type Seed, type SeedStage, canonicalizePageUrl } from '@fruitback/shared';
-import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type Note, type NoteStage, canonicalizePageUrl } from '@fruitback/shared';
+import { minimalNoteFixture, noteFixture } from '@fruitback/shared/note.fixture';
 import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { checkText, replyText } from './reply-text.ts';
-import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { type CreatedIssue, type NoteStore, StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
- * What every `SeedStore` promises, whatever holds the seeds (FRU-34).
+ * What every `NoteStore` promises, whatever holds the seeds (FRU-34).
  *
  * `store-conformance.test.ts` runs this suite once for each entry in `STORE_SPECS`. A remote store
  * runs against a double that keeps what it receives, so that a read finds what a write stored.
@@ -41,7 +41,7 @@ export type ConformanceSubject = {
   /** Why the whole suite cannot run here: the cases are reported as skipped, with the reason. */
   skip?: string | false;
   /** Prepare an empty store and its double. Called before each case. */
-  open(): SeedStore | Promise<SeedStore>;
+  open(): NoteStore | Promise<NoteStore>;
   /** Remove what `open`, `broken` or `unreachable` prepared. Called after each case. */
   close(): void | Promise<void>;
   /**
@@ -50,7 +50,7 @@ export type ConformanceSubject = {
    */
   readWithNoClient?: string;
   /** The stage of a seed just written. Absent when the store picks it some other way. */
-  writtenStage?: SeedStage;
+  writtenStage?: NoteStage;
   /** The most replies a read returns on one seed. A case writes more, and the store matrix of `docs/self-hosting.md` gives it. */
   replyCap: number | string;
   /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
@@ -61,7 +61,7 @@ export type ConformanceSubject = {
    * Write the seed with the replies of `repliesNewestFirst(count)`. A store that writes its own replies
    * can write another number, but at least two, stored newest first.
    */
-  plantReplies(store: SeedStore, seed: Seed, count: number): Promise<void>;
+  plantReplies(store: NoteStore, seed: Note, count: number): Promise<void>;
   /** Why this store takes no reply (FRU-257). Absent: it takes one, and a read shows it. */
   noReply?: string;
   /** Why this store takes no verdict (FRU-294). Absent: it takes one, and a read shows it. */
@@ -69,11 +69,11 @@ export type ConformanceSubject = {
   /** Mark a stored seed done, as the team would in the store. */
   markDone: ((created: CreatedIssue) => void | Promise<void>) | string;
   /** A store whose provider answers every call with an error. It replaces the double of `open`. */
-  broken: (() => SeedStore) | string;
+  broken: (() => NoteStore) | string;
   /** A store whose provider cannot be reached, so every call rejects. It replaces the double of `open`. */
-  unreachable: (() => SeedStore) | string;
+  unreachable: (() => NoteStore) | string;
   /** A store whose provider answers with something it cannot read. It replaces the double of `open`. */
-  garbled: (() => SeedStore) | string;
+  garbled: (() => NoteStore) | string;
 };
 
 const POLICY: ClientPolicy = {
@@ -96,12 +96,12 @@ const ENV: WorkerEnv = beforePostgres({
 const PAGE = canonicalizePageUrl('https://preview.acme.test/pricing');
 const PAGE_WITH_QUERY = canonicalizePageUrl('https://preview.acme.test/pricing?tab=annual');
 
-function seedFor(id: string, url: string, client: string | undefined): Seed {
+function noteAt(id: string, url: string, client: string | undefined): Note {
   const page = { url, path: '/pricing', title: 'Pricing — Acme' };
 
   return client === undefined
-    ? minimalSeedFixture({ id, page })
-    : seedFixture({ id, page, client: { id: client, name: client } });
+    ? minimalNoteFixture({ id, page })
+    : noteFixture({ id, page, client: { id: client, name: client } });
 }
 
 function skipReason(step: unknown): string | false {
@@ -109,8 +109,8 @@ function skipReason(step: unknown): string | false {
 }
 
 /** The store rejects with `StoreError`, and the worker answers `502 store-unavailable` on both routes. */
-async function assertStoreUnavailable(failing: SeedStore): Promise<void> {
-  const seed = seedFor('sd_outage', PAGE, 'acme');
+async function assertStoreUnavailable(failing: NoteStore): Promise<void> {
+  const seed = noteAt('sd_outage', PAGE, 'acme');
 
   await assert.rejects(failing.create(seed, undefined, POLICY), StoreError);
   await assert.rejects(failing.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY), StoreError);
@@ -143,10 +143,10 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
   const where = subject.on === undefined ? '' : `, on ${subject.on}`;
 
   describe(
-    `the ${subject.provider} store keeps the SeedStore promises${where}`,
+    `the ${subject.provider} store keeps the NoteStore promises${where}`,
     { skip: Boolean(subject.skip) },
     () => {
-      let store: SeedStore;
+      let store: NoteStore;
 
       beforeEach(async () => {
         store = await subject.open();
@@ -162,7 +162,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         store.findForPage({ url, clientId }, undefined, policy);
 
       it('reads a written seed back as the same seed', async () => {
-        const seed = seedFor('sd_round_trip', PAGE, 'acme');
+        const seed = noteAt('sd_round_trip', PAGE, 'acme');
         const created = await store.create(seed, undefined, POLICY);
 
         const found = await find(PAGE, 'acme');
@@ -173,15 +173,15 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         assert.equal(found[0]?.identifier, created.identifier);
         const stage = found[0]?.stage;
         assert.ok(
-          (store.stages ?? SEED_STAGES).some((declared) => declared === stage),
+          (store.stages ?? NOTE_STAGES).some((declared) => declared === stage),
           'a stage the store does not declare',
         );
         if (subject.writtenStage !== undefined) assert.equal(stage, subject.writtenStage);
       });
 
       it('keeps a page apart from the same page with a query string', async () => {
-        await store.create(seedFor('sd_page', PAGE, 'acme'), undefined, POLICY);
-        await store.create(seedFor('sd_page_with_query', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+        await store.create(noteAt('sd_page', PAGE, 'acme'), undefined, POLICY);
+        await store.create(noteAt('sd_page_with_query', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
 
         const ids = async (url: string) => (await find(url, 'acme')).map((issue) => issue.seed.id);
 
@@ -190,9 +190,9 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       });
 
       it('never gives one client the seeds of another, or a seed that names no client', async () => {
-        await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
-        await store.create(seedFor('sd_globex', PAGE, 'globex'), undefined, POLICY);
-        await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
+        await store.create(noteAt('sd_acme', PAGE, 'acme'), undefined, POLICY);
+        await store.create(noteAt('sd_globex', PAGE, 'globex'), undefined, POLICY);
+        await store.create(noteAt('sd_nobody', PAGE, undefined), undefined, POLICY);
 
         const ids = async (clientId: string) => (await find(PAGE, clientId)).map((issue) => issue.seed.id);
 
@@ -205,9 +205,9 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         'gives a read that names no client every seed on the page',
         { skip: Boolean(subject.readWithNoClient) },
         async () => {
-          await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
-          await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
-          await store.create(seedFor('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+          await store.create(noteAt('sd_acme', PAGE, 'acme'), undefined, POLICY);
+          await store.create(noteAt('sd_nobody', PAGE, undefined), undefined, POLICY);
+          await store.create(noteAt('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
 
           const ids = (await find(PAGE, undefined)).map((issue) => issue.seed.id).sort();
 
@@ -223,8 +223,8 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           const tenant = subject.otherTenant;
           // The default tenant is written first, as on a worker that already served it: its labels
           // exist, and a store that looks them up in the wrong tenant finds them.
-          await store.create(seedFor('sd_default_tenant', PAGE, 'acme'), undefined, POLICY);
-          await store.create(seedFor('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
+          await store.create(noteAt('sd_default_tenant', PAGE, 'acme'), undefined, POLICY);
+          await store.create(noteAt('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
 
           const ids = async (client: typeof tenant | undefined) =>
             (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.seed.id);
@@ -239,18 +239,18 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         'draws a state it does not know at the default stage',
         { skip: skipReason(subject.unknownState) !== false },
         async () => {
-          const created = await store.create(seedFor('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
+          const created = await store.create(noteAt('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
           if (typeof subject.unknownState === 'function') await subject.unknownState(created);
 
           const found = await find(PAGE, 'acme');
 
           assert.equal(found.length, 1);
-          assert.equal(found[0]?.stage, DEFAULT_SEED_STAGE);
+          assert.equal(found[0]?.stage, DEFAULT_NOTE_STAGE);
         },
       );
 
       it('returns the replies oldest first', async () => {
-        await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'), 2);
+        await subject.plantReplies(store, noteAt('sd_replies', PAGE, 'acme'), 2);
 
         const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
 
@@ -264,7 +264,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         { skip: Boolean(subject.noReply) },
         async () => {
           assert.ok(store.reply !== undefined, 'the store takes no reply and says no reason');
-          const created = await store.create(seedFor('sd_answered', PAGE, 'acme'), undefined, POLICY);
+          const created = await store.create(noteAt('sd_answered', PAGE, 'acme'), undefined, POLICY);
           const reply = { body: 'Seen on the phone too.', author: { kind: 'visitor' as const, name: 'Bob' } };
 
           const written = await store.reply({ issue: created.id, clientId: 'acme' }, reply, undefined, POLICY);
@@ -290,7 +290,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         { skip: (subject.noCheck ?? skipReason(subject.markDone)) !== false },
         async () => {
           assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
-          const created = await store.create(seedFor('sd_fixed', PAGE, 'acme'), undefined, POLICY);
+          const created = await store.create(noteAt('sd_fixed', PAGE, 'acme'), undefined, POLICY);
           if (typeof subject.markDone === 'function') await subject.markDone(created);
           const check = { verdict: 'fixed' as const, author: CHECKER };
 
@@ -312,7 +312,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         { skip: (subject.noCheck ?? skipReason(subject.markDone)) !== false },
         async () => {
           assert.ok(store.check !== undefined, 'the store takes no verdict and says no reason');
-          const created = await store.create(seedFor('sd_wrong', PAGE, 'acme'), undefined, POLICY);
+          const created = await store.create(noteAt('sd_wrong', PAGE, 'acme'), undefined, POLICY);
           if (typeof subject.markDone === 'function') await subject.markDone(created);
           const check = { verdict: 'wrong' as const, author: CHECKER, body: 'Still grey.' };
 
@@ -333,7 +333,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       });
 
       it('leaves the replies out when the client hides them', async () => {
-        await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'), 2);
+        await subject.plantReplies(store, noteAt('sd_hidden_replies', PAGE, 'acme'), 2);
 
         const [shown] = await find(PAGE, 'acme', POLICY);
         const [hidden] = await find(PAGE, 'acme', QUIET);
@@ -346,7 +346,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) !== false }, async () => {
         if (typeof subject.replyCap !== 'number') return;
         const cap = subject.replyCap;
-        await subject.plantReplies(store, seedFor('sd_long_thread', PAGE, 'acme'), cap + 2);
+        await subject.plantReplies(store, noteAt('sd_long_thread', PAGE, 'acme'), cap + 2);
 
         const bodies = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.body) ?? [];
 
@@ -358,7 +358,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       });
 
       it('says empty when a seed has no replies', async () => {
-        await store.create(seedFor('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
+        await store.create(noteAt('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
 
         const [shown] = await find(PAGE, 'acme', POLICY);
 

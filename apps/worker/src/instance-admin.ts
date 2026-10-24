@@ -1,4 +1,4 @@
-import type { SeedStage } from '@fruitback/shared';
+import type { NoteStage } from '@fruitback/shared';
 import {
   type Account,
   type ConnectorAttention,
@@ -330,7 +330,7 @@ export const USER_FILTERS = ['all', 'admins', 'alone'] as const;
 
 export type AdminQuery<Show extends string> = { q?: string; show: Show };
 
-export type StageCounts = Record<SeedStage, number>;
+export type StageCounts = Record<NoteStage, number>;
 
 /** A workspace, as the administrator names it in an answer. */
 export type WorkspaceName = { id: string; name: string };

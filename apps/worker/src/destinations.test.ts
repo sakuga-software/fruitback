@@ -1,6 +1,6 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type Role, destinationId } from './accounts.ts';
 import { IDENTITY_SECRET } from './auth-worker.fixture.ts';
 import {
@@ -178,7 +178,7 @@ async function acme(env: World) {
   };
   let written = 0;
   const write = (text: string, options: { token?: string; destination?: string } = {}) => {
-    const seed = seedFixture();
+    const seed = noteFixture();
     written += 1;
 
     return call(

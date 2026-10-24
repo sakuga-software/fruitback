@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { GITHUB_STAGES, readRsaPrivateKey } from './github.ts';
@@ -285,7 +285,7 @@ async function tenant(world: World, githubApp: GithubApp, installation: number, 
     sites.push({
       site,
       write: (note: string) => {
-        const seed = seedFixture();
+        const seed = noteFixture();
 
         return call(world, githubApp, 'POST', '/feedback', {
           origin,

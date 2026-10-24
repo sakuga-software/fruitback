@@ -156,7 +156,7 @@ export function statusOf(
  * A reply from the team, as the widget shows it (FRU-13).
  *
  * Part of the read envelope, not of the note. Comments live in whichever store answers — Linear, and
- * `seeds-postgres.ts` in its own table — and are fetched from it. Nothing here changes the round trip, so
+ * `notes-postgres.ts` in its own table — and are fetched from it. Nothing here changes the round trip, so
  * `SEED_VERSION` does not move.
  */
 export const noteCommentSchema = z.object({

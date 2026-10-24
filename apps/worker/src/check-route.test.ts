@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { REPLY_LENGTH } from './app.ts';
 import { REPLY_LIMIT } from './rate-limit.ts';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { createMemoryStore, resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { checkedOf, verdictOf } from './reply-text.ts';
@@ -48,7 +48,7 @@ async function noteOf(
   origin = ORIGIN,
 ): Promise<{ id: string; seed: string }> {
   const url = `${origin}/pricing`;
-  const seed = seedFixture({
+  const seed = noteFixture({
     id,
     page: { url, path: '/pricing', title: 'Pricing' },
     client: { id: site, name: 'Acme' },
@@ -87,7 +87,7 @@ function check(
   site: string,
   issue: string,
   body: Record<string, unknown>,
-  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex; store?: SeedStore } = {},
+  options: { token?: string; cookie?: string; ip?: string; noteIndex?: NoteIndex; store?: NoteStore } = {},
 ): Promise<Answer> {
   const token = options.cookie ?? options.token;
 
@@ -317,7 +317,7 @@ describe('a verdict, when two come at once or a store fails (FRU-294, heavy revi
     const { world, site, member, owner, note } = await aDoneNote();
     // A tracker that takes its time: the second request reads the note while the first writes.
     const memory = createMemoryStore();
-    const slow: SeedStore = {
+    const slow: NoteStore = {
       ...memory,
       check: async (...args) => {
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -340,7 +340,7 @@ describe('a verdict, when two come at once or a store fails (FRU-294, heavy revi
     // The first request writes for 150 ms, and the second reads the note during that write. The
     // second then waits on the index past the end of the first, and takes the key that it gave back.
     const memory = createMemoryStore();
-    const slow: SeedStore = {
+    const slow: NoteStore = {
       ...memory,
       check: async (...args) => {
         await new Promise((resolve) => setTimeout(resolve, 150));
@@ -380,7 +380,7 @@ describe('a verdict, when two come at once or a store fails (FRU-294, heavy revi
     const { world, site, member, note } = await aDoneNote();
     const memory = createMemoryStore();
     let fails = 1;
-    const flaky: SeedStore = {
+    const flaky: NoteStore = {
       ...memory,
       check: async (...args) => {
         if (fails-- > 0) throw new StoreError('Linear could not be reached');

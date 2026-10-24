@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { createPrivateKey, generateKeyPairSync, verify } from 'node:crypto';
 import { afterEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
-import { DEFAULT_SEED_STAGE, SEED_STAGES, buildIssueDescription } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES, buildIssueDescription } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type ClientPolicy, readClientMap } from './clients.ts';
 import {
   GITHUB_STAGES,
@@ -36,7 +36,7 @@ const POLICY: ClientPolicy = {
   write: 'public',
   locale: 'en',
 };
-const PAGE = seedFixture().page.url;
+const PAGE = noteFixture().page.url;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -82,7 +82,7 @@ function installation(options: { repository?: string; expiresAt?: string } = {})
   };
 }
 
-function row(overrides: Record<string, unknown> = {}, seed = seedFixture()) {
+function row(overrides: Record<string, unknown> = {}, seed = noteFixture()) {
   return {
     id: 9001,
     number: 12,
@@ -122,7 +122,7 @@ describe('stageForGithubIssue', () => {
   });
 
   it('draws a state it does not know at the default of the contract', () => {
-    assert.equal(stageForGithubIssue('locked', null), DEFAULT_SEED_STAGE);
+    assert.equal(stageForGithubIssue('locked', null), DEFAULT_NOTE_STAGE);
   });
 
   it('declares exactly the stages it can return, in the order of the contract', () => {
@@ -137,7 +137,7 @@ describe('stageForGithubIssue', () => {
 
     assert.deepEqual([...returned].sort(), [...GITHUB_STAGES].sort());
     assert.deepEqual(
-      SEED_STAGES.filter((stage) => GITHUB_STAGES.includes(stage)),
+      NOTE_STAGES.filter((stage) => GITHUB_STAGES.includes(stage)),
       [...GITHUB_STAGES],
     );
   });
@@ -286,7 +286,7 @@ describe('create', () => {
       'POST /repos/acme/site/issues': created,
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
-    const seed = seedFixture({ client: { id: 'Acme', name: 'Acme' } });
+    const seed = noteFixture({ client: { id: 'Acme', name: 'Acme' } });
 
     await store.create(seed, undefined, POLICY);
 
@@ -301,7 +301,7 @@ describe('create', () => {
   });
 
   it('creates the two labels, then the issue with the shared codec', async () => {
-    const seed = seedFixture();
+    const seed = noteFixture();
     const calls = fakeGithub({
       ...installation(),
       'POST /repos/acme/site/labels': () => json(201, {}),
@@ -330,7 +330,7 @@ describe('create', () => {
 
   /** The prose follows the worker's own locale, wherever the issues are kept (FRU-39). */
   it('writes the issue body in the locale the policy carries', async () => {
-    const seed = seedFixture();
+    const seed = noteFixture();
     const calls = fakeGithub({
       ...installation(),
       'POST /repos/acme/site/labels': () => json(201, {}),
@@ -354,7 +354,7 @@ describe('create', () => {
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
 
-    assert.equal((await store.create(seedFixture(), undefined, POLICY)).identifier, '#12');
+    assert.equal((await store.create(noteFixture(), undefined, POLICY)).identifier, '#12');
   });
 
   it('stops before the issue if a label cannot be created', async () => {
@@ -371,7 +371,7 @@ describe('create', () => {
       });
       const store = createGithubStore(CONFIG, { now: () => NOW });
 
-      await assert.rejects(store.create(seedFixture(), undefined, POLICY), StoreError);
+      await assert.rejects(store.create(noteFixture(), undefined, POLICY), StoreError);
       assert.equal(calls.filter((call) => call.path === '/repos/acme/site/issues').length, 0);
       vi.restoreAllMocks();
     }
@@ -383,7 +383,7 @@ describe('create', () => {
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
 
-    await assert.rejects(store.create(seedFixture(), undefined, POLICY), StoreError);
+    await assert.rejects(store.create(noteFixture(), undefined, POLICY), StoreError);
   });
 });
 
@@ -414,8 +414,8 @@ describe('findForPage', () => {
   });
 
   it('keeps only the seeds of this exact page, and no pull request', async () => {
-    const seed = seedFixture();
-    const otherPage = seedFixture({
+    const seed = noteFixture();
+    const otherPage = noteFixture({
       id: 'sd_other',
       page: { url: 'https://preview.acme.test/pricing', path: '/pricing', title: 'Pricing — Acme' },
     });
@@ -459,7 +459,7 @@ describe('findForPage', () => {
     const label = githubLabelName('fruitback:acme,staging');
     const { calls, issues } = readWith(
       [
-        row({ labels: [{ name: 'fruitback' }, { name: label }] }, seedFixture({ client: { id: 'acme,staging' } })),
+        row({ labels: [{ name: 'fruitback' }, { name: label }] }, noteFixture({ client: { id: 'acme,staging' } })),
         row({ id: 2, number: 2, labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }, { name: 'staging' }] }),
       ],
       {},
@@ -487,7 +487,7 @@ describe('findForPage', () => {
 
   it('keeps a note off a client whose name its seed does not carry, whatever its labels say', async () => {
     const { issues } = readWith([
-      row({}, seedFixture({ client: { id: 'globex', name: 'Globex' } })),
+      row({}, noteFixture({ client: { id: 'globex', name: 'Globex' } })),
       row({ id: 2, number: 2 }),
     ]);
 

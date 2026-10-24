@@ -1,4 +1,4 @@
-import type { Seed } from '@fruitback/shared';
+import type { Note } from '@fruitback/shared';
 
 /**
  * From a worker that has just started to a pin that a visitor planted, and read back (FRU-48, FRU-225).
@@ -8,7 +8,7 @@ import type { Seed } from '@fruitback/shared';
  * so the first run does what a person does after `docker compose up`, with the API the console calls:
  *
  * 1. opens the sign-in link of the first administrator, which the worker wrote in its log;
- * 2. makes the first workspace, and a site at the address of `PIN_SEED`, that everyone reads;
+ * 2. makes the first workspace, and a site at the address of `PIN_NOTE`, that everyone reads;
  * 3. plants a pin there as a visitor: no account, no session, no token;
  * 4. reads it back, as a visitor.
  *
@@ -20,7 +20,7 @@ import type { Seed } from '@fruitback/shared';
  *
  * The only import is a type, which Node erases, so the script runs with no `pnpm install`.
  */
-export const PIN_SEED: Seed = {
+export const PIN_NOTE: Note = {
   kind: 'fruitback.seed',
   v: 2,
   id: 'sd_compose_smoke',
@@ -32,7 +32,7 @@ export const PIN_SEED: Seed = {
 };
 
 /** The origin of the page of the pin: the site the administrator adds, and the `Origin` of the visitor. */
-export const PIN_ORIGIN = new URL(PIN_SEED.page.url).origin;
+export const PIN_ORIGIN = new URL(PIN_NOTE.page.url).origin;
 
 /** The cookies of an answer, as a browser sends them back: `name=value`, with no attribute. */
 export function cookiesOf(answer: Response): string {
@@ -104,19 +104,19 @@ export async function plantAPin(endpoint: string, site: string, options: { plant
     const posted = await fetch(`${endpoint}/feedback`, {
       method: 'POST',
       headers: { ...visitor, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...PIN_SEED, client: { id: site } }),
+      body: JSON.stringify({ ...PIN_NOTE, client: { id: site } }),
     });
     if (posted.status !== 201) throw new Error(`POST /feedback answered ${posted.status}: ${await posted.text()}`);
   }
 
   const read = await fetch(
-    `${endpoint}/feedback?url=${encodeURIComponent(PIN_SEED.page.url)}&client=${encodeURIComponent(site)}`,
+    `${endpoint}/feedback?url=${encodeURIComponent(PIN_NOTE.page.url)}&client=${encodeURIComponent(site)}`,
     { headers: visitor },
   );
   const body = await read.text();
   const issues =
     read.status === 200 ? ((JSON.parse(body) as { issues?: { seed?: { id?: string } }[] }).issues ?? []) : [];
-  if (!issues.some((issue) => issue.seed?.id === PIN_SEED.id)) {
+  if (!issues.some((issue) => issue.seed?.id === PIN_NOTE.id)) {
     throw new Error(`GET /feedback answered ${read.status} without the pin: ${body}`);
   }
 }

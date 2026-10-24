@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { AUTH_BASE_PATH } from './auth.ts';
 import { AUTH_SECRET } from './auth.fixture.ts';
 import { GITHUB, GOOGLE, IDENTITY_SECRET, SESSION_COOKIE } from './auth-worker.fixture.ts';
@@ -575,7 +575,7 @@ async function notesOfTheInstance() {
   const entry = (workspace: string, site: string, id: string, note: string, place: Place, reference: string) => ({
     workspace,
     site,
-    seed: seedFixture({ id, note }),
+    seed: noteFixture({ id, note }),
     channel: 'script' as const,
     author: { kind: 'visitor' as const },
     place,

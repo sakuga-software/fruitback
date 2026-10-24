@@ -56,9 +56,9 @@ import {
   statuses,
   workspace_suspensions,
 } from './postgres-schema.ts';
-import { MAX_STATUSES, type SeedStage } from '@fruitback/shared';
+import { MAX_STATUSES, type NoteStage } from '@fruitback/shared';
 import { OWN_SOURCE, type SiteStatus, isBuiltIn } from './site-statuses.ts';
-import { identifierFor, isSameSeed, keptRowOf } from './seed-rows.ts';
+import { identifierFor, isSameNote, keptRowOf } from './note-rows.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -942,7 +942,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .select({ seed: seeds.seed })
           .from(seeds)
           .where(and(eq(seeds.id, id), eq(seeds.client_id, site)));
-        if (kept === undefined || !isSameSeed(kept.seed, seed)) return refused('not-kept');
+        if (kept === undefined || !isSameNote(kept.seed, seed)) return refused('not-kept');
 
         const [row] = await db
           .select({ stage: statuses.stage, hidden: statuses.hidden })
@@ -950,9 +950,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .where(and(eq(statuses.site_id, site), eq(statuses.source, OWN_SOURCE), eq(statuses.key, key)));
         if (row?.hidden === true) return refused('status-hidden');
         // A built-in status writes no key: a note with none is in the built-in status of its stage.
-        let chosen: { key: string | null; stage: SeedStage };
-        if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as SeedStage };
-        else if (row !== undefined) chosen = { key, stage: row.stage as SeedStage };
+        let chosen: { key: string | null; stage: NoteStage };
+        if (isBuiltIn(OWN_SOURCE, key)) chosen = { key: null, stage: key as NoteStage };
+        else if (row !== undefined) chosen = { key, stage: row.stage as NoteStage };
         else return refused('unknown-status');
 
         const now = Date.now();

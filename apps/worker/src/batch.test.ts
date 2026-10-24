@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { type Seed, parseSeedFromDescription } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, parseNoteFromDescription } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
 import type { WorkerEnv } from './env.ts';
@@ -11,7 +11,7 @@ import { resetMemoryLinear } from './linear-memory.ts';
 import { installLinearStub } from './linear-stub.ts';
 import { batchParent } from './linear.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type NoteStore, StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 /** Several notes in one request (FRU-124): `POST /feedback` with an array of seeds. */
@@ -32,9 +32,9 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-function seeds(count: number): Seed[] {
+function seeds(count: number): Note[] {
   return Array.from({ length: count }, (_, index) =>
-    seedFixture({
+    noteFixture({
       id: `sd_batch_${index}`,
       note: `Note ${index + 1}`,
       page: { url: PAGE, path: '/pricing', title: 'Pricing' },
@@ -42,7 +42,7 @@ function seeds(count: number): Seed[] {
   );
 }
 
-type Options = { env?: WorkerEnv; kv?: Kv; store?: SeedStore; ip?: string; query?: string };
+type Options = { env?: WorkerEnv; kv?: Kv; store?: NoteStore; ip?: string; query?: string };
 
 function send(body: unknown, options: Options = {}): Promise<Response> {
   return handleRequest(
@@ -122,10 +122,10 @@ describe('a batch of notes (FRU-124)', () => {
     const [parent, ...children] = created.map((call) => call.variables.input as Record<string, unknown>);
     assert.equal(parent?.parentId, undefined);
     assert.equal(parent?.title, '2 notes on preview.acme.test');
-    assert.equal(parseSeedFromDescription(String(parent?.description)).ok, false, 'the parent holds a seed');
+    assert.equal(parseNoteFromDescription(String(parent?.description)).ok, false, 'the parent holds a seed');
     for (const child of children) {
       assert.equal(child.parentId, 'issue_1');
-      assert.equal(parseSeedFromDescription(String(child.description)).ok, true);
+      assert.equal(parseNoteFromDescription(String(child.description)).ok, true);
     }
   });
 
@@ -169,7 +169,7 @@ describe('a batch of notes (FRU-124)', () => {
   it('answers the notes another attempt kept, and plants only the others', async () => {
     let fail = true;
     let created = 0;
-    const flaky: SeedStore = {
+    const flaky: NoteStore = {
       name: 'flaky',
       scope: () => '',
       findForPage: async () => [],
@@ -203,7 +203,7 @@ describe('a batch of notes (FRU-124)', () => {
 
   it('plants each note once when two attempts of one batch arrive at the same moment', async () => {
     let created = 0;
-    const slow: SeedStore = {
+    const slow: NoteStore = {
       name: 'slow',
       scope: () => '',
       findForPage: async () => [],
@@ -231,7 +231,7 @@ describe('a batch of notes (FRU-124)', () => {
 
   it('gives a note back when the store did not keep it, so the next attempt plants it at once', async () => {
     let fail = true;
-    const store: SeedStore = {
+    const store: NoteStore = {
       name: 'once-down',
       scope: () => '',
       findForPage: async () => [],
@@ -251,7 +251,7 @@ describe('a batch of notes (FRU-124)', () => {
   it('keeps the answers of the notes before one that throws an error nobody expected', async () => {
     let broken = true;
     let created = 0;
-    const store: SeedStore = {
+    const store: NoteStore = {
       name: 'broken',
       scope: () => '',
       findForPage: async () => [],
@@ -275,7 +275,7 @@ describe('a batch of notes (FRU-124)', () => {
 
   it('gives the notes back when the whole batch throws an error nobody expected', async () => {
     const kv = createMemoryKv();
-    const thrower: SeedStore = {
+    const thrower: NoteStore = {
       name: 'thrower',
       scope: () => '',
       findForPage: async () => [],
@@ -284,7 +284,7 @@ describe('a batch of notes (FRU-124)', () => {
         throw new TypeError('a defect');
       },
     };
-    const working: SeedStore = { ...thrower, createBatch: undefined as never };
+    const working: NoteStore = { ...thrower, createBatch: undefined as never };
     delete (working as { createBatch?: unknown }).createBatch;
 
     await assert.rejects(send(seeds(2), { kv, store: thrower }), TypeError);
@@ -294,7 +294,7 @@ describe('a batch of notes (FRU-124)', () => {
 
   it('keeps the note and holds its seed when the Kv does not keep its trace', async () => {
     let created = 0;
-    const store: SeedStore = {
+    const store: NoteStore = {
       name: 'counting',
       scope: () => '',
       findForPage: async () => [],
@@ -319,7 +319,7 @@ describe('a batch of notes (FRU-124)', () => {
   });
 
   it('answers 502 when the store kept no note, as for one note', async () => {
-    const down: SeedStore = {
+    const down: NoteStore = {
       name: 'down',
       scope: () => '',
       findForPage: async () => [],

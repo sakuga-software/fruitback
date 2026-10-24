@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import type { Seed } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import type { Note } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
 import type { WorkerEnv } from './env.ts';
@@ -31,9 +31,9 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-function seeds(count: number, from = 0): Seed[] {
+function seeds(count: number, from = 0): Note[] {
   return Array.from({ length: count }, (_, index) =>
-    seedFixture({
+    noteFixture({
       id: `sd_parent_${from + index}`,
       note: `Note ${from + index + 1}`,
       page: { url: PAGE, path: '/pricing', title: 'Pricing' },

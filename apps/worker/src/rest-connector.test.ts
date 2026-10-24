@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
 import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { deliverPending, handleRequest } from './app.ts';
 import { CONSOLE, type World as Env, callOn as call, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import {
   ABANDONED_KEPT_DAYS,
   DELIVERY_HEADER,
@@ -63,7 +63,7 @@ async function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
     },
   });
 
-  return { ...world, context: { ...world.context, store: createPostgresSeedStore(world.database) } };
+  return { ...world, context: { ...world.context, store: createPostgresNoteStore(world.database) } };
 }
 
 /** One pass of the loop that sends, on the accounts of this worker: its database is on PGlite. */
@@ -112,7 +112,7 @@ async function receiving(env: Env, world: World, body: Record<string, unknown> =
 }
 
 function note(site: string, text = 'The price should say per month.') {
-  const seed = seedFixture();
+  const seed = noteFixture();
 
   return { ...seed, note: text, page: { ...seed.page, url: `${SITE}/pricing` }, client: { id: site } };
 }
@@ -986,7 +986,7 @@ describe('the contract a receiver is written against (FRU-122)', () => {
       Object.keys(shown),
       Object.keys(
         JSON.parse(
-          deliveryBody({ workspace: 'w', site: { id: 's' }, identifier: 'FB-1', seed: seedFixture() }),
+          deliveryBody({ workspace: 'w', site: { id: 's' }, identifier: 'FB-1', seed: noteFixture() }),
         ) as object,
       ),
     );
@@ -1133,7 +1133,7 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
       workspace,
       site: { id: 's' },
       identifier: 'FB-1',
-      seed: { ...seedFixture({ id: 'sd_waiting' }), screenshot: { url: `https://w.test/screenshot/${LEGACY}` } },
+      seed: { ...noteFixture({ id: 'sd_waiting' }), screenshot: { url: `https://w.test/screenshot/${LEGACY}` } },
     });
 
   it('carries the picture that its seed names, while the migration keeps it, and gives it to its note', async () => {
@@ -1311,7 +1311,7 @@ describe('a delivery that arrived, with a store of files that does not answer (F
       workspace: world.workspace.id,
       site: { id: 's' },
       identifier: 'FB-1',
-      seed: seedFixture(),
+      seed: noteFixture(),
       attachments: [{ id: `att_${'1'.repeat(32)}`, name: 'a.png', type: 'image/png', size: 2 }],
     });
     const files = createMemoryAttachmentStore();

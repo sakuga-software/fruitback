@@ -8,10 +8,10 @@ import {
   MAX_ATTACHMENTS_PER_NOTE,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENT_BYTES_PER_NOTE,
-  type Seed,
-  type SeedIssue,
+  type Note,
+  type NoteIssue,
 } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 import { WORKER, type World, memberOf, shareWith, signInTo, worlds } from './console-world.fixture.ts';
@@ -39,7 +39,7 @@ import {
   signedAttachmentPath,
   verifiesSignedRead,
 } from './attachments.ts';
-import { type CreatedWithFiles, type SeedStore, StoreError } from './store.ts';
+import { type CreatedWithFiles, type NoteStore, StoreError } from './store.ts';
 
 /**
  * The files of the notes in transit (FRU-331): `POST /attachments`, the files that `POST /feedback`
@@ -56,9 +56,9 @@ const HTML = new TextEncoder().encode('<!doctype html><script>alert(1)</script>'
 /** A tracker that keeps what it is given, files included, and can be told to fail. */
 function trackerDouble(options: { takes?: boolean; fails?: boolean; loses?: boolean } = {}) {
   const { takes = true } = options;
-  const received: { seed: Seed; files: readonly OutgoingFile[] }[] = [];
-  const kept: SeedIssue[] = [];
-  const store: SeedStore = {
+  const received: { seed: Note; files: readonly OutgoingFile[] }[] = [];
+  const kept: NoteIssue[] = [];
+  const store: NoteStore = {
     name: 'tracker',
     scope: () => 'tracker',
     ...(takes ? { attachments: true as const } : {}),
@@ -128,7 +128,7 @@ let ip = 0;
 
 function call(
   env: World,
-  context: { attachments?: AttachmentStore; store?: SeedStore },
+  context: { attachments?: AttachmentStore; store?: NoteStore },
   path: string,
   init: { method?: string; token?: string; body?: Uint8Array | string; headers?: Record<string, string> } = {},
 ): Promise<Response> {
@@ -151,7 +151,7 @@ function call(
 
 function upload(
   env: World,
-  context: { attachments?: AttachmentStore; store?: SeedStore },
+  context: { attachments?: AttachmentStore; store?: NoteStore },
   site: string,
   token: string,
   bytes: Uint8Array = PNG,
@@ -166,15 +166,15 @@ function upload(
   });
 }
 
-function noteOf(site: string, id = 'sd_with_files'): Seed {
-  const seed = seedFixture({ id });
+function noteOf(site: string, id = 'sd_with_files'): Note {
+  const seed = noteFixture({ id });
 
   return { ...seed, page: { ...seed.page, url: 'https://staging.acme.dev/pricing' }, client: { id: site } };
 }
 
 function post(
   env: World,
-  context: { attachments?: AttachmentStore; store?: SeedStore },
+  context: { attachments?: AttachmentStore; store?: NoteStore },
   token: string,
   body: unknown,
   ids: readonly string[],
@@ -529,7 +529,7 @@ describe('the files of a note, sent with it (FRU-331)', () => {
       `/feedback?url=${encodeURIComponent('https://staging.acme.dev/pricing')}&client=${site}`,
       { token: alice_token },
     );
-    const { issues } = (await read.json()) as { issues: SeedIssue[] };
+    const { issues } = (await read.json()) as { issues: NoteIssue[] };
     assert.deepEqual(issues[0]?.attachments, [
       { name: 'capture.png', url: 'https://tracker.test/files/capture.png' },
       { name: 'a.log', url: 'https://tracker.test/files/a.log' },
@@ -658,7 +658,7 @@ describe('the files of a note, sent with it (FRU-331)', () => {
     const env = await envWith();
     const { alice_token, site } = await setUp(env);
     const attachments = createMemoryAttachmentStore();
-    const read = async (store: SeedStore, token?: string) =>
+    const read = async (store: NoteStore, token?: string) =>
       (await (
         await call(
           env,

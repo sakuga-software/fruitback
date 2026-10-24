@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENTS_PER_NOTE, SEED_STAGES, type Seed, type SeedIssue, parseSeed } from '@fruitback/shared';
+import { MAX_ATTACHMENTS_PER_NOTE, NOTE_STAGES, type Note, type NoteIssue, parseNote } from '@fruitback/shared';
 import { legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { attachmentIdsOf } from './attachments.ts';
 import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
@@ -8,7 +8,7 @@ import { type ClientConfig, normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import {
   batchOffer,
-  canonicalSeed,
+  canonicalNote,
   canonicalizeRequestedPage,
   indexed,
   invalidatePages,
@@ -26,7 +26,7 @@ import type { CallerChecks, RequestContext, Served } from './request-context.ts'
 import {
   type BatchAnswer,
   type CreatedIssue,
-  type SeedStore,
+  type NoteStore,
   StoreError,
   takesAttachments,
   takesChecks,
@@ -52,7 +52,7 @@ import type { AccountStore } from './accounts.ts';
 export async function getFeedback(
   request: Request,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   noteIndex: NoteIndex | undefined,
@@ -140,7 +140,7 @@ export async function getFeedback(
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
-    const issues: SeedIssue[] = all.map((issue) => {
+    const issues: NoteIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
       const marked = {
         ...issue,
@@ -151,12 +151,12 @@ export async function getFeedback(
       return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.seed.id)) : marked;
     });
 
-    // The stages of the trackers that answered, in the order of `SEED_STAGES` (FRU-188). A site read in
+    // The stages of the trackers that answered, in the order of `NOTE_STAGES` (FRU-188). A site read in
     // several places can show a pin of each of them.
     const reported = await Promise.all(
-      targets.map(async (target) => (await store.stagesFor?.(target)) ?? store.stages ?? SEED_STAGES),
+      targets.map(async (target) => (await store.stagesFor?.(target)) ?? store.stages ?? NOTE_STAGES),
     );
-    const stages = SEED_STAGES.filter((stage) => reported.some((each) => each.includes(stage)));
+    const stages = NOTE_STAGES.filter((stage) => reported.some((each) => each.includes(stage)));
 
     // FRU-366: the statuses of the site, which `status` on each note names. Asked at each request, and
     // never in the cached answer: a change in the console shows at the next read. A read that cannot
@@ -238,7 +238,7 @@ export async function getFeedback(
 export async function postFeedback(
   request: Request,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   clientIp: string,
@@ -275,12 +275,12 @@ export async function postFeedback(
     return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex, stillWrites, checks);
   }
 
-  const parsed = parseSeed(payload);
+  const parsed = parseNote(payload);
   if (!parsed.ok) {
     return json(400, { error: 'invalid-seed', reason: parsed.reason }, corsHeaders);
   }
 
-  const seed = canonicalSeed(parsed.seed);
+  const seed = canonicalNote(parsed.note);
   const clientId = seed.client?.id;
 
   const route = routeFor(request, config, clientId);
@@ -375,7 +375,7 @@ export async function postFeedback(
 async function postBatch(
   request: Request,
   config: Served,
-  store: SeedStore,
+  store: NoteStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
   clientIp: string,
@@ -390,11 +390,11 @@ async function postBatch(
     return json(400, { error: 'invalid-batch', max }, corsHeaders);
   }
 
-  const seeds: Seed[] = [];
+  const seeds: Note[] = [];
   for (const [index, each] of payload.entries()) {
-    const parsed = parseSeed(each);
+    const parsed = parseNote(each);
     if (!parsed.ok) return json(400, { error: 'invalid-seed', index, reason: parsed.reason }, corsHeaders);
-    seeds.push(canonicalSeed(parsed.seed));
+    seeds.push(canonicalNote(parsed.note));
   }
   if (new Set(seeds.map((seed) => seed.id)).size !== seeds.length) {
     return json(400, { error: 'invalid-batch', reason: 'the same seed twice', max }, corsHeaders);
@@ -419,7 +419,7 @@ async function postBatch(
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   // One request is one caller: the identity is checked once, and written on every note it signs.
-  const attributed: Seed[] = [];
+  const attributed: Note[] = [];
   let channel: Channel = 'script';
   let account = false;
   for (const seed of seeds) {

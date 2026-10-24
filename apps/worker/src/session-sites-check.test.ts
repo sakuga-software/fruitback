@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, shareWith, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { resetMemoryLinear, setMemoryIssueState } from './linear-memory.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -63,7 +63,7 @@ async function sitesOf(world: World, token: string): Promise<Listed[]> {
 
 /** A note on `PAGE` of `site`, sent with `token`: its id in the store. */
 async function noteOf(world: World, site: string, id: string, token: string): Promise<string> {
-  const seed = seedFixture({
+  const seed = noteFixture({
     id,
     page: { url: PAGE, path: '/pricing', title: 'Pricing' },
     client: { id: site, name: 'Acme' },

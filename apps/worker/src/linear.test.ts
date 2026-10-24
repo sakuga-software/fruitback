@@ -1,16 +1,16 @@
 import { afterEach, describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import {
   ATTACHMENT_SUBTITLE,
   createLinearStore,
   linearRoutingFor,
   reopenStateOf,
   stageForLinearState,
-  toSeedIssue,
+  toNoteIssue,
 } from './linear.ts';
-import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
+import { installLinearStub, storedIssueFromNote } from './linear-stub.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -32,9 +32,9 @@ describe('stageForLinearState', () => {
 
   it('draws an unrecognised state instead of hiding it, at the contract’s default', () => {
     // Both inputs happen: Linear can answer with a state type this connector has never seen, and
-    // `toSeedIssue` passes '' for an issue that came back with no state at all.
-    assert.equal(stageForLinearState('someCustomType'), DEFAULT_SEED_STAGE);
-    assert.equal(stageForLinearState(''), DEFAULT_SEED_STAGE);
+    // `toNoteIssue` passes '' for an issue that came back with no state at all.
+    assert.equal(stageForLinearState('someCustomType'), DEFAULT_NOTE_STAGE);
+    assert.equal(stageForLinearState(''), DEFAULT_NOTE_STAGE);
 
     // Asserted against the constant, not against `'new'`: every connector answers the same way
     // for a state it does not know, so the rule is the contract's and a connector spelling the
@@ -181,7 +181,7 @@ describe('the files of a note, in Linear (FRU-331)', () => {
 
   it('puts each file in the storage of Linear before the issue, then attaches it to the issue', async () => {
     const stub = installLinearStub();
-    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY, files);
+    const created = await createLinearStore(config).create(noteFixture(), undefined, POLICY, files);
 
     assert.deepEqual(
       stub.calls.map((call) => call.operation).filter((operation) => !operation.includes('Label')),
@@ -218,7 +218,7 @@ describe('the files of a note, in Linear (FRU-331)', () => {
       { uploadUrl: 'http://storage.linear.test/put' },
     ]) {
       const stub = installLinearStub(options);
-      await assert.rejects(createLinearStore(config).create(seedFixture(), undefined, POLICY, files), StoreError);
+      await assert.rejects(createLinearStore(config).create(noteFixture(), undefined, POLICY, files), StoreError);
       assert.equal(
         stub.calls.some((call) => call.operation === 'FruitbackCreateIssue'),
         false,
@@ -230,7 +230,7 @@ describe('the files of a note, in Linear (FRU-331)', () => {
 
   it('answers a file that Linear refuses to attach as lost, once the issue exists, and never throws', async () => {
     installLinearStub({ failAttachment: true });
-    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY, files);
+    const created = await createLinearStore(config).create(noteFixture(), undefined, POLICY, files);
 
     assert.equal(created.identifier, 'SKG-999');
     assert.deepEqual(created.files, { sent: [], lost: ['att_1', 'att_2'], waiting: [] });
@@ -238,17 +238,17 @@ describe('the files of a note, in Linear (FRU-331)', () => {
 
   it('sends no file and says nothing of files for a note without one', async () => {
     const stub = installLinearStub();
-    const created = await createLinearStore(config).create(seedFixture(), undefined, POLICY);
+    const created = await createLinearStore(config).create(noteFixture(), undefined, POLICY);
 
     assert.equal('files' in created, false);
     assert.equal(stub.puts.length, 0);
   });
 
   it('reads back the attachments that Fruitback made, by name and address, and not the others', () => {
-    const seed = seedFixture();
-    const issue = toSeedIssue(
+    const seed = noteFixture();
+    const issue = toNoteIssue(
       {
-        ...storedIssueFromSeed(seed),
+        ...storedIssueFromNote(seed),
         attachments: {
           nodes: [
             { title: 'capture.png', url: 'https://uploads.linear.app/a/capture.png', subtitle: ATTACHMENT_SUBTITLE },
@@ -260,7 +260,7 @@ describe('the files of a note, in Linear (FRU-331)', () => {
     );
 
     assert.deepEqual(issue?.attachments, [{ name: 'capture.png', url: 'https://uploads.linear.app/a/capture.png' }]);
-    assert.equal('attachments' in (toSeedIssue(storedIssueFromSeed(seed), seed.page.url) ?? {}), false);
+    assert.equal('attachments' in (toNoteIssue(storedIssueFromNote(seed), seed.page.url) ?? {}), false);
   });
 });
 
@@ -277,7 +277,7 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
   const config = { apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined };
 
   it('finds the files of Fruitback behind more than ten other attachments of the issue', async () => {
-    const seed = seedFixture();
+    const seed = noteFixture();
     const links = Array.from({ length: 12 }, (_, index) => ({
       title: `PR #${index + 1}`,
       url: `https://github.com/acme/app/pull/${index + 1}`,
@@ -288,7 +288,7 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
       { title: 'log.txt', url: 'https://uploads.linear.app/a/log.txt', subtitle: ATTACHMENT_SUBTITLE },
     ];
     const stub = installLinearStub({
-      storedIssues: [storedIssueFromSeed(seed, { attachments: { nodes: [...links, ...ours] } })],
+      storedIssues: [storedIssueFromNote(seed, { attachments: { nodes: [...links, ...ours] } })],
     });
 
     const [issue] = await createLinearStore(config).findForPage(

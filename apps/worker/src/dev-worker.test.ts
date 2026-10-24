@@ -3,7 +3,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { afterAll, describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { envWith } from './auth-worker.fixture.ts';
@@ -178,7 +178,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
       // With no HOST in its environment, the process says where it listens.
       assert.match(worker.said(), /listening on 127\.0\.0\.1:\d+ /);
 
-      const seed = seedFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+      const seed = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
       const sent = await fetch(`${worker.origin}/feedback`, {
         method: 'POST',
         headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json' },
@@ -202,7 +202,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
   it('keeps its tables, its workspace and its notes in a schema of its own when one is named (FRU-219)', async () => {
     const worker = await start({ FRUITBACK_STORE: 'postgres', FRUITBACK_DATABASE_SCHEMA: 'fruitback' });
     await ready(worker.origin, worker.said);
-    const seed = seedFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+    const seed = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
     const sent = await fetch(`${worker.origin}/feedback`, {
       method: 'POST',
       headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json' },

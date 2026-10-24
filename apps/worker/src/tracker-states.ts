@@ -1,10 +1,10 @@
-import { SEED_STAGES, STATUS_COLOR } from '@fruitback/shared';
+import { NOTE_STAGES, STATUS_COLOR } from '@fruitback/shared';
 import type { ClientConfig } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
 import { placedAt } from './note-helpers.ts';
 import type { TrackerSource } from './site-statuses.ts';
 import type { StageExceptions } from './linear.ts';
-import type { SeedStore, TrackerState } from './store.ts';
+import type { NoteStore, TrackerState } from './store.ts';
 
 /**
  * The states of the trackers a site sends to (FRU-368), for the statuses of its read.
@@ -67,7 +67,7 @@ function statesOf(value: string | undefined): TrackerState[] | undefined {
         each !== null &&
         typeof each.id === 'string' &&
         typeof each.name === 'string' &&
-        (SEED_STAGES as readonly unknown[]).includes(each.stage) &&
+        (NOTE_STAGES as readonly unknown[]).includes(each.stage) &&
         (each.color === undefined || (typeof each.color === 'string' && STATUS_COLOR.test(each.color))),
     );
 
@@ -84,7 +84,7 @@ function statesOf(value: string | undefined): TrackerState[] | undefined {
  */
 export async function trackerSourcesOf(
   kv: Kv | undefined,
-  store: SeedStore,
+  store: NoteStore,
   client: ClientConfig | undefined,
   /** The exceptions of a connector, read at this request. */
   exceptionsOf: (connector: string) => Promise<StageExceptions> = async () => ({}),

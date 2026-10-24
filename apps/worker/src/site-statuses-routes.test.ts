@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { DEFAULT_SEED_STAGE, SEED_STAGES, type SeedStatus, offeredStatuses, statusOf } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { DEFAULT_NOTE_STAGE, NOTE_STAGES, type NoteStatus, offeredStatuses, statusOf } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type World, callOn, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 
 /**
  * The statuses of a site through the console (FRU-366), and what `GET /feedback` says of them: the
@@ -13,7 +13,7 @@ import { createPostgresSeedStore } from './seeds-postgres.ts';
 
 const world = worlds();
 const PAGE = 'https://acme.test/pricing';
-const [NEW, , , DONE, CLOSED] = SEED_STAGES;
+const [NEW, , , DONE, CLOSED] = NOTE_STAGES;
 
 /** A workspace of Alice with one site that everybody reads, and her console session. */
 async function acme(): Promise<{ team: World; token: string; workspace: string; site: string }> {
@@ -27,7 +27,7 @@ async function acme(): Promise<{ team: World; token: string; workspace: string; 
 
 /** A note the worker keeps on the page, in `stage` and in the status `key` (NULL: the built-in one). */
 async function plant(team: World, site: string, stage: string, key: string | null, id: string): Promise<void> {
-  const seed = seedFixture({ id, client: { id: site }, page: { url: PAGE, path: '/pricing' } });
+  const seed = noteFixture({ id, client: { id: site }, page: { url: PAGE, path: '/pricing' } });
   await rowsOf(
     team.database,
     `INSERT INTO seeds (client_id, page_url, stage, status_key, seed, created_at, updated_at)
@@ -38,18 +38,18 @@ async function plant(team: World, site: string, stage: string, key: string | nul
 async function read(
   team: World,
   site: string,
-): Promise<{ statuses: SeedStatus[]; issues: { stage: string; status?: string }[] }> {
+): Promise<{ statuses: NoteStatus[]; issues: { stage: string; status?: string }[] }> {
   // The notes the worker keeps, in the database of the world: its default store is the one in memory.
   const answer = await callOn(
     team,
     'GET',
     `/feedback?url=${encodeURIComponent(PAGE)}&client=${site}`,
     { origin: 'https://acme.test' },
-    { store: createPostgresSeedStore(team.database) },
+    { store: createPostgresNoteStore(team.database) },
   );
   assert.equal(answer.status, 200, await answer.clone().text());
 
-  return (await answer.json()) as { statuses: SeedStatus[]; issues: { stage: string; status?: string }[] };
+  return (await answer.json()) as { statuses: NoteStatus[]; issues: { stage: string; status?: string }[] };
 }
 
 const path = (workspace: string, site: string, more = '') =>
@@ -204,7 +204,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     assert.equal(listed.status, 200, await listed.clone().text());
     const { notes } = (await listed.json()) as { notes: Record<string, number> };
     assert.deepEqual(notes, {
-      ...Object.fromEntries(SEED_STAGES.map((stage) => [stage, 0])),
+      ...Object.fromEntries(NOTE_STAGES.map((stage) => [stage, 0])),
       [DONE as string]: 1,
       waiting: 2,
       parked: 0,
@@ -334,7 +334,7 @@ describe('the statuses in the read of a page (FRU-366)', () => {
 
     assert.deepEqual(
       statuses,
-      SEED_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
+      NOTE_STAGES.map((stage) => ({ key: `own:${stage}`, name: '', stage })),
     );
     assert.equal(issues[0]?.status, `own:${DONE}`);
     assert.deepEqual(statusOf(issues[0] as never, offeredStatuses(statuses)), {
@@ -375,7 +375,7 @@ describe('the statuses in the read of a page (FRU-366)', () => {
     // The four built-in statuses no row changed follow.
     assert.deepEqual(
       statuses.slice(2).map((status) => status.key),
-      SEED_STAGES.filter((stage) => stage !== DONE).map((stage) => `own:${stage}`),
+      NOTE_STAGES.filter((stage) => stage !== DONE).map((stage) => `own:${stage}`),
     );
     assert.deepEqual(
       issues.map((issue) => issue.status),
@@ -387,6 +387,6 @@ describe('the statuses in the read of a page (FRU-366)', () => {
       issues.map((issue) => statusOf(issue as never, offered)?.name),
       ['Waiting', 'Shipped'],
     );
-    assert.equal(DEFAULT_SEED_STAGE, NEW, 'a new note is in the first stage, so its built-in status is the first one');
+    assert.equal(DEFAULT_NOTE_STAGE, NEW, 'a new note is in the first stage, so its built-in status is the first one');
   });
 });

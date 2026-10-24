@@ -15,7 +15,7 @@ import { type Database, createPgDatabase } from './postgres.ts';
 import {
   ACCOUNTS_FILE_VERSION,
   COPY_SCHEMA,
-  SEEDS_FILE_VERSION,
+  NOTES_FILE_VERSION,
   SESSIONS_FILE_VERSION,
   copySqliteFiles,
 } from './postgres-copy.ts';
@@ -511,7 +511,7 @@ for (const subject of SUBJECTS) {
 describe('the versions of the files that the copy takes (FRU-150, FRU-226)', () => {
   it('are the ones of the last worker that wrote the files, frozen in a fixture', () => {
     assert.deepEqual(
-      { accounts: ACCOUNTS_FILE_VERSION, sessions: SESSIONS_FILE_VERSION, seeds: SEEDS_FILE_VERSION },
+      { accounts: ACCOUNTS_FILE_VERSION, sessions: SESSIONS_FILE_VERSION, seeds: NOTES_FILE_VERSION },
       FROZEN_VERSIONS,
     );
   });

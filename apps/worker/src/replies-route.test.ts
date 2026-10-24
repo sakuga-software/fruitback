@@ -7,8 +7,8 @@ import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
 import { rowsOf, withoutOwnerRule } from './postgres.fixture.ts';
 import { REPLY_LIMIT } from './rate-limit.ts';
 import { createPairing, redeemPairing } from './session.ts';
-import { type SeedStore, StoreError } from './store.ts';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type NoteStore, StoreError } from './store.ts';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 
 /**
  * `POST /feedback/<id>/replies` (FRU-257): who may reply to a note from the page, by the rule of
@@ -49,7 +49,7 @@ async function aSite(visibility: Visibility) {
 
 /** A note of `site` on `PAGE`, written in the store that the world reads. */
 function plant(site: string, id: string) {
-  const seed = seedFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
 
   return createMemoryStore().create({ ...seed, client: { id: site, name: site } }, undefined, POLICY);
 }
@@ -68,7 +68,7 @@ function reply(
   site: string,
   issue: string,
   body: Record<string, unknown>,
-  options: { token?: string; ip?: string; store?: SeedStore } = {},
+  options: { token?: string; ip?: string; store?: NoteStore } = {},
 ): Promise<Answer> {
   return callOn(
     world,
@@ -164,7 +164,7 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
 
     // As Linear: the store takes the id of an issue and does not ask whose it is. The route asks.
     const memory = createMemoryStore();
-    const asLinear: SeedStore = {
+    const asLinear: NoteStore = {
       ...memory,
       reply: (target, written, client, policy) =>
         memory.reply?.({ ...target, clientId: undefined }, written, client, policy) ?? Promise.resolve(undefined),
@@ -233,7 +233,7 @@ describe('a reply from the page, by who writes it (FRU-257)', () => {
 
   it('answers 502 when the store does not answer, so the widget keeps the text', async () => {
     const { world, site, note } = await aSite('everyone');
-    const down: SeedStore = {
+    const down: NoteStore = {
       ...createMemoryStore(),
       findForPage: async () => {
         throw new StoreError('the tracker did not answer');

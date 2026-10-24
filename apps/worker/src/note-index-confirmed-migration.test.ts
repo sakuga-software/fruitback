@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { createPostgresNoteIndex } from './notes-index-postgres.ts';
 import { migrationsThrough, rowsOf } from './postgres.fixture.ts';
@@ -46,7 +46,7 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await index.toCheck('ws_acme', 'acc_bob'), new Map());
 
       // A read of the page, where a verdict can be given, sees no verdict in the replies of the note.
-      const done = seedFixture({ id: 'sd_done', page: { url: 'https://acme.dev/', path: '/', title: 'Home' } });
+      const done = noteFixture({ id: 'sd_done', page: { url: 'https://acme.dev/', path: '/', title: 'Home' } });
       await index.refresh(
         'ws_acme',
         'site_acme',

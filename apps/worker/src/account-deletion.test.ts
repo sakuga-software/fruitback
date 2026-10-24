@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
-import { type Seed, canonicalizePageUrl } from '@fruitback/shared';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { type Note, canonicalizePageUrl } from '@fruitback/shared';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import {
   type CallOptions,
   type World,
@@ -14,7 +14,7 @@ import {
 import { ADMIN_PATH } from './instance-admin.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createMemoryAttachmentStore } from './attachments.ts';
-import { createPostgresSeedStore } from './seeds-postgres.ts';
+import { createPostgresNoteStore } from './notes-postgres.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
 
 /**
@@ -60,8 +60,8 @@ async function accountSession(world: World, who: Who): Promise<string> {
   return ((await claimed.json()) as { accessToken: string }).accessToken;
 }
 
-function noteOn(site: string, id: string): Seed {
-  const seed = seedFixture({ id, page: { url: PAGE, path: '/pricing' } });
+function noteOn(site: string, id: string): Note {
+  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
 
   return { ...seed, client: { id: site, name: 'Acme' } };
 }
@@ -76,7 +76,7 @@ async function anInstance() {
     ...base,
     context: {
       ...base.context,
-      store: createPostgresSeedStore(base.database),
+      store: createPostgresNoteStore(base.database),
       attachments: createMemoryAttachmentStore(),
       connectStore: base.connectStore,
       resolveTxt: async () => [],

@@ -1,4 +1,4 @@
-import type { SeedIssue, SeedReporter } from '@fruitback/shared';
+import type { NoteIssue, NoteReporter } from '@fruitback/shared';
 import type { Auth } from './auth.ts';
 import {
   type ClientConfig,
@@ -20,7 +20,7 @@ import { seen } from './last-seen.ts';
 import type { Mailer } from './mail.ts';
 import type { Channel, NoteIndex } from './notes-index.ts';
 import type { SessionIdentity, SessionStore } from './session.ts';
-import type { ReplyAuthor, SeedStore } from './store.ts';
+import type { ReplyAuthor, NoteStore } from './store.ts';
 
 /**
  * What one request of `app.ts` reads, out of `app.ts` so that each module of routes names it
@@ -45,7 +45,7 @@ export type RequestContext = {
    * it is absent the fallback builds one, which is also what a test driving this directly wants: a
    * fresh store per case.
    */
-  store?: SeedStore;
+  store?: NoteStore;
   /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh file per case. */
   sessionStore?: SessionStore;
   /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
@@ -174,7 +174,7 @@ export type CallerChecks = {
     policy: ClientPolicy,
     workspace: string | undefined,
     site: string | undefined,
-    issues: readonly SeedIssue[],
+    issues: readonly NoteIssue[],
     noteIndex: NoteIndex | undefined,
   ) => Promise<Set<string>>;
   /** The account of a session of the extension that reads `site` in `workspace` now: `memberOf` of `app.ts`. */
@@ -192,9 +192,9 @@ export type CallerChecks = {
   attributionFor: (
     request: Request,
     policy: ClientPolicy,
-    claimed: SeedReporter | undefined,
+    claimed: NoteReporter | undefined,
   ) => Promise<
-    | { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean }
+    | { ok: true; reporter: NoteReporter | undefined; channel: Channel; account: boolean }
     | { ok: false; error: 'invalid-identity' | 'identity-required'; reason: string }
   >;
   /** Where a member chose to send the note, or `null` for a place refused: `chosenPlace` of `app.ts`. */
