@@ -1161,71 +1161,147 @@ describe('the team’s replies', () => {
 });
 
 describe('the reading direction and the dates (FRU-38)', () => {
-  it('opens the thread 26 px past the point of the drop, on its end side, or on the other one (FRU-304)', () => {
-    const placedBy = (left: number, translator = createTranslator()) => {
-      const page = mountWithCta();
-      setRect(page.query('button'), { left, top: 200, width: 200, height: 40 });
-      overlay = createOverlay({ document: page.document, translator });
-      overlay.render([issueOnCta()]);
-      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-      const placed = { pin: pin.style.left, left: thread.style.left, top: thread.style.top };
-      overlay.destroy();
-      overlay = null;
+  /**
+   * happy-dom lays nothing out: a thread has no size, and fits everywhere. It is given the 344 × 300 of
+   * a short thread, so that a side of its element can lack the room.
+   */
+  function sizedThreads(page: MountedPage, height = 300): void {
+    const proto = (page.view as unknown as { HTMLElement: typeof HTMLElement }).HTMLElement.prototype;
+    const sized = (name: 'offsetWidth' | 'offsetHeight', value: number) =>
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        get(this: HTMLElement) {
+          return this.classList.contains('fruitback-thread') ? value : 0;
+        },
+      });
+    sized('offsetWidth', 344);
+    sized('offsetHeight', height);
+  }
 
-      return placed;
-    };
-    const hebrew = createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } });
-
-    // The point is at 116, 200: the thread starts 26 px past it, 8 px above the top of the drop (200 − 34 − 8).
-    assert.deepEqual(placedBy(100), { pin: '95px', left: '142px', top: '158px' });
-    // Right to left, the end side is the left one: 616 − 26 − 344.
-    assert.deepEqual(placedBy(600, hebrew), { pin: '595px', left: '246px', top: '158px' });
-    // No room on the end side: the other one, 716 − 26 − 344. The pin is geometry and does not move.
-    assert.deepEqual(placedBy(700), { pin: '695px', left: '346px', top: '158px' });
-    assert.deepEqual(placedBy(100, hebrew), { pin: '95px', left: '142px', top: '158px' });
-  });
-
-  it('opens the thread under its pin when the window has no room on either side', () => {
-    // A phone: 390 px leave no room for 344 px and 26 px on either side of the point.
-    const page = mountPage(PAGE, { width: 390, height: 844 });
-    setDocumentSize(page.document, 390, 844);
-    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
-    overlay = createOverlay({ document: page.document });
+  /** Opens the thread of a pin on `rect`, and says where it went and which edge holds the arrow. */
+  function threadBy(
+    rect: { left: number; top: number; width: number; height: number },
+    options: { translator?: ReturnType<typeof createTranslator>; window?: [number, number]; scrollX?: number } = {},
+  ) {
+    const [width, height] = options.window ?? [1_000, 1_000];
+    const page = mountPage(PAGE, { width, height });
+    setDocumentSize(page.document, Math.max(width, 3_000), Math.max(height, 1_000));
+    if (options.scrollX !== undefined) page.view.scrollTo(options.scrollX, 0);
+    sizedThreads(page);
+    setRect(page.query('button'), rect);
+    overlay = createOverlay({
+      document: page.document,
+      ...(options.translator ? { translator: options.translator } : {}),
+    });
     overlay.render([issueOnCta()]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
     const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-    // Under the frame (195 + 50 + 8), and inside the window: 390 − 344 − 8.
-    assert.deepEqual({ left: thread.style.left, top: thread.style.top }, { left: '38px', top: '253px' });
+    const placed = {
+      left: thread.style.left,
+      top: thread.style.top,
+      arrow: thread.dataset.fruitbackArrow,
+      at: thread.style.getPropertyValue('--fruitback-arrow-at'),
+    };
+    overlay.destroy();
+    overlay = null;
+
+    return placed;
+  }
+
+  const hebrew = () => createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } });
+
+  it('opens the thread under its element, its arrow on its top edge under the point of the drop (FRU-421)', () => {
+    // The frame is 95, 195, 210 × 50, and the point of the drop is at 116, 200. Under the frame, 14 px
+    // off: 195 + 50 + 14. The thread starts 20 px before the point, so the arrow is under it.
+    assert.deepEqual(threadBy({ left: 100, top: 200, width: 200, height: 40 }), {
+      left: '96px',
+      top: '259px',
+      arrow: 'top',
+      at: '20px',
+    });
+  });
+
+  it('opens the thread above its element when there is no room under it, clear of the drop (FRU-421)', () => {
+    // The drop stands from 766 to 800: 766 − 14 − 300.
+    assert.deepEqual(threadBy({ left: 100, top: 800, width: 200, height: 40 }), {
+      left: '96px',
+      top: '452px',
+      arrow: 'bottom',
+      at: '20px',
+    });
+  });
+
+  it('opens the thread beside a tall element, on its end side, or on the other one (FRU-421)', () => {
+    // The frame is 45 to 955 high: no room under it or above it. 305 + 14 on the end side; the point is
+    // at 50, so the thread starts at 30, and the arrow is 20 px down its edge.
+    assert.deepEqual(threadBy({ left: 100, top: 50, width: 200, height: 900 }), {
+      left: '319px',
+      top: '30px',
+      arrow: 'left',
+      at: '20px',
+    });
+    // No room on the end side: the start side, 695 − 14 − 344.
+    assert.deepEqual(threadBy({ left: 700, top: 50, width: 200, height: 900 }), {
+      left: '337px',
+      top: '30px',
+      arrow: 'right',
+      at: '20px',
+    });
+    // Right to left, the end side is the left one, and it has no room here: the right one.
+    assert.deepEqual(threadBy({ left: 100, top: 50, width: 200, height: 900 }, { translator: hebrew() }), {
+      left: '319px',
+      top: '30px',
+      arrow: 'left',
+      at: '20px',
+    });
+    assert.deepEqual(threadBy({ left: 700, top: 50, width: 200, height: 900 }, { translator: hebrew() }), {
+      left: '337px',
+      top: '30px',
+      arrow: 'right',
+      at: '20px',
+    });
+  });
+
+  it('opens the thread beside its pin, with no arrow, when its element leaves the room on no side (FRU-304)', () => {
+    // The whole window is the element. The point is at 16, 34: 26 px past it, and 24 px from the top.
+    assert.deepEqual(threadBy({ left: 0, top: 0, width: 1_000, height: 1_000 }), {
+      left: '42px',
+      top: '24px',
+      arrow: undefined,
+      at: '',
+    });
+    // Right to left, the end side of the point is its left one, and has no room: the right one.
+    assert.deepEqual(threadBy({ left: 0, top: 0, width: 1_000, height: 1_000 }, { translator: hebrew() }), {
+      left: '42px',
+      top: '24px',
+      arrow: undefined,
+      at: '',
+    });
+  });
+
+  it('opens the thread under its element on a phone, inside the window', () => {
+    // 390 px: the thread is 344 px, and starts no further than 390 − 8 − 344.
+    assert.deepEqual(threadBy({ left: 100, top: 200, width: 200, height: 40 }, { window: [390, 844] }), {
+      left: '38px',
+      top: '259px',
+      arrow: 'top',
+      at: '78px',
+    });
   });
 
   it('opens the thread inside the window when the page is scrolled sideways (FRU-68)', () => {
-    const placedBy = (viewportLeft: number, translator = createTranslator()) => {
-      const page = mountWithCta();
-      page.view.scrollTo(1_500, 0);
-      setRect(page.query('button'), { left: viewportLeft, top: 200, width: 200, height: 40 });
-      overlay = createOverlay({ document: page.document, translator });
-      overlay.render([issueOnCta()]);
-      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
-      const placed = { pin: pin.style.left, thread: thread.style.left };
-      overlay.destroy();
-      overlay = null;
+    const left = (viewportLeft: number, translator?: ReturnType<typeof createTranslator>) =>
+      threadBy(
+        { left: viewportLeft, top: 200, width: 200, height: 40 },
+        { scrollX: 1_500, ...(translator ? { translator } : {}) },
+      ).left;
 
-      return placed;
-    };
-
-    // On screen at document x 2000: past the point, counted from the scroll (2016 + 26).
-    assert.deepEqual(placedBy(500), { pin: '1995px', thread: '2042px' });
-    // Near the right edge of the window, on the other side of the point: 2416 − 26 − 344.
-    assert.deepEqual(placedBy(900), { pin: '2395px', thread: '2046px' });
-    // Right to left, near the left edge of the window, on the end side after all: 1516 + 26.
-    assert.deepEqual(placedBy(0, createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '1495px',
-      thread: '1542px',
-    });
+    // On screen at document x 2000: the point is at 2016, and the thread starts 20 px before it.
+    assert.equal(left(500), '1996px');
+    // Near the right edge of the window: no further than 2500 − 8 − 344.
+    assert.equal(left(900), '2148px');
+    // Near the left edge: no nearer than 1500 + 8.
+    assert.equal(left(0, hebrew()), '1508px');
   });
 
   it('dates a reply relative to now, with the day in its title', () => {
