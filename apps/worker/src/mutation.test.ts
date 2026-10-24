@@ -14,7 +14,15 @@ import {
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
 import { type Artifact, branchesOf, coarsen, find, pick } from '../../../tools/mutation/reference.ts';
-import { artifactOf, changedSince, choose, plan, scopeOf } from '../../../tools/mutation/scope.ts';
+import {
+  artifactOf,
+  baselineAt,
+  changedSince,
+  choose,
+  movedLines,
+  plan,
+  scopeOf,
+} from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
 
 /**
@@ -137,10 +145,12 @@ describe('what a mutation job mutates', () => {
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/seed.ts', 'README.md']), {
       mutate: ['src/seed.ts'],
       full: false,
+      line: false,
     });
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['apps/worker/src/seed.ts']), {
       mutate: [],
       full: false,
+      line: false,
     });
   });
 
@@ -148,23 +158,115 @@ describe('what a mutation job mutates', () => {
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/issue.test.ts']), {
       mutate: ['src/issue.ts'],
       full: false,
+      line: false,
     });
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/seed-shape.test.ts']), {
       mutate: [],
       full: false,
+      line: false,
     });
   });
 
   it('mutates the whole scope on a schedule, by hand, and when the pull request changes how mutation runs', () => {
     for (const event of ['schedule', 'workflow_dispatch']) {
-      assert.deepEqual(choose('packages/shared', scope, event, undefined), { mutate: scope, full: true });
+      assert.deepEqual(choose('packages/shared', scope, event, undefined), { mutate: scope, full: true, line: true });
     }
     for (const file of [
       '.github/workflows/mutation.yml',
       'packages/shared/stryker.config.json',
       'tools/mutation/ratchet.ts',
     ]) {
-      assert.deepEqual(choose('packages/shared', scope, 'pull_request', [file]), { mutate: scope, full: true }, file);
+      assert.deepEqual(
+        choose('packages/shared', scope, 'pull_request', [file]),
+        { mutate: scope, full: true, line: true },
+        file,
+      );
+    }
+  });
+
+  /**
+   * `baseline.json` holds the lines, not how mutation runs (FRU-447). A pull request that only raised
+   * lines ran the whole worker, 22 to 67 minutes, with no mutant and no test changed.
+   */
+  it('mutates, from their last report, the files whose line a pull request moves, and no other', () => {
+    const changed = ['tools/mutation/baseline.json'];
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', changed), {
+      mutate: [],
+      full: false,
+      line: false,
+    });
+    assert.deepEqual(
+      choose('packages/shared', scope, 'pull_request', changed, { files: ['src/issue.ts'], package: false }),
+      {
+        mutate: ['src/issue.ts'],
+        full: false,
+        line: false,
+      },
+    );
+    // The line of a package is the score of every file of it: each one is measured, and the line held.
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', changed, { files: [], package: true }), {
+      mutate: scope,
+      full: false,
+      line: true,
+    });
+  });
+
+  it('reads which lines moved, a line added or taken away included', () => {
+    const before: Baseline = {
+      'apps/worker': {
+        score: 90,
+        files: { 'src/kv.ts': { score: 80, mutants: 10 }, 'src/cors.ts': { score: 100, mutants: 5 } },
+      },
+    };
+    const after: Baseline = {
+      'apps/worker': {
+        score: 90,
+        files: { 'src/kv.ts': { score: 85, mutants: 10 }, 'src/cache.ts': { score: 100, mutants: 3 } },
+      },
+    };
+
+    assert.deepEqual(movedLines('apps/worker', before, after), {
+      files: ['src/kv.ts', 'src/cors.ts', 'src/cache.ts'],
+      package: false,
+    });
+    assert.deepEqual(movedLines('apps/worker', before, before), { files: [], package: false });
+    assert.deepEqual(
+      movedLines('apps/worker', before, { 'apps/worker': { ...after['apps/worker']!, score: 91 } }).package,
+      true,
+    );
+    // A base with no baseline moves every line.
+    assert.deepEqual(movedLines('apps/worker', undefined, before), {
+      files: ['src/kv.ts', 'src/cors.ts'],
+      package: true,
+    });
+  });
+
+  it('reads the baseline of the base through git, and none where the base has no file', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'fruitback-baseline-'));
+    try {
+      git(repository, 'init', '-q', '-b', 'main');
+      mkdirSync(join(repository, 'tools/mutation'), { recursive: true });
+      writeFileSync(join(repository, 'README.md'), 'base\n');
+      git(repository, 'add', '.');
+      git(repository, 'commit', '-q', '-m', 'no baseline');
+      const empty = git(repository, 'rev-parse', 'HEAD').trim();
+      const lines: Baseline = { 'apps/worker': { score: 90, files: {} } };
+      writeFileSync(join(repository, 'tools/mutation/baseline.json'), JSON.stringify(lines));
+      git(repository, 'add', '.');
+      git(repository, 'commit', '-q', '-m', 'a baseline');
+      const head = git(repository, 'rev-parse', 'HEAD').trim();
+
+      assert.deepEqual(
+        apart(() => baselineAt(head, repository)),
+        lines,
+      );
+      assert.equal(
+        apart(() => baselineAt(empty, repository)),
+        undefined,
+      );
+      assert.deepEqual(baselineAt(undefined, repository), lines);
+    } finally {
+      rmSync(repository, { recursive: true, force: true });
     }
   });
 
@@ -176,18 +278,21 @@ describe('what a mutation job mutates', () => {
     assert.deepEqual(choose('apps/worker', scope, 'pull_request', ['packages/shared/stryker.config.json']), {
       mutate: [],
       full: false,
+      line: false,
     });
     assert.deepEqual(choose('apps/worker', scope, 'pull_request', ['apps/worker/stryker.config.json']), {
       mutate: scope,
       full: true,
+      line: true,
     });
   });
 
   it('gives each file a job of its own, with an artifact that names its package and its file', () => {
-    const { jobs, full } = plan([
-      { pkg: 'packages/shared', mutate: ['src/seed.ts'], full: false },
-      { pkg: 'apps/worker', mutate: ['src/kv.ts', 'src/cors.ts'], full: true },
-      { pkg: 'apps/extension', mutate: [], full: true },
+    const { jobs, lines } = plan([
+      { pkg: 'packages/shared', mutate: ['src/seed.ts'], full: false, line: false },
+      { pkg: 'apps/worker', mutate: ['src/kv.ts', 'src/cors.ts'], full: true, line: true },
+      { pkg: 'apps/extension', mutate: [], full: true, line: true },
+      { pkg: 'apps/console', mutate: ['src/a.ts'], full: false, line: true },
     ]);
 
     // A package mutated in full starts from nothing: its run is the one the next ones start from (FRU-341).
@@ -205,9 +310,10 @@ describe('what a mutation job mutates', () => {
         artifact: 'mutation--apps-worker--src-cors.ts',
         incremental: false,
       },
+      { package: 'apps/console', file: 'src/a.ts', artifact: 'mutation--apps-console--src-a.ts', incremental: true },
     ]);
     // A package with nothing to mutate has no line to hold.
-    assert.deepEqual(full, ['apps/worker']);
+    assert.deepEqual(lines, ['apps/worker', 'apps/console']);
     // The line job takes the reports of a package by this prefix: no other package may share it.
     assert.ok(!artifactOf('apps/worker-x', 'src/a.ts').startsWith('mutation--apps-worker--'));
   });
@@ -221,6 +327,7 @@ describe('what a mutation job mutates', () => {
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', deletedAndRenamed()), {
       mutate: ['src/seed.ts', 'src/issue.ts'],
       full: false,
+      line: false,
     });
   });
 

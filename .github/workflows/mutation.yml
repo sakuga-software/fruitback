@@ -6,7 +6,8 @@ name: Mutation
 #
 # On a pull request, only the files that it changes, in the scope of `stryker.config.json`. Every
 # file of that scope on a schedule, by hand, and on a pull request that changes how mutation runs,
-# because the lines depend on it.
+# because the lines depend on it. `baseline.json` holds the lines and does not change how mutation
+# runs: a pull request that moves a line mutates the files of that line (FRU-447).
 #
 # Each file is mutated by a job of its own (FRU-336): the 8 files of the worker in one job ran out
 # of its 150 minutes from 2026-10-19. `plan` lists the jobs, and `line` holds the line of a package
@@ -43,7 +44,7 @@ jobs:
     outputs:
       matrix: ${{ steps.scope.outputs.matrix }}
       count: ${{ steps.scope.outputs.count }}
-      full: ${{ steps.scope.outputs.full }}
+      lines: ${{ steps.scope.outputs.lines }}
 
     steps:
       - name: Checkout code
@@ -187,7 +188,7 @@ jobs:
   line:
     name: mutation line ${{ matrix.package }}
     needs: [plan, mutation]
-    if: needs.plan.outputs.full != '[]'
+    if: needs.plan.outputs.lines != '[]'
     runs-on: ubuntu-latest
     # Blocking on `main`, on the schedule and by hand; a report only on a pull request.
     continue-on-error: ${{ github.event_name == 'pull_request' }}
@@ -195,7 +196,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: ${{ fromJSON(needs.plan.outputs.full) }}
+        package: ${{ fromJSON(needs.plan.outputs.lines) }}
 
     steps:
       - name: Checkout code
