@@ -50,5 +50,5 @@ page.
   description states it, read them, and delete the ones that are this reporter's. On GitHub only an
   administrator of the repository can delete an issue. Closing an issue does not delete it.
 
-If you delete PostgreSQL rows by hand, delete the row of `seeds`: its replies in `seed_comments` go
+If you delete PostgreSQL rows by hand, delete the row of `notes`: its replies in `note_comments` go
 with it.

@@ -41,6 +41,15 @@ FRU-144 on it once, then the new one. An image of before still opens a database 
 the newer schema. When a release adds a migration that an older image cannot read, its notes say so,
 and a rollback past it means restoring the backup from step 1 — and losing the pins planted since.
 
+**`0030_note_names` (FRU-378) renames tables: an image of before it cannot read the database after
+it.** The tables `seeds` and `seed_comments` are now `notes` and `note_comments`. The columns `seed`
+and `seed_id` are now `payload` and `note_id`, and the sequences, indexes and keys follow. Only names
+change, no row is rewritten, and the migration takes a lock for the time it needs to rename. To roll
+back past it, stop the worker, run the reverse statements (`REVERSE_SQL` in
+`apps/worker/src/note-names-migration.test.ts`, which proves them) with `psql`, then start the image
+of before. Without them, every query of the image of before that names `seeds` fails: the table is
+not there.
+
 **What an instance of before FRU-225 loses on the way, and nothing else:** the pairings of the
 extension, when it had no accounts. Each reviewer pairs again, once, from the console. The notes, the
 sites and the accounts move with `migrate-to-postgres`, below.

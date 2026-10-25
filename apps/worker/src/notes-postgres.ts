@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { DEFAULT_NOTE_STAGE, type Note, type NoteIssue } from '@fruitback/shared';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { seed_comments, seeds, sites, statuses } from './postgres-schema.ts';
+import { note_comments, notes, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
 import { forgetSelectorFor, identifierFor, noteOf, widgetIdOf, stageOf, threadsOf, toNoteIssue } from './note-rows.ts';
 import { checkText, replyText } from './reply-text.ts';
@@ -11,8 +11,8 @@ import { type BatchAnswer, type CreatedIssue, type NoteStore, StoreError } from 
 /**
  * The notes in the database of the worker (FRU-218): `FRUITBACK_STORE=postgres`.
  *
- * The store of the SQLite file of before (FRU-31, gone with FRU-226), on the tables `seeds` and
- * `seed_comments`: the same columns, the same `FB-<n>`, no page to open, and stages that are its own.
+ * The store of the SQLite file of before (FRU-31, gone with FRU-226), on the tables `notes` and
+ * `note_comments`: the same columns, the same `FB-<n>`, no page to open, and stages that are its own.
  * `note-rows.ts` reads a row.
  *
  * **One database holds the notes of every workspace, so every read names its site.** A worker on a
@@ -40,16 +40,16 @@ export function createPostgresNoteStore(database: Database): NoteStore {
   /** One note written. `page.url` is already canonical: it is what the read asks for. */
   const insert = async (db: Db, seed: Note, now: number): Promise<CreatedIssue> => {
     const [row] = await db
-      .insert(seeds)
+      .insert(notes)
       .values({
         client_id: seed.client?.id ?? null,
         page_url: seed.page.url,
         stage: DEFAULT_NOTE_STAGE,
-        seed: JSON.stringify(seed),
+        payload: JSON.stringify(seed),
         created_at: now,
         updated_at: now,
       })
-      .returning({ id: seeds.id });
+      .returning({ id: notes.id });
     if (row === undefined) throw new StoreError('PostgreSQL kept a note and answered no number for it');
 
     // No `url`: see `CreatedIssue`. An empty string would be a link to the current page.
@@ -79,22 +79,22 @@ export function createPostgresNoteStore(database: Database): NoteStore {
         const rows = await run((db) =>
           db
             .select({
-              id: seeds.id,
-              page_url: seeds.page_url,
-              stage: seeds.stage,
-              status_key: seeds.status_key,
-              seed: seeds.seed,
-              at: seeds.updated_at,
+              id: notes.id,
+              page_url: notes.page_url,
+              stage: notes.stage,
+              status_key: notes.status_key,
+              seed: notes.payload,
+              at: notes.updated_at,
             })
-            .from(seeds)
+            .from(notes)
             .where(
               and(
-                eq(seeds.page_url, query.url),
+                eq(notes.page_url, query.url),
                 // WARNING: without this clause a site reads the notes of every workspace of the worker.
-                query.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, query.clientId),
+                query.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, query.clientId),
               ),
             )
-            .orderBy(asc(seeds.id)),
+            .orderBy(asc(notes.id)),
         );
         // One statement for the replies of every note of the page, and none when the client hides them.
         const threads =
@@ -104,19 +104,19 @@ export function createPostgresNoteStore(database: Database): NoteStore {
                   await run((db) =>
                     db
                       .select()
-                      .from(seed_comments)
+                      .from(note_comments)
                       .where(
                         inArray(
-                          seed_comments.seed_id,
+                          note_comments.note_id,
                           rows.map((row) => row.id),
                         ),
                       )
                       // The newest first for one note: the cap of `threadsOf` keeps the newest.
-                      .orderBy(asc(seed_comments.seed_id), desc(seed_comments.created_at), desc(seed_comments.id)),
+                      .orderBy(asc(note_comments.note_id), desc(note_comments.created_at), desc(note_comments.id)),
                   )
                 ).map((row) => ({
                   id: row.id,
-                  seed_id: row.seed_id,
+                  note_id: row.note_id,
                   author: row.author,
                   body: row.body,
                   createdAt: new Date(row.created_at).toISOString(),
@@ -152,21 +152,21 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           const id = Number(target.issue);
           if (!Number.isSafeInteger(id)) return undefined;
           const [note] = await tx
-            .select({ id: seeds.id })
-            .from(seeds)
+            .select({ id: notes.id })
+            .from(notes)
             .where(
               and(
-                eq(seeds.id, id),
-                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
               ),
             )
             .for('update');
           if (note === undefined) return undefined;
           const now = Date.now();
           const [row] = await tx
-            .insert(seed_comments)
-            .values({ seed_id: id, author: null, body: replyText(reply, policy.locale), created_at: now })
-            .returning({ id: seed_comments.id, body: seed_comments.body });
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: replyText(reply, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
           if (row === undefined) throw new StoreError('PostgreSQL kept a reply and answered no number for it');
 
           return { id: String(row.id), body: row.body, createdAt: new Date(now).toISOString() };
@@ -180,12 +180,12 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           const id = Number(target.issue);
           if (!Number.isSafeInteger(id)) return undefined;
           const [note] = await tx
-            .select({ id: seeds.id, stage: seeds.stage })
-            .from(seeds)
+            .select({ id: notes.id, stage: notes.stage })
+            .from(notes)
             .where(
               and(
-                eq(seeds.id, id),
-                target.clientId === undefined ? isNull(seeds.client_id) : eq(seeds.client_id, target.clientId),
+                eq(notes.id, id),
+                target.clientId === undefined ? isNull(notes.client_id) : eq(notes.client_id, target.clientId),
               ),
             )
             .for('update');
@@ -194,14 +194,14 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           if (check.verdict === 'wrong') {
             // FRU-367: back to the built-in status of the first stage, so its status and its stage agree.
             await tx
-              .update(seeds)
+              .update(notes)
               .set({ stage: DEFAULT_NOTE_STAGE, status_key: null, updated_at: now })
-              .where(eq(seeds.id, id));
+              .where(eq(notes.id, id));
           }
           const [row] = await tx
-            .insert(seed_comments)
-            .values({ seed_id: id, author: null, body: checkText(check, policy.locale), created_at: now })
-            .returning({ id: seed_comments.id, body: seed_comments.body });
+            .insert(note_comments)
+            .values({ note_id: id, author: null, body: checkText(check, policy.locale), created_at: now })
+            .returning({ id: note_comments.id, body: note_comments.body });
           if (row === undefined) throw new StoreError('PostgreSQL kept a verdict and answered no number for it');
 
           return {
@@ -241,10 +241,10 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           if (row?.hidden === true || (status.key !== null && row === undefined)) return 'status-changed' as const;
           const stage = status.key === null ? status.stage : stageOf(row?.stage ?? status.stage);
           const [note] = await tx
-            .update(seeds)
+            .update(notes)
             .set({ status_key: status.key, stage, updated_at: Date.now() })
-            .where(and(eq(seeds.id, id), eq(seeds.client_id, target.clientId)))
-            .returning({ stage: seeds.stage, page: seeds.page_url });
+            .where(and(eq(notes.id, id), eq(notes.client_id, target.clientId)))
+            .returning({ stage: notes.stage, page: notes.page_url });
 
           return note === undefined ? undefined : { stage: stageOf(note.stage), page: note.page };
         }),
@@ -258,15 +258,15 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           const selects = forgetSelectorFor(which);
           const found = (
             await tx
-              .select({ id: seeds.id, page_url: seeds.page_url, seed: seeds.seed, created_at: seeds.created_at })
-              .from(seeds)
-              .orderBy(asc(seeds.id))
+              .select({ id: notes.id, page_url: notes.page_url, seed: notes.payload, created_at: notes.created_at })
+              .from(notes)
+              .orderBy(asc(notes.id))
           ).filter(selects);
 
           if (!options.dryRun && found.length > 0) {
-            await tx.delete(seeds).where(
+            await tx.delete(notes).where(
               inArray(
-                seeds.id,
+                notes.id,
                 found.map((row) => row.id),
               ),
             );

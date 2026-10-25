@@ -218,7 +218,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
       await seedDevWorkspace(database, { origin: DEV_PLAYGROUND, visibility: 'everyone' });
       const where = await rowsOf(
         database,
-        `SELECT DISTINCT schemaname FROM pg_tables WHERE tablename IN ('sites', 'seeds', 'kv')`,
+        `SELECT DISTINCT schemaname FROM pg_tables WHERE tablename IN ('sites', 'notes', 'kv')`,
       );
       assert.deepEqual(
         where.map((row) => row.schemaname),
@@ -339,7 +339,7 @@ describe('the demonstration on PostgreSQL, as it is prepared (FRU-223)', () => {
   it('empties tables that the schema has, and no other, in reset.sh', async () => {
     const script = readFileSync(new URL('../../playground/demo/postgres/reset.sh', import.meta.url), 'utf8');
     const truncate = /'(TRUNCATE [a-z_, ]+ RESTART IDENTITY)'/.exec(script)?.[1];
-    assert.equal(truncate, 'TRUNCATE seeds, seed_comments, screenshots RESTART IDENTITY');
+    assert.equal(truncate, 'TRUNCATE notes, note_comments, screenshots RESTART IDENTITY');
     const database = await createPgliteDatabase();
     try {
       await migrate(database);

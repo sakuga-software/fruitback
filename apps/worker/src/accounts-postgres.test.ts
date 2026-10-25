@@ -411,11 +411,11 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
     for (const [name, site] of Object.entries(sites)) {
       const [row] = await rowsOf(
         on,
-        `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+        `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
            VALUES ('${site.id}', '${site.origin}/', 'new', '{"id":"sd_${name}","note":"A note of ${name}"}', 1, 1)
          RETURNING id`,
       );
-      await rowsOf(on, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (${row?.id}, 'A reply', 1)`);
+      await rowsOf(on, `INSERT INTO note_comments (note_id, body, created_at) VALUES (${row?.id}, 'A reply', 1)`);
       const hook = name === 'globex' ? hooks.globex : hooks.acme;
       await accounts.enqueueDelivery(
         hook.id,
@@ -425,7 +425,7 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
     }
 
     const kept = async () =>
-      (await rowsOf(on, 'SELECT client_id FROM seeds ORDER BY client_id')).map((row) => String(row.client_id));
+      (await rowsOf(on, 'SELECT client_id FROM notes ORDER BY client_id')).map((row) => String(row.client_id));
     const left = async (table: string) => Number((await rowsOf(on, `SELECT count(*)::int AS n FROM ${table}`))[0]?.n);
 
     return { accounts, acme, globex, sites, hooks, kept, left };
@@ -436,7 +436,7 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
 
     // The control: a workspace that does not hold the site removes nothing.
     assert.equal(await accounts.removeSite(globex.id, sites.acme.id), false);
-    assert.equal(await left('seeds'), 3);
+    assert.equal(await left('notes'), 3);
 
     // A body is text that the worker wrote, but it is read as JSON here: a delivery of another
     // workspace that names this site is not one of its own.
@@ -449,7 +449,7 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
     assert.equal(await accounts.removeSite(acme.id, sites.acme.id), true);
 
     assert.deepEqual(await kept(), [sites.blog.id, sites.globex.id].toSorted());
-    assert.equal(await left('seed_comments'), 2);
+    assert.equal(await left('note_comments'), 2);
     assert.equal(await left('deliveries'), 3);
   });
 
@@ -459,7 +459,7 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
     await accounts.deleteWorkspace(acme.id);
 
     assert.deepEqual(await kept(), [sites.globex.id]);
-    assert.equal(await left('seed_comments'), 1);
+    assert.equal(await left('note_comments'), 1);
     assert.equal(await left('deliveries'), 1);
   });
 });

@@ -453,8 +453,8 @@ const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
  * A row goes when its tracker has the file, or at `expires_at`, `ATTACHMENT_TRANSIT_DAYS` after it
  * came. A row read after `expires_at` reads as absent. `expires_at` defaults to 0: a row written
  * with no end is past it at once. `account_id` is who sent it, and holds no foreign key: the file
- * of a person who leaves still goes with its note. `seed_id` is the note that took it: the id
- * the widget gave the seed.
+ * of a person who leaves still goes with its note. `note_id` is the note that took it: the id
+ * the widget gave the note.
  */
 export const screenshots = pgTable(
   'screenshots',
@@ -472,7 +472,7 @@ export const screenshots = pgTable(
     name: text('name').notNull().default('screenshot.png'),
     content_type: text('content_type').notNull().default('image/png'),
     expires_at: instant('expires_at').notNull().default(0),
-    seed_id: text('seed_id'),
+    note_id: text('note_id'),
     // A picture of FRU-44, marked so by migration 0023: it ends 7 days after it, and counts for
     // nothing in what its account holds in transit (heavy review of #427). A file of FRU-331 is false.
     before_transit: boolean('before_transit').notNull().default(false),
@@ -518,7 +518,7 @@ export const kv = pgTable(
  * - `client_id` is the id of the site. **It holds no foreign key**: the copy of a SQLite file
  *   (FRU-220) writes ids of clients that are not sites. The notes of a site that is removed go with
  *   it by `removeSite` of `accounts-postgres.ts` (FRU-194).
- * - `seed` is the note as JSON, in a `TEXT`: the reader parses a row and never trusts it, as for a
+ * - `payload` is the note as JSON, in a `TEXT`: the reader parses a row and never trusts it, as for a
  *   file. `JSONB` refuses the `\u0000` that a note may hold, and `TEXT` holds its six characters.
  * - **It holds what a person wrote, in the clear**: a name, sometimes an address, the note.
  *   `forget` of `notes-postgres.ts` deletes them.
@@ -529,44 +529,44 @@ export const kv = pgTable(
  * note of such a page would not be kept at all. A hash index takes any length, and the read is an
  * equality. The site is then read in the rows of the page, which are few.
  */
-export const seeds = pgTable(
-  'seeds',
+export const notes = pgTable(
+  'notes',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'seeds_id_seq' }),
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'notes_id_seq' }),
     client_id: text('client_id'),
     page_url: text('page_url').notNull(),
     stage: text('stage').notNull(),
     // The key of its status in `statuses`, with the source `own` (FRU-365). NULL: the built-in status
     // of its stage. Written with the stage, never alone (FRU-367).
     status_key: text('status_key'),
-    seed: text('seed').notNull(),
+    payload: text('payload').notNull(),
     created_at: instant('created_at').notNull(),
     updated_at: instant('updated_at').notNull(),
   },
   (table) => [
-    index('seeds_by_page').using('hash', table.page_url),
+    index('notes_by_page').using('hash', table.page_url),
     // Every note of one site: what a removed site deletes (FRU-194), and the read by site.
-    index('seeds_by_client').on(table.client_id),
+    index('notes_by_client').on(table.client_id),
   ],
 );
 
 /** A reply of the team to a note the worker keeps (FRU-218). It goes with its note. */
-export const seed_comments = pgTable(
-  'seed_comments',
+export const note_comments = pgTable(
+  'note_comments',
   {
-    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'seed_comments_id_seq' }),
-    seed_id: bigint('seed_id', { mode: 'number' }).notNull(),
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'note_comments_id_seq' }),
+    note_id: bigint('note_id', { mode: 'number' }).notNull(),
     author: text('author'),
     body: text('body').notNull(),
     created_at: instant('created_at').notNull(),
   },
   (table) => [
     foreignKey({
-      name: 'seed_comments_seed_id_fkey',
-      columns: [table.seed_id],
-      foreignColumns: [seeds.id],
+      name: 'note_comments_note_id_fkey',
+      columns: [table.note_id],
+      foreignColumns: [notes.id],
     }).onDelete('cascade'),
-    index('seed_comments_by_seed').on(table.seed_id, table.created_at),
+    index('note_comments_by_note').on(table.note_id, table.created_at),
   ],
 );
 
@@ -583,7 +583,7 @@ export const note_index = pgTable(
   'note_index',
   {
     site_id: text('site_id').notNull(),
-    seed_id: text('seed_id').notNull(),
+    note_id: text('note_id').notNull(),
     workspace_id: text('workspace_id').notNull(),
     page_url: text('page_url').notNull(),
     excerpt: text('excerpt').notNull(),
@@ -602,7 +602,7 @@ export const note_index = pgTable(
     confirmed: boolean('confirmed'),
   },
   (table) => [
-    primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.seed_id] }),
+    primaryKey({ name: 'note_index_pkey', columns: [table.site_id, table.note_id] }),
     foreignKey({
       name: 'note_index_site_id_fkey',
       columns: [table.site_id],
@@ -635,7 +635,7 @@ export const note_index = pgTable(
       table.workspace_id,
       table.created_at.desc(),
       sql`"site_id" COLLATE "C" DESC`,
-      sql`"seed_id" COLLATE "C" DESC`,
+      sql`"note_id" COLLATE "C" DESC`,
     ),
   ],
 );

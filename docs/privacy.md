@@ -234,7 +234,7 @@ the first read of its page, with what that read says.
 | Column                       | What it holds                                                                                                                                                       |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `site_id`, `workspace_id`    | The site of the note and its workspace.                                                                                                                             |
-| `seed_id`                    | The id the widget gave the note.                                                                                                                                    |
+| `note_id`                    | The id the widget gave the note.                                                                                                                                    |
 | `page_url`                   | The address of the page, as the worker canonicalised it.                                                                                                            |
 | `excerpt`                    | **The first 64 characters of the text, never more**, spaces and line breaks made one space, cut between two characters. For a person to tell one note from another. |
 | `stage`                      | The stage the store last said, and `checked_at` when it said it.                                                                                                    |

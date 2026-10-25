@@ -17,7 +17,7 @@ function attachmentOf(row: Row): StoredAttachment {
     content: row.content,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
-    ...(row.seed_id === null ? {} : { seed: row.seed_id }),
+    ...(row.note_id === null ? {} : { seed: row.note_id }),
     ...(row.before_transit ? { beforeTransit: true as const } : {}),
   };
 }
@@ -81,12 +81,12 @@ export function createPostgresAttachmentStore(database: Database): AttachmentSto
       const rows = await database.run((db) =>
         db
           .update(screenshots)
-          .set({ seed_id: seed })
+          .set({ note_id: seed })
           .where(
             and(
               inArray(screenshots.id, [...ids]),
               gt(screenshots.expires_at, now),
-              or(isNull(screenshots.seed_id), eq(screenshots.seed_id, seed)),
+              or(isNull(screenshots.note_id), eq(screenshots.note_id, seed)),
             ),
           )
           .returning(),

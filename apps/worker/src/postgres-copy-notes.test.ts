@@ -126,7 +126,7 @@ const counts = async (database: PgDatabase) =>
   (
     await rowsOf(
       database,
-      `SELECT (SELECT count(*)::int FROM seeds) AS seeds, (SELECT count(*)::int FROM seed_comments) AS comments`,
+      `SELECT (SELECT count(*)::int FROM notes) AS notes, (SELECT count(*)::int FROM note_comments) AS comments`,
     )
   )[0];
 
@@ -164,8 +164,8 @@ for (const subject of SUBJECTS) {
         const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.equal(outcome.ok, true, outcome.lines.join('\n'));
-        assert.match(outcome.lines.join('\n'), /seeds\s+6\s+6\s+same/);
-        assert.match(outcome.lines.join('\n'), /seed_comments\s+3\s+3\s+same/);
+        assert.match(outcome.lines.join('\n'), /notes\s+6\s+6\s+same/);
+        assert.match(outcome.lines.join('\n'), /note_comments\s+3\s+3\s+same/);
         const store = createPostgresNoteStore(database);
         const after = await everyRead((query) => store.findForPage(query, undefined, POLICY), clients);
         // The SQLite store gives a reader that names no client every note of the page, and the store of
@@ -177,18 +177,18 @@ for (const subject of SUBJECTS) {
           (after[`${PAGES[0]} (none)`] as { identifier: string }[]).map((issue) => issue.identifier),
           ['FB-5'],
         );
-        // The five stages came through, and the text of a seed is the text of the file.
+        // The five stages came through, and the text of a note is the text of the file.
         assert.deepEqual(
-          (await rowsOf(database, 'SELECT stage FROM seeds ORDER BY id')).map((row) => row.stage),
+          (await rowsOf(database, 'SELECT stage FROM notes ORDER BY id')).map((row) => row.stage),
           [...NOTE_STAGES, 'new'],
         );
         const file = new DatabaseSync(notesPath, { readOnly: true });
         const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
         file.close();
         assert.deepEqual(
-          (await rowsOf(database, 'SELECT id, seed FROM seeds ORDER BY id')).map((row) => ({
+          (await rowsOf(database, 'SELECT id, payload FROM notes ORDER BY id')).map((row) => ({
             id: Number(row.id),
-            seed: row.seed,
+            seed: row.payload,
           })),
           texts.map((row) => ({ id: row.id, seed: row.seed })),
         );
@@ -210,8 +210,8 @@ for (const subject of SUBJECTS) {
         // FB-6 was a note that somebody had deleted: nobody gets its number.
         assert.deepEqual(next, { id: '8', identifier: 'FB-8' });
         // And a reply: 4 was given to the reply that went with FB-6.
-        await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (8, 'Vu.', 1)`);
-        assert.deepEqual(await rowsOf(database, 'SELECT max(id)::int AS last FROM seed_comments'), [{ last: 5 }]);
+        await rowsOf(database, `INSERT INTO note_comments (note_id, body, created_at) VALUES (8, 'Vu.', 1)`);
+        assert.deepEqual(await rowsOf(database, 'SELECT max(id)::int AS last FROM note_comments'), [{ last: 5 }]);
       });
 
       it('serves the copied notes through GET /feedback of a worker with a database, to the site that --client names', async () => {
@@ -286,7 +286,7 @@ for (const subject of SUBJECTS) {
           outcome.lines.at(-1) ?? '',
           /^dry run: the counts are equal, and nothing was kept\. The next note would be FB-8\./,
         );
-        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+        assert.deepEqual(await counts(database), { notes: 0, comments: 0 });
         const first = await createPostgresNoteStore(database).create(
           noteFixtureOf('sd_first', PAGES[0] ?? '', 'acme', 'La première note de cette base'),
           undefined,
@@ -303,7 +303,7 @@ for (const subject of SUBJECTS) {
         const again = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
         assert.equal(again.ok, true);
         assert.match(again.lines[0] ?? '', /already holds exactly these notes: nothing is written/);
-        assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
+        assert.deepEqual(await counts(database), { notes: 6, comments: 3 });
 
         await createPostgresNoteStore(database).create(
           noteFixtureOf('sd_since', PAGES[0] ?? '', 'acme', 'Depuis'),
@@ -316,7 +316,7 @@ for (const subject of SUBJECTS) {
           late.lines.at(-1) ?? '',
           /^refused: PostgreSQL already holds notes, and they are not the ones of the file/,
         );
-        assert.deepEqual(await counts(database), { seeds: 7, comments: 3 });
+        assert.deepEqual(await counts(database), { notes: 7, comments: 3 });
       });
 
       it('holds the same rows under another name of site as other rows: a second run with another --client is refused', async () => {
@@ -333,7 +333,7 @@ for (const subject of SUBJECTS) {
 
         assert.equal(renamed.ok, false);
         assert.deepEqual(
-          await rowsOf(database, `SELECT count(*)::int AS n FROM seeds WHERE client_id = 'site_other'`),
+          await rowsOf(database, `SELECT count(*)::int AS n FROM notes WHERE client_id = 'site_other'`),
           [{ n: 0 }],
         );
       });
@@ -349,19 +349,19 @@ for (const subject of SUBJECTS) {
         );
         await rowsOf(
           database,
-          'CREATE TRIGGER stop_the_copy BEFORE INSERT ON seed_comments EXECUTE FUNCTION stop_the_copy()',
+          'CREATE TRIGGER stop_the_copy BEFORE INSERT ON note_comments EXECUTE FUNCTION stop_the_copy()',
         );
 
         await assert.rejects(
           copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false }),
           /the copy stops here/,
         );
-        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+        assert.deepEqual(await counts(database), { notes: 0, comments: 0 });
 
-        await rowsOf(database, 'DROP TRIGGER stop_the_copy ON seed_comments');
+        await rowsOf(database, 'DROP TRIGGER stop_the_copy ON note_comments');
         const again = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
         assert.equal(again.ok, true, again.lines.join('\n'));
-        assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
+        assert.deepEqual(await counts(database), { notes: 6, comments: 3 });
       });
 
       it('fails its final count when a note goes missing in the target, and keeps nothing', async () => {
@@ -372,19 +372,19 @@ for (const subject of SUBJECTS) {
         await rowsOf(
           database,
           `CREATE FUNCTION lose_a_note() RETURNS trigger LANGUAGE plpgsql
-           AS $$ BEGIN DELETE FROM seeds WHERE id = (SELECT max(id) FROM seeds); RETURN NULL; END $$`,
+           AS $$ BEGIN DELETE FROM notes WHERE id = (SELECT max(id) FROM notes); RETURN NULL; END $$`,
         );
         await rowsOf(
           database,
-          'CREATE TRIGGER lose_a_note AFTER INSERT ON seeds FOR EACH STATEMENT EXECUTE FUNCTION lose_a_note()',
+          'CREATE TRIGGER lose_a_note AFTER INSERT ON notes FOR EACH STATEMENT EXECUTE FUNCTION lose_a_note()',
         );
 
         const outcome = await copyNotesFile({ notesPath, clients: NO_RENAME, database, dryRun: false });
 
         assert.equal(outcome.ok, false);
-        assert.match(outcome.lines.join('\n'), /seeds\s+6\s+5\s+DIFFERENT/);
+        assert.match(outcome.lines.join('\n'), /notes\s+6\s+5\s+DIFFERENT/);
         assert.match(outcome.lines.at(-1) ?? '', /^refused: a table of PostgreSQL differs from the file/);
-        assert.deepEqual(await counts(database), { seeds: 0, comments: 0 });
+        assert.deepEqual(await counts(database), { notes: 0, comments: 0 });
       });
 
       it('refuses a file of another version, a column it does not know, a date it cannot keep, and a client the file does not name', async () => {
@@ -635,8 +635,8 @@ describe('the command migrate-to-postgres --notes, as a process (FRU-220)', () =
           assert.ok(!`${output.stdout}${output.stderr}`.includes(password));
         }
         const database = createPgDatabase(own.url, 'public', { max: 1 });
-        assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
-        assert.deepEqual(await rowsOf(database, `SELECT count(*)::int AS n FROM seeds WHERE client_id = 'site_1'`), [
+        assert.deepEqual(await counts(database), { notes: 6, comments: 3 });
+        assert.deepEqual(await rowsOf(database, `SELECT count(*)::int AS n FROM notes WHERE client_id = 'site_1'`), [
           { n: 4 },
         ]);
         await database.close();

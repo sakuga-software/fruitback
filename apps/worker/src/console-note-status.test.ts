@@ -139,7 +139,7 @@ async function pin(world: World, site: string, token: string, store: NoteStore) 
   return [issue?.stage, issue?.status];
 }
 
-const stored = (world: World) => rowsOf(world.database, 'SELECT stage, status_key FROM seeds');
+const stored = (world: World) => rowsOf(world.database, 'SELECT stage, status_key FROM notes');
 const indexed = (world: World, site: string) =>
   rowsOf(world.database, `SELECT stage FROM note_index WHERE site_id = '${site}'`);
 
@@ -263,7 +263,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
     for (const kind of ['linear', 'rest'] as const) {
       const { world, workspace, site, alice } = await aNote();
       const index = createPostgresNoteIndex(world.database);
-      const [{ id }] = (await rowsOf(world.database, 'SELECT id FROM seeds')) as [{ id: number }];
+      const [{ id }] = (await rowsOf(world.database, 'SELECT id FROM notes')) as [{ id: number }];
       const connector = await world.accounts.addConnector(workspace, { kind, label: 'Elsewhere', sealed: 'x' });
       await index.record(
         [

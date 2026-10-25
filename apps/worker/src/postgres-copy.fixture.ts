@@ -221,7 +221,7 @@ export function issuesOfFile(path: string, query: NoteIssueQuery, policy: Client
     const threads = threadsOf(
       replies.map((reply) => ({
         id: reply.id,
-        seed_id: reply.seed_id,
+        note_id: reply.seed_id,
         author: reply.author,
         body: reply.body,
         createdAt: reply.created_at,

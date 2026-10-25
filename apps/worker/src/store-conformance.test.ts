@@ -369,17 +369,17 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
       for (const database of databases.splice(0)) await database.close();
     },
     unknownState: async (created) => {
-      await rowsOf(opened(), `UPDATE seeds SET stage = 'marmalade' WHERE id = ${Number(created.id)}`);
+      await rowsOf(opened(), `UPDATE notes SET stage = 'marmalade' WHERE id = ${Number(created.id)}`);
     },
     markDone: async (created) => {
-      await rowsOf(opened(), `UPDATE seeds SET stage = 'done' WHERE id = ${Number(created.id)}`);
+      await rowsOf(opened(), `UPDATE notes SET stage = 'done' WHERE id = ${Number(created.id)}`);
     },
     plantReplies: async (store, seed, count) => {
       const created = await store.create(seed, undefined, POLICY);
       for (const reply of repliesNewestFirst(count)) {
         await rowsOf(
           opened(),
-          `INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES (${Number(created.id)}, 'Alice', '${reply.body}', ${Date.parse(reply.createdAt)})`,
+          `INSERT INTO note_comments (note_id, author, body, created_at) VALUES (${Number(created.id)}, 'Alice', '${reply.body}', ${Date.parse(reply.createdAt)})`,
         );
       }
     },

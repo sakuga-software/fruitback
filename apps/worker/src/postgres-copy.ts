@@ -7,7 +7,7 @@ import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, integer, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
-import { deliveries, email_links, pairings, seed_comments } from './postgres-schema.ts';
+import { deliveries, email_links, note_comments, pairings } from './postgres-schema.ts';
 
 /**
  * The `user_version` of each file of the last worker that wrote one: the one version this command
@@ -453,7 +453,8 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
  * - **The target is the database of a worker of this image.** Every migration is applied first, as
  *   the worker does when it starts. So it runs after the copy of the accounts, never before: that
  *   one goes into a database that no worker started on.
- * - **A note keeps its number, its text and its dates.** `seed` is copied as it is, byte for byte.
+ * - **A note keeps its number, its text and its dates.** The `seed` of the file is copied into
+ *   `payload` as it is, byte for byte.
  *   The file writes a date as ISO text, and the database as milliseconds: a date that does not come
  *   back to the same text is refused, with the number of its row.
  * - **The numbers go on after the largest one the file ever gave**, a note that was deleted since
@@ -475,24 +476,32 @@ export type NotesCopyInput = {
 };
 
 /**
- * `seeds` as a seeds file holds it: FRU-365 added `status_key`, which no file holds. A note copied
+ * `notes` as the file can fill it: FRU-365 added `status_key`, which no file holds. A note copied
  * here keeps it NULL, the built-in status of its stage, as every note of before.
  */
-const seeds = pgTable('seeds', {
+const notes = pgTable('notes', {
   id: bigint('id', { mode: 'number' }).primaryKey(),
   client_id: text('client_id'),
   page_url: text('page_url').notNull(),
   stage: text('stage').notNull(),
-  seed: text('seed').notNull(),
+  payload: text('payload').notNull(),
   created_at: instant('created_at').notNull(),
   updated_at: instant('updated_at').notNull(),
 });
 
-/** The two tables of the file, with the table of the database each one goes to. */
-const NOTE_TABLES = [
-  { name: 'seeds', table: seeds, dates: ['created_at', 'updated_at'] },
-  { name: 'comments', table: seed_comments, dates: ['created_at'] },
-] as const;
+/**
+ * The two tables of the file, with the table of the database each one goes to. The file keeps the
+ * names of before FRU-378: `inFile` gives the name of a column of the database there.
+ */
+const NOTE_TABLES: readonly {
+  name: string;
+  table: PgTable;
+  dates: readonly string[];
+  inFile: Readonly<Record<string, string>>;
+}[] = [
+  { name: 'seeds', table: notes, dates: ['created_at', 'updated_at'], inFile: { payload: 'seed' } },
+  { name: 'comments', table: note_comments, dates: ['created_at'], inFile: { note_id: 'seed_id' } },
+];
 
 /** The date of a row of the file, as the database keeps it. */
 function instantOf(text: unknown, where: string): number {
@@ -527,8 +536,9 @@ function readNotesFile(
         (row) => [row.name, row.seq] as const,
       ),
     );
-    for (const { name, table, dates } of NOTE_TABLES) {
-      const expected = columnsOf(table);
+    for (const { name, table, dates, inFile } of NOTE_TABLES) {
+      const columns = columnsOf(table);
+      const expected = columns.map((column) => inFile[column] ?? column);
       const present = (source.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map(
         (column) => column.name,
       );
@@ -546,9 +556,9 @@ function readNotesFile(
       const list = expected.map((column) => `"${column}"`).join(', ');
       const read = source.prepare(`SELECT ${list} FROM ${name} ORDER BY id`).all() as Row[];
       const taken = read.map((row) => {
-        const kept: Row = { ...row };
+        const kept: Row = Object.fromEntries(columns.map((column) => [column, row[inFile[column] ?? column]]));
         for (const date of dates) kept[date] = instantOf(row[date], `the row ${String(row.id)} of ${name}`);
-        if (table === seeds) {
+        if (table === notes) {
           const before = (row.client_id ?? null) as string | null;
           byClient.set(before, (byClient.get(before) ?? 0) + 1);
           const site = clients.get(before);
@@ -652,7 +662,7 @@ export async function copyNotesFile(input: NotesCopyInput): Promise<CopyOutcome>
         lines.push(HEADER, ...after.lines, 'the site of each note:', ...sitesLines);
         if (!after.same) throw new Refused('a table of PostgreSQL differs from the file after the copy');
 
-        const next = (source.last.get(seeds) ?? 0) + 1;
+        const next = (source.last.get(notes) ?? 0) + 1;
         if (input.dryRun) {
           await db.execute(sql`ROLLBACK`);
           lines.push(`dry run: the counts are equal, and nothing was kept. The next note would be FB-${next}.`);

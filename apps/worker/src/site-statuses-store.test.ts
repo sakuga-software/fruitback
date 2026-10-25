@@ -138,7 +138,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       await store.putSiteStatus(workspace, site, status('parked', { stage: CLOSED as SiteStatus['stage'] }));
       await rowsOf(
         database,
-        `INSERT INTO seeds (client_id, page_url, stage, status_key, seed, created_at, updated_at) VALUES
+        `INSERT INTO notes (client_id, page_url, stage, status_key, payload, created_at, updated_at) VALUES
            ('${site}', 'https://acme.test/', '${NEW}', 'waiting', '{}', 1, 1),
            ('${elsewhere}', 'https://two.test/', '${NEW}', 'waiting', '{}', 1, 1)`,
       );
@@ -159,7 +159,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         pages: ['https://acme.test/'],
       });
 
-      assert.deepEqual(await rowsOf(database, 'SELECT client_id, stage, status_key FROM seeds ORDER BY id'), [
+      assert.deepEqual(await rowsOf(database, 'SELECT client_id, stage, status_key FROM notes ORDER BY id'), [
         { client_id: site, stage: CLOSED, status_key: 'parked' },
         // A note of another site keeps its status, whatever its key.
         { client_id: elsewhere, stage: NEW, status_key: 'waiting' },

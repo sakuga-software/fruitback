@@ -87,10 +87,10 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   // for the time of one statement.
   await rowsOf(
     database,
-    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES ('site_1', 'https://acme.dev/', 'new', '{}', 1, 1)`,
+    `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at) VALUES ('site_1', 'https://acme.dev/', 'new', '{}', 1, 1)`,
   );
-  await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'a reply', 1)`);
-  await rowsOf(database, 'ALTER TABLE seed_comments DROP CONSTRAINT seed_comments_seed_id_fkey');
+  await rowsOf(database, `INSERT INTO note_comments (note_id, body, created_at) VALUES (1, 'a reply', 1)`);
+  await rowsOf(database, 'ALTER TABLE note_comments DROP CONSTRAINT note_comments_note_id_fkey');
   await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
   // A site shared with a guest (FRU-250).
   await rowsOf(
@@ -106,7 +106,7 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   // FRU-237: one row of the index of the notes.
   await rowsOf(
     database,
-    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, created_at, checked_at)
+    `INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, author_kind, place, created_at, checked_at)
        VALUES ('site_acme', 'sd_1', 'ws_acme', 'https://acme.dev/', 'A note', 'new', 'visitor', 'fruitback', 1, 1)`,
   );
   // FRU-261: one read of an administrator of the instance.
@@ -161,19 +161,19 @@ it('knows the thirty-nine BIGINT columns of the worker, and that better-auth has
     'email_links.expires_at',
     'email_links.spent_at',
     'kv.expires_at',
+    'note_comments.created_at',
+    'note_comments.id',
+    'note_comments.note_id',
     'note_index.checked_at',
     'note_index.created_at',
+    'notes.created_at',
+    'notes.id',
+    'notes.updated_at',
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',
     'screenshots.created_at',
     'screenshots.expires_at',
-    'seed_comments.created_at',
-    'seed_comments.id',
-    'seed_comments.seed_id',
-    'seeds.created_at',
-    'seeds.id',
-    'seeds.updated_at',
     'sessions.created_at',
     'sessions.expires_at',
     'sessions.revoked_at',

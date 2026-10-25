@@ -412,9 +412,9 @@ describe('forget, and the index (FRU-237)', () => {
       );
       assert.equal(done.ok, true, done.lines.join('\n'));
 
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, excerpt FROM note_index ORDER BY seed_id'), [
-        { seed_id: 'sd_bob', excerpt: 'A note of Bob.' },
-        { seed_id: 'sd_other', excerpt: 'A note of the other workspace.' },
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id, excerpt FROM note_index ORDER BY note_id'), [
+        { note_id: 'sd_bob', excerpt: 'A note of Bob.' },
+        { note_id: 'sd_other', excerpt: 'A note of the other workspace.' },
       ]);
     } finally {
       await database.close();
@@ -460,9 +460,9 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         Date.now(),
       );
 
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, reference, stage FROM note_index ORDER BY seed_id'), [
-        { seed_id: 'sd_other', reference: 'FB-3', stage: 'done' },
-        { seed_id: 'sd_same', reference: 'FB-1', stage: 'done' },
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id, reference, stage FROM note_index ORDER BY note_id'), [
+        { note_id: 'sd_other', reference: 'FB-3', stage: 'done' },
+        { note_id: 'sd_same', reference: 'FB-1', stage: 'done' },
       ]);
     } finally {
       await database.close();
@@ -522,8 +522,8 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       );
 
       assert.equal(done.ok, true, done.lines.join('\n'));
-      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM notes'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id FROM note_index'), []);
     } finally {
       await database.close();
     }
@@ -575,11 +575,11 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       assert.equal(listed.ok, true, listed.lines.join('\n'));
       assert.match(listed.lines.join('\n'), /sd_tracked {2}ACM-151 .* A note that went to Linear\./);
       assert.match(listed.lines.join('\n'), /no row of the index names sd_nowhere/);
-      assert.equal((await rowsOf(database, 'SELECT seed_id FROM note_index')).length, 2, 'a dry run removes nothing');
+      assert.equal((await rowsOf(database, 'SELECT note_id FROM note_index')).length, 2, 'a dry run removes nothing');
 
       const done = await runForget(['--seed', 'sd_tracked'], env, tracker, index);
       assert.equal(done.ok, true, done.lines.join('\n'));
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), [{ seed_id: 'sd_kept' }]);
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id FROM note_index'), [{ note_id: 'sd_kept' }]);
     } finally {
       await database.close();
     }
@@ -607,8 +607,8 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
       await withoutOwnerRule(database, `DELETE FROM "user" WHERE id = '${alice.id}'`);
 
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, author_kind, author_account_id FROM note_index'), [
-        { seed_id: 'sd_member', author_kind: 'member', author_account_id: null },
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id, author_kind, author_account_id FROM note_index'), [
+        { note_id: 'sd_member', author_kind: 'member', author_account_id: null },
       ]);
     } finally {
       await database.close();
@@ -662,7 +662,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       );
 
       assert.equal(done.ok, false);
-      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM notes'), []);
       assert.match(done.lines.join('\n'), /deleted 1 note\(s\)/);
       assert.match(done.lines.join('\n'), /Run: forget --note sd_alice/);
     } finally {
@@ -720,8 +720,8 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       );
 
       assert.equal(done.ok, true, done.lines.join('\n'));
-      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id FROM note_index'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM notes'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT note_id FROM note_index'), []);
     } finally {
       await database.close();
     }

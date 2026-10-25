@@ -106,7 +106,7 @@ async function notesOf(answer: Response): Promise<{ note: string; verified: unkn
 }
 
 const rowsIn = async (world: World): Promise<number> =>
-  Number((await rowsOf(world.database, 'SELECT count(*)::int AS n FROM seeds'))[0]?.n);
+  Number((await rowsOf(world.database, 'SELECT count(*)::int AS n FROM notes'))[0]?.n);
 
 describe('a visitor with no account, on a site that everyone reads (FRU-224)', () => {
   it('leaves a note and reads it again, with no session, no token and no cookie', async () => {
@@ -237,7 +237,7 @@ describe('a visitor with no account, on a site that its members read (FRU-224, F
     assert.equal(((await read.json()) as { canWrite?: unknown }).canWrite, undefined);
     // The note is one that nobody vouched for.
     assert.notEqual(
-      (JSON.parse(String((await rowsOf(world.database, 'SELECT seed FROM seeds'))[0]?.seed)) as Note).reporter
+      (JSON.parse(String((await rowsOf(world.database, 'SELECT payload FROM notes'))[0]?.payload)) as Note).reporter
         ?.verified,
       true,
     );

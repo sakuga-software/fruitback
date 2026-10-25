@@ -20,8 +20,8 @@ docker compose exec -T postgres pg_restore -f /dev/null /tmp/fruitback.pgdump &&
 docker compose cp postgres:/tmp/fruitback.pgdump "./fruitback-$(date +%F).pgdump"
 ```
 
-Measured on 2026-10-16: the dump held the data of every table of the worker, `seeds`,
-`seed_comments`, `sites`, `user` and `session` among them.
+Measured on 2026-10-16: the dump held the data of every table of the worker, `notes`,
+`note_comments` (named `seeds` and `seed_comments` before FRU-378), `sites`, `user` and `session` among them.
 
 **Four values are in no dump: keep them apart, somewhere other than the server.**
 

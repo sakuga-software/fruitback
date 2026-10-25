@@ -84,7 +84,7 @@ Per site, as decided: two sites that send to the same Linear team can show « In
 colours. A site's list is computed from its destinations (`site_destinations`, FRU-123): when a
 destination changes connector or team, the rows of the old `source` stay, unused, so going back
 restores them. A table rather than a bigger `connectors.settings` JSON, because the settings are per
-site now, and because a status of the own store is referenced by notes (`seeds.status_key`).
+site now, and because a status of the own store is referenced by notes (`notes.status_key`).
 
 ### The contract
 
@@ -208,7 +208,7 @@ does not — the same Shadow root markup, the same `pageNotes()`, with a control
   and Fruitback reads it; inventing one here would be a state the tracker does not have.
 - Five built-in statuses, one per stage, with the keys `new` … `closed`: a site whose team never
   opens the screen sees exactly what it sees now.
-- `seeds.status_key`, nullable. `null` is the built-in status of the note's `stage`.
+- `notes.status_key`, nullable. `null` is the built-in status of the note's `stage`.
 - A note needs a way to change status, which does not exist today: a select in the list of notes of
   the console (`manage-feedback`), and later in the extension. Changing the status writes the stage
   of that status in the same transaction, so the index, the counts and the filters keep working.

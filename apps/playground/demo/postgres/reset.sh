@@ -18,15 +18,15 @@ now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 sql() { docker exec -i "$PG_CONTAINER" psql -U "$PGUSER" -d "$PGDATABASE" -At -v ON_ERROR_STOP=1 "$@"; }
 
 # A database on which no worker started yet has no table. That is an empty store already.
-if [ "$(sql -c "SELECT to_regclass('seeds') IS NOT NULL")" != t ]; then
+if [ "$(sql -c "SELECT to_regclass('notes') IS NOT NULL")" != t ]; then
   echo "$(now) reset: nothing stored yet"
   exit 0
 fi
-sql -q -c 'TRUNCATE seeds, seed_comments, screenshots RESTART IDENTITY'
+sql -q -c 'TRUNCATE notes, note_comments, screenshots RESTART IDENTITY'
 sql -q -v "origin=$ORIGIN" <"$HERE/seed.sql"
-SEEDS=$(sql -c 'SELECT count(*) FROM seeds')
-COMMENTS=$(sql -c 'SELECT count(*) FROM seed_comments')
+NOTES=$(sql -c 'SELECT count(*) FROM notes')
+COMMENTS=$(sql -c 'SELECT count(*) FROM note_comments')
 PICTURES=$(sql -c 'SELECT count(*) FROM screenshots')
 SITES=$(sql -c "SELECT count(*) FROM sites WHERE id = 'playground'")
-echo "$(now) reset: seeds=$SEEDS comments=$COMMENTS screenshots=$PICTURES site=$SITES"
-[ "$SEEDS" = 0 ] && [ "$COMMENTS" = 0 ] && [ "$PICTURES" = 0 ] && [ "$SITES" = 1 ]
+echo "$(now) reset: notes=$NOTES comments=$COMMENTS screenshots=$PICTURES site=$SITES"
+[ "$NOTES" = 0 ] && [ "$COMMENTS" = 0 ] && [ "$PICTURES" = 0 ] && [ "$SITES" = 1 ]

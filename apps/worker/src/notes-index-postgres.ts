@@ -16,7 +16,7 @@ import {
 } from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { connectors, deliveries, note_index, seeds, sites } from './postgres-schema.ts';
+import { connectors, deliveries, note_index, notes, sites } from './postgres-schema.ts';
 import { isSameNote, keptRowOf } from './note-rows.ts';
 import { checkedOf } from './reply-text.ts';
 
@@ -44,7 +44,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .values(
             entries.map((entry: NoteEntry) => ({
               site_id: entry.site,
-              seed_id: entry.seed.id,
+              note_id: entry.seed.id,
               workspace_id: entry.workspace,
               page_url: entry.seed.page.url,
               excerpt: excerptOf(entry.seed.note),
@@ -61,7 +61,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             })),
           )
           // A second attempt of one note, or a note a read wrote first, is the same note.
-          .onConflictDoNothing({ target: [note_index.site_id, note_index.seed_id] }),
+          .onConflictDoNothing({ target: [note_index.site_id, note_index.note_id] }),
       );
     },
 
@@ -81,7 +81,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .values(
             known.map((issue: NoteIssue) => ({
               site_id: site,
-              seed_id: issue.seed.id,
+              note_id: issue.seed.id,
               workspace_id: workspace,
               page_url: issue.seed.page.url,
               excerpt: excerptOf(issue.seed.note),
@@ -102,7 +102,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
           // and a read with no replies leaves the verdict as the last read with replies said it.
           .onConflictDoUpdate({
-            target: [note_index.site_id, note_index.seed_id],
+            target: [note_index.site_id, note_index.note_id],
             set: {
               stage: sql`excluded.stage`,
               checked_at: sql`excluded.checked_at`,
@@ -119,14 +119,14 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       if (seeds.length === 0) return new Map();
       const rows = await run((db) =>
         db
-          .select({ seed: note_index.seed_id, account: note_index.author_account_id })
+          .select({ seed: note_index.note_id, account: note_index.author_account_id })
           .from(note_index)
           .where(
             and(
               eq(note_index.workspace_id, workspace),
               eq(note_index.site_id, site),
               eq(note_index.author_kind, 'member'),
-              inArray(note_index.seed_id, [...new Set(seeds)]),
+              inArray(note_index.note_id, [...new Set(seeds)]),
             ),
           ),
       );
@@ -221,7 +221,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
     async forget(which, options = {}) {
       const columns = {
         site: note_index.site_id,
-        seed: note_index.seed_id,
+        seed: note_index.note_id,
         pageUrl: note_index.page_url,
         excerpt: note_index.excerpt,
         reference: note_index.reference,
@@ -252,7 +252,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             ? placed
             : and(
                 placed,
-                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.seed_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
               );
         const keys = [...pending.values()].map((delivery) => delivery.key);
 
@@ -277,7 +277,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             .orderBy(
               sql`${note_index.created_at} DESC NULLS LAST`,
               sql`${note_index.site_id} COLLATE "C" DESC`,
-              sql`${note_index.seed_id} COLLATE "C" DESC`,
+              sql`${note_index.note_id} COLLATE "C" DESC`,
             )
             .limit(query.limit + 1),
           db
@@ -321,7 +321,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             pending.has(JSON.stringify([row.connector, row.site, row.reference])),
           ).length,
           ...(page.length > query.limit && last !== undefined
-            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.seed_id } }
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.note_id } }
             : {}),
         };
       });
@@ -333,7 +333,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .select()
           .from(note_index)
           .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.seed_id, seed)),
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, seed)),
           )
           .limit(1);
         if (row === undefined) return undefined;
@@ -358,11 +358,11 @@ type Pending = {
 
 /** A note of a page, by its site and the id the widget gave it. */
 function keyOfNoteId(row: typeof note_index.$inferSelect): string {
-  return JSON.stringify([row.site_id, row.seed_id]);
+  return JSON.stringify([row.site_id, row.note_id]);
 }
 
 /**
- * The status of each note of a page that the worker keeps (FRU-384), as `seeds` holds it now: one
+ * The status of each note of a page that the worker keeps (FRU-384), as `notes` holds it now: one
  * statement for the page. A note in Fruitback, or sent on to an address, is `FB-<id>` in the index
  * (`keptRowOf`); its row must be of the same site and hold the same note, since a tracker can name an
  * issue `FB-12` too.
@@ -378,18 +378,24 @@ async function keptOf(
   });
   if (owned.length === 0) return new Map();
   const found = await db
-    .select({ id: seeds.id, site: seeds.client_id, seed: seeds.seed, statusKey: seeds.status_key, stage: seeds.stage })
-    .from(seeds)
+    .select({
+      id: notes.id,
+      site: notes.client_id,
+      seed: notes.payload,
+      statusKey: notes.status_key,
+      stage: notes.stage,
+    })
+    .from(notes)
     .where(
       inArray(
-        seeds.id,
+        notes.id,
         owned.map(({ id }) => id),
       ),
     );
   const kept = new Map<string, { statusKey: string | null; stage: string }>();
   for (const { id, row } of owned) {
     const seed = found.find(
-      (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.seed, row.seed_id),
+      (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.seed, row.note_id),
     );
     if (seed !== undefined) kept.set(keyOfNoteId(row), { statusKey: seed.statusKey, stage: seed.stage });
   }
@@ -507,7 +513,7 @@ type PageRow = {
 function listedOf({ row, connector, memberName, memberRole, delivery, kept }: PageRow): ListedNote {
   return {
     site: row.site_id,
-    seed: row.seed_id,
+    seed: row.note_id,
     pageUrl: row.page_url,
     excerpt: row.excerpt,
     stage: row.stage,
@@ -573,11 +579,11 @@ function instantOf(iso: string, now: number): number {
  * all an operator reads in an issue, and a widget makes it at random for each note.
  */
 function selected(which: ForgetIndex) {
-  if ('seeds' in which) return which.seeds.length === 0 ? sql`false` : inArray(note_index.seed_id, [...which.seeds]);
+  if ('seeds' in which) return which.seeds.length === 0 ? sql`false` : inArray(note_index.note_id, [...which.seeds]);
 
   return (
     or(
-      ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.seed_id, note.seed))),
+      ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.note_id, note.seed))),
     ) ?? sql`false`
   );
 }
