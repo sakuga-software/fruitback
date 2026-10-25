@@ -1,19 +1,20 @@
 import { type FormEvent, useState } from 'react';
-import { renameWorkspace } from '../api';
-import { t } from '../i18n';
+import { LOGO_TYPES, type Workspace, removeWorkspaceLogo, renameWorkspace, setWorkspaceLogo } from '../api';
+import { msg, t } from '../i18n';
 import { problemOf } from '../problems';
 import { manages } from '../setup-stage';
-import { Button, Field, Problem } from '../ui';
+import { Button, Field, FilePick, Problem } from '../ui';
 import { useLocale } from '../use-locale';
+import { LOGO_NOT_REMOVED, LOGO_NOT_SAVED, LOGO_PROBLEMS, logoRefusal } from '../workspace-logo';
 import { RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED } from './setup-account';
-import { PageHead, useWorkspace } from './workspace';
+import { PageHead, WorkspaceMark, useWorkspace } from './workspace';
 
 /**
  * The settings of a workspace (FRU-414), opened from the name of the workspace at the top of the
  * rail. No board draws it: it is the kit, as « My account » lays it out.
  *
- * It holds what the worker lets a workspace change today: its name (FRU-236), for an owner or an
- * admin. A logo is not here: a workspace has none in the worker, and no route keeps one.
+ * It holds what the worker lets a workspace change today, for an owner or an admin: its name
+ * (FRU-236) and its logo (FRU-428). Every member reads both.
  */
 export default function WorkspaceSettings() {
   const { workspace } = useWorkspace();
@@ -88,6 +89,84 @@ function Settings() {
           {kept ? t('The name is saved.') : ''}
         </p>
       </section>
+      <LogoSection workspace={workspace} may={may} />
     </>
+  );
+}
+
+/**
+ * The logo of the workspace (FRU-428): the mark of the rail, larger. An owner or an admin sends one,
+ * replaces it and removes it; the rail shows the change at once. Without one, the initial shows.
+ */
+function LogoSection({ workspace, may }: { workspace: Workspace; may: boolean }) {
+  useLocale();
+  const { logoChanged } = useWorkspace();
+  const [busy, setBusy] = useState<'sending' | 'removing' | undefined>();
+  const [problem, setProblem] = useState<string | undefined>();
+  const [done, setDone] = useState<string | undefined>();
+  const has = typeof workspace.logo === 'string';
+  let pickWords = has ? t('Replace the logo') : t('Upload a logo');
+  if (busy === 'sending') pickWords = t('Uploading…');
+
+  async function chosen(file: File) {
+    if (busy !== undefined) return;
+    setDone(undefined);
+    const refused = logoRefusal(file);
+    if (refused !== undefined) return setProblem(refused);
+    setProblem(undefined);
+    setBusy('sending');
+    const answer = await setWorkspaceLogo(workspace, file);
+    setBusy(undefined);
+    if (!answer.ok) return setProblem(problemOf(answer, LOGO_PROBLEMS, LOGO_NOT_SAVED));
+    logoChanged(answer.data.logo);
+    setDone(msg('The logo is saved.'));
+  }
+
+  async function remove() {
+    if (busy !== undefined) return;
+    setProblem(undefined);
+    setDone(undefined);
+    setBusy('removing');
+    const answer = await removeWorkspaceLogo(workspace);
+    setBusy(undefined);
+    if (!answer.ok) return setProblem(problemOf(answer, LOGO_PROBLEMS, LOGO_NOT_REMOVED));
+    logoChanged(null);
+    setDone(msg('The logo is removed.'));
+  }
+
+  return (
+    <section
+      aria-labelledby="workspace-logo-title"
+      aria-busy={busy !== undefined}
+      className="flex max-w-[640px] flex-col gap-[14px] pt-[32px]"
+    >
+      <h2 id="workspace-logo-title" className="text-section font-bold">
+        {t('Logo')}
+      </h2>
+      <div className="flex flex-wrap items-center gap-[16px]">
+        <WorkspaceMark workspace={workspace} size={64} />
+        {may ? (
+          <div className="flex flex-wrap gap-[10px]">
+            <FilePick accept={LOGO_TYPES.join(',')} disabled={busy !== undefined} onFile={(file) => void chosen(file)}>
+              {pickWords}
+            </FilePick>
+            {has ? (
+              <Button tone="outline" size="page" disabled={busy !== undefined} onClick={() => void remove()}>
+                {busy === 'removing' ? t('Removing…') : t('Remove the logo')}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <p className="text-small text-muted">
+        {may
+          ? t('PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.')
+          : t('Only an owner or an admin of the workspace changes its logo.')}
+      </p>
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      <p role="status" className="text-small text-muted">
+        {done === undefined ? '' : t(done)}
+      </p>
+    </section>
   );
 }

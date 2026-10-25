@@ -19,6 +19,7 @@ const APP = new URL('./', import.meta.url);
 // `ago.ts` says how long ago something happened, for the Sites screen and My account (FRU-270).
 // `writers-pick.tsx` holds « Who can leave a note? », for the Sites screen and the setup (FRU-330).
 // `site-preview.tsx` holds the site itself in the preview of the setup, or why it cannot show (FRU-354).
+// `workspace-logo.ts` says why a logo of a workspace is refused, for its settings (FRU-428).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -35,6 +36,7 @@ const screens = [
   'writers-pick.tsx',
   'site-preview.tsx',
   'note-status.ts',
+  'workspace-logo.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
