@@ -491,6 +491,21 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, 'SELECT email FROM account_emails'), []);
     });
 
+    it('unlinks a provider that gives the primary address of an account it did not bring', async () => {
+      const worker = await workerOf(await opening(open));
+      const alice = await person(worker, 'alice@acme.dev');
+      await linked(worker, alice.cookie, 'github', github('alice@acme.dev'));
+      await signInWith(worker, 'github', github('alice@acme.dev'));
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT email FROM account_emails'), []);
+
+      const unlinked = await worker.call('/console/me/sign-in/github', {
+        method: 'DELETE',
+        headers: { Cookie: alice.cookie },
+      });
+
+      assert.equal(unlinked.status, 204, await unlinked.clone().text());
+    });
+
     it('makes no account for a provider that gives another address of an account, and joins none', async () => {
       const worker = await workerOf(await opening(open));
       const alice = await person(worker, 'alice@acme.dev');
