@@ -579,7 +579,13 @@ async function signInMethods(
     });
     if (answer.status === 403) return json(403, { error: 'sign-in-again' }, headers);
     if (!answer.ok) throw new AuthUnavailable(`better-auth answered ${answer.status} to an unlink`);
-    await context.accounts.noteProviderAddress(mine.userId, provider, undefined, Date.now());
+    // The provider is unlinked: its address goes. A failure here does not answer `500` for an unlink
+    // that is done; the list of the addresses takes the provider away at its next read.
+    try {
+      await context.accounts.noteProviderAddress(mine.userId, provider, undefined, Date.now());
+    } catch (error) {
+      console.error(`[fruitback] the address of ${provider} was not taken away at its unlink: ${String(error)}`);
+    }
 
     return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
   });

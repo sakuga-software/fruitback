@@ -454,6 +454,20 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       );
     });
 
+    it('takes away, at the next read, the address of a provider whose unlink did not write it', async () => {
+      const worker = await workerOf(await opening(open));
+      const alice = await person(worker, 'alice@acme.dev');
+      await linked(worker, alice.cookie, 'github', github('alice@gh.example'));
+      // The unlink of before, whose last write failed: the row of the provider is gone, its address stays.
+      await rowsOf(worker.database, `DELETE FROM account WHERE "providerId" = 'github'`);
+
+      assert.deepEqual(
+        (await listed(worker, alice.cookie)).emails.map((each) => each.email),
+        ['alice@acme.dev'],
+      );
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT email FROM account_emails'), []);
+    });
+
     it('makes no account for a provider that gives another address of an account, and joins none', async () => {
       const worker = await workerOf(await opening(open));
       const alice = await person(worker, 'alice@acme.dev');

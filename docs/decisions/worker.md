@@ -3999,7 +3999,13 @@ of the console, which no other page sends; the confirmation and the alert stand 
 better-auth compares the address of the invitation with the one of the session, and its acceptance
 runs its own hooks, limits and transaction. Writing the member and the status here would have copied
 that code; the primary address for one call keeps it, and the invitation gets its own address back in
-a `finally`. An acceptance runs alone in its workspace (`oneAtATime`), in one process.
+a `finally`. An acceptance runs alone in its workspace (`oneAtATime`), in one process. A process that
+stops between the two writes leaves the invitation with the primary address of the same account:
+nobody else can accept it, and the list shows the primary address. A column on `invitation` for the
+address of before would undo that, for a migration of a table of better-auth: not taken.
+
+- **An unlink whose last write failed** leaves its provider on an address; the list of the addresses
+  (`addressesOf`) takes away every provider that is no longer linked, at its next read.
 
 ### Why the primary address of a provider blocks its unlink
 

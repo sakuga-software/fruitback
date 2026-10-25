@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mailboxOf, normalizeEmail } from './accounts.ts';
-import { SESSION_FRESH_SECONDS } from './auth.ts';
+import { type Auth, SESSION_FRESH_SECONDS } from './auth.ts';
 import { type AuthRouteContext, mutationAllowed, onePersonAtATime, sessionOfCookie } from './auth-routes.ts';
 import { MailError, primaryChangedMessage, verifyAddressMessage } from './mail.ts';
 
@@ -54,6 +54,32 @@ type VerificationAdapter = {
   findVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
   consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
 };
+
+type AccountAdapter = {
+  findMany(input: { model: 'account'; where: { field: string; value: string }[] }): Promise<{ providerId: string }[]>;
+};
+
+/**
+ * The addresses of the account, with no provider that is no longer linked. An unlink whose last
+ * write failed left its provider on an address (raised in review of #613): it goes here, at the next
+ * read, and the address goes with it when nothing else proves it.
+ */
+async function addressesOf(context: AuthRouteContext, auth: Auth, account: string, now: number) {
+  const rows = await context.accounts.addresses(account);
+  const listed = new Set(rows.flatMap((row) => row.providers));
+  if (listed.size === 0) return rows;
+  const adapter = (await auth.$context).adapter as unknown as AccountAdapter;
+  const linked = new Set(
+    (await adapter.findMany({ model: 'account', where: [{ field: 'userId', value: account }] })).map(
+      (row) => row.providerId,
+    ),
+  );
+  const gone = [...listed].filter((provider) => !linked.has(provider));
+  if (gone.length === 0) return rows;
+  for (const provider of gone) await context.accounts.noteProviderAddress(account, provider, undefined, now);
+
+  return context.accounts.addresses(account);
+}
 
 type SessionAdapter = {
   findMany(input: { model: 'session'; where: { field: string; value: string }[] }): Promise<{ createdAt: Date }[]>;
@@ -122,7 +148,7 @@ export async function handleEmailRoutes(
   if (account === undefined) return json(401, { error: 'identity-required' }, headers);
 
   if (pathname === EMAILS_PATH && request.method === 'GET') {
-    const rows = await context.accounts.addresses(account.id);
+    const rows = await addressesOf(context, auth, account.id, now());
     const primary = rows.find((row) => row.email === account.email);
     const others = rows.filter((row) => row.email !== account.email);
 
@@ -244,6 +270,7 @@ export async function handleEmailRoutes(
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
 
     return onePersonAtATime(account.id, async () => {
+      await addressesOf(context, auth, account.id, now());
       const removed = await context.accounts.removeAddress(account.id, email);
       if (removed === 'not-found') return json(404, { error: 'not-found' }, headers);
       if (removed === 'primary') return json(409, { error: 'primary-address' }, headers);

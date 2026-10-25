@@ -226,6 +226,12 @@ async function isAddressOf(
  * better-auth takes them from a session of the address of the invitation only, and knows one address
  * of an account: the invitation names the primary one for the length of the call, and its own after.
  * `undefined`: the invitation is not one of another address of the person, and is left to better-auth.
+ *
+ * WARNING: a process that stops between the two writes leaves the invitation with the primary address
+ * of the person (raised in review of #613). That address is of the same account, so nobody else can
+ * accept it, and the account still can; only the address the list shows is not the one it was sent
+ * to. A column of its own on `invitation` would hold the address of before; it was not worth a
+ * migration of a table of better-auth for that.
  */
 async function asPrimaryAddress(
   context: Pick<OrganizationRouteContext, 'accounts'>,
