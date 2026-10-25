@@ -138,16 +138,15 @@ None of these can be guessed from the code, and most of them have broken somethi
 `packages/shared` is the contract between the widget and the worker, and every published version of the
 widget depends on it. Treat a change there as breaking until you have shown it is not.
 
-- **A note survives the round trip.** `parseNoteFromDescription(buildIssueDescription(seed))` returns
-  exactly `seed`. So a schema has no default values, and a note holds no field the widget cannot rebuild
+- **A note survives the round trip.** `parseNoteFromDescription(buildIssueDescription(note))` returns
+  exactly `note`. So a schema has no default values, and a note holds no field the widget cannot rebuild
   from what is stored.
-- **If the shape of a note changes, bump `NOTE_VERSION`.** `SEED_VERSION` stays at 2 for good: no
-  writer makes a new version of `fruitback.seed`. Readers accept older versions and refuse newer ones,
-  instead of silently dropping the fields they do not know.
+- **If the shape of a note changes, bump `NOTE_VERSION`.** Readers refuse a newer version instead of
+  silently dropping the fields they do not know.
 - **A field of the read answer is not a field of the note.** `GET /feedback` adds `url` and `stages` to the
   answer, and `url` and `comments` to each issue. They are not stored in the note, so they do not change
   `NOTE_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
-  `seed.page.url` is not one of them: it is part of the note.
+  `note.page.url` is not one of them: it is part of the note.
 - **The parsers never throw.** A note is read back from an issue description a person can edit, so
   `parseNote*` returns `{ ok: false, reason }`.
 
@@ -157,7 +156,7 @@ A connector puts notes in a store. Linear, PostgreSQL and GitHub Issues exist, a
 contribution we expect most often.
 
 1. Implement `NoteStore` from [`apps/worker/src/store.ts`](apps/worker/src/store.ts). `findForPage` says
-   what to return, not how: filter the way your store can, then compare `seed.page.url` exactly.
+   what to return, not how: filter the way your store can, then compare `note.page.url` exactly.
 2. Declare it with `defineStore`, and add one entry to `STORE_SPECS` in `stores.ts`. Name your
    environment variables in `envNames`, so that a boot error names the variable an operator sets.
 3. Add each variable to `docker-compose.yml`, `.env.example` and the variable table of

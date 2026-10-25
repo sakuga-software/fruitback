@@ -1739,7 +1739,7 @@ seen » is shown to owners and admins only.
   test:`answers 404 for a note of a site the caller does not read, or of another workspace`.
 - **Every check is in one transaction, the site held for update** (`setNoteStatus` of the accounts
   store): the note of the index and its author, the status of the site (`409 status-hidden`, and
-  `409 status-changed` for one it no longer has), then the note and its stage in `seeds` and in the
+  `409 status-changed` for one it no longer has), then the note and its stage in `notes` and in the
   index. The worker keeps a note in Fruitback, or sent on to an address (a `rest` connector), as
   `FB-<id>`; that row must be of the same site and hold the same note (the id the widget gave it), so a
   note of a tracker, even one it named `FB-<n>`, is `403 statuses-not-taken`.
@@ -2277,7 +2277,7 @@ l'interface, géré par better-auth avec le flag admin en base ». The Cloud run
 - **The notes** (FRU-272, `GET /console/admin/notes`). Every note of the index, of every workspace:
   its workspace, its site, its page, its stage, its date, its way (`script` or `extension`), the kind
   of its author and never a name, where it went, the reference and the link in the tracker, and **the
-  excerpt of 64 characters**. **The whole text only for a note that the worker keeps** in `seeds`:
+  excerpt of 64 characters**. **The whole text only for a note that the worker keeps** in `notes`:
   the site of the row and the id that the widget gave the note must be the ones of the index, because
   a tracker can name an issue `FB-12` too and a page writes the ids of its notes. A note that went to
   a tracker has its excerpt and nothing more: **the worker calls no tracker to read more**, with the

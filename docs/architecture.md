@@ -50,7 +50,7 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   one that exists: the notes of the store `postgres`, the sites, the accounts and the sessions.
 - **console** — `@fruitback/console`, static files behind nginx, a second image. A person signs in,
   makes a workspace and adds its sites there. It holds no secret: the session is the worker's cookie.
-- **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
+- **shared** — `@fruitback/shared`, the note contract. Both ends depend on it.
 - **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (FRU-41).
   The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
   tag, no package, no deploy, and nothing for an ordinary visitor to see. MV3 on Chromium and

@@ -11,7 +11,7 @@ connector's environment, and what a second connector with no markdown body actua
   somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
   in the store.** The rule is the point; "exactly one reason" was the wording until FRU-26, and it
   stopped being true when a store with no API key shipped.
-- **Both paths canonicalize the page URL** — `POST /feedback` re-does `seed.page.url` server-side and
+- **Both paths canonicalize the page URL** — `POST /feedback` re-does `note.page.url` server-side and
   `GET /feedback` its `url` parameter. A client that skipped normalization would plant a pin nobody
   can find again.
 - **The rate limiter and the read cache keep their state in a `Kv`** (FRU-49). **A worker with a
@@ -60,11 +60,11 @@ connector's environment, and what a second connector with no markdown body actua
   three tests fail.
 - The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
   `/health`, not as an opaque Linear error per request.
-- `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds notes by
+- `POST /feedback` re-canonicalizes `note.page.url` server-side. The read path finds notes by
   matching that URL inside the description, so a client that skipped normalization would plant a pin
   nobody can find again. `GET /feedback` canonicalizes its `url` parameter for the same reason.
 - **The `description contains` filter is a substring match**, so `/pricing` also matches the notes of
-  `/pricing?tab=annual`. `fetchNoteIssues` therefore re-checks `seed.page.url` exactly before
+  `/pricing?tab=annual`. `fetchNoteIssues` therefore re-checks `note.page.url` exactly before
   returning an issue — dropping that check silently mixes two pages' pins.
 - The read cache (`cache.ts`) holds the in-flight promise **in this process** and the settled answer
   in the `Kv`, so a burst of visitors on one page costs one Linear call and N replicas cost at most N.
@@ -329,7 +329,7 @@ degradation the ticket asked to have written down rather than discovered.
   it gets one `create` for each note (`createAll` in `batch.ts`).
 - **One answer for each note, in order**: `201` when every note was kept, `207` when some were, `502`
   when none was. **A note kept in the last ten minutes answers its issue again** and is not planted
-  twice: `seed.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
+  twice: `note.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
 - **A parent whose sub-issues Linear all refused is kept, and used again** (FRU-195). The request
   answers `502` and the parent stays in the team with no sub-issue. The worker remembers it in the
   `Kv` for the ten minutes of a note, by note and by place (`batchMemory` in `batch.ts`), and the next
@@ -471,7 +471,7 @@ degradation the ticket asked to have written down rather than discovered.
   people who triage. The client is also looked for in the
   description, as a substring, so the notes of another client of the team do not fill the pages a
   read walks; the exact comparison is in the code.
-- **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
+- **A GitHub read lists the client's issues by label and re-checks `note.page.url`; it never
   searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
   stopped at 1,000 issues, and the read cache is what protects the hourly budget.
 - **A label that cannot be created stops a GitHub write.** A read finds a note by its labels, so an
@@ -614,7 +614,7 @@ degradation the ticket asked to have written down rather than discovered.
   `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
   changes: one team, one project, `client` optional on a read.
 - **Configured, a client has to be named on both paths** — the `client` parameter on a read,
-  `seed.client.id` on a write — and an unknown one is refused. A read that named nobody used to
+  `note.client.id` on a write — and an unknown one is refused. A read that named nobody used to
   answer with every note on that URL, which on a shared worker is one client reading another's
   feedback; a write that names nobody would land in the default team, which is the same leak facing
   the other way. The read cache key carries the team for the same reason.
@@ -668,7 +668,7 @@ degradation the ticket asked to have written down rather than discovered.
   has to remember to apply is a state the connector invents.
 - **So a store declares the stages it reports, and the panel offers only those.** `stages` travels on
   every read, pins or none. Derived from the pins on screen instead, an empty page, or a page whose
-  pins are all open, would offer the wrong boxes. It is a read-envelope field, so `SEED_VERSION` stays
+  pins are all open, would offer the wrong boxes. It is a read-envelope field, so `NOTE_VERSION` stays
   where it was, and `offeredStages` answers every stage for a worker from before this ticket. The
   list is not in `ConfigStore`, which persists to `localStorage`: a stored copy would outlive a change
   of store. A stage the reporter hid stays hidden in the config, so a worker that reports it again
@@ -690,7 +690,7 @@ degradation the ticket asked to have written down rather than discovered.
 - **The read lists by label; it does not search.** The search API allows 30 requests a minute and 1,000
   results, shared by every page read of every client. Listing
   `labels=fruitback,fruitback:<client>&state=all` spends the ordinary budget, and the exact
-  `seed.page.url` re-check does the job the re-check after `contains` does on Linear.
+  `note.page.url` re-check does the job the re-check after `contains` does on Linear.
 - **`labels` is AND, and that is the client isolation.** Measured on `cli/cli`, 2026-09-14: `bug` alone
   filled a page of 100, `gh-codespace` gave 42, and `bug,gh-codespace` gave 22, every row carrying
   both. The first comparison proved nothing: three labels, three counts of 100, each one the page size.
@@ -1715,15 +1715,15 @@ removes its own SQL file, snapshot and entry, and generates again.
 ### The rules, in short
 
 - **`migrate-to-postgres --notes <file>` copies the notes and their replies**, in a run of its own:
-  never with `--accounts` and `--sessions`. `--seeds`, its name of before FRU-378, still works; both
-  may be given if they name the same file. That copy goes into a database that no worker started
+  never with `--accounts` and `--sessions`. That copy goes into a database that no worker started
   on, and this one applies every migration first. The runbook is « Switch 1 bis » of
   `apps/worker/cloud/README.md`.
 - **A note keeps its number, and no number is given twice.** The ids of the file are written as
   they are, and each sequence goes to the largest number the file ever gave: `sqlite_sequence`
   holds it, and a note that was deleted is in it
   (test:`goes on after the largest number the file ever gave, a deleted note included`).
-- **`seed` is copied byte for byte.** `--client` and `--no-client` change the column `client_id`
+- **The note is copied byte for byte**, from the column of the file into `notes.payload`: a note of
+  that file is of the kind of before FRU-378, so `rewrite-notes` runs after the copy. `--client` and `--no-client` change the column `client_id`
   and nothing inside the text, whose `client.id` stays the one of before: no read compares the two.
 - **A date must come back as it is written.** The file holds ISO text and the database
   milliseconds. A row whose date does not is refused, with its number: the digest compares the
@@ -2402,7 +2402,7 @@ ticket removes; it adds no route and no table.
   _writer_, not of any provider. Beside the code that makes it true, it cannot drift from it.
 - **The round-trip test travelled with the code rather than being rewritten**, which is what the
   ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
-  `parseNoteFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
+  `parseNoteFromDescription(buildIssueDescription(note)) === note` is still the same assertion on the
   same fixture.
 - **`packages/shared/src/linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
   Linear's workflow states out of it, FRU-24 took the words a human reads, and this ticket took the
@@ -3300,16 +3300,16 @@ under a client that is not a site looks the same. `forget` deletes them.
   query of `console-notes.ts` (`site`, `stage`, `place`, `q`, `cursor`, `limit`) plus `workspace`,
   less `mine`. Each row names its workspace. No counts by place and no delivery: the screen of the
   instance lists, and « Send again » is for the people of the workspace.
-- **`text` is there only for a note that the worker keeps in `seeds`**, and `excerpt` always.
+- **`text` is there only for a note that the worker keeps in `notes`**, and `excerpt` always.
   `keptTexts` of `instance-admin-postgres.ts` reads the number of the row from the reference
   (`rowOfIdentifier`), then takes the text only when the site of the row and the id that the widget
   gave the note are the ones of the index. The reference alone is not enough: a tracker can name an
   issue `FB-12` (a team of Linear keyed `FB`), and a page writes the ids of its notes, so another site
   can reuse one. test:`answers the text of a note the worker keeps, and of a note of a tracker its excerpt only`
   plants both, and fails without either check.
-- **No gate on the place.** A note sent to a receiving address (REST) is kept in `seeds` first
+- **No gate on the place.** A note sent to a receiving address (REST) is kept in `notes` first
   (FRU-122), and the administrator reads its text. A note of `fruitback` on a worker whose store is
-  Linear has no row in `seeds`, and gets no text.
+  Linear has no row in `notes`, and gets no text.
 - **No call to a tracker.** The route reads the database and nothing else:
   test:`calls no tracker to read the notes, and the control sees the call of a read of Linear`, whose
   control is a read of a Linear store under the same stub.
@@ -3469,8 +3469,7 @@ refused by its sentence. What follows is the history.
 - **`forget --note <id>` removes the row of a note that went to a tracker**, whatever the store
   (decided by the orchestrator, 2026-10-13): the index keeps no address and no name, so the
   operator reads the `id` of the note in the issue. The command says so when it cannot find a note
-  of a tracker by `--email` or `--name`. `--seed`, its name of before FRU-378, still works:
-  `--note a --seed b` forgets both.
+  of a tracker by `--email` or `--name`.
 - **The account of a member goes with the account**: `author_account_id` is a foreign key to
   `user`, `ON DELETE SET NULL`, and the row stays with `member` and no account (`0010`). Before it,
   `0009` empties the ids of accounts already removed, which the key would refuse: a migration of
@@ -3539,10 +3538,10 @@ refused by its sentence. What follows is the history.
 
 - **`GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` is the list of FRU-244 for one site,
   with the session of the extension** (`session-notes.ts`). It calls the same `queryOf` and the
-  same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{note, seed,
+  same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{note,
   excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,
   searched, next?}`. `note` is the id the widget gave the note: the panel opens `page.url` and the
-  widget finds the note there. `seed` holds the same id, for the extension 0.3.0 (FRU-378).
+  widget finds the note there.
 - **The session is read again in the store** (`sessionWrites`), not only verified: the side panel
   reads several pages of notes, and a session that ended must stop at the next call, as for a write.
 - **The site is found among the workspaces of the session** (every membership of an account that is
@@ -3892,7 +3891,7 @@ client map were refused together at boot.
 
 - **`FRUITBACK_CLIENTS` maps a `clientId` to a team, a project and the origins that client may be
   embedded on** (FRU-15). Configured, a client has to be named on **both** paths — the `client`
-  parameter on a read, `seed.client.id` on a write — and an unknown one is refused. A read that named
+  parameter on a read, `note.client.id` on a write — and an unknown one is refused. A read that named
   nobody used to answer with every note on that URL.
 - **`normalizeClientId` runs before the id is used for anything.** It picks the route, builds the
   `fruitback:<id>` label of the issue, is the client a read compares each note with, and keys the cache. Normalising it for the route alone
@@ -4279,3 +4278,32 @@ in the code, and the test named went red:
 - **No real installation.** The route and its fields (`total_count`, `repositories`, `full_name`,
   `private`) are the ones of the REST documentation, version 2022-11-28. That GitHub answers
   `permissions` in the answer of `access_tokens` is the documentation's example.
+
+## The notes of before, rewritten once (FRU-378)
+
+Mathieu's decision of 2026-10-25: the word « seed » goes, with no alias. A note is `fruitback.note`
+at version 3, and no reader takes the payload of before.
+
+### The rules, in short
+
+- **`rewrite-notes` is the only code that reads the payload of before** (`rewrite-notes.ts`, and
+  nothing imports its parser but its test). FRU-449 removes it once it has run on every instance.
+- **It rewrites three places**: the block of each issue of Linear and GitHub that holds the kind of
+  before, the rows of `notes`, and the bodies of `deliveries` (version 1 with `seed`, to version 2
+  with `note`). In an issue the block alone changes: what a person wrote beside it stays.
+- **Each tracker goes through its store** (`rewriteBlocks` of `NoteStore`), with the key the worker
+  holds: the store of the environment, then each `linear` and `github` connector, in the teams and
+  the repositories that the destinations of its sites name. A store reads every issue before it
+  writes one: a rewritten issue leaves the search, and would move the pages under the reader.
+- **It can run twice**, and `--dry-run` lists without writing. A failure of one issue is said, the
+  others go on, and the command ends with code 1.
+- **The read cache changed its prefix** (`read-v3` in `cache.ts`): an answer of before, with the
+  issues of before, is never served to a widget of now. The widget keeps its drafts under a new key
+  of `sessionStorage`, for the same reason.
+
+### What was not measured
+
+- **No real tracker.** Linear and GitHub are the ones of the tests: `linear-stub.ts` answers the
+  search by `description: { contains }` and `issueUpdate`, and a fake GitHub answers the list of the
+  issues and their `PATCH`. That Linear filters a team on `description.contains` is what
+  `fetchNoteIssues` already uses.
