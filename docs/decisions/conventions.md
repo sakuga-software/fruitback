@@ -221,6 +221,16 @@ How this repository is formatted, tested and documented, and which test holds ea
   peer (measured), so the lockfile moved both to their fixed versions, 8.3.4 and 1.2.2, inside the
   ranges that the console and the playground already declare. An advisory of vitest itself fails
   that job too.
+- **Under StrykerJS the test of the mutated file runs first, then the other test files, smallest
+  first** (FRU-451). `vitest.mutation.config.ts` is `vitest.config.ts` with another `sequencer`, and
+  reads the file of the job from `MUTATE`. vitest runs the largest files first: a mutant then ran the
+  route tests on PGlite before the unit test that kills it. Measured on `cache.ts`, a Mac, no cache of
+  vitest: 87.7 tests a mutant, then 4.5, with vitest 4.1.12; 26.2, then 4.7, with vitest 5.0.5 and
+  StrykerJS 10.1.1. `rate-limit.ts`: 62.4, then 4.6, and its ten timeouts in CI were mutants that
+  only `rate-limit.test.ts` kills, run after 60 route files. `store-config.ts`, whose own test kills
+  none: 98.3, then 27.6. Every score the same. A sort by the durations of vitest does not work: each
+  runner process of StrykerJS has its own vitest, and only the one of the dry run knows them.
+  `mutation.test.ts` holds the order, that the configuration changes nothing else, and `MUTATE`.
 - **The runner of StrykerJS sets `pool: 'threads'` and one worker**, and keeps `isolate`: each test
   file still starts its own instances. The whole suite passes that way (measured on 2026-10-21), and
   `pglite-isolation.test.ts` holds the pool and `isolate` of the config.

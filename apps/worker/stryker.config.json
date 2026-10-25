@@ -4,7 +4,7 @@
   "testRunner": "vitest",
   "plugins": ["../../tools/mutation/node_modules/@stryker-mutator/vitest-runner/dist/src/index.js"],
   "vitest": {
-    "configFile": "vitest.config.ts",
+    "configFile": "vitest.mutation.config.ts",
     "related": false
   },
   "mutate": [
