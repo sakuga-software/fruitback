@@ -344,11 +344,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-frame.spec.ts` holds the rail after a scroll at 1440 px and at 390 px, and the right
   edge of each screen.
 - **The Sites screen is a grid of cards** (FRU-408, Mathieu, in place of the table of six columns
-  of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). A card says what a row of the table
-  said: the icon and the name of the site (`siteName`), who sees its notes, its notes by status (a
-  count and a bar whose name says the counts again), then after a term each, how they came (the
-  script or the extension), where they go, to whoever sees the tracker, and the last one (`ago.ts`:
-  « 12 min ago », « Yesterday », then the day). Cards are side by side while each has 280 px, and
+  of the mockup of FRU-243 and FRU-270, `routes/sites.tsx`). **A card is read from the top, in
+  three parts** (FRU-432, Mathieu): the icon and the name of the site (`siteName`, 17 px, the largest
+  words of the card), with who sees its notes and, when it is the exception, who writes them, on
+  one line under it; then its status, the count of its notes at 20 px, a bar whose name says the
+  counts again, and how many are new in the accent, or « Waiting for the first note »; then a foot
+  under a line, where the notes go at the left, to whoever sees the tracker, and the last one at the
+  right (`ago.ts`: « 12 min ago », « Yesterday », then the day). The terms of the foot are for a
+  screen reader: the place and the moment say what they are to the eye. How the notes came (the
+  script or the extension) is on the page of the site. Cards are side by side while each has 280 px, and
   one under the other on a phone, so nothing scrolls sideways. The counts are the summary of the
   sites (FRU-237), in the answer that lists them: **nothing of a card comes after the card**, so
   nothing moves under a press, and a test holds the read to prove it. A value with nothing to say

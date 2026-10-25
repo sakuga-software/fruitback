@@ -184,10 +184,17 @@ export default function SitePage() {
                     ? t('Anyone on the page')
                     : t('Members only'),
               },
+              {
+                // How its notes came: on the card until FRU-432, which kept the card to what is read first.
+                term: t('On the page with'),
+                value: site.via === undefined || site.via.length === 0 ? t('None yet') : viaOf(site.via),
+              },
             ]}
           />
           {/* The worker has no route that changes them: a control that does nothing is not drawn. */}
-          <p className="text-hint text-muted">{t('These are set when the site is added.')}</p>
+          <p className="text-hint text-muted">
+            {t('Who sees the notes and who leaves them are set when the site is added.')}
+          </p>
         </Section>
 
         <Section id="install" title={t('Install')} label={t('Install on {site}', { site: host })}>
@@ -256,6 +263,13 @@ export default function SitePage() {
       </div>
     </>
   );
+}
+
+/** How the notes of a site came: the script pasted on its pages, the extension, or both. */
+function viaOf(via: readonly ('script' | 'extension')[]): string {
+  if (via.includes('script') && via.includes('extension')) return t('Extension, script');
+
+  return via.includes('extension') ? t('Extension') : t('Script');
 }
 
 /** A section of the page, reached by its hash, and named by its title or by a longer label. */

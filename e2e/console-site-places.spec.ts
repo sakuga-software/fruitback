@@ -209,7 +209,7 @@ test('an owner chooses where the notes of a site go, on the page of the site (FR
 
   // Back on the grid, the card of the site says where its notes go now.
   await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Sites' }).click();
-  await expect(card(page).locator('dd').nth(1)).toHaveText('LinearTeam Web and 1 more');
+  await expect(card(page).locator('dd').first()).toHaveText('LinearTeam Web and 1 more');
 });
 
 test('the places wait for a list to be kept before the next gesture (FRU-123)', async ({ page }) => {
