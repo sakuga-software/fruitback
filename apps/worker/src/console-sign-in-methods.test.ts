@@ -312,6 +312,30 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await providersOf(worker.database, id), []);
     });
 
+    it('answers 502 and keeps the link waiting when the write fails for another reason than a conflict (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      await linkThrough(worker, cookie, 'google', google('alice@other.dev'));
+      const adapter = (await worker.auth.$context).internalAdapter as unknown as {
+        createAccount: () => Promise<never>;
+      };
+      const failing = mockMethod(adapter, 'createAccount', async () => {
+        throw new Error('the database did not answer');
+      });
+      let failed: Response;
+      try {
+        failed = await pending(worker, cookie, 'POST');
+      } finally {
+        failing.mockRestore();
+      }
+
+      assert.equal(failed.status, 502);
+      assert.deepEqual(await providersOf(worker.database, id), []);
+      // Not a conflict, and not spent: the person confirms again, and it is linked.
+      assert.equal((await pending(worker, cookie)).status, 200);
+      assert.equal((await pending(worker, cookie, 'POST')).status, 200);
+      assert.deepEqual(await providersOf(worker.database, id), ['google']);
+    });
+
     it('links nothing on a GET, nor on a POST of another page (FRU-415)', async () => {
       const { worker, cookie, id } = await signedIn();
       const path = '/console/auth/link/github?workspace=ws_0123456789abcdef0123';

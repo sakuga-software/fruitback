@@ -672,8 +672,9 @@ async function pendingLink(request: Request, context: AuthRouteContext, headers:
   return onePersonAtATime(mine.userId, async () => {
     if ((await waiting()) === undefined) return none();
     // Spent once: of two confirmations, one finds it.
-    const pending = readPending(await adapter.consumeVerificationValue(key));
-    if (pending === undefined || pending.session !== mine.sessionId) return none();
+    const spent = await adapter.consumeVerificationValue(key);
+    const pending = readPending(spent);
+    if (spent === null || pending === undefined || pending.session !== mine.sessionId) return none();
     const link = {
       userId: mine.userId,
       providerId: pending.provider,
@@ -686,9 +687,19 @@ async function pendingLink(request: Request, context: AuthRouteContext, headers:
     try {
       // The identity is the id of the provider account. No token: there is none to keep.
       await adapter.createAccount({ userId: link.userId, providerId: link.providerId, accountId: link.accountId });
-    } catch {
+    } catch (error) {
       // `account_providerId_accountId_key`: another account took it in between, on another replica.
-      return json(409, { error: ACCOUNT_OF_ANOTHER }, headers);
+      // Read again, so that only that conflict answers `409`.
+      const owner = await adapter
+        .findAccountByKey({ providerId: link.providerId, accountId: link.accountId })
+        .catch(() => null);
+      if (owner !== null && owner.userId !== link.userId) return json(409, { error: ACCOUNT_OF_ANOTHER }, headers);
+      // Any other failure: the link waits again, for a confirmation that is tried again, and the
+      // caller answers `502`.
+      await adapter
+        .createVerificationValue({ identifier: key, value: spent.value, expiresAt: spent.expiresAt })
+        .catch(() => undefined);
+      throw new AuthUnavailable(`the link with ${link.providerId} was not written: ${String(error)}`, { cause: error });
     }
     await alertOfLink(context, mine.userId, pending);
 
