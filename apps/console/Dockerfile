@@ -9,10 +9,13 @@
 # In Dokploy: Dockerfile path `apps/console/Dockerfile`, build context `.`, port 80. The build
 # argument `VITE_FRUITBACK_API` is still taken: it is then the address of a container that is given
 # no `FRUITBACK_API`, so the console of the Cloud is built and started as before.
+FROM --platform=$BUILDPLATFORM ghcr.io/pnpm/pnpm:12.15.0-alpine@sha256:f164ca19f7736a0994dae195b81756cd969542a93ef692f5ab466759d06c1da9 AS pnpm
+
 FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 
 WORKDIR /repo
-RUN npm install --global pnpm@11.16.0
+COPY --from=pnpm /opt/pnpm /opt/pnpm
+RUN ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
