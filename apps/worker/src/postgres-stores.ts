@@ -58,11 +58,21 @@ function later<Store extends object>(load: () => Promise<Store>, methods: Record
 }
 
 export function postgresAccountStore(url: string, schema: string): AccountStore {
-  const database = databaseFor(url, schema);
+  return accountStoreOn(databaseFor(url, schema));
+}
 
+/** The accounts of this database. `auth.ts` keeps the addresses a provider gives (FRU-450). */
+export function accountStoreOn(database: Database): AccountStore {
   return later(async () => (await import('./accounts-postgres.ts')).createPostgresAccountStore(database), {
     signIn: true,
     account: true,
+    addresses: true,
+    ownerOfAddress: true,
+    noteProviderAddress: true,
+    verifyAddress: true,
+    removeAddress: true,
+    providerHoldsPrimary: true,
+    makePrimary: true,
     isInstanceAdmin: true,
     setLocale: true,
     setName: true,
@@ -136,6 +146,7 @@ export function sessionStoreOn(database: Database): SessionStore {
     revokeSession: true,
     endSessionsOf: true,
     renameSessionsOf: true,
+    readdressSessionsOf: true,
     purge: true,
     holdsSession: true,
     chainOf: true,

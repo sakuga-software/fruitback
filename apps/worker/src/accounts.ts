@@ -20,6 +20,12 @@ import type { ClientMap } from './clients.ts';
 /** `suspended`: an administrator of the instance suspended the account (FRU-281). It acts nowhere. */
 export type Account = { id: string; email: string; name?: string; locale?: string; suspended?: true };
 
+/**
+ * An address of an account beside its primary one (FRU-450). `providers`: the linked providers that
+ * give it, verified. `verified`: Fruitback proved it itself.
+ */
+export type AccountAddress = { email: string; providers: string[]; verified: boolean; createdAt: number };
+
 /** The longest name a person gives themself (FRU-249): the same bound as a workspace name. */
 export const MAX_PERSON_NAME = 80;
 
@@ -358,6 +364,30 @@ export type AccountStore = {
     locale?: string;
   }): Promise<Account>;
   account(id: string): Promise<Account | undefined>;
+  /**
+   * The addresses of an account that something proved, beside `user.email` (FRU-450): see
+   * `account-emails.ts`. The primary address is there only when a provider brought it.
+   */
+  addresses(account: string): Promise<AccountAddress[]>;
+  /** The account that has this address, as its primary address or as another one. */
+  ownerOfAddress(email: string): Promise<string | undefined>;
+  /**
+   * The address a provider gives the account now, at a link or a sign-in (FRU-450). `undefined`: it
+   * gave none, or none that it verified. The provider leaves the address it gave before; an address
+   * of another account is not taken, and nothing says so.
+   */
+  noteProviderAddress(account: string, provider: string, email: string | undefined, now: number): Promise<void>;
+  /** Fruitback proved this address for the account (its link was opened). `taken`: another account has it. */
+  verifyAddress(account: string, email: string, now: number): Promise<'added' | 'taken'>;
+  /** Takes an address away by hand. Never the primary one, nor one that a linked provider gives. */
+  removeAddress(account: string, email: string): Promise<'removed' | 'not-found' | 'primary' | 'provider'>;
+  /** Whether this provider alone proves the primary address: unlinking it would leave it unproved. */
+  providerHoldsPrimary(account: string, provider: string): Promise<boolean>;
+  /**
+   * Makes an address of the account its primary one. The one of before stays, as proved by Fruitback.
+   * `undefined`: the address is not one of the account.
+   */
+  makePrimary(account: string, email: string, now: number): Promise<{ before: string } | undefined>;
   /**
    * Whether this account is the administrator of the instance (FRU-261), read in the database at each
    * call: `role` of `user` is `admin`, and the account is not banned. `instance-admin.ts` says why.

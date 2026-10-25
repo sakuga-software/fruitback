@@ -341,6 +341,11 @@ export async function runForget(
    * of the environment too: a test that hands a store hands its index, or none.
    */
   heldIndex?: NoteIndex,
+  /**
+   * The accounts a test opened (FRU-450). Absent, the ones of the environment when the store is the one
+   * of the environment too. An address of an account forgets the notes of every address of it.
+   */
+  heldAccounts?: Pick<AccountStore, 'ownerOfAddress' | 'account' | 'addresses'>,
 ): Promise<ForgetOutcome> {
   const parsed = parseForgetArgs(argv);
   if (!parsed.ok) return { ok: false, lines: [parsed.error] };
@@ -354,7 +359,18 @@ export async function runForget(
   const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
   if ('ids' in which) return forgetNotes(which.ids, dryRun, index);
 
-  const { that, none, search } = describe(which);
+  // FRU-450: the address of an account names every address of it, its primary one and the others:
+  // a note was signed with the primary address of its day, and a person asks with any of them.
+  const accounts = heldAccounts ?? (held === undefined ? accountStoreFor(config.config) : undefined);
+  let addresses: string[] = [];
+  if ('email' in which) {
+    try {
+      addresses = await addressesOfAccount(accounts, which.email);
+    } catch (error) {
+      return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
+    }
+  }
+  const { that, none, search } = describe(addresses.length > 1 ? { email: addresses.join(', ') } : which);
   const store = held ?? config.config.store.create();
   if (store.forget === undefined) {
     const provider = config.config.store.provider;
@@ -371,11 +387,20 @@ export async function runForget(
     };
   }
 
+  const forget = store.forget.bind(store);
+  // Each address in turn: a note gives one address as its reporter's.
+  const forgetAll = async (options: { dryRun: boolean }): Promise<ForgottenNote[]> => {
+    if (addresses.length <= 1) return forget(which, options);
+    const all: ForgottenNote[] = [];
+    for (const email of addresses) all.push(...(await forget({ email }, options)));
+
+    return all;
+  };
   let found: ForgottenNote[];
   try {
     // Listed first, whatever was asked: an identifier that names no note stops the deletion of the
     // others, because a list with a typing error in it is not the list the operator read.
-    found = await store.forget(which, { dryRun: true });
+    found = await forgetAll({ dryRun: true });
     const missing =
       'identifiers' in which ? which.identifiers.filter((id) => !found.some((note) => note.identifier === id)) : [];
     if (missing.length > 0) {
@@ -387,7 +412,7 @@ export async function runForget(
       // of a note is left behind in the index.
       const notes = { notes: found.map(({ identifier, id }) => ({ identifier, note: id })) };
       await index?.forget(notes);
-      found = await store.forget(which, { dryRun: false });
+      found = await forgetAll({ dryRun: false });
       // Again, once the notes are gone: a read of their page that asked the store before the
       // deletion may have written their rows back since (FRU-237). A read that starts now does not
       // find them, and writes nothing of them. The notes are deleted by now, so a failure here is
@@ -434,6 +459,28 @@ export async function runForget(
           ...(index === undefined ? [] : [TRACKER_NOTES]),
         ],
   };
+}
+
+/**
+ * Every address of the account that has `email` (FRU-450), the typed one first, or that one alone when
+ * no account has it. A worker with no accounts reads none.
+ */
+async function addressesOfAccount(
+  accounts: Pick<AccountStore, 'ownerOfAddress' | 'account' | 'addresses'> | undefined,
+  email: string,
+): Promise<string[]> {
+  const typed = email.trim().toLowerCase();
+  if (accounts === undefined) return [email];
+  const owner = await accounts.ownerOfAddress(typed);
+  if (owner === undefined) return [email];
+  const account = await accounts.account(owner);
+  const all = [
+    typed,
+    ...(account === undefined ? [] : [account.email]),
+    ...(await accounts.addresses(owner)).map((row) => row.email),
+  ];
+
+  return [...new Set(all)];
 }
 
 /** What `forget` says of the notes it does not see, on a worker with an index (FRU-237). */

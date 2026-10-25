@@ -33,6 +33,7 @@ import {
   CONSOLE_URL,
   DATABASE_PASSWORD,
   DATABASE_URL,
+  NO_ADDRESSES,
   NO_SESSIONS,
   PUBLIC_URL,
   ask,
@@ -310,7 +311,7 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     const quiet = { log() {}, error() {} };
     const announced = config.ok ? await announceAuth(config.config, quiet) : config.missing.join(', ');
     // The control builds the options, as a worker that has better-auth on does after its migrations.
-    if (process.env.BUILD_OPTIONS === '1') await authOptions(JSON.parse(process.env.AUTH_CONFIG), {}, { endSessionsOf: async () => {} }, { incr: async () => 1 });
+    if (process.env.BUILD_OPTIONS === '1') await authOptions(JSON.parse(process.env.AUTH_CONFIG), {}, { endSessionsOf: async () => {} }, { incr: async () => 1 }, { ownerOfAddress: async () => undefined, noteProviderAddress: async () => {} });
     const library = loaded.filter((url) => /\\/node_modules\\/(?:better-auth|@better-auth|kysely|better-call)\\//.test(url)).length;
     console.log(JSON.stringify({ statuses, announced, library, modules: loaded.length }));
     process.exit(0);
@@ -616,7 +617,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
 
 describe('the options of better-auth, as they are written (FRU-144)', () => {
   it('writes each option that closes something, and reads none of them from the environment', async () => {
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
 
     assert.equal(options.baseURL, PUBLIC_URL);
     assert.equal(options.basePath, '/console/auth');
@@ -674,7 +675,13 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
   });
 
   it('reads the address of the caller from the header the worker writes, and only when it keeps addresses', async () => {
-    const on = await authOptions({ ...AUTH_CONFIG, trackIp: true }, {} as never, NO_SESSIONS, createMemoryKv());
+    const on = await authOptions(
+      { ...AUTH_CONFIG, trackIp: true },
+      {} as never,
+      NO_SESSIONS,
+      createMemoryKv(),
+      NO_ADDRESSES,
+    );
 
     assert.deepEqual(
       { ...on.rateLimit, customStorage: typeof on.rateLimit?.customStorage?.consume },
@@ -689,7 +696,13 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
   it('signs a person in with the second GitHub App and the Google client of before, and keeps no picture', async () => {
     const github = { clientId: 'gh-of-better-auth', clientSecret: 'a-secret-of-github' };
     const google = { clientId: 'the-google-client', clientSecret: 'a-secret-of-google' };
-    const options = await authOptions({ ...AUTH_CONFIG, github, google }, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(
+      { ...AUTH_CONFIG, github, google },
+      {} as never,
+      NO_SESSIONS,
+      createMemoryKv(),
+      NO_ADDRESSES,
+    );
     const providers = options.socialProviders as Record<string, Record<string, unknown>>;
 
     assert.deepEqual(Object.keys(providers), ['github', 'google']);
@@ -705,6 +718,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
       {} as never,
       NO_SESSIONS,
       createMemoryKv(),
+      NO_ADDRESSES,
     );
 
     assert.deepEqual(options.trustedOrigins, ['https://app.fruitback.test']);
@@ -712,7 +726,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
   });
 
   it('writes what better-auth says in the log of the worker, with no address of the database', async () => {
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
     const lines: string[] = [];
     const [warn, error] = [console.warn, console.error];
     console.warn = (line: string) => void lines.push(`warn ${line}`);
@@ -735,7 +749,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
 
 describe('the plugins of better-auth (FRU-144)', () => {
   it('configures the organization plugin and the layer that keeps no secret at rest, and no other', async () => {
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
 
     assert.deepEqual(
       options.plugins?.map((plugin) => plugin.id),
@@ -746,7 +760,7 @@ describe('the plugins of better-auth (FRU-144)', () => {
 
   it('refuses to build better-auth with the bearer plugin, and says why', async () => {
     const { bearer } = await import('better-auth/plugins/bearer');
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
     const planted = { ...options, plugins: [...(options.plugins ?? []), bearer()] };
 
     assert.equal(refusedPlugins(planted).length, 1);
@@ -761,7 +775,7 @@ describe('the plugins of better-auth (FRU-144)', () => {
   });
 
   it('refuses to build better-auth without the layer that keeps no secret at rest, or with a secondary storage', async () => {
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
     const store = {
       get: async () => null,
       set: async () => {},
@@ -796,7 +810,7 @@ describe('the plugins of better-auth (FRU-144)', () => {
 describe('the roles of a workspace, as better-auth reads them (FRU-144)', () => {
   type Authorize = { authorize(request: Record<string, string[]>): { success: boolean } };
   async function rolesOfThePlugin(): Promise<Record<string, Authorize>> {
-    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv());
+    const options = await authOptions(AUTH_CONFIG, {} as never, NO_SESSIONS, createMemoryKv(), NO_ADDRESSES);
     const plugin = options.plugins?.find(({ id }) => id === 'organization') as
       | { options?: { roles?: Record<string, Authorize> } }
       | undefined;

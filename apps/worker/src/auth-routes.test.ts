@@ -8,6 +8,7 @@ import { AUTH_BASE_PATH, type Auth, CLIENT_IP_HEADER, SERVED_PATHS, authOptions,
 import {
   AUTH_CONFIG,
   AUTH_SECRET,
+  NO_ADDRESSES,
   NO_SESSIONS,
   CONSOLE_URL,
   MIGRATED_DATABASES,
@@ -730,6 +731,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         await database.pool(),
         NO_SESSIONS,
         createPostgresKv(database),
+        NO_ADDRESSES,
       );
       const auth = await startAuth({ ...options, databaseHooks: { ...options.databaseHooks, user: {} } });
       const start = await auth.handler(
@@ -1006,6 +1008,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         await database.pool(),
         NO_SESSIONS,
         createPostgresKv(database),
+        NO_ADDRESSES,
       );
       const auth = await startAuth(options);
       const through = (path: string, instance: Auth) =>

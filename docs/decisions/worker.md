@@ -1504,7 +1504,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the forty BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty-two BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3131,7 +3131,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the forty BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty-two BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -3966,6 +3966,54 @@ site sends the cookie with a navigation. Before FRU-415 that page could link onl
 account that the browser is signed in to, for the address of the account**: what a sign-in did
 already. With another address allowed, it would be a forced link. A form `POST` carries the `Origin`
 of the console, which no other page sends; the confirmation and the alert stand behind it.
+
+## The other addresses of an account (FRU-450, step 2 of FRU-415)
+
+### The rules, in short
+
+- **The primary address stays `user.email` of better-auth**, the one of `reporter.email`, of the
+  messages and of the extensions. The others are rows of `account_emails` (`account-emails.ts` for
+  the routes, the store of the accounts for the statements): `providers` (who gives it, verified) and
+  `verified_at` (Fruitback proved it). A row with neither is deleted. The primary address has a row
+  only when a provider brought it, or when it was primary before another one.
+- **One address, one account**: the key of `account_emails`, and the trigger of
+  `0033_one_owner_per_address` against `user.email` of another account (a custom migration, as
+  `0016_first_admin`), under a lock of the address. Every reader of « whose address » asks
+  `ownerOfAddress`.
+- **An address added by hand waits in `verification`**, under `fruitback-email:<token>`, for
+  `VERIFY_ADDRESS_HOURS`, and is nobody's while it waits. The link is `<console>/verify-email#<token>`;
+  `POST /console/me/emails/verify` spends it for the account that asked only, read before it is spent.
+- **better-auth knows one address per account**, so the worker translates at three places: a sign-in
+  link to another address is the link of the primary one, sent there (`sendLink`); an acceptance or a
+  refusal of an invitation sent to another address names the primary one for the call
+  (`asPrimaryAddress` of `auth-organization.ts`); the list of the invitations of a person adds the
+  ones of their other addresses (`listUserInvitations` in the process, with `query.email`).
+- **A provider's address is followed in `validateUserInfo`** (`keepAddressOf` of `provider-link.ts`):
+  at each `sign-in`, and at a sign-in that joins a provider of the same address (FRU-97). A failure is
+  logged and does not stop the sign-in. A link writes it at its confirmation.
+- **The `create` hook of `user` refuses an address of another account** (`email_already_used`), so
+  a provider that gives one makes no second account.
+
+### Why the invitation names the primary address for the length of the call
+
+better-auth compares the address of the invitation with the one of the session, and its acceptance
+runs its own hooks, limits and transaction. Writing the member and the status here would have copied
+that code; the primary address for one call keeps it, and the invitation gets its own address back in
+a `finally`. An acceptance runs alone in its workspace (`oneAtATime`), in one process.
+
+### Why the primary address of a provider blocks its unlink
+
+Decision of Mathieu, 2026-10-25: an unlink takes the address of the provider away, unless Fruitback
+proved it too, and never the primary one. When the provider alone proves the primary address, the
+worker refuses (`409 primary-address`) rather than leave an account whose primary address nothing
+proves. An address that the account had before a provider gave it is not brought by the provider, and
+does not block: an account made by a link, then linked to Google with the same address, unlinks Google.
+
+### Not done
+
+- **No export of an account exists** in the worker or the console. `privacy.md` said that « its
+  export » covered the address; it now says what covers the addresses: « My account », the deletion
+  of the account and `forget --email`.
 
 ## « Last seen » and the label of a browser (FRU-249)
 

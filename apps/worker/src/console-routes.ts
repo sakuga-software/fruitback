@@ -8,6 +8,7 @@ import {
   renameWorkspaceWithPlugin,
 } from './auth-organization.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
+import { handleEmailRoutes, isEmailRoute } from './account-emails.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { SIGN_IN_PROVIDERS } from './console-cors.ts';
 import { handleConsoleConnect } from './connect-routes.ts';
@@ -75,7 +76,7 @@ export async function handleConsole(request: Request, pathname: string, seams: C
 
     // The routes of better-auth, and the worker's own beside them (FRU-147). A worker that has it
     // off answers `404` there, as before.
-    if (isAuthRoute(pathname)) {
+    if (isAuthRoute(pathname) || isEmailRoute(pathname)) {
       if (auth === undefined || served.consoleUrl === undefined) return json(404, { error: 'not-found' }, cors.headers);
       try {
         const routes = {
@@ -86,11 +87,14 @@ export async function handleConsole(request: Request, pathname: string, seams: C
           consoleUrl: served.consoleUrl,
           clientIp: context.clientIp,
           trackIp: served.authTrackIp,
+          sessions,
         };
         // The routes of the organization plugin first, each under its rule (FRU-149). A path of the
         // plugin that has none answers `404` there, and never reaches the list below.
+        // The addresses of the account (FRU-450), beside its ways to sign in.
+        if (isEmailRoute(pathname)) return await handleEmailRoutes(request, pathname, routes, cors.headers);
         const answer =
-          (await handleOrganizationRoutes(request, pathname, { ...routes, sessions }, cors.headers)) ??
+          (await handleOrganizationRoutes(request, pathname, routes, cors.headers)) ??
           (await handleAuthRoutes(request, pathname, routes, cors.headers));
         if (answer !== undefined) return answer;
       } catch (error) {

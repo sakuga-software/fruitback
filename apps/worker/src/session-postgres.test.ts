@@ -431,7 +431,7 @@ describe('a person renames themself while their extension refreshes, on two conn
     });
   // The chains of the person are read, and not held.
   const WITHOUT_THE_HOLD = {
-    from: ".orderBy(asc(sessions.token_hash))\n          .for('update');",
+    from: ".orderBy(asc(sessions.token_hash))\n        .for('update');",
     to: '.orderBy(asc(sessions.token_hash));',
   };
   // The store as it is, through the same machinery: the case can pass.

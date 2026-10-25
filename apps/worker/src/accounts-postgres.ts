@@ -43,6 +43,7 @@ import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { account, invitation, member, organization, user } from './auth-schema.ts';
 import {
+  account_emails,
   connectors,
   deliveries,
   domains,
@@ -300,6 +301,15 @@ async function restageIndex(db: Db, site: string, ids: readonly number[], stage:
     );
 }
 
+/** Whether PostgreSQL refused a write for a unique key, or for the trigger that holds one address to one account. */
+function isUniqueViolation(error: unknown): boolean {
+  for (let cause = error; typeof cause === 'object' && cause !== null; cause = (cause as { cause?: unknown }).cause) {
+    if ((cause as { code?: unknown }).code === '23505') return true;
+  }
+
+  return false;
+}
+
 /** Thrown inside a transaction to roll it back, and caught by the method that threw it. */
 class RolledBack extends Error {}
 
@@ -411,6 +421,215 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
     async account(id) {
       return accountOf((await run((db) => db.select(ACCOUNT).from(user).where(eq(user.id, id))))[0]);
+    },
+
+    async addresses(person) {
+      const rows = await run((db) =>
+        db
+          .select()
+          .from(account_emails)
+          .where(eq(account_emails.account_id, given(person, 'addresses: account')))
+          .orderBy(asc(account_emails.created_at), asc(account_emails.email)),
+      );
+
+      return rows.map((row) => ({
+        email: row.email,
+        providers: [...row.providers].toSorted(),
+        verified: row.verified_at !== null,
+        createdAt: row.created_at,
+      }));
+    },
+
+    async ownerOfAddress(email) {
+      const address = normalizeEmail(email);
+      if (address === undefined) return undefined;
+
+      return run(async (db) => {
+        const primary = await db.select({ id: user.id }).from(user).where(eq(user.email, address));
+        if (primary[0] !== undefined) return primary[0].id;
+        const other = await db
+          .select({ id: account_emails.account_id })
+          .from(account_emails)
+          .where(eq(account_emails.email, address));
+
+        return other[0]?.id;
+      });
+    },
+
+    async noteProviderAddress(person, provider, email, now) {
+      given(person, 'noteProviderAddress: account');
+      given(provider, 'noteProviderAddress: provider');
+      given(now, 'noteProviderAddress: now');
+      const address = email === undefined ? undefined : normalizeEmail(email);
+      await transaction(async (tx) => {
+        const primary = (await tx.select({ email: user.email }).from(user).where(eq(user.id, person)).for('update'))[0]
+          ?.email;
+        if (primary === undefined) return;
+        if (address !== undefined) {
+          const held = (
+            await tx
+              .select({ account: account_emails.account_id })
+              .from(account_emails)
+              .where(eq(account_emails.email, address))
+          )[0]?.account;
+          if (held === person) {
+            await tx
+              .update(account_emails)
+              .set({
+                providers: sql`array_append(array_remove(${account_emails.providers}, ${provider}::text), ${provider}::text)`,
+              })
+              .where(eq(account_emails.email, address));
+          } else if (held === undefined && address !== primary) {
+            // An address of another account, taken in between, is not taken: the trigger refuses it.
+            await tx
+              .transaction(async (point) => {
+                await point
+                  .insert(account_emails)
+                  .values({ email: address, account_id: person, providers: [provider], created_at: now })
+                  .onConflictDoNothing({ target: account_emails.email });
+              })
+              .catch((error: unknown) => {
+                if (!isUniqueViolation(error)) throw error;
+              });
+          }
+        }
+        // The provider leaves the address it gave before, and an address that nothing proves goes.
+        await tx
+          .update(account_emails)
+          .set({ providers: sql`array_remove(${account_emails.providers}, ${provider}::text)` })
+          .where(
+            and(
+              eq(account_emails.account_id, person),
+              sql`${provider}::text = ANY(${account_emails.providers})`,
+              address === undefined ? undefined : ne(account_emails.email, address),
+            ),
+          );
+        await tx
+          .delete(account_emails)
+          .where(
+            and(
+              eq(account_emails.account_id, person),
+              sql`cardinality(${account_emails.providers}) = 0`,
+              isNull(account_emails.verified_at),
+            ),
+          );
+      });
+    },
+
+    async verifyAddress(person, email, now) {
+      given(person, 'verifyAddress: account');
+      given(now, 'verifyAddress: now');
+      const address = normalizeEmail(email);
+      if (address === undefined) throw new StoreError('verifyAddress needs a valid address');
+
+      return transaction(async (tx) => {
+        const owner = (await tx.select({ id: user.id }).from(user).where(eq(user.email, address)))[0]?.id;
+        if (owner !== undefined) return owner === person ? 'added' : 'taken';
+        const held = (
+          await tx
+            .select({ account: account_emails.account_id })
+            .from(account_emails)
+            .where(eq(account_emails.email, address))
+        )[0]?.account;
+        if (held !== undefined && held !== person) return 'taken';
+        if (held === person) {
+          await tx
+            .update(account_emails)
+            .set({ verified_at: sql`COALESCE(${account_emails.verified_at}, ${now}::bigint)` })
+            .where(eq(account_emails.email, address));
+
+          return 'added';
+        }
+        try {
+          const written = await tx.transaction((point) =>
+            point
+              .insert(account_emails)
+              .values({ email: address, account_id: person, verified_at: now, created_at: now })
+              .onConflictDoNothing({ target: account_emails.email })
+              .returning({ email: account_emails.email }),
+          );
+
+          return written.length === 1 ? 'added' : 'taken';
+        } catch (error) {
+          if (isUniqueViolation(error)) return 'taken';
+          throw error;
+        }
+      });
+    },
+
+    async removeAddress(person, email) {
+      const address = normalizeEmail(email);
+      if (address === undefined) return 'not-found';
+
+      return transaction(async (tx) => {
+        const primary = (await tx.select({ email: user.email }).from(user).where(eq(user.id, person)).for('update'))[0]
+          ?.email;
+        if (primary === address) return 'primary';
+        const row = (
+          await tx
+            .select()
+            .from(account_emails)
+            .where(and(eq(account_emails.email, address), eq(account_emails.account_id, person)))
+            .for('update')
+        )[0];
+        if (row === undefined) return 'not-found';
+        if (row.providers.length > 0) return 'provider';
+        await tx.delete(account_emails).where(eq(account_emails.email, address));
+
+        return 'removed';
+      });
+    },
+
+    async providerHoldsPrimary(person, provider) {
+      const rows = await run((db) =>
+        db
+          .select({ email: account_emails.email })
+          .from(account_emails)
+          .innerJoin(user, and(eq(user.id, account_emails.account_id), eq(user.email, account_emails.email)))
+          .where(
+            and(
+              eq(account_emails.account_id, person),
+              isNull(account_emails.verified_at),
+              sql`${account_emails.providers} = ARRAY[${provider}]::text[]`,
+            ),
+          ),
+      );
+
+      return rows.length > 0;
+    },
+
+    async makePrimary(person, email, now) {
+      given(now, 'makePrimary: now');
+      const address = normalizeEmail(email);
+      if (address === undefined) return undefined;
+
+      return transaction(async (tx) => {
+        const before = (await tx.select({ email: user.email }).from(user).where(eq(user.id, person)).for('update'))[0]
+          ?.email;
+        if (before === undefined) return undefined;
+        if (before === address) return { before };
+        const row = await tx
+          .select({ email: account_emails.email })
+          .from(account_emails)
+          .where(and(eq(account_emails.email, address), eq(account_emails.account_id, person)))
+          .for('update');
+        if (row.length === 0) return undefined;
+        // The address of before was proved when it became the primary one: it stays, as proved.
+        await tx
+          .insert(account_emails)
+          .values({ email: before, account_id: person, verified_at: now, created_at: now })
+          .onConflictDoUpdate({
+            target: account_emails.email,
+            set: { verified_at: sql`COALESCE(${account_emails.verified_at}, ${now}::bigint)` },
+            setWhere: eq(account_emails.account_id, person),
+          });
+        await tx
+          .update(user)
+          .set({ email: address, updatedAt: new Date(now) })
+          .where(eq(user.id, person));
+
+        return { before };
+      });
     },
 
     async isInstanceAdmin(id) {

@@ -192,9 +192,20 @@ the account of the member who left a note, and that is what says who may give a 
   10 minutes at most: the provider, the id of the provider account, the address the provider gave
   and the id of the session that started the link, in the table `verification`. It goes when the
   person confirms or cancels, or when it expires. Once linked, the account keeps the provider and
-  its id, as for a sign-in, and **not the address of the provider**: the account keeps one address,
-  its own, which `forget`, the deletion of the account and its export already cover. The alert that
-  follows a link goes to that address, and names the provider account.
+  its id, as for a sign-in, and since FRU-450 the address the provider verified, as another address
+  of the account (below). The alert that follows a link goes to the primary address, and names the
+  provider account.
+- **The other addresses of an account** (FRU-450), in the table `account_emails`: each address, the
+  account, the providers that give it, and whether and when Fruitback proved it, with the day it was
+  added. An address that a person adds waits 24 hours at most in the table `verification`: a digest
+  of the token of its link, the account and the address. It goes when the link is opened or expires.
+  A provider's address follows what the provider gives at each sign-in, and goes when the provider is
+  unlinked, unless Fruitback proved it too. The person sees them all in « My account », and takes one
+  away there. **The deletion of the account deletes them all** (the rows go with the account), and
+  **`forget --email` with any address of an account deletes the notes of every address of that
+  account**: a note was signed with the primary address of its day. The notes, the tickets and the
+  messages of Fruitback carry the primary address only. The worker sends a few links of verification
+  to one address in an hour, and keeps that address in the `Kv` for the hour, as the key of a count.
 
 - **The sites shared with a guest** (FRU-250): for each invitation of a guest, the ids of the sites
   it names; for each guest who accepted one, the ids of those sites, with the workspace, the account

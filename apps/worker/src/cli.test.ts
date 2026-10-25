@@ -63,6 +63,39 @@ describe('node server.mjs forget (FRU-85)', () => {
     assert.match(again.lines.join('\n'), /no note gives alice@example.com/);
   });
 
+  it('forgets the notes of every address of the account that has the address it is given (FRU-450)', async () => {
+    const store = await storeWithAlice();
+    await store.create(
+      noteFixture({ text: 'Le menu se ferme seul', reporter: { name: 'Alice', email: 'alice@home.example' } }),
+      undefined,
+      { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
+    );
+    // Alice's account: `alice@example.com` is its primary address, and `alice@home.example` another one.
+    const accounts = {
+      async ownerOfAddress(email: string) {
+        return ['alice@example.com', 'alice@home.example'].includes(email) ? 'acc_alice' : undefined;
+      },
+      async account() {
+        return { id: 'acc_alice', email: 'alice@example.com' };
+      },
+      async addresses() {
+        return [{ email: 'alice@home.example', providers: [], verified: true, createdAt: 1 }];
+      },
+    };
+
+    const dry = await runForget(['--email', 'Alice@Home.Example', '--dry-run'], ENV, store, undefined, accounts);
+    assert.ok(dry.ok);
+    assert.match(
+      dry.lines.join('\n'),
+      /2 note\(s\) give alice@home\.example, alice@example\.com\. Nothing was deleted/,
+    );
+
+    const done = await runForget(['--email', 'alice@home.example'], ENV, store, undefined, accounts);
+    assert.match(done.lines.join('\n'), /deleted 2 note/);
+    const none = await runForget(['--email', 'bob@example.com', '--dry-run'], ENV, store, undefined, accounts);
+    assert.match(none.lines.join('\n'), /no note gives bob@example\.com/);
+  });
+
   it('takes one selector, and refuses two of them (FRU-111)', () => {
     assert.deepEqual(parseForgetArgs(['--id', 'FB-2', '--id', 'FB-7', '--id', 'FB-2']), {
       ok: true,

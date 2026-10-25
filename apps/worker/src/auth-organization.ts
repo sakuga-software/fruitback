@@ -65,6 +65,8 @@ export type OrganizationRouteContext = Pick<AuthRouteContext, 'consoleUrl' | 'cl
     | 'shareOnAcceptance'
     | 'sharedIn'
     | 'unshare'
+    | 'ownerOfAddress'
+    | 'addresses'
     | 'suspension'
   >;
   sessions: Pick<SessionStore, 'endSessionsOf'>;
@@ -114,7 +116,7 @@ type InvitationAdapter = {
   update(input: {
     model: 'invitation';
     where: { field: string; value: string }[];
-    update: { mailed: boolean };
+    update: { mailed: boolean } | { email: string };
   }): Promise<unknown>;
   updateMany(input: {
     model: 'invitation';
@@ -203,9 +205,47 @@ async function isInvitedPerson(
 ): Promise<boolean> {
   const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
   if (invitation === null) return false;
-  const account = await context.accounts.account(person);
 
-  return account !== undefined && String(invitation.email).toLowerCase() === account.email.toLowerCase();
+  return isAddressOf(context, person, String(invitation.email));
+}
+
+/**
+ * Whether this address is one of `person` (FRU-450): their primary address, or another one that a
+ * provider or Fruitback proved. An address that waits for its verification is nobody's.
+ */
+async function isAddressOf(
+  context: Pick<OrganizationRouteContext, 'accounts'>,
+  person: string,
+  email: string,
+): Promise<boolean> {
+  return (await context.accounts.ownerOfAddress(email)) === person;
+}
+
+/**
+ * An acceptance or a refusal of an invitation sent to another address of the person (FRU-450).
+ * better-auth takes them from a session of the address of the invitation only, and knows one address
+ * of an account: the invitation names the primary one for the length of the call, and its own after.
+ * `undefined`: the invitation is not one of another address of the person, and is left to better-auth.
+ */
+async function asPrimaryAddress(
+  context: Pick<OrganizationRouteContext, 'accounts'>,
+  adapter: InvitationAdapter,
+  person: string,
+  invitationId: string,
+): Promise<{ restore(): Promise<void> } | undefined> {
+  const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
+  if (invitation === null || invitation.status !== 'pending') return undefined;
+  const account = await context.accounts.account(person);
+  const sent = String(invitation.email).toLowerCase();
+  if (account === undefined || sent === account.email || !(await isAddressOf(context, person, sent))) return undefined;
+  const where = [{ field: 'id', value: invitationId }];
+  await adapter.update({ model: 'invitation', where, update: { email: account.email } });
+
+  return {
+    async restore() {
+      await adapter.update({ model: 'invitation', where, update: { email: sent } });
+    },
+  };
 }
 
 /**
@@ -249,8 +289,7 @@ async function shareBeforeAcceptance(
   // Every other caller, and an invitation that no longer waits, gets the answer of better-auth: the
   // refusal below is for the person of the invitation only (raised by the review of #334).
   const workspace = String(invitation.organizationId);
-  const account = await context.accounts.account(person);
-  if (account === undefined || String(invitation.email).toLowerCase() !== account.email.toLowerCase()) return {};
+  if (!(await isAddressOf(context, person, String(invitation.email)))) return {};
   if (invitation.status !== 'pending' || !(new Date(String(invitation.expiresAt)).getTime() > Date.now())) return {};
   if ((await context.accounts.role(workspace, person)) !== undefined) return {};
   const sites = (await context.accounts.sitesOfInvitations([invitationId])).get(invitationId) ?? [];
@@ -533,13 +572,23 @@ async function answerOrganizationCall(
   const forwardedHeaders = headersFor(request, context);
   forwardedHeaders.delete('Content-Length');
   if (rule.method === 'POST') forwardedHeaders.set('Content-Type', 'application/json');
-  const answer = await auth.handler(
-    new Request(address, {
-      method: rule.method,
-      headers: forwardedHeaders,
-      ...(rule.method === 'POST' ? { body: JSON.stringify(handed) } : {}),
-    }),
-  );
+  // FRU-450: an invitation sent to another address of the person names their primary one for the call.
+  const retargeted =
+    path === '/organization/accept-invitation' || path === '/organization/reject-invitation'
+      ? await asPrimaryAddress(context, adapter, mine.userId, String(read.input.invitationId))
+      : undefined;
+  let answer: Response;
+  try {
+    answer = await auth.handler(
+      new Request(address, {
+        method: rule.method,
+        headers: forwardedHeaders,
+        ...(rule.method === 'POST' ? { body: JSON.stringify(handed) } : {}),
+      }),
+    );
+  } finally {
+    await retargeted?.restore();
+  }
 
   // An acceptance that better-auth refused leaves no share: the person is no member, and the rows
   // would give nothing, but they are theirs to keep only as a guest. A person who is a member, by
@@ -651,11 +700,23 @@ async function answerOrganizationCall(
   // An invitation past its end waits no more: better-auth refuses it at the acceptance, and still
   // lists it as `pending` (1.7.7). The screens showed it, and « Join » failed.
   if ((path === '/organization/list-invitations' || path === '/organization/list-user-invitations') && answer.ok) {
-    const listed: unknown = await answer
+    const read: unknown = await answer
       .clone()
       .json()
       .catch(() => undefined);
-    if (!Array.isArray(listed)) throw new AuthUnavailable(`better-auth answered no list on ${path}`);
+    if (!Array.isArray(read)) throw new AuthUnavailable(`better-auth answered no list on ${path}`);
+    // FRU-450: the invitations sent to the other addresses of the person too. better-auth lists the
+    // ones of an address that a call in the process names, and the ones of the session otherwise.
+    const listed: unknown[] = [...read];
+    if (path === '/organization/list-user-invitations') {
+      const account = await context.accounts.account(mine.userId);
+      const others = (await context.accounts.addresses(mine.userId)).filter((each) => each.email !== account?.email);
+      const api = auth.api as unknown as { listUserInvitations(input: object): Promise<unknown> };
+      for (const other of others) {
+        const more = await api.listUserInvitations({ query: { email: other.email } });
+        if (Array.isArray(more)) listed.push(...more);
+      }
+    }
     const now = Date.now();
     const waiting = (listed as { id?: unknown; status?: unknown; expiresAt?: unknown }[]).filter(
       (each) => each.status !== 'pending' || new Date(String(each.expiresAt)).getTime() > now,

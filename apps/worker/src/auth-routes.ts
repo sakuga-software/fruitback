@@ -20,6 +20,7 @@ import {
   readPending,
   refusalOf,
 } from './provider-link.ts';
+import type { SessionStore } from './session.ts';
 import { INVITATION_REQUIRED, asOperatorLink } from './sign-up.ts';
 
 /**
@@ -51,6 +52,8 @@ export type AuthRouteContext = {
   /** The address `resolveClientIp` read, which better-auth keeps when `trackIp` is on. */
   clientIp: string;
   trackIp: boolean;
+  /** The sessions of the extensions: a new primary address is written on them (FRU-450). */
+  sessions?: Pick<SessionStore, 'readdressSessionsOf'>;
 };
 
 /** Links per address, per window: enough for a lost one, too few to fill someone's mailbox (FRU-98). */
@@ -285,8 +288,14 @@ async function sendLink(
   const body = await readBody(request);
   const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
   if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+  // FRU-450: another address of an account, which something proved, opens that account. better-auth
+  // knows one address of an account, so the link is the one of its primary address, and goes here.
+  const owner = await context.accounts.ownerOfAddress(email);
+  const holder = owner === undefined ? undefined : await context.accounts.account(owner);
+  const signsIn = holder?.email ?? email;
   // The words of the message, never the link (FRU-119).
   const locale =
+    holder?.locale ??
     (await context.accounts.localeOf(email)) ??
     readLocaleTag(body?.locale) ??
     readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
@@ -298,7 +307,7 @@ async function sendLink(
 
   const mailer = context.mailer;
   try {
-    await sendLinkThrough(await context.auth, email, headersFor(request, context), async (token) => {
+    await sendLinkThrough(await context.auth, signsIn, headersFor(request, context), async (token) => {
       // The token is after the `#`: a fragment is never sent to a server, so no proxy logs it.
       const link = `${new URL(context.consoleUrl).origin}/sign-in#${token}`;
       await mailer.send(signInMessage(email, link, MAGIC_LINK_TTL_SECONDS / 60, locale));
@@ -496,7 +505,7 @@ type AccountAdapter = {
  */
 const unlinking = new Map<string, Promise<unknown>>();
 
-async function onePersonAtATime<T>(person: string, run: () => Promise<T>): Promise<T> {
+export async function onePersonAtATime<T>(person: string, run: () => Promise<T>): Promise<T> {
   const before = unlinking.get(person) ?? Promise.resolve();
   const mine = before.then(run, run);
   const settled = mine.catch(() => undefined);
@@ -557,6 +566,11 @@ async function signInMethods(
         other !== provider && Object.hasOwn(configured, other) && rows.some((each) => each.providerId === other),
     );
     if (context.mailer === undefined && !another) return json(409, { error: 'last-sign-in' }, headers);
+    // FRU-450: the provider takes its address away. The primary address stays proved: when this
+    // provider alone proves it, the person chooses another primary address first.
+    if (await context.accounts.providerHoldsPrimary(mine.userId, provider)) {
+      return json(409, { error: 'primary-address' }, headers);
+    }
 
     const answer = await (auth.api as unknown as { unlinkAccount(input: object): Promise<Response> }).unlinkAccount({
       body: { accountId: row.id },
@@ -565,6 +579,7 @@ async function signInMethods(
     });
     if (answer.status === 403) return json(403, { error: 'sign-in-again' }, headers);
     if (!answer.ok) throw new AuthUnavailable(`better-auth answered ${answer.status} to an unlink`);
+    await context.accounts.noteProviderAddress(mine.userId, provider, undefined, Date.now());
 
     return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
   });
@@ -681,7 +696,7 @@ async function pendingLink(request: Request, context: AuthRouteContext, headers:
       accountId: pending.accountId,
       email: pending.email,
     };
-    const refusal = await refusalOf(adapter, link);
+    const refusal = await refusalOf(adapter, link, context.accounts);
     if (refusal === 'linked') return json(200, { provider: pending.provider }, headers);
     if (refusal !== undefined) return json(409, { error: refusal }, headers);
     try {
@@ -700,6 +715,12 @@ async function pendingLink(request: Request, context: AuthRouteContext, headers:
         .createVerificationValue({ identifier: key, value: spent.value, expiresAt: spent.expiresAt })
         .catch(() => undefined);
       throw new AuthUnavailable(`the link with ${link.providerId} was not written: ${String(error)}`, { cause: error });
+    }
+    // FRU-450: the address the provider verified is one of the account now.
+    try {
+      await context.accounts.noteProviderAddress(link.userId, link.providerId, link.email, Date.now());
+    } catch (error) {
+      console.error(`[fruitback] the address of a link with ${link.providerId} was not kept: ${String(error)}`);
     }
     await alertOfLink(context, mine.userId, pending);
 

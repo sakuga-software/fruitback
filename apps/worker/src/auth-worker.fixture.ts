@@ -90,6 +90,7 @@ export async function workerOf(
     await database.pool(),
     sessions,
     more.limits ?? createPostgresKv(database),
+    accounts,
   );
   const auth: Auth = await startAuth(more.changed === undefined ? options : more.changed(options));
   const mail = inbox();

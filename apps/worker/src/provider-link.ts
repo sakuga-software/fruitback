@@ -1,3 +1,5 @@
+import type { AccountStore } from './accounts.ts';
+
 /**
  * A provider linked from « My account » whose address is not the one of the account (FRU-415, step 1).
  *
@@ -17,7 +19,8 @@
  *   started the link, once. It reads every condition again, then sends an alert to the address of the
  *   account.
  * - **The identity is the id of the provider account** (`sub` of Google, `id` of GitHub), read by the
- *   provider's own `accountSubject`, as better-auth reads it. The address is shown, and is not kept.
+ *   provider's own `accountSubject`, as better-auth reads it. The address is shown, and since FRU-450
+ *   it is kept as another address of the account (`account-emails.ts`), and followed at each sign-in.
  *
  * A sign-in with a provider is not a link of this file: its state has no `link`, and the rule of
  * FRU-97 stays (one verified address is one account).
@@ -103,17 +106,25 @@ export function readPending(row: { value: string; expiresAt: Date } | null, now 
 export async function refusalOf(
   adapter: LinkAdapter,
   link: { userId: string; providerId: string; accountId: string; email: string },
+  /** The addresses of the accounts beside their primary one (FRU-450). */
+  addresses: AddressBook,
 ): Promise<string | 'linked' | undefined> {
   const owner = await adapter.findAccountByKey({ providerId: link.providerId, accountId: link.accountId });
   if (owner !== null) return owner.userId === link.userId ? 'linked' : ACCOUNT_OF_ANOTHER;
   // better-auth keeps an address in lower case.
   const holder = await adapter.findUserByEmail(link.email.toLowerCase());
   if (holder !== null && holder.user.id !== link.userId) return EMAIL_ALREADY_USED;
+  // FRU-450: an address of another account, beside its primary one.
+  const other = await addresses.ownerOfAddress(link.email);
+  if (other !== undefined && other !== link.userId) return EMAIL_ALREADY_USED;
   const mine = await adapter.findAccounts(link.userId);
   if (mine.some((row) => row.providerId === link.providerId)) return PROVIDER_ALREADY_LINKED;
 
   return undefined;
 }
+
+/** The addresses of the accounts beside their primary one (FRU-450): two methods of the store. */
+export type AddressBook = Pick<AccountStore, 'ownerOfAddress' | 'noteProviderAddress'>;
 
 /** What better-auth gives `validateUserInfo` (1.7.10, `utils/validate-user-info.mjs`). */
 type UserInfoInput = {
@@ -160,6 +171,24 @@ function workspaceOf(callbackURL: unknown): string | undefined {
 }
 
 /**
+ * FRU-450: at each sign-in with a linked provider, the address it gives now is the one it brings to
+ * the account, if it verified it. One it did not verify, or none, takes the one of before away. A
+ * failure is logged and does not stop the sign-in: the provider account is the identity, not the address.
+ */
+async function keepAddressOf(addresses: AddressBook, data: UserInfoInput, now: () => number): Promise<void> {
+  const userId = data.user.id;
+  const providerId = data.source?.oauth?.providerId;
+  if (typeof userId !== 'string' || typeof providerId !== 'string') return;
+  const email = data.user.email;
+  const verified = typeof email === 'string' && email.trim() !== '' && data.user.emailVerified === true;
+  try {
+    await addresses.noteProviderAddress(userId, providerId, verified ? email : undefined, now());
+  } catch (error) {
+    console.error(`[fruitback] the address that ${providerId} gave at a sign-in was not kept: ${String(error)}`);
+  }
+}
+
+/**
  * The `before` hook of `/link-social`: the id of the session that starts the link goes into the state.
  * `/link-social` is closed to a request; the route of the worker calls it in the process.
  */
@@ -180,12 +209,21 @@ export function markLinkStart(api: LinkApi) {
  * `validateUserInfo` of better-auth: the conditions of a link, on the way back from the provider.
  * It answers a code of refusal, or keeps a pending link and answers `LINK_NEEDS_CONFIRMATION`.
  */
-export function guardLink(api: LinkApi, now: () => number = Date.now) {
+export function guardLink(api: LinkApi, addresses: AddressBook, now: () => number = Date.now) {
   return async (data: UserInfoInput, context: LinkContext): Promise<{ error: string } | undefined> => {
+    if (data.source?.action === 'sign-in') {
+      await keepAddressOf(addresses, data, now);
+
+      return undefined;
+    }
     if (data.source?.action !== 'link-account') return undefined;
     const state = await api.getOAuthState();
     // A sign-in that joins a provider of the same verified address (FRU-97): not a link of this file.
-    if (state?.link === undefined || state.link === null) return undefined;
+    if (state?.link === undefined || state.link === null) {
+      await keepAddressOf(addresses, data, now);
+
+      return undefined;
+    }
     const started = state.serverContext?.[STARTED] as { session?: unknown; workspace?: unknown } | undefined;
     if (typeof started?.session !== 'string') return { error: LINK_NOT_STARTED };
     const userId = data.user.id;
@@ -199,9 +237,13 @@ export function guardLink(api: LinkApi, now: () => number = Date.now) {
     if (accountId === undefined) return { error: 'unable_to_get_user_info' };
 
     const adapter = context.context.internalAdapter as LinkAdapter;
-    const refusal = await refusalOf(adapter, { userId, providerId, accountId, email });
+    const refusal = await refusalOf(adapter, { userId, providerId, accountId, email }, addresses);
     // Linked to this person already: better-auth updates its row, which holds no token.
-    if (refusal === 'linked') return undefined;
+    if (refusal === 'linked') {
+      await keepAddressOf(addresses, data, now);
+
+      return undefined;
+    }
     if (refusal !== undefined) return { error: refusal };
 
     const pending: PendingLink = {

@@ -228,6 +228,93 @@ export function providerLinkedMessage(
   return { to, subject: words.subject, text, html };
 }
 
+/** The languages of the verification of an address (FRU-450). Any other tag falls back to English. */
+const VERIFY_WORDS = {
+  en: {
+    subject: 'Confirm an address of your Fruitback account',
+    lead: (account: string) => `Somebody signed in as ${account} asked to add this address to their Fruitback account.`,
+    how: 'To add it, open this link in the browser where you are signed in to Fruitback:',
+    button: 'Add this address',
+    once: (hours: number) => `It works once, for ${hours} hours.`,
+    ignore: 'If it was not you, ignore this message: the address is not added without the link.',
+  },
+  fr: {
+    subject: 'Confirmez une adresse de votre compte Fruitback',
+    lead: (account: string) =>
+      `Une personne connectée en tant que ${account} demande à ajouter cette adresse à son compte Fruitback.`,
+    how: "Pour l'ajouter, ouvrez ce lien dans le navigateur où vous êtes connecté à Fruitback :",
+    button: 'Ajouter cette adresse',
+    once: (hours: number) => `Il ne sert qu'une fois, pendant ${hours} heures.`,
+    ignore: "Si ce n'était pas vous, ignorez ce message : l'adresse n'est pas ajoutée sans le lien.",
+  },
+} as const;
+
+/**
+ * The link that proves an address added in « My account » (FRU-450). It names the primary address of
+ * the account that asked, so that the person who reads it knows to whom the address would go. The
+ * token is after the `#` of the link, as for a sign-in link: no server logs it.
+ */
+export function verifyAddressMessage(
+  to: string,
+  verify: { account: string; link: string; hours: number },
+  locale = 'en',
+): MailMessage {
+  const words = locale.toLowerCase().startsWith('fr') ? VERIFY_WORDS.fr : VERIFY_WORDS.en;
+  const lead = words.lead(unlinked(verify.account));
+  const text = [lead, words.how, '', verify.link, '', words.once(verify.hours), words.ignore].join('\n');
+  const href = escapeHtml(verify.link);
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
+<p style="font-size:16px;font-weight:600">${escapeHtml(lead)}</p>
+<p>${escapeHtml(words.how)}</p>
+<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p style="color:#6b6b74;font-size:13px">${escapeHtml(words.once(verify.hours))} ${escapeHtml(words.ignore)}</p>
+<p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
+</body></html>`;
+
+  return { to, subject: words.subject, text, html };
+}
+
+/** The languages of the alert of a new primary address (FRU-450). Any other tag falls back to English. */
+const PRIMARY_WORDS = {
+  en: {
+    subject: 'The primary address of your Fruitback account changed',
+    lead: (before: string, after: string) =>
+      `The primary address of your Fruitback account is now ${after}, in the place of ${before}. Your notes and the messages of Fruitback use it from now on.`,
+    undo: 'If it was not you, open « My account », choose your address again under « Addresses », and sign out of the other browsers:',
+    button: 'Open My account',
+    ok: 'If it was you, there is nothing to do.',
+  },
+  fr: {
+    subject: "L'adresse principale de votre compte Fruitback a changé",
+    lead: (before: string, after: string) =>
+      `L'adresse principale de votre compte Fruitback est désormais ${after}, à la place de ${before}. Vos notes et les messages de Fruitback l'utilisent dès maintenant.`,
+    undo: "Si ce n'était pas vous, ouvrez « Mon compte », choisissez de nouveau votre adresse dans « Adresses », puis déconnectez les autres navigateurs :",
+    button: 'Ouvrir Mon compte',
+    ok: "Si c'était vous, il n'y a rien à faire.",
+  },
+} as const;
+
+/** The alert of a new primary address (FRU-450), sent to the address of before and to the new one. */
+export function primaryChangedMessage(
+  to: string,
+  change: { before: string; after: string; link: string },
+  locale = 'en',
+): MailMessage {
+  const words = locale.toLowerCase().startsWith('fr') ? PRIMARY_WORDS.fr : PRIMARY_WORDS.en;
+  const lead = words.lead(unlinked(change.before), unlinked(change.after));
+  const text = [lead, '', words.undo, '', change.link, '', words.ok].join('\n');
+  const href = escapeHtml(change.link);
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
+<p style="font-size:16px;font-weight:600">${escapeHtml(lead)}</p>
+<p>${escapeHtml(words.undo)}</p>
+<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p style="color:#6b6b74;font-size:13px">${escapeHtml(words.ok)}</p>
+<p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
+</body></html>`;
+
+  return { to, subject: words.subject, text, html };
+}
+
 /**
  * A text that a person wrote, as a mail client shows it without a link: a zero-width space after each
  * `.`, `:`, `/` and `@` breaks what a client would read as an address (`https://…`, `www.…`,
