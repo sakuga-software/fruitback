@@ -21,10 +21,6 @@
       "src/contrast.ts": {
         "score": 93.33,
         "mutants": 30
-      },
-      "src/deprecated.ts": {
-        "score": 100,
-        "mutants": 5
       }
     }
   },

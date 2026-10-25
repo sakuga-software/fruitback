@@ -20,20 +20,19 @@ npm i @fruitback/shared
 ```ts
 import { parseNote } from '@fruitback/shared';
 
-// The body of a request of the REST connector carries the note in `note`, and in `seed` as before.
-const { note, seed } = JSON.parse(body);
-const parsed = parseNote(note ?? seed);
+// The body of a request of the REST connector carries the note in `note`.
+const parsed = parseNote(JSON.parse(body).note);
 if (parsed.ok) {
-  console.log(parsed.note.note, parsed.note.page.url, parsed.note.anchor.selector);
+  console.log(parsed.note.text, parsed.note.page.url, parsed.note.anchor.selector);
 }
 ```
 
 `parseNote` never throws: a value that is not a valid note gives `{ ok: false, reason }`. The types
 (`Note`, `NoteAnchor`, `NotePage`, …) come with the schemas.
 
-A note was called a _seed_ until 0.4.0. The names of before (`parseSeed`, `Seed`, `seedSchema`,
-`@fruitback/shared/seed.fixture`, …) still work, marked deprecated, and go in a later version. An
-issue written before then holds `"kind": "fruitback.seed"`, and `parseNote` reads it for good.
+0.4.0 changed the payload: its `kind` is `fruitback.note`, its version 3, and the words of the
+visitor are in `text`. `parseNote` reads that version only, and the names that 0.3.0 exported for
+the old payload are gone: the changelog lists them.
 
 ## Guides
 

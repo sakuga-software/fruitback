@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 /**
- * A **note** is one piece of visual feedback planted on an element of a live page. Its payload was
- * called a « seed » until FRU-378, and the notes written before then say so in their `kind`.
+ * A **note** is one piece of visual feedback planted on an element of a live page.
  *
  * It is the only contract shared by the three moving parts of Fruitback:
  * the widget writes it, the worker relays it into Linear, and the widget reads it back to
@@ -13,26 +12,16 @@ import { z } from 'zod';
  * no schema default values, and no field the widget cannot rebuild from the stored payload.
  */
 
-/**
- * The last version of the kind `fruitback.seed`, the one a note is written with today.
- *
- * 2 since FRU-9 added `reporter.verified`. Readers accept older versions and refuse newer ones,
- * so a v1 note still parses: it simply carries no verified identity, which is exactly what it meant.
- * The issues already in the trackers hold this kind, so a reader accepts it for good (FRU-378).
- */
-export const SEED_VERSION = 2;
-
 /** Discriminator that lets us recognise our own JSON among anything else in a description. */
-export const SEED_KIND = 'fruitback.seed';
-
-/**
- * The kind of a note from version 3 on (FRU-378): the version 2 of `fruitback.seed`, with its text in
- * `text` rather than in `note`. Readers accept it already; the writers move to it in a later change,
- * so a worker that reads it is out before a widget that writes it.
- */
 export const NOTE_KIND = 'fruitback.note';
 
-/** The version of `NOTE_KIND`. It starts at 3, after the two versions of `fruitback.seed`. */
+/**
+ * The version a note is written with, and the only one a reader takes (FRU-378).
+ *
+ * It starts at 3: versions 1 and 2 had another kind, which `rewrite-notes` of the worker turns into
+ * this one, once, in the trackers and in the database. A reader refuses a newer version rather than
+ * silently drop the fields it does not know.
+ */
 export const NOTE_VERSION = 3;
 
 /** Text excerpts are a re-anchoring hint, not content — keep them short. */
@@ -169,13 +158,13 @@ export const noteScreenshotSchema = z.object({
 });
 
 export const noteSchema = z.object({
-  kind: z.literal(SEED_KIND),
-  v: z.number().int().positive(),
+  kind: z.literal(NOTE_KIND),
+  v: z.literal(NOTE_VERSION),
   /** Generated client-side. Dedupes retries and keys the pin across reloads. */
   id: z.string().min(1),
   createdAt: isoTimestamp,
   /** What the visitor actually wrote. Stored here too so the round-trip stays lossless. */
-  note: z.string().max(NOTE_MAX_LENGTH),
+  text: z.string().max(NOTE_MAX_LENGTH),
   page: notePageSchema,
   viewport: noteViewportSchema,
   anchor: noteAnchorSchema,
@@ -209,27 +198,17 @@ export type NoteParseFailure =
 
 export type NoteParseResult = { ok: true; note: Note } | NoteParseFailure;
 
-/**
- * A note as `NOTE_KIND` writes it: `text` for the words of the visitor. The parser reads it into a
- * `Note` of `SEED_KIND`, the shape every reader holds until the writers move. `extend` replaces
- * `kind`, so only `note` is omitted.
- */
-const noteV3Schema = noteSchema.omit({ note: true }).extend({
-  kind: z.literal(NOTE_KIND),
-  text: z.string().max(NOTE_MAX_LENGTH),
-});
-
 /** Build a validated note, stamping the current kind and version. Throws on an invalid input. */
 export function createNote(input: NoteInput): Note {
-  return noteSchema.parse({ ...input, kind: SEED_KIND, v: SEED_VERSION });
+  return noteSchema.parse({ ...input, kind: NOTE_KIND, v: NOTE_VERSION });
 }
 
 /**
  * Validate an untrusted value as a note. Never throws — the caller is usually parsing a Linear
  * description a human may have edited.
  *
- * It reads both kinds: `fruitback.seed` up to `SEED_VERSION`, and `fruitback.note` at `NOTE_VERSION`,
- * whose `text` it answers as `note`.
+ * It reads `NOTE_KIND` at `NOTE_VERSION` only. A payload of another kind is `not-found`: that is what
+ * a block of before FRU-378 reads as, until `rewrite-notes` of the worker turns it into this kind.
  */
 export function parseNote(value: unknown): NoteParseResult {
   if (!isNoteShaped(value)) {
@@ -246,10 +225,11 @@ export function parseNote(value: unknown): NoteParseResult {
     return { ok: false, reason: 'invalid', message: 'missing or malformed note version' };
   }
 
-  if (value.kind === NOTE_KIND) return parseVersion3(value, version);
-
-  if (version > SEED_VERSION) {
+  if (version > NOTE_VERSION) {
     return { ok: false, reason: 'unsupported-version', version };
+  }
+  if (version < NOTE_VERSION) {
+    return { ok: false, reason: 'invalid', message: `v: ${NOTE_KIND} starts at version ${NOTE_VERSION}` };
   }
 
   const result = noteSchema.safeParse(value);
@@ -260,52 +240,16 @@ export function parseNote(value: unknown): NoteParseResult {
   return { ok: true, note: result.data };
 }
 
-/** A note of `NOTE_KIND`, answered in the shape of `SEED_KIND` at `SEED_VERSION`. */
-function parseVersion3(value: Record<string, unknown>, version: number): NoteParseResult {
-  if (version > NOTE_VERSION) {
-    return { ok: false, reason: 'unsupported-version', version };
-  }
-  if (version < NOTE_VERSION) {
-    return { ok: false, reason: 'invalid', message: `v: ${NOTE_KIND} starts at version ${NOTE_VERSION}` };
-  }
-
-  const result = noteV3Schema.safeParse(value);
-  if (!result.success) {
-    return { ok: false, reason: 'invalid', message: formatIssues(result.error) };
-  }
-
-  // `noteSchema` drops `text` and puts the fields back in the order of the version 2.
-  const { text, ...rest } = result.data;
-
-  return { ok: true, note: noteSchema.parse({ ...rest, kind: SEED_KIND, v: SEED_VERSION, note: text }) };
-}
-
-/** A note in the shape of `NOTE_KIND` at `NOTE_VERSION`: its words in `text`. */
-export type NoteV3 = z.infer<typeof noteV3Schema>;
-
-/**
- * The same note in the shape of `NOTE_KIND` (FRU-378): `kind` and `v` of version 3, and the words in
- * `text` where version 2 has `note`. The fields keep the order of version 2. `parseNote` reads the
- * result back as the same note.
- *
- * The worker answers this shape in `note`, next to `seed`, on each read and each delivery.
- */
-export function toNoteV3(note: Note): NoteV3 {
-  const { kind: _kind, v: _v, id, createdAt, note: text, ...rest } = note;
-
-  return { kind: NOTE_KIND, v: NOTE_VERSION, id, createdAt, text, ...rest };
-}
-
 /** Cheap `kind` check, so an unrelated JSON block reports `not-found` rather than `invalid`. */
 function isNoteShaped(value: unknown): value is Record<string, unknown> {
   // A string or a number has no `kind` either; only `null` and `undefined` need the `?.`.
   const kind = (value as { kind?: unknown } | null | undefined)?.kind;
 
-  return kind === SEED_KIND || kind === NOTE_KIND;
+  return kind === NOTE_KIND;
 }
 
 function formatIssues(error: z.ZodError): string {
-  // `isNoteShaped` lets only an object through, and no rule of either schema sits on the object itself,
+  // `isNoteShaped` lets only an object through, and no rule of the schema sits on the object itself,
   // so every issue has a path.
   return error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
 }

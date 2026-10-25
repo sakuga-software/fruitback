@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
-import { SEED_VERSION, noteSchema } from './note.ts';
+import { NOTE_VERSION, noteSchema } from './note.ts';
 
 /**
  * The shape of the payload, written down beside the version it belongs to.
  *
- * The rule is « bump `SEED_VERSION` when the payload shape changes ». Nothing held it: a field added
+ * The rule is « bump `NOTE_VERSION` when the payload shape changes ». Nothing held it: a field added
  * to `noteSchema` passed every test, and a reader of the version before then met a payload it could
  * not tell from its own. This test cannot decide for somebody whether a change needs a new version.
  * It makes the change impossible to miss: the shape is recorded here, so a change to the schema
@@ -17,13 +17,13 @@ import { SEED_VERSION, noteSchema } from './note.ts';
  */
 
 const RECORDED = {
-  version: 2,
+  version: 3,
   shape: [
     'kind: string',
-    'v: integer',
+    'v: number',
     'id: string',
     'createdAt: string',
-    'note: string',
+    'text: string',
     'page.url: string',
     'page.path: string',
     'page.title?: string',
@@ -93,18 +93,18 @@ describe('the shape of a note, beside its version', () => {
       shape,
       RECORDED.shape,
       'the payload shape changed. Decide: if a reader of the version before would misread the new payload, ' +
-        'bump SEED_VERSION. Then record the new shape, and the version, in this file.',
+        'bump NOTE_VERSION. Then record the new shape, and the version, in this file.',
     );
   });
 
   it('is recorded for the version the code writes', () => {
-    assert.equal(SEED_VERSION, RECORDED.version, 'SEED_VERSION moved: record it here, with the shape it now names');
+    assert.equal(NOTE_VERSION, RECORDED.version, 'NOTE_VERSION moved: record it here, with the shape it now names');
   });
 
   /** A guard over an empty set passes. */
   it('reads the fields of the schema, optional ones included', () => {
     assert.ok(shape.length >= 30, `only ${shape.length} fields were read from the schema`);
-    assert.ok(shape.includes('note: string'));
+    assert.ok(shape.includes('text: string'));
     assert.ok(shape.some((line) => line.startsWith('source?.')));
   });
 });

@@ -157,7 +157,7 @@ export function statusOf(
  *
  * Part of the read envelope, not of the note. Comments live in whichever store answers — Linear, and
  * `notes-postgres.ts` in its own table — and are fetched from it. Nothing here changes the round trip, so
- * `SEED_VERSION` does not move.
+ * `NOTE_VERSION` does not move.
  */
 export const noteCommentSchema = z.object({
   id: z.string().min(1),
@@ -182,7 +182,7 @@ export const noteIssueSchema = z.object({
    *
    * Optional because SQLite has no web interface. Keeping it required meant inventing a URL that
    * goes nowhere, and a link back to the current page reads as a lost note. The widget renders the
-   * link only when this is present. Read-envelope field, so `SEED_VERSION` does not move.
+   * link only when this is present. Read-envelope field, so `NOTE_VERSION` does not move.
    */
   url: z.string().min(1).optional(),
   title: z.string(),
@@ -191,7 +191,7 @@ export const noteIssueSchema = z.object({
   /**
    * The key of its status in the `statuses` of the same read (FRU-364). Absent: the note is drawn by
    * its stage, as before. `stage` and `stateName` stay filled, for a widget that reads only them.
-   * Read-envelope field, so `SEED_VERSION` does not move.
+   * Read-envelope field, so `NOTE_VERSION` does not move.
    */
   status: statusKeySchema.optional(),
   updatedAt: z.string(),
@@ -215,7 +215,7 @@ export const noteIssueSchema = z.object({
    * tracker. Absent when the store says nothing of them. Read-envelope field.
    */
   attachments: z.array(noteAttachmentSchema).optional(),
-  seed: noteSchema,
+  note: noteSchema,
 });
 
 export type NoteIssue = z.infer<typeof noteIssueSchema>;

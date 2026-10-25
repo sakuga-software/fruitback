@@ -106,7 +106,7 @@ const DEFAULT_TITLE_MAX_LENGTH = 80;
  */
 export function buildIssueTitle(note: Note, options: { maxLength?: number } = {}): string {
   const maxLength = options.maxLength ?? DEFAULT_TITLE_MAX_LENGTH;
-  const firstLine = note.note
+  const firstLine = note.text
     .split('\n')
     .map((line) => line.trim())
     .find((line) => line.length > 0);
@@ -191,7 +191,7 @@ export function buildNoteBlock(note: Note): string {
  */
 export function buildIssueDescription(note: Note, options: DescriptionOptions = {}): string {
   const sections = [
-    note.note.trim(),
+    note.text.trim(),
     buildIssueMetadata(note, options).join('\n'),
     teamWords(options.locale).caption,
     buildNoteBlock(note),

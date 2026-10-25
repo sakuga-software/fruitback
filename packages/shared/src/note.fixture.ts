@@ -11,7 +11,7 @@ export function noteFixture(overrides: Partial<NoteInput> = {}): Note {
   return createNote({
     id: 'sd_2f8c1a90',
     createdAt: '2026-08-04T09:15:00.000Z',
-    note: 'Le bouton “Commander” est trop petit sur mobile, on le rate au pouce.',
+    text: 'Le bouton “Commander” est trop petit sur mobile, on le rate au pouce.',
     page: {
       url: 'https://preview.acme.test/pricing?tab=annual',
       path: '/pricing',
@@ -38,7 +38,7 @@ export function minimalNoteFixture(overrides: Partial<NoteInput> = {}): Note {
   return createNote({
     id: 'sd_minimal',
     createdAt: '2026-08-04T09:15:00.000Z',
-    note: '',
+    text: '',
     page: { url: 'https://acme.test/', path: '/' },
     viewport: { width: 390, height: 844 },
     anchor: {
@@ -63,7 +63,7 @@ export function noteIssueFixture(overrides: Partial<NoteIssue> = {}): NoteIssue 
     stage: 'progress',
     stateName: 'In Progress',
     updatedAt: '2026-08-05T10:00:00.000Z',
-    seed: noteFixture(),
+    note: noteFixture(),
     ...overrides,
   });
 }
