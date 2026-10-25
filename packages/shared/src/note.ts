@@ -18,8 +18,8 @@ export const NOTE_KIND = 'fruitback.note';
 /**
  * The version a note is written with, and the only one a reader takes (FRU-378).
  *
- * It starts at 3: versions 1 and 2 had another kind, which `rewrite-notes` of the worker turns into
- * this one, once, in the trackers and in the database. A reader refuses a newer version rather than
+ * It starts at 3: versions 1 and 2 had another kind, which `rewrite-notes` of the worker 0.4.0 turned
+ * into this one, once, in the trackers and in the database. A reader refuses a newer version rather than
  * silently drop the fields it does not know.
  */
 export const NOTE_VERSION = 3;
@@ -207,8 +207,8 @@ export function createNote(input: NoteInput): Note {
  * Validate an untrusted value as a note. Never throws — the caller is usually parsing a Linear
  * description a human may have edited.
  *
- * It reads `NOTE_KIND` at `NOTE_VERSION` only. A payload of another kind is `not-found`: that is what
- * a block of before FRU-378 reads as, until `rewrite-notes` of the worker turns it into this kind.
+ * It reads `NOTE_KIND` at `NOTE_VERSION` only. A payload of another kind is `not-found`, a block of
+ * before FRU-378 included.
  */
 export function parseNote(value: unknown): NoteParseResult {
   if (!isNoteShaped(value)) {

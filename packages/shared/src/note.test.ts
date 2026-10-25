@@ -65,14 +65,6 @@ describe('parseNote', () => {
     assert.deepEqual(parseNote('{}'), { ok: false, reason: 'not-found' });
   });
 
-  it('reports a payload of before FRU-378 as not-found: rewrite-notes alone reads it', () => {
-    for (const v of [1, 2, 3]) {
-      const { kind: _kind, v: _v, text, ...rest } = noteFixture();
-      const before = { kind: 'fruitback.seed', v, note: text, ...rest };
-      assert.deepEqual(parseNote(before), { ok: false, reason: 'not-found' });
-    }
-  });
-
   it('refuses a payload from a newer Fruitback instead of dropping its fields', () => {
     const result = parseNote({ ...noteFixture(), v: NOTE_VERSION + 1 });
 

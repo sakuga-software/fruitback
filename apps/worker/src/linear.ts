@@ -17,7 +17,6 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import {
   type BatchAnswer,
   type BatchMemory,
-  type BlockRewrite,
   type CheckAnswer,
   type CreatedIssue,
   type CreatedWithFiles,
@@ -25,7 +24,6 @@ import {
   type NewReply,
   type NoteIssueQuery,
   type NoteStore,
-  type RewrittenIssue,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
@@ -1003,90 +1001,7 @@ export function createLinearStore(
       })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
-    rewriteBlocks: (clients, job) =>
-      rewriteLinearBlocks(
-        config,
-        clients.map((client) => linearRoutingFor(config, client).teamId),
-        job,
-      ),
   };
-}
-
-const BLOCK_ISSUES_QUERY = `
-  query FruitbackBlockIssues($filter: IssueFilter, $first: Int, $after: String) {
-    issues(filter: $filter, first: $first, after: $after) {
-      nodes { id identifier description }
-      pageInfo { hasNextPage endCursor }
-    }
-  }
-`;
-
-const REWRITE_DESCRIPTION_MUTATION = `
-  mutation FruitbackRewriteDescription($id: String!, $description: String!) {
-    issueUpdate(id: $id, input: { description: $description }) { success }
-  }
-`;
-
-/** Pages of a team read by `rewriteLinearBlocks`, at most: 200 pages of 50 issues. */
-const BLOCK_MAX_PAGES = 200;
-
-type BlockIssuesResult = {
-  issues: {
-    nodes: { id: string; identifier: string; description: string | null }[];
-    pageInfo: { hasNextPage: boolean; endCursor: string | null };
-  };
-};
-
-/**
- * `rewriteBlocks` of a Linear store (FRU-378): the issues of each team whose description holds the
- * marker, read to the last page before any is written, since a rewritten issue leaves the filter and
- * would move the pages under the reader. Then each one is rewritten, one call each.
- */
-export async function rewriteLinearBlocks(
-  config: LinearConfig,
-  teams: readonly string[],
-  job: BlockRewrite,
-): Promise<RewrittenIssue[]> {
-  const found: BlockIssuesResult['issues']['nodes'] = [];
-  for (const team of new Set(teams)) {
-    let after: string | null = null;
-    for (let page = 0; page < BLOCK_MAX_PAGES; page += 1) {
-      const result: BlockIssuesResult = await graphql(config, BLOCK_ISSUES_QUERY, {
-        filter: { team: { id: { eq: team } }, description: { contains: job.marker } },
-        first: ISSUES_PAGE_SIZE,
-        after,
-      });
-      found.push(...result.issues.nodes);
-      after = result.issues.pageInfo.hasNextPage ? result.issues.pageInfo.endCursor : null;
-      if (after === null) break;
-    }
-  }
-
-  const done: RewrittenIssue[] = [];
-  for (const issue of found) {
-    const description = issue.description === null ? undefined : job.rewrite(issue.description);
-    if (description === undefined) {
-      done.push({ reference: issue.identifier, outcome: 'unchanged' });
-    } else if (job.dryRun) {
-      done.push({ reference: issue.identifier, outcome: 'to-rewrite' });
-    } else {
-      try {
-        const answer = await graphql<{ issueUpdate: { success: boolean } }>(config, REWRITE_DESCRIPTION_MUTATION, {
-          id: issue.id,
-          description,
-        });
-        done.push({
-          reference: issue.identifier,
-          outcome: answer.issueUpdate.success ? 'rewritten' : 'failed',
-          ...(answer.issueUpdate.success ? {} : { error: 'Linear answered no success' }),
-        });
-      } catch (error) {
-        done.push({ reference: issue.identifier, outcome: 'failed', error: (error as Error).message });
-      }
-    }
-  }
-
-  return done;
 }
 
 /**

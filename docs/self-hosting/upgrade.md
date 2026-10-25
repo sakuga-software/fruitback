@@ -54,34 +54,11 @@ not there.
 extension, when it had no accounts. Each reviewer pairs again, once, from the console. The notes, the
 sites and the accounts move with `migrate-to-postgres`, below.
 
-## Rewriting the notes of before, once (0.4.0, FRU-378)
+## Upgrading a worker of before 0.4.0 (FRU-378)
 
-0.4.0 writes and reads a note of one kind only, `fruitback.note` at version 3, with the words of the
-reporter in `text`. A note written before it is of another kind, in three places: the block at the
-end of each issue in Linear or GitHub, the rows of `notes` that the worker keeps, and the deliveries
-that wait in the queue of a REST connector. The worker of 0.4.0 does not read them. **Their pins are
-not drawn, and a waiting delivery is not sent as version 2, until `rewrite-notes` has run.** Nothing
-is lost in between: the issues, the rows and the deliveries stay as they were.
-
-**Run it at once, right after the new image is up**, on the same environment as the worker:
-
-```bash
-docker compose exec worker node server.mjs rewrite-notes --dry-run
-docker compose exec worker node server.mjs rewrite-notes
-```
-
-- `--dry-run` lists what it would rewrite and writes nothing: a count of rows of `notes` and of
-  deliveries, then for the store of the environment and for each `linear` and `github` connector of
-  a workspace, the issues by their reference (`ACM-12`, `acme/site#12`).
-- Without it, the same, written. In an issue it replaces the block alone: the words above it, and
-  anything a person wrote beside it, stay.
-- **It can run again.** What it wrote is of the kind of now, so a second run finds nothing. A run
-  that says « failed » for an issue (a tracker that did not answer, a key that was revoked) ends
-  with code 1: run it again once the tracker answers, and only what is left is written.
-- A connector reads the teams or the repositories that the destinations of its sites name, with the
-  key the worker holds for it.
-- After `migrate-to-postgres --notes`, below, run it too: the notes of the SQLite file are of the
-  kind of before.
+**A worker of before 0.4.0 goes through 0.4.0 first, and runs `node server.mjs rewrite-notes` there,
+before it takes a later version**: the notes it wrote are of a kind that no later worker reads, and
+the command that rewrote them is gone since FRU-449.
 
 **What 0.4.0 changes for what reads Fruitback**, beside the pins: the extension 0.3.0 reads the old
 answer of `GET /session/notes` and needs 0.4.0; a receiver of the REST connector written for version
@@ -184,9 +161,9 @@ and their replies move with one command, and **a pin keeps its number**.
    reads it**. The two lines of counts say `same`, and the last one `dry run`, then `copied`.
 
 4. Nothing to change in `.env`: step 1 of the section above set `FRUITBACK_STORE=postgres` and
-   emptied the variables of before. Run `node server.mjs rewrite-notes` (see
-   [Rewriting the notes of before](#rewriting-the-notes-of-before-once-040-fru-378)): the notes of the
-   file are of the kind of before, and the worker reads them once it has rewritten them.
+   emptied the variables of before. The notes of the file are of the kind of before 0.4.0: make the
+   copy with the image of 0.4.0, and run `rewrite-notes` there (see
+   [Upgrading a worker of before 0.4.0](#upgrading-a-worker-of-before-040-fru-378)).
 5. **Each reviewer pairs the extension again, once**: `pair` writes its code in the database now.
    A session of a worker that had no accounts names no member of a workspace, and is not copied.
 

@@ -136,14 +136,6 @@ export type NoteStore = {
    */
   forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenNote[]>;
   /**
-   * Rewrite, once, the description of each issue that holds a block of before FRU-378: the issues
-   * whose description contains `job.marker`, in the team or the repository of each of `clients`, given
-   * to `job.rewrite`. A description it answers `undefined` for stays as it is, and `dryRun` writes none.
-   *
-   * Only `rewrite-notes` of the command calls it. A store that keeps no description has none.
-   */
-  rewriteBlocks?(clients: readonly (ClientConfig | undefined)[], job: BlockRewrite): Promise<RewrittenIssue[]>;
-  /**
    * Write a reply under one note (FRU-257), as the text of `replyText`, and answer it as a read will
    * show it. `undefined`: this store holds no such note for this client. Absent: this store takes no
    * reply. A tracker writes it under the identity of its key.
@@ -262,23 +254,6 @@ export async function takesChecks(store: NoteStore, client: ClientConfig | undef
  * one note, and it is what an operator uses after reading the list.
  */
 export type ForgetSelector = { email: string } | { name: string } | { identifiers: readonly string[] };
-
-/** What `rewriteBlocks` is asked to do (FRU-378). */
-export type BlockRewrite = {
-  /** A text that every description to read holds, to narrow the search of the tracker. */
-  marker: string;
-  /** The description as it must be now, or `undefined` to leave it as it is. */
-  rewrite: (description: string) => string | undefined;
-  dryRun: boolean;
-};
-
-/** An issue `rewriteBlocks` read: its reference in the tracker, and what became of it. */
-export type RewrittenIssue = {
-  reference: string;
-  outcome: 'rewritten' | 'to-rewrite' | 'unchanged' | 'failed';
-  /** Why it failed, as the tracker said it. */
-  error?: string;
-};
 
 /**
  * A note that `forget` found, as the operator reads it before it goes. `id` is the id the widget gave

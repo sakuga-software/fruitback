@@ -15,15 +15,7 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import { type ClientConfig, type ClientPolicy, REPOSITORY_PATTERN } from './clients.ts';
-import {
-  type BlockRewrite,
-  type CreatedIssue,
-  type NoteIssueQuery,
-  type NoteStore,
-  type RewrittenIssue,
-  StoreError,
-  type TrackerState,
-} from './store.ts';
+import { type CreatedIssue, type NoteIssueQuery, type NoteStore, StoreError, type TrackerState } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -80,9 +72,6 @@ const ISSUES_PAGE_SIZE = 100;
  * Fruitback issues loses its oldest pins from the page.
  */
 const ISSUES_MAX_PAGES = 10;
-
-/** Pages of a repository read by `rewriteBlocks`, at most: 100 pages of 100 issues (FRU-378). */
-const BLOCK_MAX_PAGES = 100;
 
 /** Same cap as the Linear store. The thread keeps the newest comments. */
 export const COMMENTS_PER_ISSUE = 20;
@@ -220,7 +209,7 @@ export class GithubResponseError extends StoreError {
   }
 }
 
-type GithubCall = { method?: 'GET' | 'POST' | 'PATCH'; token: string; body?: unknown };
+type GithubCall = { method?: 'GET' | 'POST'; token: string; body?: unknown };
 
 /** `api` is for the tests: a GitHub on a port of the machine. */
 export async function githubFetch(
@@ -537,10 +526,10 @@ export function createIssueStore({
       }));
   }
 
-  async function listIssues(repository: string, labels: string[], pages = ISSUES_MAX_PAGES): Promise<unknown[]> {
+  async function listIssues(repository: string, labels: string[]): Promise<unknown[]> {
     const rows: unknown[] = [];
 
-    for (let page = 1; page <= pages; page += 1) {
+    for (let page = 1; page <= ISSUES_MAX_PAGES; page += 1) {
       const params = new URLSearchParams({
         // An issue must carry every label in the list. Measured on cli/cli, 2026-09-14: `bug` gave
         // 100+ issues, `gh-codespace` 42, and `bug,gh-codespace` 22, each with both labels. The
@@ -625,57 +614,6 @@ export function createIssueStore({
       });
 
       return issues.flatMap((result): NoteIssue[] => (result.success ? [result.data] : []));
-    },
-
-    /**
-     * FRU-378: the issues of Fruitback in the repository of each client, all of them read before any
-     * is written. Each one whose body holds the marker is rewritten, one call each.
-     */
-    async rewriteBlocks(clients: readonly (ClientConfig | undefined)[], job: BlockRewrite): Promise<RewrittenIssue[]> {
-      const repositories = new Set(
-        clients.flatMap((client) => {
-          try {
-            return [repositoryOf(client)];
-          } catch {
-            return [];
-          }
-        }),
-      );
-      const done: RewrittenIssue[] = [];
-      for (const repository of repositories) {
-        const rows = (await listIssues(repository, [githubLabelName(FRUITBACK_LABEL)], BLOCK_MAX_PAGES)).flatMap(
-          (row) => {
-            const issue = issueRowSchema.safeParse(row);
-
-            return issue.success &&
-              issue.data.pull_request === undefined &&
-              (issue.data.body ?? '').includes(job.marker)
-              ? [issue.data]
-              : [];
-          },
-        );
-        for (const issue of rows) {
-          const reference = `${repository}#${issue.number}`;
-          const body = job.rewrite(issue.body ?? '');
-          if (body === undefined) {
-            done.push({ reference, outcome: 'unchanged' });
-          } else if (job.dryRun) {
-            done.push({ reference, outcome: 'to-rewrite' });
-          } else {
-            try {
-              await call(repository, `/repos/${repository}/issues/${issue.number}`, {
-                method: 'PATCH',
-                body: { body },
-              });
-              done.push({ reference, outcome: 'rewritten' });
-            } catch (error) {
-              done.push({ reference, outcome: 'failed', error: (error as Error).message });
-            }
-          }
-        }
-      }
-
-      return done;
     },
   };
 }

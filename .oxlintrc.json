@@ -200,7 +200,6 @@
         "apps/worker/src/auth-schema.ts",
         "apps/worker/src/postgres-migrate.ts",
         "apps/worker/src/postgres-copy.ts",
-        "apps/worker/src/rewrite-notes-postgres.ts",
         "apps/worker/src/postgres-stores.ts"
       ],
       "rules": {
@@ -242,8 +241,7 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts",
-                  "./rewrite-notes-postgres.ts"
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -289,8 +287,7 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts",
-                  "./rewrite-notes-postgres.ts"
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -332,8 +329,7 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts",
-                  "./rewrite-notes-postgres.ts"
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -354,8 +350,7 @@
         "apps/worker/src/postgres-schema.ts",
         "apps/worker/src/auth-schema.ts",
         "apps/worker/src/postgres-migrate.ts",
-        "apps/worker/src/postgres-copy.ts",
-        "apps/worker/src/rewrite-notes-postgres.ts"
+        "apps/worker/src/postgres-copy.ts"
       ],
       "rules": {
         "no-restricted-imports": [

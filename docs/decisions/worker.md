@@ -1723,7 +1723,8 @@ removes its own SQL file, snapshot and entry, and generates again.
   holds it, and a note that was deleted is in it
   (test:`goes on after the largest number the file ever gave, a deleted note included`).
 - **The note is copied byte for byte**, from the column of the file into `notes.payload`: a note of
-  that file is of the kind of before FRU-378, so `rewrite-notes` runs after the copy. `--client` and `--no-client` change the column `client_id`
+  that file is of the kind of before FRU-378, which no worker after 0.4.0 reads: the copy and
+  `rewrite-notes` run on 0.4.0 (`docs/self-hosting/upgrade.md`). `--client` and `--no-client` change the column `client_id`
   and nothing inside the text, whose `client.id` stays the one of before: no read compares the two.
 - **A date must come back as it is written.** The file holds ISO text and the database
   milliseconds. A row whose date does not is refused, with its number: the digest compares the
@@ -4279,38 +4280,21 @@ in the code, and the test named went red:
   `private`) are the ones of the REST documentation, version 2022-11-28. That GitHub answers
   `permissions` in the answer of `access_tokens` is the documentation's example.
 
-## The notes of before, rewritten once (FRU-378)
+## The notes of before, rewritten once (FRU-378, FRU-449)
 
 Mathieu's decision of 2026-10-25: the word « seed » goes, with no alias. A note is `fruitback.note`
 at version 3, and no reader takes the payload of before.
 
 ### The rules, in short
 
-- **`rewrite-notes` is the only code that reads the payload of before** (`rewrite-notes.ts`, and
-  nothing imports its parser but its test). FRU-449 removes it once it has run on every instance.
-- **It rewrites three places**: the block of each issue of Linear and GitHub that holds the kind of
-  before, the rows of `notes`, and the bodies of `deliveries` (version 1 with `seed`, to version 2
-  with `note`). In an issue the block alone changes: what a person wrote beside it stays.
-- **Each tracker goes through its store** (`rewriteBlocks` of `NoteStore`), with the key the worker
-  holds: the store of the environment, then each `linear` and `github` connector, in the teams and
-  the repositories that the destinations of its sites name. A store reads every issue before it
-  writes one: a rewritten issue leaves the search, and would move the pages under the reader.
-- **It can run twice**, and `--dry-run` lists without writing. A failure of one issue is said, the
-  others go on, and the command ends with code 1.
-- **A row is written only if it still holds what was read** (`WHERE id AND payload` in
-  `rewrite-notes-postgres.ts`, review of #605): the worker runs while the command does, and a row
-  that it wrote in between is left as it wrote it, and not counted. test:`leaves a row that another
-  worker wrote between the read and the write, and does not count it`.
+- **No code of the worker reads the payload of before.** `rewrite-notes` rewrote it once, in the
+  issues of Linear and GitHub, the rows of `notes` and the bodies of `deliveries`, and held the only
+  reader of it. FRU-449 removed the command, its reader and `rewriteBlocks` of `NoteStore`, once
+  Mathieu had run it in production. A worker of before 0.4.0 runs it on 0.4.0 first
+  (`docs/self-hosting/upgrade.md`).
 - **The read cache changed its prefix** (`read-v3` in `cache.ts`): an answer of before, with the
   issues of before, is never served to a widget of now. The widget keeps its drafts under a new key
   of `sessionStorage`, for the same reason.
-
-### What was not measured
-
-- **No real tracker.** Linear and GitHub are the ones of the tests: `linear-stub.ts` answers the
-  search by `description: { contains }` and `issueUpdate`, and a fake GitHub answers the list of the
-  issues and their `PATCH`. That Linear filters a team on `description.contains` is what
-  `fetchNoteIssues` already uses.
 
 ## The logo of a workspace (FRU-428)
 
