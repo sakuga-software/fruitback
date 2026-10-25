@@ -125,7 +125,7 @@ and their replies move with one command, and **a pin keeps its number**.
 
    ```bash
    docker compose run --rm --no-deps worker \
-     node server.mjs migrate-to-postgres --seeds /data/fruitback.db --no-client <the id of the site> --dry-run
+     node server.mjs migrate-to-postgres --notes /data/fruitback.db --no-client <the id of the site> --dry-run
    ```
 
    `--no-client` gives a site the notes of a worker that had one client. A worker that had

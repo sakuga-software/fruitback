@@ -524,7 +524,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
   it('takes the file, each --client, --no-client, and --dry-run', () => {
     assert.deepEqual(
       parseMigrateArgs([
-        '--seeds',
+        '--notes',
         'fb.db',
         '--client',
         'acme=site_1',
@@ -548,7 +548,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
         },
       },
     );
-    assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db']), {
+    assert.deepEqual(parseMigrateArgs(['--notes', 'fb.db']), {
       ok: true,
       args: { copy: 'seeds', notesPath: 'fb.db', clients: new Map(), dryRun: false },
     });
@@ -556,27 +556,61 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
 
   it('refuses the notes in the run of the accounts, a --client with no site, twice the same one, and a --client with no notes', () => {
     for (const argv of [
-      ['--seeds', 'fb.db', '--accounts', 'a.db', '--sessions', 's.db'],
-      ['--seeds', 'fb.db', '--sessions', 's.db'],
-      ['--seeds', 'fb.db', '--client', 'acme'],
-      ['--seeds', 'fb.db', '--client', 'acme='],
-      ['--seeds', 'fb.db', '--client', '=site_1'],
-      ['--seeds', 'fb.db', '--client', '--dry-run'],
-      ['--seeds', 'fb.db', '--client', 'acme=site_1', '--client', 'acme=site_2'],
-      ['--seeds', 'fb.db', '--no-client', 'site_1', '--no-client', 'site_2'],
-      ['--seeds', 'fb.db', '--no-client'],
-      ['--seeds', '--dry-run'],
-      ['--seeds', 'fb.db', '--seeds', 'other.db'],
-      ['--seeds', 'fb.db', '--dryrun'],
+      ['--notes', 'fb.db', '--accounts', 'a.db', '--sessions', 's.db'],
+      ['--notes', 'fb.db', '--sessions', 's.db'],
+      ['--notes', 'fb.db', '--client', 'acme'],
+      ['--notes', 'fb.db', '--client', 'acme='],
+      ['--notes', 'fb.db', '--client', '=site_1'],
+      ['--notes', 'fb.db', '--client', '--dry-run'],
+      ['--notes', 'fb.db', '--client', 'acme=site_1', '--client', 'acme=site_2'],
+      ['--notes', 'fb.db', '--no-client', 'site_1', '--no-client', 'site_2'],
+      ['--notes', 'fb.db', '--no-client'],
+      ['--notes', '--dry-run'],
+      ['--notes', 'fb.db', '--notes', 'other.db'],
+      ['--notes', 'fb.db', '--dryrun'],
       ['--accounts', 'a.db', '--sessions', 's.db', '--client', 'acme=site_1'],
       ['--client', 'acme=site_1'],
     ]) {
       assert.equal(parseMigrateArgs(argv).ok, false, argv.join(' '));
     }
   });
+
+  it('reads --seeds, the name of before FRU-378, as --notes', () => {
+    const notes = { ok: true, args: { copy: 'seeds', notesPath: 'fb.db', clients: new Map(), dryRun: false } };
+
+    assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db']), notes);
+    assert.deepEqual(parseMigrateArgs(['--notes', 'fb.db', '--seeds', 'fb.db']), notes);
+    assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db', '--notes', ' fb.db ']), notes);
+  });
+
+  it('refuses --notes and --seeds that name two files, and either flag given twice', () => {
+    for (const argv of [
+      ['--notes', 'fb.db', '--seeds', 'other.db'],
+      ['--seeds', 'fb.db', '--notes', 'other.db'],
+      ['--seeds', 'fb.db', '--seeds', 'fb.db'],
+      ['--notes', 'fb.db', '--notes', 'fb.db'],
+      ['--seeds', '--dry-run'],
+      ['--seeds', 'fb.db', '--accounts', 'a.db', '--sessions', 's.db'],
+    ]) {
+      const parsed = parseMigrateArgs(argv);
+
+      assert.equal(parsed.ok, false, argv.join(' '));
+    }
+    const twice = parseMigrateArgs(['--notes', 'fb.db', '--seeds', 'other.db']);
+    assert.match(twice.ok ? '' : twice.error, /--notes takes one file$/);
+    const empty = parseMigrateArgs(['--seeds', '--dry-run']);
+    assert.match(empty.ok ? '' : empty.error, /--seeds needs a file$/);
+  });
+
+  it('says --notes in its usage', () => {
+    const refused = parseMigrateArgs([]);
+
+    assert.match(refused.ok ? '' : refused.error, /migrate-to-postgres --notes <file>/);
+    assert.doesNotMatch(refused.ok ? '' : refused.error, /--seeds/);
+  });
 });
 
-describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () => {
+describe('the command migrate-to-postgres --notes, as a process (FRU-220)', () => {
   it(
     'tries, copies, ends with 0, never prints the address of the database, and ends with 1 on a refusal',
     { skip: NO_REAL_POSTGRES !== false, timeout: 60_000 },
@@ -586,7 +620,7 @@ describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () =
       const own = await ownDatabase();
       try {
         const env = { PATH: process.env.PATH, FRUITBACK_DATABASE_URL: own.url };
-        const argv = ['src/main.ts', 'migrate-to-postgres', '--seeds', notesPath, '--client', 'acme=site_1'];
+        const argv = ['src/main.ts', 'migrate-to-postgres', '--notes', notesPath, '--client', 'acme=site_1'];
         const cwd = fileURLToPath(new URL('..', import.meta.url));
 
         const dry = await run(process.execPath, [...argv, '--dry-run'], { cwd, env, timeout: 15_000 });

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
 import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
+import { type Note, toNoteV3 } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { deliverPending, handleRequest } from './app.ts';
 import { CONSOLE, type World as Env, callOn as call, memberOf, signInTo, worlds } from './console-world.fixture.ts';
@@ -245,7 +246,7 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
     assert.equal(sent.url, TARGET);
     const body = JSON.parse(sent.body) as Record<string, unknown>;
     assert.deepEqual(
-      { ...body, seed: undefined },
+      { ...body, seed: undefined, note: undefined },
       {
         version: 1,
         event: 'note.created',
@@ -253,9 +254,13 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
         site: { id: world.site.id, origin: SITE },
         identifier,
         seed: undefined,
+        note: undefined,
       },
     );
     assert.equal((body.seed as { note: string }).note, 'The price should say per month.');
+    // FRU-378: the same note in the shape of fruitback.note, and `version` stays at 1.
+    assert.deepEqual(body.note, JSON.parse(JSON.stringify(toNoteV3(body.seed as Note))));
+    assert.equal((body.note as { text: string }).text, 'The price should say per month.');
     assert.equal(sent.headers['Content-Type'], 'application/json');
     assert.equal(sent.headers[TIMESTAMP_HEADER], String(LATER_MS / 1_000));
     assert.match(sent.headers[DELIVERY_HEADER] ?? '', /^dlv_/);
@@ -1159,6 +1164,8 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
 
     assert.deepEqual(signed.files, [LEGACY]);
     const sent = JSON.parse(signed.body) as { attachments: { name: string; url: string }[] };
+    // A body queued before FRU-378 goes as it was queued: no `note` is added to it.
+    assert.equal('note' in sent, false);
     assert.equal(sent.attachments[0]?.name, 'screenshot.png');
     assert.ok(verifiesSignedRead(SECRETS_KEY, LEGACY, new URL(sent.attachments[0]?.url ?? '').searchParams, now));
     assert.equal((await attachments.get(LEGACY, now))?.seed, undefined, 'an attempt changes nothing of a file');

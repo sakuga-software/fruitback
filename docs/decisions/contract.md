@@ -32,6 +32,11 @@ first publish made it expensive.
   both in the shape of version 2. The writers still write `fruitback.seed`: they move once every
   reader takes the new kind. The names of before (`Seed`, `parseSeed`, `seed.fixture`…) are aliases
   in `deprecated.ts`, which FRU-446 removes.
+- **The wire says `note` next to `seed`** (FRU-378). Each issue of `GET /feedback` and each REST
+  delivery carry the note twice: `seed` as before, and `note` in the shape of `fruitback.note` v3
+  (`toNoteV3`). `note` is added to each answer, never kept in the cache of the reads. `GET
+  /session/notes` gives the id of each note in `note` and in `seed`. A refused note is
+  `invalid-note`. FRU-446 removes `seed` from the wire once no client reads it.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
   optional, both read-envelope fields: `SEED_VERSION` does not move.

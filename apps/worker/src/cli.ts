@@ -237,10 +237,11 @@ export async function runPair(
  * `docker exec <container> node server.mjs forget --email alice@acme.dev --dry-run`
  * `docker exec <container> node server.mjs forget --name "Alice" --dry-run`
  * `docker exec <container> node server.mjs forget --id FB-12 --id FB-13`
- * `docker exec <container> node server.mjs forget --seed sd_2f8c1a90 --dry-run`
+ * `docker exec <container> node server.mjs forget --note sd_2f8c1a90 --dry-run`
  *
- * `--seed` is for a note that went to a tracker (FRU-237): the worker does not hold it, and cannot
- * find it by an address or a name. Its issue holds the seed, and the seed its `id`. The command then
+ * `--note` is for a note that went to a tracker (FRU-237): the worker does not hold it, and cannot
+ * find it by an address or a name. Its issue holds the note, and the note its `id`. `--seed` is its
+ * name of before FRU-378, read as `--note`: `--note a --seed b` forgets both. The command then
  * removes what the worker holds of it, its row in the index of the notes with its excerpt, whatever
  * the store; the issue itself is deleted in the tracker.
  *
@@ -254,29 +255,33 @@ export type ForgetArgs = { which: ForgetSelector | { seeds: readonly string[] };
 export type ForgetArgsResult = { ok: true; args: ForgetArgs } | { ok: false; error: string };
 
 const FORGET_USAGE =
-  'usage: forget (--email <address> | --name <name> --dry-run | --id <FB-n> [--id <FB-n> ...] | --seed <id> [--seed <id> ...]) [--dry-run]';
+  'usage: forget (--email <address> | --name <name> --dry-run | --id <FB-n> [--id <FB-n> ...] | --note <id> [--note <id> ...]) [--dry-run]';
 
-const VALUE_FLAGS = ['--email', '--name', '--id', '--seed'] as const;
+const VALUE_FLAGS = ['--email', '--name', '--id', '--note'] as const;
 type ValueFlag = (typeof VALUE_FLAGS)[number];
+
+/** The names of before FRU-378, read as the flag they became. */
+const FORGET_ALIASES: Readonly<Record<string, ValueFlag>> = { '--seed': '--note' };
 
 /** A note excerpt long enough to recognise it, short enough to keep one note on one line. */
 const NOTE_EXCERPT_LENGTH = 60;
 
 export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
   const refuse = (reason: string): ForgetArgsResult => ({ ok: false, error: `${FORGET_USAGE}\n${reason}` });
-  const given: Record<ValueFlag, string[]> = { '--email': [], '--name': [], '--id': [], '--seed': [] };
+  const given: Record<ValueFlag, string[]> = { '--email': [], '--name': [], '--id': [], '--note': [] };
   let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index] ?? '';
+    const named = FORGET_ALIASES[flag] ?? flag;
 
     if (flag === '--dry-run') {
       dryRun = true;
-    } else if ((VALUE_FLAGS as readonly string[]).includes(flag)) {
+    } else if ((VALUE_FLAGS as readonly string[]).includes(named)) {
       const value = argv[index + 1];
       // `--email --dry-run` would otherwise read the flag as the address and run a real deletion.
       if (value === undefined || value.startsWith('--') || value.trim() === '') return refuse(`${flag} needs a value`);
-      given[flag as ValueFlag].push(value.trim());
+      given[named as ValueFlag].push(value.trim());
       index += 1;
     } else {
       // Refused rather than ignored: `--dryrun` must not delete what `--dry-run` would only list.
@@ -285,12 +290,12 @@ export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
   }
 
   const kinds = VALUE_FLAGS.filter((flag) => given[flag].length > 0);
-  if (kinds.length === 0) return refuse('one of --email, --name, --id and --seed is required');
+  if (kinds.length === 0) return refuse('one of --email, --name, --id and --note is required');
   // Two selectors in one command have two readings, all of them or any of them. Neither is asked for.
   if (kinds.length > 1) return refuse(`use one of ${kinds.join(' and ')}, not both`);
 
   const [kind] = kinds;
-  if (kind === '--seed') return { ok: true, args: { which: { seeds: [...new Set(given['--seed'])] }, dryRun } };
+  if (kind === '--note') return { ok: true, args: { which: { seeds: [...new Set(given['--note'])] }, dryRun } };
   if (kind === '--id') {
     const malformed = given['--id'].filter((identifier) => !/^FB-[1-9]\d*$/.test(identifier));
     if (malformed.length > 0) return refuse(`not an identifier of this store: ${malformed.join(', ')}`);
@@ -404,7 +409,7 @@ export async function runForget(
       try {
         await index?.forget(deleted);
       } catch (error) {
-        const seeds = deleted.notes.map((note) => `--seed ${note.seed}`).join(' ');
+        const seeds = deleted.notes.map((note) => `--note ${note.seed}`).join(' ');
 
         return {
           ok: false,
@@ -439,9 +444,9 @@ export async function runForget(
 
 /** What `forget` says of the notes it does not see, on a worker with an index (FRU-237). */
 const TRACKER_NOTES =
-  'Notes that went to a tracker are not found by an address or a name here: delete each issue in its tracker, and remove what the worker holds of it, its row in the index with up to 64 characters of its text, with --seed <id> (the "id" of the seed in the issue).';
+  'Notes that went to a tracker are not found by an address or a name here: delete each issue in its tracker, and remove what the worker holds of it, its row in the index with up to 64 characters of its text, with --note <id> (the "id" of the note in the issue).';
 
-/** `--seed`: the rows of the index of these notes, whatever the store (FRU-237). */
+/** `--note`: the rows of the index of these notes, whatever the store (FRU-237). */
 async function forgetNotes(
   seeds: readonly string[],
   dryRun: boolean,
@@ -493,8 +498,9 @@ function excerpt(note: string): string {
  * `FRUITBACK_DATABASE_URL`, and never writes the two files: `postgres-copy.ts` says how. The runbook
  * of the switch is in `cloud/README.md`.
  *
- * `node server.mjs migrate-to-postgres --seeds /data/fb.db --dry-run` copies the notes of the file
- * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own.
+ * `node server.mjs migrate-to-postgres --notes /data/fb.db --dry-run` copies the notes of the file
+ * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own. `--seeds` is its
+ * name of before FRU-378, read as `--notes`; both may name the file, if they name the same one.
  */
 
 /**
@@ -510,14 +516,20 @@ export type MigrateArgsResult = { ok: true; args: MigrateArgs } | { ok: false; e
 
 const MIGRATE_USAGE = [
   'usage: migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]',
-  '       migrate-to-postgres --seeds <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]',
+  '       migrate-to-postgres --notes <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]',
 ].join('\n');
 
-const FILE_FLAGS = ['--accounts', '--sessions', '--seeds'];
+const FILE_FLAGS = ['--accounts', '--sessions', '--notes'];
+
+/** The names of before FRU-378, read as the flag they became. */
+const MIGRATE_ALIASES: Readonly<Record<string, string>> = { '--seeds': '--notes' };
 
 export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
   const refuse = (reason: string): MigrateArgsResult => ({ ok: false, error: `${MIGRATE_USAGE}\n${reason}` });
   const paths = new Map<string, string>();
+  // The spelling that gave each file. `--notes a --seeds a` names one file by its two names (FRU-378);
+  // `--notes a --notes a` gives one flag twice, refused as before.
+  const spelled = new Map<string, string>();
   const clients = new Map<string | null, string>();
   let dryRun = false;
 
@@ -529,11 +541,15 @@ export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
     }
     const value = argv[index + 1];
     const valued = value !== undefined && !value.startsWith('--') && value.trim() !== '';
-    if (FILE_FLAGS.includes(flag)) {
+    const named = MIGRATE_ALIASES[flag] ?? flag;
+    if (FILE_FLAGS.includes(named)) {
       // `--accounts --dry-run` would otherwise read the flag as the file, and copy for good.
       if (!valued) return refuse(`${flag} needs a file`);
-      if (paths.has(flag)) return refuse(`${flag} takes one file`);
-      paths.set(flag, value.trim());
+      if (paths.has(named) && (spelled.get(named) === flag || paths.get(named) !== value.trim())) {
+        return refuse(`${named} takes one file`);
+      }
+      paths.set(named, value.trim());
+      spelled.set(named, flag);
     } else if (flag === '--client') {
       // The first `=`: an id of a site has none, and an id of `FRUITBACK_CLIENTS` is a key of JSON.
       const at = valued ? value.indexOf('=') : -1;
@@ -555,17 +571,17 @@ export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
 
   const accountsPath = paths.get('--accounts');
   const sessionsPath = paths.get('--sessions');
-  const notesPath = paths.get('--seeds');
+  const notesPath = paths.get('--notes');
   if (notesPath !== undefined) {
     if (accountsPath !== undefined || sessionsPath !== undefined) {
-      return refuse('--seeds is a run of its own: copy the accounts and the sessions first, then the notes');
+      return refuse('--notes is a run of its own: copy the accounts and the sessions first, then the notes');
     }
 
     return { ok: true, args: { copy: 'seeds', notesPath, clients, dryRun } };
   }
-  if (clients.size > 0) return refuse('--client and --no-client go with --seeds');
+  if (clients.size > 0) return refuse('--client and --no-client go with --notes');
   if (accountsPath === undefined || sessionsPath === undefined) {
-    return refuse('--accounts and --sessions are required, or --seeds');
+    return refuse('--accounts and --sessions are required, or --notes');
   }
 
   return { ok: true, args: { copy: 'accounts', accountsPath, sessionsPath, dryRun } };

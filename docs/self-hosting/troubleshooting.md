@@ -35,7 +35,7 @@ The other answers the worker gives:
 
 | Code         | `error`                                                                      | Means                                                  |
 | ------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `400`        | `invalid-body`, `invalid-json`, `invalid-seed`, `invalid-url`, `missing-url` | The request is wrong.                                  |
+| `400`        | `invalid-body`, `invalid-json`, `invalid-note`, `invalid-url`, `missing-url` | The request is wrong.                                  |
 | `401`        | `identity-required`, `invalid-identity`                                      | The read needs a session, or the token did not verify. |
 | `403`        | `origin-not-allowed`, `origin-not-allowed-for-client`                        | The calling site is not allowed.                       |
 | `404`, `405` | `not-found`, `method-not-allowed`                                            | No such route.                                         |

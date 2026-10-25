@@ -280,6 +280,22 @@ function parseVersion3(value: Record<string, unknown>, version: number): NotePar
   return { ok: true, note: noteSchema.parse({ ...rest, kind: SEED_KIND, v: SEED_VERSION, note: text }) };
 }
 
+/** A note in the shape of `NOTE_KIND` at `NOTE_VERSION`: its words in `text`. */
+export type NoteV3 = z.infer<typeof noteV3Schema>;
+
+/**
+ * The same note in the shape of `NOTE_KIND` (FRU-378): `kind` and `v` of version 3, and the words in
+ * `text` where version 2 has `note`. The fields keep the order of version 2. `parseNote` reads the
+ * result back as the same note.
+ *
+ * The worker answers this shape in `note`, next to `seed`, on each read and each delivery.
+ */
+export function toNoteV3(note: Note): NoteV3 {
+  const { kind: _kind, v: _v, id, createdAt, note: text, ...rest } = note;
+
+  return { kind: NOTE_KIND, v: NOTE_VERSION, id, createdAt, text, ...rest };
+}
+
 /** Cheap `kind` check, so an unrelated JSON block reports `not-found` rather than `invalid`. */
 function isNoteShaped(value: unknown): value is Record<string, unknown> {
   // A string or a number has no `kind` either; only `null` and `undefined` need the `?.`.

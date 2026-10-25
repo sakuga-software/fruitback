@@ -206,7 +206,7 @@ export type WorkerEnv = {
   FRUITBACK_TEAM_LOCALE?: string;
   /**
    * The SQLite file of the notes, until FRU-225. **Refused at boot**: the notes are in PostgreSQL,
-   * and `migrate-to-postgres --seeds` copies a file there. It is read only to say so.
+   * and `migrate-to-postgres --notes` copies a file there. It is read only to say so.
    */
   FRUITBACK_SQLITE_PATH?: string;
   /** See `WITHOUT_DATABASE`. Never in `process.env`. */
@@ -360,13 +360,13 @@ export const REQUIRED_WITH_DATABASE: Readonly<
  */
 export const REFUSED_SINCE_POSTGRES = {
   FRUITBACK_CLIENTS:
-    'FRUITBACK_CLIENTS (the sites are in the database since FRU-225, and the console makes them: make each site there, then copy its notes with `migrate-to-postgres --seeds <file> --client <id>=<id of the site>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
+    'FRUITBACK_CLIENTS (the sites are in the database since FRU-225, and the console makes them: make each site there, then copy its notes with `migrate-to-postgres --notes <file> --client <id>=<id of the site>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
   FRUITBACK_SESSION_PATH:
     'FRUITBACK_SESSION_PATH (the sessions of the extension are in the database since FRU-225: each reviewer pairs again, once, from the console; remove this variable)',
   FRUITBACK_SQLITE_PATH:
-    'FRUITBACK_SQLITE_PATH (the notes are in the database since FRU-225: copy the file with `migrate-to-postgres --seeds <file>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
+    'FRUITBACK_SQLITE_PATH (the notes are in the database since FRU-225: copy the file with `migrate-to-postgres --notes <file>`, as docs/self-hosting/upgrade.md says; then remove this variable)',
   sqlite:
-    'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --seeds <file>`, as docs/self-hosting/upgrade.md says)',
+    'FRUITBACK_STORE (« sqlite » is gone since FRU-225: the notes are in the database, the store « postgres », which is the default; copy the file with `migrate-to-postgres --notes <file>`, as docs/self-hosting/upgrade.md says)',
   FRUITBACK_FIRST_REVIEWER:
     'FRUITBACK_FIRST_REVIEWER (it names no workspace, and every worker has workspaces since FRU-225: the first administrator is FRUITBACK_FIRST_ADMIN, and a reviewer pairs from the console; remove this variable)',
   unnamedStore:

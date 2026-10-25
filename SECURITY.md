@@ -919,7 +919,7 @@ whole.
   row is written by a later read of its page that asks the store, if one comes and the store lists
   the note.
 - **`forget` removes the rows of the notes it deletes, before and after it deletes them**, and
-  `forget --seed <id>` the row of a note that went to a tracker, whatever the store. **The account
+  `forget --note <id>` the row of a note that went to a tracker, whatever the store. **The account
   of a member leaves the index with the account** (`ON DELETE SET NULL`).
 
 ### The list of the notes of a workspace (FRU-244)

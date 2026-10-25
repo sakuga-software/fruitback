@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
-import type { Note } from '@fruitback/shared';
+import { type Note, type NoteV3, toNoteV3 } from '@fruitback/shared';
 import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
 import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
@@ -169,6 +169,9 @@ export type DeliveryBody = {
   site: { id: string; origin?: string };
   /** What Fruitback calls the note, as its thread shows it. */
   identifier: string;
+  /** The note, in the shape of `fruitback.note` v3 (FRU-378). */
+  note: NoteV3;
+  /** The same note in the shape of `fruitback.seed` v2, for the receivers of before FRU-378. */
   seed: Note;
   /**
    * The files of the note (FRU-331), as the queue keeps them: an id in transit, a name, a type, a
@@ -186,8 +189,17 @@ export type KeptAttachment = { id: string; name: string; type: string; size: num
  */
 export type SentAttachment = { name: string; type: string; size: number; url: string; expiresAt: string };
 
-export function deliveryBody(note: Omit<DeliveryBody, 'version' | 'event'>): string {
-  return JSON.stringify({ version: DELIVERY_VERSION, event: 'note.created', ...note } satisfies DeliveryBody);
+/**
+ * `note` is added here and kept in the queue. A body queued before FRU-378 has `seed` only, and goes
+ * as it was queued: its signature covers the body as it is sent.
+ */
+export function deliveryBody(delivery: Omit<DeliveryBody, 'version' | 'event' | 'note'>): string {
+  return JSON.stringify({
+    version: DELIVERY_VERSION,
+    event: 'note.created',
+    ...delivery,
+    note: toNoteV3(delivery.seed),
+  } satisfies DeliveryBody);
 }
 
 /**
@@ -339,9 +351,10 @@ export async function withSignedFiles(
     now,
   }: { attachments: AttachmentStore | undefined; publicUrl: string | undefined; secretsKey: string; now: number },
 ): Promise<{ body: string; files: string[] }> {
-  let parsed: DeliveryBody;
+  // A body queued before FRU-378 has no `note`.
+  let parsed: Omit<DeliveryBody, 'note'> & { note?: NoteV3 };
   try {
-    parsed = JSON.parse(body) as DeliveryBody;
+    parsed = JSON.parse(body) as typeof parsed;
   } catch {
     return { body, files: [] };
   }

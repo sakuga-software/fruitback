@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
 import assert from 'node:assert/strict';
-import { NOTE_STAGES, type NoteIssue, canonicalizePageUrl, parseNoteFromDescription } from '@fruitback/shared';
+import {
+  NOTE_STAGES,
+  type NoteIssue,
+  canonicalizePageUrl,
+  parseNote,
+  parseNoteFromDescription,
+  toNoteV3,
+} from '@fruitback/shared';
 import { minimalNoteFixture, noteFixture } from '@fruitback/shared/note.fixture';
 import { handleRequest } from './app.ts';
 import { DATABASE_REQUIRED, type WorkerEnv } from './env.ts';
@@ -177,7 +184,7 @@ describe('POST /feedback', () => {
     const response = await post({ hello: 'world' });
 
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { error: 'invalid-seed', reason: 'not-found' });
+    assert.deepEqual(await response.json(), { error: 'invalid-note', reason: 'not-found' });
   });
 
   it('rejects malformed JSON', async () => {
@@ -374,12 +381,12 @@ describe('GET /feedback', () => {
 
   type ReadResponse = { url: string; issues: NoteIssue[] };
 
-  function read(page: string, query = '') {
-    return get(`/feedback?url=${encodeURIComponent(page)}${query}`);
+  function read(page: string, query = '', kv?: Kv) {
+    return get(`/feedback?url=${encodeURIComponent(page)}${query}`, kv === undefined ? {} : { kv });
   }
 
-  async function readBody(page: string, query = ''): Promise<ReadResponse> {
-    return (await read(page, query)).json() as Promise<ReadResponse>;
+  async function readBody(page: string, query = '', kv?: Kv): Promise<ReadResponse> {
+    return (await read(page, query, kv)).json() as Promise<ReadResponse>;
   }
 
   it('returns the seeds of a page with the Linear state that colours the pin', async () => {
@@ -403,6 +410,30 @@ describe('GET /feedback', () => {
     ]);
     // The point of the whole read path: the pin comes back exactly as it was planted.
     assert.deepEqual(body.issues[0]?.seed, seed);
+  });
+
+  it('gives each issue its note in the shape of fruitback.note, next to seed (FRU-378)', async () => {
+    const seed = noteFixture();
+    installLinearStub({ storedIssues: [storedIssueFromNote(seed)] });
+    const kv = createMemoryKv();
+    const cachedValues: string[] = [];
+    const recording: Kv = { ...kv, set: (key, value, ttl) => (cachedValues.push(value), kv.set(key, value, ttl)) };
+
+    const first = (await readBody(PAGE, '', recording)) as { issues: (NoteIssue & { note?: unknown })[] };
+    resetCacheState();
+    const again = (await readBody(PAGE, '', { ...kv })) as { issues: (NoteIssue & { note?: unknown })[] };
+
+    for (const body of [first, again]) {
+      assert.deepEqual(body.issues[0]?.seed, seed);
+      assert.deepEqual(body.issues[0]?.note, JSON.parse(JSON.stringify(toNoteV3(seed))));
+      assert.deepEqual(parseNote(body.issues[0]?.note), { ok: true, note: seed });
+    }
+    // The cache keeps the issues as the store gave them: `note` is added to each answer.
+    assert.ok(cachedValues.length > 0);
+    assert.ok(
+      cachedValues.every((value) => !value.includes('fruitback.note')),
+      cachedValues.join('\n'),
+    );
   });
 
   it('says which stages the store can report, so the panel offers only those (FRU-32)', async () => {

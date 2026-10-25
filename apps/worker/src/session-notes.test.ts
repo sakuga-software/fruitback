@@ -21,6 +21,7 @@ const LONG = `The add button is almost invisible until you hover it, and ${'nobo
 
 type Answer = {
   notes: {
+    note: string;
     seed: string;
     excerpt: string;
     page: { url: string; path: string };
@@ -165,12 +166,15 @@ describe('the notes of a whole site, in GET /session/notes (FRU-306)', () => {
         'author',
         'createdAt',
         'excerpt',
+        'note',
         'page',
         'reference',
         'referenceUrl',
         'seed',
         'stage',
       ]);
+      // FRU-378: the id under its name, and under `seed` for the extension 0.3.0.
+      assert.equal(note.note, note.seed);
     }
     // The member reads it too, with the same session kind.
     assert.equal((await read(world, (await sessionOf(world, bob)).accessToken, `?site=${shop.id}`)).total, 6);
