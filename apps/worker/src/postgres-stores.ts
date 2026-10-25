@@ -317,19 +317,3 @@ export type SqliteCopy = { accountsPath: string; sessionsPath: string; database:
 export async function copySqliteFiles(copy: SqliteCopy): Promise<{ ok: boolean; lines: string[] }> {
   return (await import('./postgres-copy.ts')).copySqliteFiles(copy);
 }
-
-/**
- * The rows of `rewrite-notes` (FRU-378): `rewriteRows` of `rewrite-notes-postgres.ts`, loaded at the
- * call, as the copies above.
- */
-export async function rewriteRows(
-  database: Database,
-  job: { payload: (text: string) => string | undefined; body: (text: string) => string | undefined; dryRun: boolean },
-): Promise<{ notes: { rewritten: number; of: number }; deliveries: { rewritten: number; of: number } }> {
-  return (await import('./rewrite-notes-postgres.ts')).rewriteRows(database, job);
-}
-
-/** The workspaces that hold a connector (FRU-378): `workspacesWithConnectors`, loaded at the call. */
-export async function workspacesWithConnectors(database: Database): Promise<string[]> {
-  return (await import('./rewrite-notes-postgres.ts')).workspacesWithConnectors(database);
-}

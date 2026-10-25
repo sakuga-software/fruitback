@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { parseNote } from '@fruitback/shared';
 import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, integer, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import type { Database, Db } from './postgres.ts';
@@ -455,6 +456,9 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
  *   one goes into a database that no worker started on.
  * - **A note keeps its number, its text and its dates.** The `seed` of the file is copied into
  *   `payload` as it is, byte for byte.
+ * - **A file that holds a note this worker cannot read is refused** (FRU-449). The SQLite store wrote
+ *   the kind of before 0.4.0, and `rewrite-notes`, which read it, is gone: such a file is copied, and
+ *   rewritten, by the worker 0.4.0.
  *   The file writes a date as ISO text, and the database as milliseconds: a date that does not come
  *   back to the same text is refused, with the number of its row.
  * - **The numbers go on after the largest one the file ever gave**, a note that was deleted since
@@ -513,6 +517,16 @@ function instantOf(text: unknown, where: string): number {
   return instant;
 }
 
+/** Whether a payload of the file reads as a note of now (FRU-449). */
+function readsAsNote(payload: unknown): boolean {
+  if (typeof payload !== 'string') return false;
+  try {
+    return parseNote(JSON.parse(payload)).ok;
+  } catch {
+    return false;
+  }
+}
+
 /** The rows of the two tables of the file, as the database takes them, and the last number each table gave. */
 function readNotesFile(
   copy: string,
@@ -531,6 +545,7 @@ function readNotesFile(
     const rows = new Map<PgTable, Row[]>();
     const last = new Map<PgTable, number>();
     const byClient = new Map<string | null, number>();
+    const unread: unknown[] = [];
     const given = new Map(
       (source.prepare('SELECT name, seq FROM sqlite_sequence').all() as { name: string; seq: number }[]).map(
         (row) => [row.name, row.seq] as const,
@@ -559,6 +574,7 @@ function readNotesFile(
         const kept: Row = Object.fromEntries(columns.map((column) => [column, row[inFile[column] ?? column]]));
         for (const date of dates) kept[date] = instantOf(row[date], `the row ${String(row.id)} of ${name}`);
         if (table === notes) {
+          if (!readsAsNote(kept.payload)) unread.push(row.id);
           const before = (row.client_id ?? null) as string | null;
           byClient.set(before, (byClient.get(before) ?? 0) + 1);
           const site = clients.get(before);
@@ -572,6 +588,14 @@ function readNotesFile(
       last.set(
         table,
         taken.reduce((largest, row) => Math.max(largest, Number(row.id)), given.get(name) ?? 0),
+      );
+    }
+    if (unread.length > 0) {
+      const shown = unread.slice(0, 5).map(String).join(', ') + (unread.length > 5 ? ', …' : '');
+      throw new Refused(
+        `${unread.length} note(s) of the file (row ${shown}) are not a note that this worker reads, ` +
+          'the kind of before 0.4.0: copy this file with the worker 0.4.0, and run rewrite-notes there ' +
+          '(docs/self-hosting/upgrade.md)',
       );
     }
     const unknown = [...clients.keys()].filter((before) => !byClient.has(before));

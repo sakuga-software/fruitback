@@ -494,7 +494,8 @@ function excerpt(note: string): string {
  *
  * `node server.mjs migrate-to-postgres --notes /data/fb.db --dry-run` copies the notes of the file
  * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own. The notes of the
- * file are of the kind of before FRU-378: run `rewrite-notes` after it.
+ * file are of the kind of before FRU-378, which only `rewrite-notes` of 0.4.0 reads: copy them on
+ * 0.4.0 (`docs/self-hosting/upgrade.md`). This worker refuses a file that holds one.
  */
 
 /**

@@ -169,24 +169,6 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
         });
       }
 
-      // FRU-378: the issues whose description holds a text, as `rewriteLinearBlocks` reads them.
-      if (operation === 'FruitbackBlockIssues') {
-        const filter = variables.filter as { description: { contains: string } };
-        const nodes = (options.storedIssues ?? [])
-          .filter((issue) => (issue.description ?? '').includes(filter.description.contains))
-          .map(({ id, identifier, description }) => ({ id, identifier, description }));
-
-        return jsonResponse({ data: { issues: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } });
-      }
-
-      if (operation === 'FruitbackRewriteDescription') {
-        const issue = (options.storedIssues ?? []).find((each) => each.id === variables.id);
-        if (issue === undefined) return jsonResponse({ errors: [{ message: 'Entity not found: Issue' }] });
-        issue.description = String(variables.description);
-
-        return jsonResponse({ data: { issueUpdate: { success: true } } });
-      }
-
       if (operation === 'FruitbackFileUpload') {
         if (options.failFileUpload) return jsonResponse({ errors: [{ message: 'upload refused' }] });
         const n = calls.filter((call) => call.operation === 'FruitbackFileUpload').length;

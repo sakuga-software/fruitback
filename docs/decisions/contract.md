@@ -29,9 +29,8 @@ first publish made it expensive.
 - **A note is `fruitback.note` at version 3, and nothing else reads as one** (FRU-378, decided by
   Mathieu on 2026-10-25). The words of the reporter are in `text`. `parseNote` reads that kind and
   version only: a payload of another kind is `not-found`, a newer version `unsupported-version`. The
-  payloads of before are rewritten once by `rewrite-notes` of the worker, which holds the only reader
-  of them (`apps/worker/src/rewrite-notes.ts`, removed by FRU-449). `@fruitback/shared` 0.4.0
-  exports no name of before.
+  payloads of before were rewritten once by `rewrite-notes` of the worker 0.4.0, which held the only
+  reader of them; FRU-449 removed both. `@fruitback/shared` 0.4.0 exports no name of before.
 - **The wire says `note`, and only `note`** (FRU-378). Each issue of `GET /feedback`, each row of
   `GET /session/notes` and each REST delivery (version 2) carry the note under `note`. A refused
   note is `invalid-note`. An answer of the read cache of before is under another prefix of the `Kv`
