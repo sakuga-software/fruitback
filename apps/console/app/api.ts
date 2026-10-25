@@ -577,6 +577,60 @@ export async function renameMe(name: string): Promise<Answer<{ account: Account 
 }
 
 /**
+ * An address of the account (FRU-450). `primary`: the one of the notes and of the messages.
+ * `providers`: the linked providers that give it. `verified`: Fruitback proved it itself.
+ */
+export type AccountEmail = { email: string; primary: boolean; providers: Linkable[]; verified: boolean };
+
+/** The addresses of the account, and whether this worker sends the link that adds one. */
+export type AccountEmails = { canAdd: boolean; emails: AccountEmail[] };
+
+export async function accountEmails(): Promise<Answer<AccountEmails>> {
+  const asked = await call<AccountEmails>('GET', '/console/me/emails');
+  if (!asked.ok) return asked;
+  const { canAdd, emails } = asked.data ?? {};
+  if (typeof canAdd !== 'boolean' || !Array.isArray(emails)) return { ok: false, status: 200, error: 'unknown' };
+
+  // A provider the console does not know is not drawn: it is read in the closed list `LINKABLE`.
+  return {
+    ok: true,
+    data: {
+      canAdd,
+      emails: emails
+        .filter((each) => typeof each?.email === 'string')
+        .map((each) => ({
+          email: each.email,
+          primary: each.primary === true,
+          providers: (Array.isArray(each.providers) ? each.providers : []).filter((provider) =>
+            (LINKABLE as readonly unknown[]).includes(provider),
+          ),
+          verified: each.verified === true,
+        })),
+    },
+  };
+}
+
+/** Sends the link that adds `email` to the account. The address is added once the link is opened. */
+export async function addAccountEmail(email: string): Promise<Answer<{ email: string }>> {
+  return call<{ email: string }>('POST', '/console/me/emails', { email });
+}
+
+/** Spends the link of verification of an address, in the session of the account that asked. */
+export async function verifyAccountEmail(token: string): Promise<Answer<{ email: string }>> {
+  return call<{ email: string }>('POST', '/console/me/emails/verify', { token }, { quiet: true });
+}
+
+/** Makes an address of the account its primary one. `workspace`: where the alert sends the person back. */
+export async function makePrimaryEmail(email: string, workspace: string): Promise<Answer<{ email: string }>> {
+  return call<{ email: string }>('POST', '/console/me/emails/primary', { email, workspace });
+}
+
+/** Takes an address away from the account. Never the primary one, nor one that a linked provider gives. */
+export async function removeAccountEmail(email: string): Promise<Answer<unknown>> {
+  return call('DELETE', `/console/me/emails/${encodeURIComponent(email)}`);
+}
+
+/**
  * The sessions of the console of the person. A refusal is no list: the screen says it could not read.
  * `quiet`: a `401` does not end the session of the screen (`/connect` reads it signed out too, FRU-441).
  */

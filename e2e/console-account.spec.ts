@@ -74,10 +74,23 @@ type Stubbed = {
   pending?: { provider: string; email: string };
   /** What the worker answers to « Link this account » when it refuses, by its code. */
   confirmRefuses?: string;
+  /** The addresses of the account (FRU-450); `undefined`: the worker does not answer. */
+  emails: { email: string; primary: boolean; providers: string[]; verified: boolean }[] | undefined;
+  /** Whether the worker sends the link that adds an address. */
+  canAdd: boolean;
+  /** What the worker answers to an address, a new primary one or a removal, when it refuses. */
+  addRefuses?: string;
+  addressRefuses?: string;
   sent: string[];
   /** The bodies the console sent, by path. */
   bodies: Record<string, unknown>;
 };
+
+const EMAILS = [
+  { email: 'ana@acme.dev', primary: true, providers: [], verified: true },
+  { email: 'ana.perso@gmail.test', primary: false, providers: ['github'], verified: false },
+  { email: 'ana@home.test', primary: false, providers: [], verified: true },
+];
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Stubbed> {
   const worker: Stubbed = {
@@ -87,6 +100,8 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     methods: { email: true, github: { linked: true }, google: { linked: false } },
     extensions: [],
     extensionRefuses: false,
+    emails: EMAILS.map((each) => ({ ...each })),
+    canAdd: true,
     sent: [],
     bodies: {},
   };
@@ -136,6 +151,34 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
         });
       }
       worker.methods = { ...worker.methods, [provider]: { linked: false } };
+
+      return route.fulfill({ status: 204 });
+    }
+    // FRU-450: the addresses of the account.
+    if (pathname === '/console/me/emails' && method === 'GET') {
+      return worker.emails === undefined
+        ? route.fulfill({ status: 500, json: { error: 'unknown' } })
+        : route.fulfill({ json: { canAdd: worker.canAdd, emails: worker.emails } });
+    }
+    if (pathname.startsWith('/console/me/emails')) {
+      worker.sent.push(`${method} ${pathname}`);
+      const body = route.request().postDataJSON() as { email?: string } | null;
+      worker.bodies[pathname] = body;
+      if (pathname === '/console/me/emails') {
+        if (worker.addRefuses !== undefined) return route.fulfill({ status: 409, json: { error: worker.addRefuses } });
+
+        return route.fulfill({ status: 202, json: { sent: true, email: (body?.email ?? '').toLowerCase() } });
+      }
+      if (worker.addressRefuses !== undefined) {
+        return route.fulfill({ status: 409, json: { error: worker.addressRefuses } });
+      }
+      if (pathname === '/console/me/emails/primary') {
+        worker.emails = (worker.emails ?? []).map((each) => ({ ...each, primary: each.email === body?.email }));
+
+        return route.fulfill({ json: { email: body?.email } });
+      }
+      const gone = decodeURIComponent(pathname.split('/').at(-1) ?? '');
+      worker.emails = (worker.emails ?? []).filter((each) => each.email !== gone);
 
       return route.fulfill({ status: 204 });
     }
@@ -215,12 +258,20 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   await workerWith(page);
   await open(page);
   await expect(page.locator('main h1')).toHaveText('My account');
-  await expect(page.getByText('Your name on notes, how you sign in, and where.')).toBeVisible();
+  await expect(page.getByText('Your name on notes, your addresses, how you sign in, and where.')).toBeVisible();
 
-  // Four sections of the mockup, each named by its title, 40 px apart; and the one it does not draw.
+  // Four sections of the mockup, each named by its title, 40 px apart; and the two it does not draw:
+  // the addresses (FRU-450), under the profile, and the end of the workspace.
   const sections = page.locator('main section');
-  await expect(sections).toHaveCount(5);
-  for (const name of ['Profile', 'How you sign in', 'Where you are signed in', 'Sign out', 'Delete the workspace']) {
+  await expect(sections).toHaveCount(6);
+  for (const name of [
+    'Profile',
+    'Addresses',
+    'How you sign in',
+    'Where you are signed in',
+    'Sign out',
+    'Delete the workspace',
+  ]) {
     await expect(section(page, name), name).toBeVisible();
   }
   expect.soft(await styles(sections.first().locator('..'), ['display', 'flex-direction', 'row-gap'])).toEqual({
@@ -261,9 +312,14 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect.soft(await painted(help, 'color')).toEqual(rgb(MUTED));
   // The two fields have a line under them that the mockup does not draw (the address, and what the
   // language is for): what is under the profile is lower by those lines, and laid out as the mockup.
-  const under = (await box(signIn.getByRole('heading', { level: 2 }))).y - 283;
-  if (MOCKUP_FONT) expect.soft(under, 'the lines under the two fields').toBeGreaterThan(20);
-  if (MOCKUP_FONT) expect.soft(under, 'the lines under the two fields').toBeLessThan(60);
+  // The addresses (FRU-450) are between the two, with the gap of a section under them.
+  await expect(section(page, 'Addresses').getByRole('listitem')).toHaveCount(3);
+  const addresses = (await box(section(page, 'Addresses'))).height + 40;
+  const lines = (await box(signIn.getByRole('heading', { level: 2 }))).y - 283 - addresses;
+  if (MOCKUP_FONT) expect.soft(lines, 'the lines under the two fields').toBeGreaterThan(20);
+  if (MOCKUP_FONT) expect.soft(lines, 'the lines under the two fields').toBeLessThan(60);
+  // What is under the addresses is lower by them.
+  const under = lines + addresses;
   const ways = signIn.getByRole('listitem');
   await expect(ways).toHaveCount(3);
   expect.soft(await styles(ways.first().locator('..'), ['border-top-width', 'font-size'])).toEqual({
@@ -484,6 +540,9 @@ for (const state of ['read', 'not read'] as const) {
     const everywhere = page.getByRole('button', { name: 'Sign out everywhere', exact: true });
     await expect(out).toBeVisible();
     await expect(section(page, 'Where you are signed in').getByText('Loading…')).toBeVisible();
+    // The addresses (FRU-450) are read: « Sign out » is under the fold of 900 px, and is brought into view.
+    await expect(section(page, 'Addresses').getByRole('listitem')).toHaveCount(3);
+    await out.scrollIntoViewIfNeeded();
     const before = { out: await out.boundingBox(), everywhere: await everywhere.boundingBox() };
 
     // The press starts before the list arrives, and ends after.
@@ -558,7 +617,7 @@ test('the owner alone deletes the workspace, and asks twice', async ({ page }) =
     await workerWith(page, role);
     await open(page);
     await expect(page.getByText('Delete the workspace'), role).toHaveCount(0);
-    await expect(page.locator('main section'), role).toHaveCount(4);
+    await expect(page.locator('main section'), role).toHaveCount(5);
   }
 });
 
@@ -816,6 +875,53 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     expect(await accepted(third.context)).toBe(401);
     await nextCall(third.page);
     await expect(third.page.getByRole('alert').filter({ hasText: 'Your session ended' })).toBeVisible();
+  });
+
+  test('an address is added by its link, becomes the primary one, and the one of before goes (FRU-450)', async ({
+    browser,
+  }) => {
+    const { page } = await browserOf(browser, 'ana@acme.dev');
+    await page.getByRole('link', { name: 'My account' }).first().click();
+    const addresses = section(page, 'Addresses');
+    await expect(addresses.getByRole('listitem')).toHaveCount(1);
+
+    // The link goes to the new address, and names the account that asked.
+    await addresses.getByRole('textbox', { name: 'Add an address' }).fill('ana@home.test');
+    await addresses.getByRole('button', { name: 'Send a link' }).click();
+    await expect(
+      addresses.getByRole('status').filter({ hasText: 'Fruitback sent a link to ana@home.test.' }),
+    ).toBeVisible();
+    const message = (await worker.mail()).at(-1);
+    expect(message?.to).toBe('ana@home.test');
+    const link = /http:\/\/\S+\/verify-email#\S+/.exec(message?.text ?? '')?.[0];
+    expect(link, 'no link of verification in the message').toBeDefined();
+    const account = page.url();
+
+    // Opened in this browser, the address is added.
+    await page.goto(link as string);
+    await expect(page.getByRole('heading', { name: 'Address added' })).toBeVisible();
+    await page.goto(account);
+    await expect(addresses.getByRole('listitem')).toHaveCount(2);
+    await expect(addresses.getByRole('listitem').nth(1)).toContainText('Verified by Fruitback');
+
+    // It becomes the primary one: both addresses get an alert.
+    await addresses.getByRole('listitem').nth(1).getByRole('button', { name: 'Make primary' }).click();
+    await expect(
+      addresses.getByRole('status').filter({ hasText: 'ana@home.test is your primary address now.' }),
+    ).toBeVisible();
+    await expect(section(page, 'Profile').getByText('ana@home.test')).toBeVisible();
+    const alerts = (await worker.mail())
+      .slice(-2)
+      .map((each) => each.to)
+      .toSorted();
+    expect(alerts).toEqual(['ana@acme.dev', 'ana@home.test']);
+
+    // The address of before goes, after a second press.
+    const before = addresses.getByRole('listitem').filter({ hasText: 'ana@acme.dev' });
+    await before.getByRole('button', { name: 'Remove', exact: true }).click();
+    await before.getByRole('button', { name: 'Remove ana@acme.dev' }).click();
+    await expect(addresses.getByRole('listitem')).toHaveCount(1);
+    await expectNoViolation(page, 'the addresses on a worker with accounts');
   });
 });
 
@@ -1234,4 +1340,126 @@ test('the line of a list of the extension that was not read goes when a later re
   await disconnect('Firefox on Linux');
   await expect(where.getByText(/^Extension ·/)).toHaveCount(0);
   await expect(where.getByRole('alert')).toHaveCount(0);
+});
+
+test('the addresses of the account: the primary one, the others, and what each one can do (FRU-450)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const addresses = section(page, 'Addresses');
+  const rows = addresses.getByRole('listitem');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText('ana@acme.dev');
+  await expect(rows.nth(0)).toContainText('Primary · on your notes and in the messages of Fruitback');
+  await expect(rows.nth(0).getByRole('button')).toHaveCount(0);
+  // An address that a linked provider gives is not removed here: its provider is unlinked.
+  await expect(rows.nth(1)).toContainText('From GitHub');
+  await expect(rows.nth(1).getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
+  await expect(rows.nth(2)).toContainText('Verified by Fruitback');
+  await expectNoViolation(page, 'the addresses');
+
+  // An address of another account: the refusal says so, and keeps what was typed.
+  const field = addresses.getByRole('textbox', { name: 'Add an address' });
+  worker.addRefuses = 'email-taken';
+  await field.fill('bob@acme.dev');
+  await addresses.getByRole('button', { name: 'Send a link' }).click();
+  await expect(
+    addresses.getByText('This address is the one of another Fruitback account.', { exact: false }),
+  ).toBeVisible();
+  await expect(field).toHaveValue('bob@acme.dev');
+  // Accepted: the link goes, and the address is added once it is opened.
+  worker.addRefuses = undefined;
+  await field.fill('Ana@Work.test');
+  await addresses.getByRole('button', { name: 'Send a link' }).click();
+  await expect(
+    addresses.getByRole('status').filter({ hasText: 'Fruitback sent a link to ana@work.test.' }),
+  ).toBeVisible();
+  await expect(field).toHaveValue('');
+  expect(worker.bodies['/console/me/emails']).toEqual({ email: 'Ana@Work.test' });
+
+  // Another address becomes the primary one: the page says it, and the profile names it.
+  await rows.nth(2).getByRole('button', { name: 'Make primary' }).click();
+  await expect(
+    addresses.getByRole('status').filter({ hasText: 'ana@home.test is your primary address now.' }),
+  ).toBeVisible();
+  await expect(rows.nth(2)).toContainText('Primary · on your notes');
+  await expect(section(page, 'Profile').getByText('ana@home.test')).toBeVisible();
+  expect(worker.bodies['/console/me/emails/primary']).toEqual({ email: 'ana@home.test', workspace: 'w1' });
+
+  // « Remove » asks twice.
+  await rows.nth(0).getByRole('button', { name: 'Remove', exact: true }).click();
+  await rows.nth(0).getByRole('button', { name: 'Remove ana@acme.dev' }).click();
+  await expect(rows).toHaveCount(2);
+  expect(worker.sent).toContain(`DELETE /console/me/emails/${encodeURIComponent('ana@acme.dev')}`);
+
+  // At 390 px nothing scrolls sideways, and the field is as wide as the screen.
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect.soft(await sideScroll(page), 'the addresses at 390 px').toBe(0);
+  await expectNoViolation(page, 'the addresses at 390 px');
+});
+
+test('a refusal of an address says why, in French too (FRU-450)', async ({ page }) => {
+  const worker = await workerWith(page, 'owner', 'fr');
+  await page.goto(`${CONSOLE}/w/w1/account`);
+  const addresses = section(page, 'Adresses');
+  await expect(addresses.getByRole('listitem')).toHaveCount(3);
+  worker.addressRefuses = 'sign-in-again';
+  await addresses.getByRole('listitem').nth(2).getByRole('button', { name: 'Rendre principale' }).click();
+  await expect(addresses.getByText(/Reconnectez-vous d’abord : l’adresse principale/)).toBeVisible();
+  await expect(addresses.getByRole('listitem').nth(0)).toContainText('ana@acme.dev');
+});
+
+test('a worker that sends no e-mail adds no address by hand, and says so (FRU-450)', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.canAdd = false;
+  await open(page);
+  const addresses = section(page, 'Addresses');
+  await expect(
+    addresses.getByText('This Fruitback sends no email: an address is added by a linked provider only.'),
+  ).toBeVisible();
+  await expect(addresses.getByRole('textbox')).toHaveCount(0);
+});
+
+test.describe('the link that adds an address (FRU-450)', () => {
+  async function landing(page: Page, status: number, json: unknown) {
+    const asked: unknown[] = [];
+    await stubWorker(page, {
+      answer: (pathname, route) => {
+        if (pathname !== '/console/me/emails/verify') return undefined;
+        asked.push(route.request().postDataJSON());
+
+        return route.fulfill({ status, json });
+      },
+    });
+
+    return asked;
+  }
+
+  test('adds the address in this browser, and takes the code out of the address bar', async ({ page }) => {
+    const asked = await landing(page, 200, { email: 'ana@home.test' });
+    await page.goto(`${CONSOLE}/verify-email#a-code-of-forty-three-characters-0123456789x`);
+    await expect(page.getByRole('heading', { name: 'Address added' })).toBeVisible();
+    await expect(page.getByText('ana@home.test is now an address of your account.', { exact: false })).toBeVisible();
+    expect(asked).toEqual([{ token: 'a-code-of-forty-three-characters-0123456789x' }]);
+    expect(new URL(page.url()).hash).toBe('');
+    const results = await new AxeBuilder({ page }).analyze();
+    expect.soft(results.violations.map((violation) => violation.id)).toEqual([]);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect.soft(await sideScroll(page)).toBe(0);
+  });
+
+  test('asks to sign in first when this browser is not, and spends nothing', async ({ page }) => {
+    await landing(page, 401, { error: 'identity-required' });
+    await page.goto(`${CONSOLE}/verify-email#a-code-of-forty-three-characters-0123456789x`);
+    await expect(page.getByRole('heading', { name: 'Sign in first' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in');
+  });
+
+  test('says that a link spent, too old or of another account does not work, in French too', async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('fruitback:locale', 'fr'));
+    await landing(page, 404, { error: 'link-spent-or-expired' });
+    await page.goto(`${CONSOLE}/verify-email#a-code-of-forty-three-characters-0123456789x`);
+    await expect(page.getByRole('heading', { name: 'Ce lien ne fonctionne pas' })).toBeVisible();
+  });
 });

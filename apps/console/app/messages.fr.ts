@@ -17,7 +17,59 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Loading…': 'Chargement…',
 
   'My account': 'Mon compte',
-  'Your name on notes, how you sign in, and where.': 'Votre nom sur les notes, comment vous vous connectez, et où.',
+  'Your name on notes, your addresses, how you sign in, and where.':
+    'Votre nom sur les notes, vos adresses, comment vous vous connectez, et où.',
+  '{provider} gives your primary address. Make another address primary first, under « Addresses ».':
+    '{provider} fournit votre adresse principale. Choisissez d’abord une autre adresse principale, dans « Adresses ».',
+  'Type one email address, like name@company.com.': 'Saisissez une adresse e-mail, comme nom@entreprise.com.',
+  'This address is the one of another Fruitback account. An address opens one account only.':
+    'Cette adresse est celle d’un autre compte Fruitback. Une adresse n’ouvre qu’un seul compte.',
+  'This address is already one of your account.': 'Cette adresse est déjà l’une de votre compte.',
+  'Too many links were sent in the last hour. Try again later.':
+    'Trop de liens ont été envoyés dans l’heure. Réessayez plus tard.',
+  'The link could not be sent. Try again.': 'Le lien n’a pas pu être envoyé. Réessayez.',
+  'The link was not sent. Try again.': 'Le lien n’a pas été envoyé. Réessayez.',
+  'This is your primary address. Make another one primary first.':
+    'C’est votre adresse principale. Choisissez d’abord une autre adresse principale.',
+  'A linked provider gives this address. Unlink it under « How you sign in » to take it away.':
+    'Un fournisseur lié fournit cette adresse. Déliez-le dans « Comment vous vous connectez » pour la retirer.',
+  'Sign in again first: the primary address changes only in the day after a sign-in.':
+    'Reconnectez-vous d’abord : l’adresse principale ne change que dans la journée qui suit une connexion.',
+  'This address is no longer one of your account.': 'Cette adresse n’est plus l’une de votre compte.',
+  'Primary · on your notes and in the messages of Fruitback':
+    'Principale · sur vos notes et dans les messages de Fruitback',
+  'From {provider}': 'Fournie par {provider}',
+  'Verified by Fruitback': 'Vérifiée par Fruitback',
+  Addresses: 'Adresses',
+  'A sign-in link sent to any of them opens your account, and their invitations are yours. Your notes and the messages of Fruitback use the primary one.':
+    'Un lien de connexion envoyé à l’une d’elles ouvre votre compte, et leurs invitations sont les vôtres. Vos notes et les messages de Fruitback utilisent l’adresse principale.',
+  '{email} is your primary address now. Fruitback sent a message to both addresses.':
+    '{email} est désormais votre adresse principale. Fruitback a envoyé un message aux deux adresses.',
+  'Fruitback did not answer. The addresses of your account could not be read.':
+    'Fruitback n’a pas répondu. Les adresses de votre compte n’ont pas pu être lues.',
+  'Make primary': 'Rendre principale',
+  'Remove {email}': 'Retirer {email}',
+  'A sign-in link sent there no longer opens your account.':
+    'Un lien de connexion envoyé là n’ouvrira plus votre compte.',
+  'Add an address': 'Ajouter une adresse',
+  'Send a link': 'Envoyer un lien',
+  'This Fruitback sends no email: an address is added by a linked provider only.':
+    'Ce Fruitback n’envoie pas d’e-mail : une adresse n’est ajoutée que par un fournisseur lié.',
+  'Fruitback sent a link to {email}. Open it in this browser within a day: the address is added then.':
+    'Fruitback a envoyé un lien à {email}. Ouvrez-le dans ce navigateur dans la journée : l’adresse est ajoutée à ce moment-là.',
+  'Adding the address…': 'Ajout de l’adresse…',
+  'Address added': 'Adresse ajoutée',
+  '{email} is now an address of your account. A sign-in link sent there opens it.':
+    '{email} est désormais une adresse de votre compte. Un lien de connexion envoyé là l’ouvre.',
+  'Sign in first': 'Connectez-vous d’abord',
+  'Sign in to Fruitback in this browser, with the account that asked for this address, then open the link again.':
+    'Connectez-vous à Fruitback dans ce navigateur, avec le compte qui a demandé cette adresse, puis ouvrez de nouveau le lien.',
+  'This link does not work': 'Ce lien ne fonctionne pas',
+  'It was used already, it is older than a day, or it was asked by another account than the one signed in here. Add the address again from « My account ».':
+    'Il a déjà servi, il a plus d’un jour, ou un autre compte que celui connecté ici l’a demandé. Ajoutez de nouveau l’adresse depuis « Mon compte ».',
+  'This address was not added': 'Cette adresse n’a pas été ajoutée',
+  'It is now the address of another Fruitback account.': 'C’est désormais l’adresse d’un autre compte Fruitback.',
+  'The address is not added yet': 'L’adresse n’est pas encore ajoutée',
   'Name shown on notes': 'Nom affiché sur les notes',
   'How you sign in': 'Comment vous vous connectez',
   'Any of these opens the same account, in the console and in the extension.':
