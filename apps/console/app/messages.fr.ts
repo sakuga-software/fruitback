@@ -24,7 +24,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Type one email address, like name@company.com.': 'Saisissez une adresse e-mail, comme nom@entreprise.com.',
   'This address is the one of another Fruitback account. An address opens one account only.':
     'Cette adresse est celle d’un autre compte Fruitback. Une adresse n’ouvre qu’un seul compte.',
-  'This address is already one of your account.': 'Cette adresse est déjà l’une de votre compte.',
+  'This address is already one of your account.': 'Cette adresse est déjà liée à votre compte.',
   'Too many links were sent in the last hour. Try again later.':
     'Trop de liens ont été envoyés dans l’heure. Réessayez plus tard.',
   'The link could not be sent. Try again.': 'Le lien n’a pas pu être envoyé. Réessayez.',
@@ -35,7 +35,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Un fournisseur lié fournit cette adresse. Déliez-le dans « Comment vous vous connectez » pour la retirer.',
   'Sign in again first: the primary address changes only in the day after a sign-in.':
     'Reconnectez-vous d’abord : l’adresse principale ne change que dans la journée qui suit une connexion.',
-  'This address is no longer one of your account.': 'Cette adresse n’est plus l’une de votre compte.',
+  'This address is no longer one of your account.': 'Cette adresse n’est plus liée à votre compte.',
   'Primary · on your notes and in the messages of Fruitback':
     'Principale · sur vos notes et dans les messages de Fruitback',
   'From {provider}': 'Fournie par {provider}',
