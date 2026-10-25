@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 import { mockMethod } from './mock.fixture.ts';
+import { MailError } from './mail.ts';
 import { ADDRESSES_PER_HOUR, VERIFY_ADDRESS_HOURS } from './account-emails.ts';
 import { CONSOLE_URL, MIGRATED_DATABASES, databasesOfACase } from './auth.fixture.ts';
 import { GOOGLE, cookieOf, workerOf } from './auth-worker.fixture.ts';
@@ -211,6 +212,28 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       // The table keeps a digest of the token, never the token.
       const kept = await rowsOf(worker.database, 'SELECT identifier, value FROM verification');
       assert.equal(JSON.stringify(kept).includes(token), false);
+    });
+
+    it('leaves no link that waits when the message did not leave', async () => {
+      const worker = await workerOf(await opening(open));
+      const alice = await person(worker, 'alice@acme.dev');
+      const waiting = async () => (await rowsOf(worker.database, 'SELECT 1 AS one FROM verification')).length;
+      const before = await waiting();
+      const said = mockMethod(console, 'error', () => {});
+      const refused = mockMethod(worker.mail, 'send', async () => {
+        throw new MailError('The mail provider refused the message: 503');
+      });
+      try {
+        const asked = await worker.call('/console/me/emails', {
+          body: { email: 'alice@home.example' },
+          headers: { Cookie: alice.cookie },
+        });
+        assert.deepEqual([asked.status, await asked.json()], [502, { error: 'mail-unavailable' }]);
+      } finally {
+        refused.mockRestore();
+        said.mockRestore();
+      }
+      assert.equal(await waiting(), before);
     });
 
     it('refuses a link of verification past its 24 hours', async () => {

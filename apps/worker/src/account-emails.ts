@@ -53,6 +53,7 @@ type VerificationAdapter = {
   createVerificationValue(data: { identifier: string; value: string; expiresAt: Date }): Promise<unknown>;
   findVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
   consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
+  deleteVerificationByIdentifier(identifier: string): Promise<void>;
 };
 
 type AccountAdapter = {
@@ -201,6 +202,9 @@ export async function handleEmailRoutes(
         verifyAddressMessage(email, { account: account.email, link, hours: VERIFY_ADDRESS_HOURS }, account.locale),
       );
     } catch (error) {
+      // No link left behind for a message that did not leave. The counts stay spent, as for a
+      // sign-in link: a provider that refuses is not asked again and again.
+      await adapter.deleteVerificationByIdentifier(waitingKey(token)).catch(() => undefined);
       if (!(error instanceof MailError)) throw error;
       console.error(`[fruitback] ${error.message}`);
 
