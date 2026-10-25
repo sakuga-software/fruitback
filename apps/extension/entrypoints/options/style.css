@@ -724,7 +724,8 @@ button.worker-pair-button:disabled {
   font-size: 12px;
 }
 
-.pref-name {
+.pref-name,
+.pref-select {
   box-sizing: border-box;
   width: 200px;
   height: 34px;

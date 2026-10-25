@@ -1,6 +1,8 @@
+import type { DockPosition } from '@fruitback/widget';
 import { msg, t } from './i18n.ts';
 import { keys, toggle } from './kit.ts';
 import { keysOfShortcut } from './popup-view.ts';
+import { parseDockPosition } from './protocol.ts';
 import { PAIRING_NEEDS_HTTPS } from './remedy.ts';
 
 /**
@@ -249,6 +251,9 @@ export type PreferencesOptions = {
   /** « Show CSS selectors » (FRU-349). Off by default. */
   selectors: boolean;
   onSelectors: (on: boolean) => Promise<void> | void;
+  /** « Corner of the widget » (FRU-443): the corner of the dock on every site. */
+  dockPosition: DockPosition;
+  onDockPosition: (position: DockPosition) => Promise<void> | void;
   /** « Allow captures on every site » (FRU-425): whether `<all_urls>` is held now. */
   capturesEverywhere: boolean;
   /** The words of the prompt of this browser, quoted by the row. */
@@ -262,6 +267,17 @@ export type PreferencesOptions = {
 
 /** What a preference whose write failed says: the control is back where it was. */
 export const PREFERENCE_NOT_SAVED = msg('This preference could not be saved. Try again.');
+
+/** The four corners, in the order of the widget, by the words the select shows. */
+const CORNER_WORDS: readonly (readonly [DockPosition, string])[] = [
+  ['bottom-right', msg('Bottom right')],
+  ['bottom-left', msg('Bottom left')],
+  ['top-right', msg('Top right')],
+  ['top-left', msg('Top left')],
+];
+
+/** The corner by default, as the widget has it. */
+export const DEFAULT_DOCK_POSITION: DockPosition = 'bottom-right';
 
 /** The longest name, as the widget keeps it (`REPORTER_NAME_MAX`). */
 export const NAME_MAX = 120;
@@ -364,6 +380,34 @@ export function preferencesSection(document: Document, options: PreferencesOptio
 
         return control;
       })(),
+    ),
+  );
+
+  // FRU-443: a select, which a keyboard opens and walks with the arrows, and a screen reader names.
+  const corner = make(document, 'select', 'pref-select');
+  corner.setAttribute('aria-label', t('Corner of the widget'));
+  for (const [value, words] of CORNER_WORDS) {
+    const option = make(document, 'option', '', t(words));
+    option.value = value;
+    corner.append(option);
+  }
+  corner.value = options.dockPosition;
+  let keptCorner = options.dockPosition;
+  corner.addEventListener('change', () => {
+    const chosen = parseDockPosition(corner.value) ?? DEFAULT_DOCK_POSITION;
+    const before = keptCorner;
+    keptCorner = chosen;
+    save(options.onDockPosition(chosen), () => {
+      keptCorner = before;
+      corner.value = before;
+    });
+  });
+  card.append(
+    row(
+      document,
+      t('Corner of the widget'),
+      t('Where the widget stands on every site you review. It moves at once, and a note being written stays.'),
+      corner,
     ),
   );
 

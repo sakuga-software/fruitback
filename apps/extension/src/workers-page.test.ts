@@ -252,6 +252,72 @@ describe('« Workers and sessions » while a pairing is in progress (raised in r
   });
 });
 
+describe('« Corner of the widget » (FRU-443)', () => {
+  const base = {
+    panelOnClick: false,
+    onPanelOnClick: nothing,
+    name: '',
+    onName: nothing,
+    synced: false,
+    onSynced: nothing,
+    selectors: false,
+    onSelectors: nothing,
+    capturesEverywhere: false,
+    captureWarning: 'Read and change all your data on all websites',
+    onCapturesEverywhere: async (on: boolean) => on,
+  };
+
+  it('is a named select of the four corners, on the corner kept, and writes the one chosen', () => {
+    const chosen: string[] = [];
+    const section = preferencesSection(page(), {
+      ...base,
+      dockPosition: 'top-left',
+      onDockPosition: (position) => void chosen.push(position),
+    });
+    const select = section.querySelector<HTMLSelectElement>('select.pref-select');
+    assert.ok(select);
+    assert.equal(select.getAttribute('aria-label'), 'Corner of the widget');
+    assert.deepEqual(
+      [...select.options].map((option) => `${option.value}:${option.textContent}`),
+      ['bottom-right:Bottom right', 'bottom-left:Bottom left', 'top-right:Top right', 'top-left:Top left'],
+    );
+    assert.equal(select.value, 'top-left');
+
+    select.value = 'bottom-left';
+    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    assert.deepEqual(chosen, ['bottom-left']);
+  });
+
+  it('goes back to the corner kept when the write fails, and says so', async () => {
+    const section = preferencesSection(page(), {
+      ...base,
+      dockPosition: 'bottom-right',
+      onDockPosition: () => Promise.reject(new Error('full')),
+    });
+    const select = section.querySelector<HTMLSelectElement>('select.pref-select');
+    assert.ok(select);
+    select.value = 'top-right';
+    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(select.value, 'bottom-right');
+    assert.equal(section.querySelector('.pref-problem')?.textContent, 'This preference could not be saved. Try again.');
+  });
+
+  it('speaks French', () => {
+    setLanguage('fr');
+    try {
+      const section = preferencesSection(page(), { ...base, dockPosition: 'bottom-right', onDockPosition: nothing });
+      assert.deepEqual(
+        [...(section.querySelector<HTMLSelectElement>('select.pref-select')?.options ?? [])].map((o) => o.textContent),
+        ['En bas à droite', 'En bas à gauche', 'En haut à droite', 'En haut à gauche'],
+      );
+    } finally {
+      setLanguage('en');
+    }
+  });
+});
+
 describe('« Preferences » (FRU-302)', () => {
   const options = (extra: Partial<Parameters<typeof preferencesSection>[1]> = {}) => ({
     panelOnClick: false,
@@ -262,6 +328,8 @@ describe('« Preferences » (FRU-302)', () => {
     onSynced: nothing,
     selectors: false,
     onSelectors: nothing,
+    dockPosition: 'bottom-right' as const,
+    onDockPosition: nothing,
     capturesEverywhere: false,
     captureWarning: 'Read and change all your data on all websites',
     onCapturesEverywhere: async (on: boolean) => on,
@@ -278,6 +346,7 @@ describe('« Preferences » (FRU-302)', () => {
         'Open notes in the sidebar',
         'Name on my notes',
         'Show CSS selectors',
+        'Corner of the widget',
         'Allow captures on every site',
         'Leave feedback shortcut',
         'Keep my rules in the account of this browser',
@@ -401,6 +470,8 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onSynced: refuse,
       selectors: false,
       onSelectors: refuse,
+      dockPosition: 'bottom-right',
+      onDockPosition: refuse,
       capturesEverywhere: false,
       captureWarning: 'Read and change all your data on all websites',
       onCapturesEverywhere: refuse,
@@ -454,6 +525,8 @@ describe('« Preferences » whose write failed (raised in review)', () => {
       onSynced: () => Promise.resolve(),
       selectors: false,
       onSelectors: () => Promise.resolve(),
+      dockPosition: 'bottom-right',
+      onDockPosition: () => Promise.resolve(),
       capturesEverywhere: false,
       captureWarning: 'Read and change all your data on all websites',
       onCapturesEverywhere: (on) => Promise.resolve(on),

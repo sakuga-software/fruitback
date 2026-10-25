@@ -250,6 +250,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Name on my notes': 'Nom sur mes notes',
   // FRU-349.
   'Show CSS selectors': 'Afficher les sélecteurs CSS',
+  // FRU-443: the corner of the widget.
+  'Corner of the widget': 'Coin du widget',
+  'Where the widget stands on every site you review. It moves at once, and a note being written stays.':
+    'L’endroit où le widget se place sur tous les sites que vous relisez. Il se déplace aussitôt, et une note en cours d’écriture reste.',
+  'Bottom right': 'En bas à droite',
+  'Bottom left': 'En bas à gauche',
+  'Top right': 'En haut à droite',
+  'Top left': 'En haut à gauche',
   'In the head of a note you write, and in the note of a pin. The issue in your tracker keeps the selector either way.':
     'Dans l’en-tête d’une note que vous écrivez, et dans la note d’une épingle. Le ticket de votre outil de suivi garde le sélecteur dans tous les cas.',
   'Prefilled in private mode. Team mode signs with your session.':

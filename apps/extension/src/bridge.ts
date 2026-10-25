@@ -1,3 +1,4 @@
+import type { DockPosition } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, NAME_MAX } from './protocol.ts';
 import type { SiteConfig } from './sites.ts';
 
@@ -26,6 +27,8 @@ export type BridgeSeams = {
    * and the rule stays on. A read that fails shows it.
    */
   readHidden?: () => Promise<boolean>;
+  /** « Corner of the widget » (FRU-443): said to a widget we mount. `undefined`: the default corner. */
+  readDockPosition?: () => Promise<DockPosition | undefined>;
   post: (message: BridgeMessage) => void;
 };
 
@@ -36,6 +39,7 @@ export function createApply({
   readName,
   readShowSelectors,
   readHidden,
+  readDockPosition,
   post,
 }: BridgeSeams): (force?: boolean) => Promise<void> {
   // What was last posted, so an unchanged decision is not posted again.
@@ -51,6 +55,8 @@ export function createApply({
   let said: boolean | undefined;
   /** « Show CSS selectors » as last said, for the same reason. */
   let selectorsSaid: boolean | undefined;
+  /** The corner as last said, for the same reason. `null`: no widget to say it to. */
+  let cornerSaid: DockPosition | undefined | null = null;
 
   // Three sources call this, and it awaits in the middle: the first run, the page world's handshake,
   // and every storage change. So two can be in flight, and the older one can resolve last and post a
@@ -62,13 +68,15 @@ export function createApply({
 
   return async (force = false): Promise<void> => {
     const mine = ++generation;
-    const [site, locale, name, selectors, hidden] = await Promise.all([
+    const [site, locale, name, selectors, hidden, corner] = await Promise.all([
       readSite(),
       readLanguage?.().catch(() => undefined),
       readName?.().catch(() => undefined),
       // A read that fails keeps what was said last: the selector is a help, never a reason to stop.
       readShowSelectors?.().catch(() => selectorsSaid ?? false),
       readHidden?.().catch(() => false),
+      // A read that fails keeps the corner said last: a dock that jumps back is a dock that moved.
+      readDockPosition?.().catch(() => (cornerSaid === null ? undefined : cornerSaid)),
     ]);
     // FRU-315: said apart from the mount, so a session that ends or comes back changes what the
     // widget offers without building it again over a note being written.
@@ -112,6 +120,15 @@ export function createApply({
       selectorsSaid = selectors;
     } else if (message.kind !== 'mount') {
       selectorsSaid = undefined;
+    }
+    // FRU-443: after the mount too, and again with each mount, like the selectors.
+    if (message.kind === 'mount' && readDockPosition !== undefined) {
+      if (mounting || corner !== cornerSaid) {
+        post({ channel: CHANNEL, kind: 'dock', ...(corner === undefined ? {} : { position: corner }) });
+      }
+      cornerSaid = corner;
+    } else if (message.kind !== 'mount') {
+      cornerSaid = null;
     }
   };
 }

@@ -721,7 +721,17 @@ did not change: the fields of 760 px and the file input of the browser are as th
   written stays, as with `selectors` (FRU-349).
 - **A value that is not a corner is no message**: it moves nothing. The page can read and forge it on
   its channel; it moves the dock on that page, and nothing else.
-- **Kept in the local area, under `dockPosition`**, for every site. No credential.
+- **Kept in the local area, under `dockPosition`**, for every site. No credential. The corner by
+  default is no key: choosing it again removes the key.
+- **« Corner of the widget » is a row of « Preferences »**, after « Show CSS selectors »: a `select`
+  of the four corners (« Bottom right », « Bottom left », « Top right », « Top left »), which the
+  keyboard reaches with Tab and walks with the arrows. A write that fails puts the select back and
+  says « This preference could not be saved. Try again. ».
+- **The bridge says the corner after each mount, and again when the key changes** (`readDockPosition`
+  of `createApply`), like the selectors: a widget already on a page moves at once, with what is
+  written in its composer. A read that fails keeps the corner said last.
+  `e2e/extension-dock-position.spec.ts` chooses a corner over a note being written, reloads, and
+  goes back to the default.
 
 ## The rules in the reviewer's other browsers (FRU-72)
 
