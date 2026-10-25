@@ -92,16 +92,16 @@ Two optional fields, both in the read envelope. Built in `packages/shared/src/is
 
 ```ts
 // GET /feedback, next to `stages`: read with offeredStatuses(body.statuses)
-statuses?: SeedStatus[];   // seedStatusSchema
-type SeedStatus = {
+statuses?: NoteStatus[];   // noteStatusSchema
+type NoteStatus = {
   key: string;             // 1 to 200 characters, unique in this answer: `<source>:<key>`
   name: string;            // what the team or the tracker calls it; empty means the catalog word
-  stage: SeedStage;
+  stage: NoteStage;
   color?: string;          // STATUS_COLOR, #rrggbb; absent means the token of the stage
   textColor?: string;      // STATUS_COLOR; only with `color`
 };
 
-// on each SeedIssue (seedIssueSchema)
+// on each NoteIssue (noteIssueSchema)
 status?: string;           // a key of `statuses`; statusOf(issue, statuses) resolves it
 ```
 
