@@ -46,9 +46,10 @@ first publish made it expensive.
   return exactly `seed`. Two rules protect it — **no schema default values**, and no field the
   widget cannot rebuild from what is stored. Adding a default is the easy way to break this
   silently; test:`adds no field the caller did not provide` is there to catch it.
-- **Bump `SEED_VERSION`** when the payload shape changes — it is `2` since FRU-9 added
-  `reporter.verified`. Readers accept older versions and refuse
-  newer ones (`unsupported-version`) rather than silently dropping fields.
+- **Bump `NOTE_VERSION`** when the payload shape changes — it is `3` since FRU-378 named the kind
+  `fruitback.note`. `SEED_VERSION` stays at `2`, where FRU-9 left it when it added
+  `reporter.verified`: no writer makes a new version of `fruitback.seed`. Readers accept older
+  versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
 - **`parseNote*` never throws.** It returns `{ ok: false, reason }` — the input is a Linear
   description a human may have edited.
 - `canonicalizePageUrl` is the page identity: fragment and tracking params dropped, remaining params

@@ -141,11 +141,12 @@ widget depends on it. Treat a change there as breaking until you have shown it i
 - **A note survives the round trip.** `parseNoteFromDescription(buildIssueDescription(seed))` returns
   exactly `seed`. So a schema has no default values, and a note holds no field the widget cannot rebuild
   from what is stored.
-- **If the shape of a note changes, bump `SEED_VERSION`.** Readers accept older versions and refuse
-  newer ones, instead of silently dropping the fields they do not know.
+- **If the shape of a note changes, bump `NOTE_VERSION`.** `SEED_VERSION` stays at 2 for good: no
+  writer makes a new version of `fruitback.seed`. Readers accept older versions and refuse newer ones,
+  instead of silently dropping the fields they do not know.
 - **A field of the read answer is not a field of the note.** `GET /feedback` adds `url` and `stages` to the
   answer, and `url` and `comments` to each issue. They are not stored in the note, so they do not change
-  `SEED_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
+  `NOTE_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
   `seed.page.url` is not one of them: it is part of the note.
 - **The parsers never throw.** A note is read back from an issue description a person can edit, so
   `parseNote*` returns `{ ok: false, reason }`.
