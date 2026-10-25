@@ -1714,8 +1714,9 @@ removes its own SQL file, snapshot and entry, and generates again.
 
 ### The rules, in short
 
-- **`migrate-to-postgres --seeds <file>` copies the notes and their replies**, in a run of its own:
-  never with `--accounts` and `--sessions`. That copy goes into a database that no worker started
+- **`migrate-to-postgres --notes <file>` copies the notes and their replies**, in a run of its own:
+  never with `--accounts` and `--sessions`. `--seeds`, its name of before FRU-378, still works; both
+  may be given if they name the same file. That copy goes into a database that no worker started
   on, and this one applies every migration first. The runbook is « Switch 1 bis » of
   `apps/worker/cloud/README.md`.
 - **A note keeps its number, and no number is given twice.** The ids of the file are written as
@@ -3465,10 +3466,11 @@ refused by its sentence. What follows is the history.
   store before it and writes after the second removal can still write a row back: a window of one
   read, not closed here. A row is named by the reference of the note **and** the id the widget gave
   it: a tracker of another workspace may call an issue `FB-12` as well, and its row stays.
-- **`forget --seed <id>` removes the row of a note that went to a tracker**, whatever the store
+- **`forget --note <id>` removes the row of a note that went to a tracker**, whatever the store
   (decided by the orchestrator, 2026-10-13): the index keeps no address and no name, so the
   operator reads the `id` of the note in the issue. The command says so when it cannot find a note
-  of a tracker by `--email` or `--name`.
+  of a tracker by `--email` or `--name`. `--seed`, its name of before FRU-378, still works:
+  `--note a --seed b` forgets both.
 - **The account of a member goes with the account**: `author_account_id` is a foreign key to
   `user`, `ON DELETE SET NULL`, and the row stays with `member` and no account (`0010`). Before it,
   `0009` empties the ids of accounts already removed, which the key would refuse: a migration of
@@ -3537,10 +3539,10 @@ refused by its sentence. What follows is the history.
 
 - **`GET /session/notes?site=<id>&stage=&q=&cursor=&limit=` is the list of FRU-244 for one site,
   with the session of the extension** (`session-notes.ts`). It calls the same `queryOf` and the
-  same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{seed,
+  same `NoteIndex.list`, with `site` and `sites: [site]` both set, and answers `{notes: [{note, seed,
   excerpt, page: {url, path}, stage, author, reference?, referenceUrl?, createdAt}], total,
-  searched, next?}`. `seed` is the id the widget gave the note: the panel opens `page.url` and the
-  widget finds the note there.
+  searched, next?}`. `note` is the id the widget gave the note: the panel opens `page.url` and the
+  widget finds the note there. `seed` holds the same id, for the extension 0.3.0 (FRU-378).
 - **The session is read again in the store** (`sessionWrites`), not only verified: the side panel
   reads several pages of notes, and a session that ended must stop at the next call, as for a write.
 - **The site is found among the workspaces of the session** (every membership of an account that is

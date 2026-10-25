@@ -129,6 +129,8 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean) {
   const { url, path } = pageOf(note.pageUrl);
 
   return {
+    // FRU-378: the id of the note under its name, and under `seed` for the extension 0.3.0.
+    note: note.seed,
     seed: note.seed,
     excerpt: note.excerpt,
     page: { url, path },

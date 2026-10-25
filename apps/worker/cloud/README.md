@@ -397,7 +397,7 @@ takes the number after the largest one the file ever gave, a deleted note includ
 The copy is the same command, in a run of its own:
 
 ```bash
-node server.mjs migrate-to-postgres --seeds <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]
+node server.mjs migrate-to-postgres --notes <file> [--client <id in the file>=<id of the site>]... [--no-client <id of the site>] [--dry-run]
 ```
 
 - It reads a copy of the file, made with its `-wal`, in a folder of its own. **It never writes the
@@ -435,7 +435,7 @@ cannot send a note. `$PG` and `$WORKER` are as in Switch 1.
 
 1. **`D_bis`, with the configuration unchanged.** Check `/health` and a pin on a page, then that
    the command is in the image: `docker exec <container of the worker> node server.mjs
-   migrate-to-postgres` prints two lines of usage, the second with `--seeds`, and exits 1.
+   migrate-to-postgres` prints two lines of usage, the second with `--notes`, and exits 1.
    Way back: the digest before.
 2. **A fresh copy, then stop the worker.** `sh snapshot.sh` and `sh snapshot-pg.sh`, then:
 
@@ -454,7 +454,7 @@ cannot send a note. `$PG` and `$WORKER` are as in Switch 1.
    export FRUITBACK_DATABASE_URL
    docker run --rm --network "container:$PG" -v fruitback-cloud-data:/data:ro -e FRUITBACK_DATABASE_URL \
      ghcr.io/sakuga-software/fruitback-worker@sha256:<D_bis> \
-     node server.mjs migrate-to-postgres --seeds /data/fb.db --dry-run
+     node server.mjs migrate-to-postgres --notes /data/fb.db --dry-run
    ```
 
    Check: the command exits 0; the two lines say `same`; **each line under « the site of each note »

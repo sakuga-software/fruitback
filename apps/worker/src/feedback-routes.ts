@@ -1,4 +1,12 @@
-import { MAX_ATTACHMENTS_PER_NOTE, NOTE_STAGES, type Note, type NoteIssue, parseNote } from '@fruitback/shared';
+import {
+  MAX_ATTACHMENTS_PER_NOTE,
+  NOTE_STAGES,
+  type Note,
+  type NoteIssue,
+  type NoteV3,
+  parseNote,
+  toNoteV3,
+} from '@fruitback/shared';
 import { legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { attachmentIdsOf } from './attachments.ts';
 import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
@@ -44,6 +52,9 @@ import type { AccountStore } from './accounts.ts';
  * Every check of the caller stays in `app.ts`, which hands it over in `CallerChecks`, under the
  * names the routes call it by.
  */
+
+/** An issue of `GET /feedback`: the issue of the store, and its note again in `note` (FRU-378). */
+export type ReadIssue = NoteIssue & { note: NoteV3 };
 
 /**
  * The read path: every seed planted on one page, with the Linear state that gives the pin its
@@ -140,7 +151,7 @@ export async function getFeedback(
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
-    const issues: NoteIssue[] = all.map((issue) => {
+    const issues: ReadIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
       const marked = {
         ...issue,
@@ -148,7 +159,11 @@ export async function getFeedback(
         ...(own.has(issue.seed.id) ? { mine: true as const } : {}),
       };
 
-      return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.seed.id)) : marked;
+      const shown = hidden ? withoutTrackerStatus(withoutTracker(marked, issue.seed.id)) : marked;
+
+      // FRU-378: the note in the shape of `fruitback.note`, next to `seed` that every widget of before
+      // reads. Never in the cached answer, which keeps the issues as the store gave them.
+      return { ...shown, note: toNoteV3(shown.seed) };
     });
 
     // The stages of the trackers that answered, in the order of `NOTE_STAGES` (FRU-188). A site read in
@@ -277,7 +292,7 @@ export async function postFeedback(
 
   const parsed = parseNote(payload);
   if (!parsed.ok) {
-    return json(400, { error: 'invalid-seed', reason: parsed.reason }, corsHeaders);
+    return json(400, { error: 'invalid-note', reason: parsed.reason }, corsHeaders);
   }
 
   const seed = canonicalNote(parsed.note);
@@ -393,7 +408,7 @@ async function postBatch(
   const seeds: Note[] = [];
   for (const [index, each] of payload.entries()) {
     const parsed = parseNote(each);
-    if (!parsed.ok) return json(400, { error: 'invalid-seed', index, reason: parsed.reason }, corsHeaders);
+    if (!parsed.ok) return json(400, { error: 'invalid-note', index, reason: parsed.reason }, corsHeaders);
     seeds.push(canonicalNote(parsed.note));
   }
   if (new Set(seeds.map((seed) => seed.id)).size !== seeds.length) {

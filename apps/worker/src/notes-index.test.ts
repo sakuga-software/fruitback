@@ -529,7 +529,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     }
   });
 
-  it('removes with --seed the row of a note that went to a tracker, whatever the store, and no other', async () => {
+  it('removes with --note, or --seed its name of before, the row of a note that went to a tracker, whatever the store, and no other', async () => {
     const { database, acme, site, index } = await oneSite();
     const { runForget } = await import('./cli.ts');
     try {
@@ -564,10 +564,10 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
 
       const byEmail = await runForget(['--email', 'alice@client.fr'], env, tracker, index);
       assert.equal(byEmail.ok, false);
-      assert.match(byEmail.lines.join('\n'), /--seed <id>/);
+      assert.match(byEmail.lines.join('\n'), /--note <id>/);
 
       const listed = await runForget(
-        ['--seed', 'sd_tracked', '--seed', 'sd_nowhere', '--dry-run'],
+        ['--note', 'sd_tracked', '--seed', 'sd_nowhere', '--dry-run'],
         env,
         tracker,
         index,
@@ -664,7 +664,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       assert.equal(done.ok, false);
       assert.deepEqual(await rowsOf(database, 'SELECT id FROM seeds'), []);
       assert.match(done.lines.join('\n'), /deleted 1 note\(s\)/);
-      assert.match(done.lines.join('\n'), /Run: forget --seed sd_alice/);
+      assert.match(done.lines.join('\n'), /Run: forget --note sd_alice/);
     } finally {
       await database.close();
     }

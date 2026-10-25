@@ -250,7 +250,7 @@ visitor's typed name is in the tracker and never in the index**: the console sho
 notes that Fruitback keeps for the site (FRU-194). **`forget` removes the rows of the notes it deletes**,
 before it deletes them and again after, so a read of their page during the command does not leave
 one behind. **A note that went to a tracker** is not found by an address or a name, since the index
-keeps neither: `forget --seed <id>`, with the `id` of the note that its issue holds, removes its row,
+keeps neither: `forget --note <id>`, with the `id` of the note that its issue holds, removes its row,
 whatever the store, and the issue is deleted in the tracker. **A note deleted in a tracker keeps its row**, excerpt included, until its
 site goes: the worker is not told of a deletion there, and a read of the page cannot tell a note
 that was deleted from one that a tracker did not list. That is the one place where up to 64

@@ -41,7 +41,7 @@ page.
 
 - **After an upgrade copied the notes of an instance of before FRU-225 into the database (FRU-220),
   the file of before still holds them.** See [self-hosting/upgrade.md](../self-hosting/upgrade.md).
-  `migrate-to-postgres --seeds` copies and never writes the file, which is the way back. `forget`
+  `migrate-to-postgres --notes` copies and never writes the file, which is the way back. `forget`
   then deletes in the database only: a note that a person asked you to delete is still in the file
   and in the archives that hold it. Delete the file when the way back is no longer needed, and
   record when its archives expire.

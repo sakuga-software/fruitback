@@ -20,8 +20,9 @@ npm i @fruitback/shared
 ```ts
 import { parseNote } from '@fruitback/shared';
 
-// The body of a request of the REST connector carries the note in `seed`.
-const parsed = parseNote(JSON.parse(body).seed);
+// The body of a request of the REST connector carries the note in `note`, and in `seed` as before.
+const { note, seed } = JSON.parse(body);
+const parsed = parseNote(note ?? seed);
 if (parsed.ok) {
   console.log(parsed.note.note, parsed.note.page.url, parsed.note.anchor.selector);
 }

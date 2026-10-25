@@ -21,7 +21,13 @@ This page is the contract your receiver is written against.
   "workspace": "ws_3f9a…",
   "site": { "id": "site_81c2…", "origin": "https://staging.acme.dev" },
   "identifier": "FB-12",
-  "seed": { "note": "The price should say per month.", "page": { "url": "https://staging.acme.dev/pricing" } }
+  "seed": { "note": "The price should say per month.", "page": { "url": "https://staging.acme.dev/pricing" } },
+  "note": {
+    "kind": "fruitback.note",
+    "v": 3,
+    "text": "The price should say per month.",
+    "page": { "url": "https://staging.acme.dev/pricing" }
+  }
 }
 ```
 
@@ -33,6 +39,11 @@ This page is the contract your receiver is written against.
 | `site`       | The id of the site, and its origin.                                                               |
 | `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                    |
 | `seed`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field. |
+| `note`       | The same note in the shape of `fruitback.note` v3: its words are in `text` (FRU-378).             |
+
+`note` came with FRU-378, when a « seed » became a note. A request has both fields, and `seed` stays
+as it is: a receiver written before reads what it read. A request queued before the upgrade has
+`seed` only. `parseNote` of `@fruitback/shared` reads either of them.
 
 A note can carry files (FRU-331): a capture of the page or of an area, an image, any file. A body
 then has one more field, `attachments`, with one entry for each file that still waits in the worker:

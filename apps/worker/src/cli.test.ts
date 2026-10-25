@@ -74,6 +74,33 @@ describe('node server.mjs forget (FRU-85)', () => {
     assert.equal(parseForgetArgs([]).ok, false);
   });
 
+  it('takes --note, and --seed its name of before FRU-378, as one selector (FRU-378)', () => {
+    const both = { ok: true, args: { which: { seeds: ['sd_a', 'sd_b'] }, dryRun: true } };
+
+    assert.deepEqual(parseForgetArgs(['--note', 'sd_a', '--note', 'sd_b', '--dry-run']), both);
+    assert.deepEqual(parseForgetArgs(['--seed', 'sd_a', '--seed', 'sd_b', '--dry-run']), both);
+    assert.deepEqual(parseForgetArgs(['--note', 'sd_a', '--seed', 'sd_b', '--seed', 'sd_a', '--dry-run']), both);
+    assert.equal(parseForgetArgs(['--note', 'sd_a', '--id', 'FB-2']).ok, false);
+    assert.equal(parseForgetArgs(['--seed', 'sd_a', '--email', 'alice@example.com']).ok, false);
+  });
+
+  it('never reads a flag as the id of a note, under either name', () => {
+    for (const argv of [['--note', '--dry-run'], ['--seed', '--dry-run'], ['--note', '  '], ['--seed']]) {
+      const parsed = parseForgetArgs(argv);
+
+      assert.equal(parsed.ok, false, argv.join(' '));
+      assert.match(parsed.ok ? '' : parsed.error, new RegExp(`${argv[0]} needs a value$`));
+    }
+  });
+
+  it('says --note in its usage and in what it requires', () => {
+    const parsed = parseForgetArgs([]);
+
+    assert.match(parsed.ok ? '' : parsed.error, /--note <id> \[--note <id> \.\.\.\]/);
+    assert.match(parsed.ok ? '' : parsed.error, /one of --email, --name, --id and --note is required$/);
+    assert.doesNotMatch(parsed.ok ? '' : parsed.error, /--seed/);
+  });
+
   it('refuses an identifier that this store does not write', () => {
     for (const identifier of ['12', 'FB-0', 'FB-', 'fb-12', 'FB-1 OR 1=1', 'FRU-12']) {
       assert.equal(parseForgetArgs(['--id', identifier]).ok, false, identifier);
