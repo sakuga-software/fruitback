@@ -1601,14 +1601,45 @@ identity is asked for (`openid email profile`).
   the redemption reads the name in the statement that spends the code: test:`gives the new name
   to a refresh in flight, on a real server, with the store as it is`. The notes already in a
   tracker keep the name they were sent with.
-- **A provider is linked only for the address of the account, verified by the provider.**
-  `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same
-  refusal of a page of another site and of a provider this worker does not have. better-auth
-  refuses another address, an address the provider did not verify, and a provider account that is
-  another person's: no account is joined to another, and the person comes back to « My account »
-  with an error (read in `oauth2/link-account.mjs` of 1.7.7): test:`refuses a provider whose address
-  is another one, or is not verified, and joins no account`. No token of the provider is kept, as for
-  a sign-in. better-auth's own `/link-social`, `/unlink-account` and `/list-accounts` stay closed.
+- **A provider is linked to an account only after its owner confirmed it, in the session that
+  started the link** (FRU-415). This protects against a forced link: somebody who gets their own
+  provider account linked to the account of another person, then signs in as them. What holds it:
+  - **It starts by a `POST` of the console** (`POST /console/auth/link/<provider>`, a form), with the
+    `Origin` of the console. A `GET` starts nothing, so a link or an image on a page of the same site
+    sends the cookie and links nothing; a form of another page carries its own `Origin` and is refused:
+    test:`links nothing on a GET, nor on a POST of another page (FRU-415)`. The id of the session
+    that started it goes into the state of better-auth (`serverContext`, which no request writes),
+    and the state is in an encrypted cookie of that browser.
+  - **The way back from the provider writes no row.** The address of the provider account is known
+    only there, so the console asks there: « Link the Google account x@y to your Fruitback
+    account? ». The link waits 10 minutes (`PENDING_LINK_MS`), in the table `verification`, under a
+    digest of its key. Only the session that started it reads it, confirms it
+    (`POST /console/me/sign-in/pending`, with the `Origin` of the console) or cancels it, and it is
+    spent once: test:`lets only the session that started a link confirm it, from the console, and
+    cancels it (FRU-415)`. This holds for a provider account of the address of the account too:
+    test:`links GitHub for the same verified address after the confirmation, keeps no token, and
+    goes back to « My account »`.
+  - **The address may differ from the one of the account, on three conditions**
+    (`accountLinking.allowDifferentEmails`, and `guardLink` of `provider-link.ts`): the provider gave
+    an address, and said that it verified it (`email_verified` of Google, `verified` of GitHub); a
+    GitHub account that gives no address is refused. test:`refuses an address that the provider did
+    not verify, or no address, and writes nothing (FRU-415)`. No other account has that address,
+    and no other account has that provider account: the person is told which, and **no account is
+    ever joined to another**. test:`refuses a provider account or an address that belongs to another
+    account, and joins no account (FRU-415)`. Each condition is read again at the confirmation.
+  - **The identity is the id of the provider account** (`sub` of Google, `id` of GitHub), never the
+    address. The address of the account does not change, and the address of the provider is not
+    kept: test:`links a provider of another verified address after the confirmation, by its id, and
+    alerts the address of the account (FRU-415)`. A later sign-in with that provider account opens
+    the account whatever address the provider gives then: test:`signs in by the id of the linked
+    provider account, whatever address it gives later (FRU-415)`.
+  - **An alert goes to the address of the account after each link**, with the provider account
+    and the way to undo it (« My account », then « Unlink »). **On condition that the worker sends
+    e-mail**: a worker with no mailer sends none, and a failure to send is logged and does not undo
+    the link that the person confirmed.
+  - No token of the provider is kept, as for a sign-in. better-auth's own `/link-social`,
+    `/unlink-account` and `/list-accounts` stay closed. A sign-in with a provider is not a link: the
+    rule of FRU-97 stays, one verified address is one account.
 - **A provider goes only while another way to sign in stays** (`DELETE /console/me/sign-in/<provider>`):
   the link of the e-mail on a worker that sends it, or the other provider, linked and set up on this
   worker. Otherwise `409 last-sign-in`: test:`keeps the last way to sign in on a worker that sends no

@@ -645,8 +645,13 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
     });
     assert.deepEqual(options.socialProviders, {});
     assert.deepEqual(options.onAPIError, { errorURL: `${CONSOLE_URL}/setup` });
-    // No provider is trusted, and the worker rules on unlinking (FRU-249): nothing else of linking is set.
-    assert.deepEqual((options.account as { accountLinking?: unknown }).accountLinking, { allowUnlinkingAll: true });
+    // No provider is trusted, and the worker rules on unlinking (FRU-249). Another address may be
+    // linked, on the conditions of `guardLink` (FRU-415), which runs before better-auth writes.
+    assert.deepEqual((options.account as { accountLinking?: unknown }).accountLinking, {
+      allowUnlinkingAll: true,
+      allowDifferentEmails: true,
+    });
+    assert.equal(typeof (options.user as { validateUserInfo?: unknown }).validateUserInfo, 'function');
     assert.deepEqual(options.disabledPaths?.slice(0, 7), [
       '/revoke-session',
       '/revoke-other-sessions',

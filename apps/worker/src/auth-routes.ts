@@ -11,7 +11,15 @@ import {
 import { UNKNOWN_BROWSER } from './browser-label.ts';
 import { adminLinkAt, endAdminLink } from './first-admin.ts';
 import type { Kv } from './kv.ts';
-import { MailError, type Mailer, signInMessage } from './mail.ts';
+import { MailError, type Mailer, providerLinkedMessage, signInMessage } from './mail.ts';
+import {
+  ACCOUNT_OF_ANOTHER,
+  LINK_NEEDS_CONFIRMATION,
+  type LinkAdapter,
+  pendingLinkKey,
+  readPending,
+  refusalOf,
+} from './provider-link.ts';
 import { INVITATION_REQUIRED, asOperatorLink } from './sign-up.ts';
 
 /**
@@ -67,11 +75,17 @@ const SESSION_PATH = /^\/console\/sessions\/([A-Za-z0-9_-]{1,80})$/;
 
 /**
  * The ways a person signs in (FRU-249). `GET /console/me/sign-in` says which providers are linked to
- * their account; `DELETE /console/me/sign-in/<provider>` takes one away. `GET /console/auth/link/<provider>`
- * links one, by a navigation, for the reason of `START_PATH`.
+ * their account; `DELETE /console/me/sign-in/<provider>` takes one away. `POST /console/auth/link/<provider>`
+ * starts a link, by a navigation (a form), for the reason of `START_PATH` (FRU-415: a `POST`, no
+ * longer a `GET`). `/console/me/sign-in/pending` reads, confirms or cancels the link that came back.
  */
 export const SIGN_IN_PATH = '/console/me/sign-in';
 const SIGN_IN_ONE = /^\/console\/me\/sign-in\/(github|google)$/;
+export const PENDING_LINK_PATH = '/console/me/sign-in/pending';
+/** The way back from a provider, served by better-auth. */
+const CALLBACK_PATH = new RegExp(`^${AUTH_BASE_PATH}/callback/(github|google)$`);
+/** The names of the providers in the alert of a link. */
+const PROVIDER_NAMES: Record<string, string> = { github: 'GitHub', google: 'Google' };
 const LINK_PATH = new RegExp(`^${AUTH_BASE_PATH}/link/(github|google)$`);
 /** The providers a person links and unlinks. The link of the e-mail is not one: it has no row. */
 const LINKABLE = ['github', 'google'] as const;
@@ -85,6 +99,7 @@ export function isAuthRoute(pathname: string): boolean {
     pathname === SESSIONS_PATH ||
     SESSION_PATH.test(pathname) ||
     pathname === SIGN_IN_PATH ||
+    pathname === PENDING_LINK_PATH ||
     SIGN_IN_ONE.test(pathname)
   );
 }
@@ -556,20 +571,21 @@ async function signInMethods(
 }
 
 /**
- * `GET /console/auth/link/<provider>?workspace=<id>` (FRU-249): links a provider to the account of the
- * cookie, by a navigation, as `START_PATH` starts a sign-in. The person comes back to « My account »
- * of that workspace, with `?linked=<provider>`, or with `?provider=<provider>&error=<code>` when
- * the link did not start or better-auth refused it: the console names the provider (FRU-416).
- * `provider` is one of `LINK_PATH`, never a value of the request.
+ * `POST /console/auth/link/<provider>?workspace=<id>` (FRU-249, FRU-415): starts a link of a provider
+ * to the account of the cookie. The console sends it by a form, so the browser navigates and keeps
+ * the cookie of the state, as for `START_PATH`. The person comes back to « My account » of that
+ * workspace with `?confirm=<provider>` (a link to confirm), `?linked=<provider>` (linked already), or
+ * `?provider=<provider>&error=<code>` (FRU-416). `provider` is one of `LINK_PATH`, never a value of
+ * the request.
  *
- * better-auth links only an address that the provider verified, and **only the address of the
- * account**: another one answers `email_does_not_match`, and two accounts are never joined here
- * (read in `oauth2/link-account.mjs` of 1.7.7, and tested). A page of another site does not start
- * one; a page of the same site sends the cookie, and can link to the account its own provider
- * account at most, which a sign-in with that provider does too.
+ * **A `GET` starts nothing** (FRU-415): a page of the same site sends the cookie with a navigation,
+ * and could start a link. A `POST` must carry the `Origin` of the console, which no other page sends.
+ *
+ * **The way back writes no row.** `guardLink` of `provider-link.ts` refuses, or keeps the link for the
+ * confirmation of `pendingLink`: the address of the provider is known only there.
  */
 async function linkProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
-  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, {});
   const consoleOrigin = new URL(context.consoleUrl).origin;
   const workspace = new URL(request.url).searchParams.get('workspace') ?? '';
   const page = WORKSPACE_ID.test(workspace) ? `/w/${workspace}/account` : '/';
@@ -578,9 +594,11 @@ async function linkProvider(request: Request, provider: string, context: AuthRou
     to.searchParams.set('provider', provider);
     to.searchParams.set('error', code);
 
-    return new Response(null, { status: 302, headers: { Location: to.href, 'Cache-Control': 'no-store' } });
+    return new Response(null, { status: 303, headers: { Location: to.href, 'Cache-Control': 'no-store' } });
   };
-  if (request.headers.get('Sec-Fetch-Site') === 'cross-site') return back('started_from_another_site');
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || !mutationAllowed(request, context.consoleUrl)) {
+    return back('started_from_another_site');
+  }
   const auth = await context.auth;
   const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
   if (!Object.hasOwn(configured, provider)) return back('oauth_provider_not_found');
@@ -605,10 +623,139 @@ async function linkProvider(request: Request, provider: string, context: AuthRou
 
     return back('internal_server_error');
   }
+  // `303`: the browser goes to the provider with a `GET`, after the `POST` of the form.
   const headers = new Headers({ Location: body.url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
   for (const cookie of answer.headers.getSetCookie()) headers.append('Set-Cookie', cookie);
 
-  return new Response(null, { status: 302, headers });
+  return new Response(null, { status: 303, headers });
+}
+
+/**
+ * `/console/me/sign-in/pending` (FRU-415): the link that came back from the provider and waits.
+ *
+ * - `GET` answers `{provider, email}`, for the session that started it, or `404 no-pending-link`.
+ * - `POST` confirms it: every condition of `refusalOf` is read again, the row of `account` is written
+ *   with the id of the provider account, and an alert goes to the address of the account.
+ *   `409 <code>` when a condition no longer holds. The pending link is spent once.
+ * - `DELETE` cancels it.
+ *
+ * Each takes the cookie of the console and its `Origin`, as every change of the ways to sign in.
+ */
+async function pendingLink(request: Request, context: AuthRouteContext, headers: Record<string, string>) {
+  const auth = await context.auth;
+  const mine = await sessionOfCookie(auth, request);
+  if (mine === undefined) return json(401, { error: 'identity-required' }, headers);
+  if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
+  const adapter = (await auth.$context).internalAdapter as unknown as LinkAdapter;
+  const key = pendingLinkKey(mine.userId);
+  const none = () => json(404, { error: 'no-pending-link' }, headers);
+  const waiting = async () => {
+    const pending = readPending(await adapter.findVerificationValue(key));
+
+    // Another session of the person does not see it: the one that started the link confirms it.
+    return pending?.session === mine.sessionId ? pending : undefined;
+  };
+
+  if (request.method === 'GET') {
+    const pending = await waiting();
+
+    return pending === undefined ? none() : json(200, { provider: pending.provider, email: pending.email }, headers);
+  }
+  if (request.method === 'DELETE') {
+    if ((await waiting()) === undefined) return none();
+    await adapter.deleteVerificationByIdentifier(key);
+
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
+  }
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+
+  return onePersonAtATime(mine.userId, async () => {
+    if ((await waiting()) === undefined) return none();
+    // Spent once: of two confirmations, one finds it.
+    const spent = await adapter.consumeVerificationValue(key);
+    const pending = readPending(spent);
+    if (spent === null || pending === undefined || pending.session !== mine.sessionId) return none();
+    const link = {
+      userId: mine.userId,
+      providerId: pending.provider,
+      accountId: pending.accountId,
+      email: pending.email,
+    };
+    const refusal = await refusalOf(adapter, link);
+    if (refusal === 'linked') return json(200, { provider: pending.provider }, headers);
+    if (refusal !== undefined) return json(409, { error: refusal }, headers);
+    try {
+      // The identity is the id of the provider account. No token: there is none to keep.
+      await adapter.createAccount({ userId: link.userId, providerId: link.providerId, accountId: link.accountId });
+    } catch (error) {
+      // `account_providerId_accountId_key`: another account took it in between, on another replica.
+      // Read again, so that only that conflict answers `409`.
+      const owner = await adapter
+        .findAccountByKey({ providerId: link.providerId, accountId: link.accountId })
+        .catch(() => null);
+      if (owner !== null && owner.userId !== link.userId) return json(409, { error: ACCOUNT_OF_ANOTHER }, headers);
+      // Any other failure: the link waits again, for a confirmation that is tried again, and the
+      // caller answers `502`.
+      await adapter
+        .createVerificationValue({ identifier: key, value: spent.value, expiresAt: spent.expiresAt })
+        .catch(() => undefined);
+      throw new AuthUnavailable(`the link with ${link.providerId} was not written: ${String(error)}`, { cause: error });
+    }
+    await alertOfLink(context, mine.userId, pending);
+
+    return json(200, { provider: pending.provider }, headers);
+  });
+}
+
+/**
+ * The alert of a link (FRU-415), to the address of the account, in its language. A worker with no
+ * mailer sends none. A failure to send is logged, and does not undo the link: the person confirmed it.
+ */
+async function alertOfLink(
+  context: AuthRouteContext,
+  userId: string,
+  pending: { provider: string; email: string; workspace?: string },
+): Promise<void> {
+  const mailer = context.mailer;
+  if (mailer === undefined) return;
+  // After the write: nothing here may fail the confirmation, which is done.
+  try {
+    const account = await context.accounts.account(userId);
+    if (account === undefined) return;
+    const origin = new URL(context.consoleUrl).origin;
+    const link = pending.workspace === undefined ? `${origin}/` : `${origin}/w/${pending.workspace}/account`;
+    const message = providerLinkedMessage(
+      account.email,
+      { provider: PROVIDER_NAMES[pending.provider] ?? pending.provider, address: pending.email, link },
+      account.locale,
+    );
+    await mailer.send(message);
+  } catch (error) {
+    console.error(`[fruitback] the alert of a link with ${pending.provider} was not sent: ${String(error)}`);
+  }
+}
+
+/**
+ * The way back of a link that waits for its confirmation: better-auth writes it as an error of
+ * `guardLink`, and the console reads `?confirm=<provider>` in its place.
+ */
+function confirmInstead(answer: Response): Response {
+  const location = answer.headers.get('Location');
+  if (location === null) return answer;
+  let to: URL;
+  try {
+    to = new URL(location);
+  } catch {
+    return answer;
+  }
+  if (to.searchParams.get('error') !== LINK_NEEDS_CONFIRMATION) return answer;
+  const provider = to.searchParams.get('provider') ?? '';
+  to.search = '';
+  to.searchParams.set('confirm', provider);
+  const headers = new Headers(answer.headers);
+  headers.set('Location', to.href);
+
+  return new Response(answer.body, { status: answer.status, headers });
 }
 
 /**
@@ -630,6 +777,7 @@ export async function handleAuthRoutes(
   const started = START_PATH.exec(pathname);
   if (started !== null) return startWithProvider(request, started[1] ?? '', context);
   if (pathname === SESSIONS_PATH || SESSION_PATH.test(pathname)) return sessions(request, pathname, context, headers);
+  if (pathname === PENDING_LINK_PATH) return pendingLink(request, context, headers);
   if (pathname === SIGN_IN_PATH || SIGN_IN_ONE.test(pathname))
     return signInMethods(request, pathname, context, headers);
   const linking = LINK_PATH.exec(pathname);
@@ -650,5 +798,7 @@ export async function handleAuthRoutes(
     ...(SAFE_METHODS.has(request.method) ? {} : { body: await request.arrayBuffer() }),
   });
 
-  return withHeaders(await (await context.auth).handler(forwarded), headers);
+  const answer = await (await context.auth).handler(forwarded);
+
+  return withHeaders(CALLBACK_PATH.test(pathname) ? confirmInstead(answer) : answer, headers);
 }
