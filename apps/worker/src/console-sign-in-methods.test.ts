@@ -336,6 +336,23 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await providersOf(worker.database, id), ['google']);
     });
 
+    it('answers the confirmation that wrote the link, when the alert cannot be read or sent (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      await linkThrough(worker, cookie, 'google', google('alice@other.dev'));
+      const reading = mockMethod(worker.accounts, 'account', async () => {
+        throw new Error('the database did not answer');
+      });
+      let confirmed: Response;
+      try {
+        confirmed = await pending(worker, cookie, 'POST');
+      } finally {
+        reading.mockRestore();
+      }
+
+      assert.equal(confirmed.status, 200);
+      assert.deepEqual(await providersOf(worker.database, id), ['google']);
+    });
+
     it('links nothing on a GET, nor on a POST of another page (FRU-415)', async () => {
       const { worker, cookie, id } = await signedIn();
       const path = '/console/auth/link/github?workspace=ws_0123456789abcdef0123';

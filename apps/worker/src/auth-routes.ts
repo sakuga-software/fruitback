@@ -716,18 +716,20 @@ async function alertOfLink(
   userId: string,
   pending: { provider: string; email: string; workspace?: string },
 ): Promise<void> {
-  if (context.mailer === undefined) return;
-  const account = await context.accounts.account(userId);
-  if (account === undefined) return;
-  const origin = new URL(context.consoleUrl).origin;
-  const link = pending.workspace === undefined ? `${origin}/` : `${origin}/w/${pending.workspace}/account`;
-  const message = providerLinkedMessage(
-    account.email,
-    { provider: PROVIDER_NAMES[pending.provider] ?? pending.provider, address: pending.email, link },
-    account.locale,
-  );
+  const mailer = context.mailer;
+  if (mailer === undefined) return;
+  // After the write: nothing here may fail the confirmation, which is done.
   try {
-    await context.mailer.send(message);
+    const account = await context.accounts.account(userId);
+    if (account === undefined) return;
+    const origin = new URL(context.consoleUrl).origin;
+    const link = pending.workspace === undefined ? `${origin}/` : `${origin}/w/${pending.workspace}/account`;
+    const message = providerLinkedMessage(
+      account.email,
+      { provider: PROVIDER_NAMES[pending.provider] ?? pending.provider, address: pending.email, link },
+      account.locale,
+    );
+    await mailer.send(message);
   } catch (error) {
     console.error(`[fruitback] the alert of a link with ${pending.provider} was not sent: ${String(error)}`);
   }
