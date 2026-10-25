@@ -45,15 +45,17 @@ export function NotesBoard<Note extends BoardNote>({
   const [refused, setRefused] = useState<string | undefined>();
   const frame = useRef<HTMLDivElement>(null);
   // The note whose select moved it. Its card is drawn again in another column, and the focus of the
-  // keyboard went back to the page: it is given back to the select once the list is read again.
+  // keyboard went back to the page: it is given back to the select once the list is read again. A
+  // filter can keep the note off the board after the read: the focus then goes to the board, never
+  // to the page.
   const [follow, setFollow] = useState<string | undefined>();
   useEffect(() => {
     if (follow === undefined || busy) return;
     const moved = [...(frame.current?.querySelectorAll<HTMLElement>('li[data-note]') ?? [])].find(
       (each) => each.dataset.note === follow,
     );
-    const select = moved?.querySelector<HTMLElement>('button[aria-haspopup]');
-    if (select !== null && select !== undefined && document.activeElement !== select) select.focus();
+    const target = moved?.querySelector<HTMLElement>('button[aria-haspopup]') ?? frame.current;
+    if (target !== null && document.activeElement !== target) target.focus();
     setFollow(undefined);
   }, [follow, busy, columns]);
 

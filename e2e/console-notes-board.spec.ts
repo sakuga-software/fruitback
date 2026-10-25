@@ -76,10 +76,14 @@ type Worker = {
 
 async function workerWith(
   page: Page,
-  options: { locale?: 'en' | 'fr'; sites?: readonly unknown[] } = {},
+  options: {
+    locale?: 'en' | 'fr';
+    sites?: readonly unknown[];
+    more?: readonly ReturnType<typeof notes>[number][];
+  } = {},
 ): Promise<Worker> {
   const worker: Worker = { sent: [], asked: [], refuse: undefined };
-  const kept = notes();
+  const kept = [...notes(), ...(options.more ?? [])];
   const answer = (pathname: string, route: Route) => {
     const request = route.request();
     if (pathname === '/console/workspaces/w1/connectors') {
@@ -233,6 +237,39 @@ test('the keyboard moves a note with the select of its card', async ({ page }) =
       .locator('li')
       .getByRole('button', { name: /Status of this note/ }),
   ).toBeFocused();
+});
+
+/** Chooses a status with the select of a card, as a keyboard does. */
+async function chooseWithKeyboard(page: Page, excerpt: string, status: string): Promise<void> {
+  await card(page, excerpt)
+    .getByRole('button', { name: /Status of this note/ })
+    .focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('option', { name: status, exact: true }).focus();
+  await page.keyboard.press('Enter');
+}
+
+test('a note the filter no longer keeps leaves the board, and the focus stays on the board', async ({ page }) => {
+  const second = { ...notes()[0]!, id: 'n4', excerpt: 'The footer has no link to the terms.' };
+  const worker = await workerWith(page, { more: [second] });
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board&stage=new`);
+  await chooseWithKeyboard(page, 'The headline', 'Shipped');
+
+  await expect.poll(() => worker.sent.length).toBe(1);
+  // « Shipped » is done, and the filter keeps the new notes: the card is gone after the read.
+  await expect(card(page, 'The headline')).toHaveCount(0);
+  await expect(card(page, 'The footer')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Notes by status' })).toBeFocused();
+});
+
+test('when the last note the filter kept leaves, « Clear the filters » takes the focus', async ({ page }) => {
+  const worker = await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board&stage=new`);
+  await chooseWithKeyboard(page, 'The headline', 'Shipped');
+
+  await expect.poll(() => worker.sent.length).toBe(1);
+  await expect(page.getByText('No note matches.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear the filters' })).toBeFocused();
 });
 
 test('with several sites in view, a column is a stage', async ({ page }) => {

@@ -152,6 +152,9 @@ export default function Notes() {
   // then goes to the first page.
   const [before, setBefore] = useState<string[]>([]);
   const asked = useRef(0);
+  // A select of the board moved a note (FRU-436). If the read after it leaves no note under the
+  // filters, the board is gone with the select that had the focus: « Clear the filters » takes it.
+  const [movedOut, setMovedOut] = useState(false);
 
   const read = useCallback(async () => {
     const mine = (asked.current += 1);
@@ -170,6 +173,7 @@ export default function Notes() {
   /** Sets filters, and goes back to the first page: a page of another list means nothing. */
   function filter(changes: Partial<Record<(typeof FILTERS)[number], string>>, replace = false) {
     setBefore([]);
+    setMovedOut(false);
     // From the address as it is when the change lands, not as it was when it was asked: the search
     // writes 300 ms after its key, and a list chosen meanwhile must not be undone by it. The setter of
     // React Router reads the address of the render that made it, so the latest one is kept here.
@@ -314,6 +318,7 @@ export default function Notes() {
             <div className="flex flex-wrap items-center gap-x-[12px] text-body text-muted">
               <p>{t('No note matches.')}</p>
               <LinkButton
+                autoFocus={movedOut}
                 onClick={() => {
                   setTyped('');
                   filter({ place: '', site: '', stage: '', mine: '', q: '' });
@@ -350,6 +355,7 @@ export default function Notes() {
                       choose={(status) => choose(note, status)}
                       onSaved={() => {
                         moved();
+                        setMovedOut(true);
                         void read();
                       }}
                     />
@@ -710,7 +716,8 @@ function NoteCard({
           {t('Show on the page')}
         </LinkButton>
       </p>
-      <NoteStatus note={note} statuses={statuses} choose={choose} onSaved={onSaved} />
+      {/* Keyed by the status read: a read again that says another status starts the select from it. */}
+      <NoteStatus key={note.status ?? note.stage} note={note} statuses={statuses} choose={choose} onSaved={onSaved} />
       {seesTracker && note.place !== undefined ? (
         <div className="text-hint">
           <Place
