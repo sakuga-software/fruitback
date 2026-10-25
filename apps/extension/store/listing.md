@@ -181,7 +181,7 @@ Captures of the page (team mode only): the browser refuses tabs.captureVisibleTa
 - **Build instructions**, for the same form:
 
   ```text
-  Node 26 (see .nvmrc) and pnpm 11.16.0, on Linux or macOS.
+  Node 26 (see .nvmrc) and pnpm 12.15.0, on Linux or macOS.
 
   pnpm install --frozen-lockfile
   pnpm --filter @fruitback/extension build:firefox

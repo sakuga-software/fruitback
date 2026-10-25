@@ -28,7 +28,7 @@
     "oxlint": "catalog:",
     "typescript": "catalog:"
   },
-  "packageManager": "pnpm@11.16.0",
+  "packageManager": "pnpm@12.15.0",
   "nx": {
     "includedScripts": []
   }

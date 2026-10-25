@@ -15,7 +15,7 @@ three modes over one core — public, private, team: [docs/modes.md](docs/modes.
 
 ## Commands
 
-Package manager is `pnpm@11.16.0` (pinned). Nx runs multi-project targets.
+Package manager is `pnpm@12.15.0` (pinned). Nx runs multi-project targets.
 
 ```bash
 pnpm install

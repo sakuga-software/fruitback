@@ -13,8 +13,8 @@ read [SECURITY.md](SECURITY.md) first instead of opening an ordinary issue.
 
 - **Node 26**, the version in `.nvmrc` (`nvm use` reads it). The sources run with no build step,
   because Node strips the types itself.
-- **pnpm 11.16.0**, the version `packageManager` pins in `package.json`. For example:
-  `npm install --global pnpm@11.16.0`.
+- **pnpm 12.15.0**, the version `packageManager` pins in `package.json`. For example:
+  `npm install --global pnpm@12.15.0`.
 
 ```bash
 pnpm install
