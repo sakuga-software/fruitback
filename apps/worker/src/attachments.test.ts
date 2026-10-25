@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createMemoryKv } from './kv.ts';
@@ -418,17 +418,24 @@ describe('the limits of the files of a person and of a note (FRU-331)', () => {
     const env = await envWith();
     const { acme, alice_token, site, tokenOf } = await setUp(env);
     const attachments = createMemoryAttachmentStore();
-    for (let n = 0; n < MAX_FILES_PER_MINUTE; n += 1) {
-      assert.equal((await upload(env, { attachments }, site, alice_token)).status, 201, `file ${n + 1}`);
+    // The limit counts by minute of the clock. A minute that changes between two files starts the
+    // count again, and the file over the limit passes (FRU-452): the clock stays in one minute here.
+    vi.useFakeTimers({ toFake: ['Date'], now: Math.ceil(Date.now() / 60_000) * 60_000 + 1_000 });
+    try {
+      for (let n = 0; n < MAX_FILES_PER_MINUTE; n += 1) {
+        assert.equal((await upload(env, { attachments }, site, alice_token)).status, 201, `file ${n + 1}`);
+      }
+      const over = await upload(env, { attachments }, site, alice_token);
+      assert.equal(over.status, 429);
+      assert.deepEqual(await over.json(), { error: 'rate-limited', maxFilesPerMinute: MAX_FILES_PER_MINUTE });
+      assert.equal(attachments.size(), MAX_FILES_PER_MINUTE, 'the refused file is not kept');
+      // The control: another person of the workspace, in the same minute, sends one.
+      const carl = await signInTo(env, 'carl@acme.dev');
+      await memberOf(env, acme.id, carl.id, 'member');
+      assert.equal((await upload(env, { attachments }, site, await tokenOf(carl.id, acme.id))).status, 201);
+    } finally {
+      vi.useRealTimers();
     }
-    const over = await upload(env, { attachments }, site, alice_token);
-    assert.equal(over.status, 429);
-    assert.deepEqual(await over.json(), { error: 'rate-limited', maxFilesPerMinute: MAX_FILES_PER_MINUTE });
-    assert.equal(attachments.size(), MAX_FILES_PER_MINUTE, 'the refused file is not kept');
-    // The control: another person of the workspace, in the same minute, sends one.
-    const carl = await signInTo(env, 'carl@acme.dev');
-    await memberOf(env, acme.id, carl.id, 'member');
-    assert.equal((await upload(env, { attachments }, site, await tokenOf(carl.id, acme.id))).status, 201);
   });
 
   it('stops an address at the limit of all its requests, and not another address', async () => {
