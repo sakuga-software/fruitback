@@ -18,7 +18,7 @@ import { readReactSource } from './source.ts';
  *
  * This is the only place the widget builds a seed, and it goes through `createNote`, so an anchor
  * that came out malformed fails here — in the reporter's browser, with a message — rather than as a
- * `400 invalid-seed` after the note was typed.
+ * `400 invalid-note` after the note was typed.
  */
 
 export type CaptureNoteOptions = {
