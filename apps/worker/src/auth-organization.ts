@@ -599,7 +599,10 @@ async function answerOrganizationCall(
       }),
     );
   } finally {
-    await retargeted?.restore();
+    // A failed restore is logged: the error of the acceptance, if any, is the one that goes up.
+    await retargeted?.restore().catch((error: unknown) => {
+      console.error(`[fruitback] an invitation did not get its address back: ${String(error)}`);
+    });
   }
 
   // An acceptance that better-auth refused leaves no share: the person is no member, and the rows
