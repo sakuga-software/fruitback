@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DOCK_POSITIONS as WIDGET_DOCK_POSITIONS } from '@fruitback/widget';
 import {
+  DOCK_POSITIONS,
+  parseDockPosition,
   CHANNEL,
   MAX_FILE_BASE64,
   NAME_MAX,
@@ -413,5 +416,24 @@ describe('the message of « Show CSS selectors » (FRU-349)', () => {
     });
     assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors', shown: 'true' }), undefined);
     assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'selectors' }), undefined);
+  });
+});
+
+describe('the message of « Corner of the widget » (FRU-443)', () => {
+  it('reads a corner the widget knows, or none, and carries no other field', () => {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'dock', position: 'top-left', extra: 1 }), {
+      channel: CHANNEL,
+      kind: 'dock',
+      position: 'top-left',
+    });
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'dock' }), { channel: CHANNEL, kind: 'dock' });
+    for (const position of ['middle', 'Top-Left', '', 1, null, {}]) {
+      assert.equal(parseBridgeMessage({ channel: CHANNEL, kind: 'dock', position }), undefined, String(position));
+    }
+  });
+
+  it('knows the corners the widget knows', () => {
+    assert.deepEqual([...DOCK_POSITIONS], [...WIDGET_DOCK_POSITIONS]);
+    for (const corner of WIDGET_DOCK_POSITIONS) assert.equal(parseDockPosition(corner), corner);
   });
 });
