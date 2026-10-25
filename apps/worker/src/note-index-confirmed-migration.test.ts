@@ -33,9 +33,9 @@ for (const { label, open, skip } of DATABASES) {
 
       await migrate(database);
 
-      const rows = await rowsOf(database, 'SELECT seed_id, confirmed FROM note_index ORDER BY created_at');
+      const rows = await rowsOf(database, 'SELECT note_id, confirmed FROM note_index ORDER BY created_at');
       assert.deepEqual(
-        rows.map((row) => [row.seed_id, row.confirmed]),
+        rows.map((row) => [row.note_id, row.confirmed]),
         [
           ['sd_done', null],
           ['sd_open', null],

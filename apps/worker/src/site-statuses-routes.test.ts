@@ -30,7 +30,7 @@ async function plant(team: World, site: string, stage: string, key: string | nul
   const seed = noteFixture({ id, client: { id: site }, page: { url: PAGE, path: '/pricing' } });
   await rowsOf(
     team.database,
-    `INSERT INTO seeds (client_id, page_url, stage, status_key, seed, created_at, updated_at)
+    `INSERT INTO notes (client_id, page_url, stage, status_key, payload, created_at, updated_at)
        VALUES ('${site}', '${PAGE}', '${stage}', ${key === null ? 'NULL' : `'${key}'`}, '${JSON.stringify(seed)}', 1, 1)`,
   );
 }
@@ -172,7 +172,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     assert.deepEqual([moved.status, await moved.json()], [200, { moved: 2 }]);
     // The notes take the status and its stage.
     assert.deepEqual(
-      await rowsOf(team.database, `SELECT DISTINCT stage, status_key FROM seeds WHERE client_id = '${site}'`),
+      await rowsOf(team.database, `SELECT DISTINCT stage, status_key FROM notes WHERE client_id = '${site}'`),
       [{ stage: CLOSED, status_key: 'parked' }],
     );
 
@@ -180,7 +180,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     const back = await callOn(team, 'DELETE', path(workspace, site, `/own/parked?moveTo=${DONE}`), { token });
     assert.deepEqual([back.status, await back.json()], [200, { moved: 2 }]);
     assert.deepEqual(
-      await rowsOf(team.database, `SELECT DISTINCT stage, status_key FROM seeds WHERE client_id = '${site}'`),
+      await rowsOf(team.database, `SELECT DISTINCT stage, status_key FROM notes WHERE client_id = '${site}'`),
       [{ stage: DONE, status_key: null }],
     );
     assert.deepEqual(await rowsOf(team.database, `SELECT key FROM statuses WHERE site_id = '${site}'`), []);
@@ -222,14 +222,14 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
     await plant(team, site, NEW as string, 'waiting', 'seed-1');
     await read(team, site);
-    const indexed = () => rowsOf(team.database, `SELECT seed_id, stage FROM note_index WHERE site_id = '${site}'`);
-    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: NEW }], 'the read wrote the note in the index');
+    const indexed = () => rowsOf(team.database, `SELECT note_id, stage FROM note_index WHERE site_id = '${site}'`);
+    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: NEW }], 'the read wrote the note in the index');
 
     await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo=parked'), { token });
-    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: CLOSED }]);
+    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: CLOSED }]);
 
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: DONE } });
-    assert.deepEqual(await indexed(), [{ seed_id: 'seed-1', stage: DONE }]);
+    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: DONE }]);
   });
 
   it('reads the page of a note it moves again at once, not from the cache of the page', async () => {
@@ -281,7 +281,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: DONE } });
 
     assert.deepEqual(
-      await rowsOf(team.database, `SELECT status_key, stage FROM seeds WHERE client_id = '${site}' ORDER BY id`),
+      await rowsOf(team.database, `SELECT status_key, stage FROM notes WHERE client_id = '${site}' ORDER BY id`),
       [
         { status_key: 'waiting', stage: DONE },
         // A note in a built-in status does not move.

@@ -40,7 +40,7 @@ async function rowsByTable(database: PgDatabase): Promise<Record<string, number>
   return counts;
 }
 
-/** Rows in the tables of better-auth, of a workspace, of the seeds (with an identity) and of the cache. */
+/** Rows in the tables of better-auth, of a workspace, of the notes (with an identity) and of the cache. */
 async function writeSomething(database: PgDatabase): Promise<Row[]> {
   await rowsOf(
     database,
@@ -59,7 +59,7 @@ async function writeSomething(database: PgDatabase): Promise<Row[]> {
 
   return rowsOf(
     database,
-    `INSERT INTO seeds (page_url, stage, seed, created_at, updated_at) VALUES ('https://a.test/', 's', 'x', 1, 1) RETURNING id`,
+    `INSERT INTO notes (page_url, stage, payload, created_at, updated_at) VALUES ('https://a.test/', 's', 'x', 1, 1) RETURNING id`,
   );
 }
 
@@ -119,7 +119,7 @@ describe('a migrated database of PGlite, from one case to the next (FRU-339)', (
     ['a table that is dropped', 'DROP TABLE deliveries'],
     ['a table that is renamed', 'ALTER TABLE note_index RENAME TO note_index_gone'],
     ['a column that is added', 'ALTER TABLE kv ADD COLUMN extra text'],
-    ['a default that changes', `ALTER TABLE seeds ALTER COLUMN stage SET DEFAULT 'x'`],
+    ['a default that changes', `ALTER TABLE notes ALTER COLUMN stage SET DEFAULT 'x'`],
     ['an index that is dropped', 'DROP INDEX kv_by_expiry'],
     ['a trigger that is off', 'ALTER TABLE member DISABLE TRIGGER member_keeps_owner'],
     [

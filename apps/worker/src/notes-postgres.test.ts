@@ -72,11 +72,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal(await store.reply?.({ issue: ours.id, clientId: undefined }, reply, undefined, POLICY), undefined);
       assert.equal(await store.reply?.({ issue: '999', clientId: 'site_a' }, reply, undefined, POLICY), undefined);
       assert.equal(await store.reply?.({ issue: 'FB-1', clientId: 'site_a' }, reply, undefined, POLICY), undefined);
-      assert.deepEqual(await rowsOf(database, 'SELECT id FROM seed_comments'), []);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM note_comments'), []);
 
       const written = await store.reply?.({ issue: ours.id, clientId: 'site_a' }, reply, undefined, POLICY);
       assert.ok(written !== undefined);
-      assert.equal((await rowsOf(database, 'SELECT id FROM seed_comments')).length, 1);
+      assert.equal((await rowsOf(database, 'SELECT id FROM note_comments')).length, 1);
     });
 
     it('gives a read that names no site the notes that name none, and never the notes of a site', async () => {
@@ -111,7 +111,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       ];
       await assert.rejects(Promise.resolve(store.createBatch?.(refused, undefined, POLICY)), StoreError);
       assert.deepEqual(
-        (await rowsOf(database, 'SELECT id FROM seeds ORDER BY id')).map((row) => Number(row.id)),
+        (await rowsOf(database, 'SELECT id FROM notes ORDER BY id')).map((row) => Number(row.id)),
         [1, 2, 3],
       );
     });
@@ -148,8 +148,8 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       for (const id of ['sd_good', 'sd_not_json', 'sd_other_page']) {
         await store.create(noteFixtureOf(id, 'site_a'), undefined, POLICY);
       }
-      await rowsOf(database, `UPDATE seeds SET seed = 'not json' WHERE id = 2`);
-      await rowsOf(database, `UPDATE seeds SET page_url = '${PAGE}?moved=1' WHERE id = 3`);
+      await rowsOf(database, `UPDATE notes SET payload = 'not json' WHERE id = 2`);
+      await rowsOf(database, `UPDATE notes SET page_url = '${PAGE}?moved=1' WHERE id = 3`);
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
       const moved = await store.findForPage({ url: `${PAGE}?moved=1`, clientId: 'site_a' }, undefined, POLICY);
@@ -189,7 +189,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       await store.create(noteFixtureOf('second', 'site_a'), undefined, POLICY);
       await rowsOf(
         database,
-        `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'pour la premiere', 1), (2, 'pour la seconde', 1)`,
+        `INSERT INTO note_comments (note_id, body, created_at) VALUES (1, 'pour la premiere', 1), (2, 'pour la seconde', 1)`,
       );
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
@@ -206,7 +206,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('leaves the author out when nobody signed it', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_unsigned', 'site_a'), undefined, POLICY);
-      await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'sans signature', 1)`);
+      await rowsOf(database, `INSERT INTO note_comments (note_id, body, created_at) VALUES (1, 'sans signature', 1)`);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
@@ -219,7 +219,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_good', 'site_a'), undefined, POLICY);
       await store.create(noteFixtureOf('sd_hello', 'site_a'), undefined, POLICY);
-      await rowsOf(database, `UPDATE seeds SET seed = '{ "hello": "world" }' WHERE id = 2`);
+      await rowsOf(database, `UPDATE notes SET payload = '{ "hello": "world" }' WHERE id = 2`);
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
@@ -237,7 +237,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       });
       await store.create(elsewhere, undefined, POLICY);
       // The column says this page, and the seed in it says another.
-      await rowsOf(database, `UPDATE seeds SET page_url = '${PAGE}' WHERE id = 2`);
+      await rowsOf(database, `UPDATE notes SET page_url = '${PAGE}' WHERE id = 2`);
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
@@ -250,7 +250,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('says when a note was written and changed, as dates', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_dated', 'site_a'), undefined, POLICY);
-      await rowsOf(database, `UPDATE seeds SET updated_at = ${Date.UTC(2026, 9, 13, 8, 30)}`);
+      await rowsOf(database, `UPDATE notes SET updated_at = ${Date.UTC(2026, 9, 13, 8, 30)}`);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
@@ -266,12 +266,12 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       await store.create(noteFixtureOf('sd_alice_b', 'site_b', { reporter: alice }), undefined, POLICY);
       await rowsOf(
         database,
-        `INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES (1, 'Team', 'one', 1), (2, 'Team', 'two', 2), (3, 'Team', 'three', 3)`,
+        `INSERT INTO note_comments (note_id, author, body, created_at) VALUES (1, 'Team', 'one', 1), (2, 'Team', 'two', 2), (3, 'Team', 'three', 3)`,
       );
       const left = async () => ({
-        seeds: (await rowsOf(database, 'SELECT id FROM seeds ORDER BY id')).map((row) => Number(row.id)),
-        replies: (await rowsOf(database, 'SELECT seed_id FROM seed_comments ORDER BY seed_id')).map((row) =>
-          Number(row.seed_id),
+        seeds: (await rowsOf(database, 'SELECT id FROM notes ORDER BY id')).map((row) => Number(row.id)),
+        replies: (await rowsOf(database, 'SELECT note_id FROM note_comments ORDER BY note_id')).map((row) =>
+          Number(row.note_id),
         ),
       });
 
@@ -329,7 +329,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         listed?.map((seed) => seed.identifier),
         ['FB-1'],
       );
-      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM seeds'), [{ n: 3 }]);
+      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM notes'), [{ n: 3 }]);
     });
 
     it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {
@@ -340,13 +340,13 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         POLICY,
       );
       await store.create(noteFixtureOf('sd_broken', 'site_a'), undefined, POLICY);
-      await rowsOf(database, `UPDATE seeds SET seed = '{not json' WHERE id = 2`);
+      await rowsOf(database, `UPDATE notes SET payload = '{not json' WHERE id = 2`);
 
       const forgotten = await store.forget?.({ email: 'alice@example.com' }, { dryRun: false });
 
       assert.equal(forgotten?.length, 1);
       assert.deepEqual(
-        (await rowsOf(database, 'SELECT id FROM seeds')).map((row) => Number(row.id)),
+        (await rowsOf(database, 'SELECT id FROM notes')).map((row) => Number(row.id)),
         [2],
       );
     });

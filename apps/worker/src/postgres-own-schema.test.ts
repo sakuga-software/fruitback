@@ -117,7 +117,7 @@ for (const { label, open, skip } of [
 
       // Its tables, the ones of better-auth among them, and its journal are in its schema.
       const mine = await tablesOf(database, SCHEMA);
-      for (const table of ['user', 'session', 'account', 'organization', 'sites', 'seeds', APPLIED.migrationsTable]) {
+      for (const table of ['user', 'session', 'account', 'organization', 'sites', 'notes', APPLIED.migrationsTable]) {
         assert.ok(mine.includes(table), `no table ${SCHEMA}.${table}`);
       }
       assert.deepEqual(await rowsOf(database, `SELECT email FROM "${SCHEMA}"."user"`), [{ email: 'alice@acme.dev' }]);

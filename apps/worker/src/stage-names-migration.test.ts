@@ -13,6 +13,9 @@ import { migrate } from './postgres-migrate.ts';
 
 const { opening } = databasesOfACase();
 
+/** The migrations up to the one before `0030_note_names` (FRU-378), which renames the tables this file reads. */
+const BEFORE_NOTE_NAMES = migrationsThrough('0029_connector_name');
+
 const OLD = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 const NEW = ['new', 'todo', 'progress', 'done', 'closed'] as const;
 
@@ -128,7 +131,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, migrationsThrough('0025_site_statuses'));
       for (const statement of BEFORE) await rowsOf(database, statement);
 
-      await migrate(database);
+      await migrate(database, BEFORE_NOTE_NAMES);
 
       const after = await stored(database);
       assert.deepEqual(after.seeds, [...NEW, 'blue']);
@@ -159,7 +162,7 @@ for (const { label, open, skip } of DATABASES) {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0025_site_statuses'));
       for (const statement of BEFORE) await rowsOf(database, statement);
-      await migrate(database);
+      await migrate(database, BEFORE_NOTE_NAMES);
       const once = await stored(database);
 
       const file = readFileSync(new URL('../drizzle/0026_stage_names.sql', import.meta.url), 'utf8');
@@ -173,7 +176,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, migrationsThrough('0025_site_statuses'));
       for (const statement of BEFORE) await rowsOf(database, statement);
       const before = await stored(database);
-      await migrate(database);
+      await migrate(database, BEFORE_NOTE_NAMES);
 
       for (const statement of REVERSE_SQL) await rowsOf(database, statement);
 

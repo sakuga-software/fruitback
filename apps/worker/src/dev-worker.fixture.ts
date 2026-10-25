@@ -140,7 +140,7 @@ async function moveStage(database: PgDatabase, incoming: IncomingMessage, respon
     const client = await pool.connect();
     try {
       const moved = await client.query(
-        "UPDATE seeds SET stage = $1, updated_at = $3 WHERE (seed::jsonb ->> 'id') = $2",
+        "UPDATE notes SET stage = $1, updated_at = $3 WHERE (payload::jsonb ->> 'id') = $2",
         [asked.stage, asked.note, Date.now()],
       );
       const count = (moved as { rowCount?: number | null }).rowCount ?? 0;

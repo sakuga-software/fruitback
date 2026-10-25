@@ -130,11 +130,11 @@ and an address are a claim by whoever was on the page, and they are stored as on
 The whole note — its text, page URL, selector, the reporter's name and address — is
 stored as it arrived, and **where** depends on the connector:
 
-| Store      | Where a note lands                                                                              | Who can read it                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `linear`   | verbatim in an issue description                                                                | anyone with access to that workspace                                                                                 |
-| `postgres` | `JSON.stringify(seed)` in the `seed` column of the table `seeds`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
-| `github`   | verbatim in an issue body                                                                       | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
+| Store      | Where a note lands                                                                                 | Who can read it                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `linear`   | verbatim in an issue description                                                                   | anyone with access to that workspace                                                                                 |
+| `postgres` | `JSON.stringify(note)` in the `payload` column of the table `notes`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
+| `github`   | verbatim in an issue body                                                                          | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the note. On PostgreSQL the database and its dumps are the

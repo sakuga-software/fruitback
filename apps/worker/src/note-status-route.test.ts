@@ -128,7 +128,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
       { stage: TODO },
     ]);
     assert.deepEqual(await pin(world, site, tokens.bob, store), [TODO, 'own:waiting']);
-    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM seeds`), [
+    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM notes`), [
       { stage: TODO, status_key: 'waiting' },
     ]);
   });
@@ -141,7 +141,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
 
     assert.deepEqual(set, { status: 200, body: { status: `own:${DONE}`, stage: DONE } });
     // A built-in status is no key of its own: the note is in the status of its stage.
-    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM seeds`), [
+    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM notes`), [
       { stage: DONE, status_key: null },
     ]);
     assert.deepEqual(await pin(world, site, tokens.alice, store), [DONE, `own:${DONE}`]);
@@ -158,7 +158,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
       status: 401,
       body: { error: 'identity-required' },
     });
-    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM seeds`), [
+    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM notes`), [
       { stage: NEW, status_key: null },
     ]);
   });
@@ -172,7 +172,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
     assert.deepEqual(await refused('con_linear:st_1'), { status: 400, body: { error: 'not-own' } });
     assert.deepEqual(await refused('own:in review'), { status: 400, body: { error: 'invalid-status' } });
     assert.deepEqual(await refused(3), { status: 400, body: { error: 'invalid-status' } });
-    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM seeds`), [
+    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM notes`), [
       { stage: NEW, status_key: null },
     ]);
   });
@@ -226,7 +226,7 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
     );
 
     assert.equal(wrong.status, 201, JSON.stringify(wrong.body));
-    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM seeds`), [
+    assert.deepEqual(await rowsOf(world.database, `SELECT stage, status_key FROM notes`), [
       { stage: NEW, status_key: null },
     ]);
     assert.deepEqual(await pin(world, site, tokens.bob, store), [NEW, `own:${NEW}`]);
@@ -237,7 +237,7 @@ describe('the status of a note, written under the lock of its site (FRU-367, hea
   it('writes nothing for a status removed or hidden since the route read it, and takes the stage of the row now', async () => {
     const { world, store, workspace, site, note } = await aNote();
     const target = { issue: note, clientId: site };
-    const before = () => rowsOf(world.database, `SELECT stage, status_key FROM seeds`);
+    const before = () => rowsOf(world.database, `SELECT stage, status_key FROM notes`);
 
     // Removed by the console after the route read it: the route still holds what it read.
     assert.equal(await store.setStatus?.(target, { key: 'gone', stage: TODO as never }, undefined), 'status-changed');

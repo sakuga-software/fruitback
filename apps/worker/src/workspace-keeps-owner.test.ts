@@ -144,7 +144,7 @@ describe(
         const tableLocked = new Promise<void>((resolve) => (locked = resolve));
         const holding = holder.transaction(async (db) => {
           await db.execute(
-            `LOCK TABLE ${deleting_ === 'workspace-by-owner' ? 'seeds' : 'admin_actions'} IN EXCLUSIVE MODE`,
+            `LOCK TABLE ${deleting_ === 'workspace-by-owner' ? 'notes' : 'admin_actions'} IN EXCLUSIVE MODE`,
           );
           locked();
           await released;

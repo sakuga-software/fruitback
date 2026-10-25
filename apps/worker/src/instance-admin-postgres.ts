@@ -42,7 +42,7 @@ import {
   admin_reads,
   connectors,
   note_index,
-  seeds,
+  notes,
   site_shares,
   sites,
   workspace_suspensions,
@@ -56,8 +56,8 @@ import { noteOf, rowOfIdentifier, widgetIdOf } from './note-rows.ts';
  * WARNING: a statement here selects its columns by name. The digests of `session` and `verification`,
  * and the token columns of `account` are never selected: an answer of the administrator holds none of
  * them. `connectors.sealed` is selected once, by `deleteWorkspace`, for the Linear connectors of the
- * workspace it deletes: the route revokes them after the commit, and answers none of them. Only `notes` selects `note_index.excerpt` and `seeds.seed`,
- * and it answers the text of a row of `seeds` only for the note that the row is (`keptTexts`).
+ * workspace it deletes: the route revokes them after the commit, and answers none of them. Only `notes` selects `note_index.excerpt` and `notes.payload`,
+ * and it answers the text of a row of `notes` only for the note that the row is (`keptTexts`).
  *
  * A `BIGINT` is read through the schema, as in every store (FRU-180): the raw statements here count,
  * and read an instant of better-auth as milliseconds (`EPOCH_MS`).
@@ -188,7 +188,7 @@ const TROUBLED = sql`c.attention IN (${sql.join(
 /** The columns of `note_index` that `notes` answers: not `author_account_id`. */
 const NOTE_COLUMNS = {
   site_id: note_index.site_id,
-  seed_id: note_index.seed_id,
+  note_id: note_index.note_id,
   workspace_id: note_index.workspace_id,
   page_url: note_index.page_url,
   excerpt: note_index.excerpt,
@@ -202,12 +202,12 @@ const NOTE_COLUMNS = {
   checked_at: note_index.checked_at,
 };
 
-type NoteRow = { site_id: string; seed_id: string; reference: string | null };
+type NoteRow = { site_id: string; note_id: string; reference: string | null };
 
-const keyOf = (row: { site_id: string; seed_id: string }): string => JSON.stringify([row.site_id, row.seed_id]);
+const keyOf = (row: { site_id: string; note_id: string }): string => JSON.stringify([row.site_id, row.note_id]);
 
 /**
- * The text of each note of a page that the worker keeps in `seeds`, by its key. The reference gives
+ * The text of each note of a page that the worker keeps in `notes`, by its key. The reference gives
  * the number of a row only: a tracker can name an issue `FB-12` too. The row is the note when its site
  * and the id that the widget gave it are the ones of the index. A row that does not parse is no note.
  */
@@ -217,9 +217,9 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
   ];
   if (ids.length === 0) return new Map();
   const kept = await db
-    .select({ id: seeds.id, client_id: seeds.client_id, seed: seeds.seed })
-    .from(seeds)
-    .where(inArray(seeds.id, ids));
+    .select({ id: notes.id, client_id: notes.client_id, seed: notes.payload })
+    .from(notes)
+    .where(inArray(notes.id, ids));
   const byId = new Map(kept.map((row) => [Number(row.id), row]));
 
   const texts = new Map<string, string>();
@@ -228,7 +228,7 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
     const seed = id === undefined ? undefined : byId.get(id);
     if (seed === undefined || seed.client_id !== row.site_id) continue;
     const widgetId = widgetIdOf(seed.seed);
-    if (widgetId === '' || widgetId !== row.seed_id) continue;
+    if (widgetId === '' || widgetId !== row.note_id) continue;
     texts.set(keyOf(row), noteOf(seed.seed));
   }
 
@@ -635,7 +635,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             ? filtered
             : and(
                 filtered,
-                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.seed_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
               );
 
         const [page, [counted]] = await Promise.all([
@@ -654,7 +654,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             .orderBy(
               sql`${note_index.created_at} DESC NULLS LAST`,
               sql`${note_index.site_id} COLLATE "C" DESC`,
-              sql`${note_index.seed_id} COLLATE "C" DESC`,
+              sql`${note_index.note_id} COLLATE "C" DESC`,
             )
             .limit(query.limit + 1),
           db
@@ -678,7 +678,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             return {
               workspace: { id: row.workspace_id, name: workspaceName },
               site: { id: row.site_id, origin },
-              seed: row.seed_id,
+              seed: row.note_id,
               pageUrl: row.page_url,
               excerpt: row.excerpt,
               ...(text === undefined ? {} : { text }),
@@ -697,7 +697,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           }),
           total: number(counted?.notes),
           ...(page.length > query.limit && last !== undefined
-            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.seed_id } }
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.note_id } }
             : {}),
         };
       });
@@ -930,7 +930,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
                      (SELECT count(*)::int FROM member WHERE "organizationId" = ${workspace}) AS members,
                      (SELECT count(*)::int FROM invitation WHERE "organizationId" = ${workspace} AND status = 'pending' AND "expiresAt" > now()) AS invitations,
                      (SELECT count(*)::int FROM connectors WHERE workspace_id = ${workspace}) AS connectors,
-                     (SELECT count(*)::int FROM seeds
+                     (SELECT count(*)::int FROM notes
                        WHERE client_id IN (SELECT id FROM sites WHERE workspace_id = ${workspace})) AS kept_notes`,
         );
         const gone = {

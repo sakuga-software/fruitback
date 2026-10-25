@@ -1673,7 +1673,7 @@ SQLite out while the notes have no other home: this is that home. It is a store 
 
 ### The rules, in short
 
-- **`notes-postgres.ts` is `sqlite.ts` on two tables of the database**, `seeds` and `seed_comments`:
+- **`notes-postgres.ts` is `sqlite.ts` on two tables of the database**, `notes` and `note_comments`:
   the same columns, the same `FB-<n>`, no page to open, its own stages, and nothing in the worker
   that writes a reply. `note-rows.ts` reads a row of either database, and imports neither.
 - **Every read names its site.** One database holds the notes of every workspace, so a read that
@@ -1689,7 +1689,7 @@ SQLite out while the notes have no other home: this is that home. It is a store 
 - **The page is under a hash index.** A B-tree refuses an address of 6 400 characters that do not
   compress (measured on 17.11, the sentence is in `postgres-schema.ts`), and the note would not be
   kept at all. The ticket asked for an index (page, client): the site is read in the rows of the
-  page, and `seeds_by_client` is the index of the notes of one site.
+  page, and `notes_by_client` is the index of the notes of one site.
 - **The numbers are an identity that takes a value when one is given**: the copy of a SQLite file
   (FRU-220) keeps the `FB-<n>` that people quoted, and then moves the sequence.
 - **`forget` reads the notes of the whole instance**, in one transaction with the deletion, and
@@ -3274,8 +3274,8 @@ committed. The workspace had no owner, which nobody repairs from the console.
 
 **The rules, in short:**
 
-- **A site that is removed takes the notes that the worker keeps for it**: its rows of `seeds`, their
-  replies (`seed_comments`, by their key), and the deliveries that wait to send them. A workspace that
+- **A site that is removed takes the notes that the worker keeps for it**: its rows of `notes`, their
+  replies (`note_comments`, by their key), and the deliveries that wait to send them. A workspace that
   is deleted does the same for each of its sites. The notes already in a tracker stay there.
 - **One transaction**: `removeSite` deletes the site and `dropKeptNotes` in it, so a site that is still
   there keeps its notes, and a site that is gone keeps none. `deleteWorkspace` reads its sites, then
@@ -3321,7 +3321,7 @@ under a client that is not a site looks the same. `forget` deletes them.
 **The rules, in short:**
 
 - **`NoteStore.reply` writes a reply under one note, and `takesReplies` says which store takes one.**
-  Linear (`commentCreate`), the database (`seed_comments`) and the store of the dev loop take one.
+  Linear (`commentCreate`), the database (`note_comments`) and the store of the dev loop take one.
   GitHub does not: it is a store of the environment, and no connector of a workspace yet (FRU-188).
 - **A site takes no reply when nobody would read it back**: an address that only receives (REST),
   though the worker keeps its notes, and a tracker whose workspace hides its replies (FRU-102).

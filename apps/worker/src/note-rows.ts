@@ -34,7 +34,7 @@ export type NoteRecord = {
 };
 
 /** A reply, as both databases hand it over, the newest first for one note. */
-export type CommentRow = { id: number; seed_id: number; author: string | null; body: string; createdAt: string };
+export type CommentRow = { id: number; note_id: number; author: string | null; body: string; createdAt: string };
 
 /** `FB-12`, because a reporter quoting a number to their team needs something to say out loud. */
 export function identifierFor(id: number): string {
@@ -135,7 +135,7 @@ export function threadsOf(rows: readonly CommentRow[]): Map<number, NoteComment[
   const byId = new Map<number, NoteComment[]>();
 
   for (const row of rows) {
-    const thread = byId.get(row.seed_id) ?? [];
+    const thread = byId.get(row.note_id) ?? [];
     if (thread.length >= COMMENTS_PER_ISSUE) continue;
 
     thread.push({
@@ -146,7 +146,7 @@ export function threadsOf(rows: readonly CommentRow[]): Map<number, NoteComment[
       createdAt: row.createdAt,
       ...(row.author === null ? {} : { author: row.author }),
     });
-    byId.set(row.seed_id, thread);
+    byId.set(row.note_id, thread);
   }
   for (const thread of byId.values()) thread.reverse();
 

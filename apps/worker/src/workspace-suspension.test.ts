@@ -312,7 +312,7 @@ describe('a site of a suspended workspace answers as a site that does not exist 
         unknownBefore,
         `${route.name}: the site is not served, the comparison proves nothing`,
       );
-      const notes = await count(on, 'seeds');
+      const notes = await count(on, 'notes');
 
       await suspend(on, on.acme, 'impayé');
 
@@ -323,7 +323,7 @@ describe('a site of a suspended workspace answers as a site that does not exist 
         const unknown = await bytesOf(await route.ask(on, UNKNOWN, origin));
         assert.deepEqual(suspended, unknown, `${route.name}, from ${origin ?? 'no origin'}`);
       }
-      assert.equal(await count(on, 'seeds'), notes, `${route.name}: a suspended site took a note`);
+      assert.equal(await count(on, 'notes'), notes, `${route.name}: a suspended site took a note`);
 
       // The notes stay, and the restored site serves them again.
       await restore(on, on.acme);
@@ -672,7 +672,7 @@ async function fixtures(on: Instance): Promise<Fixtures> {
   ).id;
   await rowsOf(
     database,
-    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
+    `INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
        VALUES ('${on.site.id}', 'sd_late', '${on.acme}', '${PAGE}', 'A note', 'new', 'visitor', 'connector', '${rest}', 'FB-1', 1, 1)`,
   );
   const delivery = await accounts.enqueueDelivery(
@@ -797,7 +797,7 @@ describe('the one guard of the writes of a suspended workspace (FRU-282)', () =>
       'deliveries',
       'site_destinations',
       'statuses',
-      'seeds',
+      'notes',
       'note_index',
       'pairings',
       'organization',

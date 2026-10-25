@@ -153,7 +153,7 @@ async function heldOf(on: Instance, workspace: string) {
       on,
       `deliveries WHERE connector_id IN (SELECT id FROM connectors WHERE workspace_id = '${workspace}')`,
     ),
-    keptNotes: await count(on, `seeds WHERE client_id IN ${sitesOf}`),
+    keptNotes: await count(on, `notes WHERE client_id IN ${sitesOf}`),
     indexed: await count(on, `note_index WHERE workspace_id = '${workspace}'`),
   };
 }
@@ -239,7 +239,7 @@ describe('the route of the deletion of a workspace (FRU-284)', () => {
       keptNotes: 0,
       indexed: 0,
     });
-    assert.equal(await count(on, `seeds WHERE client_id = '${on.site.id}'`), 0);
+    assert.equal(await count(on, `notes WHERE client_id = '${on.site.id}'`), 0);
     // What stays: the accounts of its people, and the other workspace of its owner with its note.
     assert.deepEqual(
       (await rowsOf(on.world.database, `SELECT email FROM "user" ORDER BY email`)).map((row) => row.email),

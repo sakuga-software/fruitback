@@ -49,7 +49,7 @@ import {
   invitation_sites,
   last_seen,
   note_index,
-  seeds,
+  notes,
   site_destinations,
   site_shares,
   sites,
@@ -179,13 +179,13 @@ function rowLimit(limit: number): number {
 /**
  * The notes that the worker keeps for these sites, their replies, and the deliveries that wait to
  * send them (FRU-194). A site that goes takes them with it: nothing reads them after, and a site
- * that is added again gets a new id. `note_index` goes by its own foreign key; `seeds` has none,
+ * that is added again gets a new id. `note_index` goes by its own foreign key; `notes` has none,
  * because a copy from SQLite writes the ids of clients that are not sites. A delivery names its site
  * in its body only, as `pendingOf` of `notes-index-postgres.ts` reads it.
  */
 async function dropKeptNotes(db: Db, workspace: string, ids: readonly string[]): Promise<void> {
   if (ids.length === 0) return;
-  await db.delete(seeds).where(inArray(seeds.client_id, [...ids]));
+  await db.delete(notes).where(inArray(notes.client_id, [...ids]));
   const site = sql`(CASE WHEN pg_input_is_valid(${deliveries.body}, 'jsonb') THEN ${deliveries.body}::jsonb -> 'site' ->> 'id' END)`;
   await db
     .delete(deliveries)
@@ -227,7 +227,7 @@ export async function holdMembers(db: Db, workspace: string): Promise<void> {
  * worker keeps go first, while the sites still name them.
  */
 export async function dropWorkspace(db: Db, workspace: string): Promise<void> {
-  // WARNING: the workspace is held first, before `dropKeptNotes` holds rows of `seeds`. Both paths of
+  // WARNING: the workspace is held first, before `dropKeptNotes` holds rows of `notes`. Both paths of
   // a deletion then take their locks in one order: an owner and an administrator who delete one
   // workspace at the same moment wait for each other, where the other order ended one of them on a
   // deadlock (seen by the heavy review of #364).
@@ -778,8 +778,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)));
         if (owned.length === 0) return undefined;
         // NULL is the built-in status of the note's stage, whose key is the stage.
-        const key = sql<string>`COALESCE(${seeds.status_key}, ${seeds.stage})`;
-        const rows = await db.select({ key, notes: count() }).from(seeds).where(eq(seeds.client_id, site)).groupBy(key);
+        const key = sql<string>`COALESCE(${notes.status_key}, ${notes.stage})`;
+        const rows = await db.select({ key, notes: count() }).from(notes).where(eq(notes.client_id, site)).groupBy(key);
 
         return Object.fromEntries(rows.map((row) => [row.key, Number(row.notes)]));
       });
@@ -813,10 +813,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (status.source === OWN_SOURCE && !isBuiltIn(status.source, status.key)) {
           const now = Date.now();
           const moved = await db
-            .update(seeds)
+            .update(notes)
             .set({ stage: status.stage, updated_at: now })
-            .where(and(eq(seeds.client_id, site), eq(seeds.status_key, status.key), ne(seeds.stage, status.stage)))
-            .returning({ id: seeds.id, page: seeds.page_url });
+            .where(and(eq(notes.client_id, site), eq(notes.status_key, status.key), ne(notes.stage, status.stage)))
+            .returning({ id: notes.id, page: notes.page_url });
           pages = moved.map((row) => row.page);
           await restageIndex(
             db,
@@ -882,18 +882,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           if (moveTo !== undefined && target === undefined) {
             return { removed: false as const, reason: 'invalid-target' as const };
           }
-          const held = and(eq(seeds.client_id, site), eq(seeds.status_key, key));
+          const held = and(eq(notes.client_id, site), eq(notes.status_key, key));
           if (target === undefined) {
-            const [counted] = await db.select({ notes: count() }).from(seeds).where(held);
-            const notes = Number(counted?.notes ?? 0);
-            if (notes > 0) return { removed: false as const, reason: 'in-use' as const, notes };
+            const [counted] = await db.select({ notes: count() }).from(notes).where(held);
+            const inUse = Number(counted?.notes ?? 0);
+            if (inUse > 0) return { removed: false as const, reason: 'in-use' as const, notes: inUse };
           } else {
             const now = Date.now();
             const changed = await db
-              .update(seeds)
+              .update(notes)
               .set({ status_key: target.key, stage: target.stage, updated_at: now })
               .where(held)
-              .returning({ id: seeds.id, page: seeds.page_url });
+              .returning({ id: notes.id, page: notes.page_url });
             moved = changed.length;
             pages = changed.map((row) => row.page);
             await restageIndex(
@@ -929,7 +929,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .from(note_index)
           .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
           .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.seed_id, seed)),
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, seed)),
           );
         if (note === undefined) return refused('not-found');
         // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
@@ -939,9 +939,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (id === undefined) return refused('not-kept');
         // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
         const [kept] = await db
-          .select({ seed: seeds.seed })
-          .from(seeds)
-          .where(and(eq(seeds.id, id), eq(seeds.client_id, site)));
+          .select({ seed: notes.payload })
+          .from(notes)
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)));
         if (kept === undefined || !isSameNote(kept.seed, seed)) return refused('not-kept');
 
         const [row] = await db
@@ -957,10 +957,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
 
         const now = Date.now();
         const [written] = await db
-          .update(seeds)
+          .update(notes)
           .set({ status_key: chosen.key, stage: chosen.stage, updated_at: now })
-          .where(and(eq(seeds.id, id), eq(seeds.client_id, site)))
-          .returning({ page: seeds.page_url });
+          .where(and(eq(notes.id, id), eq(notes.client_id, site)))
+          .returning({ page: notes.page_url });
         if (written === undefined) return refused('not-kept');
         await restageIndex(db, site, [id], chosen.stage, now);
 

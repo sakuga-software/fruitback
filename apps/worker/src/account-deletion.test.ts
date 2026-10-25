@@ -161,7 +161,7 @@ describe('the deletion of an account by an administrator (FRU-285)', () => {
     const posted = await on.call('POST', '/feedback', { token, origin: ACME, body: noteOn(on.site.id, 'sd_carl') });
     assert.equal(posted.status, 201, await posted.clone().text());
     const signed = async () =>
-      (await rowsOf(on.world.database, `SELECT seed FROM seeds WHERE client_id = '${on.site.id}'`)).map((row) =>
+      (await rowsOf(on.world.database, `SELECT payload FROM notes WHERE client_id = '${on.site.id}'`)).map((row) =>
         String(row.seed),
       );
     const before = await signed();

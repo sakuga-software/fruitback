@@ -73,13 +73,13 @@ async function anInstance() {
   // The REST connector keeps the note in the worker's store first (FRU-122): its row is `FB-<id>`.
   const [kept] = await rowsOf(
     on.database,
-    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+    `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
        VALUES ('${site.id}', 'https://staging.beta.dev/', 'new', '{"id":"sd_1","note":"${NOTE_TEXT}"}', 1, 1)
      RETURNING id`,
   );
   await rowsOf(
     on.database,
-    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
+    `INSERT INTO note_index (site_id, note_id, workspace_id, page_url, excerpt, stage, author_kind, place, connector_id, reference, created_at, checked_at)
        VALUES ('${site.id}', 'sd_1', '${beta}', 'https://staging.beta.dev/', '${NOTE_TEXT.slice(0, 64)}', 'done', 'visitor', 'connector', '${connector.id}', 'FB-${kept?.id}', 1, 1)`,
   );
   await rowsOf(
@@ -565,7 +565,7 @@ async function notesOfTheInstance() {
   const keep = async (site: string, seed: string, note: string): Promise<string> => {
     const [row] = await rowsOf(
       on.database,
-      `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at)
+      `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
          VALUES ('${site}', 'https://${site}.test/', 'new', '${JSON.stringify({ id: seed, note })}', 1, 1)
        RETURNING id`,
     );
