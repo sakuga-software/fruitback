@@ -137,6 +137,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at)
        VALUES ('ws_acme', 'image/png', '\\x89504e47'::bytea, 1)`,
   );
+  // FRU-450: another address of an account, that Fruitback verified.
+  await rowsOf(
+    database,
+    `INSERT INTO account_emails (email, account_id, verified_at, created_at)
+       VALUES ('alice@home.example', 'acc_alice', 1, 1)`,
+  );
 
   return database;
 }
@@ -146,8 +152,10 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the forty BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the forty-two BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
+    'account_emails.created_at',
+    'account_emails.verified_at',
     'admin_actions.at',
     'admin_reads.at',
     'connect_requests.answered_at',
@@ -230,7 +238,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 12);
+      assert.equal(nullable.length, 13);
       assert.deepEqual(wrong, []);
     });
 
@@ -433,10 +441,11 @@ describe('why the type of an instant matters (FRU-180)', () => {
     // their instants, on each side of 2^32` holds. Read a new one, then change its count here.
     // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238). One
     // more is selected: the key of the status of a note (FRU-386), `COALESCE` of two texts, a text.
+    // Seven more for the other addresses of an account (FRU-450), each in a `where` or a `set`.
     const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 7, sessions: 9 },
+      { accounts: 14, sessions: 9 },
     );
   });
 });

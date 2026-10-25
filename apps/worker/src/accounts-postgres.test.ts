@@ -282,7 +282,10 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
  */
 describe('two lists of destinations for one site, on two connections (FRU-141)', () => {
   const CASE = 'keeps one whole list when two calls set the destinations of one site at the same moment';
-  const WITHOUT_LOCK = { from: ".for('update')", to: '' };
+  const WITHOUT_LOCK = {
+    from: ".where(and(eq(sites.id, site), eq(sites.workspace_id, workspace)))\n          .for('update');",
+    to: '.where(and(eq(sites.id, site), eq(sites.workspace_id, workspace)));',
+  };
   // The first list has removed the rows of the site, and has not written its first place yet.
   const HELD = { table: 'site_destinations', when: 'NEW.position = 0' };
 

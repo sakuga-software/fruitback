@@ -1630,8 +1630,8 @@ identity is asked for (`openid email profile`).
     ever joined to another**. test:`refuses a provider account or an address that belongs to another
     account, and joins no account (FRU-415)`. Each condition is read again at the confirmation.
   - **The identity is the id of the provider account** (`sub` of Google, `id` of GitHub), never the
-    address. The address of the account does not change, and the address of the provider is not
-    kept: test:`links a provider of another verified address after the confirmation, by its id, and
+    address. The primary address of the account does not change; since FRU-450 the verified address
+    of the provider becomes another address of the account (below): test:`links a provider of another verified address after the confirmation, by its id, and
     alerts the address of the account (FRU-415)`. A later sign-in with that provider account opens
     the account whatever address the provider gives then: test:`signs in by the id of the linked
     provider account, whatever address it gives later (FRU-415)`.
@@ -1651,6 +1651,59 @@ identity is asked for (`openid email profile`).
   of one person run one after the other, so two at the same moment cannot take both providers:
   test:`takes one of two providers, and not both, when two unlinks come at the same moment`. **This
   holds for one process of the worker**, as the lock of a workspace does.
+
+### The other addresses of an account (FRU-450)
+
+Decisions of Mathieu, 2026-10-25. An account has one primary address (`user.email` of better-auth)
+and others, in the table `account_emails` (`account-emails.ts`). This protects against an address that
+nobody proved being used as an identity, and against one address opening two accounts.
+
+- **An address is there only once something proved it.** A linked provider proves the one it gives
+  as verified (`email_verified` of Google, `verified` of GitHub). A person adds one in « My account »:
+  Fruitback sends a link there, which works once, for 24 hours, **and only in a session of the account
+  that asked, from the console** (its `Origin`). Another account that opens it adds nothing, and the
+  link stays for the right one: test:`adds an address once its link is opened in the session that
+  asked, and lists it`. So a person who adds the address of another one gets it only if that person
+  is signed in to their account and opens the link there. The token is after the `#` of the link, and
+  the table `verification` keeps a digest of it. An address that waits is nobody's: no sign-in link
+  and no invitation reaches the account through it. test:`refuses a link of verification past its 24
+  hours`.
+- **An address is of one account**, as its primary address or as another one. An address of another
+  account is refused with `409 email-taken`, which does not say whose it is: test:`refuses an address
+  of another account, and does not say whose it is`. The database holds it too: a trigger on `user`
+  and on `account_emails`, under a lock of the address, refuses the write (`0033_one_owner_per_address`):
+  test:`holds one address to one account in the database too`. A provider that gives another address
+  of an account makes no account: test:`makes no account for a provider that gives another address of
+  an account, and joins none`.
+- **A link to add an address goes out 5 times an hour for one account, and 3 times an hour to one
+  mailbox**: test:`sends 5 links of verification an hour for an account, and no more`. The counts are
+  in the `Kv`, so the replicas share them.
+- **A sign-in link sent to another address opens the account**: better-auth makes the link of the
+  primary address, and the message goes to the address that was typed: test:`opens the account with a
+  sign-in link sent to another address it proved, and with none that waits`. So the account is as safe
+  as the weakest mailbox of its addresses, as it is of its providers.
+- **An invitation sent to another address of an account is accepted by that account.** better-auth
+  takes an acceptance from a session of the address of the invitation only: the worker gives the
+  invitation the primary address for the length of the call, then its own again. Only an address of
+  the account that something proved counts; one that waits does not: test:`lets the account accept an
+  invitation sent to another address it proved, and keeps the address of the invitation`. Fruitback
+  has no rule of a domain for the invitations; the address that counts is the one the invitation was
+  sent to. **This holds for one process of the worker**: an acceptance runs alone in its workspace.
+- **The primary address is the one of the notes and of the messages.** The person chooses it among
+  their addresses, with a session of the last day, as for an unlink; an older one answers `403
+  sign-in-again`. An alert goes to the address of before and to the new one: test:`makes another
+  address the primary one, with a session of the last day, and alerts both`. The extensions sign the
+  new address from their next access token.
+- **A provider follows its address.** At each sign-in, the verified address it gives takes the place
+  of the one it gave before; one it did not verify, or none, takes it away: test:`keeps the address of
+  a linked provider, follows it at each sign-in, and takes it away at the unlink`. A person takes an
+  address away by hand, but not the primary one, nor one that a linked provider gives: test:`takes an
+  address away by hand, but never the primary one nor one that a linked provider gives`.
+- **An unlink takes the address of the provider away**, unless Fruitback proved it too. When that
+  provider alone proves the primary address, the unlink is refused with `409 primary-address` until
+  another address is primary: test:`keeps the address of an unlinked provider that Fruitback proved
+  too, and refuses the unlink of the one that alone proves the primary address`. The rule « never the
+  last way to sign in » stays.
 
 ### « Last seen » and the label of a browser (FRU-249)
 

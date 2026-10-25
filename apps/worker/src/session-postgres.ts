@@ -239,6 +239,37 @@ export function createPostgresSessionStore(database: Database): SessionStore {
     return database.transaction(work);
   };
 
+  /** Writes `set` on the live sessions of a person and on their codes that wait: see `renameSessionsOf`. */
+  const rewriteSessionsOf = async (subject: string, set: { name: string } | { email: string }, now: number) => {
+    if (subject === '') return;
+    await transaction(async (tx) => {
+      // The codes and the chains of the person are held first, as `endSessionsOf` holds them. A
+      // refresh or a redemption that runs now ends before the statements below, which then read the
+      // row it wrote; one that starts after waits for this one, and reads the new name (raised in
+      // review: without the hold, the successor of a refresh in flight kept the name of before).
+      await tx
+        .select({ code_hash: pairings.code_hash })
+        .from(pairings)
+        .where(eq(pairings.subject, subject))
+        .orderBy(pairings.code_hash)
+        .for('update');
+      await tx
+        .select({ token_hash: sessions.token_hash })
+        .from(sessions)
+        .where(eq(sessions.subject, subject))
+        .orderBy(asc(sessions.token_hash))
+        .for('update');
+      await tx
+        .update(sessions)
+        .set(set)
+        .where(and(eq(sessions.subject, subject), isNull(sessions.revoked_at), gt(sessions.expires_at, now)));
+      await tx
+        .update(pairings)
+        .set(set)
+        .where(and(eq(pairings.subject, subject), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)));
+    });
+  };
+
   return {
     async createPairing({ codeHash, identity, expiresAt }) {
       await run((db) =>
@@ -331,33 +362,11 @@ export function createPostgresSessionStore(database: Database): SessionStore {
     },
 
     async renameSessionsOf(subject, name, now) {
-      if (subject === '') return;
-      await transaction(async (tx) => {
-        // The codes and the chains of the person are held first, as `endSessionsOf` holds them. A
-        // refresh or a redemption that runs now ends before the statements below, which then read the
-        // row it wrote; one that starts after waits for this one, and reads the new name (raised in
-        // review: without the hold, the successor of a refresh in flight kept the name of before).
-        await tx
-          .select({ code_hash: pairings.code_hash })
-          .from(pairings)
-          .where(eq(pairings.subject, subject))
-          .orderBy(pairings.code_hash)
-          .for('update');
-        await tx
-          .select({ token_hash: sessions.token_hash })
-          .from(sessions)
-          .where(eq(sessions.subject, subject))
-          .orderBy(asc(sessions.token_hash))
-          .for('update');
-        await tx
-          .update(sessions)
-          .set({ name })
-          .where(and(eq(sessions.subject, subject), isNull(sessions.revoked_at), gt(sessions.expires_at, now)));
-        await tx
-          .update(pairings)
-          .set({ name })
-          .where(and(eq(pairings.subject, subject), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)));
-      });
+      await rewriteSessionsOf(subject, { name }, now);
+    },
+
+    async readdressSessionsOf(subject, email, now) {
+      await rewriteSessionsOf(subject, { email }, now);
     },
 
     async endSessionsOf(of, now) {

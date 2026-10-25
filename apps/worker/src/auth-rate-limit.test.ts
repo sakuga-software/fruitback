@@ -5,6 +5,7 @@ import {
   AUTH_CONFIG,
   CONSOLE_URL,
   MIGRATED_DATABASES,
+  NO_ADDRESSES,
   NO_SESSIONS,
   PUBLIC_URL,
   databasesOfACase,
@@ -33,6 +34,7 @@ async function replicaOn(database: PgDatabase): Promise<Auth> {
     await database.pool(),
     NO_SESSIONS,
     createPostgresKv(database),
+    NO_ADDRESSES,
   );
 
   return startAuth(options);

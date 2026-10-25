@@ -9,12 +9,12 @@ import { browserLabel } from './browser-label.ts';
 import type { Kv } from './kv.ts';
 import { forgetSeenOf } from './last-seen.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
-import { type LinkApi, guardLink, markLinkStart } from './provider-link.ts';
+import { type AddressBook, EMAIL_ALREADY_USED, type LinkApi, guardLink, markLinkStart } from './provider-link.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import type { OAuthClient } from './oauth-client.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
-import { kvOn, migrated, sessionStoreOn } from './postgres-stores.ts';
+import { accountStoreOn, kvOn, migrated, sessionStoreOn } from './postgres-stores.ts';
 import type { SessionStore } from './session.ts';
 import { INVITATION_REQUIRED, type SignUp, isOperatorLink, maySignUp } from './sign-up.ts';
 
@@ -354,6 +354,8 @@ export async function authOptions(
   sessions: Pick<SessionStore, 'endSessionsOf'>,
   /** Where the limiter of better-auth counts: the `Kv` of the database, shared by every replica. */
   limits: Pick<Kv, 'incr'>,
+  /** The addresses of the accounts beside their primary one (FRU-450): `account-emails.ts`. */
+  addresses: AddressBook,
 ): Promise<BetterAuthOptions> {
   const [
     { organization },
@@ -479,7 +481,7 @@ export async function authOptions(
       },
       // FRU-415: a link from « My account » writes no row on the way back from the provider. It is
       // refused, or kept as a pending link that the person confirms: see `provider-link.ts`.
-      validateUserInfo: guardLink(linkApi) as never,
+      validateUserInfo: guardLink(linkApi, addresses) as never,
     },
     // FRU-415: the id of the session that starts a link goes into the state of better-auth.
     hooks: { before: createAuthMiddleware(markLinkStart(linkApi) as never) },
@@ -512,6 +514,14 @@ export async function authOptions(
           // e-mail proves its address, so it passes.
           before: async (user: { email?: unknown; emailVerified?: unknown }, context: HookContext) => {
             if (user.emailVerified !== true) return false;
+            // FRU-450: an address of another account, beside its primary one, makes no account. The
+            // trigger of `0033_one_owner_per_address` holds it too; this says why.
+            if ((await addresses.ownerOfAddress(String(user.email ?? ''))) !== undefined) {
+              throw new APIError('FORBIDDEN', {
+                code: EMAIL_ALREADY_USED,
+                message: 'This address is one of another Fruitback account',
+              });
+            }
             // FRU-278. A throw, and not `false`: better-auth puts the code of an `APIError` in the
             // `?error=` of the way back, and turns `false` into `unable_to_create_user`.
             if (!(await signUpAllowed(config.signUp, String(user.email ?? ''), context, getCurrentAdapter))) {
@@ -778,7 +788,15 @@ export function authFor(
   if (started !== undefined && started.database === database && started.key === key) return started.auth;
 
   const starting = migrated(database).then(async () =>
-    startAuth(await authOptions(auth, await database.pool(), sessionStoreOn(database), kvOn(database))),
+    startAuth(
+      await authOptions(
+        auth,
+        await database.pool(),
+        sessionStoreOn(database),
+        kvOn(database),
+        accountStoreOn(database),
+      ),
+    ),
   );
   const mine = { key, database, auth: starting };
   started = mine;

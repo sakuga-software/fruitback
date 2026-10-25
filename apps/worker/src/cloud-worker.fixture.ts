@@ -54,7 +54,9 @@ export async function cloudWorker(options: {
   const auth =
     settings === undefined
       ? undefined
-      : await startAuth(await authOptions(settings, await database.pool(), sessions, createPostgresKv(database)));
+      : await startAuth(
+          await authOptions(settings, await database.pool(), sessions, createPostgresKv(database), accounts),
+        );
   const kv = createMemoryKv();
   const sent: MailMessage[] = [];
   const received: { method: string; path: string; authorization: boolean; cookie: boolean }[] = [];

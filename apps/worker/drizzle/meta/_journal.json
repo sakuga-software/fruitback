@@ -225,6 +225,20 @@
       "when": 1792933081137,
       "tag": "0031_workspace_logos",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792953980617,
+      "tag": "0032_account_emails",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792953981212,
+      "tag": "0033_one_owner_per_address",
+      "breakpoints": true
     }
   ]
 }

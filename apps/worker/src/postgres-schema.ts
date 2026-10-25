@@ -439,6 +439,44 @@ export const last_seen = pgTable(
   ],
 );
 
+/**
+ * The addresses of an account beside the one of better-auth (`user.email`, the primary), FRU-450:
+ * `account-emails.ts`. A row is an address that something proved for the account:
+ *
+ * - `providers`: the providers that gave it as verified (`github`, `google`), at a link or at a
+ *   sign-in. A provider is in the list of one address of an account at most.
+ * - `verified_at`: Fruitback proved it: the person opened the link of verification that it sent
+ *   there, or it was the primary address of the account before another one took its place.
+ *
+ * A row with neither is not kept. The primary address of the account may have a row (when a provider
+ * brought it), and is then listed once. **An address is of one account**: the key holds it here, and
+ * the trigger of `0033_one_owner_per_address` holds it against `user.email` of another account. An
+ * address that waits for its verification is not here: it is in the table `verification`, and holds
+ * no address of another person.
+ */
+export const account_emails = pgTable(
+  'account_emails',
+  {
+    email: text('email').notNull(),
+    account_id: text('account_id').notNull(),
+    providers: text('providers')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    verified_at: instant('verified_at'),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'account_emails_pkey', columns: [table.email] }),
+    foreignKey({
+      name: 'account_emails_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [user.id],
+    }).onDelete('cascade'),
+    index('account_emails_by_account').on(table.account_id),
+  ],
+);
+
 /** The bytes of a file. The driver answers a `Buffer`, and PGlite a `Uint8Array`: both are one here. */
 const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
   dataType: () => 'bytea',

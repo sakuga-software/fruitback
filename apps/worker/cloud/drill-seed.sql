@@ -150,3 +150,8 @@ INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES
 -- The logo of a workspace (FRU-428): the first bytes of a PNG, enough for a row that the drill compares.
 INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at) VALUES
   ('ws_drill1', 'image/png', '\x89504e470d0a1a0a0000000d49484452', 1760000000000);
+
+-- The other addresses of an account (FRU-450): one that GitHub gave, one that Fruitback verified.
+INSERT INTO account_emails (email, account_id, providers, verified_at, created_at) VALUES
+  ('alice@home.example', 'acc_drill1', '{github}', NULL, 1760000000000),
+  ('alice@work.example', 'acc_drill1', '{}', 1760000000000, 1760000000000);

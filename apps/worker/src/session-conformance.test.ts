@@ -158,6 +158,14 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     },
   },
   {
+    breaks: 'writes the primary address a person chose on their live sessions and codes, and on nobody else (FRU-450)',
+    by: 'writes the address as the name',
+    replace: {
+      from: 'await rewriteSessionsOf(subject, { email }, now);',
+      to: 'await rewriteSessionsOf(subject, { name: email }, now);',
+    },
+  },
+  {
     breaks: 'opens a session for the person the operator named, not for whoever redeemed',
     by: 'does not keep the name of a pairing',
     replace: { after: 'async createPairing(', from: 'name: identity.name ?? null,', to: 'name: null,' },

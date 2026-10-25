@@ -2,6 +2,7 @@ import { PROOF_GRACE_MS, RECHECK_MS } from './domain-proof.ts';
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { SESSION_FRESH_SECONDS, SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
+import { ADDRESSES_PER_HOUR, VERIFY_ADDRESS_HOURS, VERIFY_LINKS_PER_MAILBOX } from './account-emails.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -210,6 +211,15 @@ describe('SECURITY.md states what the code does', () => {
   it('quotes how old a session may be and still take a way to sign in away (FRU-249)', () => {
     assert.ok(SECURITY.includes('**The session must be of the last day**'), 'SECURITY.md does not say it');
     assert.equal(SESSION_FRESH_SECONDS, 86_400, 'SECURITY.md says « of the last day »');
+  });
+
+  it('quotes how long the link that adds an address works, and how many go out in an hour (FRU-450)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    const sentences = [
+      `which works once, for ${VERIFY_ADDRESS_HOURS} hours`,
+      `A link to add an address goes out ${ADDRESSES_PER_HOUR} times an hour for one account, and ${VERIFY_LINKS_PER_MAILBOX} times an hour to one mailbox`,
+    ];
+    for (const sentence of sentences) assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
   });
 
   it('quotes how often a domain is proven again, and how long a DNS that does not answer is waited for (FRU-103)', () => {

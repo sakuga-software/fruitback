@@ -107,6 +107,11 @@ export type SessionStore = {
    * ended keep the name they had.
    */
   renameSessionsOf(subject: string, name: string, now: number): Promise<void>;
+  /**
+   * The same, for the primary address a person chose (FRU-450): an extension signs it from its next
+   * access token, and `reporter.email` of its next notes is that address.
+   */
+  readdressSessionsOf(subject: string, email: string, now: number): Promise<void>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
   purge(now: number): Promise<void>;
   /**

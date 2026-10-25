@@ -1,3 +1,4 @@
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import assert from 'node:assert/strict';
 import { afterEach } from 'vitest';
 import type { Auth, BetterAuthOptions } from 'better-auth';
@@ -34,6 +35,14 @@ export const AUTH_CONFIG: AuthConfig = {
   trackIp: false,
   // The behaviour before FRU-278, which most cases sign two people in with. `sign-up.test.ts` holds `invited`.
   signUp: 'anyone',
+};
+
+/** The addresses of the accounts (FRU-450), for a case that reads none: no account has another address. */
+export const NO_ADDRESSES = {
+  async ownerOfAddress(): Promise<undefined> {
+    return undefined;
+  },
+  async noteProviderAddress(): Promise<void> {},
 };
 
 /** The sessions of the extensions, for a case that removes nobody: it ends none, and says it was not asked. */
@@ -80,7 +89,13 @@ export async function optionsOn(
   made: Made = MIGRATED,
 ): Promise<{ options: BetterAuthOptions; said: Said }> {
   await make(database, made);
-  const options = await authOptions(AUTH_CONFIG, await database.pool(), NO_SESSIONS, createPostgresKv(database));
+  const options = await authOptions(
+    AUTH_CONFIG,
+    await database.pool(),
+    NO_SESSIONS,
+    createPostgresKv(database),
+    createPostgresAccountStore(database),
+  );
   const said: Said = [];
 
   return {
