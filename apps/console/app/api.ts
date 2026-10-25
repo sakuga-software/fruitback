@@ -20,7 +20,16 @@ export type Role = 'owner' | 'admin' | 'member' | 'guest';
  * A workspace of the person, as `/console/me` lists it. A suspended one says since when (FRU-282),
  * and never why (FRU-328): the reason is a note of the administrator, which only their routes answer.
  */
-export type Workspace = Omit<WorkspaceSuspension, 'reason'> & { id: string; name: string; role: Role };
+export type Workspace = Omit<WorkspaceSuspension, 'reason'> & {
+  id: string;
+  name: string;
+  role: Role;
+  /**
+   * The address of its logo on the worker (FRU-428), which changes with each logo, or `null`. Absent
+   * from a worker of before, which keeps none: the initial of the name shows, as for `null`.
+   */
+  logo?: string | null;
+};
 export type Visibility = 'members' | 'everyone';
 /** Who may leave a note on a site that its members read (FRU-330). `members` is « Members only ». */
 export type Writers = 'members' | 'anyone';
@@ -155,6 +164,8 @@ let signsIn: boolean | undefined;
 let byOperator: boolean | undefined;
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
+  // A file goes as its bytes, with its own type (FRU-428): the logo of a workspace.
+  if (body instanceof Blob) return reach(to, { method, headers: { 'Content-Type': body.type }, body });
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -746,6 +757,31 @@ export function answerConnect(
  */
 export function renameWorkspace(workspace: Workspace, name: string): Promise<Answer<Workspace>> {
   return call<Workspace>('POST', `/console/workspaces/${workspace.id}`, { name });
+}
+
+/** The types of image the worker keeps as a logo (FRU-428), as `workspace-logo.ts` of the worker says. */
+export const LOGO_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
+/** The most bytes of a logo, as the worker says. */
+export const MAX_LOGO_BYTES = 512 * 1_024;
+
+/**
+ * Where an `<img>` reads the logo of a workspace (FRU-428), or `undefined` when it has none. The
+ * worker answers an address of its own: anything else is not drawn.
+ */
+export function logoSource(workspace: Pick<Workspace, 'logo'>): string | undefined {
+  const { logo } = workspace;
+
+  return typeof logo === 'string' && logo.startsWith('/console/workspaces/') ? `${API}${logo}` : undefined;
+}
+
+/** Sends the logo of a workspace (FRU-428): its owner or an admin. The worker answers its address. */
+export function setWorkspaceLogo(workspace: Workspace, file: Blob): Promise<Answer<{ logo: string }>> {
+  return call<{ logo: string }>('POST', `/console/workspaces/${workspace.id}/logo`, file);
+}
+
+/** Removes the logo of a workspace (FRU-428): its owner or an admin. */
+export function removeWorkspaceLogo(workspace: Workspace): Promise<Answer<{ logo: null }>> {
+  return call<{ logo: null }>('DELETE', `/console/workspaces/${workspace.id}/logo`);
 }
 
 /**

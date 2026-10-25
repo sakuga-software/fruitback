@@ -853,6 +853,29 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Workspace settings': 'Réglages du workspace',
   'Settings that every member of {name} sees.': 'Les réglages que voit chaque membre de {name}.',
   'The name is saved.': 'Le nom est enregistré.',
+  // The logo of a workspace, FRU-428.
+  Logo: 'Logo',
+  'Upload a logo': 'Envoyer un logo',
+  'Replace the logo': 'Remplacer le logo',
+  'Remove the logo': 'Retirer le logo',
+  'Uploading…': 'Envoi…',
+  'Removing…': 'Retrait…',
+  'The logo is saved.': 'Le logo est enregistré.',
+  'The logo is removed.': 'Le logo est retiré.',
+  'PNG, JPEG or WebP, up to 512 KB. It shows beside the name of the workspace, in the rail.':
+    'PNG, JPEG ou WebP, 512 Ko au plus. Il s’affiche à côté du nom du workspace, dans la barre latérale.',
+  'Only an owner or an admin of the workspace changes its logo.':
+    'Seul un propriétaire ou un admin du workspace change son logo.',
+  'Choose a PNG, JPEG or WebP image. SVG is not accepted.':
+    'Choisissez une image PNG, JPEG ou WebP. Le SVG n’est pas accepté.',
+  'The image is over 512 KB. Choose a smaller one.': 'L’image dépasse 512 Ko. Choisissez-en une plus légère.',
+  'This file is not the image its type says. Choose another one.':
+    'Ce fichier n’est pas l’image que son type annonce. Choisissez-en un autre.',
+  'The image is over 4096 pixels on a side. Choose a smaller one.':
+    'L’image dépasse 4096 pixels de côté. Choisissez-en une plus petite.',
+  'This file is empty. Choose another one.': 'Ce fichier est vide. Choisissez-en un autre.',
+  'The logo was not saved. Try again.': 'Le logo n’a pas été enregistré. Réessayez.',
+  'The logo was not removed. Try again.': 'Le logo n’a pas été retiré. Réessayez.',
   'Saving…': 'Enregistrement…',
   'No workspace yet': 'Aucun pour l’instant',
   'Connecting…': 'Connexion…',

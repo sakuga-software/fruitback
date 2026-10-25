@@ -54,6 +54,7 @@ import {
   site_shares,
   sites,
   statuses,
+  workspace_logos,
   workspace_suspensions,
 } from './postgres-schema.ts';
 import { MAX_STATUSES, type NoteStage } from '@fruitback/shared';
@@ -450,10 +451,12 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             role: member.role,
             since: workspace_suspensions.since,
             reason: workspace_suspensions.reason,
+            logoAt: workspace_logos.updated_at,
           })
           .from(member)
           .innerJoin(organization, eq(organization.id, member.organizationId))
           .leftJoin(workspace_suspensions, eq(workspace_suspensions.workspace_id, organization.id))
+          .leftJoin(workspace_logos, eq(workspace_logos.workspace_id, organization.id))
           .where(eq(member.userId, person))
           .orderBy(member.createdAt, organization.id),
       );
@@ -464,8 +467,53 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         const suspension = suspensionOf(row);
         if (workspace === undefined || role === undefined) return [];
 
-        return [{ workspace, role, ...(suspension === undefined ? {} : { suspension }) }];
+        return [
+          {
+            workspace,
+            role,
+            ...(suspension === undefined ? {} : { suspension }),
+            ...(row.logoAt === null ? {} : { logoAt: row.logoAt }),
+          },
+        ];
       });
+    },
+
+    async logo(workspace) {
+      const [row] = await run((db) =>
+        db
+          .select({
+            type: workspace_logos.content_type,
+            content: workspace_logos.content,
+            updatedAt: workspace_logos.updated_at,
+          })
+          .from(workspace_logos)
+          .where(eq(workspace_logos.workspace_id, workspace)),
+      );
+
+      return row;
+    },
+
+    async setLogo(workspace, { type, content, updatedAt }) {
+      await run((db) =>
+        db
+          .insert(workspace_logos)
+          .values({ workspace_id: workspace, content_type: type, content, updated_at: updatedAt })
+          .onConflictDoUpdate({
+            target: workspace_logos.workspace_id,
+            set: { content_type: type, content, updated_at: updatedAt },
+          }),
+      );
+    },
+
+    async removeLogo(workspace) {
+      const gone = await run((db) =>
+        db
+          .delete(workspace_logos)
+          .where(eq(workspace_logos.workspace_id, workspace))
+          .returning({ id: workspace_logos.workspace_id }),
+      );
+
+      return gone.length > 0;
     },
 
     async suspension(workspace) {

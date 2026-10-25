@@ -146,3 +146,7 @@ INSERT INTO admin_actions (id, at, actor_account_id, actor_email, action, target
 -- A workspace that an administrator of the instance suspended (FRU-282). Its sites answer as unknown.
 INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES
   ('ws_drill1', 1760000000000, 'impayé');
+
+-- The logo of a workspace (FRU-428): the first bytes of a PNG, enough for a row that the drill compares.
+INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at) VALUES
+  ('ws_drill1', 'image/png', '\x89504e470d0a1a0a0000000d49484452', 1760000000000);

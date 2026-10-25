@@ -64,6 +64,12 @@ export type Workspace = { id: string; name: string };
 export type WorkspaceSuspension = { since: number; reason?: string };
 
 /**
+ * The logo of a workspace (FRU-428), as `workspace-logo.ts` checked it: its type, its bytes, and the
+ * instant it was sent, which is the version of its address.
+ */
+export type WorkspaceLogo = { type: string; content: Uint8Array; updatedAt: number };
+
+/**
  * The four roles of the design (board « My account »).
  *
  * - `owner`: everything, and the only one who can delete the workspace.
@@ -369,9 +375,18 @@ export type AccountStore = {
   createWorkspace(name: string, owner: string): Promise<Workspace>;
   /**
    * Every workspace this account belongs to, with its role there, oldest first. `suspension`: an
-   * administrator of the instance suspended the workspace (FRU-282).
+   * administrator of the instance suspended the workspace (FRU-282). `logoAt`: the instant its logo
+   * was sent (FRU-428), absent when it has none.
    */
-  memberships(account: string): Promise<{ workspace: Workspace; role: Role; suspension?: WorkspaceSuspension }[]>;
+  memberships(
+    account: string,
+  ): Promise<{ workspace: Workspace; role: Role; suspension?: WorkspaceSuspension; logoAt?: number }[]>;
+  /** The logo of a workspace (FRU-428), or `undefined` when it has none. */
+  logo(workspace: string): Promise<WorkspaceLogo | undefined>;
+  /** Writes the logo of a workspace over the one it had. The caller checked it: `checkLogo`. */
+  setLogo(workspace: string, logo: WorkspaceLogo): Promise<void>;
+  /** Removes the logo of a workspace. `false` when it had none. */
+  removeLogo(workspace: string): Promise<boolean>;
   /** The suspension of a workspace (FRU-282), or `undefined` for one that is not suspended or does not exist. */
   suspension(workspace: string): Promise<WorkspaceSuspension | undefined>;
   /**

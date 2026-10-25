@@ -1401,7 +1401,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty-nine columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the forty columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1491,7 +1491,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282, thirty-nine since FRU-331), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237, thirty-four since FRU-238, thirty-five since FRU-250, thirty-six since FRU-261, thirty-seven since FRU-280, thirty-eight since FRU-282, thirty-nine since FRU-331, forty since FRU-428), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
   number through the schema`. No store sends a raw statement
@@ -1504,7 +1504,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the thirty-nine BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3131,7 +3131,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the thirty-nine BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4311,3 +4311,35 @@ at version 3, and no reader takes the payload of before.
   search by `description: { contains }` and `issueUpdate`, and a fake GitHub answers the list of the
   issues and their `PATCH`. That Linear filters a team on `description.contains` is what
   `fetchNoteIssues` already uses.
+
+## The logo of a workspace (FRU-428)
+
+### The rules, in short
+
+- **`/console/workspaces/<id>/logo`**: `POST` (the bytes, their type in `Content-Type`) and `DELETE`
+  for `manage-workspace` (owner, admin); `GET` for every member. The route is `workspace-logo.ts`;
+  `handleConsoleApi` sends it there after the guard of a suspended workspace.
+- **PNG, JPEG, WebP; 512 KB; 4096 pixels a side; no SVG, no GIF.** `checkLogo` reads the signature and
+  the size from the header of the image, and decodes nothing. No sanitizer of SVG is trusted here: an
+  SVG is refused, not cleaned.
+- **The bytes are in PostgreSQL**, in `workspace_logos` (one row a workspace, `ON DELETE CASCADE`),
+  stored as the files in transit are (`bytea`), and not in their table: those end and are swept.
+- **The contract**: each workspace of `/console/me`, of a creation and of a rename says
+  `logo: "/console/workspaces/<id>/logo?v=<ms>"` or `logo: null`. The address is relative to the
+  worker; `v` is the instant of the logo, so a new logo is a new address.
+- **The read**: the checked type, `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`,
+  `Cross-Origin-Resource-Policy: same-site`, `Cache-Control: private, max-age=86400`. `SECURITY.md`
+  says who reads it and why.
+
+### The reasons
+
+- **No SVG.** An SVG is a document, and an `<img>` is the only context where its scripts do not run;
+  opened as a page it runs them, from the origin of the worker. A sanitizer on the worker needs a DOM
+  (DOMPurify with jsdom) that the image does not carry, and an allowlist of our own is a parser of
+  XML nobody reviewed. The logos people have are PNG and JPEG first.
+- **The size from the header.** A PNG of a few KB can say 30000 × 30000 pixels, and every browser
+  of every member would decode it. Reading the header is a few lines a format; resizing would need a
+  decoder in the worker. The console draws the logo at a fixed size, whatever its pixels.
+- **`same-site`, not `same-origin`.** The console and the worker are two origins of one site (the
+  cookie of the console is `SameSite=Strict`): an `<img>` of the console is a request of another
+  origin, which `same-origin` would block.

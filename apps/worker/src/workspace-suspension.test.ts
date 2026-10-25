@@ -428,14 +428,14 @@ describe('the members of a suspended workspace (FRU-282)', () => {
     };
     const [acme] = me.workspaces;
     // No reason (FRU-328): it is a note of the administrator of the instance.
-    assert.deepEqual(Object.keys(acme ?? {}), ['id', 'name', 'role', 'suspended', 'suspendedAt']);
+    assert.deepEqual(Object.keys(acme ?? {}), ['id', 'name', 'role', 'logo', 'suspended', 'suspendedAt']);
     assert.equal(acme?.suspended, true);
     const globex = (await (await on.call('GET', '/console/me', { token: on.alice.token })).json()) as {
       workspaces: Record<string, unknown>[];
     };
     assert.deepEqual(
       globex.workspaces.find((each) => each.id === on.globex),
-      { id: on.globex, name: 'Globex', role: 'owner', suspended: false },
+      { id: on.globex, name: 'Globex', role: 'owner', logo: null, suspended: false },
     );
 
     for (const rest of ['/sites', '/connectors', '/notes', '/domains', '/members/seen', '/admin-reads']) {
@@ -757,6 +757,10 @@ const CONSOLE_WRITES: readonly Write[] = [
     body: () => ({ status: `own:${DEFAULT_NOTE_STAGE}` }),
     status: 200,
   },
+  // FRU-428: the logo. A JSON body is no image, so the route answers `415` after the guard; the
+  // refusal of a real image is in `workspace-logo.test.ts`. No logo yet: its removal changes nothing.
+  { method: 'POST', rest: () => '/logo', body: () => ({}), status: 415 },
+  { method: 'DELETE', rest: () => '/logo', status: 200 },
   // A path that no route serves: the guard answers before the routes.
   { method: 'POST', rest: () => '/a-route-of-later', body: () => ({}), status: 404 },
 ];

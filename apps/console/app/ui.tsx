@@ -161,6 +161,45 @@ export function Button({
   );
 }
 
+/**
+ * A button of the kit that opens the file picker of the browser (FRU-428), and hands the file chosen
+ * to `onFile`. The input of the file is hidden: the button is what a person and a screen reader
+ * reach. The same file chosen twice is handed twice.
+ */
+export function FilePick({
+  accept,
+  disabled = false,
+  onFile,
+  children,
+}: {
+  /** The types the picker offers, as `accept` takes them. */
+  accept: string;
+  disabled?: boolean;
+  onFile: (file: File) => void;
+  children: ReactNode;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <Input
+        ref={input}
+        type="file"
+        accept={accept}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file !== undefined) onFile(file);
+        }}
+      />
+      <Button tone="outline" size="page" disabled={disabled} onClick={() => input.current?.click()}>
+        {children}
+      </Button>
+    </>
+  );
+}
+
 /** An outlined button over the whole width of its column: a provider to sign in with. */
 export function WideButton({
   disabled = false,

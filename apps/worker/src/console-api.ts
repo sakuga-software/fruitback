@@ -62,6 +62,7 @@ import { DEFAULT_NOTE_STAGE, MAX_STATUSES, NOTE_STAGES, type NoteStage } from '@
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
+import { handleLogo } from './workspace-logo.ts';
 
 /**
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
@@ -460,6 +461,14 @@ function destinationOf(body: Record<string, unknown> | undefined, kind: Connecto
 
 const WORKSPACE_PATH = /^\/console\/workspaces\/([A-Za-z0-9_-]+)(\/.*)?$/;
 
+/**
+ * The address of the logo of a workspace (FRU-428), from the worker: what `logo` of the contract
+ * says. `updatedAt` is its version, so a new logo is a new address.
+ */
+export function logoPath(workspace: string, updatedAt: number): string {
+  return `/console/workspaces/${encodeURIComponent(workspace)}/logo?v=${updatedAt}`;
+}
+
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
@@ -564,9 +573,11 @@ export async function handleConsoleApi(
         instanceAdmin,
         // FRU-282: each workspace says whether it is suspended, and since when, for the banner.
         // Not why (FRU-328): the reason is a note of the administrator of the instance.
-        workspaces: memberships.map(({ workspace, role, suspension }) => ({
+        // FRU-428: the address of its logo, or `null`.
+        workspaces: memberships.map(({ workspace, role, suspension, logoAt }) => ({
           ...workspace,
           role,
+          logo: logoAt === undefined ? null : logoPath(workspace.id, logoAt),
           ...memberSuspensionView(suspension),
         })),
       },
@@ -607,7 +618,7 @@ export async function handleConsoleApi(
         ? await context.accounts.createWorkspace(name, account.id)
         : await context.createWorkspace(request, name);
 
-    return json(201, { ...workspace, role: 'owner' }, headers);
+    return json(201, { ...workspace, role: 'owner', logo: null }, headers);
   }
 
   const [, workspaceId, rest = ''] = WORKSPACE_PATH.exec(pathname) as RegExpExecArray;
@@ -628,6 +639,19 @@ export async function handleConsoleApi(
       headers,
     );
     if (refused !== undefined) return refused;
+  }
+
+  // FRU-428: the logo of the workspace. Every member reads it, who manages the workspace changes it.
+  if (rest === '/logo') {
+    return handleLogo(request, {
+      accounts: context.accounts,
+      workspace: workspaceId as string,
+      manages: allowed('manage-workspace'),
+      forbidden,
+      addressAt: (at) => logoPath(workspaceId as string, at),
+      headers,
+      now: context.now ?? Date.now(),
+    });
   }
 
   // « Last seen » of the members (FRU-249): the day of each, for an owner or an admin only.
@@ -1251,8 +1275,13 @@ export async function handleConsoleApi(
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     if (context.renameWorkspace === undefined) return json(404, { error: 'not-found' }, headers);
     const renamed = await context.renameWorkspace(request, workspaceId as string, name);
+    const logo = await context.accounts.logo(workspaceId as string);
 
-    return json(200, { ...renamed, role }, headers);
+    return json(
+      200,
+      { ...renamed, role, logo: logo === undefined ? null : logoPath(renamed.id, logo.updatedAt) },
+      headers,
+    );
   }
 
   if (rest === '') {
