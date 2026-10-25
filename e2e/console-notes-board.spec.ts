@@ -177,7 +177,8 @@ test('the board has the filters of the table, and a filter keeps the board', asy
   await page.getByRole('option', { name: 'In progress', exact: true }).click();
   await expect(page).toHaveURL(/stage=progress/);
   await expect(page).toHaveURL(/view=board/);
-  expect(worker.asked.at(-1)?.get('stage')).toBe('progress');
+  // The address changes before the read leaves: wait for the read, do not take the one before it.
+  await expect.poll(() => worker.asked.at(-1)?.get('stage')).toBe('progress');
   await expect(page.locator('li[data-note]')).toHaveCount(1);
   await expect(column(page, 'In progress').locator('li')).toHaveText([/The returns policy/]);
 });
