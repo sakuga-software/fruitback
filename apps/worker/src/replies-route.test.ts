@@ -49,9 +49,9 @@ async function aSite(visibility: Visibility) {
 
 /** A note of `site` on `PAGE`, written in the store that the world reads. */
 function plant(site: string, id: string) {
-  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+  const note = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
 
-  return createMemoryStore().create({ ...seed, client: { id: site, name: site } }, undefined, POLICY);
+  return createMemoryStore().create({ ...note, client: { id: site, name: site } }, undefined, POLICY);
 }
 
 /** The access token of a session of the extension, for `account` in `workspace`. */

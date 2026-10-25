@@ -4,7 +4,7 @@ import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { note_comments, notes, sites, statuses } from './postgres-schema.ts';
 import { OWN_SOURCE } from './site-statuses.ts';
-import { forgetSelectorFor, identifierFor, noteOf, widgetIdOf, stageOf, threadsOf, toNoteIssue } from './note-rows.ts';
+import { forgetSelectorFor, identifierFor, stageOf, textOf, threadsOf, toNoteIssue, widgetIdOf } from './note-rows.ts';
 import { checkText, replyText } from './reply-text.ts';
 import { type BatchAnswer, type CreatedIssue, type NoteStore, StoreError } from './store.ts';
 
@@ -38,14 +38,14 @@ export function createPostgresNoteStore(database: Database): NoteStore {
   };
 
   /** One note written. `page.url` is already canonical: it is what the read asks for. */
-  const insert = async (db: Db, seed: Note, now: number): Promise<CreatedIssue> => {
+  const insert = async (db: Db, note: Note, now: number): Promise<CreatedIssue> => {
     const [row] = await db
       .insert(notes)
       .values({
-        client_id: seed.client?.id ?? null,
-        page_url: seed.page.url,
+        client_id: note.client?.id ?? null,
+        page_url: note.page.url,
         stage: DEFAULT_NOTE_STAGE,
-        payload: JSON.stringify(seed),
+        payload: JSON.stringify(note),
         created_at: now,
         updated_at: now,
       })
@@ -61,7 +61,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
     // One database for every site. The worker keeps the client in the key of its read cache, which
     // is what stops two sites from sharing an entry.
     scope: () => 'postgres',
-    create: (seed) => through('keep the note', ({ run }) => run((db) => insert(db, seed, Date.now()))),
+    create: (note) => through('keep the note', ({ run }) => run((db) => insert(db, note, Date.now()))),
     // One transaction: every note of the batch, or none, and then the `StoreError` that says so.
     // No parent: these notes are rows, not issues of a tracker.
     createBatch: (batch) =>
@@ -69,7 +69,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
         transaction(async (tx) => {
           const now = Date.now();
           const answers: BatchAnswer[] = [];
-          for (const seed of batch) answers.push({ issue: await insert(tx, seed, now) });
+          for (const note of batch) answers.push({ issue: await insert(tx, note, now) });
 
           return answers;
         }),
@@ -83,7 +83,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
               page_url: notes.page_url,
               stage: notes.stage,
               status_key: notes.status_key,
-              seed: notes.payload,
+              payload: notes.payload,
               at: notes.updated_at,
             })
             .from(notes)
@@ -135,7 +135,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
                   page_url: row.page_url,
                   stage: row.stage,
                   status_key: row.status_key,
-                  seed: row.seed,
+                  payload: row.payload,
                   updatedAt: new Date(row.at).toISOString(),
                 },
                 policy.showComments ? (threads?.get(row.id) ?? []) : undefined,
@@ -258,7 +258,7 @@ export function createPostgresNoteStore(database: Database): NoteStore {
           const selects = forgetSelectorFor(which);
           const found = (
             await tx
-              .select({ id: notes.id, page_url: notes.page_url, seed: notes.payload, created_at: notes.created_at })
+              .select({ id: notes.id, page_url: notes.page_url, payload: notes.payload, created_at: notes.created_at })
               .from(notes)
               .orderBy(asc(notes.id))
           ).filter(selects);
@@ -274,10 +274,10 @@ export function createPostgresNoteStore(database: Database): NoteStore {
 
           return found.map((row) => ({
             identifier: identifierFor(row.id),
-            seed: widgetIdOf(row.seed),
+            id: widgetIdOf(row.payload),
             createdAt: new Date(row.created_at).toISOString(),
             pageUrl: row.page_url,
-            note: noteOf(row.seed),
+            text: textOf(row.payload),
           }));
         }),
       ),

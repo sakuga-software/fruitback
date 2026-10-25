@@ -12,7 +12,7 @@ import { type CreatedIssue, type NoteStore, StoreError } from './store.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
 /**
- * What every `NoteStore` promises, whatever holds the seeds (FRU-34).
+ * What every `NoteStore` promises, whatever holds the notes (FRU-34).
  *
  * `store-conformance.test.ts` runs this suite once for each entry in `STORE_SPECS`. A remote store
  * runs against a double that keeps what it receives, so that a read finds what a write stored.
@@ -45,28 +45,28 @@ export type ConformanceSubject = {
   /** Remove what `open`, `broken` or `unreachable` prepared. Called after each case. */
   close(): void | Promise<void>;
   /**
-   * Why a read that names no client does not get every seed of the page. Absent: it does, as on a
+   * Why a read that names no client does not get every note of the page. Absent: it does, as on a
    * worker that serves one site.
    */
   readWithNoClient?: string;
-  /** The stage of a seed just written. Absent when the store picks it some other way. */
+  /** The stage of a note just written. Absent when the store picks it some other way. */
   writtenStage?: NoteStage;
-  /** The most replies a read returns on one seed. A case writes more, and the store matrix of `docs/self-hosting.md` gives it. */
+  /** The most replies a read returns on one note. A case writes more, and the store matrix of `docs/self-hosting.md` gives it. */
   replyCap: number | string;
-  /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
+  /** A client configuration that sends the client's notes to another tenant than the worker's own. */
   otherTenant: ClientConfig | string;
-  /** Give a stored seed a state that the store does not know. */
+  /** Give a stored note a state that the store does not know. */
   unknownState: ((created: CreatedIssue) => void | Promise<void>) | string;
   /**
-   * Write the seed with the replies of `repliesNewestFirst(count)`. A store that writes its own replies
+   * Write the note with the replies of `repliesNewestFirst(count)`. A store that writes its own replies
    * can write another number, but at least two, stored newest first.
    */
-  plantReplies(store: NoteStore, seed: Note, count: number): Promise<void>;
+  plantReplies(store: NoteStore, note: Note, count: number): Promise<void>;
   /** Why this store takes no reply (FRU-257). Absent: it takes one, and a read shows it. */
   noReply?: string;
   /** Why this store takes no verdict (FRU-294). Absent: it takes one, and a read shows it. */
   noCheck?: string;
-  /** Mark a stored seed done, as the team would in the store. */
+  /** Mark a stored note done, as the team would in the store. */
   markDone: ((created: CreatedIssue) => void | Promise<void>) | string;
   /** A store whose provider answers every call with an error. It replaces the double of `open`. */
   broken: (() => NoteStore) | string;
@@ -110,9 +110,9 @@ function skipReason(step: unknown): string | false {
 
 /** The store rejects with `StoreError`, and the worker answers `502 store-unavailable` on both routes. */
 async function assertStoreUnavailable(failing: NoteStore): Promise<void> {
-  const seed = noteAt('sd_outage', PAGE, 'acme');
+  const note = noteAt('sd_outage', PAGE, 'acme');
 
-  await assert.rejects(failing.create(seed, undefined, POLICY), StoreError);
+  await assert.rejects(failing.create(note, undefined, POLICY), StoreError);
   await assert.rejects(failing.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY), StoreError);
 
   const context = () => ({ clientIp: '203.0.113.1', store: failing, kv: createMemoryKv() });
@@ -120,7 +120,7 @@ async function assertStoreUnavailable(failing: NoteStore): Promise<void> {
     new Request('https://worker.fruitback.dev/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
-      body: JSON.stringify(seed),
+      body: JSON.stringify(note),
     }),
     ENV,
     context(),
@@ -161,14 +161,14 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       const find = (url: string, clientId: string | undefined, policy = POLICY) =>
         store.findForPage({ url, clientId }, undefined, policy);
 
-      it('reads a written seed back as the same seed', async () => {
-        const seed = noteAt('sd_round_trip', PAGE, 'acme');
-        const created = await store.create(seed, undefined, POLICY);
+      it('reads a written note back as the same note', async () => {
+        const note = noteAt('sd_round_trip', PAGE, 'acme');
+        const created = await store.create(note, undefined, POLICY);
 
         const found = await find(PAGE, 'acme');
 
         assert.equal(found.length, 1);
-        assert.deepEqual(found[0]?.seed, seed);
+        assert.deepEqual(found[0]?.note, note);
         assert.equal(found[0]?.id, created.id);
         assert.equal(found[0]?.identifier, created.identifier);
         const stage = found[0]?.stage;
@@ -183,18 +183,18 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         await store.create(noteAt('sd_page', PAGE, 'acme'), undefined, POLICY);
         await store.create(noteAt('sd_page_with_query', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
 
-        const ids = async (url: string) => (await find(url, 'acme')).map((issue) => issue.seed.id);
+        const ids = async (url: string) => (await find(url, 'acme')).map((issue) => issue.note.id);
 
         assert.deepEqual(await ids(PAGE), ['sd_page']);
         assert.deepEqual(await ids(PAGE_WITH_QUERY), ['sd_page_with_query']);
       });
 
-      it('never gives one client the seeds of another, or a seed that names no client', async () => {
+      it('never gives one client the notes of another, or a note that names no client', async () => {
         await store.create(noteAt('sd_acme', PAGE, 'acme'), undefined, POLICY);
         await store.create(noteAt('sd_globex', PAGE, 'globex'), undefined, POLICY);
         await store.create(noteAt('sd_nobody', PAGE, undefined), undefined, POLICY);
 
-        const ids = async (clientId: string) => (await find(PAGE, clientId)).map((issue) => issue.seed.id);
+        const ids = async (clientId: string) => (await find(PAGE, clientId)).map((issue) => issue.note.id);
 
         assert.deepEqual(await ids('acme'), ['sd_acme']);
         assert.deepEqual(await ids('globex'), ['sd_globex']);
@@ -202,14 +202,14 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       // Only a worker without FRUITBACK_CLIENTS accepts a read that names no client.
       it(
-        'gives a read that names no client every seed on the page',
+        'gives a read that names no client every note on the page',
         { skip: Boolean(subject.readWithNoClient) },
         async () => {
           await store.create(noteAt('sd_acme', PAGE, 'acme'), undefined, POLICY);
           await store.create(noteAt('sd_nobody', PAGE, undefined), undefined, POLICY);
           await store.create(noteAt('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
 
-          const ids = (await find(PAGE, undefined)).map((issue) => issue.seed.id).sort();
+          const ids = (await find(PAGE, undefined)).map((issue) => issue.note.id).sort();
 
           assert.deepEqual(ids, ['sd_acme', 'sd_nobody']);
         },
@@ -227,7 +227,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
           await store.create(noteAt('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
 
           const ids = async (client: typeof tenant | undefined) =>
-            (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.seed.id);
+            (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.note.id);
 
           assert.deepEqual(await ids(tenant), ['sd_other_tenant']);
           assert.deepEqual(await ids(undefined), ['sd_default_tenant']);
@@ -254,7 +254,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
         const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
 
-        assert.ok(times.length >= 2, 'the seed has fewer than two replies');
+        assert.ok(times.length >= 2, 'the note has fewer than two replies');
         assert.deepEqual(times, [...times].sort());
         assert.notEqual(times[0], times.at(-1));
       });
@@ -338,8 +338,8 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         const [shown] = await find(PAGE, 'acme', POLICY);
         const [hidden] = await find(PAGE, 'acme', QUIET);
 
-        assert.ok((shown?.comments?.length ?? 0) > 0, 'the seed has no replies to hide');
-        assert.ok(hidden !== undefined, 'the seed was not found');
+        assert.ok((shown?.comments?.length ?? 0) > 0, 'the note has no replies to hide');
+        assert.ok(hidden !== undefined, 'the note was not found');
         assert.equal('comments' in hidden, false);
       });
 
@@ -357,12 +357,12 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
         );
       });
 
-      it('says empty when a seed has no replies', async () => {
+      it('says empty when a note has no replies', async () => {
         await store.create(noteAt('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
 
         const [shown] = await find(PAGE, 'acme', POLICY);
 
-        assert.ok(shown !== undefined, 'the seed was not found');
+        assert.ok(shown !== undefined, 'the note was not found');
         assert.deepEqual(shown.comments, []);
       });
 

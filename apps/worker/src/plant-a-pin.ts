@@ -21,11 +21,11 @@ import type { Note } from '@fruitback/shared';
  * The only import is a type, which Node erases, so the script runs with no `pnpm install`.
  */
 export const PIN_NOTE: Note = {
-  kind: 'fruitback.seed',
-  v: 2,
+  kind: 'fruitback.note',
+  v: 3,
   id: 'sd_compose_smoke',
   createdAt: '2026-09-14T00:00:00.000Z',
-  note: 'Planted by the compose smoke test',
+  text: 'Planted by the compose smoke test',
   page: { url: 'https://staging.example.com/', path: '/' },
   viewport: { width: 1280, height: 800 },
   anchor: { selector: 'main > h1', tag: 'h1', bounds: { xPct: 0, yPct: 0, wPct: 100, hPct: 8 } },
@@ -115,8 +115,8 @@ export async function plantAPin(endpoint: string, site: string, options: { plant
   );
   const body = await read.text();
   const issues =
-    read.status === 200 ? ((JSON.parse(body) as { issues?: { seed?: { id?: string } }[] }).issues ?? []) : [];
-  if (!issues.some((issue) => issue.seed?.id === PIN_NOTE.id)) {
+    read.status === 200 ? ((JSON.parse(body) as { issues?: { note?: { id?: string } }[] }).issues ?? []) : [];
+  if (!issues.some((issue) => issue.note?.id === PIN_NOTE.id)) {
     throw new Error(`GET /feedback answered ${read.status} without the pin: ${body}`);
   }
 }

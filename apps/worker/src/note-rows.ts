@@ -29,7 +29,8 @@ export type NoteRecord = {
   stage: string;
   /** The status of the note in its site (FRU-365). NULL or absent: the built-in status of its stage. */
   status_key?: string | null;
-  seed: string;
+  /** The note as JSON, as the column `payload` holds it. */
+  payload: string;
   updatedAt: string;
 };
 
@@ -52,7 +53,7 @@ export function rowOfIdentifier(identifier: string): number | undefined {
 }
 
 /**
- * The row of `seeds` that a note of the index names, when the worker's store keeps it (FRU-384): in
+ * The row of `notes` that a note of the index names, when the worker's store keeps it (FRU-384): in
  * Fruitback, or sent on to an address (a `rest` connector), whose notes the worker keeps too and
  * whose reference is `FB-<id>` (heavy review of #505). A note of a tracker, or of a connector removed
  * since, is the tracker's. The row is only where to look: `isSameNote` says whether it is this note.
@@ -67,12 +68,12 @@ export function keptRowOf(
   return kept && reference !== null ? rowOfIdentifier(reference) : undefined;
 }
 
-/** Whether the `seed` column of a row is the note the widget named `seed`: its id is in the JSON. */
-export function isSameNote(column: string, seed: string): boolean {
+/** Whether the `payload` of a row is the note whose id the widget gave: the id is in the JSON. */
+export function isSameNote(column: string, id: string): boolean {
   try {
     const parsed: unknown = JSON.parse(column);
 
-    return typeof parsed === 'object' && parsed !== null && (parsed as { id?: unknown }).id === seed;
+    return typeof parsed === 'object' && parsed !== null && (parsed as { id?: unknown }).id === id;
   } catch {
     return false;
   }
@@ -96,19 +97,19 @@ export function stageOf(value: string): NoteStage {
  * the whole page. Same reasoning as the tolerant parser on Linear descriptions.
  */
 export function toNoteIssue(row: NoteRecord, comments: NoteComment[] | undefined): NoteIssue | null {
-  const seed = noteSchema.safeParse(readJson(row.seed));
-  if (!seed.success) return null;
+  const note = noteSchema.safeParse(readJson(row.payload));
+  if (!note.success) return null;
 
-  // The row was selected on `page_url`, and the seed carries its own `page.url`. They are written
-  // together and can only drift through an edit or a restore — but if they do, this seed belongs to
+  // The row was selected on `page_url`, and the note carries its own `page.url`. They are written
+  // together and can only drift through an edit or a restore — but if they do, this note belongs to
   // another page, and returning it puts one page's note on top of another's element.
-  if (seed.data.page.url !== row.page_url) return null;
+  if (note.data.page.url !== row.page_url) return null;
 
   const result = noteIssueSchema.safeParse({
     id: String(row.id),
     identifier: identifierFor(row.id),
     // No `url`: there is no interface to open. See the field's own note in the contract.
-    title: buildIssueTitle(seed.data),
+    title: buildIssueTitle(note.data),
     stage: stageOf(row.stage),
     // Nobody named the states of this store: they are the stages. An empty name makes the widget
     // write the stage in the words of its catalog, in the language of the reader (FRU-114).
@@ -117,7 +118,7 @@ export function toNoteIssue(row: NoteRecord, comments: NoteComment[] | undefined
     status: `${OWN_SOURCE}:${row.status_key ?? stageOf(row.stage)}`,
     updatedAt: row.updatedAt,
     ...(comments === undefined ? {} : { comments }),
-    seed: seed.data,
+    note: note.data,
   });
 
   return result.success ? result.data : null;
@@ -160,7 +161,7 @@ export function threadsOf(rows: readonly CommentRow[]): Map<number, NoteComment[
  * The filter runs on the rows, and not in the database: one row that is not JSON makes a query on
  * the JSON throw for every row, and a row is parsed, never trusted.
  */
-export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; seed: string }) => boolean {
+export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; payload: string }) => boolean {
   if ('identifiers' in which) {
     const wanted = new Set(which.identifiers);
 
@@ -170,7 +171,7 @@ export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; se
   const [field, value] = 'email' in which ? (['email', which.email] as const) : (['name', which.name] as const);
   const wanted = value.trim().toLowerCase();
 
-  return (row) => reporterFieldOf(row.seed, field) === wanted;
+  return (row) => reporterFieldOf(row.payload, field) === wanted;
 }
 
 function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefined {
@@ -179,11 +180,11 @@ function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefi
   return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
 }
 
-/** The text of the note of a row, for the list an operator reads before a deletion. */
-export function noteOf(text: string): string {
-  const note = (readJson(text) as { note?: unknown } | undefined)?.note;
+/** The words of the note of a row, for the list an operator reads before a deletion. */
+export function textOf(payload: string): string {
+  const text = (readJson(payload) as { text?: unknown } | undefined)?.text;
 
-  return typeof note === 'string' ? note : '';
+  return typeof text === 'string' ? text : '';
 }
 
 /** The id the widget gave the note of a row (FRU-237: the index of the notes is keyed on it). */

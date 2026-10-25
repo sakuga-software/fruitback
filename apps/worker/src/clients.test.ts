@@ -176,7 +176,7 @@ describe('resolveClient', () => {
   });
 
   it('trims the id, because it arrives from two places', () => {
-    // The query parameter was trimmed at its call site and the seed's own id was not, so a client
+    // The query parameter was trimmed at its call site and the note's own id was not, so a client
     // with a stray space resolved on a read and came back unknown on a write.
     const resolved = resolveClient({ clients: MAP, clientId: '  acme  ', origin: null, fallback: FALLBACK });
 

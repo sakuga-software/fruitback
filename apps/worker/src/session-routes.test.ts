@@ -535,10 +535,10 @@ describe('a session store that cannot be opened', () => {
   /**
    * A database that does not answer.
    *
-   * Answered like the seed path's outage rather than as a bare `500`, so the extension can tell
+   * Answered like the note path's outage rather than as a bare `500`, so the extension can tell
    * "retry later" from "this request was wrong" — and so the answer carries the CORS headers it
    * needs to read it at all. Raised in review: the session connector threw a plain `Error`, which
-   * `handleSession` had nothing to map. It raises `StoreError` now, like the seed connector.
+   * `handleSession` had nothing to map. It raises `StoreError` now, like the note connector.
    */
   it('answers 502 store-unavailable, with the headers the extension can read', async () => {
     const env = envWith();

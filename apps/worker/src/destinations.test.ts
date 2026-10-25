@@ -172,13 +172,13 @@ async function acme(env: World) {
       origin: SITE,
       ...options,
     });
-    const body = (await answer.json()) as { issues?: { seed: { note: string } }[]; destinations?: Offered };
+    const body = (await answer.json()) as { issues?: { note: { text: string } }[]; destinations?: Offered };
 
-    return { status: answer.status, notes: (body.issues ?? []).map((issue) => issue.seed.note), body };
+    return { status: answer.status, notes: (body.issues ?? []).map((issue) => issue.note.text), body };
   };
   let written = 0;
   const write = (text: string, options: { token?: string; destination?: string } = {}) => {
-    const seed = noteFixture();
+    const note = noteFixture();
     written += 1;
 
     return call(
@@ -189,10 +189,10 @@ async function acme(env: World) {
         origin: SITE,
         ...(options.token === undefined ? {} : { token: options.token }),
         body: {
-          ...seed,
-          id: `seed-${written}`,
-          note: text,
-          page: { ...seed.page, url: PAGE },
+          ...note,
+          id: `sd_${written}`,
+          text,
+          page: { ...note.page, url: PAGE },
           client: { id: site.id },
         },
       },

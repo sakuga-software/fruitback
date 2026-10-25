@@ -76,9 +76,9 @@ async function accountSession(world: World, who: Who): Promise<string> {
 }
 
 function noteOn(site: string, id: string): Note {
-  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
+  const note = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
 
-  return { ...seed, client: { id: site, name: 'Acme' } };
+  return { ...note, client: { id: site, name: 'Acme' } };
 }
 
 /** A PNG header and nothing more: the worker reads its size and keeps its bytes. */
@@ -331,9 +331,9 @@ describe('a site of a suspended workspace answers as a site that does not exist 
         origin: ACME,
       });
       assert.equal(read.status, 200);
-      const { issues } = (await read.json()) as { issues: { seed: { id: string } }[] };
+      const { issues } = (await read.json()) as { issues: { note: { id: string } }[] };
       assert.ok(
-        issues.some((issue) => issue.seed.id === 'sd_kept'),
+        issues.some((issue) => issue.note.id === 'sd_kept'),
         route.name,
       );
     }
@@ -681,7 +681,7 @@ async function fixtures(on: Instance): Promise<Fixtures> {
       workspace: on.acme,
       site: { id: on.site.id },
       identifier: 'FB-1',
-      seed: noteFixture({ id: 'sd_late' }),
+      note: noteFixture({ id: 'sd_late' }),
     }),
     1,
   );

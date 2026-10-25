@@ -205,7 +205,7 @@ describe('each test file is run (FRU-174)', () => {
       'tools/mutation/zz.test.ts',
       'zz.test.ts',
     ];
-    const read = ['packages/shared/src/seed.test.ts', 'packages/shared/src/deep/er/zz.test.ts', 'e2e/zz.spec.ts'];
+    const read = ['packages/shared/src/note.test.ts', 'packages/shared/src/deep/er/zz.test.ts', 'e2e/zz.spec.ts'];
 
     assert.deepEqual(unread([...planted, ...read], [shared], 'e2e'), planted);
   });
@@ -235,7 +235,7 @@ describe('each test file is run (FRU-174)', () => {
       { root: 'packages/typo', script: "node --test 'scr/**/*.test.ts'", globs: ['scr/**/*.test.ts'] },
       { root: 'packages/no-glob', script: 'node --test', globs: [] },
     ];
-    const tests = ['packages/shared/src/seed.test.ts', 'packages/typo/src/a.test.ts', 'packages/no-glob/src/a.test.ts'];
+    const tests = ['packages/shared/src/note.test.ts', 'packages/typo/src/a.test.ts', 'packages/no-glob/src/a.test.ts'];
 
     assert.deepEqual(empty(tests, packages), ['packages/fruitback', 'packages/typo', 'packages/no-glob']);
   });
@@ -259,7 +259,7 @@ describe('each test file is run (FRU-174)', () => {
     assert.deepEqual(unknownRunners(packages), ['packages/other-runner', 'packages/narrowed']);
     assert.deepEqual(
       empty(
-        ['packages/shared/src/seed.test.ts', 'packages/other-runner/src/a.test.ts', 'apps/worker/src/a.test.ts'],
+        ['packages/shared/src/note.test.ts', 'packages/other-runner/src/a.test.ts', 'apps/worker/src/a.test.ts'],
         packages,
       ),
       [],

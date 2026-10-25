@@ -157,18 +157,18 @@ async function tenant(env: World, name: string, origin: string, apiKey: string) 
 
   const page = `${origin}/pricing`;
   const write = (text: string) => {
-    const seed = noteFixture();
+    const note = noteFixture();
 
     return call(env, 'POST', '/feedback', {
       origin,
-      body: { ...seed, note: text, page: { ...seed.page, url: page }, client: { id: site.id } },
+      body: { ...note, text, page: { ...note.page, url: page }, client: { id: site.id } },
     });
   };
   const read = async () => {
     const answer = await call(env, 'GET', `/feedback?url=${encodeURIComponent(page)}&client=${site.id}`, { origin });
 
-    return ((await answer.json()) as { issues: { identifier: string; seed: { note: string } }[] }).issues.map(
-      (issue) => [issue.identifier, issue.seed.note],
+    return ((await answer.json()) as { issues: { identifier: string; note: { text: string } }[] }).issues.map(
+      (issue) => [issue.identifier, issue.note.text],
     );
   };
   /** What the widget draws of each pin: its stage, and the replies it shows. */
@@ -198,7 +198,7 @@ describe('two workspaces on one worker, each with its own tracker (FRU-102)', ()
     assert.equal((await acme.write('Acme: and the button too.')).status, 201);
 
     const notesOf = (organisation: string) =>
-      (linear.get(organisation) ?? []).map((issue) => /"note": "([^"]*)"/.exec(issue.description)?.[1]);
+      (linear.get(organisation) ?? []).map((issue) => /"text": "([^"]*)"/.exec(issue.description)?.[1]);
     assert.deepEqual(notesOf('acme'), ['Acme: the price is wrong.', 'Acme: and the button too.']);
     assert.deepEqual(notesOf('globex'), ['Globex: the logo is cut.']);
 
@@ -696,14 +696,14 @@ describe('the states of Linear as the statuses of a site (FRU-368)', () => {
     assert.equal(set.status, 200);
     // A new note empties the cache of the page, in the Kv of this worker; the states kept for the team
     // went with the change of the settings.
-    const seed = noteFixture();
+    const note = noteFixture();
     const written = await callOn(
       env,
       'POST',
       '/feedback',
       {
         origin: 'https://staging.acme.dev',
-        body: { ...seed, note: 'Acme: two.', page: { ...seed.page, url: page }, client: { id: acme.site.id } },
+        body: { ...note, text: 'Acme: two.', page: { ...note.page, url: page }, client: { id: acme.site.id } },
       },
       { kv },
     );

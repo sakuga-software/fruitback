@@ -30,14 +30,14 @@ const POLICY: ClientPolicy = {
 afterEach(() => vi.restoreAllMocks());
 
 function row(id: number, state: string, stateReason: string | null) {
-  const seed = noteFixture({ id: `sd_${id}` });
+  const note = noteFixture({ id: `sd_${id}` });
 
   return {
     id,
     number: id,
     html_url: `https://github.com/acme/site/issues/${id}`,
     title: 'A note',
-    body: buildIssueDescription(seed),
+    body: buildIssueDescription(note),
     state,
     state_reason: stateReason,
     updated_at: '2026-10-22T10:00:00Z',

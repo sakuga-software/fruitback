@@ -53,8 +53,8 @@ afterAll(() => {
 });
 
 function noteFixtureOf(id: string, page: string, client: string | undefined, note: string): Note {
-  const seed = noteFixture({ id, note, page: { url: page, path: new URL(page).pathname, title: 'A page' } });
-  const { client: _own, ...rest } = seed;
+  const made = noteFixture({ id, text: note, page: { url: page, path: new URL(page).pathname, title: 'A page' } });
+  const { client: _own, ...rest } = made;
 
   return { ...rest, ...(client === undefined ? {} : { client: { id: client, name: client } }) };
 }
@@ -183,14 +183,17 @@ for (const subject of SUBJECTS) {
           [...NOTE_STAGES, 'new'],
         );
         const file = new DatabaseSync(notesPath, { readOnly: true });
-        const texts = file.prepare('SELECT id, seed FROM seeds ORDER BY id').all() as { id: number; seed: string }[];
+        const texts = file.prepare('SELECT id, seed AS note FROM seeds ORDER BY id').all() as {
+          id: number;
+          note: string;
+        }[];
         file.close();
         assert.deepEqual(
           (await rowsOf(database, 'SELECT id, payload FROM notes ORDER BY id')).map((row) => ({
             id: Number(row.id),
-            seed: row.payload,
+            note: row.payload,
           })),
-          texts.map((row) => ({ id: row.id, seed: row.seed })),
+          texts.map((row) => ({ id: row.id, note: row.note })),
         );
       });
 
@@ -256,7 +259,7 @@ for (const subject of SUBJECTS) {
                 store: createPostgresNoteStore(database as PgDatabase),
               },
             )
-          ).json()) as { issues: { identifier: string; stage: string; seed: { note: string } }[] };
+          ).json()) as { issues: { identifier: string; stage: string; note: { text: string } }[] };
         assert.deepEqual((await read(PAGES[0] ?? '')).issues.map((issue) => [issue.identifier, issue.stage]).sort(), [
           ['FB-1', 'new'],
           ['FB-2', 'todo'],
@@ -537,7 +540,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
       {
         ok: true,
         args: {
-          copy: 'seeds',
+          copy: 'notes',
           notesPath: 'fb.db',
           clients: new Map<string | null, string>([
             ['acme', 'site_1'],
@@ -550,7 +553,7 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
     );
     assert.deepEqual(parseMigrateArgs(['--notes', 'fb.db']), {
       ok: true,
-      args: { copy: 'seeds', notesPath: 'fb.db', clients: new Map(), dryRun: false },
+      args: { copy: 'notes', notesPath: 'fb.db', clients: new Map(), dryRun: false },
     });
   });
 
@@ -575,38 +578,16 @@ describe('the arguments of migrate-to-postgres, for the notes (FRU-220)', () => 
     }
   });
 
-  it('reads --seeds, the name of before FRU-378, as --notes', () => {
-    const notes = { ok: true, args: { copy: 'seeds', notesPath: 'fb.db', clients: new Map(), dryRun: false } };
-
-    assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db']), notes);
-    assert.deepEqual(parseMigrateArgs(['--notes', 'fb.db', '--seeds', 'fb.db']), notes);
-    assert.deepEqual(parseMigrateArgs(['--seeds', 'fb.db', '--notes', ' fb.db ']), notes);
-  });
-
-  it('refuses --notes and --seeds that name two files, and either flag given twice', () => {
-    for (const argv of [
-      ['--notes', 'fb.db', '--seeds', 'other.db'],
-      ['--seeds', 'fb.db', '--notes', 'other.db'],
-      ['--seeds', 'fb.db', '--seeds', 'fb.db'],
-      ['--notes', 'fb.db', '--notes', 'fb.db'],
-      ['--seeds', '--dry-run'],
-      ['--seeds', 'fb.db', '--accounts', 'a.db', '--sessions', 's.db'],
-    ]) {
-      const parsed = parseMigrateArgs(argv);
-
-      assert.equal(parsed.ok, false, argv.join(' '));
-    }
-    const twice = parseMigrateArgs(['--notes', 'fb.db', '--seeds', 'other.db']);
-    assert.match(twice.ok ? '' : twice.error, /--notes takes one file$/);
-    const empty = parseMigrateArgs(['--seeds', '--dry-run']);
-    assert.match(empty.ok ? '' : empty.error, /--seeds needs a file$/);
+  it('takes one file, and refuses --notes given twice', () => {
+    assert.equal(parseMigrateArgs(['--notes', 'fb.db', '--notes', 'fb.db']).ok, false);
+    const empty = parseMigrateArgs(['--notes', '--dry-run']);
+    assert.match(empty.ok ? '' : empty.error, /--notes needs a file$/);
   });
 
   it('says --notes in its usage', () => {
     const refused = parseMigrateArgs([]);
 
     assert.match(refused.ok ? '' : refused.error, /migrate-to-postgres --notes <file>/);
-    assert.doesNotMatch(refused.ok ? '' : refused.error, /--seeds/);
   });
 });
 

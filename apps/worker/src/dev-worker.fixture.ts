@@ -127,7 +127,7 @@ async function setWriters(
 
 const STAGES = ['new', 'todo', 'progress', 'done', 'closed'];
 
-/** `POST /__dev/stage`: the note whose seed has this id goes to this stage. `404` for no such note. */
+/** `POST /__dev/stage`: the note with this id goes to this stage. `404` for no such note. */
 async function moveStage(database: PgDatabase, incoming: IncomingMessage, response: ServerResponse): Promise<void> {
   try {
     const asked = await bodyOf(incoming);

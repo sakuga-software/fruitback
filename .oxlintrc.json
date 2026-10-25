@@ -77,11 +77,11 @@
             "patterns": [
               {
                 "group": ["node:*", "@fruitback/*"],
-                "message": "The seed contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
+                "message": "The note contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
               },
               {
                 "regex": "(^|/)apps/",
-                "message": "The seed contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
+                "message": "The note contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
               }
             ]
           }
@@ -200,6 +200,7 @@
         "apps/worker/src/auth-schema.ts",
         "apps/worker/src/postgres-migrate.ts",
         "apps/worker/src/postgres-copy.ts",
+        "apps/worker/src/rewrite-notes-postgres.ts",
         "apps/worker/src/postgres-stores.ts"
       ],
       "rules": {
@@ -241,7 +242,8 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts"
+                  "./postgres-copy.ts",
+                  "./rewrite-notes-postgres.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -287,7 +289,8 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts"
+                  "./postgres-copy.ts",
+                  "./rewrite-notes-postgres.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -329,7 +332,8 @@
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
                   "./postgres-migrate.ts",
-                  "./postgres-copy.ts"
+                  "./postgres-copy.ts",
+                  "./rewrite-notes-postgres.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -350,7 +354,8 @@
         "apps/worker/src/postgres-schema.ts",
         "apps/worker/src/auth-schema.ts",
         "apps/worker/src/postgres-migrate.ts",
-        "apps/worker/src/postgres-copy.ts"
+        "apps/worker/src/postgres-copy.ts",
+        "apps/worker/src/rewrite-notes-postgres.ts"
       ],
       "rules": {
         "no-restricted-imports": [

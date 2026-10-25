@@ -3,14 +3,14 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { OutgoingFile } from './attachments.ts';
 
 /**
- * Where a seed is stored, behind one interface (FRU-29).
+ * Where a note is stored, behind one interface (FRU-29).
  *
  * The seam already existed and was not named: `app.ts` selected between `linear.ts` and
  * `linear-memory.ts` through a `Pick<typeof realLinear, 'createNoteIssue' | 'fetchNoteIssues'>`,
  * which is an interface discovered by accident. This is that interface written down, so a second
  * store — SQLite (FRU-31), GitHub Issues (FRU-32) — is an implementation rather than a rewrite.
  *
- * **What is deliberately not here: how to find the seeds of a page.** Linear can filter server-side
+ * **What is deliberately not here: how to find the notes of a page.** Linear can filter server-side
  * with `description: { contains: <canonical url> }`, GitHub lists issues by label, a SQL store does a
  * `WHERE`, and a store with no search at all would have to walk everything. So `findForPage` states
  * the *intention* and each store picks its method. Exposing a `contains` filter would have made
@@ -27,7 +27,7 @@ import type { OutgoingFile } from './attachments.ts';
 export class StoreError extends Error {}
 
 /**
- * What a store hands back after planting a seed.
+ * What a store hands back after planting a note.
  *
  * `url` is optional for the same reason it is on `NoteIssue`: a store may have no interface to open
  * (FRU-31). The widget does not read it — this travels in the `201` body, where an empty string
@@ -48,25 +48,25 @@ export type FilesAnswer = { sent: string[]; lost: string[]; waiting: string[] };
 /** A note planted with its files. */
 export type CreatedWithFiles = CreatedIssue & { files?: FilesAnswer };
 
-/** What became of one seed of a batch: its issue, or a store that did not keep it. */
+/** What became of one note of a batch: its issue, or a store that did not keep it. */
 export type BatchAnswer = { issue: CreatedIssue } | { error: 'store-unavailable' };
 
 /**
  * What a store may remember of a batch from one attempt to the next (FRU-195). The worker holds it,
- * for the seeds of the batch and the minutes a seed is remembered; a store with no parent ignores it.
+ * for the notes of the batch and the minutes a note is remembered; a store with no parent ignores it.
  *
  * Nothing here may throw: a memory that does not answer only costs the reuse of a parent.
  */
 export type BatchMemory = {
-  /** The parent an earlier attempt wrote for one of these seeds. */
+  /** The parent an earlier attempt wrote for one of these notes. */
   parent(): Promise<string | undefined>;
-  /** Remembers the parent of these seeds. */
+  /** Remembers the parent of these notes. */
   keepParent(id: string): Promise<void>;
   /** Forgets it: the next attempt writes a new one. */
   forgetParent(): Promise<void>;
 };
 
-/** The read the worker asks for: every seed on one page, for one client. */
+/** The read the worker asks for: every note on one page, for one client. */
 export type NoteIssueQuery = { url: string; clientId: string | undefined };
 
 export type NoteStore = {
@@ -95,14 +95,14 @@ export type NoteStore = {
    */
   scope(client: ClientConfig | undefined): string;
   /**
-   * Plant one seed. `files` are its attachments in transit (FRU-331), for a store that takes them
+   * Plant one note. `files` are its attachments in transit (FRU-331), for a store that takes them
    * (`attachments`): the store sends them to its tracker, and says what became of each.
    *
    * A store throws `StoreError` when the note is not written: the files then stay in transit, and the
    * widget sends the note again. Once the note is written, a file that fails is `lost`, never a throw.
    */
   create(
-    seed: Note,
+    note: Note,
     client: ClientConfig | undefined,
     policy: ClientPolicy,
     files?: readonly OutgoingFile[],
@@ -115,26 +115,34 @@ export type NoteStore = {
   /** Whether the store of this client takes files, for a store that routes by client. */
   attachmentsFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
-   * Plant several seeds as one batch (FRU-124): a tracker groups them under one parent, and each
-   * seed is still its own issue, with its own state. One answer for each seed, in order.
+   * Plant several notes as one batch (FRU-124): a tracker groups them under one parent, and each
+   * note is still its own issue, with its own state. One answer for each note, in order.
    *
    * It throws `StoreError` only when nothing was written. A store without it gets one `create` for
-   * each seed: `createAll` in `batch.ts`. `memory` is absent when the caller keeps none.
+   * each note: `createAll` in `batch.ts`. `memory` is absent when the caller keeps none.
    */
   createBatch?(
-    seeds: readonly Note[],
+    notes: readonly Note[],
     client: ClientConfig | undefined,
     policy: ClientPolicy,
     memory?: BatchMemory,
   ): Promise<BatchAnswer[]>;
   findForPage(query: NoteIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<NoteIssue[]>;
   /**
-   * Delete the seeds that `which` selects, and the replies to them (FRU-85, FRU-111).
+   * Delete the notes that `which` selects, and the replies to them (FRU-85, FRU-111).
    *
    * Only a store that holds the rows itself has this. A tracker keeps the issues in the team's own
    * workspace, and the team deletes them there. `node server.mjs forget` refuses a store without it.
    */
   forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenNote[]>;
+  /**
+   * Rewrite, once, the description of each issue that holds a block of before FRU-378: the issues
+   * whose description contains `job.marker`, in the team or the repository of each of `clients`, given
+   * to `job.rewrite`. A description it answers `undefined` for stays as it is, and `dryRun` writes none.
+   *
+   * Only `rewrite-notes` of the command calls it. A store that keeps no description has none.
+   */
+  rewriteBlocks?(clients: readonly (ClientConfig | undefined)[], job: BlockRewrite): Promise<RewrittenIssue[]>;
   /**
    * Write a reply under one note (FRU-257), as the text of `replyText`, and answer it as a read will
    * show it. `undefined`: this store holds no such note for this client. Absent: this store takes no
@@ -248,13 +256,32 @@ export async function takesChecks(store: NoteStore, client: ClientConfig | undef
 }
 
 /**
- * Which seeds to forget.
+ * Which notes to forget.
  *
  * An address and a name are what the reporter typed, so each one is a claim. An identifier names
- * one seed, and it is what an operator uses after reading the list.
+ * one note, and it is what an operator uses after reading the list.
  */
 export type ForgetSelector = { email: string } | { name: string } | { identifiers: readonly string[] };
 
-/** One seed that `forget` found, as the operator reads it before it goes. */
-/** A note `forget` found. `seed` is the id the widget gave it, which the index of the notes is keyed on. */
-export type ForgottenNote = { identifier: string; seed: string; createdAt: string; pageUrl: string; note: string };
+/** What `rewriteBlocks` is asked to do (FRU-378). */
+export type BlockRewrite = {
+  /** A text that every description to read holds, to narrow the search of the tracker. */
+  marker: string;
+  /** The description as it must be now, or `undefined` to leave it as it is. */
+  rewrite: (description: string) => string | undefined;
+  dryRun: boolean;
+};
+
+/** An issue `rewriteBlocks` read: its reference in the tracker, and what became of it. */
+export type RewrittenIssue = {
+  reference: string;
+  outcome: 'rewritten' | 'to-rewrite' | 'unchanged' | 'failed';
+  /** Why it failed, as the tracker said it. */
+  error?: string;
+};
+
+/**
+ * A note that `forget` found, as the operator reads it before it goes. `id` is the id the widget gave
+ * it, which the index of the notes is keyed on.
+ */
+export type ForgottenNote = { identifier: string; id: string; createdAt: string; pageUrl: string; text: string };

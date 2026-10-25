@@ -20,8 +20,8 @@ function storeOfStages() {
   const store: NoteStore = {
     name: 'test',
     scope: () => 'test',
-    async create(seed) {
-      kept.push(seed);
+    async create(note) {
+      kept.push(note);
 
       return {
         id: `issue_${kept.length}`,
@@ -31,15 +31,15 @@ function storeOfStages() {
     },
     async findForPage({ url, clientId }) {
       return kept
-        .filter((seed) => seed.page.url === url && seed.client?.id === clientId)
-        .map((seed, index): NoteIssue => ({
+        .filter((note) => note.page.url === url && note.client?.id === clientId)
+        .map((note, index): NoteIssue => ({
           id: `issue_${index + 1}`,
-          identifier: `FB-${kept.indexOf(seed) + 1}`,
-          title: seed.note.slice(0, 20),
-          stage: stages.get(seed.id) ?? 'new',
+          identifier: `FB-${kept.indexOf(note) + 1}`,
+          title: note.text.slice(0, 20),
+          stage: stages.get(note.id) ?? 'new',
           stateName: 'Whatever',
           updatedAt: '2026-10-13T00:00:00.000Z',
-          seed,
+          note,
         }));
     },
   };
@@ -78,21 +78,21 @@ async function leave(
   more: { token?: string; id?: string; origin?: string } = {},
 ) {
   const origin = more.origin ?? 'https://acme.dev';
-  const seed = noteFixture({
+  const planted = noteFixture({
     id: more.id ?? `sd_${Math.random().toString(36).slice(2, 10)}`,
-    note,
+    text: note,
     page: { url: `${origin}/pricing`, path: '/pricing', title: 'Pricing' },
     client: { id: site, name: 'Acme' },
     reporter: { name: 'Typed Name', email: 'typed@client.fr' },
   });
   const answer = await callOn(world, 'POST', '/feedback', {
     origin,
-    body: seed,
+    body: planted,
     ...(more.token === undefined ? {} : { headers: { Authorization: `Bearer ${more.token}` } }),
   });
   assert.equal(answer.status, 201, await answer.clone().text());
 
-  return seed;
+  return planted;
 }
 
 async function sitesOf(world: World, workspace: string, token: string) {
@@ -165,8 +165,8 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
 
   it('moves a count when a read of the page finds the note at another stage in its store', async () => {
     const { world, alice, workspace, acme, stages } = await aWorkspace();
-    const seed = await leave(world, acme, 'Done in the tracker later.');
-    stages.set(seed.id, 'done');
+    const note = await leave(world, acme, 'Done in the tracker later.');
+    stages.set(note.id, 'done');
 
     const read = await callOn(
       world,
@@ -186,7 +186,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
     kept.push(
       noteFixture({
         id: 'sd_before',
-        note: 'Planted before the index.',
+        text: 'Planted before the index.',
         page: { url: 'https://acme.dev/pricing', path: '/pricing', title: 'Pricing' },
         client: { id: acme, name: 'Acme' },
       }),
@@ -359,20 +359,20 @@ describe('forget, and the index (FRU-237)', () => {
         ['sd_alice', 'Alice'],
         ['sd_bob', 'Bob'],
       ] as const) {
-        const seed = noteFixture({
+        const note = noteFixture({
           id,
-          note: `A note of ${name}.`,
+          text: `A note of ${name}.`,
           client: { id: site.id, name: 'Acme' },
           reporter: { name, email: `${name.toLowerCase()}@client.fr` },
         });
-        const issue = await store.create(seed, undefined, { read: 'public' } as never);
+        const issue = await store.create(note, undefined, { read: 'public' } as never);
         planted.push(issue.identifier);
         await index.record(
           [
             {
               workspace: acme.id,
               site: site.id,
-              seed,
+              note,
               channel: 'script',
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
@@ -393,7 +393,7 @@ describe('forget, and the index (FRU-237)', () => {
           {
             workspace: other.id,
             site: otherSite.id,
-            seed: noteFixture({ id: 'sd_other', note: 'A note of the other workspace.' }),
+            note: noteFixture({ id: 'sd_other', text: 'A note of the other workspace.' }),
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -423,14 +423,14 @@ describe('forget, and the index (FRU-237)', () => {
 });
 
 describe('the index, against what the review of #300 found (FRU-237)', () => {
-  const issueOf = (seedId: string, identifier: string, note: string, stage: NoteStage): NoteIssue => ({
+  const issueOf = (noteId: string, identifier: string, note: string, stage: NoteStage): NoteIssue => ({
     id: identifier,
     identifier,
     title: note.slice(0, 20),
     stage,
     stateName: 'x',
     updatedAt: '2026-10-13T00:00:00.000Z',
-    seed: noteFixture({ id: seedId, note }),
+    note: noteFixture({ id: noteId, text: note }),
   });
 
   async function oneSite() {
@@ -445,7 +445,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     return { database, accounts, alice, acme, site, index: createPostgresNoteIndex(database) };
   }
 
-  it('writes the page when two of its issues carry one seed id, the first of them', async () => {
+  it('writes the page when two of its issues carry one note id, the first of them', async () => {
     const { database, acme, site, index } = await oneSite();
     try {
       await index.refresh(
@@ -475,19 +475,19 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     const { runForget } = await import('./cli.ts');
     try {
       const real = createPostgresNoteStore(database);
-      const seed = noteFixture({
+      const note = noteFixture({
         id: 'sd_alice',
-        note: 'Secret note of Alice.',
+        text: 'Secret note of Alice.',
         client: { id: site.id, name: 'Acme' },
         reporter: { name: 'Alice', email: 'alice@client.fr' },
       });
-      const issue = await real.create(seed, undefined, { read: 'public' } as never);
+      const issue = await real.create(note, undefined, { read: 'public' } as never);
       await index.record(
         [
           {
             workspace: acme.id,
             site: site.id,
-            seed,
+            note,
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -504,7 +504,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
         ...real,
         forget: async (which, options) => {
           if (!options.dryRun) {
-            const issues = await real.findForPage({ url: seed.page.url, clientId: site.id }, undefined, {
+            const issues = await real.findForPage({ url: note.page.url, clientId: site.id }, undefined, {
               read: 'public',
             } as never);
             await index.refresh(acme.id, site.id, { kind: 'fruitback' }, issues, Date.now());
@@ -529,7 +529,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     }
   });
 
-  it('removes with --note, or --seed its name of before, the row of a note that went to a tracker, whatever the store, and no other', async () => {
+  it('removes with --note the row of a note that went to a tracker, whatever the store, and no other', async () => {
     const { database, acme, site, index } = await oneSite();
     const { runForget } = await import('./cli.ts');
     try {
@@ -542,7 +542,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
             {
               workspace: acme.id,
               site: site.id,
-              seed: noteFixture({ id, note }),
+              note: noteFixture({ id, text: note }),
               channel: 'script',
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },
@@ -567,7 +567,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       assert.match(byEmail.lines.join('\n'), /--note <id>/);
 
       const listed = await runForget(
-        ['--note', 'sd_tracked', '--seed', 'sd_nowhere', '--dry-run'],
+        ['--note', 'sd_tracked', '--note', 'sd_nowhere', '--dry-run'],
         env,
         tracker,
         index,
@@ -577,7 +577,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
       assert.match(listed.lines.join('\n'), /no row of the index names sd_nowhere/);
       assert.equal((await rowsOf(database, 'SELECT note_id FROM note_index')).length, 2, 'a dry run removes nothing');
 
-      const done = await runForget(['--seed', 'sd_tracked'], env, tracker, index);
+      const done = await runForget(['--note', 'sd_tracked'], env, tracker, index);
       assert.equal(done.ok, true, done.lines.join('\n'));
       assert.deepEqual(await rowsOf(database, 'SELECT note_id FROM note_index'), [{ note_id: 'sd_kept' }]);
     } finally {
@@ -593,7 +593,7 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
           {
             workspace: acme.id,
             site: site.id,
-            seed: noteFixture({ id: 'sd_member', note: 'A note of a member.' }),
+            note: noteFixture({ id: 'sd_member', text: 'A note of a member.' }),
             channel: 'extension',
             author: { kind: 'member', account: alice.id },
             place: { kind: 'fruitback' },
@@ -621,19 +621,19 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     const { runForget } = await import('./cli.ts');
     try {
       const store = createPostgresNoteStore(database);
-      const seed = noteFixture({
+      const note = noteFixture({
         id: 'sd_alice',
-        note: 'A note of Alice.',
+        text: 'A note of Alice.',
         client: { id: site.id, name: 'Acme' },
         reporter: { name: 'Alice', email: 'alice@client.fr' },
       });
-      const issue = await store.create(seed, undefined, { read: 'public' } as never);
+      const issue = await store.create(note, undefined, { read: 'public' } as never);
       await index.record(
         [
           {
             workspace: acme.id,
             site: site.id,
-            seed,
+            note,
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -677,19 +677,19 @@ describe('the index, against what the review of #300 found (FRU-237)', () => {
     try {
       const real = createPostgresNoteStore(database);
       const plant = async (id: string) => {
-        const seed = noteFixture({
+        const note = noteFixture({
           id,
-          note: `A note ${id}.`,
+          text: `A note ${id}.`,
           client: { id: site.id, name: 'Acme' },
           reporter: { name: 'Alice', email: 'alice@client.fr' },
         });
-        const issue = await real.create(seed, undefined, { read: 'public' } as never);
+        const issue = await real.create(note, undefined, { read: 'public' } as never);
         await index.record(
           [
             {
               workspace: acme.id,
               site: site.id,
-              seed,
+              note,
               channel: 'script',
               author: { kind: 'visitor' },
               place: { kind: 'fruitback' },

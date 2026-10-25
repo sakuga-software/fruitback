@@ -36,7 +36,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
   return {
     async record(all, now) {
       // One row for one note: a second note of one site under the same id is the same note here.
-      const entries = once(all, (entry) => `${entry.site}\n${entry.seed.id}`);
+      const entries = once(all, (entry) => `${entry.site}\n${entry.note.id}`);
       if (entries.length === 0) return;
       await run((db) =>
         db
@@ -44,10 +44,10 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .values(
             entries.map((entry: NoteEntry) => ({
               site_id: entry.site,
-              note_id: entry.seed.id,
+              note_id: entry.note.id,
               workspace_id: entry.workspace,
-              page_url: entry.seed.page.url,
-              excerpt: excerptOf(entry.seed.note),
+              page_url: entry.note.page.url,
+              excerpt: excerptOf(entry.note.text),
               stage: entry.stage,
               channel: entry.channel,
               author_kind: entry.author.kind,
@@ -67,12 +67,12 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
     async refresh(workspace, site, place, issues, now, options = {}) {
       const verdicts = options.verdicts === true;
-      // Two issues of one page can carry one seed id (two places of one team, or a widget that sent
+      // Two issues of one page can carry one note id (two places of one team, or a widget that sent
       // one note twice). One statement cannot write one row twice, and would write nothing of the
       // page: the first is kept.
       const known = once(
         issues.filter((issue) => (NOTE_STAGES as readonly string[]).includes(issue.stage)),
-        (issue) => issue.seed.id,
+        (issue) => issue.note.id,
       );
       if (known.length === 0) return;
       await run((db) =>
@@ -81,19 +81,19 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
           .values(
             known.map((issue: NoteIssue) => ({
               site_id: site,
-              note_id: issue.seed.id,
+              note_id: issue.note.id,
               workspace_id: workspace,
-              page_url: issue.seed.page.url,
-              excerpt: excerptOf(issue.seed.note),
+              page_url: issue.note.page.url,
+              excerpt: excerptOf(issue.note.text),
               stage: issue.stage,
               // A note from before the index: what the read says, and nothing invented.
               channel: null,
-              author_kind: issue.seed.reporter?.verified === true ? 'verified' : 'visitor',
+              author_kind: issue.note.reporter?.verified === true ? 'verified' : 'visitor',
               author_account_id: null,
               ...placeColumns(place),
               reference: issue.identifier,
               reference_url: issue.url ?? null,
-              created_at: instantOf(issue.seed.createdAt, now),
+              created_at: instantOf(issue.note.createdAt, now),
               checked_at: now,
               // FRU-295: what the replies say of a verdict, where one can be given and the read has them.
               confirmed: !verdicts || issue.comments === undefined ? null : checkedOf(issue.comments) !== undefined,
@@ -115,23 +115,23 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       );
     },
 
-    async authors(workspace, site, seeds) {
-      if (seeds.length === 0) return new Map();
+    async authors(workspace, site, ids) {
+      if (ids.length === 0) return new Map();
       const rows = await run((db) =>
         db
-          .select({ seed: note_index.note_id, account: note_index.author_account_id })
+          .select({ note: note_index.note_id, account: note_index.author_account_id })
           .from(note_index)
           .where(
             and(
               eq(note_index.workspace_id, workspace),
               eq(note_index.site_id, site),
               eq(note_index.author_kind, 'member'),
-              inArray(note_index.note_id, [...new Set(seeds)]),
+              inArray(note_index.note_id, [...new Set(ids)]),
             ),
           ),
       );
 
-      return new Map(rows.flatMap((row) => (row.account === null ? [] : [[row.seed, row.account] as const])));
+      return new Map(rows.flatMap((row) => (row.account === null ? [] : [[row.note, row.account] as const])));
     },
 
     async toCheck(workspace, account) {
@@ -221,7 +221,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
     async forget(which, options = {}) {
       const columns = {
         site: note_index.site_id,
-        seed: note_index.note_id,
+        note: note_index.note_id,
         pageUrl: note_index.page_url,
         excerpt: note_index.excerpt,
         reference: note_index.reference,
@@ -252,7 +252,7 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             ? placed
             : and(
                 placed,
-                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.note} COLLATE "C")`,
               );
         const keys = [...pending.values()].map((delivery) => delivery.key);
 
@@ -321,19 +321,19 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
             pending.has(JSON.stringify([row.connector, row.site, row.reference])),
           ).length,
           ...(page.length > query.limit && last !== undefined
-            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.note_id } }
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, note: last.row.note_id } }
             : {}),
         };
       });
     },
 
-    async deliveryOf(workspace, site, seed) {
+    async deliveryOf(workspace, site, note) {
       return run(async (db) => {
         const [row] = await db
           .select()
           .from(note_index)
           .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, seed)),
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, note)),
           )
           .limit(1);
         if (row === undefined) return undefined;
@@ -381,7 +381,7 @@ async function keptOf(
     .select({
       id: notes.id,
       site: notes.client_id,
-      seed: notes.payload,
+      payload: notes.payload,
       statusKey: notes.status_key,
       stage: notes.stage,
     })
@@ -394,10 +394,10 @@ async function keptOf(
     );
   const kept = new Map<string, { statusKey: string | null; stage: string }>();
   for (const { id, row } of owned) {
-    const seed = found.find(
-      (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.seed, row.note_id),
+    const note = found.find(
+      (one) => Number(one.id) === id && one.site === row.site_id && isSameNote(one.payload, row.note_id),
     );
-    if (seed !== undefined) kept.set(keyOfNoteId(row), { statusKey: seed.statusKey, stage: seed.stage });
+    if (note !== undefined) kept.set(keyOfNoteId(row), { statusKey: note.statusKey, stage: note.stage });
   }
 
   return kept;
@@ -513,7 +513,7 @@ type PageRow = {
 function listedOf({ row, connector, memberName, memberRole, delivery, kept }: PageRow): ListedNote {
   return {
     site: row.site_id,
-    seed: row.note_id,
+    note: row.note_id,
     pageUrl: row.page_url,
     excerpt: row.excerpt,
     stage: row.stage,
@@ -575,15 +575,15 @@ function instantOf(iso: string, now: number): number {
  * note. `FB-12` of this worker's store is one, but a tracker of another workspace can call one of
  * its issues `FB-12` too, and its row is not a note this command deleted.
  *
- * `seeds` names the notes of a tracker by the id the widget gave them, on every site: that id is
+ * `notes` names the notes of a tracker by the id the widget gave them, on every site: that id is
  * all an operator reads in an issue, and a widget makes it at random for each note.
  */
 function selected(which: ForgetIndex) {
-  if ('seeds' in which) return which.seeds.length === 0 ? sql`false` : inArray(note_index.note_id, [...which.seeds]);
+  if ('ids' in which) return which.ids.length === 0 ? sql`false` : inArray(note_index.note_id, [...which.ids]);
 
   return (
     or(
-      ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.note_id, note.seed))),
+      ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.note_id, note.note))),
     ) ?? sql`false`
   );
 }

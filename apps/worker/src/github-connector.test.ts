@@ -285,11 +285,11 @@ async function tenant(world: World, githubApp: GithubApp, installation: number, 
     sites.push({
       site,
       write: (note: string) => {
-        const seed = noteFixture();
+        const base = noteFixture();
 
         return call(world, githubApp, 'POST', '/feedback', {
           origin,
-          body: { ...seed, note, page: { ...seed.page, url: page }, client: { id: site.id } },
+          body: { ...base, text: note, page: { ...base.page, url: page }, client: { id: site.id } },
         });
       },
       read: async () => {

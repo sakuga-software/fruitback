@@ -499,7 +499,7 @@ export type AccountStore = {
   setNoteStatus(
     workspace: string,
     site: string,
-    seed: string,
+    note: string,
     key: string,
     who: { account: string; manages: boolean },
   ): Promise<

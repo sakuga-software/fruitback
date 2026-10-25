@@ -27,11 +27,11 @@ async function acme(): Promise<{ team: World; token: string; workspace: string; 
 
 /** A note the worker keeps on the page, in `stage` and in the status `key` (NULL: the built-in one). */
 async function plant(team: World, site: string, stage: string, key: string | null, id: string): Promise<void> {
-  const seed = noteFixture({ id, client: { id: site }, page: { url: PAGE, path: '/pricing' } });
+  const note = noteFixture({ id, client: { id: site }, page: { url: PAGE, path: '/pricing' } });
   await rowsOf(
     team.database,
     `INSERT INTO notes (client_id, page_url, stage, status_key, payload, created_at, updated_at)
-       VALUES ('${site}', '${PAGE}', '${stage}', ${key === null ? 'NULL' : `'${key}'`}, '${JSON.stringify(seed)}', 1, 1)`,
+       VALUES ('${site}', '${PAGE}', '${stage}', ${key === null ? 'NULL' : `'${key}'`}, '${JSON.stringify(note)}', 1, 1)`,
   );
 }
 
@@ -157,8 +157,8 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
-    await plant(team, site, NEW as string, 'waiting', 'seed-2');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
+    await plant(team, site, NEW as string, 'waiting', 'sd_2');
 
     const refused = await callOn(team, 'DELETE', path(workspace, site, '/own/waiting'), { token });
     assert.deepEqual([refused.status, await refused.json()], [409, { error: 'status-in-use', notes: 2 }]);
@@ -190,15 +190,15 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
-    await plant(team, site, NEW as string, 'waiting', 'seed-2');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
+    await plant(team, site, NEW as string, 'waiting', 'sd_2');
     // No status of its own: the built-in status of its stage.
-    await plant(team, site, DONE as string, null, 'seed-3');
+    await plant(team, site, DONE as string, null, 'sd_3');
     // The control: a note of another site of the same workspace, in a status of the same key.
     const elsewhere = (
       await team.accounts.addSite(workspace, { origin: 'https://globex.test', visibility: 'everyone' })
     ).id;
-    await plant(team, elsewhere, NEW as string, 'waiting', 'seed-4');
+    await plant(team, elsewhere, NEW as string, 'waiting', 'sd_4');
 
     const listed = await callOn(team, 'GET', path(workspace, site), { token });
     assert.equal(listed.status, 200, await listed.clone().text());
@@ -220,16 +220,16 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
     await read(team, site);
     const indexed = () => rowsOf(team.database, `SELECT note_id, stage FROM note_index WHERE site_id = '${site}'`);
-    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: NEW }], 'the read wrote the note in the index');
+    assert.deepEqual(await indexed(), [{ note_id: 'sd_1', stage: NEW }], 'the read wrote the note in the index');
 
     await callOn(team, 'DELETE', path(workspace, site, '/own/waiting?moveTo=parked'), { token });
-    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: CLOSED }]);
+    assert.deepEqual(await indexed(), [{ note_id: 'sd_1', stage: CLOSED }]);
 
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: DONE } });
-    assert.deepEqual(await indexed(), [{ note_id: 'seed-1', stage: DONE }]);
+    assert.deepEqual(await indexed(), [{ note_id: 'sd_1', stage: DONE }]);
   });
 
   it('reads the page of a note it moves again at once, not from the cache of the page', async () => {
@@ -237,7 +237,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'parked', stage: CLOSED } });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
     const pins = async () => (await read(team, site)).issues.map((issue) => [issue.stage, issue.status]);
     assert.deepEqual(await pins(), [[NEW, 'own:waiting']]);
 
@@ -252,7 +252,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
     // Asked in the balanced review of #487: `statuses` is never in the cached answer. A rename moves no
     // note, so nothing invalidates the page, and the list must change all the same.
     const { team, token, workspace, site } = await acme();
-    await plant(team, site, DONE as string, null, 'seed-1');
+    await plant(team, site, DONE as string, null, 'sd_1');
     const first = await read(team, site);
     assert.equal(first.statuses.find((status) => status.key === `own:${DONE}`)?.name, '');
 
@@ -275,8 +275,8 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
   it('takes the notes of a status the team added to the stage it moves to', async () => {
     const { team, token, workspace, site } = await acme();
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: NEW } });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
-    await plant(team, site, NEW as string, null, 'seed-2');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
+    await plant(team, site, NEW as string, null, 'sd_2');
 
     await callOn(team, 'POST', path(workspace, site), { token, body: { source: 'own', key: 'waiting', stage: DONE } });
 
@@ -328,7 +328,7 @@ describe('the statuses of a site, through the console (FRU-366)', () => {
 describe('the statuses in the read of a page (FRU-366)', () => {
   it('lists the built-in statuses on a site with no row, and draws each note by its stage', async () => {
     const { team, site } = await acme();
-    await plant(team, site, DONE as string, null, 'seed-1');
+    await plant(team, site, DONE as string, null, 'sd_1');
 
     const { statuses, issues } = await read(team, site);
 
@@ -362,8 +362,8 @@ describe('the statuses in the read of a page (FRU-366)', () => {
         position: 1,
       },
     });
-    await plant(team, site, NEW as string, 'waiting', 'seed-1');
-    await plant(team, site, DONE as string, null, 'seed-2');
+    await plant(team, site, NEW as string, 'waiting', 'sd_1');
+    await plant(team, site, DONE as string, null, 'sd_2');
 
     const { statuses, issues } = await read(team, site);
 

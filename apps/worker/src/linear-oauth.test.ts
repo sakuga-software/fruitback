@@ -214,9 +214,9 @@ async function connected(env: Env, linear: ReturnType<typeof fakeLinear>, world:
 }
 
 function note(site: string) {
-  const seed = noteFixture();
+  const base = noteFixture();
 
-  return { ...seed, page: { ...seed.page, url: `${SITE}/pricing` }, client: { id: site } };
+  return { ...base, page: { ...base.page, url: `${SITE}/pricing` }, client: { id: site } };
 }
 
 describe('a workspace connects Linear with OAuth (FRU-134)', () => {

@@ -61,9 +61,9 @@ async function accountSession(world: World, who: Who): Promise<string> {
 }
 
 function noteOn(site: string, id: string): Note {
-  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
+  const note = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
 
-  return { ...seed, client: { id: site, name: 'Acme' } };
+  return { ...note, client: { id: site, name: 'Acme' } };
 }
 
 /**
@@ -162,7 +162,7 @@ describe('the deletion of an account by an administrator (FRU-285)', () => {
     assert.equal(posted.status, 201, await posted.clone().text());
     const signed = async () =>
       (await rowsOf(on.world.database, `SELECT payload FROM notes WHERE client_id = '${on.site.id}'`)).map((row) =>
-        String(row.seed),
+        String(row.payload),
       );
     const before = await signed();
     assert.equal(before.length, 1, 'the control: the note is kept');

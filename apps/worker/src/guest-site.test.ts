@@ -44,18 +44,18 @@ type Handle = typeof handleRequest;
  */
 function trackerStore(): NoteStore {
   const kept: NoteIssue[] = [];
-  const created = (seed: Note): CreatedIssue => {
+  const created = (note: Note): CreatedIssue => {
     const n = kept.length + 1;
     const issue: NoteIssue = {
       id: `lin_${n}`,
       identifier: `ACM-${n}`,
       url: `https://tracker.test/ACM-${n}`,
-      title: seed.note.slice(0, 40),
+      title: note.text.slice(0, 40),
       stage: NOTE_STAGES[0],
       stateName: 'Todo',
       updatedAt: '2026-10-14T10:00:00.000Z',
       comments: [],
-      seed,
+      note,
     };
     kept.push(issue);
 
@@ -66,11 +66,11 @@ function trackerStore(): NoteStore {
     name: 'tracker',
     scope: () => 'tracker',
     attachments: true,
-    async create(seed) {
-      return created(seed);
+    async create(note) {
+      return created(note);
     },
     async findForPage({ url, clientId }) {
-      return kept.filter((issue) => issue.seed.page.url === url && issue.seed.client?.id === clientId);
+      return kept.filter((issue) => issue.note.page.url === url && issue.note.client?.id === clientId);
     },
   } as NoteStore;
 }
@@ -199,9 +199,9 @@ async function accountSession(team: Acme, who: Who): Promise<string> {
 }
 
 function noteOn(site: string, origin: string, id: string): Note {
-  const seed = noteFixture({ id, page: { url: canonicalizePageUrl(`${origin}/pricing`), path: '/pricing' } });
+  const note = noteFixture({ id, page: { url: canonicalizePageUrl(`${origin}/pricing`), path: '/pricing' } });
 
-  return { ...seed, client: { id: site, name: 'Acme' } };
+  return { ...note, client: { id: site, name: 'Acme' } };
 }
 
 const pageOf = (origin: string) => encodeURIComponent(canonicalizePageUrl(`${origin}/pricing`));
@@ -337,7 +337,7 @@ async function plantNotes(team: Acme): Promise<void> {
         {
           workspace: team.workspace,
           site,
-          seed: noteOn(site, origin, `sd_index_${n}`),
+          note: noteOn(site, origin, `sd_index_${n}`),
           channel: 'extension',
           author: { kind: 'member', account: team.alice.id },
           place: { kind: 'fruitback' },

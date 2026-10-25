@@ -27,6 +27,13 @@ export const CACHE_TTL_MS = 15_000;
  */
 export const PAGE_VERSION_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * The prefix of an answer in the `Kv`. It names the shape of the answer: `read-v3` since FRU-378,
+ * when a note took `fruitback.note` v3 and the issues `note`. An answer of before is under the prefix
+ * of before, where no reader looks, and goes at the end of its `CACHE_TTL_MS`.
+ */
+export const READ_ENTRY = 'fruitback:read-v3:';
+
 const inFlight = new Map<string, Promise<unknown>>();
 
 /**
@@ -50,7 +57,7 @@ export async function cached<T>(kv: Kv, page: string, key: string, load: () => P
   // the version a reader uses.
   // The page is in the key as well as the version: two pages with no version yet both read `'none'`.
   // With no version, JSON writes `null` in its place, which no version is.
-  const entryKey = `fruitback:read:${JSON.stringify([version, page, key])}`;
+  const entryKey = `${READ_ENTRY}${JSON.stringify([version, page, key])}`;
   const joined = inFlight.get(entryKey);
   if (joined !== undefined) return joined as Promise<T>;
 

@@ -75,8 +75,8 @@ function read(opened: World, site: string, origin: string, page: string, token?:
 }
 
 function write(opened: World, site: string, origin: string, page: string, token?: string): Promise<Response> {
-  const seed = noteFixture();
-  const body = { ...seed, page: { ...seed.page, url: `${page}/pricing` }, client: { id: site } };
+  const note = noteFixture();
+  const body = { ...note, page: { ...note.page, url: `${page}/pricing` }, client: { id: site } };
 
   return callOn(opened, 'POST', '/feedback', { origin, body, ...(token === undefined ? {} : { token }) });
 }
@@ -89,7 +89,7 @@ describe('a session belongs to one workspace (FRU-95)', () => {
     const first = await verifyIdentityToken(session.access, IDENTITY_SECRET);
     assert.ok(first.ok);
     assert.equal(first.workspace, a.workspace);
-    assert.equal('workspace' in first.reporter, false, 'the workspace is not part of what a seed stores');
+    assert.equal('workspace' in first.reporter, false, 'the workspace is not part of what a note stores');
 
     const refreshed = await refreshSession(opened.sessions, session.refresh, IDENTITY_SECRET);
     assert.ok(refreshed.ok);

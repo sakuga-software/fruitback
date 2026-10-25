@@ -142,9 +142,9 @@ async function connected(env: World, world: Awaited<ReturnType<typeof acme>>): P
 }
 
 function note(site: string, path = '/pricing') {
-  const seed = noteFixture();
+  const base = noteFixture();
 
-  return { ...seed, page: { ...seed.page, url: `${SITE}${path}` }, client: { id: site } };
+  return { ...base, page: { ...base.page, url: `${SITE}${path}` }, client: { id: site } };
 }
 
 describe('a workspace connects Linear (FRU-121)', () => {
@@ -400,11 +400,11 @@ describe('who may touch a connector (FRU-121)', () => {
          VALUES ('${theirs.id}', 0, '${connector}', 'team_design')`,
     );
     linear.asked.length = 0;
-    const seed = noteFixture();
+    const base = noteFixture();
 
     const written = await call(env, 'POST', '/feedback', {
       origin: 'https://else.dev',
-      body: { ...seed, page: { ...seed.page, url: 'https://else.dev/' }, client: { id: theirs.id } },
+      body: { ...base, page: { ...base.page, url: 'https://else.dev/' }, client: { id: theirs.id } },
     });
 
     assert.equal(written.status, 502);

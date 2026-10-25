@@ -80,7 +80,7 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
   return {
     ok: true,
     args: {
-      // The stable id for this person, and what lands in `reporter.id` on every seed they file.
+      // The stable id for this person, and what lands in `reporter.id` on every note they file.
       subject: subject.trim(),
       ...(name === undefined || name === '' ? {} : { name }),
       ...(email === undefined || email === '' ? {} : { email }),
@@ -240,8 +240,7 @@ export async function runPair(
  * `docker exec <container> node server.mjs forget --note sd_2f8c1a90 --dry-run`
  *
  * `--note` is for a note that went to a tracker (FRU-237): the worker does not hold it, and cannot
- * find it by an address or a name. Its issue holds the note, and the note its `id`. `--seed` is its
- * name of before FRU-378, read as `--note`: `--note a --seed b` forgets both. The command then
+ * find it by an address or a name. Its issue holds the note, and the note its `id`. The command then
  * removes what the worker holds of it, its row in the index of the notes with its excerpt, whatever
  * the store; the issue itself is deleted in the tracker.
  *
@@ -250,7 +249,7 @@ export async function runPair(
  * so `--name` only lists. Run it with `--dry-run` first, read the list, and delete by `--id`.
  */
 
-export type ForgetArgs = { which: ForgetSelector | { seeds: readonly string[] }; dryRun: boolean };
+export type ForgetArgs = { which: ForgetSelector | { ids: readonly string[] }; dryRun: boolean };
 
 export type ForgetArgsResult = { ok: true; args: ForgetArgs } | { ok: false; error: string };
 
@@ -259,9 +258,6 @@ const FORGET_USAGE =
 
 const VALUE_FLAGS = ['--email', '--name', '--id', '--note'] as const;
 type ValueFlag = (typeof VALUE_FLAGS)[number];
-
-/** The names of before FRU-378, read as the flag they became. */
-const FORGET_ALIASES: Readonly<Record<string, ValueFlag>> = { '--seed': '--note' };
 
 /** A note excerpt long enough to recognise it, short enough to keep one note on one line. */
 const NOTE_EXCERPT_LENGTH = 60;
@@ -273,15 +269,13 @@ export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index] ?? '';
-    const named = FORGET_ALIASES[flag] ?? flag;
-
     if (flag === '--dry-run') {
       dryRun = true;
-    } else if ((VALUE_FLAGS as readonly string[]).includes(named)) {
+    } else if ((VALUE_FLAGS as readonly string[]).includes(flag)) {
       const value = argv[index + 1];
       // `--email --dry-run` would otherwise read the flag as the address and run a real deletion.
       if (value === undefined || value.startsWith('--') || value.trim() === '') return refuse(`${flag} needs a value`);
-      given[named as ValueFlag].push(value.trim());
+      given[flag as ValueFlag].push(value.trim());
       index += 1;
     } else {
       // Refused rather than ignored: `--dryrun` must not delete what `--dry-run` would only list.
@@ -295,7 +289,7 @@ export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
   if (kinds.length > 1) return refuse(`use one of ${kinds.join(' and ')}, not both`);
 
   const [kind] = kinds;
-  if (kind === '--note') return { ok: true, args: { which: { seeds: [...new Set(given['--note'])] }, dryRun } };
+  if (kind === '--note') return { ok: true, args: { which: { ids: [...new Set(given['--note'])] }, dryRun } };
   if (kind === '--id') {
     const malformed = given['--id'].filter((identifier) => !/^FB-[1-9]\d*$/.test(identifier));
     if (malformed.length > 0) return refuse(`not an identifier of this store: ${malformed.join(', ')}`);
@@ -358,7 +352,7 @@ export async function runForget(
   // The index of the environment when the store is the one of the environment too: a test that
   // hands a store hands its index, or none.
   const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
-  if ('seeds' in which) return forgetNotes(which.seeds, dryRun, index);
+  if ('ids' in which) return forgetNotes(which.ids, dryRun, index);
 
   const { that, none, search } = describe(which);
   const store = held ?? config.config.store.create();
@@ -383,7 +377,7 @@ export async function runForget(
     // others, because a list with a typing error in it is not the list the operator read.
     found = await store.forget(which, { dryRun: true });
     const missing =
-      'identifiers' in which ? which.identifiers.filter((id) => !found.some((seed) => seed.identifier === id)) : [];
+      'identifiers' in which ? which.identifiers.filter((id) => !found.some((note) => note.identifier === id)) : [];
     if (missing.length > 0) {
       return { ok: false, lines: [`no note is ${missing.join(', ')}. Nothing was deleted.`] };
     }
@@ -391,7 +385,7 @@ export async function runForget(
       // FRU-237: the index of these notes goes first, its excerpt of their text included. An index
       // that does not answer stops the command before a note is deleted: run it again, and nothing
       // of a note is left behind in the index.
-      const notes = { notes: found.map(({ identifier, seed }) => ({ identifier, seed })) };
+      const notes = { notes: found.map(({ identifier, id }) => ({ identifier, note: id })) };
       await index?.forget(notes);
       found = await store.forget(which, { dryRun: false });
       // Again, once the notes are gone: a read of their page that asked the store before the
@@ -401,21 +395,21 @@ export async function runForget(
       // The notes the deletion took, with the ones listed: a note of the same reporter that arrived
       // between the list and the deletion went too, and so does its row.
       const deleted = {
-        notes: [...notes.notes, ...found.map(({ identifier, seed }) => ({ identifier, seed }))].filter(
+        notes: [...notes.notes, ...found.map(({ identifier, id }) => ({ identifier, note: id }))].filter(
           (note, at, all) =>
-            all.findIndex((other) => other.identifier === note.identifier && other.seed === note.seed) === at,
+            all.findIndex((other) => other.identifier === note.identifier && other.note === note.note) === at,
         ),
       };
       try {
         await index?.forget(deleted);
       } catch (error) {
-        const seeds = deleted.notes.map((note) => `--note ${note.seed}`).join(' ');
+        const again = deleted.notes.map((note) => `--note ${note.note}`).join(' ');
 
         return {
           ok: false,
           lines: [
             `deleted ${found.length} note(s) that ${that}, but the index of the notes did not answer after: ${String(error instanceof Error ? error.message : error)}`,
-            `A row of them may be left in the index, with up to 64 characters of their text. Run: forget ${seeds}`,
+            `A row of them may be left in the index, with up to 64 characters of their text. Run: forget ${again}`,
           ],
         };
       }
@@ -426,7 +420,7 @@ export async function runForget(
 
   if (found.length === 0) return { ok: true, lines: [none, ...(index === undefined ? [] : [TRACKER_NOTES])] };
 
-  const listed = found.map((seed) => `  ${seed.identifier}  ${seed.createdAt}  ${seed.pageUrl}  ${excerpt(seed.note)}`);
+  const listed = found.map((note) => `  ${note.identifier}  ${note.createdAt}  ${note.pageUrl}  ${excerpt(note.text)}`);
 
   return {
     ok: true,
@@ -448,7 +442,7 @@ const TRACKER_NOTES =
 
 /** `--note`: the rows of the index of these notes, whatever the store (FRU-237). */
 async function forgetNotes(
-  seeds: readonly string[],
+  notes: readonly string[],
   dryRun: boolean,
   index: NoteIndex | undefined,
 ): Promise<ForgetOutcome> {
@@ -460,14 +454,14 @@ async function forgetNotes(
   }
   let rows: IndexedNote[];
   try {
-    rows = await index.forget({ seeds }, { dryRun });
+    rows = await index.forget({ ids: notes }, { dryRun });
   } catch (error) {
     return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
   }
-  const missing = seeds.filter((seed) => !rows.some((row) => row.seed === seed));
+  const missing = notes.filter((note) => !rows.some((row) => row.note === note));
   const listed = rows.map(
     (row) =>
-      `  ${row.seed}  ${row.reference ?? '-'}  ${new Date(row.createdAt).toISOString()}  ${row.pageUrl}  ${row.excerpt}`,
+      `  ${row.note}  ${row.reference ?? '-'}  ${new Date(row.createdAt).toISOString()}  ${row.pageUrl}  ${row.excerpt}`,
   );
 
   return {
@@ -499,8 +493,8 @@ function excerpt(note: string): string {
  * of the switch is in `cloud/README.md`.
  *
  * `node server.mjs migrate-to-postgres --notes /data/fb.db --dry-run` copies the notes of the file
- * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own. `--seeds` is its
- * name of before FRU-378, read as `--notes`; both may name the file, if they name the same one.
+ * of `FRUITBACK_STORE=sqlite` (FRU-220, the switch n° 1 bis), in a run of its own. The notes of the
+ * file are of the kind of before FRU-378: run `rewrite-notes` after it.
  */
 
 /**
@@ -510,7 +504,7 @@ function excerpt(note: string): string {
  */
 export type MigrateArgs =
   | { copy: 'accounts'; accountsPath: string; sessionsPath: string; dryRun: boolean }
-  | { copy: 'seeds'; notesPath: string; clients: Map<string | null, string>; dryRun: boolean };
+  | { copy: 'notes'; notesPath: string; clients: Map<string | null, string>; dryRun: boolean };
 
 export type MigrateArgsResult = { ok: true; args: MigrateArgs } | { ok: false; error: string };
 
@@ -521,15 +515,9 @@ const MIGRATE_USAGE = [
 
 const FILE_FLAGS = ['--accounts', '--sessions', '--notes'];
 
-/** The names of before FRU-378, read as the flag they became. */
-const MIGRATE_ALIASES: Readonly<Record<string, string>> = { '--seeds': '--notes' };
-
 export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
   const refuse = (reason: string): MigrateArgsResult => ({ ok: false, error: `${MIGRATE_USAGE}\n${reason}` });
   const paths = new Map<string, string>();
-  // The spelling that gave each file. `--notes a --seeds a` names one file by its two names (FRU-378);
-  // `--notes a --notes a` gives one flag twice, refused as before.
-  const spelled = new Map<string, string>();
   const clients = new Map<string | null, string>();
   let dryRun = false;
 
@@ -541,15 +529,11 @@ export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
     }
     const value = argv[index + 1];
     const valued = value !== undefined && !value.startsWith('--') && value.trim() !== '';
-    const named = MIGRATE_ALIASES[flag] ?? flag;
-    if (FILE_FLAGS.includes(named)) {
+    if (FILE_FLAGS.includes(flag)) {
       // `--accounts --dry-run` would otherwise read the flag as the file, and copy for good.
       if (!valued) return refuse(`${flag} needs a file`);
-      if (paths.has(named) && (spelled.get(named) === flag || paths.get(named) !== value.trim())) {
-        return refuse(`${named} takes one file`);
-      }
-      paths.set(named, value.trim());
-      spelled.set(named, flag);
+      if (paths.has(flag)) return refuse(`${flag} takes one file`);
+      paths.set(flag, value.trim());
     } else if (flag === '--client') {
       // The first `=`: an id of a site has none, and an id of `FRUITBACK_CLIENTS` is a key of JSON.
       const at = valued ? value.indexOf('=') : -1;
@@ -577,7 +561,7 @@ export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
       return refuse('--notes is a run of its own: copy the accounts and the sessions first, then the notes');
     }
 
-    return { ok: true, args: { copy: 'seeds', notesPath, clients, dryRun } };
+    return { ok: true, args: { copy: 'notes', notesPath, clients, dryRun } };
   }
   if (clients.size > 0) return refuse('--client and --no-client go with --notes');
   if (accountsPath === undefined || sessionsPath === undefined) {
@@ -600,7 +584,7 @@ export async function runMigrateToPostgres(
     return { ok: false, lines: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host) is required'] };
 
   const { args } = parsed;
-  const files = args.copy === 'seeds' ? [args.notesPath] : [args.accountsPath, args.sessionsPath];
+  const files = args.copy === 'notes' ? [args.notesPath] : [args.accountsPath, args.sessionsPath];
   // Checked here: `node:sqlite` makes an empty database of a path that names no file.
   const absent = files.filter((path) => !existsSync(path));
   if (absent.length > 0) return { ok: false, lines: [`no file at ${absent.join(', ')}. Nothing was written.`] };
@@ -610,7 +594,7 @@ export async function runMigrateToPostgres(
 
   const database = createPgDatabase(url, schema, { max: 1 });
   try {
-    return args.copy === 'seeds'
+    return args.copy === 'notes'
       ? await copyNotesFile({ notesPath: args.notesPath, clients: args.clients, database, dryRun: args.dryRun })
       : await copySqliteFiles({ ...args, database });
   } catch (error) {

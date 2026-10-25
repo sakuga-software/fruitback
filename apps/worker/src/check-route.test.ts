@@ -46,19 +46,19 @@ async function noteOf(
   id: string,
   token: string,
   origin = ORIGIN,
-): Promise<{ id: string; seed: string }> {
+): Promise<{ id: string; note: string }> {
   const url = `${origin}/pricing`;
-  const seed = noteFixture({
+  const note = noteFixture({
     id,
     page: { url, path: '/pricing', title: 'Pricing' },
     client: { id: site, name: 'Acme' },
   });
   const answer = await answerOf(
-    await callOn(world, 'POST', '/feedback', { origin, body: seed, headers: { Authorization: `Bearer ${token}` } }),
+    await callOn(world, 'POST', '/feedback', { origin, body: note, headers: { Authorization: `Bearer ${token}` } }),
   );
   assert.equal(answer.status, 201, JSON.stringify(answer.body));
 
-  return { id: answer.body.issue.id as string, seed: id };
+  return { id: answer.body.issue.id as string, note: id };
 }
 
 /**
@@ -219,7 +219,7 @@ describe('who may give a verdict (FRU-294, option A of 2026-10-20)', () => {
     const real = world.context.noteIndex as NoteIndex;
     const lying: NoteIndex = {
       ...real,
-      authors: async (_workspace, _site, seeds) => new Map(seeds.map((seed) => [seed, dan.id])),
+      authors: async (_workspace, _site, notes) => new Map(notes.map((id) => [id, dan.id])),
     };
 
     const taken = await check(world, site.id, note.id, { verdict: 'fixed' }, { token: dans, noteIndex: lying });

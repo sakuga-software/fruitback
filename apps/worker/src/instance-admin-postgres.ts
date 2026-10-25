@@ -47,7 +47,7 @@ import {
   sites,
   workspace_suspensions,
 } from './postgres-schema.ts';
-import { noteOf, rowOfIdentifier, widgetIdOf } from './note-rows.ts';
+import { rowOfIdentifier, textOf, widgetIdOf } from './note-rows.ts';
 
 /**
  * What the administrator of the instance reads, in the database of the worker (FRU-261). See
@@ -217,7 +217,7 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
   ];
   if (ids.length === 0) return new Map();
   const kept = await db
-    .select({ id: notes.id, client_id: notes.client_id, seed: notes.payload })
+    .select({ id: notes.id, client_id: notes.client_id, payload: notes.payload })
     .from(notes)
     .where(inArray(notes.id, ids));
   const byId = new Map(kept.map((row) => [Number(row.id), row]));
@@ -225,11 +225,11 @@ async function keptTexts(db: Db, rows: readonly NoteRow[]): Promise<Map<string, 
   const texts = new Map<string, string>();
   for (const row of rows) {
     const id = row.reference === null ? undefined : rowOfIdentifier(row.reference);
-    const seed = id === undefined ? undefined : byId.get(id);
-    if (seed === undefined || seed.client_id !== row.site_id) continue;
-    const widgetId = widgetIdOf(seed.seed);
+    const note = id === undefined ? undefined : byId.get(id);
+    if (note === undefined || note.client_id !== row.site_id) continue;
+    const widgetId = widgetIdOf(note.payload);
     if (widgetId === '' || widgetId !== row.note_id) continue;
-    texts.set(keyOf(row), noteOf(seed.seed));
+    texts.set(keyOf(row), textOf(note.payload));
   }
 
   return texts;
@@ -635,7 +635,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             ? filtered
             : and(
                 filtered,
-                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.note_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.note} COLLATE "C")`,
               );
 
         const [page, [counted]] = await Promise.all([
@@ -678,7 +678,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
             return {
               workspace: { id: row.workspace_id, name: workspaceName },
               site: { id: row.site_id, origin },
-              seed: row.note_id,
+              note: row.note_id,
               pageUrl: row.page_url,
               excerpt: row.excerpt,
               ...(text === undefined ? {} : { text }),
@@ -697,7 +697,7 @@ export function createPostgresInstanceAdmin(database: Database): InstanceAdminRe
           }),
           total: number(counted?.notes),
           ...(page.length > query.limit && last !== undefined
-            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.note_id } }
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, note: last.row.note_id } }
             : {}),
         };
       });

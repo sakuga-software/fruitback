@@ -17,7 +17,7 @@ function attachmentOf(row: Row): StoredAttachment {
     content: row.content,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
-    ...(row.note_id === null ? {} : { seed: row.note_id }),
+    ...(row.note_id === null ? {} : { note: row.note_id }),
     ...(row.before_transit ? { beforeTransit: true as const } : {}),
   };
 }
@@ -74,19 +74,19 @@ export function createPostgresAttachmentStore(database: Database): AttachmentSto
       // A sum of `bigint` comes back as a string from the driver: read as a number here, never as an instant.
       return { files: Number(row?.files ?? 0), bytes: Number(row?.bytes ?? 0) };
     },
-    async claim(ids, seed, now) {
+    async claim(ids, note, now) {
       if (ids.length === 0) return [];
       await migrated(database);
       // One statement: two notes that name one file at the same moment cannot both take it.
       const rows = await database.run((db) =>
         db
           .update(screenshots)
-          .set({ note_id: seed })
+          .set({ note_id: note })
           .where(
             and(
               inArray(screenshots.id, [...ids]),
               gt(screenshots.expires_at, now),
-              or(isNull(screenshots.note_id), eq(screenshots.note_id, seed)),
+              or(isNull(screenshots.note_id), eq(screenshots.note_id, note)),
             ),
           )
           .returning(),

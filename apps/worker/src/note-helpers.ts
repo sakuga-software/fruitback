@@ -33,15 +33,15 @@ export function placedAt(client: ClientConfig, place: ClientDestination): Client
  */
 export function withoutTracker<
   T extends { id: string; identifier: string; url?: string; attachments?: NoteIssue['attachments'] },
->(issue: T, seed: string): T {
+>(issue: T, note: string): T {
   const { url: _url, attachments, ...rest } = issue;
 
   // The address of a file is the tracker's (FRU-331): a guest reads its name only.
   return {
     ...rest,
     ...(attachments === undefined ? {} : { attachments: attachments.map(({ name }) => ({ name })) }),
-    id: seed,
-    identifier: seed,
+    id: note,
+    identifier: note,
   } as T;
 }
 
@@ -65,7 +65,7 @@ export async function indexed(index: NoteIndex | undefined, work: (index: NoteIn
 export function noteEntry(
   workspace: string,
   site: string,
-  seed: Note,
+  note: Note,
   channel: Channel,
   target: ClientConfig | undefined,
   issue: CreatedIssue,
@@ -73,9 +73,9 @@ export function noteEntry(
   return {
     workspace,
     site,
-    seed,
+    note,
     channel,
-    author: authorOf(seed, channel === 'extension'),
+    author: authorOf(note, channel === 'extension'),
     place: placeOf(target),
     issue: { identifier: issue.identifier, ...(issue.url === undefined ? {} : { url: issue.url }) },
     stage: 'new',
@@ -118,19 +118,19 @@ export function canonicalizeRequestedPage(requested: string): string | null {
 }
 
 /**
- * Re-canonicalized server-side. The read path finds seeds by matching this URL inside the
+ * Re-canonicalized server-side. The read path finds notes by matching this URL inside the
  * description, so a client that skipped normalization would plant a pin nobody can find again.
  *
  * The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
  * label the read filters on, so a padded id here means an issue nobody can query back.
  */
-export function canonicalNote(seed: Note): Note {
-  const clientId = normalizeClientId(seed.client?.id);
+export function canonicalNote(note: Note): Note {
+  const clientId = normalizeClientId(note.client?.id);
 
   return {
-    ...seed,
-    page: { ...seed.page, url: canonicalizePageUrl(seed.page.url) },
-    ...(seed.client !== undefined && clientId !== undefined ? { client: { ...seed.client, id: clientId } } : {}),
+    ...note,
+    page: { ...note.page, url: canonicalizePageUrl(note.page.url) },
+    ...(note.client !== undefined && clientId !== undefined ? { client: { ...note.client, id: clientId } } : {}),
   };
 }
 

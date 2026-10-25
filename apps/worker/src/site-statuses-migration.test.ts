@@ -110,8 +110,8 @@ for (const { label, open, skip } of DATABASES) {
       );
 
       // A note of before has no status: it is drawn by its stage.
-      const seeds = await rowsOf(database, 'SELECT stage, status_key FROM seeds');
-      assert.deepEqual(seeds, [{ stage: 'ripe', status_key: null }]);
+      const notes = await rowsOf(database, 'SELECT stage, status_key FROM seeds');
+      assert.deepEqual(notes, [{ stage: 'ripe', status_key: null }]);
 
       // The statuses of a site go with it.
       await rowsOf(database, `DELETE FROM sites WHERE id = 'site_a'`);

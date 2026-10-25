@@ -87,8 +87,8 @@ describe('two replicas that count at once, on a real server (FRU-67)', { skip: N
     }
   });
 
-  it('answers 1 to one of two callers that hold the same seed at the same moment, each time', async () => {
-    // `incr` === 1 is how a batch holds a seed: two attempts of one batch must not both hold it.
+  it('answers 1 to one of two callers that hold the same note at the same moment, each time', async () => {
+    // `incr` === 1 is how a batch holds a note: two attempts of one batch must not both hold it.
     const { stores, close } = await twoReplicas();
 
     try {

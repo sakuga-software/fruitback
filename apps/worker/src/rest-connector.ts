@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
-import { type Note, type NoteV3, toNoteV3 } from '@fruitback/shared';
+import type { Note } from '@fruitback/shared';
 import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
 import { type AttachmentStore, SIGNED_URL_MS, legacyFileOf, signedAttachmentPath } from './attachments.ts';
@@ -159,8 +159,11 @@ export function signature(secret: string, timestamp: number, body: string): stri
   return `sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
 }
 
-/** The body of a delivery. `version` moves when a field changes meaning or goes. */
-export const DELIVERY_VERSION = 1;
+/**
+ * The body of a delivery. `version` moves when a field changes meaning or goes: 2 since FRU-378, when
+ * the note went from `note` to `note`, in the shape of `fruitback.note` v3.
+ */
+export const DELIVERY_VERSION = 2;
 
 export type DeliveryBody = {
   version: typeof DELIVERY_VERSION;
@@ -169,10 +172,8 @@ export type DeliveryBody = {
   site: { id: string; origin?: string };
   /** What Fruitback calls the note, as its thread shows it. */
   identifier: string;
-  /** The note, in the shape of `fruitback.note` v3 (FRU-378). */
-  note: NoteV3;
-  /** The same note in the shape of `fruitback.seed` v2, for the receivers of before FRU-378. */
-  seed: Note;
+  /** The note, as the widget built it. */
+  note: Note;
   /**
    * The files of the note (FRU-331), as the queue keeps them: an id in transit, a name, a type, a
    * size. Each attempt replaces this list with `SentAttachment`s: see `withSignedFiles`.
@@ -189,17 +190,8 @@ export type KeptAttachment = { id: string; name: string; type: string; size: num
  */
 export type SentAttachment = { name: string; type: string; size: number; url: string; expiresAt: string };
 
-/**
- * `note` is added here and kept in the queue. A body queued before FRU-378 has `seed` only, and goes
- * as it was queued: its signature covers the body as it is sent.
- */
-export function deliveryBody(delivery: Omit<DeliveryBody, 'version' | 'event' | 'note'>): string {
-  return JSON.stringify({
-    version: DELIVERY_VERSION,
-    event: 'note.created',
-    ...delivery,
-    note: toNoteV3(delivery.seed),
-  } satisfies DeliveryBody);
+export function deliveryBody(delivery: Omit<DeliveryBody, 'version' | 'event'>): string {
+  return JSON.stringify({ version: DELIVERY_VERSION, event: 'note.created', ...delivery } satisfies DeliveryBody);
 }
 
 /**
@@ -351,18 +343,17 @@ export async function withSignedFiles(
     now,
   }: { attachments: AttachmentStore | undefined; publicUrl: string | undefined; secretsKey: string; now: number },
 ): Promise<{ body: string; files: string[] }> {
-  // A body queued before FRU-378 has no `note`.
-  let parsed: Omit<DeliveryBody, 'note'> & { note?: NoteV3 };
+  let parsed: DeliveryBody;
   try {
-    parsed = JSON.parse(body) as typeof parsed;
+    parsed = JSON.parse(body) as DeliveryBody;
   } catch {
     return { body, files: [] };
   }
-  // A delivery of before FRU-331 names its picture in its seed, not in a list: it carries it while the
+  // A delivery of before FRU-331 names its picture in its note, not in a list: it carries it while the
   // migration keeps it. **Nothing of a file changes here**: an attempt only reads and signs. The
   // state of a file moves after a `2xx` only (`deliverDue`), and an attempt that fails leaves every
   // file as it was, for the next attempt to sign it again.
-  const legacy = parsed.seed === undefined ? undefined : legacyFileOf(parsed.seed);
+  const legacy = parsed.note === undefined ? undefined : legacyFileOf(parsed.note);
   const listed = Array.isArray(parsed.attachments) ? [...parsed.attachments] : [];
   if (listed.length === 0 && legacy === undefined) return { body, files: [] };
   // A note of before sent again after FRU-331 lists its picture already (`legacyAttachment`): it goes

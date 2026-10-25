@@ -60,7 +60,7 @@ for (const { label, open, skip } of DATABASES) {
             stateName: '',
             updatedAt: '',
             comments: [],
-            seed: done,
+            note: done,
           },
         ],
         Date.now(),

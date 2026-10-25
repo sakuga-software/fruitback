@@ -63,13 +63,13 @@ async function aNote() {
     ...team,
     hidden: true,
   });
-  const seed = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+  const note = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
   const planted = await answerOf(
     await callOn(
       world,
       'POST',
       '/feedback',
-      { origin: ORIGIN, body: seed, headers: { Authorization: `Bearer ${tokens.bob}` } },
+      { origin: ORIGIN, body: note, headers: { Authorization: `Bearer ${tokens.bob}` } },
       { store },
     ),
   );
@@ -180,13 +180,13 @@ describe('the status of a note that the worker keeps (FRU-367)', () => {
   it('refuses the note of a tracker: its status changes in the tracker', async () => {
     const { world, site, tokens } = await aNote();
     const tracker = createMemoryStore();
-    const seed = noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+    const note = noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
     const planted = await answerOf(
       await callOn(
         world,
         'POST',
         '/feedback',
-        { origin: ORIGIN, body: seed, headers: { Authorization: `Bearer ${tokens.bob}` } },
+        { origin: ORIGIN, body: note, headers: { Authorization: `Bearer ${tokens.bob}` } },
         { store: tracker },
       ),
     );

@@ -152,8 +152,8 @@ describe('verifyIdentityToken', () => {
     assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString()), { alg: 'HS256', typ: 'JWT' });
   });
 
-  it('ignores a name in the seed and reports only what the token says', async () => {
-    // A page can claim one identity in the seed and hold a token for another. The token wins, whole:
+  it('ignores a name in the note and reports only what the token says', async () => {
+    // A page can claim one identity in the note and hold a token for another. The token wins, whole:
     // merging them would let a claim ride into Linear under a verified banner.
     const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
 

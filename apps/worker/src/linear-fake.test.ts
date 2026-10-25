@@ -29,10 +29,10 @@ describe('the fake Linear of the bench (FRU-426)', () => {
     const fake = createLinearFake();
     installLinearFake(fake);
     const content = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-    const seed = noteFixture();
+    const note = noteFixture();
     const store = createLinearStore(config);
 
-    await store.create(seed, undefined, POLICY, [{ id: 'att_1', name: 'area.png', type: 'image/png', content }]);
+    await store.create(note, undefined, POLICY, [{ id: 'att_1', name: 'area.png', type: 'image/png', content }]);
 
     const received = fake.received();
     assert.equal(received.issues.length, 1);
@@ -46,7 +46,7 @@ describe('the fake Linear of the bench (FRU-426)', () => {
       [{ issueId: received.issues[0]?.id, title: 'area.png' }],
     );
 
-    const read = await store.findForPage({ url: seed.page.url, clientId: undefined }, undefined, POLICY);
+    const read = await store.findForPage({ url: note.page.url, clientId: undefined }, undefined, POLICY);
     assert.equal(read.length, 1);
     assert.deepEqual(
       read[0]?.attachments?.map((file) => file.name),
