@@ -21,7 +21,7 @@ import type { SiteConfig } from './sites.ts';
  * and a gate that is never exercised is a gate nobody can trust.
  */
 
-/** The path the widget calls, on both directions of the seed (`embed.ts`). */
+/** The path the widget calls, on both directions of the note (`embed.ts`). */
 export const FEEDBACK_PATH = '/feedback';
 
 /**

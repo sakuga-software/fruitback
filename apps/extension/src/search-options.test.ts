@@ -39,7 +39,7 @@ const NOTES: PanelNote[] = [
   note({ id: 'd', number: 4, stage: 'progress', note: 'The promo code should be AUTUMN10.', placement: 'detached' }),
 ];
 
-const siteNote = (fields: Partial<SiteNote> & { seed: string }): SiteNote => ({
+const siteNote = (fields: Partial<SiteNote> & { note: string }): SiteNote => ({
   excerpt: 'The email field is too short on mobile.',
   page: { url: 'https://staging.acme.dev/subscriptions', path: '/subscriptions' },
   stage: 'progress',
@@ -53,7 +53,7 @@ function draw(search: Partial<SearchState> | undefined, notes: PanelState = on(N
     onScope: (scope) => calls.push(`scope:${scope}`),
     onQuery: (q) => calls.push(`q:${q}`),
     onStage: (stage) => calls.push(`stage:${stage}`),
-    onSiteNote: (picked) => calls.push(`site-note:${picked.seed}`),
+    onSiteNote: (picked) => calls.push(`site-note:${picked.note}`),
     onSiteRetry: () => calls.push('site-retry'),
     onMore: () => calls.push('more'),
     onPins: (shown) => calls.push(`pins:${shown}`),
@@ -176,15 +176,15 @@ describe('« This page » (FRU-307)', () => {
 
 describe('« Whole site » (FRU-307)', () => {
   const SITE: SiteNote[] = [
-    siteNote({ seed: 's1', reference: 'FRU-128', referenceUrl: 'https://linear.app/acme/issue/FRU-128' }),
+    siteNote({ note: 's1', reference: 'FRU-128', referenceUrl: 'https://linear.app/acme/issue/FRU-128' }),
     siteNote({
-      seed: 's2',
+      note: 's2',
       stage: 'todo',
       excerpt: 'Could the title mention that the coffee is roasted in Bordeaux, and since when the house',
       page: { url: 'https://staging.acme.dev/', path: '/' },
       author: 'Camille',
     }),
-    siteNote({ seed: 's3', stage: 'done', mine: true, page: { url: 'https://staging.acme.dev/cart', path: '/cart' } }),
+    siteNote({ note: 's3', stage: 'done', mine: true, page: { url: 'https://staging.acme.dev/cart', path: '/cart' } }),
   ];
 
   it('names the two scopes with their counts', () => {

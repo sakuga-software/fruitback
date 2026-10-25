@@ -62,7 +62,7 @@ const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 /** Long enough for a UUID, short enough that a page cannot post a megabyte of it. */
 /**
- * The longest id the channel carries: a request, a note. A seed id of the widget is 15 characters
+ * The longest id the channel carries: a request, a note. A note id of the widget is 15 characters
  * (`sd_` and 12 hex), an issue id of a tracker well under this.
  */
 export const MAX_ID_LENGTH = 100;
@@ -73,7 +73,7 @@ export const MAX_ID_LENGTH = 100;
  * **The abort is the point, not the deadline.** Without it a worker that accepts a connection and
  * never answers leaves the request in flight while the page is told the call failed — and a reviewer
  * told their note failed presses send again, which plants it twice. The worker cannot tell the two
- * apart (FRU-9 gives a seed its own id, which dedupes a retry of the *same* request, not a second
+ * apart (FRU-9 gives a note its own id, which dedupes a retry of the *same* request, not a second
  * one). Raised in review.
  */
 export const RELAY_CALL_TIMEOUT_MS = 20 * 1_000;
@@ -296,7 +296,7 @@ export type CommandMessage = {
   kind: 'command';
   id: string;
   command: TabCommand;
-  /** The note of `focus-note` and `reply` (FRU-299): the id of its seed. */
+  /** The note of `focus-note` and `reply` (FRU-299): its id. */
   note?: string;
   /** The text of `reply`. */
   body?: string;

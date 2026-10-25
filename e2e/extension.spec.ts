@@ -122,9 +122,9 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
 
   // The component name comes from the React fiber, which only the page's own world can see. A widget
   // mounted from the isolated world would store the note with no source.
-  const [seed] = await notesOn(page);
-  expect(seed?.note).toBe('Planté par le mode privé');
-  expect(seed?.source).toMatchObject({ component: 'Button', file: expect.stringContaining('site.tsx') });
+  const [note] = await notesOn(page);
+  expect(note?.text).toBe('Planté par le mode privé');
+  expect(note?.source).toMatchObject({ component: 'Button', file: expect.stringContaining('site.tsx') });
 
   await page.reload();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -254,9 +254,9 @@ test('private mode: no file and no picture of the element are offered without a 
 
   await plantOnTheLatteCard(page, /Leave feedback/, 'Sans fichier, et pourtant envoyée');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
-  const [seed] = await notesOn(page);
-  expect(seed?.note).toBe('Sans fichier, et pourtant envoyée');
-  expect(seed && 'screenshot' in seed).toBe(false);
+  const [note] = await notesOn(page);
+  expect(note?.text).toBe('Sans fichier, et pourtant envoyée');
+  expect(note && 'screenshot' in note).toBe(false);
 });
 
 /**
@@ -454,8 +454,8 @@ test('team mode: paired from the popup, the site reads and writes through the re
 
   // Signed by the worker from the session: only the relay carries it.
   const access = tokens.find((token) => token.area === 'session')?.value;
-  const [seed] = await notesOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
-  expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
+  const [note] = await notesOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
+  expect(note?.reporter).toMatchObject({ name: REVIEWER, verified: true });
 });
 
 test('a session held with the worker of a private-mode site stays on the popup, with its log out (FRU-88)', async ({

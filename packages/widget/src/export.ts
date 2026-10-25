@@ -42,34 +42,34 @@ export function feedbackAsText(entries: readonly FeedbackEntry[], options: Feedb
 }
 
 function block({ issue, placement, status }: FeedbackEntry, position: number, t: Translator): string {
-  const seed = issue.seed;
+  const note = issue.note;
   const facts = [
     t.text('export.element', { element: element(issue) }),
     component(issue, t),
     signature(issue, t),
     placement === 'approximate' ? t.text('export.approximate') : undefined,
     placement === 'detached' ? t.text('export.detached') : undefined,
-    seed.screenshot?.url !== undefined ? t.text('export.picture', { url: seed.screenshot.url }) : undefined,
+    note.screenshot?.url !== undefined ? t.text('export.picture', { url: note.screenshot.url }) : undefined,
   ].filter((line): line is string => line !== undefined);
 
   return [
     `## ${position}. ${oneLine(issue.identifier)} — ${oneLine(statusLabel(issue, status, t))}`,
     facts.map((fact) => `- ${fact}`).join('\n'),
-    seed.note.trim().length > 0 ? quote(seed.note) : t.text('thread.noNote'),
+    note.text.trim().length > 0 ? quote(note.text) : t.text('thread.noNote'),
     ...(issue.comments ?? []).map((comment) => reply(comment, t)),
   ].join('\n\n');
 }
 
 /** The tag, the text the element showed, and the selector that found it. */
 function element(issue: NoteIssue): string {
-  const anchor = issue.seed.anchor;
+  const anchor = issue.note.anchor;
   const text = oneLine(anchor.text ?? '');
 
   return [text.length > 0 ? `${anchor.tag} "${text}"` : anchor.tag, code(anchor.selector)].join(' · ');
 }
 
 function component(issue: NoteIssue, t: Translator): string | undefined {
-  const source = issue.seed.source;
+  const source = issue.note.source;
   if (source === undefined) return undefined;
 
   const file = source.file === undefined ? undefined : [source.file, source.line].filter(isPresent).join(':');
@@ -79,8 +79,8 @@ function component(issue: NoteIssue, t: Translator): string | undefined {
 }
 
 function signature(issue: NoteIssue, t: Translator): string | undefined {
-  const name = issue.seed.reporter?.name ?? issue.seed.reporter?.email;
-  const date = day(issue.seed.createdAt);
+  const name = issue.note.reporter?.name ?? issue.note.reporter?.email;
+  const date = day(issue.note.createdAt);
   if (name !== undefined) return dated(t.text('export.by', { name: oneLine(name) }), date);
 
   return date === '' ? undefined : t.text('export.written', { date });

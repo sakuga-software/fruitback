@@ -175,7 +175,7 @@ describe('reading pins', () => {
 
   function onCta() {
     return noteIssueFixture({
-      seed: noteFixture({
+      note: noteFixture({
         anchor: {
           selector: '[data-testid="checkout-cta"]',
           tag: 'button',
@@ -536,7 +536,7 @@ describe('coming back to the tab (FRU-87)', () => {
 
   function onCta() {
     return noteIssueFixture({
-      seed: noteFixture({
+      note: noteFixture({
         anchor: {
           selector: '[data-testid="checkout-cta"]',
           tag: 'button',
@@ -792,7 +792,7 @@ describe('who carries the calls', () => {
     assert.equal(request?.url, `${ENDPOINT}/feedback`);
     assert.equal(request?.headers['Content-Type'], 'application/json');
     assert.equal(request?.headers.Authorization, 'Bearer a-token');
-    assert.equal((JSON.parse(request?.body ?? '{}') as { note: string }).note, 'the price is wrong');
+    assert.equal((JSON.parse(request?.body ?? '{}') as { text: string }).text, 'the price is wrong');
   });
 
   it('sends the note to the page where the element was chosen, after a navigation (FRU-152)', async () => {
@@ -937,7 +937,7 @@ describe('who carries the calls', () => {
     assert.equal(await send(false, async () => undefined), true);
   });
 
-  it('names the place a member chose in the query, and leaves the body the seed it was (FRU-123)', async () => {
+  it('names the place a member chose in the query, and leaves the body the note it was (FRU-123)', async () => {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     setDocumentSize(page.document, 1_000, 1_000);
     setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
@@ -973,7 +973,7 @@ describe('who carries the calls', () => {
     // The choice adds no header: the relay of the extension would drop one in silence.
     assert.deepEqual(Object.keys(chosen?.headers ?? {}), ['Content-Type']);
 
-    // The body is the seed and nothing more. Two captures differ by their id and their time only.
+    // The body is the note and nothing more. Two captures differ by their id and their time only.
     const fields = (request: TransportRequest | undefined) => {
       const { id: _id, createdAt: _createdAt, ...rest } = JSON.parse(request?.body ?? '{}') as Record<string, unknown>;
 
@@ -1314,12 +1314,12 @@ describe('why a send failed', () => {
 
 /**
  * Sending the notes kept for later (FRU-124). The worker half is on main (#171): it answers each
- * seed of a batch, and protects a kept one against a second copy for ten minutes only.
+ * note of a batch, and protects a kept one against a second copy for ten minutes only.
  */
 describe('sending the drafts', () => {
   const ENDPOINT = 'https://worker.test';
   const draftOf = (id: string, destination?: string) => ({
-    seed: noteFixture({ id, client: { id: 'acme' } }),
+    note: noteFixture({ id, client: { id: 'acme' } }),
     ...(destination === undefined ? {} : { destination }),
   });
 
@@ -1363,7 +1363,7 @@ describe('sending the drafts', () => {
     assert.equal(requests[0]?.url, `${ENDPOINT}/feedback`);
     const body = JSON.parse(requests[0]?.body ?? '') as unknown[];
     assert.deepEqual(
-      body.map((seed) => (parseNote(seed).ok ? (seed as { id: string }).id : 'not a seed')),
+      body.map((note) => (parseNote(note).ok ? (note as { id: string }).id : 'not a note')),
       ['sd_a', 'sd_b'],
     );
   });
@@ -1377,13 +1377,13 @@ describe('sending the drafts', () => {
     assert.deepEqual(first, { kept: ['sd_a'], failure: 'retry' });
 
     const second = await sendDrafts({
-      drafts: drafts.filter((each) => !first.kept.includes(each.seed.id)),
+      drafts: drafts.filter((each) => !first.kept.includes(each.note.id)),
       offer,
       options,
     });
     assert.deepEqual(second, { kept: ['sd_b'] });
     assert.deepEqual(
-      (JSON.parse(requests[1]?.body ?? '') as { id: string }[]).map((seed) => seed.id),
+      (JSON.parse(requests[1]?.body ?? '') as { id: string }[]).map((note) => note.id),
       ['sd_b'],
       'the second attempt sent a note that was already kept',
     );
@@ -1403,7 +1403,7 @@ describe('sending the drafts', () => {
   });
 
   it('keeps every note of a batch the worker answers 502, its answer for each note included', async () => {
-    // The worker answers `502` when it kept none, with one result for each seed.
+    // The worker answers `502` when it kept none, with one result for each note.
     const { options } = transportAnswering(results(502, [], ['sd_a', 'sd_b']));
 
     assert.deepEqual(
@@ -1438,7 +1438,7 @@ describe('sending the drafts', () => {
     assert.equal(requests.length, 2, 'a request was sent after a 429');
   });
 
-  it('sends a seed and not an array to a worker that offers no batch, and the place in the query', async () => {
+  it('sends a note and not an array to a worker that offers no batch, and the place in the query', async () => {
     const { requests, options } = transportAnswering(
       () => ({ ok: true, status: 201, body: '{}' }),
       () => ({ ok: false, status: 502, body: '{"error":"store-unavailable"}' }),
@@ -1452,7 +1452,7 @@ describe('sending the drafts', () => {
 
     assert.deepEqual(outcome, { kept: ['sd_a'], failure: 'retry' });
     assert.equal(requests[0]?.url, `${ENDPOINT}/feedback?destination=dst_design`);
-    assert.equal(parseNote(JSON.parse(requests[0]?.body ?? '')).ok, true, 'the body of a single note is not a seed');
+    assert.equal(parseNote(JSON.parse(requests[0]?.body ?? '')).ok, true, 'the body of a single note is not a note');
   });
 
   it('keeps every note when the worker cannot be reached', async () => {
@@ -1504,9 +1504,9 @@ describe('a link that opens a note on its page (FRU-253)', () => {
     noteIssueFixture({
       id: 'issue_linked',
       identifier: 'ACM-142',
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_linked',
-        note: 'The linked note',
+        text: 'The linked note',
         anchor: {
           selector: '[data-testid="checkout-cta"]',
           tag: 'button',
@@ -1565,9 +1565,9 @@ describe('a link that opens a note on its page (FRU-253)', () => {
 
   it('opens the list on « Could not be placed » for a note whose element is gone, and its thread', async () => {
     const gone = note({
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_linked',
-        note: 'The linked note',
+        text: 'The linked note',
         anchor: { selector: '#gone', tag: 'input', text: 'Gone', bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 } },
       }),
     });

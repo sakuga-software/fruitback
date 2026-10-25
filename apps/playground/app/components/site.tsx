@@ -7,7 +7,7 @@ import { hashedButtonClass, hashedMenuClass, useSiteState } from '../site-state'
  * The fake client site, as named components.
  *
  * The names are the point. `getElementContext` reads the component and the source file off the React
- * fiber, and on the static playground there was no fiber to read — so the half of a seed that says
+ * fiber, and on the static playground there was no fiber to read — so the half of a note that says
  * *which component* a note is about had never been exercised end to end. Every element the E2E suite
  * points at now belongs to a component with a name worth seeing in a Linear issue.
  */

@@ -47,7 +47,7 @@ describe('readTextExcerpt', () => {
     assert.equal(readTextExcerpt(page.query('button')), 'Commander maintenant');
   });
 
-  it('truncates to the length the seed schema accepts', () => {
+  it('truncates to the length the note schema accepts', () => {
     const page = mountPage(`<main><p>${'ab '.repeat(200)}</p></main>`);
 
     const text = readTextExcerpt(page.query('p'));

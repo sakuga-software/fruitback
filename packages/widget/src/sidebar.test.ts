@@ -19,7 +19,7 @@ function note(id: string, text: string, stage: FeedbackEntry['issue']['stage'] =
   return noteIssueFixture({
     identifier: id.toUpperCase(),
     stage,
-    seed: noteFixture({ id, note: text, createdAt: '2026-10-09T10:00:00.000Z', reporter: { name: 'Alice' } }),
+    note: noteFixture({ id, text: text, createdAt: '2026-10-09T10:00:00.000Z', reporter: { name: 'Alice' } }),
   });
 }
 
@@ -632,9 +632,9 @@ describe('the way into the list (FRU-129)', () => {
     overlay.render([
       noteIssueFixture({
         identifier: 'ID-1',
-        seed: noteFixture({
+        note: noteFixture({
           id: 'sd_one',
-          note: 'On the button',
+          text: 'On the button',
           anchor: {
             selector: '[data-testid="cta"]',
             tag: 'button',
@@ -668,9 +668,9 @@ describe('the thread of a note in place of the rows (FRU-312)', () => {
       noteIssueFixture({
         id: `issue_${id}`,
         identifier: `ID-${index + 1}`,
-        seed: noteFixture({
+        note: noteFixture({
           id,
-          note: `Note ${index + 1}`,
+          text: `Note ${index + 1}`,
           anchor: {
             selector: '[data-testid="cta"]',
             tag: 'button',
@@ -920,7 +920,7 @@ describe('the notes kept for later, in the list (FRU-124)', () => {
     const page = mountPage('<main></main>');
     const host = page.document.createElement('div');
     page.document.body.append(host);
-    const kept = [{ seed: noteFixture({ id: 'sd_a' }) }, { seed: noteFixture({ id: 'sd_b' }) }];
+    const kept = [{ note: noteFixture({ id: 'sd_a' }) }, { note: noteFixture({ id: 'sd_b' }) }];
     let outcome: { sent: number; failure?: 'wait' } = { sent: 1, failure: 'wait' };
     const sidebar = createSidebar({
       document: page.document,

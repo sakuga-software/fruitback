@@ -18,16 +18,16 @@ async function longNotes(page: Page): Promise<void> {
     if (route.request().method() !== 'GET') return route.fallback();
     const response = await route.fetch();
     const body = (await response.json()) as {
-      issues: { stateName: string; comments?: unknown[]; seed: Record<string, unknown> }[];
+      issues: { stateName: string; comments?: unknown[]; note: Record<string, unknown> }[];
     };
     for (const issue of body.issues) {
       issue.stateName = 'Waiting for the review of the design team';
-      issue.seed.source = {
+      issue.note.source = {
         component: 'CheckoutPaymentMethodConfirmationButtonWithLoyaltyPoints',
         file: 'src/features/checkout/payment-method/components/confirmation/ConfirmationButtonWithLoyaltyPoints.tsx',
         line: 142,
       };
-      issue.seed.reporter = { name: 'Marie-Antoinette de La Rochefoucauld-Montmorency' };
+      issue.note.reporter = { name: 'Marie-Antoinette de La Rochefoucauld-Montmorency' };
       issue.comments = [
         {
           id: 'reply-1',

@@ -16,7 +16,7 @@ import { readReactSource } from './source.ts';
 /**
  * One click plus one note, assembled into the payload the worker stores.
  *
- * This is the only place the widget builds a seed, and it goes through `createNote`, so an anchor
+ * This is the only place the widget builds a note, and it goes through `createNote`, so an anchor
  * that came out malformed fails here — in the reporter's browser, with a message — rather than as a
  * `400 invalid-note` after the note was typed.
  */
@@ -24,7 +24,8 @@ import { readReactSource } from './source.ts';
 export type CaptureNoteOptions = {
   /** The element the reporter clicked. */
   element: Element;
-  note: string;
+  /** What the reporter wrote. */
+  text: string;
   /** Defaults to the element's own window. Passed explicitly when capturing inside an iframe. */
   view?: Window;
   client?: NoteClient;
@@ -51,12 +52,12 @@ export type CaptureNoteOptions = {
    * page, so `embed.ts` reads the place at the click and hands it here at the send.
    */
   place?: CapturedPlace;
-  /** Injected by the tests, and by anything that needs the seed to be reproducible. */
+  /** Injected by the tests, and by anything that needs the note to be reproducible. */
   id?: string;
   createdAt?: string;
 };
 
-/** The part of a seed that says where the note is: the page, how it was seen, the element. */
+/** The part of a note that says where it is: the page, how it was seen, the element. */
 export type CapturedPlace = {
   page: NotePage;
   viewport: NoteViewport;
@@ -79,14 +80,14 @@ export function capturePlace(element: Element, options: { view?: Window; source?
 }
 
 export function captureNote(options: CaptureNoteOptions): Note {
-  const { element, note, includeEnv = false } = options;
+  const { element, text, includeEnv = false } = options;
   const view = viewOf(element, options.view);
   const place = options.place ?? capturePlace(element, { view, ...optional('source', options.source) });
 
-  const seed = {
+  const input = {
     id: options.id ?? newNoteId(view),
     createdAt: options.createdAt ?? new Date().toISOString(),
-    note,
+    text,
     ...place,
     ...optional('client', options.client),
     ...optional('reporter', options.reporter),
@@ -94,7 +95,7 @@ export function captureNote(options: CaptureNoteOptions): Note {
     ...optional('screenshot', options.screenshot),
   };
 
-  return createNote(seed);
+  return createNote(input);
 }
 
 function viewOf(element: Element, view: Window | undefined): Window {
@@ -111,7 +112,7 @@ const SOURCE_FIELDS = ['component', 'file', 'line', 'column'] as const;
 /**
  * The engine's answer, completed by the fiber walk's — never the other way round.
  *
- * Nothing is invented here: a field absent from both stays absent, which is what keeps the seed
+ * Nothing is invented here: a field absent from both stays absent, which is what keeps the note
  * round-trip free of values the widget cannot rebuild.
  *
  * The fallback is passed unevaluated because it is a walk up the fiber tree on every capture, and
@@ -135,7 +136,7 @@ function mergeSource(
 /**
  * The name of the component a note about this element will carry: the engine's, and the fiber
  * walk's when the engine has none. The frame of a capture writes it (FRU-258), and it must be the
- * name `mergeSource` gives the seed, or the reporter reads one name and sends another.
+ * name `mergeSource` gives the note, or the reporter reads one name and sends another.
  */
 export function componentOf(element: Element, engine: NoteSource | undefined): string | undefined {
   return mergeSource(engine, () => readReactSource(element))?.component;
@@ -151,7 +152,7 @@ function optional<K extends string, T>(key: K, value: T | undefined): Partial<Re
 }
 
 /**
- * Generated client-side, and only has to be unique among the seeds of one workspace — it dedupes a
+ * Generated client-side, and only has to be unique among the notes of one workspace — it dedupes a
  * retry and keys the pin across reloads. `randomUUID` needs a secure context, which a staging site
  * on http does not have, hence the fallback.
  */

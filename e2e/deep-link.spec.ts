@@ -37,9 +37,9 @@ async function plant(page: Page, selector: string, note: string): Promise<string
     async ([origin, text]) => {
       const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-      const { issues } = (await response.json()) as { issues: { seed: { id: string; note: string } }[] };
+      const { issues } = (await response.json()) as { issues: { note: { id: string; text: string } }[] };
 
-      return issues.find((issue) => issue.seed.note === text)?.seed.id ?? '';
+      return issues.find((issue) => issue.note.text === text)?.note.id ?? '';
     },
     [WORKER_ORIGIN, note] as const,
   );

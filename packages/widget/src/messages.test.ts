@@ -295,9 +295,9 @@ describe('every word the widget shows', () => {
       comments: [],
       // FRU-332: the files of the note, in its tracker. The thread says how many, and links the ticket.
       attachments: [{ name: 'FILE ONE', url: 'https://tracker.test/file' }],
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_found',
-        note: 'NOTE ONE',
+        text: 'NOTE ONE',
         // A name, so that its field of reply names the author (FRU-257).
         reporter: { name: 'REPORTER' },
         anchor: {
@@ -312,9 +312,9 @@ describe('every word the widget shows', () => {
       identifier: 'ID-2',
       stateName: '',
       comments: [{ id: 'c1', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_gone',
-        note: 'NOTE TWO',
+        text: 'NOTE TWO',
         anchor: {
           selector: '#gone',
           tag: 'textarea',
@@ -329,9 +329,9 @@ describe('every word the widget shows', () => {
       stateName: '',
       // One reply, so its row of the list says how many (FRU-259).
       comments: [{ id: 'c2', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_near',
-        note: '',
+        text: '',
         anchor: {
           selector: '#renamed',
           tag: 'button',
@@ -340,7 +340,7 @@ describe('every word the widget shows', () => {
         },
       }),
     });
-    const kept = noteIssueFixture({ id: 'draft:sd_kept', seed: noteFixture({ id: 'sd_kept', note: 'NOTE KEPT' }) });
+    const kept = noteIssueFixture({ id: 'draft:sd_kept', note: noteFixture({ id: 'sd_kept', text: 'NOTE KEPT' }) });
     draftIssue = kept;
     overlay.render([found, detached, placedByPosition, kept]);
 
@@ -373,7 +373,7 @@ describe('every word the widget shows', () => {
     const listed = {
       entries: overlay.resolutions().map((each) => ({ issue: each.issue, placement: placementOf(each) })),
       state: 'read' as ListState,
-      drafts: [{ seed: kept.seed }] as Draft[],
+      drafts: [{ note: kept.note }] as Draft[],
     };
     const sidebar = createSidebar({
       document: page.document,
@@ -432,7 +432,7 @@ describe('every word the widget shows', () => {
     }
     // A reply from the open thread: in flight, then each cause of a failure, then kept (FRU-257).
     const settleReply = () => new Promise((resolve) => setTimeout(resolve, 0));
-    overlay.select(found.seed.id);
+    overlay.select(found.note.id);
     const replyForm = host.root.querySelector('.fruitback-thread-reply-form') as HTMLFormElement;
     (host.root.querySelector('.fruitback-thread-reply-field') as HTMLTextAreaElement).value = 'REPLY';
     for (const answer of ['wait', 'signed-out', 'retry'] as const) {
@@ -588,7 +588,7 @@ describe('every word the widget shows', () => {
     // The copied text is not in the DOM. `export.test.ts` checks its words; here it only has to
     // show every key, so the list below stays complete.
     const signed = noteIssueFixture({
-      seed: noteFixture({
+      note: noteFixture({
         reporter: { name: 'Alice' },
         source: { component: 'Button', file: 'site.tsx', line: 4 },
         screenshot: { url: 'https://cdn.test/shot.png' },
@@ -621,7 +621,7 @@ describe('every word the widget shows', () => {
 
     // A relative date comes from `Intl`, not from a catalog, so it counts as data here.
     const relativeDates = [found, detached, placedByPosition, kept]
-      .flatMap((issue) => [issue.seed.createdAt, ...(issue.comments ?? []).map((comment) => comment.createdAt)])
+      .flatMap((issue) => [issue.note.createdAt, ...(issue.comments ?? []).map((comment) => comment.createdAt)])
       .map((written) => translator.relative(new Date(written)));
     const data = [
       ...relativeDates,

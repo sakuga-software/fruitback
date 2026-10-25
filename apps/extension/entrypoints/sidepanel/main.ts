@@ -404,11 +404,11 @@ async function openSiteNote(note: SiteNote): Promise<void> {
   if (followed === undefined) return;
   if (note.page.path === followed.path) {
     search = undefined;
-    open = note.seed;
+    open = note.note;
     tab = 'open';
     draw();
-    void ask('mark-note', { note: note.seed });
-    void ask('focus-note', { note: note.seed });
+    void ask('mark-note', { note: note.note });
+    void ask('focus-note', { note: note.note });
 
     return;
   }
@@ -417,9 +417,9 @@ async function openSiteNote(note: SiteNote): Promise<void> {
   if (created?.id === undefined) return;
   if (followed?.tabId === created.id) {
     // The panel already follows the new tab: the row waits for its list there.
-    pendingOpen = note.seed;
-    focusOnOpen = note.seed;
-  } else awaiting = { tabId: created.id, note: note.seed };
+    pendingOpen = note.note;
+    focusOnOpen = note.note;
+  } else awaiting = { tabId: created.id, note: note.note };
 }
 
 const searchHandlers: SearchHandlers = {

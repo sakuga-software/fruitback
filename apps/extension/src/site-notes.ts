@@ -28,7 +28,7 @@ export type SiteStage = (typeof STAGES)[number];
 /** A note of the site, as the index of the worker keeps it. */
 export type SiteNote = {
   /** The id the widget gave the note: the widget finds it on its page by this. */
-  seed: string;
+  note: string;
   excerpt: string;
   page: { url: string; path: string };
   stage: SiteStage;
@@ -143,14 +143,14 @@ export function parseSitePage(value: unknown): SitePage | undefined {
 function parseSiteNote(value: unknown): SiteNote | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const note = value as Record<string, unknown>;
-  const seed = text(note.seed, 200);
+  const id = text(note.note, 200);
   const excerpt = text(note.excerpt);
   const stage = STAGES.find((each) => each === note.stage);
   const createdAt = text(note.createdAt, 64);
   const page = typeof note.page === 'object' && note.page !== null ? (note.page as Record<string, unknown>) : {};
   const url = text(page.url);
   const path = text(page.path);
-  if (seed === undefined || seed === '' || excerpt === undefined || stage === undefined) return undefined;
+  if (id === undefined || id === '' || excerpt === undefined || stage === undefined) return undefined;
   if (createdAt === undefined || url === undefined || path === undefined || !webUrl(url)) return undefined;
   const author =
     typeof note.author === 'object' && note.author !== null ? (note.author as Record<string, unknown>) : {};
@@ -159,7 +159,7 @@ function parseSiteNote(value: unknown): SiteNote | undefined {
   const referenceUrl = text(note.referenceUrl);
 
   return {
-    seed,
+    note: id,
     excerpt,
     page: { url, path },
     stage,

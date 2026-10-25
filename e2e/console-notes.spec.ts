@@ -60,7 +60,7 @@ type Note = {
   site: { id: string };
   stage: string;
   author: { kind: string; name?: string };
-  seed?: string;
+  note?: string;
   place?: Record<string, string>;
   ref?: string;
   url?: string;
@@ -94,7 +94,7 @@ const FIRST: Note[] = [
     site: { id: 's1' },
     stage: 'new',
     author: { kind: 'you', name: 'Ana' },
-    seed: 'seed-n2',
+    note: 'note-n2',
     place: LINEAR,
     ref: 'ACM-151',
     url: 'https://linear.app/acme/issue/ACM-151',
@@ -408,7 +408,7 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   const show = first.getByRole('link', { name: 'Show on the page' });
   // The link of the widget (FRU-253) opens the note by the id the widget gave it, by its issue when
   // the worker does not send that id, and opens the page alone with neither.
-  await expect(show).toHaveAttribute('href', 'https://staging.acme.dev/#fruitback-note=seed-n2');
+  await expect(show).toHaveAttribute('href', 'https://staging.acme.dev/#fruitback-note=note-n2');
   await expect(row(page, 'returns policy').getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
     'href',
     'https://acme.dev/help/returns#fruitback-note=ACM-149',

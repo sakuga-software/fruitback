@@ -40,7 +40,7 @@ describe('zod without the Function constructor (FRU-389)', () => {
 
   it('leaves every other file alone, and fails on a version of zod that writes the line otherwise', () => {
     assert.equal(withoutEval('const F = Function;', '/x/node_modules/zod/v4/core/schemas.js'), undefined);
-    assert.equal(withoutEval('const F = Function;', '/x/packages/shared/src/seed.ts'), undefined);
+    assert.equal(withoutEval('const F = Function;', '/x/packages/shared/src/note.ts'), undefined);
     assert.throws(() => withoutEval('const Ctor = Function;', UTIL), /no longer writes/);
     assert.equal(ZOD_EVAL.length, 2);
   });

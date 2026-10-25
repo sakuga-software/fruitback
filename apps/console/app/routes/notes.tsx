@@ -52,7 +52,7 @@ export type IndexedNote = {
    * The id the widget gave the note, which its link opens (`#fruitback-note=`, FRU-253). Absent from a
    * worker that does not send it: the link then names the issue, or opens the page alone.
    */
-  seed?: string;
+  note?: string;
   /** Where it went, its reference in the tracker and the address of the issue: not for a guest. */
   place?: NotePlace;
   ref?: string;
@@ -516,7 +516,7 @@ function NoteRow({
   const [refused, setRefused] = useState<string | undefined>();
   const { author, place } = note;
   // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
-  const opened = note.seed ?? note.ref;
+  const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = author.kind === 'verified' || author.kind === 'anonymous';
   const who = visitor ? t('Visitor') : (author.name ?? t('Somebody of the workspace'));
@@ -706,7 +706,7 @@ function NoteCard({
   onSaved: () => void;
 }) {
   useLocale();
-  const opened = note.seed ?? note.ref;
+  const opened = note.note ?? note.ref;
   const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = note.author.kind === 'verified' || note.author.kind === 'anonymous';
   const who = visitor ? t('Visitor') : (note.author.name ?? t('Somebody of the workspace'));

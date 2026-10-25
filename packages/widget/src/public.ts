@@ -13,7 +13,7 @@
  * The emitted declarations still name types from `@fruitback/shared`, which is why that
  * package is published alongside this one: types pointing at something nobody can install are worse
  * than none. Narrowing this entry was tried first and is not sufficient — `panel.d.ts` reaches
- * `config.d.ts`, which reaches the seed contract.
+ * `config.d.ts`, which reaches the note contract.
  *
  * A site that outgrows this can vendor the source — `files` ships it — rather than have us pretend
  * the internals were stable.

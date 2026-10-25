@@ -80,7 +80,7 @@ function launchButton(): HTMLElement {
 }
 
 describe('the chrome the reporter sees (FRU-36)', () => {
-  it('names the launch button in words, and draws the seed as a shape', () => {
+  it('names the launch button in words, and draws the note as a shape', () => {
     // The label used to open with a sprout. An emoji is drawn by the system font, so nothing about
     // it is ours to set — and the accessible name is the label, which is what every E2E spec finds
     // this button by, so the icon has to contribute no text at all.

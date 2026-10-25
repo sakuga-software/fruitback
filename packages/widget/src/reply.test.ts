@@ -28,7 +28,7 @@ function mounted(): MountedPage {
 function anIssue(overrides: Parameters<typeof noteIssueFixture>[0] = {}): NoteIssue {
   return noteIssueFixture({
     comments: [],
-    seed: noteFixture({
+    note: noteFixture({
       reporter: { name: 'Camille' },
       anchor: {
         selector: '[data-testid="cta"]',

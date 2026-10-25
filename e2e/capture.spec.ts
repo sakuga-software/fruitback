@@ -37,11 +37,11 @@ test('the selector it picked is unique in a real engine, and skips what a redepl
     const url = new URL(window.location.href);
     url.hash = '';
     const response = await fetch(`${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`);
-    const { issues } = (await response.json()) as { issues: { seed: { anchor: { selector: string } } }[] };
+    const { issues } = (await response.json()) as { issues: { note: { anchor: { selector: string } } }[] };
 
     return issues.map((issue) => ({
-      selector: issue.seed.anchor.selector,
-      matches: document.querySelectorAll(issue.seed.anchor.selector).length,
+      selector: issue.note.anchor.selector,
+      matches: document.querySelectorAll(issue.note.anchor.selector).length,
     }));
   }, WORKER_ORIGIN);
 
@@ -70,7 +70,7 @@ test('a pin below the fold is placed in the document, not in the viewport', asyn
 });
 
 test('a note carries the component and the file it came from', async ({ page }) => {
-  // The reason the playground is a React app at all: `source` is half of what makes a seed useful in
+  // The reason the playground is a React app at all: `source` is half of what makes a note useful in
   // Linear, and a static page had no fiber for it to read. Both assertions below failed on the first
   // run against real components — see `engine.ts` and `source.ts`.
   await openPlayground(page, 'source');
@@ -78,9 +78,9 @@ test('a note carries the component and the file it came from', async ({ page }) 
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le bouton Ajouter est trop discret');
   await plantPin(page, page.getByRole('heading', { name: 'Nos formules' }), 'Ce titre pourrait être plus clair');
 
-  const seeds = await storedNotes(page);
-  const button = seeds.find((seed) => seed.note.startsWith('Le bouton'));
-  const heading = seeds.find((seed) => seed.note.startsWith('Ce titre'));
+  const notes = await storedNotes(page);
+  const button = notes.find((note) => note.text.startsWith('Le bouton'));
+  const heading = notes.find((note) => note.text.startsWith('Ce titre'));
 
   // A HeroUI button: react-grab reports the react-aria internal that rendered the host node, so the
   // name has to come from the fiber walk while the location still comes from react-grab. `Button`,

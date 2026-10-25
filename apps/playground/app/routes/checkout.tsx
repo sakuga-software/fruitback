@@ -7,7 +7,7 @@ export function meta() {
 
 /**
  * The second page, and the question it asks: a pin belongs to a URL, so navigating here has to
- * change which seeds are on screen. The overlay re-reads on every navigation for exactly that
+ * change which notes are on screen. The overlay re-reads on every navigation for exactly that
  * reason — on a client-rendered app nothing else tells it the page changed.
  */
 export default function Checkout() {

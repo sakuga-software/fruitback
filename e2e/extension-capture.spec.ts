@@ -70,7 +70,7 @@ test('a capture of the page and one of an area go through the relay to the ticke
   // The double of the tracker holds the two files of the note, by their names.
   const access = (await storedTokens(extension.worker)).find((token) => token.area === 'session')?.value;
   const read = await readNoteIssues(page, WORKER_ORIGIN, access);
-  const { issues } = (await read.json()) as { issues: { seed: { note: string }; attachments?: { name: string }[] }[] };
-  const note = issues.find((issue) => issue.seed.note === 'Deux captures');
+  const { issues } = (await read.json()) as { issues: { note: { text: string }; attachments?: { name: string }[] }[] };
+  const note = issues.find((issue) => issue.note.text === 'Deux captures');
   expect(note?.attachments?.map((file) => file.name)).toEqual(['page.png', 'area.png']);
 });

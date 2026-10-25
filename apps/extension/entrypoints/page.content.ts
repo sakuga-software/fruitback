@@ -19,7 +19,7 @@ import { version as VERSION } from '../package.json';
  *
  * **`world: 'MAIN'` is not a preference here, it is the ticket.** A content script in the isolated
  * world shares the DOM but not the properties page scripts put on it, and everything that gives a
- * seed its `source` is exactly that: `readReactSource` finds the fiber under a `__reactFiber$…` key,
+ * note its `source` is exactly that: `readReactSource` finds the fiber under a `__reactFiber$…` key,
  * and react-grab scans `__reactContainer$` / `__reactInternalInstance$` and installs itself as
  * `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`. From the isolated world all of it is invisible and
  * the hook is installed on a global React never reads — so the widget would appear to work and

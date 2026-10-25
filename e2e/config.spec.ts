@@ -115,7 +115,7 @@ test('a stage hidden before the pins arrive is never drawn', async ({ page }) =>
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
   // The preference is read before the first render, not applied after it. Waiting on the status
-  // rather than on `waitForPins` is the point of the test: the worker still returns the seed — the
+  // rather than on `waitForPins` is the point of the test: the worker still returns the note — the
   // status says so — and the widget draws nothing.
   await page.reload();
   await expect(status(page)).toHaveText(/^1 pin$/);

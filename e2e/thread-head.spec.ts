@@ -24,14 +24,14 @@ async function rewriteReads(page: Page, read: Read): Promise<void> {
         stage: string;
         updatedAt: string;
         comments?: unknown[];
-        seed: Record<string, unknown>;
+        note: Record<string, unknown>;
       }[];
     };
     for (const issue of body.issues) {
       issue.stateName = read.stateName;
       issue.stage = 'progress';
       issue.updatedAt = new Date(Date.now() - 21 * 60_000).toISOString();
-      issue.seed.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
+      issue.note.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
       issue.comments = Array.from({ length: read.replies }, (_, index) => ({
         id: `reply-${index}`,
         body: 'On essaie la variante crème dans le prochain build.',

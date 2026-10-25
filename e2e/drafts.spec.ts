@@ -74,15 +74,15 @@ test('notes kept for later outlive a reload, and go in one request from the list
   await list.getByRole('button', { name: 'Send the 2 notes' }).click();
   await expect(list.getByText('2 notes sent')).toBeVisible();
 
-  // One request, an array of the two seeds.
+  // One request, an array of the two notes.
   expect(posted).toHaveLength(1);
-  const body = JSON.parse(posted[0] ?? '') as { note: string }[];
-  expect(body.map((seed) => seed.note)).toEqual(['Gardée : le prix est faux', 'Gardée : le bouton est trop petit']);
+  const body = JSON.parse(posted[0] ?? '') as { text: string }[];
+  expect(body.map((note) => note.text)).toEqual(['Gardée : le prix est faux', 'Gardée : le bouton est trop petit']);
 
   // The pins are the worker's now, with a state, and the drafts are gone, reload or not.
   await expect(drafts).toHaveCount(0);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
-  expect((await storedNotes(page)).map((seed) => seed.note).sort()).toEqual(
+  expect((await storedNotes(page)).map((note) => note.text).sort()).toEqual(
     ['Gardée : le bouton est trop petit', 'Gardée : le prix est faux'].sort(),
   );
   await page.reload();

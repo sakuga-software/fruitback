@@ -34,10 +34,10 @@ function mountWithCta(): MountedPage {
   return page;
 }
 
-/** The seed the fixture plants, re-pointed at the button this page actually has. */
+/** The note the fixture plants, re-pointed at the button this page actually has. */
 function issueOnCta(overrides: Parameters<typeof noteIssueFixture>[0] = {}) {
   return noteIssueFixture({
-    seed: noteFixture({
+    note: noteFixture({
       anchor: {
         selector: '[data-testid="checkout-cta"]',
         tag: 'button',
@@ -121,7 +121,7 @@ describe('createOverlay', () => {
     overlay.render([sent, draft]);
 
     const [first, second] = [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')];
-    // The control: the same seed, sent, wears its stage.
+    // The control: the same note, sent, wears its stage.
     assert.equal(first?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-done)');
     assert.equal(first?.dataset.fruitbackDraft, undefined);
     assert.equal(second?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-color-text-muted)');
@@ -187,7 +187,7 @@ describe('createOverlay', () => {
       noteIssueFixture({
         id: `issue_${n}`,
         stage,
-        seed: { ...issueOnCta().seed, id: `sd_${n}`, note: `Note text ${n}` },
+        note: { ...issueOnCta().note, id: `sd_${n}`, text: `Note text ${n}` },
       });
     const issues = [note(1, 'new'), note(2, 'progress'), note(3, 'done')];
     overlay.render(issues);
@@ -253,7 +253,7 @@ describe('createOverlay', () => {
 
     overlay.render([
       issueOnCta({
-        seed: noteFixture({
+        note: noteFixture({
           anchor: { selector: '#gone', tag: 'button', bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 } },
         }),
       }),
@@ -337,11 +337,11 @@ describe('createOverlay', () => {
       noteIssueFixture({
         id: `issue_${n}`,
         identifier: `SKG-${n}`,
-        seed: { ...issueOnCta().seed, id: `sd_cta_${n}`, note: `Note ${n}` },
+        note: { ...issueOnCta().note, id: `sd_cta_${n}`, text: `Note ${n}` },
       });
     const aside = noteIssueFixture({
       id: 'issue_aside',
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_aside',
         anchor: { selector: '#aside', tag: 'p', text: 'À côté', bounds: { xPct: 40, yPct: 20, wPct: 10, hPct: 2 } },
       }),
@@ -380,7 +380,7 @@ describe('createOverlay', () => {
     const on = (id: string, selector: string, tag: string) =>
       noteIssueFixture({
         id: `issue_${id}`,
-        seed: noteFixture({ id, anchor: { selector, tag, bounds: { xPct: 1, yPct: 1, wPct: 1, hPct: 1 } } }),
+        note: noteFixture({ id, anchor: { selector, tag, bounds: { xPct: 1, yPct: 1, wPct: 1, hPct: 1 } } }),
       });
     overlay.render([on('sd_top', '#top', 'p'), on('sd_thin', '#thin', 'i')]);
     const tip = (id: string) => {
@@ -425,7 +425,7 @@ describe('createOverlay', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
-    assert.equal(overlay.mark(issueOnCta().seed.id), true);
+    assert.equal(overlay.mark(issueOnCta().note.id), true);
     assert.ok(page.document.querySelector('[data-fruitback-pin]')?.hasAttribute('data-fruitback-marked'));
 
     const rules = (page.document.querySelector('style')?.textContent ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -671,17 +671,17 @@ describe('createOverlay', () => {
   });
 
   it('shows the selector when asked, then the component and the file, and the selector alone without them (FRU-256, FRU-304, FRU-349)', () => {
-    const lineFor = (source: NoteIssue['seed']['source']) => {
+    const lineFor = (source: NoteIssue['note']['source']) => {
       const page = mountWithCta();
       const issue = issueOnCta();
-      const { source: _dropped, ...seed } = issue.seed;
+      const { source: _dropped, ...note } = issue.note;
       overlay = createOverlay({ document: page.document, showSelectors: true });
-      overlay.render([{ ...issue, seed: source === undefined ? seed : { ...seed, source } }]);
+      overlay.render([{ ...issue, note: source === undefined ? note : { ...note, source } }]);
       (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
       // The selector the note carries, always first.
       assert.equal(
         page.document.querySelector('.fruitback-thread-source > .fruitback-thread-selector')?.textContent,
-        issue.seed.anchor.selector,
+        issue.note.anchor.selector,
       );
       const line = page.document.querySelector('.fruitback-thread-component');
       const text = line === null ? null : line.textContent;
@@ -716,8 +716,8 @@ describe('createOverlay', () => {
     assert.doesNotMatch(thread().textContent ?? '', /checkout-cta"\]/);
     assert.doesNotMatch(thread().textContent ?? '', /CheckoutCta|checkout-cta\.tsx/);
     // The note keeps them: only the thread hides them.
-    assert.equal(issue.seed.anchor.selector, '[data-testid="checkout-cta"]');
-    assert.equal(issue.seed.source?.component, 'CheckoutCta');
+    assert.equal(issue.note.anchor.selector, '[data-testid="checkout-cta"]');
+    assert.equal(issue.note.source?.component, 'CheckoutCta');
 
     overlay.showSelectors(true);
     assert.equal(thread().querySelector('.fruitback-thread-selector')?.textContent, '[data-testid="checkout-cta"]');
@@ -754,9 +754,9 @@ describe('createOverlay', () => {
   it('draws no empty box for a note with no source while the selector is hidden (FRU-349)', () => {
     const page = mountWithCta();
     const issue = issueOnCta();
-    const { source: _dropped, ...seed } = issue.seed;
+    const { source: _dropped, ...note } = issue.note;
     overlay = createOverlay({ document: page.document });
-    overlay.render([{ ...issue, seed }]);
+    overlay.render([{ ...issue, note }]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     assert.equal(page.document.querySelector('.fruitback-thread-source'), null);
@@ -832,7 +832,7 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     const onScreen = issueOnCta();
     const gone = issueOnCta({
-      seed: noteFixture({
+      note: noteFixture({
         id: 'sd_gone',
         anchor: { selector: '#nowhere', tag: 'button', bounds: { xPct: 90, yPct: 90, wPct: 2, hPct: 1 } },
       }),
@@ -1019,8 +1019,8 @@ describe('a note chosen in the list of the page (FRU-308)', () => {
   function two(page: MountedPage): Overlay {
     const made = createOverlay({ document: page.document });
     made.render([
-      issueOnCta({ seed: { ...issueOnCta().seed, id: 'sd_one' } }),
-      issueOnCta({ seed: { ...issueOnCta().seed, id: 'sd_two' } }),
+      issueOnCta({ note: { ...issueOnCta().note, id: 'sd_one' } }),
+      issueOnCta({ note: { ...issueOnCta().note, id: 'sd_two' } }),
     ]);
 
     return made;
@@ -1329,8 +1329,8 @@ describe('the reading direction and the dates (FRU-38)', () => {
 describe('the detached notes', () => {
   const orphanIssue = (note: string) =>
     noteIssueFixture({
-      seed: noteFixture({
-        note,
+      note: noteFixture({
+        text: note,
         anchor: {
           selector: '#gone-for-good',
           // A tag this page does not have, so even `bounds` — which scores overlap against every
@@ -1373,7 +1373,7 @@ describe('the detached notes', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([
       noteIssueFixture({
-        seed: noteFixture({
+        note: noteFixture({
           anchor: {
             selector: '#not-here',
             tag: 'button',
@@ -1441,7 +1441,7 @@ describe('the detached list is the widget’s own DOM', () => {
     overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
     overlay.render([
       noteIssueFixture({
-        seed: noteFixture({
+        note: noteFixture({
           anchor: {
             selector: '#gone-for-good',
             tag: 'textarea',
@@ -1528,9 +1528,9 @@ describe('the thread and the keyboard (FRU-51)', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([
       noteIssueFixture({
-        seed: noteFixture({
+        note: noteFixture({
           id: 'sd_gone',
-          note: 'Disparu',
+          text: 'Disparu',
           anchor: {
             selector: '#gone',
             tag: 'textarea',
@@ -1559,9 +1559,9 @@ describe('the thread and the keyboard (FRU-51)', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([
       noteIssueFixture({
-        seed: noteFixture({
+        note: noteFixture({
           id: 'sd_gone',
-          note: 'Disparu',
+          text: 'Disparu',
           anchor: {
             selector: '#gone',
             tag: 'textarea',
@@ -1588,9 +1588,9 @@ describe('the thread and the keyboard (FRU-51)', () => {
     const page = mountWithCta();
     const detached = (id: string, note: string) =>
       noteIssueFixture({
-        seed: noteFixture({
+        note: noteFixture({
           id,
-          note,
+          text: note,
           anchor: {
             selector: `#${id}`,
             tag: 'textarea',
@@ -1751,7 +1751,7 @@ describe('the handle of a bubble (FRU-420)', () => {
     overlay = createOverlay({ document: page.document });
     const issue = issueOnCta();
     overlay.render([issue]);
-    assert.equal(overlay.select(issue.seed.id, home), true);
+    assert.equal(overlay.select(issue.note.id, home), true);
     assert.ok(home.querySelector('[data-fruitback-thread]') !== null);
     assert.equal(home.querySelector('.fruitback-thread-handle'), null);
   });

@@ -15,19 +15,19 @@ const ANCHOR = {
   bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
 };
 
-function note(overrides: Parameters<typeof noteIssueFixture>[0] = {}, seed: Parameters<typeof noteFixture>[0] = {}) {
+function note(overrides: Parameters<typeof noteIssueFixture>[0] = {}, fields: Parameters<typeof noteFixture>[0] = {}) {
   return noteIssueFixture({
     identifier: 'FB-12',
     stateName: 'To do',
     ...overrides,
-    seed: noteFixture({
-      note: 'The price is cut off on mobile',
+    note: noteFixture({
+      text: 'The price is cut off on mobile',
       createdAt: '2026-10-06T09:30:00.000Z',
       anchor: ANCHOR,
       // The fixture names a component and no reporter. A note here starts with neither.
       source: undefined,
       reporter: undefined,
-      ...seed,
+      ...fields,
     }),
   });
 }
@@ -97,7 +97,7 @@ describe('the feedback of a page as text (FRU-109)', () => {
 
   it('numbers the notes in the order it was given, with a blank line between them', () => {
     const first = note({ identifier: 'FB-1' });
-    const second = note({ identifier: 'FB-2', stateName: 'Done' }, { note: 'Second' });
+    const second = note({ identifier: 'FB-2', stateName: 'Done' }, { text: 'Second' });
     const lines = text([
       { issue: first, placement: 'found' },
       { issue: second, placement: 'found' },
@@ -130,7 +130,7 @@ describe('the feedback of a page as text (FRU-109)', () => {
   });
 
   it('says so when a note has no text', () => {
-    assert.match(text([{ issue: note({}, { note: '   ' }), placement: 'found' }]), /\n\nNo note\.\n$/);
+    assert.match(text([{ issue: note({}, { text: '   ' }), placement: 'found' }]), /\n\nNo note\.\n$/);
   });
 
   it('gives the picture when the note has one', () => {
@@ -180,7 +180,7 @@ describe('what a reviewer wrote stays inside its quote', () => {
   ].join('\n');
 
   it('quotes every line of a note, whatever the note holds', () => {
-    const output = text([{ issue: note({}, { note: hostile }), placement: 'found' }]);
+    const output = text([{ issue: note({}, { text: hostile }), placement: 'found' }]);
 
     assert.deepEqual(unquoted(output), []);
     // The detector: the same check finds the forged lines when they are not quoted.
@@ -265,7 +265,7 @@ describe('the words of the copied text', () => {
         comments: [{ id: 'c1', body: 'BODY', createdAt: '2026-10-07T08:00:00.000Z' }],
       },
       {
-        note: 'NOTE',
+        text: 'NOTE',
         anchor: { ...ANCHOR, selector: '#SEL', tag: 'TAG', text: 'TEXT' },
         reporter: { name: 'NAME' },
         source: { component: 'COMP', file: 'FILE', line: 4 },
@@ -280,7 +280,7 @@ describe('the words of the copied text', () => {
           {
             issue: note(
               { identifier: 'ID-1', stateName: '' },
-              { note: '', anchor: { ...ANCHOR, selector: '#SEL', tag: 'TAG', text: 'TEXT' } },
+              { text: '', anchor: { ...ANCHOR, selector: '#SEL', tag: 'TAG', text: 'TEXT' } },
             ),
             placement: 'detached',
           },

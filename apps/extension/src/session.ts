@@ -609,7 +609,7 @@ type Issued = {
 /**
  * What the worker answered, parsed rather than cast.
  *
- * The same rule as every seed and every stored site: a body that is not what it claims costs this
+ * The same rule as every note and every stored site: a body that is not what it claims costs this
  * request, never the extension.
  *
  * `refreshToken` stays optional **here** while both call sites require it: `/session/pair` and

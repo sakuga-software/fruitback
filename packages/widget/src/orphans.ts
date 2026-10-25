@@ -127,7 +127,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         .map((issue) => {
           const status = options.statusOf?.(issue);
 
-          return `${issue.seed.id}:${issue.stage}:${status === undefined ? '' : JSON.stringify(status)}`;
+          return `${issue.note.id}:${issue.stage}:${status === undefined ? '' : JSON.stringify(status)}`;
         })
         .join('|');
       if (next === drawn) return;
@@ -179,7 +179,7 @@ function entry(
 ): HTMLElement {
   const item = document.createElement('li');
   item.className = 'fruitback-orphans-item';
-  item.dataset.fruitbackOrphan = issue.seed.id;
+  item.dataset.fruitbackOrphan = issue.note.id;
 
   // The stage of the note, as the pin's shape in the stage's colour — the same vocabulary the page
   // itself uses, which is what a reporter has to be able to match up. The stage is named in the
@@ -233,12 +233,12 @@ function handle(document: Document, issue: NoteIssue): HTMLElement[] {
 }
 
 function excerpt(issue: NoteIssue): string {
-  const line = issue.seed.note
+  const line = issue.note.text
     .split('\n')
     .map((value) => value.trim())
     .find((value) => value.length > 0);
 
-  if (line === undefined) return `<${issue.seed.anchor.tag}> · ${issue.seed.page.path}`;
+  if (line === undefined) return `<${issue.note.anchor.tag}> · ${issue.note.page.path}`;
 
   return line.length > EXCERPT_MAX_LENGTH ? `${line.slice(0, EXCERPT_MAX_LENGTH - 1)}…` : line;
 }

@@ -93,7 +93,7 @@ describe('the command on the channel of the page', () => {
 describe('the commands of the side panel (FRU-299)', () => {
   const PANEL = { id: ID, url: `${ORIGIN}sidepanel.html` };
   const NOTE = {
-    id: 'seed-1',
+    id: 'note-1',
     number: 3,
     stage: 'todo',
     note: 'Could the title mention Bordeaux?',
@@ -108,13 +108,13 @@ describe('the commands of the side panel (FRU-299)', () => {
 
   it('are taken from the side panel, with the note and the text they carry', () => {
     assert.deepEqual(acceptedRequest(tabCommand('notes'), PANEL, ID, ORIGIN), { command: 'notes' });
-    assert.deepEqual(acceptedRequest(tabCommand('focus-note', { note: 'seed-1' }), PANEL, ID, ORIGIN), {
+    assert.deepEqual(acceptedRequest(tabCommand('focus-note', { note: 'note-1' }), PANEL, ID, ORIGIN), {
       command: 'focus-note',
-      note: 'seed-1',
+      note: 'note-1',
     });
-    assert.deepEqual(acceptedRequest(tabCommand('reply', { note: 'seed-1', body: 'Merci' }), PANEL, ID, ORIGIN), {
+    assert.deepEqual(acceptedRequest(tabCommand('reply', { note: 'note-1', body: 'Merci' }), PANEL, ID, ORIGIN), {
       command: 'reply',
-      note: 'seed-1',
+      note: 'note-1',
       body: 'Merci',
     });
   });
@@ -123,7 +123,7 @@ describe('the commands of the side panel (FRU-299)', () => {
   it('are refused when a page sends them', () => {
     const page = { id: ID, tab: { id: 4 }, url: 'https://acme.dev/' };
     for (const command of ['notes', 'focus-note', 'mark-note', 'reply'] as const) {
-      assert.equal(acceptedRequest(tabCommand(command, { note: 'seed-1', body: 'x' }), page, ID, ORIGIN), undefined);
+      assert.equal(acceptedRequest(tabCommand(command, { note: 'note-1', body: 'x' }), page, ID, ORIGIN), undefined);
     }
   });
 
@@ -146,24 +146,24 @@ describe('the commands of the side panel (FRU-299)', () => {
   });
 
   it('take a verdict from the side panel, and only one of the two the worker knows (FRU-300)', () => {
-    assert.deepEqual(acceptedRequest(tabCommand('check', { note: 'seed-1', verdict: 'wrong' }), PANEL, ID, ORIGIN), {
+    assert.deepEqual(acceptedRequest(tabCommand('check', { note: 'note-1', verdict: 'wrong' }), PANEL, ID, ORIGIN), {
       command: 'check',
-      note: 'seed-1',
+      note: 'note-1',
       verdict: 'wrong',
     });
     assert.deepEqual(
       acceptedRequest(
-        { type: 'fruitback-tab-command', command: 'check', note: 'seed-1', verdict: 'stage' },
+        { type: 'fruitback-tab-command', command: 'check', note: 'note-1', verdict: 'stage' },
         PANEL,
         ID,
         ORIGIN,
       ),
-      { command: 'check', note: 'seed-1' },
+      { command: 'check', note: 'note-1' },
     );
     // A page that forges the command, through the bridge of its tab: refused.
     assert.equal(
       acceptedRequest(
-        tabCommand('check', { note: 'seed-1', verdict: 'fixed' }),
+        tabCommand('check', { note: 'note-1', verdict: 'fixed' }),
         { id: ID, tab: { id: 4 }, url: 'https://acme.dev/' },
         ID,
         ORIGIN,
@@ -176,10 +176,10 @@ describe('the commands of the side panel (FRU-299)', () => {
         kind: 'command',
         id: 'c1',
         command: 'check',
-        note: 'seed-1',
+        note: 'note-1',
         verdict: 'fixed',
       }),
-      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'check', note: 'seed-1', verdict: 'fixed' },
+      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'check', note: 'note-1', verdict: 'fixed' },
     );
     assert.equal(commandTimeout('check'), 20_000);
   });
@@ -196,10 +196,10 @@ describe('the commands of the side panel (FRU-299)', () => {
         kind: 'command',
         id: 'c1',
         command: 'reply',
-        note: 'seed-1',
+        note: 'note-1',
         body: 'Merci',
       }),
-      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply', note: 'seed-1', body: 'Merci' },
+      { channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply', note: 'note-1', body: 'Merci' },
     );
     assert.deepEqual(
       parseBridgeMessage({ channel: CHANNEL, kind: 'command', id: 'c1', command: 'reply', note: 7, body: {} }),
@@ -293,13 +293,13 @@ describe('the commands of the side panel (FRU-299)', () => {
 
   it('read an event of the widget: read again, or open a note', () => {
     assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE }), {});
-    assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE, open: 'seed-1' }), { open: 'seed-1' });
+    assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE, open: 'note-1' }), { open: 'note-1' });
     assert.deepEqual(panelEvent({ type: PANEL_EVENT_TYPE, open: 'x'.repeat(101) }), {});
     assert.equal(panelEvent({ type: 'something-else' }), undefined);
-    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'notes-changed', open: 'seed-1', extra: 1 }), {
+    assert.deepEqual(parseBridgeMessage({ channel: CHANNEL, kind: 'notes-changed', open: 'note-1', extra: 1 }), {
       channel: CHANNEL,
       kind: 'notes-changed',
-      open: 'seed-1',
+      open: 'note-1',
     });
   });
 });

@@ -54,8 +54,8 @@ export const reactGrabEngine: CaptureEngine = {
       // to supply a name someone can search for. `sourceFromContext` holds the rule.
       return sourceFromContext(await getElementContext(element));
     } catch {
-      // A production build with no source metadata, or a page React never touched. A seed without a
-      // `source` is a perfectly good seed; failing the capture over it would not be.
+      // A production build with no source metadata, or a page React never touched. A note without a
+      // `source` is a perfectly good note; failing the capture over it would not be.
       return undefined;
     }
   },

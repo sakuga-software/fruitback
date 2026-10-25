@@ -377,7 +377,7 @@ function siteRow(
   const here = path !== undefined && note.page.path === path;
   const row = make(document, 'li', 'panel-row');
   row.classList.add('site-row');
-  row.dataset.note = note.seed;
+  row.dataset.note = note.note;
   const head = make(document, 'button', 'panel-row-head');
   head.type = 'button';
   head.addEventListener('click', () => handlers.onSiteNote(note));
@@ -410,7 +410,7 @@ function siteRow(
     links.append(show);
   } else {
     const show = make(document, 'a', 'site-row-ref', t('Show on the page'));
-    show.href = noteLink(note.page.url, note.seed);
+    show.href = noteLink(note.page.url, note.note);
     show.target = '_blank';
     // The page of the note gets no handle on the panel, and no address of the extension.
     show.rel = 'noreferrer';

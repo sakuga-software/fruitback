@@ -40,9 +40,9 @@ test('the structural path alone would have landed on the neighbouring card', asy
     const url = new URL(window.location.href);
     const response = await fetch(`${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`);
     const { issues } = (await response.json()) as {
-      issues: { seed: { anchor: { selector: string; domPath?: string } } }[];
+      issues: { note: { anchor: { selector: string; domPath?: string } } }[];
     };
-    const anchor = issues[0]?.seed.anchor;
+    const anchor = issues[0]?.note.anchor;
     const bySelector = document.querySelectorAll(anchor?.selector ?? '');
     const byPath = document.querySelectorAll(anchor?.domPath ?? '');
     const truth = document.querySelector('[data-testid="card-latte"] .add');
@@ -61,7 +61,7 @@ test('the structural path alone would have landed on the neighbouring card', asy
 
 test('an element that is gone never leaves a pin that claims to be sure', async ({ page }) => {
   // Deleting the Latte card slides Mocha into the slot it left: same tag, same "Ajouter", same box.
-  // Nothing a seed stores separates them, so the pin does land on Mocha — and says it is a guess.
+  // Nothing a note stores separates them, so the pin does land on Mocha — and says it is a guess.
   // That is the whole point of `confident`: the degradation is visible instead of silent.
   await openPlayground(page, 'orphan');
   const latteButton = page.locator('[data-testid="card-latte"] .add');
