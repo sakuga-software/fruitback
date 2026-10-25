@@ -7,7 +7,7 @@ import { accountStoreFor, adminLinksFor, createPairingCommand, noteIndexFor } fr
 import { type AdminLinkOutcome, type AdminLinks, adminLinkFor } from './first-admin.ts';
 import type { IndexedNote, NoteIndex } from './notes-index.ts';
 import { CACHE_TTL_MS } from './cache.ts';
-import { pairingLink } from './pair-page.ts';
+import { pairingLink, pairsByCode } from './pair-page.ts';
 import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
 import { copyNotesFile, copySqliteFiles } from './postgres-stores.ts';
 import type { ForgetSelector, ForgottenNote, NoteStore } from './store.ts';
@@ -164,6 +164,10 @@ export async function runPair(
 
   const config = readConfig(env);
   if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
+  // `POST /session/pair` refuses every code there: printed, a code would read as a code that works.
+  if (!pairsByCode(config.config.publicUrl)) {
+    return { ok: false, lines: ['This worker is Fruitback Cloud: it pairs no extension by a code (FRU-325)'] };
+  }
 
   // With a database, the workspaces are in it, and FRUITBACK_CLIENTS is refused (FRU-225, FRU-277).
   const accounts = heldAccounts ?? accountStoreFor(config.config);

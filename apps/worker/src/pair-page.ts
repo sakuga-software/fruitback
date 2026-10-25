@@ -13,6 +13,19 @@ import { PAIRING_TTL_SECONDS } from './session.ts';
 
 export const PAIR_PATH = '/pair';
 
+/** The host of the worker of Fruitback Cloud. `apps/console/app/instance.ts` names the same host. */
+export const CLOUD_API_HOST = 'api.fruitback.com';
+
+/**
+ * Whether this worker pairs an extension by a code (FRU-325). Fruitback Cloud does not: its console
+ * connects an extension by the sign-in of the popup (FRU-313), and nothing there mints a code. The host
+ * of `FRUITBACK_PUBLIC_URL` decides, as the host of the worker decides in the console. A self-hosted
+ * worker pairs: the extension of the store signs in to the Cloud alone.
+ */
+export function pairsByCode(publicUrl: string | undefined): boolean {
+  return publicUrl === undefined || new URL(publicUrl).hostname !== CLOUD_API_HOST;
+}
+
 /** The link an operator sends. `endpoint` is the public address of the worker, with no slash at the end. */
 export function pairingLink(endpoint: string, code: string): string {
   return `${endpoint}${PAIR_PATH}#${code}`;

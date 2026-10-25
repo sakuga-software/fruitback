@@ -14,6 +14,7 @@ import { createPgDatabase } from './postgres.ts';
 import { createPgliteDatabase } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
+import { CLOUD_API_HOST } from './pair-page.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
 const SECRET = 'a-worker-secret-of-exactly-enough';
@@ -613,5 +614,53 @@ describe('the pair command, on a typo', () => {
     const outcome = await pair(['--subject', member, '--name', 'Alice Martin', '--email', 'alice@acme.dev'], envWith());
 
     assert.ok(outcome.ok, outcome.lines.join('\n'));
+  });
+});
+
+/**
+ * The Cloud pairs no extension by a code (FRU-325): its console connects one by the sign-in of the
+ * popup. Each case has its control, a worker of another host that still pairs.
+ */
+describe('pairing by a code, on Fruitback Cloud (FRU-325)', () => {
+  const cloud = () => envWith({ FRUITBACK_PUBLIC_URL: 'https://api.fruitback.com' });
+  const selfHosted = () => envWith({ FRUITBACK_PUBLIC_URL: 'https://fruitback.acme.dev' });
+
+  it('has no pairing page there', async () => {
+    const page = (env: WorkerEnv) =>
+      handleRequest(new Request('https://worker.test/pair'), env, contextFor(env, '198.51.100.125'));
+
+    assert.equal((await page(cloud())).status, 404);
+    assert.equal((await page(selfHosted())).status, 200);
+  });
+
+  it('spends no code there, even a code that is valid', async () => {
+    assert.equal((await call(cloud(), '/session/pair', { code: await codeFor() })).status, 404);
+    assert.equal((await call(selfHosted(), '/session/pair', { code: await codeFor() })).status, 200);
+  });
+
+  it('still refreshes a session that was paired before', async () => {
+    const paired = (await (await call(selfHosted(), '/session/pair', { code: await codeFor() })).json()) as {
+      refreshToken: string;
+    };
+
+    assert.equal((await call(cloud(), '/session/refresh', { refreshToken: paired.refreshToken })).status, 200);
+  });
+
+  it('knows the Cloud by the host the console knows it by', () => {
+    const instance = readFileSync(new URL('../../console/app/instance.ts', import.meta.url), 'utf8');
+
+    assert.equal(/export const CLOUD_API_HOST = '([^']+)';/.exec(instance)?.[1], CLOUD_API_HOST);
+  });
+
+  it('prints no code from the pair command there', async () => {
+    const refused = await pair(['--subject', member, '--name', 'Alice Martin'], cloud());
+    const minted = await pair(['--subject', member, '--name', 'Alice Martin'], selfHosted());
+
+    const code = /[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}/;
+    assert.equal(refused.ok, false);
+    assert.match(refused.lines.join('\n'), /Fruitback Cloud/);
+    assert.doesNotMatch(refused.lines.join('\n'), code);
+    assert.ok(minted.ok, minted.lines.join('\n'));
+    assert.match(minted.lines.join('\n'), code);
   });
 });

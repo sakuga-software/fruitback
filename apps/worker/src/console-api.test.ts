@@ -125,6 +125,24 @@ describe('the console API (FRU-99)', () => {
   }
 });
 
+describe('the pairing code of « Connect this browser », on Fruitback Cloud (FRU-325)', () => {
+  // The control is a worker of another host: the same call mints a code there.
+  for (const [publicUrl, status] of [
+    ['https://api.fruitback.com', 404],
+    ['https://api.fruitback.test', 201],
+  ] as const) {
+    it(`answers ${status} on a worker at ${publicUrl}`, async () => {
+      const env = await envWith({ env: { FRUITBACK_PUBLIC_URL: publicUrl } });
+      const alice = await signIn(env, 'alice@acme.dev');
+      const id = await workspaceOf(env, alice.token);
+
+      const minted = await call(env, 'POST', `/console/workspaces/${id}/connect`, { token: alice.token, body: {} });
+
+      assert.equal(minted.status, status, await minted.clone().text());
+    });
+  }
+});
+
 describe('from a link in a mailbox to a note on the page (FRU-99, FRU-100)', () => {
   it('signs in, creates a workspace, adds a site, connects a browser, and that browser writes and reads there', async () => {
     const env = await envWith();
