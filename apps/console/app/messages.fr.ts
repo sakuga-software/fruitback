@@ -906,6 +906,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You no longer sign in with {provider}. Your account and its notes stay.':
     'Vous ne vous connectez plus avec {provider}. Votre compte et ses notes restent.',
   'Link {provider}': 'Lier {provider}',
+  // FRU-415: a provider of another address, confirmed on the way back.
+  '{provider} gave no address for that account. Fruitback links only an account whose address {provider} verified. Add one at {provider}, then link again.':
+    '{provider} n’a donné aucune adresse pour ce compte. Fruitback ne lie qu’un compte dont {provider} a vérifié l’adresse. Ajoutez-en une chez {provider}, puis liez à nouveau.',
+  'The address of this {provider} account is the one of another Fruitback account. Fruitback never joins two accounts: link it from that account, or choose another {provider} account.':
+    'L’adresse de ce compte {provider} est celle d’un autre compte Fruitback. Fruitback ne réunit jamais deux comptes : liez-le depuis cet autre compte, ou choisissez un autre compte {provider}.',
+  'A {provider} account is already linked here. Unlink it first, then link the other one.':
+    'Un compte {provider} est déjà lié ici. Déliez-le d’abord, puis liez l’autre.',
+  'The link of {provider} waited too long, or was answered in another tab. Link {provider} again.':
+    'La liaison de {provider} a trop attendu, ou a reçu une réponse dans un autre onglet. Liez {provider} à nouveau.',
+  'Link the {provider} account {email} to your Fruitback account?':
+    'Lier le compte {provider} {email} à votre compte Fruitback ?',
+  'It will open this account, as your email link does. Fruitback sends a message to {account} to say so.':
+    'Il ouvrira ce compte, comme votre lien par e-mail. Fruitback envoie un message à {account} pour le dire.',
+  'Link this account': 'Lier ce compte',
   'Console · {browser}': 'Console · {browser}',
   // My account, the browsers of the extension (FRU-249).
   'Extension · {browser}': 'Extension · {browser}',

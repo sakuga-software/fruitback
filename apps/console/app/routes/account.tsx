@@ -5,13 +5,17 @@ import {
   type ExtensionBrowser,
   LINKABLE,
   type Linkable,
+  type PendingLink,
   type SignInMethods,
   call,
+  cancelLink,
+  confirmLink,
   consoleSessions,
   endConsoleSession,
   endExtensionBrowser,
   extensionBrowsers,
   linkAddress,
+  pendingLink,
   renameMe,
   saveLanguage,
   signInMethods,
@@ -78,10 +82,22 @@ const LINK_PROBLEMS: Readonly<Record<string, string>> = {
     '{provider} was not linked. If {provider} has not verified the address of that account, verify it there. Then link again.',
   ),
   identity_required: msg('Your session ended before {provider} was linked. Sign in, then link again.'),
+  // FRU-415: a provider of another address is linked, on conditions that the worker reads.
+  email_not_found: msg(
+    '{provider} gave no address for that account. Fruitback links only an account whose address {provider} verified. Add one at {provider}, then link again.',
+  ),
+  email_already_used: msg(
+    'The address of this {provider} account is the one of another Fruitback account. Fruitback never joins two accounts: link it from that account, or choose another {provider} account.',
+  ),
+  provider_already_linked: msg(
+    'A {provider} account is already linked here. Unlink it first, then link the other one.',
+  ),
+  link_expired: msg('The link of {provider} waited too long, or was answered in another tab. Link {provider} again.'),
 };
 /** A code of a failure on the way, not of a refusal: trying again can work. */
 const LINK_FAILURES: ReadonlySet<string> = new Set([
   'internal_server_error',
+  'link_not_started',
   'unable_to_get_user_info',
   'invalid_code',
 ]);
@@ -154,7 +170,7 @@ export default function Account() {
 
   // The way back of a link: `?linked=<provider>` or `?error=<code>`, said once, then taken away.
   const [params, setParams] = useSearchParams();
-  const [linked] = useState(() => params.get('linked'));
+  const [linked, setLinked] = useState(() => params.get('linked'));
   // The provider of a link that was refused (FRU-416): it stays with its sentence until the next gesture.
   const [linkError, setLinkError] = useState(() => {
     const code = params.get('error');
@@ -162,8 +178,47 @@ export default function Account() {
     return code === null ? null : { code, provider: params.get('provider') };
   });
   useEffect(() => {
-    if (params.has('linked') || params.has('error') || params.has('provider')) setParams({}, { replace: true });
+    if (params.has('linked') || params.has('error') || params.has('provider') || params.has('confirm')) {
+      setParams({}, { replace: true });
+    }
   }, [params, setParams]);
+
+  // FRU-415: `?confirm=<provider>`, a link that came back from the provider and that the worker keeps
+  // until the person says yes. The question names the provider account the worker read there.
+  const [question, setQuestion] = useState<PendingLink | 'reading' | undefined>(() =>
+    (LINKABLE as readonly (string | null)[]).includes(params.get('confirm')) ? 'reading' : undefined,
+  );
+  const [answering, setAnswering] = useState(false);
+  const [cancelled, setCancelled] = useState<Linkable | undefined>();
+  const asked = useRef(false);
+  useEffect(() => {
+    if (question !== 'reading' || asked.current) return;
+    asked.current = true;
+    const provider = params.get('confirm') as Linkable;
+    void pendingLink().then((read) => {
+      if (read.ok && read.data !== 'none') return setQuestion(read.data);
+      setQuestion(undefined);
+      setLinkError({ code: read.ok ? 'link_expired' : 'internal_server_error', provider });
+    });
+  }, [question, params]);
+
+  async function answerLink(yes: boolean) {
+    if (typeof question !== 'object' || answering) return;
+    const { provider } = question;
+    setAnswering(true);
+    const answer = yes ? await confirmLink() : await cancelLink();
+    setAnswering(false);
+    setQuestion(undefined);
+    if (!yes) {
+      setCancelled(provider);
+    } else if (answer.ok) {
+      setLinked(provider);
+    } else {
+      // Own keys only (`linkProblem`): the code is read in `LINK_PROBLEMS`, never shown as written.
+      setLinkError({ code: answer.status === 404 ? 'link_expired' : answer.error, provider });
+    }
+    await readMethods();
+  }
   const [unlinkStuck, setUnlinkStuck] = useState<{ provider: Linkable; problem: string } | undefined>();
 
   async function unlink(provider: Linkable) {
@@ -352,6 +407,21 @@ export default function Account() {
               <Problem>{linkProblem(linkError.code, linkError.provider, me.account.email)}</Problem>
             </div>
           )}
+          {cancelled === undefined ? null : (
+            <p role="status" className="mb-[12px] text-small text-muted">
+              {t('{provider} was not linked.', { provider: PROVIDER_NAMES[cancelled] })}
+            </p>
+          )}
+          {question === 'reading' ? <p className="mb-[12px] text-small text-muted">{t('Checking…')}</p> : null}
+          {typeof question === 'object' ? (
+            <LinkQuestion
+              provider={PROVIDER_NAMES[question.provider]}
+              email={question.email}
+              account={me.account.email}
+              answering={answering}
+              onAnswer={(yes) => void answerLink(yes)}
+            />
+          ) : null}
           {/* The three rows are drawn before the worker answers, so nothing under them moves when it does. */}
           <ul className="border-t border-line text-body">
             <Row title={t('Email link')} detail={me.account.email}>
@@ -387,10 +457,13 @@ export default function Account() {
                     />
                   ) : null}
                   {known?.linked === false ? (
-                    // An outlined button of 40 px, as the mockup draws it, that leads to the worker.
-                    <Button tone="outline" href={linkAddress(provider, workspace.id)}>
-                      {t('Link {provider}', { provider: named })}
-                    </Button>
+                    // An outlined button of 40 px, as the mockup draws it, that leads to the worker. A
+                    // form: the worker starts a link on a `POST` of the console only (FRU-415).
+                    <form method="post" action={linkAddress(provider, workspace.id)}>
+                      <Button tone="outline" type="submit">
+                        {t('Link {provider}', { provider: named })}
+                      </Button>
+                    </form>
                   ) : null}
                 </Row>
               );
@@ -572,6 +645,52 @@ function SectionTitle({ id, children }: { id: string; children: string }) {
 /** What a section is for, under its title. */
 function SectionHelp({ children }: { children: string }) {
   return <p className="mt-[4px] mb-[12px] text-small text-muted">{children}</p>;
+}
+
+/**
+ * The question of a link that came back from the provider (FRU-415): it names the provider account
+ * that the worker read there, and nothing is linked before « Link this account ». It is asked on the
+ * way back, and not before the provider: only the provider knows which of its accounts the person
+ * chooses. The worker sends an alert to the address of the account after the link.
+ */
+function LinkQuestion({
+  provider,
+  email,
+  account,
+  answering,
+  onAnswer,
+}: {
+  provider: string;
+  email: string;
+  account: string;
+  answering: boolean;
+  onAnswer: (yes: boolean) => void;
+}) {
+  useLocale();
+
+  return (
+    <section
+      aria-labelledby="link-question"
+      className="mb-[12px] rounded-[12px] border border-line p-[16px] [overflow-wrap:anywhere]"
+    >
+      <p id="link-question" className="text-body leading-auto font-semibold">
+        {t('Link the {provider} account {email} to your Fruitback account?', { provider, email })}
+      </p>
+      <p className="mt-[4px] text-small text-muted">
+        {t('It will open this account, as your email link does. Fruitback sends a message to {account} to say so.', {
+          account,
+        })}
+      </p>
+      <div className="mt-[12px] flex flex-wrap gap-[8px]">
+        <Button disabled={answering} onClick={() => onAnswer(true)}>
+          {t('Link this account')}
+        </Button>
+        <Button tone="quiet" disabled={answering} onClick={() => onAnswer(false)}>
+          {t('Cancel')}
+        </Button>
+      </div>
+    </section>
+  );
 }
 
 /**

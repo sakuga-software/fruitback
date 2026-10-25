@@ -67,6 +67,13 @@ type Stubbed = {
   /** A held answer refuses the name: the worker says `invalid-name` when it is released. */
   nameWaitsRefused?: boolean;
   release?: () => void;
+  /**
+   * The link that came back from the provider and waits (FRU-415): what `GET /console/me/sign-in/pending`
+   * answers. `undefined`: none, `404`.
+   */
+  pending?: { provider: string; email: string };
+  /** What the worker answers to « Link this account » when it refuses, by its code. */
+  confirmRefuses?: string;
   sent: string[];
   /** The bodies the console sent, by path. */
   bodies: Record<string, unknown>;
@@ -89,6 +96,35 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       return worker.methods === undefined
         ? route.fulfill({ status: 500, json: { error: 'unknown' } })
         : route.fulfill({ json: worker.methods });
+    }
+    // FRU-415: the form of « Link » is a `POST` that the worker answers with the provider, which comes
+    // back to « My account » with a link to confirm. The provider is not called: the round trip is one
+    // redirect here, as the worker writes it on the way back.
+    const starting = /^\/console\/auth\/link\/(\w+)$/.exec(pathname)?.[1];
+    if (starting !== undefined) {
+      worker.sent.push(`${method} ${pathname}`);
+      if (method !== 'POST') return route.fulfill({ status: 405, json: { error: 'method-not-allowed' } });
+      worker.pending = { provider: starting, email: 'ana.perso@gmail.test' };
+
+      return route.fulfill({ status: 303, headers: { Location: `${CONSOLE}/w/w1/account?confirm=${starting}` } });
+    }
+    if (pathname === '/console/me/sign-in/pending') {
+      if (method === 'GET') {
+        return worker.pending === undefined
+          ? route.fulfill({ status: 404, json: { error: 'no-pending-link' } })
+          : route.fulfill({ json: worker.pending });
+      }
+      worker.sent.push(`${method} ${pathname}`);
+      const waiting = worker.pending;
+      worker.pending = undefined;
+      if (waiting === undefined) return route.fulfill({ status: 404, json: { error: 'no-pending-link' } });
+      if (method === 'DELETE') return route.fulfill({ status: 204 });
+      if (worker.confirmRefuses !== undefined) {
+        return route.fulfill({ status: 409, json: { error: worker.confirmRefuses } });
+      }
+      worker.methods = { ...worker.methods, [waiting.provider]: { linked: true } };
+
+      return route.fulfill({ json: { provider: waiting.provider } });
     }
     const provider = /^\/console\/me\/sign-in\/(\w+)$/.exec(pathname)?.[1];
     if (provider !== undefined) {
@@ -268,11 +304,15 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   const detail = ways.nth(1).getByText('Linked', { exact: true });
   expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '13px' });
   expect.soft(await painted(detail, 'color')).toEqual(rgb(MUTED));
-  // A linked provider is unlinked; one that is not is linked, by a navigation to the worker.
+  // A linked provider is unlinked; one that is not is linked, by a form that the worker answers
+  // (FRU-415: a `POST`, which no other page of the site can send with the `Origin` of the console).
   await expect(ways.nth(1).getByRole('button', { name: 'Unlink', exact: true })).toBeVisible();
   await expect(ways.nth(2)).toContainText('Not linked');
-  const link = ways.nth(2).getByRole('link', { name: 'Link Google' });
-  await expect(link).toHaveAttribute('href', 'http://localhost:8788/console/auth/link/google?workspace=w1');
+  const link = ways.nth(2).getByRole('button', { name: 'Link Google' });
+  await expect(link).toHaveAttribute('type', 'submit');
+  const form = ways.nth(2).locator('form');
+  await expect(form).toHaveAttribute('method', 'post');
+  await expect(form).toHaveAttribute('action', 'http://localhost:8788/console/auth/link/google?workspace=w1');
   // An outlined button of 40 px, as the mockup draws « Link Google ».
   expect
     .soft(await styles(link, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight']))
@@ -820,7 +860,7 @@ test('« Unlink » asks twice, and the last way to sign in stays and says why', 
   worker.unlinkRefuses = undefined;
   await github.getByRole('button', { name: 'Unlink GitHub' }).click();
   await expect(github).toContainText('Not linked');
-  await expect(github.getByRole('link', { name: 'Link GitHub' })).toBeVisible();
+  await expect(github.getByRole('button', { name: 'Link GitHub' })).toBeVisible();
   expect(worker.sent.filter((each) => each.includes('/me/sign-in/'))).toEqual([
     'DELETE /console/me/sign-in/github',
     'DELETE /console/me/sign-in/github',
@@ -868,6 +908,20 @@ test('the way back of a link says what happened, once', async ({ page }) => {
       'provider=github&error=identity_required',
       'Your session ended before GitHub was linked. Sign in, then link again.',
     ],
+    // FRU-415: the conditions of a provider of another address.
+    [
+      'provider=github&error=email_not_found',
+      'GitHub gave no address for that account. Fruitback links only an account whose address GitHub verified. Add one at GitHub, then link again.',
+    ],
+    [
+      'provider=google&error=email_already_used',
+      'The address of this Google account is the one of another Fruitback account. Fruitback never joins two accounts: link it from that account, or choose another Google account.',
+    ],
+    [
+      'provider=google&error=provider_already_linked',
+      'A Google account is already linked here. Unlink it first, then link the other one.',
+    ],
+    ['provider=google&error=link_not_started', 'Google was not linked. Try again.'],
     // A refusal that this build does not know: no « Try again », which would not help.
     ['provider=google&error=access_denied', 'Google was not linked.'],
     // A failure on the way: trying again can work.
@@ -917,6 +971,91 @@ test('a provider is « Not set up » when the worker has none, and the three row
   await expect(ways.nth(1)).toContainText('Not set up');
   await expect(ways.nth(2)).toContainText('Not set up');
   await expect(section(page, 'How you sign in').getByRole('link')).toHaveCount(0);
+  await expect(section(page, 'How you sign in').getByRole('button', { name: /^Link / })).toHaveCount(0);
+});
+
+test('« Link » asks to confirm the provider account on the way back, then the provider is in the list (FRU-415)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const signIn = section(page, 'How you sign in');
+  const google = signIn.getByRole('listitem').nth(2);
+  await expect(google).toContainText('Not linked');
+
+  // The form goes to the worker by a POST, and comes back with the question: nothing is linked yet.
+  await google.getByRole('button', { name: 'Link Google' }).click();
+  const question = signIn.getByRole('region', {
+    name: 'Link the Google account ana.perso@gmail.test to your Fruitback account?',
+  });
+  await expect(question).toBeVisible();
+  await expect(question).toContainText(
+    'It will open this account, as your email link does. Fruitback sends a message to ana@acme.dev to say so.',
+  );
+  await expect(page).toHaveURL(/\/w\/w1\/account$/);
+  await expect(google).toContainText('Not linked');
+  expect(worker.sent).toEqual(['POST /console/auth/link/google']);
+  await expectNoViolation(page, 'the question of a link');
+  // At 390 px the question wraps, and nothing scrolls sideways.
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect.soft(await sideScroll(page), 'the question at 390 px').toBe(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // Yes: the worker links it, and the list says so.
+  await question.getByRole('button', { name: 'Link this account' }).click();
+  await expect(signIn.getByRole('status').filter({ hasText: 'Google is linked to your account.' })).toBeVisible();
+  await expect(question).toHaveCount(0);
+  await expect(google).toContainText('Linked');
+  await expect(google.getByRole('button', { name: 'Unlink', exact: true })).toBeVisible();
+  expect(worker.sent).toEqual(['POST /console/auth/link/google', 'POST /console/me/sign-in/pending']);
+
+  // A reload asks nothing again: the address lost `?confirm=`.
+  await page.reload();
+  await expect(page.getByText('Console · this browser')).toBeVisible();
+  await expect(signIn.getByRole('region')).toHaveCount(0);
+});
+
+test('« Cancel » links nothing; a refusal or a link that expired says what to do, in French too (FRU-415)', async ({
+  page,
+}) => {
+  const worker = await workerWith(page, 'owner', 'fr');
+  await page.goto(`${CONSOLE}/w/w1/account`);
+  await expect(page.getByText('Console · ce navigateur')).toBeVisible();
+  const ways = section(page, 'Comment vous vous connectez');
+  const google = ways.getByRole('listitem').nth(2);
+  const question = ways.getByRole('region', {
+    name: 'Lier le compte Google ana.perso@gmail.test à votre compte Fruitback ?',
+  });
+
+  // Cancel: the worker forgets it, and Google stays unlinked.
+  await google.getByRole('button', { name: 'Lier Google' }).click();
+  await expect(question).toContainText('Fruitback envoie un message à ana@acme.dev pour le dire.');
+  await question.getByRole('button', { name: 'Annuler' }).click();
+  await expect(ways.getByRole('status').filter({ hasText: 'Google n’a pas été lié.' })).toBeVisible();
+  await expect(google).toContainText('Non lié');
+  expect(worker.sent.at(-1)).toBe('DELETE /console/me/sign-in/pending');
+
+  // The worker refuses at the confirmation: the address is another account's. The sentence says so.
+  worker.confirmRefuses = 'email_already_used';
+  await google.getByRole('button', { name: 'Lier Google' }).click();
+  await question.getByRole('button', { name: 'Lier ce compte' }).click();
+  await expect(ways.getByRole('alert')).toHaveText(
+    'L’adresse de ce compte Google est celle d’un autre compte Fruitback. Fruitback ne réunit jamais deux comptes : liez-le depuis cet autre compte, ou choisissez un autre compte Google.',
+  );
+  await expect(google).toContainText('Non lié');
+
+  // Back on `?confirm=` with no link that waits: it expired, or another tab answered it.
+  await page.goto(`${CONSOLE}/w/w1/account?confirm=google`);
+  await expect(ways.getByRole('alert')).toHaveText(
+    'La liaison de Google a trop attendu, ou a reçu une réponse dans un autre onglet. Liez Google à nouveau.',
+  );
+  await expect(question).toHaveCount(0);
+  await expect(page).toHaveURL(/\/w\/w1\/account$/);
+
+  // A provider that is not in the list asks nothing.
+  await page.goto(`${CONSOLE}/w/w1/account?confirm=constructor`);
+  await expect(page.getByText('Console · ce navigateur')).toBeVisible();
+  await expect(ways.getByRole('region')).toHaveCount(0);
 });
 
 /** Noon of a fixed day: « used 2 h ago » is read on a clock of the browser set there. */
