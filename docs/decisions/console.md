@@ -547,9 +547,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   · Chrome on macOS », a short label of its user agent; one it could not name reads « Console · this
   browser » or « Console · another browser ». **The name on the notes is changed here**
   (`POST /console/me/name`), kept when the field is left or by Enter, as the mockup draws no button; a
-  refusal says why and keeps what was typed. **A provider is linked by a navigation** to the worker
-  (`/console/auth/link/<provider>`), which comes back with `?linked=` or `?error=`, said once and
-  taken from the address. **A refused link names the provider and the address of the account, then
+  refusal says why and keeps what was typed. **A provider is linked by a form** that `POST`s to the
+  worker (`/console/auth/link/<provider>`, FRU-415: the worker starts no link on a `GET`), which comes
+  back with `?confirm=`, `?linked=` or `?error=`, said once and taken from the address. **`?confirm=`
+  asks before anything is linked** (FRU-415): « Link the Google account x@y to your Fruitback
+  account? », with the address the worker read at the provider (`GET /console/me/sign-in/pending`),
+  « Link this account » and « Cancel ». It is asked on the way back and not before the provider:
+  only the provider knows which of its accounts the person chooses. A link that is no longer there
+  (expired, or answered in another tab) says so, and a refusal at the confirmation is said as one on
+  the way back. **A refused link names the provider and the address of the account, then
   says what to do** (FRU-416): the worker adds `?provider=`, read in the closed list `LINKABLE`, and
   the address is the one of `/console/me`, never one of the address bar; a provider that is not in
   the list, or none, gives « The account was not linked. », and « Try again » is said for a failure on

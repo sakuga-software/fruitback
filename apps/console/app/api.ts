@@ -528,11 +528,36 @@ export async function unlinkProvider(provider: Linkable): Promise<Answer<unknown
 }
 
 /**
- * Where the browser goes to link a provider: a navigation, as a sign-in, which comes back to « My
- * account » of `workspace` with `?linked=<provider>` or `?error=<code>`.
+ * Where the form of « Link » sends the browser: a `POST`, by a navigation (FRU-415), which comes back
+ * to « My account » of `workspace` with `?confirm=<provider>`, `?linked=<provider>` or `?error=<code>`.
+ * The worker starts no link on a `GET`.
  */
 export function linkAddress(provider: Linkable, workspace: string): string {
   return `${API}/console/auth/link/${provider}?workspace=${encodeURIComponent(workspace)}`;
+}
+
+/** The link that came back from a provider and waits for the person to say yes (FRU-415). */
+export type PendingLink = { provider: Linkable; email: string };
+
+/** The pending link of this session, or `none` when there is none (it expired, or was answered). */
+export async function pendingLink(): Promise<Answer<PendingLink> | { ok: true; data: 'none' }> {
+  const asked = await call<PendingLink>('GET', '/console/me/sign-in/pending');
+  if (!asked.ok) return asked.status === 404 ? { ok: true, data: 'none' } : asked;
+  const { provider, email } = asked.data ?? {};
+
+  return (LINKABLE as readonly unknown[]).includes(provider) && typeof email === 'string'
+    ? asked
+    : { ok: false, status: 200, error: 'unknown' };
+}
+
+/** « Link »: the worker writes the link, and sends an alert to the address of the account. */
+export async function confirmLink(): Promise<Answer<unknown>> {
+  return call('POST', '/console/me/sign-in/pending');
+}
+
+/** « Cancel »: the worker forgets the link. */
+export async function cancelLink(): Promise<Answer<unknown>> {
+  return call('DELETE', '/console/me/sign-in/pending');
 }
 
 /** The name on the notes of the person: one line, 1 to 80 characters. */
