@@ -131,6 +131,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     database,
     `INSERT INTO workspace_suspensions (workspace_id, since, reason) VALUES ('ws_unpaid', 1, 'impayé')`,
   );
+  // FRU-428: the logo of a workspace.
+  await rowsOf(
+    database,
+    `INSERT INTO workspace_logos (workspace_id, content_type, content, updated_at)
+       VALUES ('ws_acme', 'image/png', '\\x89504e47'::bytea, 1)`,
+  );
 
   return database;
 }
@@ -140,7 +146,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-nine BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the forty BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'admin_actions.at',
     'admin_reads.at',
@@ -180,6 +186,7 @@ it('knows the thirty-nine BIGINT columns of the worker, and that better-auth has
     'sessions.rotated_at',
     'site_shares.created_at',
     'sites.created_at',
+    'workspace_logos.updated_at',
     'workspace_suspensions.since',
   ]);
   // better-auth reads its tables on the same pool, with no parser of ours: it has no BIGINT to read.

@@ -33,6 +33,8 @@ export type CallOptions = {
   /** The `Origin` of the request. The console's when absent; `null` for none. */
   origin?: string | null;
   headers?: Record<string, string>;
+  /** Bytes sent as they are, with their `Content-Type`, in the place of a JSON `body` (FRU-428). */
+  raw?: { bytes: Uint8Array; type: string };
 };
 
 /**
@@ -78,6 +80,7 @@ export function callOn(
     else headers.Authorization = `Bearer ${options.token}`;
   }
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.raw !== undefined) headers['Content-Type'] = options.raw.type;
   ip += 1;
 
   return handleRequest(
@@ -85,6 +88,7 @@ export function callOn(
       method,
       headers: { ...headers, ...options.headers },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+      ...(options.raw === undefined ? {} : { body: options.raw.bytes }),
     }),
     world.env,
     { clientIp: `198.18.0.${ip % 250}`, ...world.context, ...context },

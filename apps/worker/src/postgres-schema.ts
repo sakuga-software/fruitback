@@ -742,3 +742,31 @@ export const workspace_suspensions = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+/**
+ * The logo of a workspace (FRU-428): one row for each workspace that has one. `workspace-logo.ts`
+ * checks the bytes before they come here: a PNG, a JPEG or a WebP of `MAX_LOGO_BYTES` at most, whose
+ * header says a size of `MAX_LOGO_SIDE` pixels at most on each side. Its owner and its admins send it
+ * and remove it; its members read it. The row goes with the workspace.
+ *
+ * The bytes are in the database, as the files in transit are (`screenshots`), and not in a table of
+ * theirs: a file in transit ends and is swept, a logo stays. `updated_at` is the version of the address
+ * that the console reads (`?v=`).
+ */
+export const workspace_logos = pgTable(
+  'workspace_logos',
+  {
+    workspace_id: text('workspace_id').notNull(),
+    content_type: text('content_type').notNull(),
+    content: bytes('content').notNull(),
+    updated_at: instant('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'workspace_logos_pkey', columns: [table.workspace_id] }),
+    foreignKey({
+      name: 'workspace_logos_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+  ],
+);

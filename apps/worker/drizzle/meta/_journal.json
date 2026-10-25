@@ -218,6 +218,13 @@
       "when": 1792919716529,
       "tag": "0030_note_names",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792933081137,
+      "tag": "0031_workspace_logos",
+      "breakpoints": true
     }
   ]
 }

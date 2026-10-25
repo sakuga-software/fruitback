@@ -173,6 +173,8 @@ clear unless this list says otherwise:
 - **The key of each connector, encrypted** with `FRUITBACK_SECRETS_KEY`, which is in no row. The notes
   are not encrypted by that key.
 - **The addresses of callers, for two minutes**, in the table `kv` of the rate limit.
+- **The logo of a workspace**, when its owner or an admin sent one (FRU-428): the bytes of one image,
+  in the table `workspace_logos`, until it is removed or replaced, or its workspace goes. See below.
 
 **Who reads it**: the role of `FRUITBACK_DATABASE_URL`, and so whoever holds that address; whoever
 runs the server of the database, and any other role it grants; and whoever holds a dump. The worker
@@ -2149,7 +2151,8 @@ Chrome, `sidebar_action` on Firefox. It is a page of the extension, `sidepanel.h
 
 ### The files of a note, in transit (FRU-331)
 
-**Fruitback stores no file: the ticket of the tracker does** (decision of 2026-10-20, FRU-198). A
+**Fruitback stores no file of a note: the ticket of the tracker does** (decision of 2026-10-20,
+FRU-198). The one image it keeps is the logo of a workspace, below. A
 note that goes to a tracker can carry files: a capture of the page or of an area, an image, any file.
 Each one waits in the database of the worker until the tracker has it, and no longer.
 
@@ -2184,8 +2187,9 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   attempt (below); the file goes one hour after the delivery arrived. Every file ends 7 days after it
   came, whatever happened: it reads as absent from then on, and the loop of the deliveries and each
   new file sweep it. A note whose delivery arrives later goes without it.
-- **Fruitback serves no file to a person.** No route answers a file to a member, a guest, a page or a
-  browser: `GET /screenshot/<id>` is gone. The one read is
+- **Fruitback serves no file of a note to a person.** No route answers a file of a note to a member, a
+  guest, a page or a browser: `GET /screenshot/<id>` is gone. The logo of a workspace is no file of a
+  note: its read is below. The one read is
   `GET /attachments/<id>?expires=…&signature=…`, for the receiver of a delivery: an HMAC-SHA256 of the
   id and the end, with a key derived from `FRUITBACK_SECRETS_KEY`, compared in constant time, that
   answers for one hour and only for a file that a note took; anything else is `404`, as a file that
@@ -2235,6 +2239,38 @@ Each one waits in the database of the worker until the tracker has it, and no lo
 
 What a capture shows is whatever the page showed on the screen, the open composer of the widget
 included when it covers it.
+
+### The logo of a workspace (FRU-428)
+
+A workspace can have a logo, which the console shows in its rail and on the screen of its settings.
+`/console/workspaces/<id>/logo`, under every rule of the console API (the cookie of a session, the
+`Origin` of the console for a write, `404` for a workspace somebody is not of):
+
+- **Who sends it, and who removes it: the owner and the admins of the workspace** (`manage-workspace`,
+  as for its name). `POST` with the bytes as the body, `DELETE` to remove it. A member or a guest:
+  `403`. A suspended workspace refuses both, as every write (`409 workspace-suspended`).
+  test:`refuses a member and a guest, as every route of who manages a workspace, and changes nothing`.
+- **Who reads it: every member of the workspace, whatever their role**, guests included: they read its
+  name already. Nobody else: `404`, and `401` with no session.
+- **What the worker takes: a PNG, a JPEG or a WebP of 512 KB at most, and no SVG.** An SVG is a
+  document that can run scripts, and the worker has no sanitizer it trusts: it answers
+  `415 unsupported-type`, as for a GIF or any other type, before it reads the body. The worker checks
+  the bytes and not the word of the sender: they must start as the type says, and the header of the
+  image must say a size of 4096 pixels at most on each side (`400 type-mismatch`,
+  `400 image-too-large`), so that 512 KB that say 30000 × 30000 pixels never reach a browser that
+  would decode them. Over the size: `413 payload-too-large`, read under that cap. Nothing is decoded
+  and nothing is resized (`checkLogo` of `workspace-logo.ts`): the console shows it at a fixed size.
+  The bytes are kept as they came, metadata included (a JPEG can carry where it was taken).
+  test:`refuses an SVG, a GIF, bytes that lie, too many pixels and too many bytes, and keeps the logo of before`.
+- **How it is read: with headers that run nothing.** `Content-Type` is the type the worker checked,
+  never another; `X-Content-Type-Options: nosniff`; `Content-Security-Policy: default-src 'none';
+  sandbox`, should a browser open it as a document; `Cross-Origin-Resource-Policy: same-site`, so the
+  `<img>` of the console reads it with the cookie of its session, which no page of another site sends;
+  `Cache-Control: private, max-age=86400`. The address (`logo` of a workspace in `/console/me`, or
+  `null`) changes with each logo (`?v=`): a member who left can keep the copy of their own browser for
+  one day, and nobody else.
+  test:`lets the owner and an admin send it, and every member reads it with the headers that run nothing`.
+- **How long: until it is replaced or removed, or its workspace is deleted**, which takes it with it.
 
 ### The administrator of the instance (FRU-261)
 
