@@ -169,6 +169,10 @@ export default function Notes() {
     setShown(answer.ok && Array.isArray(answer.data?.notes) ? answer.data : 'failed');
   }, [base, filters, cursor]);
   useEffect(() => void read(), [read]);
+  // Only the read that follows the move: once it is drawn, a list emptied later takes no focus.
+  useEffect(() => {
+    if (movedOut && !reading) setMovedOut(false);
+  }, [movedOut, reading, shown]);
 
   /** Sets filters, and goes back to the first page: a page of another list means nothing. */
   function filter(changes: Partial<Record<(typeof FILTERS)[number], string>>, replace = false) {

@@ -262,6 +262,20 @@ test('a note the filter no longer keeps leaves the board, and the focus stays on
   await expect(page.getByRole('region', { name: 'Notes by status' })).toBeFocused();
 });
 
+test('a list emptied later by a drag gives « Clear the filters » no focus', async ({ page }) => {
+  const second = { ...notes()[0]!, id: 'n4', excerpt: 'The footer has no link to the terms.' };
+  const worker = await workerWith(page, { more: [second] });
+  await page.goto(`${CONSOLE}/w/w1/notes?view=board&stage=new`);
+  await chooseWithKeyboard(page, 'The headline', 'Shipped');
+  await expect(page.getByRole('region', { name: 'Notes by status' })).toBeFocused();
+
+  // The last note leaves by a drag: nobody pressed a select, so nothing takes the focus.
+  await card(page, 'The footer').dragTo(column(page, 'Waiting'));
+  await expect.poll(() => worker.sent.length).toBe(2);
+  await expect(page.getByText('No note matches.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear the filters' })).not.toBeFocused();
+});
+
 test('when the last note the filter kept leaves, « Clear the filters » takes the focus', async ({ page }) => {
   const worker = await workerWith(page);
   await page.goto(`${CONSOLE}/w/w1/notes?view=board&stage=new`);
