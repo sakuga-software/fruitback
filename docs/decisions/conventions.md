@@ -290,6 +290,11 @@ Node 25.8.1, two workers)
   fails on another value: the head, for one, would mutate nothing and pass. A full run happens every Monday,
   by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow
   or `tools/mutation/` for both packages, the `stryker.config.json` of a package for that package alone.
+- **`baseline.json` is not part of how mutation runs** (FRU-447). A pull request that moves the line
+  of a file mutates that file, from its last report. A pull request that moves the line of a package
+  mutates each file of it, from their last reports, and its `line` job holds that line. Before, a
+  pull request that only raised lines ran the whole worker: 22 to 67 minutes on those of FRU-377, and
+  24 on #565, with no mutant and no test changed.
 - **Each file is mutated by a job of its own** (FRU-336). The `plan` job lists them with
   `tools/mutation/scope.ts`, with no install. Each job holds the line of its file. On a full run, the
   `line` job of a package holds the line of the package on the reports of all its jobs, and fails when
