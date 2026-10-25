@@ -2542,10 +2542,11 @@ Docker or that Dokploy for another project reaches the Cloud too.
 - **The volume of the database**: the files of a database that runs, with the verifier of its
   password. The password is 40 random letters and digits.
 - **The volume of the worker** (`/data`): the dump of each night (`snapshots/fruitback.pgdump`, all of
-  the database, in the clear), and the three SQLite files of before with their copies. Those hold the
-  accounts, sessions as digests and notes of before 2026-10-15/16; they go when the archive of 30 days
-  no longer holds them (about 2026-11-15).
-- **Dumps taken by hand** before each switch, in dated folders of `/home/mheos/fruitback-cloud/`.
+  the database, in the clear), and nothing else. The three SQLite files of before left it on
+  2026-10-25 (FRU-393). The archives of 30 days up to that day still hold them: accounts, sessions as
+  digests and notes of before 2026-10-15/16.
+- **Dumps taken by hand** before each switch, and the last copy of the SQLite files
+  (`sqlite-final-20261025/`), in dated folders of `/home/mheos/fruitback-cloud/`, mode `700`.
 - **The console**: static files, and no secret. It serves the script of the widget itself: no
   third-party CDN sees the address of the visitors of a site (FRU-106).
 

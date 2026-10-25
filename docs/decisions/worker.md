@@ -161,11 +161,11 @@ database.
   runs it with `run` in place of `transaction`.
 - **The image keeps `sqlite3` and the directory `/data`, and declares no volume.** « Upgrading » of
   `docs/self-hosting.md` restores the files of an old deployment with `.restore` in the new image,
-  before the copy, and `cloud/snapshot.sh` makes its `.backup` there. `/data` stays owned by `node`,
+  before the copy. `/data` stays owned by `node`,
   because an empty named volume takes that owner. `sqlite3` is 1.4 MB: 73,038,684 bytes with it,
   71,608,982 without (measured on the image of `main`).
-- **`cloud/snapshot.sh` and the SQLite restore of the runbook are marked « of before »**, not removed:
-  the archive of 30 days still holds the files.
+- **`cloud/snapshot.sh` and the SQLite restore of the runbook are gone** (FRU-393, 2026-10-25), with
+  the SQLite files of the volume of the Cloud. A copy of the files stays on the host, apart.
 
 ### The reasons, and what was measured
 

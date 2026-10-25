@@ -24,8 +24,8 @@ not pulled from GHCR, so it has no digest (FRU-183, read on 2026-10-12).
 **The data is in PostgreSQL**: the accounts and the sessions since switch 1 (2026-10-12), the notes
 since switch 1 bis (2026-10-15, `/health` says `"store":"postgres"`). better-auth signs the console in
 since switch 2 (2026-10-12). The worker reaches the database by its internal host on the network
-`dokploy-network`, with `FRUITBACK_DATABASE_URL`. `/data` still holds the three SQLite files of
-before, `fb.db`, `sessions.db` and `accounts.db`, which nothing reads (see « What is backed up »).
+`dokploy-network`, with `FRUITBACK_DATABASE_URL`. `/data` holds the dump of each night and nothing
+else: the three SQLite files of before went on 2026-10-25 (FRU-393, see « What is backed up »).
 
 **The files of the host are in `/home/mheos/fruitback-cloud/`**, and `snapshot-pg.sh` runs from the
 crontab of the user `mheos`. This runbook said `/root/fruitback/` before: that folder is not the one
@@ -34,19 +34,15 @@ in use. The dumps taken by hand before each switch are in dated folders there, f
 
 ## What is backed up
 
-> **Of before (FRU-226).** The accounts, the sessions and the notes are in PostgreSQL since
-> 2026-10-15/16, and the point of no return is behind: no worker writes the three SQLite files, and
-> the worker has no SQLite store any more. `snapshot.sh` and « Restore » below are of before. They stay
-> while the archive of 30 days holds the files, then a pull request removes them. Restore the data of
-> today from the dump: « The database » below.
+The data is in PostgreSQL: its dump, and how to restore it, are in « The database » below. **03:00,
+the backup of the host** (`~/backups/backup.sh`) archives every Docker volume to the bucket
+`backup-elastic-metal` on Scaleway Object Storage, under the date, and keeps 30 days.
 
-1. **02:45, `snapshot.sh`**, from the crontab of the host. It writes a copy of each database into
-   `/data/snapshots/` with SQLite's own backup, checks it, and only then replaces the copy before.
-2. **03:00, the backup of the host** (`~/backups/backup.sh`). It archives every Docker volume to the
-   bucket `backup-elastic-metal` on Scaleway Object Storage, under the date, and keeps 30 days.
-
-The archive of the volume holds the live files and the snapshots. **Restore from the snapshots**: a
-live file was open when it was archived.
+**The SQLite files of before are gone (FRU-393).** On 2026-10-25, `accounts.db`, `sessions.db` and
+`fb.db`, and their copies in `/data/snapshots/`, were removed from the volume, and `snapshot.sh` from
+the crontab. A copy of them is in `/home/mheos/fruitback-cloud/sqlite-final-20261025/`, mode `700`,
+with the crontab of before. The archives up to that day hold them too, for 30 days. The way to put
+them back is « Restore » in this file before FRU-393, in the history of git.
 
 **`FRUITBACK_SECRETS_KEY` and `FRUITBACK_IDENTITY_SECRET` are in no backup**, and neither is the
 password of the database once there is one. They are in the
@@ -54,45 +50,6 @@ environment of the application in Dokploy, and in the Keychain of the operator's
 (`fruitback-cloud-secrets-key`, `fruitback-cloud-identity-secret`). Without the first, the keys of
 the connectors do not open, and each workspace must add its key again. Without the second, every
 session ends.
-
-## Restore
-
-Of before: the three SQLite files, while the archive of 30 days holds them (see « What is backed up »).
-
-Stop the worker first: it keeps its files open, and a file replaced under it is not read.
-
-```bash
-# 1. Get the archive of a day, and take the snapshots out of it.
-rclone copy scaleway:backup-elastic-metal/20261009/fruitback-cloud-data.tar.gz /tmp/restore/ &&
-  mkdir -p /tmp/restore/data && tar xzf /tmp/restore/fruitback-cloud-data.tar.gz -C /tmp/restore/data &&
-  test -s /tmp/restore/data/snapshots/accounts.db
-
-# 2. Stop the worker, put the three files back, start it.
-docker service scale fruitback-cloud-worker-a9zdeo=0 &&
-  docker run --rm -v fruitback-cloud-data:/data -v /tmp/restore/data/snapshots:/from:ro alpine sh -c \
-    'set -e; test -s /from/accounts.db; test -s /from/sessions.db;
-     for f in accounts.db sessions.db fb.db; do
-       if [ -s /from/$f ]; then rm -f /data/$f-wal /data/$f-shm; cp /from/$f /data/$f; chown 1000:1000 /data/$f; fi;
-     done' &&
-  docker service scale fruitback-cloud-worker-a9zdeo=1
-```
-
-Tried on 2026-10-09, on a scratch volume and never on the one in service: the archive the host makes
-was unpacked, its snapshots were put in an empty volume, and the restored accounts, workspaces, sites
-and sessions counted the same as the live ones. That trial copied the files with the same `cp` and
-`chown`, before the check of the two required snapshots was added. The check was tried apart: with
-no snapshot of the accounts it answers 1 and reaches no copy. **The command as it is written now has
-not been run whole.** Run it once on a scratch volume before the day it is needed.
-
-**A snapshot is in WAL mode, like its source.** SQLite must create a `-shm` file beside it, so it does
-not open on a volume mounted read-only (measured: `unable to open database file`). Check a restored
-file on a writable mount.
-
-Each step is chained with `&&`, and `test -s` comes before a file is replaced: a missing file must
-stop the restore, not empty the database. **The accounts and the sessions are required**: without
-either snapshot the command stops before it touches a file, and the worker stays stopped, which is
-the state to investigate from. Only `fb.db` can be absent, for a worker that had taken no note when
-the snapshot was made; the notes file in the volume is then left as it is. Then check `https://api.fruitback.com/health`, and sign in.
 
 ## The database (FRU-143)
 
@@ -105,13 +62,7 @@ It runs since switch 1 (2026-10-12). « What to do on the host » says what was 
    into the volume of the worker, as `/data/snapshots/fruitback.pgdump`. It compares the copy with
    the dump, and only then replaces the copy before. A dump that cannot be read to its end replaces
    nothing, and the script exits 1.
-2. **02:45, `snapshot.sh`**, as before. Switch 1 leaves `accounts.db` and `sessions.db` on the
-   volume, as they were when the worker stopped: they are its way back (FRU-145). So `snapshot.sh`
-   still copies the three files, and the copies of those two hold the accounts and the sessions of
-   the day of the switch. After the point of no return, a pull request makes it copy `fb.db` alone
-   and rewrites the restore above, which requires the two files; then the operator moves them out of
-   `/data` (FRU-183).
-3. **03:00, the backup of the host**, as before. The archive of the volume of the worker holds the
+2. **03:00, the backup of the host**. The archive of the volume of the worker holds the
    dump, because the dump is in that volume. The volume of the database is archived too, and **it is
    not a backup**: the files of a database that runs are not a copy to trust. Restore from the dump.
 
@@ -204,14 +155,13 @@ done**: the dump was never restored on the host.
    the password: a short one can be guessed from a copy of the archive (`SECURITY.md`).
    **`postgres.create` of the API of Dokploy answers with the password in its body.** Do not print
    that answer, in a terminal or in a log: read the password from the Keychain.
-3. **`snapshot-pg.sh` in `/home/mheos/fruitback-cloud/`, in the crontab of `mheos`**, at 02:40,
-   before `snapshot.sh`:
+3. **`snapshot-pg.sh` in `/home/mheos/fruitback-cloud/`, in the crontab of `mheos`**, at 02:40:
 
    ```cron
-   40 2 * * * PG_SERVICE=fruitback-cloud-postgres-u6qxzp sh /home/mheos/fruitback-cloud/snapshot-pg.sh >> <its log> 2>&1
+   40 2 * * * PG_SERVICE=fruitback-cloud-postgres-u6qxzp sh /home/mheos/fruitback-cloud/snapshot-pg.sh >> /home/mheos/fruitback-cloud/snapshot-pg.log 2>&1
    ```
 
-   Where its log goes on the host is not recorded here. It was run by hand before and after switch 1,
+   Its log is `/home/mheos/fruitback-cloud/snapshot-pg.log` (read in the crontab on 2026-10-25). It was run by hand before and after switch 1,
    and ended with `exit 0`. Run by hand, it must write `fruitback.pgdump … bytes`, and
    `/data/snapshots/` in the volume of the worker must hold the file.
 
@@ -354,6 +304,9 @@ two files. Then:
    requires the two files.
 2. The operator moves `accounts.db*` and `sessions.db*` out of `/data`. They can go when the last
    archive that holds them is older than 30 days.
+
+Done in one step on 2026-10-25 (FRU-393): the three files, their copies and `snapshot.sh` went
+together, and « Restore » with them (« What is backed up »).
 
 ### What was tried, and what was not
 
@@ -663,9 +616,8 @@ comes back with it only if `FRUITBACK_GITHUB_OAUTH` is put back, and nobody need
 of switch 2 reads `betterAuth`. **What it costs:** nothing is lost. After step 5 the way back is the
 same, without the sign-in of before for GitHub.
 
-**The files of before.** `accounts.db` and `sessions.db` in the volume are read by nothing since
-switch 1. This image still has `migrate-to-postgres`, which reads them once; it does not need them
-to run. Delete them when the dump of step 3 of « Before » was restored once somewhere else.
+**The files of before.** `accounts.db` and `sessions.db` were read by nothing since switch 1. They
+left the volume on 2026-10-25 (FRU-393, « What is backed up »).
 
 **Not tried:** any of this on the host.
 

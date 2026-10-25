@@ -42,9 +42,9 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 # The `sqlite3` CLI. No store of the worker is on SQLite since FRU-226, and `migrate-to-postgres` reads
-# a file with `node:sqlite`. Two things of before still run it in this image: docs/self-hosting/upgrade.md
-# restores the files of an old deployment with `.restore` before the copy, and
-# `cloud/snapshot.sh` makes its `.backup`. It goes with them. About 1.4 MB (measured on FRU-226).
+# a file with `node:sqlite`. docs/self-hosting/upgrade.md still runs it in this image: it restores the
+# files of an old deployment with `.restore` before the copy. It goes with that page. About 1.4 MB
+# (measured on FRU-226).
 # Alpine has no curl either, which is why the healthcheck below probes with Node.
 # `upgrade` before `add`, and it is not belt-and-braces. The base image is rebuilt on its own
 # schedule, so it ships whatever Alpine packages it held on that day — measured here as openssl
