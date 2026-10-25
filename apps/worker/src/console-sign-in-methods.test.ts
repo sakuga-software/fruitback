@@ -9,7 +9,8 @@ import { rowsOf } from './postgres.fixture.ts';
 
 /**
  * The ways a person signs in, from « My account » (FRU-249): which providers are linked, linking one
- * by a navigation, and unlinking one while another way stays.
+ * by a navigation, and unlinking one while another way stays. Since FRU-415 a link starts by a `POST`
+ * of the console, and is written only once the person confirmed it, even for another address.
  */
 
 const { opening } = databasesOfACase();
@@ -36,8 +37,8 @@ async function withProvider<T>(answers: Record<string, unknown>, work: () => Pro
   }
 }
 
-/** GitHub, for a person with this address, verified or not, under this id. */
-function github(email: string, { id = 4242, verified = true } = {}): Record<string, unknown> {
+/** GitHub, for a person with this address (`null`: GitHub gives none), verified or not, under this id. */
+function github(email: string | null, { id = 4242, verified = true } = {}): Record<string, unknown> {
   return {
     'https://github.com/login/oauth/access_token': {
       access_token: 'gho_an-access-token',
@@ -45,7 +46,18 @@ function github(email: string, { id = 4242, verified = true } = {}): Record<stri
       scope: 'read:user,user:email',
     },
     'https://api.github.com/user': { id, login: 'alice-gh', name: 'Alice of GitHub', email },
-    'https://api.github.com/user/emails': [{ email, primary: true, verified }],
+    'https://api.github.com/user/emails': email === null ? [] : [{ email, primary: true, verified }],
+  };
+}
+
+/** Google, for a person with this address, verified or not, under this `sub`. */
+function google(email: string, { sub = '1081', verified = true } = {}): Record<string, unknown> {
+  return {
+    'https://oauth2.googleapis.com/token': {
+      access_token: 'ya29.an-access-token',
+      token_type: 'Bearer',
+      id_token: googleIdToken({ sub, email, email_verified: verified, name: 'Alice' }),
+    },
   };
 }
 
@@ -77,9 +89,11 @@ function withoutMail(worker: Worker): (path: string, init?: Call) => Promise<Res
   };
 }
 
+const PAGE = `${CONSOLE_URL}/w/ws_0123456789abcdef0123/account`;
+
 /**
- * A link of a provider, from « My account »: the navigation to the worker, then the way back from the
- * provider. The location the person lands on, and the answer of each half.
+ * A link of a provider, from « My account »: the form of the console that the worker answers, then the
+ * way back from the provider. The location the person lands on, and the answer of each half.
  */
 async function linkThrough(
   worker: Worker,
@@ -89,10 +103,10 @@ async function linkThrough(
   workspace = 'ws_0123456789abcdef0123',
 ) {
   const start = await worker.call(`/console/auth/link/${provider}?workspace=${workspace}`, {
-    origin: null,
+    method: 'POST',
     headers: { Cookie: cookie, 'Sec-Fetch-Site': 'same-site' },
   });
-  assert.equal(start.status, 302, await start.clone().text());
+  assert.equal(start.status, 303, await start.clone().text());
   const to = new URL(start.headers.get('Location') ?? '');
   const state = to.searchParams.get('state') ?? '';
   assert.ok(state.length > 0, `no state in ${to.href}`);
@@ -108,6 +122,23 @@ async function linkThrough(
   );
 
   return { start, to, back, location: back.headers.get('Location') ?? '' };
+}
+
+/** The link that waits, as « My account » reads it, confirms it, or cancels it. */
+function pending(worker: Worker, cookie: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', origin?: string | null) {
+  return worker.call('/console/me/sign-in/pending', {
+    method,
+    headers: { Cookie: cookie },
+    ...(origin === undefined ? {} : { origin }),
+  });
+}
+
+/** A link through the provider, then its confirmation: the provider is linked. */
+async function linked(worker: Worker, cookie: string, provider: 'github' | 'google', answers: Record<string, unknown>) {
+  const { location } = await linkThrough(worker, cookie, provider, answers);
+  assert.equal(location, `${PAGE}?confirm=${provider}`);
+  const confirmed = await pending(worker, cookie, 'POST');
+  assert.equal(confirmed.status, 200, await confirmed.clone().text());
 }
 
 async function providersOf(database: PgDatabase, user: string): Promise<string[]> {
@@ -135,7 +166,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal(listed.status, 200);
       assert.deepEqual(await listed.json(), { email: true, github: { linked: false }, google: { linked: false } });
 
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
       const after = await worker.call('/console/me/sign-in', { headers: { Cookie: cookie } });
       assert.deepEqual(await after.json(), { email: true, github: { linked: true }, google: { linked: false } });
 
@@ -155,13 +186,15 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       );
     });
 
-    it('links GitHub for the same verified address, keeps no token, and goes back to « My account »', async () => {
+    it('links GitHub for the same verified address after the confirmation, keeps no token, and goes back to « My account »', async () => {
       const { worker, cookie, id } = await signedIn();
 
       const { to, location } = await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
 
       assert.equal(to.origin, 'https://github.com');
-      assert.equal(location, `${CONSOLE_URL}/w/ws_0123456789abcdef0123/account?linked=github`);
+      assert.equal(location, `${PAGE}?confirm=github`);
+      assert.deepEqual(await providersOf(worker.database, id), []);
+      assert.equal((await pending(worker, cookie, 'POST')).status, 200);
       assert.deepEqual(await providersOf(worker.database, id), ['github']);
       const [row] = await rowsOf(
         worker.database,
@@ -172,41 +205,208 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 1);
     });
 
-    it('refuses a provider whose address is another one, or is not verified, and joins no account', async () => {
+    it('links a provider of another verified address after the confirmation, by its id, and alerts the address of the account (FRU-415)', async () => {
       const { worker, cookie, id } = await signedIn();
-      const bob = await worker.signIn('bob@acme.dev');
 
-      // The console names the provider and says what to do from these two words (FRU-416). better-auth
-      // 1.7.7 answers an address the provider did not verify with `unable_to_link_account`.
-      for (const [answers, code, why] of [
-        [github('alice@other.dev'), 'email_does_not_match', 'another address'],
-        [github('alice@acme.dev', { verified: false }), 'unable_to_link_account', 'an address GitHub did not verify'],
+      const { location } = await linkThrough(worker, cookie, 'google', google('alice@other.dev', { sub: '1081' }));
+
+      // Nothing is written before the person says yes.
+      assert.equal(location, `${PAGE}?confirm=google`);
+      assert.deepEqual(await providersOf(worker.database, id), []);
+      const waiting = await pending(worker, cookie);
+      assert.equal(waiting.status, 200);
+      assert.deepEqual(await waiting.json(), { provider: 'google', email: 'alice@other.dev' });
+
+      const sentBefore = worker.mail.sent.length;
+      const confirmed = await pending(worker, cookie, 'POST');
+      assert.equal(confirmed.status, 200);
+      assert.deepEqual(await confirmed.json(), { provider: 'google' });
+      // The identity is the id of the provider account, never the address; no token is kept.
+      const rows = await rowsOf(
+        worker.database,
+        `SELECT "providerId", "accountId", "accessToken", "idToken" FROM "account" WHERE "userId" = '${id}'`,
+      );
+      assert.deepEqual(rows, [{ providerId: 'google', accountId: '1081', accessToken: null, idToken: null }]);
+      // The address of the account is unchanged, and there is one account still.
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT email FROM "user"'), [{ email: 'alice@acme.dev' }]);
+
+      // The alert, to the address of the account, with the way to undo it.
+      assert.equal(worker.mail.sent.length, sentBefore + 1);
+      const alert = worker.mail.sent.at(-1);
+      assert.equal(alert?.to, 'alice@acme.dev');
+      assert.ok(
+        alert?.text.includes('The Google account alice@​other.​dev was linked to your Fruitback account'),
+        alert?.text,
+      );
+      assert.ok(alert?.text.includes(PAGE), alert?.text);
+      assert.ok(alert?.text.includes('unlink it'), alert?.text);
+
+      // Spent: a second confirmation finds nothing.
+      assert.equal((await pending(worker, cookie, 'POST')).status, 404);
+      assert.equal((await pending(worker, cookie)).status, 404);
+    });
+
+    it('refuses an address that the provider did not verify, or no address, and writes nothing (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+
+      for (const [provider, answers, code, why] of [
+        [
+          'github',
+          github('alice@other.dev', { verified: false }),
+          'email_not_verified',
+          'another address, not verified',
+        ],
+        [
+          'github',
+          github('alice@acme.dev', { verified: false }),
+          'email_not_verified',
+          'the same address, not verified',
+        ],
+        ['google', google('alice@other.dev', { verified: false }), 'email_not_verified', 'Google, not verified'],
+        ['github', github(null), 'email_not_found', 'GitHub gave no address'],
       ] as const) {
-        const { location } = await linkThrough(worker, cookie, 'github', answers);
+        const { location } = await linkThrough(worker, cookie, provider, answers);
         const back = new URL(location);
-        assert.equal(`${back.origin}${back.pathname}`, `${CONSOLE_URL}/w/ws_0123456789abcdef0123/account`, why);
+        assert.equal(`${back.origin}${back.pathname}`, PAGE, why);
         assert.equal(back.searchParams.get('error'), code, `${why}: ${location}`);
-        assert.equal(back.searchParams.get('provider'), 'github', `${why}: ${location}`);
+        assert.equal(back.searchParams.get('provider'), provider, `${why}: ${location}`);
+        assert.equal((await pending(worker, cookie)).status, 404, why);
         assert.deepEqual(await providersOf(worker.database, id), [], why);
       }
-      assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 2);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 1);
+    });
 
-      // A GitHub account that is Bob's already is not Alice's too.
+    it('refuses a provider account or an address that belongs to another account, and joins no account (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      const bob = await worker.signIn('bob@acme.dev');
       const bobs = (await (await worker.call('/console/me', { headers: { Cookie: bob } })).json()) as {
         account: { id: string };
       };
-      await linkThrough(worker, bob, 'github', github('bob@acme.dev', { id: 7 }));
-      const { location } = await linkThrough(worker, cookie, 'github', github('alice@acme.dev', { id: 7 }));
-      assert.equal(new URL(location).searchParams.get('error'), 'account_already_linked_to_different_user', location);
-      assert.equal(new URL(location).searchParams.get('provider'), 'github', location);
+      await linked(worker, bob, 'github', github('bob@acme.dev', { id: 7 }));
+
+      for (const [provider, answers, code, why] of [
+        ['github', github('alice@acme.dev', { id: 7 }), 'account_already_linked_to_different_user', 'Bob’s GitHub'],
+        ['github', github('alice@other.dev', { id: 7 }), 'account_already_linked_to_different_user', 'Bob’s, other'],
+        ['github', github('bob@acme.dev', { id: 99 }), 'email_already_used', 'Bob’s address, another GitHub'],
+        ['google', google('BOB@acme.dev', { sub: '55' }), 'email_already_used', 'Bob’s address at Google, in capitals'],
+      ] as const) {
+        const { location } = await linkThrough(worker, cookie, provider, answers);
+        assert.equal(new URL(location).searchParams.get('error'), code, `${why}: ${location}`);
+        assert.equal(new URL(location).searchParams.get('provider'), provider, `${why}: ${location}`);
+        assert.equal((await pending(worker, cookie)).status, 404, why);
+      }
       assert.deepEqual(await providersOf(worker.database, id), []);
       assert.deepEqual(await providersOf(worker.database, bobs.account.id), ['github']);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 2);
+
+      // A link that waits, and whose provider account became Bob's before the confirmation: refused then.
+      await linkThrough(worker, cookie, 'google', google('alice@other.dev', { sub: '1081' }));
+      await rowsOf(
+        worker.database,
+        `INSERT INTO "account" (id, "accountId", "providerId", "userId", "createdAt", "updatedAt")
+           VALUES ('lgn_google_bob', '1081', 'google', '${bobs.account.id}', now(), now())`,
+      );
+      const late = await pending(worker, cookie, 'POST');
+      assert.equal(late.status, 409);
+      assert.deepEqual(await late.json(), { error: 'account_already_linked_to_different_user' });
+      assert.deepEqual(await providersOf(worker.database, id), []);
+    });
+
+    it('links nothing on a GET, nor on a POST of another page (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      const path = '/console/auth/link/github?workspace=ws_0123456789abcdef0123';
+
+      // A GET of a page of the same site sends the cookie: it starts nothing, and sets no state.
+      const read = await worker.call(path, {
+        origin: null,
+        headers: { Cookie: cookie, 'Sec-Fetch-Site': 'same-site' },
+      });
+      assert.equal(read.status, 405);
+      assert.equal(read.headers.get('Location'), null);
+      assert.deepEqual(read.headers.getSetCookie(), []);
+
+      // A form of another page of the same site carries its own `Origin`: the worker refuses it before
+      // any route. A request with no `Origin` goes back to « My account » with the reason.
+      const elsewhere = await worker.call(path, {
+        method: 'POST',
+        origin: 'https://demo.fruitback.test',
+        headers: { Cookie: cookie, 'Sec-Fetch-Site': 'same-site' },
+      });
+      assert.equal(elsewhere.status, 403);
+      assert.equal(elsewhere.headers.get('Location'), null);
+      assert.deepEqual(elsewhere.headers.getSetCookie(), []);
+      const nowhere = await worker.call(path, {
+        method: 'POST',
+        origin: null,
+        headers: { Cookie: cookie, 'Sec-Fetch-Site': 'same-site' },
+      });
+      assert.equal(nowhere.status, 303);
+      assert.equal(nowhere.headers.get('Location'), `${PAGE}?provider=github&error=started_from_another_site`);
+      assert.deepEqual(nowhere.headers.getSetCookie(), []);
+      assert.deepEqual(await providersOf(worker.database, id), []);
+    });
+
+    it('lets only the session that started a link confirm it, from the console, and cancels it (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      const other = await worker.signIn('alice@acme.dev');
+      const bob = await worker.signIn('bob@acme.dev');
+      await linkThrough(worker, cookie, 'google', google('alice@other.dev'));
+
+      assert.equal((await worker.call('/console/me/sign-in/pending', { method: 'POST' })).status, 401);
+      assert.equal((await pending(worker, cookie, 'POST', 'https://demo.fruitback.test')).status, 403);
+      assert.equal((await pending(worker, cookie, 'POST', null)).status, 403);
+      // Another session of Alice, and Bob, see no link and confirm none.
+      for (const someone of [other, bob]) {
+        assert.equal((await pending(worker, someone)).status, 404);
+        assert.equal((await pending(worker, someone, 'POST')).status, 404);
+      }
+      assert.deepEqual(await providersOf(worker.database, id), []);
+      assert.equal(
+        (await worker.call('/console/me/sign-in/pending', { method: 'PUT', headers: { Cookie: cookie } })).status,
+        405,
+      );
+
+      // « Cancel »: the link goes, and nothing is written.
+      assert.equal((await pending(worker, cookie, 'DELETE')).status, 204);
+      assert.equal((await pending(worker, cookie)).status, 404);
+      assert.equal((await pending(worker, cookie, 'POST')).status, 404);
+      assert.deepEqual(await providersOf(worker.database, id), []);
+    });
+
+    it('signs in by the id of the linked provider account, whatever address it gives later (FRU-415)', async () => {
+      const { worker, cookie, id } = await signedIn();
+      await linked(worker, cookie, 'github', github('alice@other.dev', { id: 4242 }));
+
+      // GitHub now answers another address for the same account: it still opens Alice's account.
+      const start = await worker.call('/console/auth/start/github', {
+        origin: null,
+        headers: { 'Sec-Fetch-Site': 'same-site' },
+      });
+      const state = new URL(start.headers.get('Location') ?? '').searchParams.get('state') ?? '';
+      const stateCookie = start.headers
+        .getSetCookie()
+        .map((each) => each.split(';')[0])
+        .join('; ');
+      const back = await withProvider(github('alice@third.dev', { id: 4242 }), () =>
+        worker.call(`/console/auth/callback/github?code=a-code&state=${state}`, {
+          origin: null,
+          headers: { Cookie: stateCookie },
+        }),
+      );
+      const session = cookieOf(back);
+      assert.ok(session.length > 0, back.headers.get('Location') ?? '');
+      const me = (await (await worker.call('/console/me', { headers: { Cookie: session } })).json()) as {
+        account: { id: string; email: string };
+      };
+      assert.equal(me.account.id, id);
+      assert.equal(me.account.email, 'alice@acme.dev');
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM "user"')).length, 1);
     });
 
     it('starts no link for a page of another site, with no session, or for a provider it does not have', async () => {
       const { worker, cookie } = await signedIn();
-      const page = `${CONSOLE_URL}/w/ws_0123456789abcdef0123/account`;
-      const start = (path: string, headers: Record<string, string>) => worker.call(path, { origin: null, headers });
+      const page = PAGE;
+      const start = (path: string, headers: Record<string, string>) => worker.call(path, { method: 'POST', headers });
 
       const crossSite = await start('/console/auth/link/github?workspace=ws_0123456789abcdef0123', {
         Cookie: cookie,
@@ -232,7 +432,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
       assert.equal((await start('/console/auth/link/gitlab', { Cookie: cookie })).status, 404);
       assert.equal(
-        (await worker.call('/console/auth/link/github', { body: {}, headers: { Cookie: cookie } })).status,
+        (await worker.call('/console/auth/link/github', { method: 'PUT', headers: { Cookie: cookie } })).status,
         405,
       );
       // better-auth's own routes stay closed.
@@ -243,12 +443,12 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('unlinks a provider while the link of the e-mail signs in, and only a linked one of this person', async () => {
       const { worker, cookie, id } = await signedIn();
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
       const bob = await worker.signIn('bob@acme.dev');
       const bobs = (await (await worker.call('/console/me', { headers: { Cookie: bob } })).json()) as {
         account: { id: string };
       };
-      await linkThrough(worker, bob, 'github', github('bob@acme.dev', { id: 7 }));
+      await linked(worker, bob, 'github', github('bob@acme.dev', { id: 7 }));
 
       assert.equal(
         (await worker.call('/console/me/sign-in/google', { method: 'DELETE', headers: { Cookie: cookie } })).status,
@@ -267,7 +467,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('keeps the last way to sign in on a worker that sends no link', async () => {
       const { worker, cookie, id } = await signedIn();
       const quiet = withoutMail(worker);
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
 
       const refused = await quiet('/console/me/sign-in/github', { method: 'DELETE', headers: { Cookie: cookie } });
       assert.equal(refused.status, 409);
@@ -275,30 +475,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.deepEqual(await providersOf(worker.database, id), ['github']);
 
       // With Google linked too, one of the two may go, and then not the other.
-      await withProvider(
-        {
-          'https://oauth2.googleapis.com/token': {
-            access_token: 'ya29.an-access-token',
-            token_type: 'Bearer',
-            id_token: googleIdToken({ sub: '1081', email: 'alice@acme.dev', email_verified: true, name: 'Alice' }),
-          },
-        },
-        async () => {
-          const start = await worker.call('/console/auth/link/google', {
-            origin: null,
-            headers: { Cookie: cookie, 'Sec-Fetch-Site': 'same-site' },
-          });
-          const state = new URL(start.headers.get('Location') ?? '').searchParams.get('state') ?? '';
-          const stateCookie = start.headers
-            .getSetCookie()
-            .map((each) => each.split(';')[0])
-            .join('; ');
-          await worker.call(`/console/auth/callback/google?code=a-code&state=${state}`, {
-            origin: null,
-            headers: { Cookie: `${cookie}; ${stateCookie}` },
-          });
-        },
-      );
+      await linked(worker, cookie, 'google', google('alice@acme.dev'));
       assert.deepEqual(await providersOf(worker.database, id), ['github', 'google']);
       assert.equal(
         (await quiet('/console/me/sign-in/github', { method: 'DELETE', headers: { Cookie: cookie } })).status,
@@ -314,7 +491,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
     it('takes one of two providers, and not both, when two unlinks come at the same moment', async () => {
       const { worker, cookie, id } = await signedIn();
       const quiet = withoutMail(worker);
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
       // Google, written as better-auth writes a link: the race is in the unlinks, not here.
       await rowsOf(
         worker.database,
@@ -334,7 +511,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('asks a session older than a day to sign in again before a provider goes', async () => {
       const { worker, cookie, id } = await signedIn();
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
       await rowsOf(
         worker.database,
         `UPDATE "session" SET "createdAt" = now() - interval '25 hours' WHERE "userId" = '${id}'`,
@@ -355,7 +532,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
 
     it('unlinks for a DELETE of the console only, with the cookie, and never with the token of an extension', async () => {
       const { worker, cookie, id } = await signedIn();
-      await linkThrough(worker, cookie, 'github', github('alice@acme.dev'));
+      await linked(worker, cookie, 'github', github('alice@acme.dev'));
       const path = '/console/me/sign-in/github';
 
       assert.equal((await worker.call(path, { method: 'DELETE' })).status, 401);

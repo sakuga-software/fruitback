@@ -188,6 +188,13 @@ the account of the member who left a note, and that is what says who may give a 
   that waits, the SHA-256 of its token and the address it was sent to; the workspaces, their members, the address each invitation was sent
   to and whether a message of it left (FRU-269). The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
+  **A provider that a person links from « My account » waits for their confirmation** (FRU-415),
+  10 minutes at most: the provider, the id of the provider account, the address the provider gave
+  and the id of the session that started the link, in the table `verification`. It goes when the
+  person confirms or cancels, or when it expires. Once linked, the account keeps the provider and
+  its id, as for a sign-in, and **not the address of the provider**: the account keeps one address,
+  its own, which `forget`, the deletion of the account and its export already cover. The alert that
+  follows a link goes to that address, and names the provider account.
 
 - **The sites shared with a guest** (FRU-250): for each invitation of a guest, the ids of the sites
   it names; for each guest who accepted one, the ids of those sites, with the workspace, the account

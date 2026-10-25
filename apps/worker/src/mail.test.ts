@@ -6,6 +6,7 @@ import {
   createTemMailer,
   invitationMessage,
   parseTemCredentials,
+  providerLinkedMessage,
   signInMessage,
   unlinked,
 } from './mail.ts';
@@ -226,4 +227,27 @@ describe('what a message is made of (FRU-98, FRU-104, FRU-215)', () => {
     assert.match(invitationMessage('b@b.dev', { ...invitation, role: 'admin' }).text, /as an admin\./);
     assert.match(invitationMessage('b@b.dev', invitation).text, /as a member\.[\s\S]*It waits for 7 days\./);
   });
+});
+
+describe('the alert of a link (FRU-415)', () => {
+  const linked = { provider: 'Google', address: 'x@y.dev', link: 'https://app.fruitback.test/w/w1/account' };
+
+  for (const [locale, lead, undo] of [
+    ['en', 'The Google account x@\u200By.\u200Bdev was linked to your Fruitback account.', 'unlink it'],
+    ['fr', 'Le compte Google x@\u200By.\u200Bdev a été lié à votre compte Fruitback.', 'déliez-le'],
+  ] as const) {
+    it(`names the provider account and the way to undo it, in ${locale}, with no link made of the address`, () => {
+      const message = providerLinkedMessage('alice@acme.dev', linked, locale);
+      assert.equal(message.to, 'alice@acme.dev');
+      assert.ok(message.text.includes(lead), message.text);
+      assert.ok(message.text.includes(undo), message.text);
+      assert.ok(message.text.includes(linked.link));
+      assert.ok(message.html.includes(`href="${linked.link}"`));
+      // The address of the provider is no link in a mail client, and no markup.
+      assert.equal(message.text.includes('x@y.dev'), false);
+      const hostile = providerLinkedMessage('alice@acme.dev', { ...linked, address: HOSTILE }, locale);
+      assert.equal(hostile.html.includes(unlinked(HOSTILE)), false);
+      assert.ok(hostile.html.includes(asText(unlinked(HOSTILE))));
+    });
+  }
 });

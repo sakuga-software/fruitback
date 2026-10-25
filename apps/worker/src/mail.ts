@@ -183,6 +183,51 @@ export function invitationMessage(
   return { to, subject: words.subject, text, html };
 }
 
+/** The languages of the alert of a link (FRU-415). Any other tag falls back to English. */
+const LINKED_WORDS = {
+  en: {
+    subject: 'A sign-in method was linked to your Fruitback account',
+    lead: (provider: string, address: string) =>
+      `The ${provider} account ${address} was linked to your Fruitback account. It now signs in to it.`,
+    undo: 'If it was not you, open « My account », unlink it under « How you sign in », and sign out of the other browsers:',
+    button: 'Open My account',
+    ok: 'If it was you, there is nothing to do.',
+  },
+  fr: {
+    subject: 'Une méthode de connexion a été liée à votre compte Fruitback',
+    lead: (provider: string, address: string) =>
+      `Le compte ${provider} ${address} a été lié à votre compte Fruitback. Il permet désormais de s'y connecter.`,
+    undo: "Si ce n'était pas vous, ouvrez « Mon compte », déliez-le dans « Comment vous vous connectez », puis déconnectez les autres navigateurs :",
+    button: 'Ouvrir Mon compte',
+    ok: "Si c'était vous, il n'y a rien à faire.",
+  },
+} as const;
+
+/**
+ * The alert sent to the address of an account after a provider was linked to it (FRU-415). It says
+ * which provider account, and how to undo it. Its link is « My account », and holds no token: it
+ * opens nothing by itself. The address of the provider is written so that no client makes a link of it.
+ */
+export function providerLinkedMessage(
+  to: string,
+  linked: { provider: string; address: string; link: string },
+  locale = 'en',
+): MailMessage {
+  const words = locale.toLowerCase().startsWith('fr') ? LINKED_WORDS.fr : LINKED_WORDS.en;
+  const lead = words.lead(linked.provider, unlinked(linked.address));
+  const text = [lead, '', words.undo, '', linked.link, '', words.ok].join('\n');
+  const href = escapeHtml(linked.link);
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
+<p style="font-size:16px;font-weight:600">${escapeHtml(lead)}</p>
+<p>${escapeHtml(words.undo)}</p>
+<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p style="color:#6b6b74;font-size:13px">${escapeHtml(words.ok)}</p>
+<p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
+</body></html>`;
+
+  return { to, subject: words.subject, text, html };
+}
+
 /**
  * A text that a person wrote, as a mail client shows it without a link: a zero-width space after each
  * `.`, `:`, `/` and `@` breaks what a client would read as an address (`https://…`, `www.…`,

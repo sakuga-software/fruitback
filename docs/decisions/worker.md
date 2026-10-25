@@ -3914,23 +3914,57 @@ client map were refused together at boot.
   name read from the account at each refresh was tried first, and dropped: it would also have
   replaced the name an operator gave a pairing of the `pair` command, for a person who never chose
   one (the E2E suite caught it).
-- `GET /console/me/sign-in` lists the ways; `GET /console/auth/link/<provider>` links one by a
-  navigation, because WebKit keeps no cookie of the state from the answer of a `fetch` (FRU-147);
-  `DELETE /console/me/sign-in/<provider>` unlinks one. A link that did not start, or that
-  better-auth refused, comes back to « My account » with `?provider=<provider>&error=<code>`: the
-  provider is the one of the path, a closed list, and the console names it (FRU-416).
+- `GET /console/me/sign-in` lists the ways; `POST /console/auth/link/<provider>` starts a link by a
+  navigation (a form), because WebKit keeps no cookie of the state from the answer of a `fetch`
+  (FRU-147); `DELETE /console/me/sign-in/<provider>` unlinks one. A link that did not start, or that
+  was refused, comes back to « My account » with `?provider=<provider>&error=<code>`: the provider is
+  the one of the path, a closed list, and the console names it (FRU-416). A link to confirm comes
+  back with `?confirm=<provider>` (FRU-415).
 - The worker decides whether a provider may go, not better-auth: its count of rows does not see the
   link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
   `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.
 
-### Why a navigation, and why no ticket for it
+## A provider of another address, confirmed (FRU-415, step 1)
+
+### The rules, in short
+
+- **better-auth links a provider account whose address is not the one of the account**
+  (`accountLinking.allowDifferentEmails`), and **writes no row on the way back**: `guardLink` of
+  `provider-link.ts` runs in `user.validateUserInfo`, before better-auth writes, and answers a code.
+  It refuses `email_not_found`, `email_not_verified`, `account_already_linked_to_different_user`,
+  `email_already_used` and `provider_already_linked`, or keeps the link as pending and answers
+  `link_needs_confirmation`, which `confirmInstead` of `auth-routes.ts` turns into `?confirm=`.
+- **A sign-in is not a link.** better-auth also calls `validateUserInfo` with `link-account` when a
+  sign-in joins a provider of the same verified address (FRU-97). `guardLink` acts only when the
+  state of the call has a `link` (`getOAuthState`), which only `/link-social` writes.
+- **The session that started the link is in the state**: the `before` hook `markLinkStart` writes its
+  id with `addOAuthServerContext`, which no request reaches. A link with no such id is refused
+  (`link_not_started`).
+- **The pending link is a row of `verification`**, `fruitback-link:<user id>`, one per person, for
+  `PENDING_LINK_MS` (the life of the state of better-auth). `/console/me/sign-in/pending` reads it
+  (`GET`), confirms it (`POST`, spent by `consumeVerificationValue`) or cancels it (`DELETE`), for
+  the session of the state only. The confirmation reads every condition again, writes the row of
+  `account` with the id of the provider account, and sends the alert (`providerLinkedMessage`).
+- **The id of the provider account is read by the provider's own `accountSubject`**, as better-auth
+  reads it on the way back (`oauth2/account-key.mjs` of 1.7.10): a sign-in later finds the same row.
+
+### Why a confirmation on the way back, and not before the redirect
+
+The console cannot ask « Link the Google account x@y? » before the provider: the address is known
+only once the person has chosen an account there. So the way back keeps the link, and « My account »
+asks then, before anything is written. better-auth has no step between « read the provider » and
+« write the row », so the worker refuses the write with a code of its own and writes the row itself
+on the confirmation. A second round trip to the provider, after a « yes », would have let better-auth
+write the row, for one more page at the provider and a link that could change account in between.
+
+### Why a `POST` now
 
 A `GET` that starts a link changes something. A page of another site does not start one
 (`Sec-Fetch-Site`), and sends no cookie of the session anyway (`SameSite=Strict`). A page of the same
-site sends the cookie, and can make the browser link **the provider account that the browser is
-signed in to**, for the address of the account only: what a sign-in with that provider does already,
-since one verified address is one account (FRU-97). A one-time ticket asked for by a `POST` would
-close that too, for a second round trip and a store of tickets; it was not worth it.
+site sends the cookie with a navigation. Before FRU-415 that page could link only **the provider
+account that the browser is signed in to, for the address of the account**: what a sign-in did
+already. With another address allowed, it would be a forced link. A form `POST` carries the `Origin`
+of the console, which no other page sends; the confirmation and the alert stand behind it.
 
 ## « Last seen » and the label of a browser (FRU-249)
 

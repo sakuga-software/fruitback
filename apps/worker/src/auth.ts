@@ -9,6 +9,7 @@ import { browserLabel } from './browser-label.ts';
 import type { Kv } from './kv.ts';
 import { forgetSeenOf } from './last-seen.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
+import { type LinkApi, guardLink, markLinkStart } from './provider-link.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import type { OAuthClient } from './oauth-client.ts';
@@ -359,7 +360,7 @@ export async function authOptions(
     { magicLink },
     { createAccessControl },
     { defaultStatements },
-    { APIError },
+    { APIError, createAuthMiddleware, getOAuthState, addOAuthServerContext, getSessionFromCtx },
     { getCurrentAdapter },
   ] = await Promise.all([
     import('better-auth/plugins/organization'),
@@ -372,6 +373,8 @@ export async function authOptions(
   // No picture: the accounts of before kept none, and a picture of GitHub is an address that says
   // when a page of the console was opened.
   const noPicture = () => ({ image: undefined });
+  // FRU-415: the conditions of a provider linked from « My account », in `provider-link.ts`.
+  const linkApi = { getOAuthState, addOAuthServerContext, getSessionFromCtx } as unknown as LinkApi;
   const providers = {
     ...(config.github === undefined ? {} : { github: { ...config.github, mapProfileToUser: noPicture } }),
     ...(config.google === undefined ? {} : { google: { ...config.google, mapProfileToUser: noPicture } }),
@@ -474,7 +477,12 @@ export async function authOptions(
         locale: { type: 'string', required: false, input: false },
         ...INSTANCE_ADMIN_FIELDS,
       },
+      // FRU-415: a link from « My account » writes no row on the way back from the provider. It is
+      // refused, or kept as a pending link that the person confirms: see `provider-link.ts`.
+      validateUserInfo: guardLink(linkApi) as never,
     },
+    // FRU-415: the id of the session that starts a link goes into the state of better-auth.
+    hooks: { before: createAuthMiddleware(markLinkStart(linkApi) as never) },
     // Off, the limit of the worker is the only one. It counts above the dispatch, for every route,
     // with the address `resolveClientIp` read. On (`FRUITBACK_AUTH_TRACK_IP`), better-auth counts too,
     // with the same address: the worker hands it in `CLIENT_IP_HEADER`, and better-auth reads no
@@ -555,7 +563,10 @@ export async function authOptions(
       // FRU-249: the worker decides whether a provider may go (`unlinkProvider` of `auth-routes.ts`):
       // the link of the e-mail is a way to sign in that has no row here, so the count of better-auth,
       // one row left, is not the rule. Its own route `/unlink-account` stays closed to a request.
-      accountLinking: { allowUnlinkingAll: true },
+      // FRU-415: a provider account whose address is not the one of the account may be linked, on
+      // the conditions of `guardLink` (`provider-link.ts`): an address that the provider verified,
+      // that no other account has, and a confirmation by the session that started the link.
+      accountLinking: { allowUnlinkingAll: true, allowDifferentEmails: true },
     },
     // To a request, as `SERVED_PATHS` closes them too. The two of the link stay open to `auth.api`.
     disabledPaths: [
