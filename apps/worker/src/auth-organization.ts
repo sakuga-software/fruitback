@@ -230,7 +230,8 @@ async function isAddressOf(
  * WARNING: a process that stops between the two writes leaves the invitation with the primary address
  * of the person (raised in review of #613). That address is of the same account, so nobody else can
  * accept it, and the account still can; only the address the list shows is not the one it was sent
- * to. A column of its own on `invitation` would hold the address of before; it was not worth a
+ * to. A list of the invitations of the workspace read during the call shows the primary address too.
+ * Two acceptances do not cross: an acceptance runs alone in its workspace (`oneAtATime`). A column of its own on `invitation` would hold the address of before; it was not worth a
  * migration of a table of better-auth for that.
  */
 async function asPrimaryAddress(
@@ -249,7 +250,12 @@ async function asPrimaryAddress(
 
   return {
     async restore() {
-      await adapter.update({ model: 'invitation', where, update: { email: sent } });
+      // Only when it still names the primary address this call wrote: never over another change.
+      await adapter.update({
+        model: 'invitation',
+        where: [...where, { field: 'email', value: account.email }],
+        update: { email: sent },
+      });
     },
   };
 }

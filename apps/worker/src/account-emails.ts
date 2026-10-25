@@ -183,7 +183,9 @@ export async function handleEmailRoutes(
     // Whose it is, nobody is told.
     if (owner !== undefined) return json(409, { error: 'email-taken' }, headers);
 
-    // Counted before the link is made: a refusal above spends nothing.
+    // Counted before the link is made: a refusal above spends nothing. The count of a mailbox can be
+    // spent by anybody who types that address, as for a sign-in link: it holds the mailbox of a
+    // person against a flood, at the price of an hour of waiting for an address that is flooded.
     const asked = await context.kv.incr(`fruitback:address-adds:${account.id}`, HOUR_MS);
     if (asked > ADDRESSES_PER_HOUR) return json(429, { error: 'too-many-addresses' }, headers);
     const sent = await context.kv.incr(`fruitback:address-mail:${mailboxOf(email)}`, HOUR_MS);
