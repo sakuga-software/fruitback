@@ -3,6 +3,8 @@
 # Build context is the REPO ROOT, not this directory — the build needs the workspace lockfile and
 # `packages/shared`. In Dokploy: Dockerfile path `apps/worker/Dockerfile`, build context `.`.
 
+FROM --platform=$BUILDPLATFORM ghcr.io/pnpm/pnpm:12.15.0-alpine@sha256:f164ca19f7736a0994dae195b81756cd969542a93ef692f5ab466759d06c1da9 AS pnpm
+
 # The build stage stays on the machine that runs the build, never on the target architecture. What it
 # produces is one bundled JavaScript file, and those bytes are the same for every platform, so
 # emulating `pnpm install` and esbuild costs minutes and buys nothing. Measured cold on the
@@ -11,8 +13,8 @@
 FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 
 WORKDIR /repo
-# pnpm installed explicitly rather than through corepack, which is on its way out of the Node images.
-RUN npm install --global pnpm@11.16.0
+COPY --from=pnpm /opt/pnpm /opt/pnpm
+RUN ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
 
 # Manifests first: this layer only busts when a dependency actually changes, not on every code edit.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
