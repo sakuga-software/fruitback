@@ -574,6 +574,22 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         ).map((each) => each.id);
 
       assert.deepEqual(await theirs(), [toHome]);
+      // A list of the other address that fails leaves the list of the primary one.
+      const said = mockMethod(console, 'error', () => {});
+      const failing = mockMethod(
+        worker.auth.api as never,
+        'listUserInvitations' as never,
+        (async () => {
+          throw new Error('a list that failed');
+        }) as never,
+      );
+      try {
+        const listedNow = await worker.call(`${ORG}/list-user-invitations`, { headers: { Cookie: alice.cookie } });
+        assert.deepEqual([listedNow.status, await listedNow.json()], [200, []]);
+      } finally {
+        failing.mockRestore();
+        said.mockRestore();
+      }
       const refused = await worker.call(`${ORG}/accept-invitation`, {
         body: { invitationId: toWaiting },
         headers: { Cookie: alice.cookie },

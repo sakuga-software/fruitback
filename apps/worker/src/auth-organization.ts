@@ -725,8 +725,14 @@ async function answerOrganizationCall(
       const others = (await context.accounts.addresses(mine.userId)).filter((each) => each.email !== account?.email);
       const api = auth.api as unknown as { listUserInvitations(input: object): Promise<unknown> };
       for (const other of others) {
-        const more = await api.listUserInvitations({ query: { email: other.email } });
-        if (Array.isArray(more)) listed.push(...more);
+        // A list of another address that fails leaves the others, said in the log: never a `502` for
+        // the invitations of the primary address.
+        try {
+          const more = await api.listUserInvitations({ query: { email: other.email } });
+          if (Array.isArray(more)) listed.push(...more);
+        } catch (error) {
+          console.error(`[fruitback] the invitations of another address of a person were not read: ${String(error)}`);
+        }
       }
     }
     const now = Date.now();
