@@ -418,7 +418,7 @@ for (const subject of SUBJECTS) {
                 `UPDATE seeds SET seed = json_set(seed, '$.kind', 'fruitback.seed', '$.v', 2) WHERE id IN (2, 3)`,
               ),
             NO_RENAME,
-            /2 note\(s\) of the file \(row 2, 3\) are not a note that this worker reads, the kind of before 0\.4\.0: copy this file with the worker 0\.4\.0, and run rewrite-notes there/,
+            /2 note\(s\) of the file \(row 2, 3\) are not a note that this worker reads, a row that a person changed, or a note of before 0\.4\.0, which the SQLite store wrote: copy that file with the worker 0\.4\.0, and run rewrite-notes there/,
           ],
           [
             'a client',

@@ -594,8 +594,8 @@ function readNotesFile(
       const shown = unread.slice(0, 5).map(String).join(', ') + (unread.length > 5 ? ', …' : '');
       throw new Refused(
         `${unread.length} note(s) of the file (row ${shown}) are not a note that this worker reads, ` +
-          'the kind of before 0.4.0: copy this file with the worker 0.4.0, and run rewrite-notes there ' +
-          '(docs/self-hosting/upgrade.md)',
+          'a row that a person changed, or a note of before 0.4.0, which the SQLite store wrote: copy that file ' +
+          'with the worker 0.4.0, and run rewrite-notes there (docs/self-hosting/upgrade.md)',
       );
     }
     const unknown = [...clients.keys()].filter((before) => !byClient.has(before));
