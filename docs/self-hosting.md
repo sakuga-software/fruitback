@@ -283,8 +283,8 @@ administrator: delete it after. Then the note of a visitor, with no cookie and n
 
 ```bash
 curl -X POST http://localhost:8080/feedback -H 'Origin: http://localhost:5500' -H 'Content-Type: application/json' -d '{
-  "kind":"fruitback.seed","v":2,"id":"sd_first_pin","createdAt":"2026-10-16T00:00:00.000Z",
-  "note":"My first pin","page":{"url":"http://localhost:5500/","path":"/"},
+  "kind":"fruitback.note","v":3,"id":"sd_first_pin","createdAt":"2026-10-16T00:00:00.000Z",
+  "text":"My first pin","page":{"url":"http://localhost:5500/","path":"/"},
   "viewport":{"width":1280,"height":800},
   "anchor":{"selector":"main > h1","tag":"h1","bounds":{"xPct":0,"yPct":0,"wPct":100,"hPct":8}},
   "client":{"id":"site_099a1b20980347838e22"}}'

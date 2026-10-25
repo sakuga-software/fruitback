@@ -41,8 +41,8 @@ const PAGE = canonicalizePageUrl(`${SITE}/pricing`);
 const envOf = worlds();
 
 function noteFor(site: string, more: Partial<Note> = {}): Note {
-  const seed = noteFixture({ id: 'sd_visitor', page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
-  const { client: _own, ...rest } = seed;
+  const note = noteFixture({ id: 'sd_visitor', page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+  const { client: _own, ...rest } = note;
 
   return { ...rest, client: { id: site, name: 'Acme' }, ...more };
 }
@@ -95,13 +95,13 @@ async function sessionOf(world: World, account: string, workspace: string): Prom
 async function notesOf(answer: Response): Promise<{ note: string; verified: unknown; name: unknown }[]> {
   assert.equal(answer.status, 200, await answer.clone().text());
   const { issues } = (await answer.json()) as {
-    issues: { seed: { note: string; reporter?: { verified?: boolean; name?: string } } }[];
+    issues: { note: { text: string; reporter?: { verified?: boolean; name?: string } } }[];
   };
 
   return issues.map((issue) => ({
-    note: issue.seed.note,
-    verified: issue.seed.reporter?.verified,
-    name: issue.seed.reporter?.name,
+    note: issue.note.text,
+    verified: issue.note.reporter?.verified,
+    name: issue.note.reporter?.name,
   }));
 }
 
@@ -112,13 +112,13 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
   it('leaves a note and reads it again, with no session, no token and no cookie', async () => {
     const { world, visitor } = await workerWithASite('everyone');
 
-    const sent = await visitor.send(SITE, noteFor('ignored', { note: 'The button is too small.' }));
+    const sent = await visitor.send(SITE, noteFor('ignored', { text: 'The button is too small.' }));
     // The note names a site that is not one: the control of the next lines, which name the right one.
     assert.equal(sent.status, 400, await sent.clone().text());
     assert.equal(await rowsIn(world), 0);
 
     const { site } = { site: (await rowsOf(world.database, 'SELECT id FROM sites'))[0]?.id as string };
-    const kept = await visitor.send(SITE, noteFor(site, { note: 'The button is too small.' }));
+    const kept = await visitor.send(SITE, noteFor(site, { text: 'The button is too small.' }));
     assert.equal(kept.status, 201, await kept.clone().text());
     assert.deepEqual(await kept.json(), { issue: { id: '1', identifier: 'FB-1' } });
 

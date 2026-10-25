@@ -47,7 +47,7 @@ export function storeFor(config: WorkerConfig): NoteStore {
 /**
  * The extension's session store, or `undefined` when this worker runs without one (FRU-42).
  *
- * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
+ * Deliberately not built from `config.store`: sessions are credentials and notes are not, so they
  * never share a backend. They are in the database of the accounts (FRU-142), and in no file since
  * FRU-226.
  */

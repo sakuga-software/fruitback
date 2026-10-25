@@ -17,7 +17,7 @@ export const WORKER_ORIGIN = 'http://localhost:8788';
  */
 
 /**
- * Each spec captures on its own URL. The seed's page identity is the canonical URL, so a query
+ * Each spec captures on its own URL. The note's page identity is the canonical URL, so a query
  * parameter is all it takes to keep one spec's pins out of another's — the worker's in-memory store
  * lives for the whole run.
  */
@@ -144,7 +144,7 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
 }
 
 /**
- * The seeds the worker actually stored for this page, straight from the read path.
+ * The notes the worker actually stored for this page, straight from the read path.
  *
  * The URL is rebuilt from `window.location` rather than canonicalized: every spec captures on a
  * plain `/?case=…`, which `canonicalizePageUrl` already leaves untouched. A spec that ever needs a
@@ -152,7 +152,7 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
  * stored under.
  */
 type StoredNote = {
-  note: string;
+  text: string;
   source?: Record<string, unknown>;
   reporter?: Record<string, unknown>;
   env?: Record<string, unknown>;
@@ -162,9 +162,9 @@ export async function storedNotes(page: Page): Promise<StoredNote[]> {
   return page.evaluate(async (origin) => {
     const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-    const { issues } = (await response.json()) as { issues: { seed: StoredNote }[] };
+    const { issues } = (await response.json()) as { issues: { note: StoredNote }[] };
 
-    return issues.map((issue) => issue.seed);
+    return issues.map((issue) => issue.note);
   }, WORKER_ORIGIN);
 }
 

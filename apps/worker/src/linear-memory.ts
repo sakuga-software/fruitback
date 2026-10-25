@@ -24,7 +24,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  *
  * It is deliberately not a mock: an issue is stored as the **description string**
  * `buildIssueDescription` produces, and read back through the same `toNoteIssue` the real path uses.
- * So the dev loop exercises the round trip for real, and a seed that stops parsing breaks the
+ * So the dev loop exercises the round trip for real, and a note that stops parsing breaks the
  * playground the same way it would break production — which is the entire point of having one.
  *
  * `apps/worker/src/linear-stub.ts` is a different thing: it fakes `fetch` for the unit tests. This
@@ -65,7 +65,7 @@ const DEV_STATES = [
 ] as const;
 
 async function createNoteIssue(
-  seed: Note,
+  note: Note,
   locale?: string,
   files: readonly OutgoingFile[] = [],
 ): Promise<CreatedWithFiles> {
@@ -73,7 +73,7 @@ async function createNoteIssue(
   // The state and the replies follow the rank of the issue on its page, not in the whole store. The
   // E2E specs run side by side and each keeps to its own page (FRU-268): five notes on one page get
   // five states, and the third gets replies, whatever the other specs write at the same moment.
-  const onPage = issues.filter((issue) => issue.page === seed.page.url).length + 1;
+  const onPage = issues.filter((issue) => issue.page === note.page.url).length + 1;
   const state = DEV_STATES[onPage % DEV_STATES.length] ?? DEV_STATES[0];
   const identifier = `DEV-${String(number).padStart(3, '0')}`;
 
@@ -82,9 +82,9 @@ async function createNoteIssue(
     identifier,
     // Deliberately not a linear.app URL: a dev pin must not offer a link that 404s on the real one.
     url: `http://localhost/dev-issue/${identifier}`,
-    title: buildIssueTitle(seed),
+    title: buildIssueTitle(note),
     updatedAt: new Date().toISOString(),
-    description: buildIssueDescription(seed, { locale }),
+    description: buildIssueDescription(note, { locale }),
     state: { name: state.name, type: state.type },
     // Deliberately newest-first, like Linear's own default: the ordering is `toNoteComments`'s job,
     // and a fake that hands back an already-sorted list would never exercise it.
@@ -108,9 +108,9 @@ async function createNoteIssue(
         subtitle: ATTACHMENT_SUBTITLE,
       })),
     },
-    labels: buildIssueLabels(seed),
-    clientId: seed.client?.id,
-    page: seed.page.url,
+    labels: buildIssueLabels(note),
+    clientId: note.client?.id,
+    page: note.page.url,
   });
   const issue = { id: `dev_issue_${number}`, identifier, url: `http://localhost/dev-issue/${identifier}` };
 
@@ -123,7 +123,7 @@ async function fetchNoteIssues(query: NoteIssueQuery, policy: ClientPolicy): Pro
   return (
     issues
       // Same isolation as the real filter, by the key this store actually holds. A read that names no
-      // client gets every seed on the page, as on the other stores (FRU-34).
+      // client gets every note on the page, as on the other stores (FRU-34).
       .filter((issue) => query.clientId === undefined || issue.clientId === query.clientId)
       // `contains`, like the real filter — the exact URL check is `toNoteIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))
@@ -196,7 +196,7 @@ export function resetMemoryLinear(): void {
 /**
  * The issues this store holds, for the tests.
  *
- * The description is what the playground reads its pins back from, and the read path answers seeds
+ * The description is what the playground reads its pins back from, and the read path answers notes
  * rather than prose — so nothing else can see what was written into it.
  */
 export function memoryIssues(): { description?: string | null }[] {
@@ -223,7 +223,7 @@ export function createMemoryStore(): NoteStore {
     scope: () => 'memory',
     // FRU-331: it stands in for Linear, which takes the files of a note.
     attachments: true,
-    create: (seed, _client, policy, files) => createNoteIssue(seed, policy.locale, files),
+    create: (note, _client, policy, files) => createNoteIssue(note, policy.locale, files),
     findForPage: (query, _client, policy) => fetchNoteIssues(query, policy),
     reply: (target, reply, _client, policy) => createReply(target.issue, reply, target.clientId, policy.locale),
     check: (target, check, _client, policy) => createCheck(target.issue, check, target.clientId, policy.locale),

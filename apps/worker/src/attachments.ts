@@ -105,8 +105,8 @@ export type StoredAttachment = {
   createdAt: number;
   /** After this instant the file reads as absent, and the sweep removes it. */
   expiresAt: number;
-  /** The note that took it: the id the widget gave the seed. Absent until a note names it. */
-  seed?: string;
+  /** The note that took it: the id the widget gave the note. Absent until a note names it. */
+  note?: string;
   /**
    * A picture of FRU-44, marked so by migration 0023 (`before_transit`). It counts for nothing in
    * `heldBy` (heavy review of #427). A file of FRU-331 never has it.
@@ -128,7 +128,7 @@ export type AttachmentStore = {
    * Gives the files to one note. A file already given to another note is not taken again: the
    * answer is the files that are this note's now.
    */
-  claim(ids: readonly string[], seed: string, now: number): Promise<StoredAttachment[]>;
+  claim(ids: readonly string[], note: string, now: number): Promise<StoredAttachment[]>;
   /** Brings the end of the files to `at`, when it is later than that. */
   endAt(ids: readonly string[], at: number): Promise<void>;
   /** Removes the files. */
@@ -158,13 +158,13 @@ export function createMemoryAttachmentStore(): AttachmentStore & { size(): numbe
 
       return { files: mine.length, bytes: mine.reduce((sum, each) => sum + each.content.byteLength, 0) };
     },
-    async claim(ids, seed, now) {
+    async claim(ids, note, now) {
       const taken: StoredAttachment[] = [];
       for (const id of ids) {
         const found = held.get(id);
         if (found === undefined || found.expiresAt <= now) continue;
-        if (found.seed !== undefined && found.seed !== seed) continue;
-        found.seed = seed;
+        if (found.note !== undefined && found.note !== note) continue;
+        found.note = note;
         taken.push(found);
       }
 
@@ -221,14 +221,14 @@ export function attachmentIdOf(pathname: string): string | undefined {
 }
 
 /**
- * The picture of before that a seed names, or `undefined` (arbitration of 2026-10-21, #427).
+ * The picture of before that a note names, or `undefined` (arbitration of 2026-10-21, #427).
  *
- * Before FRU-331 the widget wrote the address of the picture, `…/screenshot/shot_…`, in the seed. A
+ * Before FRU-331 the widget wrote the address of the picture, `…/screenshot/shot_…`, in the note. A
  * note of then that is still on its way (a delivery that waits, a note kept in a tab) is delivered
  * with its picture while the migration keeps it: 7 days after the migration.
  */
-export function legacyFileOf(seed: { screenshot?: { url?: string | undefined } | undefined }): string | undefined {
-  const url = seed.screenshot?.url;
+export function legacyFileOf(note: { screenshot?: { url?: string | undefined } | undefined }): string | undefined {
+  const url = note.screenshot?.url;
   if (url === undefined) return undefined;
   try {
     const { pathname } = new URL(url);

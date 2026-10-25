@@ -4,13 +4,13 @@ import type { NoteReporter } from '@fruitback/shared';
 /**
  * Turning a claim into an identity (FRU-9).
  *
- * Anyone can type a name into the popover, so `seed.reporter` is a claim by whoever was on the page.
+ * Anyone can type a name into the popover, so `note.reporter` is a claim by whoever was on the page.
  * A client site that already knows who its visitor is can say so properly: it mints a short-lived
  * JWT, signed with a secret it shares with this worker, and the widget sends it along. Only a token
  * that verifies here produces `reporter.verified`.
  *
  * **The token never reaches Linear.** It arrives in an `Authorization` header rather than in the
- * seed, because the seed is stored verbatim in an issue description that anyone with workspace
+ * note, because the note is stored verbatim in an issue description that anyone with workspace
  * access can read — a credential in there would outlive its expiry by months.
  *
  * A standard **JWS compact JWT, HS256**, so a client site can mint one with whatever library it
@@ -146,7 +146,7 @@ export async function verifyIdentityToken(
 
   return {
     ok: true,
-    // Only what the token says. A name in the seed alongside a token identifying someone else must
+    // Only what the token says. A name in the note alongside a token identifying someone else must
     // not survive: the whole point is that this line is the worker's word.
     reporter: {
       id: claims.sub,
@@ -154,7 +154,7 @@ export async function verifyIdentityToken(
       ...(filled(claims.email) ? { email: claims.email } : {}),
       verified: true,
     },
-    // Beside the reporter and not in it: the reporter is stored in the seed, and the workspace is a
+    // Beside the reporter and not in it: the reporter is stored in the note, and the workspace is a
     // routing fact about the token.
     ...(filled(claims.ws) ? { workspace: claims.ws } : {}),
     ...(claims.scope === 'account' && claims.ws === undefined ? { account: true as const } : {}),

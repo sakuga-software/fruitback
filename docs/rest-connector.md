@@ -16,12 +16,11 @@ This page is the contract your receiver is written against.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "event": "note.created",
   "workspace": "ws_3f9a…",
   "site": { "id": "site_81c2…", "origin": "https://staging.acme.dev" },
   "identifier": "FB-12",
-  "seed": { "note": "The price should say per month.", "page": { "url": "https://staging.acme.dev/pricing" } },
   "note": {
     "kind": "fruitback.note",
     "v": 3,
@@ -33,17 +32,16 @@ This page is the contract your receiver is written against.
 
 | Field        | What it is                                                                                        |
 | ------------ | ------------------------------------------------------------------------------------------------- |
-| `version`    | `1`. It moves when a field changes meaning or goes. A new field does not move it.                 |
+| `version`    | `2`. It moves when a field changes meaning or goes. A new field does not move it.                 |
 | `event`      | `note.created`, the one event there is.                                                           |
 | `workspace`  | The id of the workspace.                                                                          |
 | `site`       | The id of the site, and its origin.                                                               |
 | `identifier` | What Fruitback calls the note. The thread of its pin shows it.                                    |
-| `seed`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field. |
-| `note`       | The same note in the shape of `fruitback.note` v3: its words are in `text` (FRU-378).             |
+| `note`       | The whole note, as the widget built it. [What the widget collects](privacy.md) lists every field. |
 
-`note` came with FRU-378, when a « seed » became a note. A request has both fields, and `seed` stays
-as it is: a receiver written before reads what it read. A request queued before the upgrade has
-`seed` only. `parseNote` of `@fruitback/shared` reads either of them.
+Version 2 came with FRU-378: the note is under `note`, its words in `text`. Version 1 had it under
+another key, in the shape of before: a receiver written for it reads nothing from version 2, and is
+written again for this page. `parseNote` of `@fruitback/shared` 0.4.0 reads the note of version 2.
 
 A note can carry files (FRU-331): a capture of the page or of an area, an image, any file. A body
 then has one more field, `attachments`, with one entry for each file that still waits in the worker:

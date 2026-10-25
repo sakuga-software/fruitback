@@ -152,7 +152,7 @@ function scriptsFor(origin: string, ids: { bridge: string; page: string }, exclu
   return [
     { id: ids.bridge, matches, ...leftOut, js: [BRIDGE_FILE], runAt: 'document_idle', world: 'ISOLATED' },
     // The widget, in the page's own world. See entrypoints/page.content.ts for why that is not a
-    // preference: from the isolated world every fiber the seed's `source` comes from is invisible.
+    // preference: from the isolated world every fiber the note's `source` comes from is invisible.
     { id: ids.page, matches, ...leftOut, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN' },
   ];
 }

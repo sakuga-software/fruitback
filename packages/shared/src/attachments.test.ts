@@ -67,7 +67,7 @@ describe('the files of a note (FRU-331)', () => {
       stateName: '',
       updatedAt: '',
       attachments: [{ name: 'a.png' }],
-      seed: noteFixture(),
+      note: noteFixture(),
     };
     assert.deepEqual(noteIssueSchema.parse(issue).attachments, [{ name: 'a.png' }]);
     const { attachments: _none, ...without } = issue;

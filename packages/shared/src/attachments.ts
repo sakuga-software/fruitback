@@ -69,7 +69,7 @@ export const ATTACHMENT_NAME_LENGTH = 120;
  * A file of a note, as a read answers it, after the tracker took it.
  *
  * `url` is the address that the tracker gave the file: it opens there, with an account of the
- * tracker. Fruitback serves no file. Part of the read envelope: `SEED_VERSION` does not move.
+ * tracker. Fruitback serves no file. Part of the read envelope: `NOTE_VERSION` does not move.
  */
 export const noteAttachmentSchema = z.object({
   name: z.string().min(1),

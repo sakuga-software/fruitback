@@ -254,8 +254,8 @@ describe('a host that signs in, past the composer (FRU-394, second review of #52
 
   it('says the session ended for the notes kept for later, not « members only »', async () => {
     const page = mounted();
-    const store = createDraftStore({ storage: page.view.sessionStorage, key: 'fruitback:config:drafts' });
-    store.add({ seed: noteFixture({ id: 'sd_kept', note: NOTE }) });
+    const store = createDraftStore({ storage: page.view.sessionStorage, key: 'fruitback:config:notes' });
+    store.add({ note: noteFixture({ id: 'sd_kept', text: NOTE }) });
     const widget = init({
       document: page.document,
       endpoint: ENDPOINT,

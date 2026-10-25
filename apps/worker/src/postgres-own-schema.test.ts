@@ -110,9 +110,9 @@ for (const { label, open, skip } of [
       const me = await worker.call('/console/me', { headers: { Cookie: cookie } });
       assert.equal(me.status, 200, await me.clone().text());
       const page = canonicalizePageUrl('https://staging.acme.dev/pricing');
-      const seed = noteFixture({ id: 'sd_1', page: { url: page, path: '/pricing', title: 'Pricing' } });
+      const note = noteFixture({ id: 'sd_1', page: { url: page, path: '/pricing', title: 'Pricing' } });
       const store = createPostgresNoteStore(database);
-      await store.create({ ...seed, client: { id: 'site_1', name: 'Acme' } }, undefined, POLICY);
+      await store.create({ ...note, client: { id: 'site_1', name: 'Acme' } }, undefined, POLICY);
       assert.equal((await store.findForPage({ url: page, clientId: 'site_1' }, undefined, POLICY)).length, 1);
 
       // Its tables, the ones of better-auth among them, and its journal are in its schema.
@@ -227,13 +227,13 @@ describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL
         subject: 'alice@acme.dev',
         email: 'alice@acme.dev',
       });
-      const seed = noteFixture({ id: 'sd_a' });
-      await createPostgresNoteStore(a).create(seed, undefined, POLICY);
+      const note = noteFixture({ id: 'sd_a' });
+      await createPostgresNoteStore(a).create(note, undefined, POLICY);
 
       assert.equal((await createPostgresAccountStore(b).account(alice.id)) === undefined, true);
       assert.deepEqual(
         await createPostgresNoteStore(b).findForPage(
-          { url: seed.page.url, clientId: seed.client?.id },
+          { url: note.page.url, clientId: note.client?.id },
           undefined,
           POLICY,
         ),

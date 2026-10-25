@@ -206,16 +206,16 @@ test('the documented snippet mounts on its own, from its data attributes', async
   await plantFromTheDocumentedTag(page, 'snippet');
 
   // The tag asked for nothing more, so the browser of the reporter is not in the note (FRU-84).
-  const [seed] = await storedNotes(page);
-  expect(seed?.env).toBeUndefined();
+  const [note] = await storedNotes(page);
+  expect(note?.env).toBeUndefined();
 });
 
 test('a tag sends the environment of the reporter only when it says so (FRU-84)', async ({ page }) => {
   // The control for the absence above: the same tag, with the one attribute that turns it on.
   await plantFromTheDocumentedTag(page, 'snippet-env', { 'data-fruitback-include-env': 'true' });
 
-  const [seed] = await storedNotes(page);
-  expect(seed?.env?.userAgent).toEqual(expect.stringContaining('Mozilla'));
+  const [note] = await storedNotes(page);
+  expect(note?.env?.userAgent).toEqual(expect.stringContaining('Mozilla'));
 });
 
 test('a half-configured tag leaves the page alone', async ({ page }) => {

@@ -52,10 +52,10 @@ async function withStatuses(page: Page): Promise<void> {
     async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
       const response = await route.fetch();
-      const body = (await response.json()) as { issues: { id: string; stage: string; seed: { note: string } }[] };
+      const body = (await response.json()) as { issues: { id: string; stage: string; note: { text: string } }[] };
       const statuses: Record<string, string>[] = [];
       const issues = body.issues.map((issue) => {
-        const chosen = Object.values(NOTES).find((each) => each.note === issue.seed.note);
+        const chosen = Object.values(NOTES).find((each) => each.note === issue.note.text);
         if (chosen === undefined) return issue;
         const key = `e2e:${issue.id}`;
         statuses.push({ key, name: chosen.name, stage: issue.stage, color: chosen.color });

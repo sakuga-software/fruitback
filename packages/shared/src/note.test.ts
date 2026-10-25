@@ -1,30 +1,26 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  type Note,
-  NOTE_KIND,
-  NOTE_VERSION,
-  SEED_KIND,
-  SEED_VERSION,
-  canonicalizePageUrl,
-  parseNote,
-  toNoteV3,
-} from './note.ts';
+import { NOTE_KIND, NOTE_VERSION, canonicalizePageUrl, parseNote } from './note.ts';
 import { minimalNoteFixture, noteFixture } from './note.fixture.ts';
 
 describe('createNote', () => {
   it('stamps the current kind and version', () => {
     const note = noteFixture();
 
-    assert.equal(note.kind, SEED_KIND);
-    assert.equal(note.v, SEED_VERSION);
+    assert.equal(note.kind, NOTE_KIND);
+    assert.equal(note.v, NOTE_VERSION);
+  });
+
+  it('names the kind and the version of a note (FRU-378)', () => {
+    assert.equal(NOTE_KIND, 'fruitback.note');
+    assert.equal(NOTE_VERSION, 3);
   });
 
   it('adds no field the caller did not provide', () => {
     // Schema defaults would silently break the write ↦ read round-trip.
     const note = minimalNoteFixture();
 
-    assert.deepEqual(Object.keys(note).sort(), ['anchor', 'createdAt', 'id', 'kind', 'note', 'page', 'v', 'viewport']);
+    assert.deepEqual(Object.keys(note), ['kind', 'v', 'id', 'createdAt', 'text', 'page', 'viewport', 'anchor']);
   });
 
   it('rejects a page URL that is not absolute http(s)', () => {
@@ -49,10 +45,18 @@ describe('createNote', () => {
 });
 
 describe('parseNote', () => {
-  it('accepts a note it produced', () => {
-    const result = parseNote(JSON.parse(JSON.stringify(noteFixture())));
+  it('accepts a note it produced, the full one and the minimal one', () => {
+    for (const note of [noteFixture(), minimalNoteFixture()]) {
+      assert.deepEqual(parseNote(JSON.parse(JSON.stringify(note))), { ok: true, note });
+    }
+  });
 
-    assert.deepEqual(result, { ok: true, note: noteFixture() });
+  it('keeps the words of the note in text, and in no field called note', () => {
+    const result = parseNote(JSON.parse(JSON.stringify(noteFixture({ text: 'Le bouton déborde.' }))));
+
+    assert.ok(result.ok);
+    assert.equal(result.note.text, 'Le bouton déborde.');
+    assert.equal('note' in result.note, false);
   });
 
   it('reports anything without our kind as not-found', () => {
@@ -61,10 +65,46 @@ describe('parseNote', () => {
     assert.deepEqual(parseNote('{}'), { ok: false, reason: 'not-found' });
   });
 
-  it('refuses a payload from a newer Fruitback instead of dropping its fields', () => {
-    const result = parseNote({ ...noteFixture(), v: SEED_VERSION + 1 });
+  it('reports a payload of before FRU-378 as not-found: rewrite-notes alone reads it', () => {
+    for (const v of [1, 2, 3]) {
+      const { kind: _kind, v: _v, text, ...rest } = noteFixture();
+      const before = { kind: 'fruitback.seed', v, note: text, ...rest };
+      assert.deepEqual(parseNote(before), { ok: false, reason: 'not-found' });
+    }
+  });
 
-    assert.deepEqual(result, { ok: false, reason: 'unsupported-version', version: SEED_VERSION + 1 });
+  it('refuses a payload from a newer Fruitback instead of dropping its fields', () => {
+    const result = parseNote({ ...noteFixture(), v: NOTE_VERSION + 1 });
+
+    assert.deepEqual(result, { ok: false, reason: 'unsupported-version', version: NOTE_VERSION + 1 });
+  });
+
+  it('refuses a fruitback.note of a version before 3, which no writer made', () => {
+    for (const v of [1, 2]) {
+      assert.deepEqual(parseNote({ ...noteFixture(), v }), {
+        ok: false,
+        reason: 'invalid',
+        message: 'v: fruitback.note starts at version 3',
+      });
+    }
+  });
+
+  it('refuses a note that holds its words in note rather than text', () => {
+    const { text, ...withoutText } = noteFixture();
+
+    assert.deepEqual(parseNote({ ...withoutText, note: text }), {
+      ok: false,
+      reason: 'invalid',
+      message: 'text: Invalid input: expected string, received undefined',
+    });
+  });
+
+  it('refuses a text longer than a note may be', () => {
+    const result = parseNote({ ...noteFixture(), text: 'x'.repeat(5_001) });
+
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok && result.reason, 'invalid');
+    assert.match(!result.ok && result.reason === 'invalid' ? result.message : '', /^text: /);
   });
 
   it('reports a corrupted payload as invalid, naming the field', () => {
@@ -77,32 +117,8 @@ describe('parseNote', () => {
     assert.ok(result.message.includes('anchor'), result.message);
   });
 
-  it('still reads a note written at version 1', () => {
-    // A note as a widget wrote it before FRU-9 moved the version to 2: no `reporter.verified`. Such
-    // notes live in issues already in Linear, and readers accept older versions (CONTRIBUTING.md).
-    const v1 = {
-      kind: 'fruitback.seed',
-      v: 1,
-      id: 'sd_v1_7c41',
-      createdAt: '2026-08-01T10:00:00.000Z',
-      note: 'Le titre passe sous le menu.',
-      page: { url: 'https://preview.acme.test/pricing', path: '/pricing', title: 'Pricing — Acme' },
-      viewport: { width: 1440, height: 900, dpr: 2 },
-      anchor: {
-        selector: '[data-testid="hero-title"]',
-        tag: 'h1',
-        text: 'Pricing',
-        bounds: { xPct: 10, yPct: 5, wPct: 80, hPct: 6 },
-      },
-      client: { id: 'acme' },
-      reporter: { name: 'Alice', email: 'alice@acme.test' },
-    };
-
-    assert.deepEqual(parseNote(JSON.parse(JSON.stringify(v1))), { ok: true, note: v1 });
-  });
-
   it('reports a version that is not a positive integer as malformed', () => {
-    for (const v of [0, -1, 1.5, '2', null, Number.NaN]) {
+    for (const v of [0, -1, 1.5, '3', null, Number.NaN]) {
       assert.deepEqual(
         parseNote({ ...noteFixture(), v }),
         { ok: false, reason: 'invalid', message: 'missing or malformed note version' },
@@ -119,138 +135,6 @@ describe('parseNote', () => {
       reason: 'invalid',
       message: 'missing or malformed note version',
     });
-  });
-});
-
-/** A note as a writer of `NOTE_KIND` writes it: the same fields, its words in `text` (FRU-378). */
-function version3(note: Note): Record<string, unknown> {
-  const { kind: _kind, v: _v, note: text, ...rest } = note;
-
-  return JSON.parse(JSON.stringify({ kind: NOTE_KIND, v: NOTE_VERSION, ...rest, text }));
-}
-
-describe('parseNote, the kind fruitback.note (FRU-378)', () => {
-  it('names the kinds and the versions the issues hold', () => {
-    assert.equal(SEED_KIND, 'fruitback.seed');
-    assert.equal(SEED_VERSION, 2);
-    assert.equal(NOTE_KIND, 'fruitback.note');
-    assert.equal(NOTE_VERSION, 3);
-  });
-
-  it('reads a note of version 3 as the same note of version 2', () => {
-    for (const note of [noteFixture(), minimalNoteFixture()]) {
-      assert.deepEqual(parseNote(version3(note)), { ok: true, note });
-    }
-  });
-
-  it('answers the fields in the order of version 2, so a note written again reads the same', () => {
-    const result = parseNote(version3(noteFixture()));
-
-    assert.ok(result.ok);
-    assert.equal(JSON.stringify(result.note), JSON.stringify(noteFixture()));
-  });
-
-  it('keeps the words of the note, and no field called text', () => {
-    const result = parseNote(version3(noteFixture({ note: 'Le bouton déborde.' })));
-
-    assert.ok(result.ok);
-    assert.equal(result.note.note, 'Le bouton déborde.');
-    assert.equal('text' in result.note, false);
-  });
-
-  it('refuses a version 3 that holds its words in note rather than text', () => {
-    const { text: _text, ...withoutText } = version3(noteFixture());
-
-    assert.deepEqual(parseNote({ ...withoutText, note: 'Le bouton déborde.' }), {
-      ok: false,
-      reason: 'invalid',
-      message: 'text: Invalid input: expected string, received undefined',
-    });
-  });
-
-  it('refuses a version 3 whose text is longer than a note may be', () => {
-    const result = parseNote({ ...version3(noteFixture()), text: 'x'.repeat(5_001) });
-
-    assert.equal(result.ok, false);
-    assert.equal(!result.ok && result.reason, 'invalid');
-    assert.match(!result.ok && result.reason === 'invalid' ? result.message : '', /^text: /);
-  });
-
-  it('refuses a version of fruitback.note newer than it reads', () => {
-    assert.deepEqual(parseNote({ ...version3(noteFixture()), v: NOTE_VERSION + 1 }), {
-      ok: false,
-      reason: 'unsupported-version',
-      version: NOTE_VERSION + 1,
-    });
-  });
-
-  it('refuses a fruitback.note of a version before 3, which no writer made', () => {
-    for (const v of [1, 2]) {
-      assert.deepEqual(parseNote({ ...version3(noteFixture()), v }), {
-        ok: false,
-        reason: 'invalid',
-        message: 'v: fruitback.note starts at version 3',
-      });
-    }
-  });
-
-  it('reports a malformed version of fruitback.note as malformed', () => {
-    assert.deepEqual(parseNote({ ...version3(noteFixture()), v: '3' }), {
-      ok: false,
-      reason: 'invalid',
-      message: 'missing or malformed note version',
-    });
-  });
-
-  it('reports a corrupted version 3 as invalid, naming the field', () => {
-    const { anchor: _anchor, ...withoutAnchor } = version3(noteFixture());
-    const result = parseNote(withoutAnchor);
-
-    assert.equal(!result.ok && result.reason, 'invalid');
-    assert.match(!result.ok && result.reason === 'invalid' ? result.message : '', /^anchor: /);
-  });
-
-  it('still refuses a fruitback.seed of version 3', () => {
-    assert.deepEqual(parseNote({ ...noteFixture(), v: 3 }), { ok: false, reason: 'unsupported-version', version: 3 });
-  });
-});
-
-describe('toNoteV3 (FRU-378)', () => {
-  it('reads back as the same note, for the full and the minimal note', () => {
-    for (const note of [noteFixture(), minimalNoteFixture()]) {
-      assert.deepEqual(parseNote(toNoteV3(note)), { ok: true, note });
-      assert.deepEqual(parseNote(JSON.parse(JSON.stringify(toNoteV3(note)))), { ok: true, note });
-    }
-  });
-
-  it('stamps the kind and the version of fruitback.note, and moves the words to text', () => {
-    const v3 = toNoteV3(noteFixture({ note: 'Le bouton déborde.' }));
-
-    assert.equal(v3.kind, 'fruitback.note');
-    assert.equal(v3.v, 3);
-    assert.equal(v3.text, 'Le bouton déborde.');
-    assert.equal('note' in v3, false);
-  });
-
-  it('keeps the fields in the order of version 2, with text where note was', () => {
-    assert.deepEqual(Object.keys(toNoteV3(minimalNoteFixture())), [
-      'kind',
-      'v',
-      'id',
-      'createdAt',
-      'text',
-      'page',
-      'viewport',
-      'anchor',
-    ]);
-  });
-
-  it('leaves the note it was given as it was', () => {
-    const note = noteFixture();
-    const before = JSON.stringify(note);
-    toNoteV3(note);
-
-    assert.equal(JSON.stringify(note), before);
   });
 });
 

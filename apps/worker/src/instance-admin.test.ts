@@ -74,7 +74,7 @@ async function anInstance() {
   const [kept] = await rowsOf(
     on.database,
     `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
-       VALUES ('${site.id}', 'https://staging.beta.dev/', 'new', '{"id":"sd_1","note":"${NOTE_TEXT}"}', 1, 1)
+       VALUES ('${site.id}', 'https://staging.beta.dev/', 'new', '{"id":"sd_1","text":"${NOTE_TEXT}"}', 1, 1)
      RETURNING id`,
   );
   await rowsOf(
@@ -434,7 +434,7 @@ describe('what the administrator reads (FRU-261)', () => {
       assert.doesNotMatch(text, /[0-9a-f]{40,}/i, `${path} holds something that looks like a digest`);
       const keys = [...text.matchAll(/"([^"]+)":/g)].map((match) => match[1] as string);
       for (const key of keys) {
-        assert.doesNotMatch(key, /token|secret|sealed|hash|digest|password|^body$|^seed$/i, path);
+        assert.doesNotMatch(key, /token|secret|sealed|hash|digest|password|^body$/i, path);
         if (!notes) assert.doesNotMatch(key, /excerpt|^note$|^text$/i, path);
       }
       // The control: the route of the notes holds the note, so the loop above reads an answer that has one.
@@ -562,11 +562,11 @@ async function notesOfTheInstance() {
   const linear = await on.accounts.addConnector(gamma, { kind: 'linear', label: 'Linear GAM', sealed: 'x' });
   const index = createPostgresNoteIndex(on.database);
 
-  const keep = async (site: string, seed: string, note: string): Promise<string> => {
+  const keep = async (site: string, id: string, text: string): Promise<string> => {
     const [row] = await rowsOf(
       on.database,
       `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
-         VALUES ('${site}', 'https://${site}.test/', 'new', '${JSON.stringify({ id: seed, note })}', 1, 1)
+         VALUES ('${site}', 'https://${site}.test/', 'new', '${JSON.stringify({ id, text })}', 1, 1)
        RETURNING id`,
     );
 
@@ -575,7 +575,7 @@ async function notesOfTheInstance() {
   const entry = (workspace: string, site: string, id: string, note: string, place: Place, reference: string) => ({
     workspace,
     site,
-    seed: noteFixture({ id, note }),
+    note: noteFixture({ id, text: note }),
     channel: 'script' as const,
     author: { kind: 'visitor' as const },
     place,

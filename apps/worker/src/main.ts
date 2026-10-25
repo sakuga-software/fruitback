@@ -1,6 +1,7 @@
 import { startServer } from './server.ts';
 import { runAdminLink, runForget, runMigrateToPostgres, runPair } from './cli.ts';
 import { closeDatabases } from './postgres.ts';
+import { runRewriteNotes } from './rewrite-notes.ts';
 
 /**
  * Container entry point, kept apart from `server.ts` so importing the server in a test does not bind
@@ -20,6 +21,8 @@ const COMMANDS = new Map<
   ['pair', runPair],
   ['forget', runForget],
   ['migrate-to-postgres', runMigrateToPostgres],
+  // FRU-378: the notes of before, rewritten once into the note of now.
+  ['rewrite-notes', runRewriteNotes],
 ]);
 const command = COMMANDS.get(process.argv[2]);
 

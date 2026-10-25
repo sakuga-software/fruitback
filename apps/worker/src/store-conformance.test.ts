@@ -324,13 +324,13 @@ function unreadableAnswers(): void {
   );
 }
 
-/** Write a seed, then store replies on it. */
+/** Write a note, then store replies on it. */
 async function writeWithReplies(
   store: NoteStore,
-  seed: Parameters<NoteStore['create']>[0],
+  note: Parameters<NoteStore['create']>[0],
   reply: (created: CreatedIssue) => void,
 ): Promise<void> {
-  reply(await store.create(seed, undefined, POLICY));
+  reply(await store.create(note, undefined, POLICY));
 }
 
 let linear: ReturnType<typeof fakeLinear> | undefined;
@@ -356,9 +356,9 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
     skip,
     writtenStage: DEFAULT_NOTE_STAGE,
     replyCap: POSTGRES_REPLY_CAP,
-    otherTenant: 'one database holds the seeds of every site, so there is no other tenant',
+    otherTenant: 'one database holds the notes of every site, so there is no other tenant',
     readWithNoClient:
-      'one database holds the seeds of every workspace: a read that names no site gets the seeds that name none',
+      'one database holds the notes of every workspace: a read that names no site gets the notes that name none',
     async open() {
       const database = await create();
       databases.push(database);
@@ -374,8 +374,8 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
     markDone: async (created) => {
       await rowsOf(opened(), `UPDATE notes SET stage = 'done' WHERE id = ${Number(created.id)}`);
     },
-    plantReplies: async (store, seed, count) => {
-      const created = await store.create(seed, undefined, POLICY);
+    plantReplies: async (store, note, count) => {
+      const created = await store.create(note, undefined, POLICY);
       for (const reply of repliesNewestFirst(count)) {
         await rowsOf(
           opened(),
@@ -386,7 +386,7 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
     // A database that refuses every statement, as one whose tables are gone would.
     broken() {
       const refuses = async (): Promise<never> => {
-        throw Object.assign(new Error('relation "seeds" does not exist'), { code: '42P01' });
+        throw Object.assign(new Error('relation "notes" does not exist'), { code: '42P01' });
       };
 
       return createPostgresNoteStore({
@@ -432,8 +432,8 @@ const SUBJECTS: ConformanceSubject[] = [
     markDone(created) {
       linear!.node(created.id).state = { id: 'st_done', name: 'Done', type: 'completed' };
     },
-    plantReplies: (store, seed, count) =>
-      writeWithReplies(store, seed, (created) => {
+    plantReplies: (store, note, count) =>
+      writeWithReplies(store, note, (created) => {
         linear!.node(created.id).comments = {
           nodes: repliesNewestFirst(count).map((reply, index) => ({
             id: `comment_${index}`,
@@ -479,8 +479,8 @@ const SUBJECTS: ConformanceSubject[] = [
     unknownState(created) {
       github!.issue(created.id).state = 'marmalade';
     },
-    plantReplies: (store, seed, count) =>
-      writeWithReplies(store, seed, (created) => {
+    plantReplies: (store, note, count) =>
+      writeWithReplies(store, note, (created) => {
         github!.issue(created.id).replies = repliesNewestFirst(count).map((reply, index) => ({
           id: 100 + index,
           body: reply.body,
@@ -509,7 +509,7 @@ const SUBJECTS: ConformanceSubject[] = [
   {
     provider: 'memory',
     replyCap: 'the dev store writes two canned replies and no more',
-    otherTenant: 'one list in the process holds the seeds of every client, so there is no other tenant',
+    otherTenant: 'one list in the process holds the notes of every client, so there is no other tenant',
     open() {
       resetMemoryLinear();
 
@@ -518,15 +518,15 @@ const SUBJECTS: ConformanceSubject[] = [
     close: () => resetMemoryLinear(),
     unknownState: 'the dev store gives each note a state from its own list',
     markDone: (created) => setMemoryIssueState(created.id, { name: 'Done', type: 'completed' }),
-    async plantReplies(store, seed) {
+    async plantReplies(store, note) {
       // The dev store writes two replies, newest first, on the third note of each page (FRU-268).
       // The two notes before it are on the same page, for another client, so a read for this one
-      // finds only the seed.
+      // finds only the note.
       for (const filler of [1, 2]) {
         const client = { id: `filler_${filler}`, name: `Filler ${filler}` };
-        await store.create({ ...seed, id: `${seed.id}_${filler}`, client }, undefined, POLICY);
+        await store.create({ ...note, id: `${note.id}_${filler}`, client }, undefined, POLICY);
       }
-      await store.create(seed, undefined, POLICY);
+      await store.create(note, undefined, POLICY);
     },
     broken: 'the dev store keeps the notes in the process, so no provider can fail',
     unreachable: 'the dev store keeps the notes in the process, so there is no network to lose',
@@ -596,9 +596,9 @@ describe('the store matrix in docs/self-hosting.md', () => {
 
 describe('Linear, in a team that refuses the labels (FRU-138)', () => {
   const noteFixtureOf = (id: string, client: string | undefined) => {
-    const seed = noteFixture({ id });
+    const note = noteFixture({ id });
 
-    return client === undefined ? { ...seed, client: undefined } : { ...seed, client: { id: client } };
+    return client === undefined ? { ...note, client: undefined } : { ...note, client: { id: client } };
   };
 
   it('reads a note back, and keeps the notes of two clients of one team apart', async () => {
@@ -610,7 +610,7 @@ describe('Linear, in a team that refuses the labels (FRU-138)', () => {
       await store.create(mine, undefined, POLICY);
       await store.create(theirs, undefined, POLICY);
       const read = async (clientId: string | undefined) =>
-        (await store.findForPage({ url: mine.page.url, clientId }, undefined, POLICY)).map((issue) => issue.seed.id);
+        (await store.findForPage({ url: mine.page.url, clientId }, undefined, POLICY)).map((issue) => issue.note.id);
 
       assert.deepEqual(await read('acme'), ['sd_mine00000001']);
       assert.deepEqual(await read('globex'), ['sd_theirs000001']);

@@ -30,7 +30,7 @@ import { apart, git } from './git.fixture.ts';
  *
  * The ratchet and the choice of files are driven here on reports and diffs written for the test:
  * the job runs for minutes, and a defect in either would only show as a green check that holds
- * nothing. The configuration is held to the code it mutates, so a file added to the seed contract
+ * nothing. The configuration is held to the code it mutates, so a file added to the note contract
  * joins the run or fails this test.
  *
  * It lives beside `workflows.test.ts` because the root has no `test` target.
@@ -41,7 +41,7 @@ const SHARED = JSON.parse(readFileSync(new URL('packages/shared/stryker.config.j
 const WORKER = JSON.parse(readFileSync(new URL('apps/worker/stryker.config.json', ROOT), 'utf8')) as object;
 
 /** A report of one file, with one mutant for each status given. */
-function report(statuses: Status[], file = 'src/seed.ts'): Report {
+function report(statuses: Status[], file = 'src/note.ts'): Report {
   return {
     files: {
       [file]: {
@@ -62,14 +62,14 @@ function deletedAndRenamed(): string[] {
   try {
     git(repository, 'init', '-q', '-b', 'main');
     mkdirSync(join(repository, 'packages/shared/src'), { recursive: true });
-    for (const file of ['issue', 'issue.test', 'seed', 'seed.test']) {
+    for (const file of ['issue', 'issue.test', 'note', 'note.test']) {
       writeFileSync(join(repository, `packages/shared/src/${file}.ts`), `export const name = '${file}';\n`);
     }
     git(repository, 'add', '.');
     git(repository, 'commit', '-q', '-m', 'base');
     const base = git(repository, 'rev-parse', 'HEAD').trim();
     rmSync(join(repository, 'packages/shared/src/issue.test.ts'));
-    renameSync(join(repository, 'packages/shared/src/seed.test.ts'), join(repository, 'packages/shared/src/x.test.ts'));
+    renameSync(join(repository, 'packages/shared/src/note.test.ts'), join(repository, 'packages/shared/src/x.test.ts'));
     git(repository, 'add', '-A');
     git(repository, 'commit', '-q', '-m', 'a test deleted, a test renamed');
     return apart(() => changedSince(base, repository));
@@ -80,20 +80,20 @@ function deletedAndRenamed(): string[] {
 
 describe('the score of a mutation run', () => {
   it('counts a timeout as detected, a mutant no test reaches as missed, and an invalid one as nothing', () => {
-    assert.deepEqual(scoreOf(report(['Killed', 'Timeout', 'Survived', 'NoCoverage']).files['src/seed.ts']!.mutants), {
+    assert.deepEqual(scoreOf(report(['Killed', 'Timeout', 'Survived', 'NoCoverage']).files['src/note.ts']!.mutants), {
       score: 50,
       mutants: 4,
     });
     assert.deepEqual(
-      scoreOf(report(['Killed', 'CompileError', 'RuntimeError', 'Ignored']).files['src/seed.ts']!.mutants),
+      scoreOf(report(['Killed', 'CompileError', 'RuntimeError', 'Ignored']).files['src/note.ts']!.mutants),
       {
         score: 100,
         mutants: 1,
       },
     );
-    assert.equal(scoreOf(report(['Ignored']).files['src/seed.ts']!.mutants), undefined);
+    assert.equal(scoreOf(report(['Ignored']).files['src/note.ts']!.mutants), undefined);
     // Rounded down: two of three is 66.66, never 66.67.
-    assert.equal(scoreOf(report(['Killed', 'Killed', 'Survived']).files['src/seed.ts']!.mutants)?.score, 66.66);
+    assert.equal(scoreOf(report(['Killed', 'Killed', 'Survived']).files['src/note.ts']!.mutants)?.score, 66.66);
   });
 
   it('fails a file that scores under its line, and holds one that scores the same or more', () => {
@@ -102,7 +102,7 @@ describe('the score of a mutation run', () => {
     assert.deepEqual(regressions(lines, report(['Killed', 'Killed', 'Survived']), true), []);
     assert.deepEqual(regressions(lines, report(['Killed', 'Killed', 'Killed']), true), []);
     assert.deepEqual(regressions(lines, report(['Killed', 'Survived', 'Survived']), false), [
-      'src/seed.ts scores 33.33, under its line of 66.66',
+      'src/note.ts scores 33.33, under its line of 66.66',
     ]);
   });
 
@@ -122,7 +122,7 @@ describe('the score of a mutation run', () => {
   it('reads the reports of the jobs of a package as one, and fails a full run that left a file out', () => {
     const lines = linesOf(merged([report(['Killed', 'Killed']), report(['Killed', 'Survived'], 'src/new.ts')]));
 
-    assert.deepEqual(Object.keys(lines.files).sort(), ['src/new.ts', 'src/seed.ts']);
+    assert.deepEqual(Object.keys(lines.files).sort(), ['src/new.ts', 'src/note.ts']);
     assert.equal(lines.score, 75);
     assert.deepEqual(regressions(lines, merged([report(['Killed', 'Killed'])]), true), [
       'src/new.ts has a line, and this full run did not measure it',
@@ -139,15 +139,15 @@ describe('the score of a mutation run', () => {
 });
 
 describe('what a mutation job mutates', () => {
-  const scope = ['src/seed.ts', 'src/issue.ts'];
+  const scope = ['src/note.ts', 'src/issue.ts'];
 
   it('mutates the files of the scope that a pull request changes, and no other', () => {
-    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/seed.ts', 'README.md']), {
-      mutate: ['src/seed.ts'],
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/note.ts', 'README.md']), {
+      mutate: ['src/note.ts'],
       full: false,
       line: false,
     });
-    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['apps/worker/src/seed.ts']), {
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['apps/worker/src/note.ts']), {
       mutate: [],
       full: false,
       line: false,
@@ -160,7 +160,7 @@ describe('what a mutation job mutates', () => {
       full: false,
       line: false,
     });
-    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/seed-shape.test.ts']), {
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/note-shape.test.ts']), {
       mutate: [],
       full: false,
       line: false,
@@ -271,7 +271,7 @@ describe('what a mutation job mutates', () => {
   });
 
   /**
-   * A file added to the seed contract changes `packages/shared/stryker.config.json`. That ran the
+   * A file added to the note contract changes `packages/shared/stryker.config.json`. That ran the
    * whole worker too, and the worker ran out of time on #427 (FRU-336), with no mutant of its own changed.
    */
   it('mutates the whole scope of a package for its own configuration, and not for the one of another', () => {
@@ -289,7 +289,7 @@ describe('what a mutation job mutates', () => {
 
   it('gives each file a job of its own, with an artifact that names its package and its file', () => {
     const { jobs, lines } = plan([
-      { pkg: 'packages/shared', mutate: ['src/seed.ts'], full: false, line: false },
+      { pkg: 'packages/shared', mutate: ['src/note.ts'], full: false, line: false },
       { pkg: 'apps/worker', mutate: ['src/kv.ts', 'src/cors.ts'], full: true, line: true },
       { pkg: 'apps/extension', mutate: [], full: true, line: true },
       { pkg: 'apps/console', mutate: ['src/a.ts'], full: false, line: true },
@@ -299,8 +299,8 @@ describe('what a mutation job mutates', () => {
     assert.deepEqual(jobs, [
       {
         package: 'packages/shared',
-        file: 'src/seed.ts',
-        artifact: 'mutation--packages-shared--src-seed.ts',
+        file: 'src/note.ts',
+        artifact: 'mutation--packages-shared--src-note.ts',
         incremental: true,
       },
       { package: 'apps/worker', file: 'src/kv.ts', artifact: 'mutation--apps-worker--src-kv.ts', incremental: false },
@@ -325,7 +325,7 @@ describe('what a mutation job mutates', () => {
    */
   it('sees a test the pull request deletes or renames, through git itself', () => {
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', deletedAndRenamed()), {
-      mutate: ['src/seed.ts', 'src/issue.ts'],
+      mutate: ['src/note.ts', 'src/issue.ts'],
       full: false,
       line: false,
     });
@@ -338,7 +338,7 @@ describe('what a mutation job mutates', () => {
 });
 
 describe('the configuration of the mutation job', () => {
-  it('mutates every file of the seed contract, and its tests are not mutated', () => {
+  it('mutates every file of the note contract, and its tests are not mutated', () => {
     const contract = readdirSync(new URL('packages/shared/src/', ROOT))
       .filter((file) => file.endsWith('.ts') && !/\.(test|fixture)\.ts$/.test(file) && file !== 'index.ts')
       .map((file) => `src/${file}`)

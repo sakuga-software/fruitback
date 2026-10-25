@@ -80,7 +80,7 @@ export async function handleNotes(
     if (note === undefined || index === undefined) return json(404, { error: 'not-found' }, headers);
     // The delivery of this note, if it is one of this workspace and did not arrive. Then the route
     // of FRU-122, which checks the workspace again.
-    const delivery = await answered(() => index.deliveryOf(context.workspace, note.site, note.seed));
+    const delivery = await answered(() => index.deliveryOf(context.workspace, note.site, note.note));
     if (delivery === failed) return json(503, { error: 'index-unavailable' }, headers);
     if (delivery === undefined) return json(404, { error: 'not-found' }, headers);
     const due = await context.accounts.retryDelivery(context.workspace, delivery.connector, delivery.id, context.now);
@@ -193,7 +193,7 @@ function noteView(note: ListedNote, account: string, seesTracker: boolean, manag
   const kept = note.kept;
 
   return {
-    id: noteIdOf(note.site, note.seed),
+    id: noteIdOf(note.site, note.note),
     excerpt: note.excerpt,
     page,
     site: { id: note.site },
@@ -249,21 +249,21 @@ export function pageOf(url: string): { url: string; host: string; path: string }
 }
 
 /** The id of a note in the console: its site and the id the widget gave it, opaque. */
-export function noteIdOf(site: string, seed: string): string {
-  return Buffer.from(JSON.stringify([site, seed])).toString('base64url');
+export function noteIdOf(site: string, note: string): string {
+  return Buffer.from(JSON.stringify([site, note])).toString('base64url');
 }
 
-function noteKeyOf(id: string): { site: string; seed: string } | undefined {
+function noteKeyOf(id: string): { site: string; note: string } | undefined {
   const read = readJson(id);
 
   return Array.isArray(read) && read.length === 2 && typeof read[0] === 'string' && typeof read[1] === 'string'
-    ? { site: read[0], seed: read[1] }
+    ? { site: read[0], note: read[1] }
     : undefined;
 }
 
 /** Where the next page starts, opaque: the screen gives it back as it got it. */
 export function cursorOf(cursor: NoteCursor): string {
-  return Buffer.from(JSON.stringify([cursor.at, cursor.site, cursor.seed])).toString('base64url');
+  return Buffer.from(JSON.stringify([cursor.at, cursor.site, cursor.note])).toString('base64url');
 }
 
 function readCursor(text: string): NoteCursor | undefined {
@@ -275,7 +275,7 @@ function readCursor(text: string): NoteCursor | undefined {
     Number.isSafeInteger(read[0]) &&
     typeof read[1] === 'string' &&
     typeof read[2] === 'string'
-    ? { at: read[0] as number, site: read[1], seed: read[2] }
+    ? { at: read[0] as number, site: read[1], note: read[2] }
     : undefined;
 }
 
@@ -347,7 +347,7 @@ async function setStatus(id: string, request: Request, context: NotesContext): P
     return json(400, { error: 'invalid-status' }, headers);
   }
 
-  const answer = await context.accounts.setNoteStatus(context.workspace, note.site, note.seed, key, {
+  const answer = await context.accounts.setNoteStatus(context.workspace, note.site, note.note, key, {
     account: context.account,
     manages: context.allowed('manage-sites'),
   });

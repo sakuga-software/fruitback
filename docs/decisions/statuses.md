@@ -18,7 +18,7 @@ The rest is FRU-368 and FRU-369, and the parts of FRU-371 that wait for them.
   the filters, the counts, the « looks fixed » check and the fallback. A connector never adds a stage.
 - **A status is data that the team configures, never a constant in a published type.** It has a key,
   a name, a stage, a background colour and a text colour. It travels in the read envelope, next to
-  `stages`, so `SEED_VERSION` does not move.
+  `stages`, so `NOTE_VERSION` does not move.
 - **Every new field is optional, and every reader is tolerant.** A widget from before ignores the
   fields and draws the stage as today. A widget from after, read by a worker from before, gets no
   list and draws the stage as today.
@@ -123,7 +123,7 @@ status?: string;           // a key of `statuses`; statusOf(issue, statuses) res
 - **`status` on an issue is strict** (1 to 200 characters), like `url`. Only the worker parses an
   issue with `noteIssueSchema`, and it parses the ones it builds. The widget reads the answer with a
   cast, so the tolerance it needs is in the two readers above.
-- **`SEED_VERSION` stays at 2.** Nothing changes in the note or in the description block, so the
+- **`NOTE_VERSION` does not move.** Nothing changes in the note or in the description block, so the
   round trip is untouched.
 
 **This amends one rule of [contract.md](contract.md):** « the contract holds no colour » (FRU-24).
@@ -357,15 +357,15 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
   `manage-sites`.
 - **The whole write is `setNoteStatus` of the accounts store**, one transaction with the site held
   for update, as the statuses routes of FRU-366: the note of the index, its author, the status, then
-  `seeds` and the index. The console's routes already write `seeds` this way (`putSiteStatus`,
+  `notes` and the index. The console's routes already write `notes` this way (`putSiteStatus`,
   `removeSiteStatus`); the route of the extension goes through the note store because it serves a
   routed store per site.
 - **A status the site no longer has is `409 status-changed`**, not `400 unknown-status`: the console
   offers only what the list read, so a key it sends that is gone was removed in between.
 - **A note the worker keeps is one in Fruitback or sent on to an address** (a `rest` connector, whose
-  notes the index places at the connector, as `FB-<id>`; heavy review of #505). Its row of `seeds` must
+  notes the index places at the connector, as `FB-<id>`; heavy review of #505). Its row of `notes` must
   be of the same site and hold the same note: a tracker can name an issue `FB-12` too.
-- **`GET …/notes` gives the status of each note the worker keeps** (`own:<key>`, read in `seeds` for
+- **`GET …/notes` gives the status of each note the worker keeps** (`own:<key>`, read in `notes` for
   the page in one statement), `canSetStatus`, and `statuses`: per site with such a note, the statuses
   of the worker's store, hidden ones marked `hidden`. A note of a tracker gets none of the three, and
   keeps its stage.

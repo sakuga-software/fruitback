@@ -80,11 +80,11 @@ export function watchedStore(
 
   return {
     ...store,
-    create: (seed, client, policy, files) =>
-      watched(client?.connector, () => store.create(seed, client, policy, files)),
+    create: (note, client, policy, files) =>
+      watched(client?.connector, () => store.create(note, client, policy, files)),
     // A batch is one call for the health of the connector: its answer is the one of the whole batch.
-    createBatch: (seeds, client, policy, memory) =>
-      watched(client?.connector, () => createAll(store, seeds, client, policy, memory)),
+    createBatch: (notes, client, policy, memory) =>
+      watched(client?.connector, () => createAll(store, notes, client, policy, memory)),
     findForPage: (query, client, policy) => watched(client?.connector, () => store.findForPage(query, client, policy)),
     ...(store.reply === undefined
       ? {}

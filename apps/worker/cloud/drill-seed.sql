@@ -111,9 +111,9 @@ INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, 
 -- sequence at 1 would give the next note the number of one that exists. Three notes and two replies.
 -- The second note is in a status of its site (FRU-365); the others are drawn by their stage.
 INSERT INTO notes (id, client_id, page_url, stage, status_key, payload, created_at, updated_at) VALUES
-  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'new', NULL, '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
-  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'done', 'done', '{"id":"sd_drill2","note":"Done."}', 2, 3),
-  (7, NULL, 'https://staging.acme.dev/', 'new', NULL, '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
+  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'new', NULL, '{"id":"sd_drill1","text":"The price is cut off on a phone."}', 1, 1),
+  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'done', 'done', '{"id":"sd_drill2","text":"Done."}', 2, 3),
+  (7, NULL, 'https://staging.acme.dev/', 'new', NULL, '{"id":"sd_drill7","text":"A note that names no site."}', 4, 4);
 SELECT setval(pg_get_serial_sequence('notes', 'id'), 7);
 
 INSERT INTO note_comments (note_id, author, body, created_at) VALUES

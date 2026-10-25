@@ -169,7 +169,7 @@ describe('resolveAnchor', () => {
   it('lands on the neighbour that took the slot — but never claims to be sure of it', () => {
     // The blind spot, written down rather than papered over. Insert a card in a grid and every card
     // shifts one slot: the element at the stale path is the neighbour, and it now occupies the very
-    // box the pin was planted on. Same tag, same text, same position — nothing a seed stores can
+    // box the pin was planted on. Same tag, same text, same position — nothing a note stores can
     // separate them.
     //
     // So the answer is given with its provenance instead of being withheld: `confident: false`, and

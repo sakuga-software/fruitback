@@ -16,7 +16,7 @@ body:
     id: find
     attributes:
       label: How it finds the notes of one page
-      description: A server-side filter, a search, a query, or a walk through everything. The connector compares `seed.page.url` exactly after that, so say how close the filter gets.
+      description: A server-side filter, a search, a query, or a walk through everything. The connector compares `note.page.url` exactly after that, so say how close the filter gets.
     validations:
       required: true
   - type: textarea

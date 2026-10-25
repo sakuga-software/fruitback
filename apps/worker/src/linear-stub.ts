@@ -80,15 +80,15 @@ export type LinearStubOptions = {
 /** A PUT of the bytes of a file to the storage of Linear (FRU-331). */
 export type PutCall = { url: string; headers: Record<string, string>; body: Uint8Array };
 
-/** A stored issue built from a seed, the way `POST /feedback` would have written it. */
-export function storedIssueFromNote(seed: Note, overrides: Partial<StoredIssue> = {}): StoredIssue {
+/** A stored issue built from a note, the way `POST /feedback` would have written it. */
+export function storedIssueFromNote(note: Note, overrides: Partial<StoredIssue> = {}): StoredIssue {
   return {
-    id: `issue_${seed.id}`,
+    id: `issue_${note.id}`,
     identifier: 'SKG-901',
     url: 'https://linear.app/sakuga-software/issue/SKG-901',
-    title: buildIssueTitle(seed),
+    title: buildIssueTitle(note),
     updatedAt: '2026-08-05T10:00:00.000Z',
-    description: buildIssueDescription(seed),
+    description: buildIssueDescription(note),
     state: { name: 'In Progress', type: 'started' },
     ...overrides,
   };
@@ -167,6 +167,24 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
             },
           },
         });
+      }
+
+      // FRU-378: the issues whose description holds a text, as `rewriteLinearBlocks` reads them.
+      if (operation === 'FruitbackBlockIssues') {
+        const filter = variables.filter as { description: { contains: string } };
+        const nodes = (options.storedIssues ?? [])
+          .filter((issue) => (issue.description ?? '').includes(filter.description.contains))
+          .map(({ id, identifier, description }) => ({ id, identifier, description }));
+
+        return jsonResponse({ data: { issues: { nodes, pageInfo: { hasNextPage: false, endCursor: null } } } });
+      }
+
+      if (operation === 'FruitbackRewriteDescription') {
+        const issue = (options.storedIssues ?? []).find((each) => each.id === variables.id);
+        if (issue === undefined) return jsonResponse({ errors: [{ message: 'Entity not found: Issue' }] });
+        issue.description = String(variables.description);
+
+        return jsonResponse({ data: { issueUpdate: { success: true } } });
       }
 
       if (operation === 'FruitbackFileUpload') {

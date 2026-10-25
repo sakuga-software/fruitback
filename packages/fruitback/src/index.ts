@@ -1,7 +1,7 @@
 /**
  * `fruitback` — one install, both halves.
  *
- * The widget and the seed contract are separate packages because they have separate jobs: one runs
+ * The widget and the note contract are separate packages because they have separate jobs: one runs
  * in a browser, the other is the storage format both ends must agree on. That split is ours, not the
  * caller's, and asking someone to install two packages to put a feedback button on their site is
  * making them care about our layout.
@@ -18,7 +18,7 @@
 export * from '@fruitback/widget';
 
 /**
- * The seed contract: what a pin is, and how it is written into a Linear issue.
+ * The note contract: what a pin is, and how it is written into a Linear issue.
  *
  * A caller mounting the widget never needs this. A caller doing more — reading pins to build their
  * own view, or checking what was stored — needs exactly these types, and would otherwise be told to

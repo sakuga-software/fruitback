@@ -26,7 +26,7 @@ function mount() {
   return page;
 }
 
-const issue = (id: string, note: string) => noteIssueFixture({ seed: noteFixture({ id, note }) });
+const issue = (id: string, note: string) => noteIssueFixture({ note: noteFixture({ id, text: note }) });
 
 describe('createOrphanList', () => {
   it('writes nothing when the set has not changed', () => {
@@ -47,7 +47,7 @@ describe('createOrphanList', () => {
     // vanishing with the link.
     const page = mount();
 
-    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), url: undefined, identifier: 'FB-7' })]);
+    list?.update([noteIssueFixture({ note: noteFixture({ id: 'sd_1' }), url: undefined, identifier: 'FB-7' })]);
 
     const handle = page.document.querySelector('.fruitback-orphans-link');
     assert.equal(handle?.textContent, 'FB-7');
@@ -76,11 +76,11 @@ describe('createOrphanList', () => {
     // honest again and this can assert what a reader sees. Drop `:${stage}` from the key in
     // `orphans.ts` and a note that changes stage keeps the colour it had — which is what this catches.
     const page = mount();
-    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), stage: 'new' })]);
+    list?.update([noteIssueFixture({ note: noteFixture({ id: 'sd_1' }), stage: 'new' })]);
     const before = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
     assert.equal(before.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-new)');
 
-    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1' }), stage: 'closed' })]);
+    list?.update([noteIssueFixture({ note: noteFixture({ id: 'sd_1' }), stage: 'closed' })]);
 
     const after = page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
     assert.equal(after.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-closed)');
@@ -94,7 +94,7 @@ describe('createOrphanList', () => {
       host: page.document.body,
       statusOf: () => ({ key: 'own:wait', name: 'Waiting for the client', stage: 'done', color }),
     });
-    const done = noteIssueFixture({ seed: noteFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' });
+    const done = noteIssueFixture({ note: noteFixture({ id: 'sd_1', text: 'Une note' }), stage: 'done' });
     list.update([done]);
 
     const mark = () => page.document.querySelector('.fruitback-orphans-stage') as HTMLElement;
@@ -115,14 +115,14 @@ describe('createOrphanList', () => {
     // nobody who cannot separate the five colours either.
     const page = mount();
 
-    list?.update([noteIssueFixture({ seed: noteFixture({ id: 'sd_1', note: 'Une note' }), stage: 'done' })]);
+    list?.update([noteIssueFixture({ note: noteFixture({ id: 'sd_1', text: 'Une note' }), stage: 'done' })]);
 
     assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Done · Une note');
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');
   });
 
   it('puts no character in front of a detached note (FRU-24, FRU-36)', () => {
-    // The entry opened with `SEED_STAGE_STYLES[stage].emoji`, a rendering decision that travelled in
+    // The entry opened with the emoji of the styles of its stage, a rendering decision that travelled in
     // the published contract; the chip above it opened with a fallen leaf. Both are drawings now, so
     // the entry's text is the note's own words and nothing else.
     const page = mount();

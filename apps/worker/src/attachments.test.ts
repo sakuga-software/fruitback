@@ -56,26 +56,26 @@ const HTML = new TextEncoder().encode('<!doctype html><script>alert(1)</script>'
 /** A tracker that keeps what it is given, files included, and can be told to fail. */
 function trackerDouble(options: { takes?: boolean; fails?: boolean; loses?: boolean } = {}) {
   const { takes = true } = options;
-  const received: { seed: Note; files: readonly OutgoingFile[] }[] = [];
+  const received: { note: Note; files: readonly OutgoingFile[] }[] = [];
   const kept: NoteIssue[] = [];
   const store: NoteStore = {
     name: 'tracker',
     scope: () => 'tracker',
     ...(takes ? { attachments: true as const } : {}),
-    async create(seed, _client, _policy, files = []): Promise<CreatedWithFiles> {
+    async create(note, _client, _policy, files = []): Promise<CreatedWithFiles> {
       if (options.fails) throw new StoreError('the tracker is down');
-      received.push({ seed, files });
+      received.push({ note, files });
       const n = kept.length + 1;
       kept.push({
         id: `trk_${n}`,
         identifier: `TRK-${n}`,
         url: `https://tracker.test/TRK-${n}`,
-        title: seed.note,
+        title: note.text,
         stage: 'new',
         stateName: 'Todo',
         updatedAt: '2026-10-21T00:00:00.000Z',
         attachments: files.map((file) => ({ name: file.name, url: `https://tracker.test/files/${file.name}` })),
-        seed,
+        note,
       });
       const ids = files.map((file) => file.id);
 
@@ -89,7 +89,7 @@ function trackerDouble(options: { takes?: boolean; fails?: boolean; loses?: bool
       };
     },
     async findForPage({ url }) {
-      return kept.filter((issue) => issue.seed.page.url === url);
+      return kept.filter((issue) => issue.note.page.url === url);
     },
   };
 
@@ -167,9 +167,9 @@ function upload(
 }
 
 function noteOf(site: string, id = 'sd_with_files'): Note {
-  const seed = noteFixture({ id });
+  const note = noteFixture({ id });
 
-  return { ...seed, page: { ...seed.page, url: 'https://staging.acme.dev/pricing' }, client: { id: site } };
+  return { ...note, page: { ...note.page, url: 'https://staging.acme.dev/pricing' }, client: { id: site } };
 }
 
 function post(
@@ -962,7 +962,7 @@ for (const [index, { label, open, skip }] of DATABASES.entries()) {
       await store.put(file('att_2'));
 
       assert.deepEqual(
-        (await store.claim(['att_1', 'att_2'], 'sd_one', 2_000)).map((each) => [each.id, each.seed]),
+        (await store.claim(['att_1', 'att_2'], 'sd_one', 2_000)).map((each) => [each.id, each.note]),
         [
           ['att_1', 'sd_one'],
           ['att_2', 'sd_one'],
@@ -998,7 +998,7 @@ for (const [index, { label, open, skip }] of DATABASES.entries()) {
            ('site_1', 'https://acme.dev/', 'new', '{"screenshot":{"url":"https://w.test/screenshot/${id('a')}"}}', 1, 1)`,
         `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES ('con_1', 'ws_acme', 'rest', 'REST', 'x', 1)`,
         `INSERT INTO deliveries (id, connector_id, body, created_at) VALUES
-           ('dlv_1', 'con_1', '{"seed":{"id":"sd_b","screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}}', 1)`,
+           ('dlv_1', 'con_1', '{"note":{"id":"sd_b","screenshot":{"url":"https://w.test/screenshot/${id('b')}"}}}', 1)`,
       ]) {
         await rowsOf(database, statement);
       }

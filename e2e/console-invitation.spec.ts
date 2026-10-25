@@ -165,11 +165,11 @@ test.describe('an invited reviewer (FRU-104)', () => {
     expect(site, 'Paul does not reach the site of the workspace').toBeDefined();
 
     const note = {
-      kind: 'fruitback.seed',
-      v: 2,
+      kind: 'fruitback.note',
+      v: 3,
       id: 'sd_paul_first',
       createdAt: new Date().toISOString(),
-      note: 'The button is too small on a phone.',
+      text: 'The button is too small on a phone.',
       page: { url: `${SITE}/pricing`, path: '/pricing' },
       viewport: { width: 1440, height: 900 },
       anchor: { selector: 'main > button', tag: 'button', bounds: { xPct: 40, yPct: 60, wPct: 12, hPct: 4 } },
@@ -187,9 +187,9 @@ test.describe('an invited reviewer (FRU-104)', () => {
       await fetch(`${worker.origin}/feedback?url=${encodeURIComponent(`${SITE}/pricing`)}&client=${site?.id}`, {
         headers: { Origin: SITE, ...bearer },
       })
-    ).json()) as { issues?: { seed: { note: string; reporter?: { email?: string; verified?: boolean } } }[] };
-    const mine = (read.issues ?? []).find((each) => each.seed.note === note.note);
-    expect(mine?.seed.reporter).toMatchObject({ email: 'paul@client.dev', verified: true });
+    ).json()) as { issues?: { note: { text: string; reporter?: { email?: string; verified?: boolean } } }[] };
+    const mine = (read.issues ?? []).find((each) => each.note.text === note.text);
+    expect(mine?.note.reporter).toMatchObject({ email: 'paul@client.dev', verified: true });
   });
 
   test('says that the fourth message did not go, and gives the link to send by hand (FRU-209)', async ({ browser }) => {

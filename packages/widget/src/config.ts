@@ -14,7 +14,7 @@ import { DESTINATION_ID_MAX } from './destinations.ts';
  * `init`, and a reporter cannot use them. A stored copy let a page that wrote this key choose where
  * the notes go, so a stored `endpoint` or `clientId` is not read.
  *
- * Everything below is a preference of this browser on this site. None of it travels in a seed.
+ * Everything below is a preference of this browser on this site. None of it travels in a note.
  */
 
 export type WidgetConfig = {

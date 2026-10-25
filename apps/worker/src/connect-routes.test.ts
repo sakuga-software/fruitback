@@ -174,10 +174,10 @@ function read(worker: Worker, site: string, origin: string, token?: string): Pro
 
 /** A note on a page of a site, as the relay sends it. */
 function write(worker: Worker, site: string, origin: string, token: string): Promise<Response> {
-  const seed = noteFixture();
+  const note = noteFixture();
 
   return worker.call('/feedback', {
-    body: { ...seed, page: { ...seed.page, url: `${origin}/pricing` }, client: { id: site } },
+    body: { ...note, page: { ...note.page, url: `${origin}/pricing` }, client: { id: site } },
     origin: EXTENSION,
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -971,8 +971,8 @@ async function endedWritesNothing(worker: Worker): Promise<void> {
   const alice = await person(worker, 'alice@acme.dev');
   const acme = await workspaceOf(worker, alice, 'acme');
   const session = await connected(worker, alice);
-  const seed = noteFixture();
-  const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
+  const base = noteFixture();
+  const note = { ...base, page: { ...base.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
   const picture = () =>
     worker.call(`/attachments?client=${acme.members}`, {
@@ -1111,8 +1111,8 @@ async function storeDownKeepsTheNote(worker: Worker): Promise<void> {
   const alice = await person(worker, 'alice@acme.dev');
   const acme = await workspaceOf(worker, alice, 'acme');
   const session = await connected(worker, alice);
-  const seed = noteFixture();
-  const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
+  const base = noteFixture();
+  const note = { ...base, page: { ...base.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
   const bearer = { Authorization: `Bearer ${session.accessToken}` };
   const down = mockMethod(worker.sessions, 'liveIdentity', async () => {
     throw new StoreError('the sessions did not answer');

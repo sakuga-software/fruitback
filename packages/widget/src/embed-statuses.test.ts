@@ -26,14 +26,14 @@ const REVIEW = noteIssueFixture({
   identifier: 'FB-1',
   stage: 'progress',
   stateName: 'In Review',
-  seed: noteFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
+  note: noteFixture({ id: 'note-1', text: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
 });
 const DONE = noteIssueFixture({
   id: 'issue_2',
   identifier: 'FB-2',
   stage: 'done',
   stateName: 'Done',
-  seed: noteFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR }),
+  note: noteFixture({ id: 'note-2', text: 'An old one.', anchor: ANCHOR }),
 });
 const STATUSES = [
   { key: 'linear:st_review', name: 'In Review', stage: 'progress', color: '#7dd3fc', textColor: '#18181b' },

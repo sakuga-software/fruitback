@@ -820,7 +820,7 @@ export function createComposer(options: ComposerOptions): Composer {
    * What the visitor said about themselves, or nothing at all.
    *
    * Anonymous is the default and stays one click away: the field is behind a disclosure, empty, and
-   * an empty one is absent rather than an empty string — the seed round-trip forbids a field nobody
+   * an empty one is absent rather than an empty string — the note round-trip forbids a field nobody
    * provided. One field, and no e-mail (FRU-91): an address is not needed to read a note.
    */
   function reporterFromFields(): NoteReporter | undefined {

@@ -10,10 +10,10 @@ import { buildDomPath, buildSelector } from './selector.ts';
  * the widget's re-anchoring engine (FRU-11); this only has to make sure each way is worth trying.
  *
  * Nothing here writes a field it did not observe: an absent text excerpt stays absent rather than
- * becoming `''`, or the seed stops round-tripping through the Linear description.
+ * becoming `''`, or the note stops round-tripping through the Linear description.
  */
 
-/** Attributes worth matching on when the selector misses, in the shape the seed schema expects. */
+/** Attributes worth matching on when the selector misses, in the shape the note schema expects. */
 type AnchorAttrs = NonNullable<NoteAnchor['attrs']>;
 
 const TEST_ID_ATTRIBUTES = ['data-testid', 'data-test-id', 'data-test', 'data-qa', 'data-cy'];

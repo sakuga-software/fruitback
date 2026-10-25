@@ -9,5 +9,5 @@
     // `.js` on the way out, in the JavaScript and the declarations alike.
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src/index.ts", "src/note.fixture.ts", "src/seed.fixture.ts"]
+  "include": ["src/index.ts", "src/note.fixture.ts"]
 }

@@ -412,7 +412,7 @@ describe('the notes that the worker keeps go with their site (FRU-194)', () => {
       const [row] = await rowsOf(
         on,
         `INSERT INTO notes (client_id, page_url, stage, payload, created_at, updated_at)
-           VALUES ('${site.id}', '${site.origin}/', 'new', '{"id":"sd_${name}","note":"A note of ${name}"}', 1, 1)
+           VALUES ('${site.id}', '${site.origin}/', 'new', '{"id":"sd_${name}","text":"A note of ${name}"}', 1, 1)
          RETURNING id`,
       );
       await rowsOf(on, `INSERT INTO note_comments (note_id, body, created_at) VALUES (${row?.id}, 'A reply', 1)`);

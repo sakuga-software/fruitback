@@ -17,18 +17,20 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
 import {
   type BatchAnswer,
   type BatchMemory,
+  type BlockRewrite,
   type CheckAnswer,
   type CreatedIssue,
+  type CreatedWithFiles,
   type NewCheck,
   type NewReply,
   type NoteIssueQuery,
   type NoteStore,
+  type RewrittenIssue,
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 import { checkText, replyText } from './reply-text.ts';
 import type { OutgoingFile } from './attachments.ts';
-import type { CreatedWithFiles } from './store.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
@@ -431,27 +433,27 @@ async function createLabel(config: LinearConfig, routing: LinearRouting, name: s
   }
 }
 
-/** Plant a seed in Linear: one issue, readable title, round-trip-able description, labels applied. */
+/** Plant a note in Linear: one issue, readable title, round-trip-able description, labels applied. */
 export async function createNoteIssue(
   config: LinearConfig,
   routing: LinearRouting,
-  seed: Note,
+  note: Note,
   /** The language the description's prose is written in (FRU-39). English when nothing says. */
   locale?: string,
-  /** The issue of the batch this seed belongs to (FRU-124): the seed becomes one of its sub-issues. */
+  /** The issue of the batch this note belongs to (FRU-124): the note becomes one of its sub-issues. */
   parentId?: string,
   /** The files of the note in transit (FRU-331). Put in Linear before the issue is written. */
   files: readonly OutgoingFile[] = [],
 ): Promise<CreatedWithFiles> {
   const uploaded = await uploadFiles(config, files);
-  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
+  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(note));
 
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
     input: {
       teamId: routing.teamId,
       projectId: routing.projectId,
-      title: buildIssueTitle(seed),
-      description: buildIssueDescription(seed, { locale }),
+      title: buildIssueTitle(note),
+      description: buildIssueDescription(note, { locale }),
       labelIds,
       ...(parentId === undefined ? {} : { parentId }),
     },
@@ -480,26 +482,26 @@ const BATCH_WORDS: Record<'en' | 'fr', { title: (count: number, host: string) =>
 
 /**
  * The parent of a batch (FRU-124): a title, a sentence and the list of the notes. **It holds no
- * seed**: `parseNoteFromDescription` finds none in it, so no read draws it as a pin. Its state is the
+ * note**: `parseNoteFromDescription` finds none in it, so no read draws it as a pin. Its state is the
  * team's business, and the widget never reads it.
  */
-export function batchParent(seeds: readonly Note[], locale?: string): { title: string; description: string } {
+export function batchParent(notes: readonly Note[], locale?: string): { title: string; description: string } {
   const words = BATCH_WORDS[locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
-  const hosts = [...new Set(seeds.map((seed) => new URL(seed.page.url).host))];
-  const list = seeds.map((seed) => `- ${buildIssueTitle(seed)} (${seed.page.url})`);
+  const hosts = [...new Set(notes.map((note) => new URL(note.page.url).host))];
+  const list = notes.map((note) => `- ${buildIssueTitle(note)} (${note.page.url})`);
 
-  return { title: words.title(seeds.length, hosts.join(', ')), description: [words.lead, '', ...list].join('\n') };
+  return { title: words.title(notes.length, hosts.join(', ')), description: [words.lead, '', ...list].join('\n') };
 }
 
 /** Writes the parent of a batch, and answers its id. A parent that Linear refuses throws. */
 async function createBatchParent(
   config: LinearConfig,
   routing: LinearRouting,
-  seeds: readonly Note[],
+  notes: readonly Note[],
   locale?: string,
 ): Promise<string> {
-  const parent = batchParent(seeds, locale);
-  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seeds[0] as Note));
+  const parent = batchParent(notes, locale);
+  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(notes[0] as Note));
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
     input: { teamId: routing.teamId, projectId: routing.projectId, ...parent, labelIds },
   });
@@ -511,7 +513,7 @@ async function createBatchParent(
 }
 
 /**
- * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each seed, in order. A
+ * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each note, in order. A
  * parent that Linear refuses throws, and nothing is written. A sub-issue that it refuses is answered
  * as such, and the next ones are still sent: each one is a note somebody wrote.
  *
@@ -524,21 +526,21 @@ async function createBatchParent(
 export async function createNoteBatch(
   config: LinearConfig,
   routing: LinearRouting,
-  seeds: readonly Note[],
+  notes: readonly Note[],
   locale?: string,
   memory?: BatchMemory,
 ): Promise<BatchAnswer[]> {
   const remembered = await memory?.parent();
-  const parentId = remembered ?? (await createBatchParent(config, routing, seeds, locale));
+  const parentId = remembered ?? (await createBatchParent(config, routing, notes, locale));
   // Remembered before the sub-issues are sent: a request that dies in the loop below leaves a parent,
-  // and the next attempt must find it. A parent that is used again is remembered for the seeds of
+  // and the next attempt must find it. A parent that is used again is remembered for the notes of
   // this attempt too, which may not be the ones of the first.
   await memory?.keepParent(parentId);
 
   const answers: BatchAnswer[] = [];
-  for (const seed of seeds) {
+  for (const note of notes) {
     try {
-      answers.push({ issue: await createNoteIssue(config, routing, seed, locale, parentId) });
+      answers.push({ issue: await createNoteIssue(config, routing, note, locale, parentId) });
     } catch (error) {
       // WARNING: nothing is thrown from here. The parent exists, and the notes before this one are
       // kept: an error that left this loop would answer `500`, lose their answers, and the next
@@ -647,10 +649,10 @@ const FRUITBACK_ATTACHMENTS = { subtitle: { eq: ATTACHMENT_SUBTITLE } } as const
 const ISSUES_MAX_PAGES = 10;
 
 /**
- * The seeds planted on one page, as the widget needs them to re-plant its pins.
+ * The notes planted on one page, as the widget needs them to re-plant its pins.
  *
  * Linear filters by team and by `description contains <canonical url>`, so the workspace can hold
- * any number of issues without this walking them. **The client is read from the seed, never from a
+ * any number of issues without this walking them. **The client is read from the note, never from a
  * label** (FRU-138): a label is put on an issue when Linear allows it, and a team can refuse that to
  * the key or to the application. An issue found by its labels only was a note that Linear kept and
  * no page showed again.
@@ -683,9 +685,9 @@ export async function fetchNoteIssues(
 
     for (const node of result.issues.nodes) {
       const issue = toNoteIssue(node, query.url, policy, stages, statusSource);
-      // The write path stores the normalized client id in the seed, so the two are equal for every
-      // note of this client. A read that names no client gets every seed of the page, as before.
-      if (issue === null || (query.clientId !== undefined && issue.seed.client?.id !== query.clientId)) continue;
+      // The write path stores the normalized client id in the note, so the two are equal for every
+      // note of this client. A read that names no client gets every note of the page, as before.
+      if (issue === null || (query.clientId !== undefined && issue.note.client?.id !== query.clientId)) continue;
       found.push(issue);
     }
 
@@ -698,11 +700,11 @@ export async function fetchNoteIssues(
 
 function buildNoteIssueFilter(routing: LinearRouting, { url, clientId }: NoteIssueQuery): Record<string, unknown> {
   return {
-    // The API key can see the whole workspace; a seed only ever lives on the team its client routes
+    // The API key can see the whole workspace; a note only ever lives on the team its client routes
     // to, which on a multi-tenant worker is what keeps one client's read off another's issues.
     team: { id: { eq: routing.teamId } },
     // No clause on the labels: see `fetchNoteIssues`. The page and the client are both looked for
-    // in the description, where the seed is written. The client narrows what Linear sends, so the
+    // in the description, where the note is written. The client narrows what Linear sends, so the
     // notes of another client of the team do not fill the pages this read walks. It is a substring,
     // like the page: `fetchNoteIssues` compares both exactly.
     and: [
@@ -807,7 +809,7 @@ export function toNoteIssue(
   if (!parsed.ok) return null;
 
   // `description contains` is a substring match, so a query for `/pricing` also brings back the
-  // seeds of `/pricing?tab=annual`. The seed itself is the authority on which page it belongs to.
+  // notes of `/pricing?tab=annual`. The note itself is the authority on which page it belongs to.
   if (parsed.note.page.url !== canonicalUrl) return null;
 
   const candidate = {
@@ -826,7 +828,7 @@ export function toNoteIssue(
     updatedAt: node.updatedAt,
     ...optionalComments(policy?.showComments === false ? undefined : toNoteComments(node)),
     ...attachmentsOf(node),
-    seed: parsed.note,
+    note: parsed.note,
   };
 
   // Validated against the shared contract rather than trusted: this is the exact shape the widget
@@ -983,10 +985,10 @@ export function createLinearStore(
     scope: (client) => linearRoutingFor(config, client).teamId,
     // FRU-331: the files of a note go to the issue.
     attachments: true,
-    create: (seed, client, policy, files) =>
-      createNoteIssue(config, linearRoutingFor(config, client), seed, policy.locale, undefined, files),
-    createBatch: (seeds, client, policy, memory) =>
-      createNoteBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
+    create: (note, client, policy, files) =>
+      createNoteIssue(config, linearRoutingFor(config, client), note, policy.locale, undefined, files),
+    createBatch: (notes, client, policy, memory) =>
+      createNoteBatch(config, linearRoutingFor(config, client), notes, policy.locale, memory),
     findForPage: (query, client, policy) =>
       fetchNoteIssues(config, linearRoutingFor(config, client), query, policy, stages, statusSource),
     // FRU-368: the states of the team of the client, as Linear says them: the stage of their type. The
@@ -1001,7 +1003,90 @@ export function createLinearStore(
       })),
     reply: (target, reply, _client, policy) => createReply(config, target.issue, reply, policy.locale),
     check: (target, check, _client, policy) => createCheck(config, target.issue, check, policy.locale, stages),
+    rewriteBlocks: (clients, job) =>
+      rewriteLinearBlocks(
+        config,
+        clients.map((client) => linearRoutingFor(config, client).teamId),
+        job,
+      ),
   };
+}
+
+const BLOCK_ISSUES_QUERY = `
+  query FruitbackBlockIssues($filter: IssueFilter, $first: Int, $after: String) {
+    issues(filter: $filter, first: $first, after: $after) {
+      nodes { id identifier description }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
+const REWRITE_DESCRIPTION_MUTATION = `
+  mutation FruitbackRewriteDescription($id: String!, $description: String!) {
+    issueUpdate(id: $id, input: { description: $description }) { success }
+  }
+`;
+
+/** Pages of a team read by `rewriteLinearBlocks`, at most: 200 pages of 50 issues. */
+const BLOCK_MAX_PAGES = 200;
+
+type BlockIssuesResult = {
+  issues: {
+    nodes: { id: string; identifier: string; description: string | null }[];
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  };
+};
+
+/**
+ * `rewriteBlocks` of a Linear store (FRU-378): the issues of each team whose description holds the
+ * marker, read to the last page before any is written, since a rewritten issue leaves the filter and
+ * would move the pages under the reader. Then each one is rewritten, one call each.
+ */
+export async function rewriteLinearBlocks(
+  config: LinearConfig,
+  teams: readonly string[],
+  job: BlockRewrite,
+): Promise<RewrittenIssue[]> {
+  const found: BlockIssuesResult['issues']['nodes'] = [];
+  for (const team of new Set(teams)) {
+    let after: string | null = null;
+    for (let page = 0; page < BLOCK_MAX_PAGES; page += 1) {
+      const result: BlockIssuesResult = await graphql(config, BLOCK_ISSUES_QUERY, {
+        filter: { team: { id: { eq: team } }, description: { contains: job.marker } },
+        first: ISSUES_PAGE_SIZE,
+        after,
+      });
+      found.push(...result.issues.nodes);
+      after = result.issues.pageInfo.hasNextPage ? result.issues.pageInfo.endCursor : null;
+      if (after === null) break;
+    }
+  }
+
+  const done: RewrittenIssue[] = [];
+  for (const issue of found) {
+    const description = issue.description === null ? undefined : job.rewrite(issue.description);
+    if (description === undefined) {
+      done.push({ reference: issue.identifier, outcome: 'unchanged' });
+    } else if (job.dryRun) {
+      done.push({ reference: issue.identifier, outcome: 'to-rewrite' });
+    } else {
+      try {
+        const answer = await graphql<{ issueUpdate: { success: boolean } }>(config, REWRITE_DESCRIPTION_MUTATION, {
+          id: issue.id,
+          description,
+        });
+        done.push({
+          reference: issue.identifier,
+          outcome: answer.issueUpdate.success ? 'rewritten' : 'failed',
+          ...(answer.issueUpdate.success ? {} : { error: 'Linear answered no success' }),
+        });
+      } catch (error) {
+        done.push({ reference: issue.identifier, outcome: 'failed', error: (error as Error).message });
+      }
+    }
+  }
+
+  return done;
 }
 
 /**

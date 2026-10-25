@@ -82,13 +82,13 @@ function installation(options: { repository?: string; expiresAt?: string } = {})
   };
 }
 
-function row(overrides: Record<string, unknown> = {}, seed = noteFixture()) {
+function row(overrides: Record<string, unknown> = {}, note = noteFixture()) {
   return {
     id: 9001,
     number: 12,
     html_url: 'https://github.com/acme/site/issues/12',
     title: 'Le bouton est trop petit',
-    body: buildIssueDescription(seed),
+    body: buildIssueDescription(note),
     state: 'open',
     state_reason: null,
     updated_at: '2026-09-14T10:00:00Z',
@@ -286,9 +286,9 @@ describe('create', () => {
       'POST /repos/acme/site/issues': created,
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
-    const seed = noteFixture({ client: { id: 'Acme', name: 'Acme' } });
+    const note = noteFixture({ client: { id: 'Acme', name: 'Acme' } });
 
-    await store.create(seed, undefined, POLICY);
+    await store.create(note, undefined, POLICY);
 
     const label = githubLabelName('fruitback:Acme');
     assert.deepEqual(
@@ -301,7 +301,7 @@ describe('create', () => {
   });
 
   it('creates the two labels, then the issue with the shared codec', async () => {
-    const seed = noteFixture();
+    const note = noteFixture();
     const calls = fakeGithub({
       ...installation(),
       'POST /repos/acme/site/labels': () => json(201, {}),
@@ -309,7 +309,7 @@ describe('create', () => {
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
 
-    const issue = await store.create(seed, undefined, POLICY);
+    const issue = await store.create(note, undefined, POLICY);
 
     assert.deepEqual(issue, { id: '9001', identifier: '#12', url: 'https://github.com/acme/site/issues/12' });
     const api = apiCalls(calls);
@@ -323,14 +323,14 @@ describe('create', () => {
     );
     assert.deepEqual(api[2]?.body, {
       title: 'Le bouton “Commander” est trop petit sur mobile, on le rate au pouce.',
-      body: buildIssueDescription(seed),
+      body: buildIssueDescription(note),
       labels: ['fruitback', 'fruitback:acme'],
     });
   });
 
   /** The prose follows the worker's own locale, wherever the issues are kept (FRU-39). */
   it('writes the issue body in the locale the policy carries', async () => {
-    const seed = noteFixture();
+    const note = noteFixture();
     const calls = fakeGithub({
       ...installation(),
       'POST /repos/acme/site/labels': () => json(201, {}),
@@ -338,10 +338,10 @@ describe('create', () => {
     });
     const store = createGithubStore(CONFIG, { now: () => NOW });
 
-    await store.create(seed, undefined, { ...POLICY, locale: 'fr' });
+    await store.create(note, undefined, { ...POLICY, locale: 'fr' });
 
     const body = (apiCalls(calls)[2]?.body as { body?: string } | undefined)?.body ?? '';
-    assert.equal(body, buildIssueDescription(seed, { locale: 'fr' }));
+    assert.equal(body, buildIssueDescription(note, { locale: 'fr' }));
     assert.match(body, /\*\*Signalé par\*\*/);
   });
 
@@ -358,7 +358,7 @@ describe('create', () => {
   });
 
   it('stops before the issue if a label cannot be created', async () => {
-    // A read finds a seed by its labels. An issue without them is a note nobody sees again, and a
+    // A read finds a note by its labels. An issue without them is a note nobody sees again, and a
     // failed write lets the widget keep the note and try again.
     for (const refusal of [
       () => json(403, { message: 'Resource not accessible by integration' }),
@@ -413,8 +413,8 @@ describe('findForPage', () => {
     assert.equal(apiCalls(anonymous.calls)[0]?.query.get('labels'), 'fruitback');
   });
 
-  it('keeps only the seeds of this exact page, and no pull request', async () => {
-    const seed = noteFixture();
+  it('keeps only the notes of this exact page, and no pull request', async () => {
+    const note = noteFixture();
     const otherPage = noteFixture({
       id: 'sd_other',
       page: { url: 'https://preview.acme.test/pricing', path: '/pricing', title: 'Pricing — Acme' },
@@ -441,7 +441,7 @@ describe('findForPage', () => {
       updatedAt: '2026-09-14T10:00:00Z',
       comments: [],
     });
-    assert.deepEqual(found[0]?.seed, seed);
+    assert.deepEqual(found[0]?.note, note);
   });
 
   it('gives a client ID that GitHub would change a hashed label, on the write and on the read', async () => {
@@ -485,7 +485,7 @@ describe('findForPage', () => {
     assert.notEqual(forged, acme);
   });
 
-  it('keeps a note off a client whose name its seed does not carry, whatever its labels say', async () => {
+  it('keeps a note off a client whose name its note does not carry, whatever its labels say', async () => {
     const { issues } = readWith([
       row({}, noteFixture({ client: { id: 'globex', name: 'Globex' } })),
       row({ id: 2, number: 2 }),

@@ -70,7 +70,7 @@ describe('the read envelope (FRU-10, FRU-13)', () => {
       comments: [
         { id: 'c_1', body: 'Corrigé sur la preview.', createdAt: '2026-08-05T11:00:00.000Z', author: 'Mathieu' },
       ],
-      seed: noteFixture(),
+      note: noteFixture(),
       ...overrides,
     };
   }
@@ -231,6 +231,6 @@ function noteIssueFixtureLike() {
     stage: 'progress',
     stateName: 'In Review',
     updatedAt: '2026-10-21T10:00:00.000Z',
-    seed: noteFixture(),
+    note: noteFixture(),
   };
 }

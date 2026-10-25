@@ -178,8 +178,8 @@ test('a member chooses a place with the keyboard, the note goes there, and the n
   await send(page, 'A note for the design team');
   await landed(page, 'A note for the design team');
   expect(sent.map((each) => each.query)).toEqual(['?destination=dst_design']);
-  // The body is the seed, and the choice is not in it.
-  expect(sent[0]?.body.note).toBe('A note for the design team');
+  // The body is the note, and the choice is not in it.
+  expect(sent[0]?.body.text).toBe('A note for the design team');
   expect(JSON.stringify(sent[0]?.body)).not.toContain('dst_design');
   expect(Object.keys(sent[0]?.body ?? {})).not.toContain('destination');
 

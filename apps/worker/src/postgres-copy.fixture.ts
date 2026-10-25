@@ -231,7 +231,7 @@ export function issuesOfFile(path: string, query: NoteIssueQuery, policy: Client
     return rows
       .map((row) =>
         toNoteIssue(
-          { id: row.id, page_url: row.page_url, stage: row.stage, seed: row.seed, updatedAt: row.updated_at },
+          { id: row.id, page_url: row.page_url, stage: row.stage, payload: row.seed, updatedAt: row.updated_at },
           threads.get(row.id) ?? (policy.showComments ? [] : undefined),
         ),
       )

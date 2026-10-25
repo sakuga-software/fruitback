@@ -226,9 +226,6 @@ describe('a consumer installing this from npm', () => {
           // And the scoped packages directly, because they stay published and someone will.
           'import { init as initScoped } from "@fruitback/widget";',
           'import type { NoteIssue } from "@fruitback/shared";',
-          // The names of 0.3.0 still build, deprecated, until FRU-446 removes them (FRU-378).
-          'import type { Seed, SeedIssue } from "fruitback";',
-          'import { parseSeed } from "@fruitback/shared";',
           // The theme type, because `FruitbackOptions.theme` names it (FRU-35). It resolves through
           // `theme.d.ts`, which ships but is not reachable through the package's `exports` — so
           // "the option is documented" and "the consumer can describe what they pass" are two
@@ -257,9 +254,6 @@ describe('a consumer installing this from npm', () => {
           'export const render = () => FruitbackComponent(props);',
           'export type Payload = Note;',
           'export type Pin = NoteIssue;',
-          'export const sameNote = (payload: Note): Seed => payload;',
-          'export const samePin = (pin: NoteIssue): SeedIssue => pin;',
-          'export const readOld = (value: unknown) => parseSeed(value);',
           '',
         ].join('\n'),
       );

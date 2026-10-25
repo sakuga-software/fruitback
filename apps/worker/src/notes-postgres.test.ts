@@ -32,8 +32,8 @@ const SITE = 'https://preview.shared.test';
 const PAGE = canonicalizePageUrl(`${SITE}/pricing`);
 
 function noteFixtureOf(id: string, client: string | undefined, more: Partial<Note> = {}): Note {
-  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
-  const { client: _own, ...rest } = seed;
+  const note = noteFixture({ id, page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+  const { client: _own, ...rest } = note;
 
   return { ...rest, ...(client === undefined ? {} : { client: { id: client, name: client } }), ...more };
 }
@@ -87,7 +87,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const found = await store.findForPage({ url: PAGE, clientId: undefined }, undefined, POLICY);
 
       assert.deepEqual(
-        found.map((issue) => issue.seed.id),
+        found.map((issue) => issue.note.id),
         ['sd_nobody'],
       );
     });
@@ -122,25 +122,25 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       // a B-tree took 6 000 times the same letter (measured on 17.11).
       const query = Array.from({ length: 200 }, (_, index) => createHash('md5').update(String(index)).digest('hex'));
       const url = canonicalizePageUrl(`${SITE}/search?q=${query.join('')}`);
-      const seed = noteFixtureOf('sd_long', 'site_a', { page: { url, path: '/search', title: 'Search' } });
+      const note = noteFixtureOf('sd_long', 'site_a', { page: { url, path: '/search', title: 'Search' } });
 
-      await store.create(seed, undefined, POLICY);
+      await store.create(note, undefined, POLICY);
 
       const found = await store.findForPage({ url, clientId: 'site_a' }, undefined, POLICY);
       assert.deepEqual(
-        found.map((issue) => issue.seed.page.url),
+        found.map((issue) => issue.note.page.url),
         [url],
       );
     });
 
     it('keeps a note that holds a NUL character, as it was written', async () => {
       const { store } = await opened();
-      const seed = noteFixtureOf('sd_nul', 'site_a', { note: 'before\u0000after' });
+      const note = noteFixtureOf('sd_nul', 'site_a', { text: 'before\u0000after' });
 
-      await store.create(seed, undefined, POLICY);
+      await store.create(note, undefined, POLICY);
 
       const [found] = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
-      assert.equal(found?.seed.note, 'before\u0000after');
+      assert.equal(found?.note.text, 'before\u0000after');
     });
 
     it('loses one note, and not the page, to a row that is not a note of that page', async () => {
@@ -155,7 +155,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const moved = await store.findForPage({ url: `${PAGE}?moved=1`, clientId: 'site_a' }, undefined, POLICY);
 
       assert.deepEqual(
-        found.map((issue) => issue.seed.id),
+        found.map((issue) => issue.note.id),
         ['sd_good'],
       );
       // The row says one page and its note another: it is drawn on neither.
@@ -183,7 +183,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.equal(found?.stateName, '');
     });
 
-    it('keeps each thread on its own seed', async () => {
+    it('keeps each thread on its own note', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('first', 'site_a'), undefined, POLICY);
       await store.create(noteFixtureOf('second', 'site_a'), undefined, POLICY);
@@ -195,7 +195,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
       assert.deepEqual(
-        found.map((issue) => [issue.seed.id, issue.comments?.map((comment) => comment.body)]),
+        found.map((issue) => [issue.note.id, issue.comments?.map((comment) => comment.body)]),
         [
           ['first', ['pour la premiere']],
           ['second', ['pour la seconde']],
@@ -215,7 +215,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       assert.ok(!('author' in comment), 'an unsigned reply must omit the field, not carry an empty name');
     });
 
-    it('drops a row that parses but is not a seed', async () => {
+    it('drops a row that parses but is not a note', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_good', 'site_a'), undefined, POLICY);
       await store.create(noteFixtureOf('sd_hello', 'site_a'), undefined, POLICY);
@@ -224,25 +224,25 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
       assert.deepEqual(
-        found.map((issue) => issue.seed.id),
+        found.map((issue) => issue.note.id),
         ['sd_good'],
       );
     });
 
-    it('drops a row whose column and seed disagree about which page it is on', async () => {
+    it('drops a row whose column and note disagree about which page it is on', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_here', 'site_a'), undefined, POLICY);
       const elsewhere = noteFixtureOf('sd_elsewhere', 'site_a', {
         page: { url: canonicalizePageUrl(`${SITE}/autre`), path: '/autre', title: 'Autre' },
       });
       await store.create(elsewhere, undefined, POLICY);
-      // The column says this page, and the seed in it says another.
+      // The column says this page, and the note in it says another.
       await rowsOf(database, `UPDATE notes SET page_url = '${PAGE}' WHERE id = 2`);
 
       const found = await store.findForPage({ url: PAGE, clientId: 'site_a' }, undefined, POLICY);
 
       assert.deepEqual(
-        found.map((issue) => issue.seed.id),
+        found.map((issue) => issue.note.id),
         ['sd_here'],
       );
     });
@@ -269,7 +269,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         `INSERT INTO note_comments (note_id, author, body, created_at) VALUES (1, 'Team', 'one', 1), (2, 'Team', 'two', 2), (3, 'Team', 'three', 3)`,
       );
       const left = async () => ({
-        seeds: (await rowsOf(database, 'SELECT id FROM notes ORDER BY id')).map((row) => Number(row.id)),
+        notes: (await rowsOf(database, 'SELECT id FROM notes ORDER BY id')).map((row) => Number(row.id)),
         replies: (await rowsOf(database, 'SELECT note_id FROM note_comments ORDER BY note_id')).map((row) =>
           Number(row.note_id),
         ),
@@ -284,40 +284,40 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const listed = await store.forget?.({ email: ' alice@example.com ' }, { dryRun: true });
 
       assert.deepEqual(
-        listed?.map((seed) => seed.identifier),
+        listed?.map((note) => note.identifier),
         ['FB-1', 'FB-3'],
       );
-      assert.deepEqual(await left(), { seeds: [1, 2, 3], replies: [1, 2, 3] });
+      assert.deepEqual(await left(), { notes: [1, 2, 3], replies: [1, 2, 3] });
 
       const deleted = await store.forget?.({ email: 'alice@example.com' }, { dryRun: false });
 
       // The whole instance: the two sites. The note of Bob stays, with its reply.
       assert.deepEqual(
-        deleted?.map((seed) => [seed.identifier, seed.pageUrl, seed.note.length > 0]),
+        deleted?.map((note) => [note.identifier, note.pageUrl, note.text.length > 0]),
         [
           ['FB-1', PAGE, true],
           ['FB-3', PAGE, true],
         ],
       );
-      assert.deepEqual(await left(), { seeds: [2], replies: [2] });
+      assert.deepEqual(await left(), { notes: [2], replies: [2] });
     });
 
     it('deletes by name and by number, and only what each one names', async () => {
       const { store, left } = await withAliceAndBob();
 
       assert.deepEqual(
-        (await store.forget?.({ identifiers: ['FB-3', 'FB-99'] }, { dryRun: false }))?.map((seed) => seed.identifier),
+        (await store.forget?.({ identifiers: ['FB-3', 'FB-99'] }, { dryRun: false }))?.map((note) => note.identifier),
         ['FB-3'],
       );
-      assert.deepEqual(await left(), { seeds: [1, 2], replies: [1, 2] });
+      assert.deepEqual(await left(), { notes: [1, 2], replies: [1, 2] });
       assert.deepEqual(
-        (await store.forget?.({ name: 'bob' }, { dryRun: false }))?.map((seed) => seed.identifier),
+        (await store.forget?.({ name: 'bob' }, { dryRun: false }))?.map((note) => note.identifier),
         ['FB-2'],
       );
-      assert.deepEqual(await left(), { seeds: [1], replies: [1] });
+      assert.deepEqual(await left(), { notes: [1], replies: [1] });
     });
 
-    it('finds the seeds signed with a name, whatever its case and the spaces around it', async () => {
+    it('finds the notes signed with a name, whatever its case and the spaces around it', async () => {
       const { database, store } = await opened();
       await store.create(noteFixtureOf('sd_a', 'site_a', { reporter: { name: ' Alice ' } }), undefined, POLICY);
       await store.create(noteFixtureOf('sd_b', 'site_a', { reporter: { name: 'Alicia' } }), undefined, POLICY);
@@ -326,7 +326,7 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       const listed = await store.forget?.({ name: 'ALICE' }, { dryRun: true });
 
       assert.deepEqual(
-        listed?.map((seed) => seed.identifier),
+        listed?.map((note) => note.identifier),
         ['FB-1'],
       );
       assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM notes'), [{ n: 3 }]);
@@ -363,12 +363,12 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
       );
       const typo = await runForget(['--id', 'FB-1', '--id', 'FB-99'], env, store);
       assert.deepEqual([typo.ok, typo.lines], [false, ['no note is FB-99. Nothing was deleted.']]);
-      assert.deepEqual(await left(), { seeds: [1, 2, 3], replies: [1, 2, 3] });
+      assert.deepEqual(await left(), { notes: [1, 2, 3], replies: [1, 2, 3] });
 
       const done = await runForget(['--id', 'FB-1', '--id', 'FB-3'], env, store);
       assert.ok(done.ok);
       assert.match(done.lines.join('\n'), /deleted 2 note\(s\), with their replies/);
-      assert.deepEqual(await left(), { seeds: [2], replies: [2] });
+      assert.deepEqual(await left(), { notes: [2], replies: [2] });
     });
   });
 }
@@ -417,7 +417,7 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
       sites.push((await world.accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' })).id);
     }
     const [acme, globex] = sites as [string, string];
-    const note = { ...noteFixtureOf('sd_acme', acme), note: 'A note of Acme.' };
+    const note = { ...noteFixtureOf('sd_acme', acme), text: 'A note of Acme.' };
 
     const written = await callOn(world, 'POST', '/feedback', { origin: SITE, body: note }, { store });
     assert.equal(written.status, 201, await written.clone().text());
@@ -432,7 +432,7 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
       );
       assert.equal(answer.status, 200, await answer.clone().text());
 
-      return ((await answer.json()) as { issues: { seed: { note: string } }[] }).issues.map((issue) => issue.seed.note);
+      return ((await answer.json()) as { issues: { note: { text: string } }[] }).issues.map((issue) => issue.note.text);
     };
     assert.deepEqual(await read(acme), ['A note of Acme.']);
     assert.deepEqual(await read(globex), []);

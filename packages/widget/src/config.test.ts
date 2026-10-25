@@ -9,8 +9,8 @@ const DEFAULTS: WidgetConfig = {
 };
 
 /** Enough of `Storage` for the store, plus a way to make it misbehave. */
-function fakeStorage(seed: Record<string, string> = {}): Storage & { throwOnWrite?: boolean } {
-  const map = new Map(Object.entries(seed));
+function fakeStorage(note: Record<string, string> = {}): Storage & { throwOnWrite?: boolean } {
+  const map = new Map(Object.entries(note));
 
   return {
     get length() {
@@ -157,7 +157,7 @@ describe('createConfigStore', () => {
   });
 
   it('ignores a stored value someone edited into nonsense', () => {
-    // This is a string a human can reach in devtools, so it is parsed the way a seed is: a bad one
+    // This is a string a human can reach in devtools, so it is parsed the way a note is: a bad one
     // costs the reporter their preferences, never the widget.
     const storage = fakeStorage({
       [CONFIG_STORAGE_KEY]: JSON.stringify({ screenshot: 'yes', hiddenStages: ['done', 'banana'] }),

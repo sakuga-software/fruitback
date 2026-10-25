@@ -346,7 +346,7 @@ describe('the places that create an account (FRU-278)', () => {
   /** Each file of the worker that may write a row of `user` outside better-auth, with its reason. */
   const ALLOWED: Record<string, string> = {
     'accounts-postgres.ts':
-      '`signIn` of the store: no route calls it, only the seed of the worker of development, and the tests',
+      '`signIn` of the store: no route calls it, only the note of the worker of development, and the tests',
   };
 
   it('writes a row of user only through better-auth, whose hook decides', () => {

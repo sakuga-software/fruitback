@@ -913,7 +913,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
-    async setNoteStatus(workspace, site, seed, key, who) {
+    async setNoteStatus(workspace, site, noteId, key, who) {
       return transaction(async (db) => {
         const refused = <R extends string>(reason: R) => ({ set: false as const, reason });
         // The site, for update: the same lock as a status added, moved or removed (FRU-366), so the
@@ -929,7 +929,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           .from(note_index)
           .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
           .where(
-            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, seed)),
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.note_id, noteId)),
           );
         if (note === undefined) return refused('not-found');
         // The author as the index keeps it, the one the route of the extension reads too (FRU-367).
@@ -939,10 +939,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         if (id === undefined) return refused('not-kept');
         // That row, of this site, and this very note: a tracker can name an issue `FB-12` too.
         const [kept] = await db
-          .select({ seed: notes.payload })
+          .select({ payload: notes.payload })
           .from(notes)
           .where(and(eq(notes.id, id), eq(notes.client_id, site)));
-        if (kept === undefined || !isSameNote(kept.seed, seed)) return refused('not-kept');
+        if (kept === undefined || !isSameNote(kept.payload, noteId)) return refused('not-kept');
 
         const [row] = await db
           .select({ stage: statuses.stage, hidden: statuses.hidden })

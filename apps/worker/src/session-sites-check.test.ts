@@ -63,14 +63,14 @@ async function sitesOf(world: World, token: string): Promise<Listed[]> {
 
 /** A note on `PAGE` of `site`, sent with `token`: its id in the store. */
 async function noteOf(world: World, site: string, id: string, token: string): Promise<string> {
-  const seed = noteFixture({
+  const note = noteFixture({
     id,
     page: { url: PAGE, path: '/pricing', title: 'Pricing' },
     client: { id: site, name: 'Acme' },
   });
   const answer = await callOn(world, 'POST', '/feedback', {
     origin: ORIGIN,
-    body: seed,
+    body: note,
     headers: { Authorization: `Bearer ${token}` },
   });
   assert.equal(answer.status, 201, await answer.clone().text());

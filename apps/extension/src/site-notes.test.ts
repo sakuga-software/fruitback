@@ -14,7 +14,7 @@ const grant = (token: string): AccessResult => ({ ok: true, grant: { accessToken
 const BODY = {
   notes: [
     {
-      seed: 'sd_1',
+      note: 'sd_1',
       excerpt: 'The Add button is almost invisible.',
       page: { url: 'https://staging.acme.dev/', path: '/' },
       stage: 'progress',
@@ -54,7 +54,7 @@ describe('the read of the notes of a whole site (FRU-307)', () => {
     assert.equal(asked[0]?.url, `${ENDPOINT}/session/notes?site=site_1&limit=${SITE_PAGE_SIZE}&q=add+button`);
     assert.equal(asked[0]?.auth, 'Bearer t1');
     assert.deepEqual(read.page.notes[0], {
-      seed: 'sd_1',
+      note: 'sd_1',
       excerpt: 'The Add button is almost invisible.',
       page: { url: 'https://staging.acme.dev/', path: '/' },
       stage: 'progress',
@@ -120,14 +120,14 @@ describe('the read of the notes of a whole site (FRU-307)', () => {
       next: 'n1',
       notes: [
         BODY.notes[0],
-        { ...BODY.notes[0], seed: 'sd_2', page: { url: 'javascript:alert(1)', path: '/' } },
-        { ...BODY.notes[0], seed: 'sd_3', stage: 'rotten' },
-        { ...BODY.notes[0], seed: 'sd_4', referenceUrl: 'javascript:alert(1)', author: { kind: 'anonymous' } },
+        { ...BODY.notes[0], note: 'sd_2', page: { url: 'javascript:alert(1)', path: '/' } },
+        { ...BODY.notes[0], note: 'sd_3', stage: 'rotten' },
+        { ...BODY.notes[0], note: 'sd_4', referenceUrl: 'javascript:alert(1)', author: { kind: 'anonymous' } },
       ],
     });
 
     assert.deepEqual(
-      page?.notes.map((note) => note.seed),
+      page?.notes.map((note) => note.note),
       ['sd_1', 'sd_4'],
     );
     assert.equal(page?.notes[1]?.referenceUrl, undefined);

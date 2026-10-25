@@ -1,6 +1,6 @@
 import { beforeEach, describe, it } from 'vitest';
 import assert from 'node:assert/strict';
-import { CACHE_TTL_MS, PAGE_VERSION_TTL_MS, cached, invalidate, resetCacheState } from './cache.ts';
+import { CACHE_TTL_MS, PAGE_VERSION_TTL_MS, READ_ENTRY, cached, invalidate, resetCacheState } from './cache.ts';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
 
 const PAGE = 'https://preview.acme.test/pricing';
@@ -148,7 +148,7 @@ describe('cached', () => {
 
   it('does not swallow an error that is not from the Kv, when it reads or writes an entry', async () => {
     const defect = new TypeError('a defect, not an outage');
-    const isEntry = (key: string) => key.startsWith('fruitback:read:');
+    const isEntry = (key: string) => key.startsWith(READ_ENTRY);
     const brokenRead: Kv = {
       ...kv,
       get: async (key) => {
@@ -179,7 +179,7 @@ describe('cached', () => {
   it('still answers the read when the Kv answers for the version of the page but not for the entry', async () => {
     // The version is read first, so a Kv that is down for every key never reaches the entry. This
     // one fails only on the entry: on its read, then on its write.
-    const isEntry = (key: string) => key.startsWith('fruitback:read:');
+    const isEntry = (key: string) => key.startsWith(READ_ENTRY);
     const brokenRead: Kv = {
       ...kv,
       get: async (key) => {
@@ -221,7 +221,7 @@ describe('cached', () => {
 
     await cached(recording, PAGE, 'k', async () => 'value');
 
-    assert.deepEqual(sets, [{ key: `fruitback:read:${JSON.stringify(['none', PAGE, 'k'])}`, ttl: CACHE_TTL_MS }]);
+    assert.deepEqual(sets, [{ key: `fruitback:read-v3:${JSON.stringify(['none', PAGE, 'k'])}`, ttl: CACHE_TTL_MS }]);
     assert.equal(CACHE_TTL_MS, 15_000);
   });
 

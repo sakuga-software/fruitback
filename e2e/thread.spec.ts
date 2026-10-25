@@ -117,13 +117,13 @@ async function theNoteOfTheMockUp(page: Page): Promise<void> {
     if (route.request().method() !== 'GET') return route.fallback();
     const response = await route.fetch();
     const body = (await response.json()) as {
-      issues: { stateName: string; stage: string; comments?: unknown[]; seed: Record<string, unknown> }[];
+      issues: { stateName: string; stage: string; comments?: unknown[]; note: Record<string, unknown> }[];
     };
     for (const issue of body.issues) {
       issue.stateName = 'In progress';
       issue.stage = 'progress';
-      issue.seed.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
-      issue.seed.reporter = { name: 'Camille Durand' };
+      issue.note.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
+      issue.note.reporter = { name: 'Camille Durand' };
       issue.comments = [
         {
           id: 'reply-1',

@@ -178,18 +178,18 @@ describe('the worker of development, as a process (FRU-223)', () => {
       // With no HOST in its environment, the process says where it listens.
       assert.match(worker.said(), /listening on 127\.0\.0\.1:\d+ /);
 
-      const seed = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+      const note = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
       const sent = await fetch(`${worker.origin}/feedback`, {
         method: 'POST',
         headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...seed, client: { id: DEV_SITE } }),
+        body: JSON.stringify({ ...note, client: { id: DEV_SITE } }),
       });
       assert.equal(sent.status, 201, await sent.clone().text());
 
-      const answer = (await (await read(worker.origin)).json()) as { issues: { seed: { note: string } }[] };
+      const answer = (await (await read(worker.origin)).json()) as { issues: { note: { text: string } }[] };
       assert.deepEqual(
-        answer.issues.map((issue) => issue.seed.note),
-        [seed.note],
+        answer.issues.map((issue) => issue.note.text),
+        [note.text],
       );
       // A site that the workspace does not hold is not served, as on any worker with a database.
       const other = await fetch(`${worker.origin}/feedback?url=${encodeURIComponent(PAGE)}&client=site_nobody`, {
@@ -202,11 +202,11 @@ describe('the worker of development, as a process (FRU-223)', () => {
   it('keeps its tables, its workspace and its notes in a schema of its own when one is named (FRU-219)', async () => {
     const worker = await start({ FRUITBACK_STORE: 'postgres', FRUITBACK_DATABASE_SCHEMA: 'fruitback' });
     await ready(worker.origin, worker.said);
-    const seed = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+    const note = noteFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
     const sent = await fetch(`${worker.origin}/feedback`, {
       method: 'POST',
       headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...seed, client: { id: DEV_SITE } }),
+      body: JSON.stringify({ ...note, client: { id: DEV_SITE } }),
     });
     assert.equal(sent.status, 201, await sent.clone().text());
     assert.equal(((await (await read(worker.origin)).json()) as { issues: unknown[] }).issues.length, 1);

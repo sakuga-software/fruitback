@@ -126,11 +126,11 @@ async function indexedAuthorOf(
   index: NoteIndex | undefined,
   workspace: string,
   site: string,
-  seed: string,
+  note: string,
 ): Promise<string | undefined> {
   if (index === undefined) return undefined;
   try {
-    return (await index.authors(workspace, site, [seed])).get(seed);
+    return (await index.authors(workspace, site, [note])).get(note);
   } catch (error) {
     throw new StoreError(
       `the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
@@ -225,11 +225,11 @@ export async function postCheck(
     for (const target of targets) {
       // Read now in the store, never in the cache: the stage that decides is the store's.
       const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-        hidden ? each.seed.id === issue : each.id === issue,
+        hidden ? each.note.id === issue : each.id === issue,
       );
       if (found === undefined) continue;
 
-      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
+      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
       const manages = reach !== undefined && can(reach.role, 'manage-sites');
       if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
       if (!(await takesChecks(store, target))) return json(403, { error: 'checks-not-taken' }, corsHeaders);
@@ -240,7 +240,7 @@ export async function postCheck(
       // One verdict at a time on a note: a double click, or two tabs, pass the guards above together
       // and would write two verdicts. The second is refused while the first is written; after it, the
       // read under the key sees the verdict of the first.
-      const lock = `fruitback:check:${clientId}:${found.seed.id}`;
+      const lock = `fruitback:check:${clientId}:${found.note.id}`;
       if ((await kv.incr(lock, CHECK_LOCK_MS)) > 1) return json(409, { error: 'check-in-progress' }, corsHeaders);
       try {
         // Read again under the key: a request that read the note before another wrote its verdict
@@ -391,11 +391,11 @@ export async function postStatus(
     for (const target of targets) {
       // Read now in the store, never in the cache: the author and the place are the store's.
       const found = (await store.findForPage({ url, clientId }, target, route.policy)).find((each) =>
-        hidden ? each.seed.id === issue : each.id === issue,
+        hidden ? each.note.id === issue : each.id === issue,
       );
       if (found === undefined) continue;
 
-      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.seed.id);
+      const author = await indexedAuthorOf(context.noteIndex, workspace, clientId, found.note.id);
       const manages = reach !== undefined && can(reach.role, 'manage-sites');
       if (author !== account && !manages) return json(403, { error: 'not-allowed' }, corsHeaders);
       if (!(await takesStatuses(store, target))) return json(403, { error: 'statuses-not-taken' }, corsHeaders);

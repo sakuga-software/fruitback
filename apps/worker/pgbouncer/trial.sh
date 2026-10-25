@@ -81,13 +81,13 @@ say "make a workspace: $(CALL -b "$TRIAL_DIR/cookies" "${FROM_CONSOLE[@]}" -d '{
 WS=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$TRIAL_DIR/body")
 say "add a site: $(CALL -b "$TRIAL_DIR/cookies" "${FROM_CONSOLE[@]}" -d '{"url":"http://localhost:5500","visibility":"everyone"}' "$W/console/workspaces/$WS/sites")"
 SITE=$(sed -n 's/.*"id":"\(site_[^"]*\)".*/\1/p' "$TRIAL_DIR/body")
-NOTE="{\"kind\":\"fruitback.seed\",\"v\":2,\"id\":\"sd_pgbouncer\",\"createdAt\":\"2026-10-21T00:00:00.000Z\",\"note\":\"Through PgBouncer\",\"page\":{\"url\":\"http://localhost:5500/\",\"path\":\"/\"},\"viewport\":{\"width\":1280,\"height\":800},\"anchor\":{\"selector\":\"main > h1\",\"tag\":\"h1\",\"bounds\":{\"xPct\":0,\"yPct\":0,\"wPct\":100,\"hPct\":8}},\"client\":{\"id\":\"$SITE\"}}"
+NOTE="{\"kind\":\"fruitback.note\",\"v\":3,\"id\":\"sd_pgbouncer\",\"createdAt\":\"2026-10-21T00:00:00.000Z\",\"text\":\"Through PgBouncer\",\"page\":{\"url\":\"http://localhost:5500/\",\"path\":\"/\"},\"viewport\":{\"width\":1280,\"height\":800},\"anchor\":{\"selector\":\"main > h1\",\"tag\":\"h1\",\"bounds\":{\"xPct\":0,\"yPct\":0,\"wPct\":100,\"hPct\":8}},\"client\":{\"id\":\"$SITE\"}}"
 say "send a note: $(CALL -X POST "${FROM_SITE[@]}" -H 'Content-Type: application/json' -d "$NOTE" "$W/feedback") $(head -c 60 "$TRIAL_DIR/body")"
 READ="$W/feedback?url=http%3A%2F%2Flocalhost%3A5500%2F&client=$SITE"
 reads=""
 for _ in 1 2 3 4 5; do reads="$reads $(CALL "${FROM_SITE[@]}" "$READ")"; done
 say "five reads, RATE_LIMIT_PER_MINUTE=8 (the counter is a row of the database):$reads"
-say "the database: $(SQL "SELECT count(*) FROM pg_tables WHERE schemaname='$TABLES'") tables in $TABLES, $(SQL "SELECT count(*) FROM pg_tables WHERE schemaname='public'") in public, $(SQL "SELECT count(*) FROM \"$TABLES\".__drizzle_migrations") migrations applied, $(SQL "SELECT count(*) FROM \"$TABLES\".seeds") note"
+say "the database: $(SQL "SELECT count(*) FROM pg_tables WHERE schemaname='$TABLES'") tables in $TABLES, $(SQL "SELECT count(*) FROM pg_tables WHERE schemaname='public'") in public, $(SQL "SELECT count(*) FROM \"$TABLES\".__drizzle_migrations") migrations applied, $(SQL "SELECT count(*) FROM \"$TABLES\".notes") note"
 DC restart worker >/dev/null 2>&1
 healthy && say "after a restart: /health 200, a read $(CALL "${FROM_SITE[@]}" "$READ") (429: the counter was kept)" || say "after a restart: /health never answered 200"
 say "lines of the log that name a failure:"

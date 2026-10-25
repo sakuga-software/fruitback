@@ -649,7 +649,7 @@ describe('a file on its way, and the note that names it (FRU-332)', () => {
     assert.equal(failureOf({ status: 409, body: '{"error":"check-in-progress"}' }), 'retry');
   });
 
-  it('names the files of the note in the query of the write, and the body stays the seed', async () => {
+  it('names the files of the note in the query of the write, and the body stays the note', async () => {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     setDocumentSize(page.document, 1_000, 1_000);
     setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
@@ -740,7 +740,7 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
     const host = page.document.createElement('div');
     page.document.body.append(host);
     const overlay = createOverlay({ document: page.document, host });
-    const seed = noteFixture({
+    const note = noteFixture({
       id: 'sd_files',
       anchor: {
         selector: '[data-testid="cta"]',
@@ -754,7 +754,7 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
       { name: 'log.txt', url: 'https://uploads.linear.app/a/log.txt' },
     ];
     overlay.render([
-      noteIssueFixture({ identifier: 'DEV-3', url: 'https://linear.app/x/DEV-3', attachments: files, seed }),
+      noteIssueFixture({ identifier: 'DEV-3', url: 'https://linear.app/x/DEV-3', attachments: files, note }),
     ]);
     overlay.select('sd_files');
 
@@ -788,9 +788,9 @@ describe('the files of a sent note, in its thread (FRU-332)', () => {
     };
     const { url: _url, ...guest } = noteIssueFixture({
       attachments: [{ name: 'page.png' }],
-      seed: noteFixture({ id: 'sd_guest', anchor }),
+      note: noteFixture({ id: 'sd_guest', anchor }),
     });
-    overlay.render([guest, noteIssueFixture({ id: 'other', seed: noteFixture({ id: 'sd_none', anchor }) })]);
+    overlay.render([guest, noteIssueFixture({ id: 'other', note: noteFixture({ id: 'sd_none', anchor }) })]);
     overlay.select('sd_guest');
     assert.equal(host.querySelector('[data-fruitback-files]')?.textContent, '1 attachment');
     overlay.select('sd_none');

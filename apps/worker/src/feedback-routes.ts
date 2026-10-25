@@ -1,12 +1,4 @@
-import {
-  MAX_ATTACHMENTS_PER_NOTE,
-  NOTE_STAGES,
-  type Note,
-  type NoteIssue,
-  type NoteV3,
-  parseNote,
-  toNoteV3,
-} from '@fruitback/shared';
+import { MAX_ATTACHMENTS_PER_NOTE, NOTE_STAGES, type Note, type NoteIssue, parseNote } from '@fruitback/shared';
 import { legacyAttachment, settleFiles, takeFiles } from './attachment-routes.ts';
 import { attachmentIdsOf } from './attachments.ts';
 import { SENT_TTL_MS, batchMemory, createAll, hold, release, sentKey } from './batch.ts';
@@ -53,11 +45,8 @@ import type { AccountStore } from './accounts.ts';
  * names the routes call it by.
  */
 
-/** An issue of `GET /feedback`: the issue of the store, and its note again in `note` (FRU-378). */
-export type ReadIssue = NoteIssue & { note: NoteV3 };
-
 /**
- * The read path: every seed planted on one page, with the Linear state that gives the pin its
+ * The read path: every note planted on one page, with the Linear state that gives the pin its
  * colour. This is what lets a client come back to the page and see their own notes again.
  */
 export async function getFeedback(
@@ -140,30 +129,26 @@ export async function getFeedback(
     );
     // Two places of one team are one read of the tracker, so a note can come back twice. A site
     // that is read in one place gets what its store answers, as it is: nothing there comes back
-    // twice, and two notes can hold one seed id.
+    // twice, and two notes can hold one note id.
     const seen = new Set<string>();
     const all =
       found.length < 2
         ? found.flat()
-        : found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
+        : found.flat().filter((issue) => !seen.has(issue.note.id) && seen.add(issue.note.id));
     // Asked at each request, after the cache, whose answer every reader of the page shares.
     const hidden = await hidesTracker(request, config, route.policy);
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
-    const issues: ReadIssue[] = all.map((issue) => {
+    const issues: NoteIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
       const marked = {
         ...issue,
         ...(checked === undefined ? {} : { checked }),
-        ...(own.has(issue.seed.id) ? { mine: true as const } : {}),
+        ...(own.has(issue.note.id) ? { mine: true as const } : {}),
       };
 
-      const shown = hidden ? withoutTrackerStatus(withoutTracker(marked, issue.seed.id)) : marked;
-
-      // FRU-378: the note in the shape of `fruitback.note`, next to `seed` that every widget of before
-      // reads. Never in the cached answer, which keeps the issues as the store gave them.
-      return { ...shown, note: toNoteV3(shown.seed) };
+      return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.note.id)) : marked;
     });
 
     // The stages of the trackers that answered, in the order of `NOTE_STAGES` (FRU-188). A site read in
@@ -295,15 +280,15 @@ export async function postFeedback(
     return json(400, { error: 'invalid-note', reason: parsed.reason }, corsHeaders);
   }
 
-  const seed = canonicalNote(parsed.note);
-  const clientId = seed.client?.id;
+  const note = canonicalNote(parsed.note);
+  const clientId = note.client?.id;
 
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   // Whose word the attribution is (FRU-9). The claimed reporter loses `verified` whatever it said,
   // and only a token this worker checked can put it back.
-  const identity = await attributionFor(request, route.policy, seed.reporter);
+  const identity = await attributionFor(request, route.policy, note.reporter);
   if (!identity.ok) {
     return json(401, { error: identity.error, reason: identity.reason }, corsHeaders);
   }
@@ -311,13 +296,13 @@ export async function postFeedback(
   const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;
   if (ended !== undefined) return ended;
 
-  const attributed = { ...seed, ...optionalReporter(identity.reporter) };
+  const attributed = { ...note, ...optionalReporter(identity.reporter) };
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
 
   try {
-    // A note of before FRU-331, sent again, names its picture in its seed: it goes with it while the
+    // A note of before FRU-331, sent again, names its picture in its note: it goes with it while the
     // migration keeps it, and the note is never refused for it.
     const noteFiles = {
       files: context?.attachments ?? attachmentStoreFor(config),
@@ -375,16 +360,16 @@ export async function postFeedback(
 }
 
 /**
- * Several notes in one request (FRU-124): `POST /feedback` with an array of seeds.
+ * Several notes in one request (FRU-124): `POST /feedback` with an array of notes.
  *
- * - Every seed is read before anything is written: one that is not a seed refuses the batch.
+ * - Every note is read before anything is written: one that is not a note refuses the batch.
  * - The request passed the limiter for one. The N − 1 others are counted here, before any write:
  *   over the limit, `429`, and nothing is written.
  * - One client for the whole batch, one identity, one place (`?destination=`).
- * - A seed kept in the last minutes answers its issue again and is not planted twice: its id is the
- *   key (`seed.id` « dedupes retries »). That is what a widget sends again after a partial failure.
- *   A seed that another request is planting now is answered as not kept, and is not planted here.
- * - One answer for each seed, in order: `201` when every one was kept, `207` when some were, `502`
+ * - A note kept in the last minutes answers its issue again and is not planted twice: its id is the
+ *   key (`note.id` « dedupes retries »). That is what a widget sends again after a partial failure.
+ *   A note that another request is planting now is answered as not kept, and is not planted here.
+ * - One answer for each note, in order: `201` when every one was kept, `207` when some were, `502`
  *   when none was. The widget keeps the ones that were not as drafts.
  */
 async function postBatch(
@@ -405,23 +390,23 @@ async function postBatch(
     return json(400, { error: 'invalid-batch', max }, corsHeaders);
   }
 
-  const seeds: Note[] = [];
+  const notes: Note[] = [];
   for (const [index, each] of payload.entries()) {
     const parsed = parseNote(each);
     if (!parsed.ok) return json(400, { error: 'invalid-note', index, reason: parsed.reason }, corsHeaders);
-    seeds.push(canonicalNote(parsed.note));
+    notes.push(canonicalNote(parsed.note));
   }
-  if (new Set(seeds.map((seed) => seed.id)).size !== seeds.length) {
-    return json(400, { error: 'invalid-batch', reason: 'the same seed twice', max }, corsHeaders);
+  if (new Set(notes.map((note) => note.id)).size !== notes.length) {
+    return json(400, { error: 'invalid-batch', reason: 'the same note twice', max }, corsHeaders);
   }
-  const clientId = seeds[0]?.client?.id;
-  if (!seeds.every((seed) => seed.client?.id === clientId)) {
+  const clientId = notes[0]?.client?.id;
+  if (!notes.every((note) => note.client?.id === clientId)) {
     return json(400, { error: 'invalid-batch', reason: 'one client for the whole batch', max }, corsHeaders);
   }
 
   let allowed: boolean;
   try {
-    allowed = await chargeRateLimit(kv, clientIp, seeds.length - 1, { limit: config.rateLimitPerMinute });
+    allowed = await chargeRateLimit(kv, clientIp, notes.length - 1, { limit: config.rateLimitPerMinute });
   } catch (error) {
     if (!(error instanceof KvError)) throw error;
     console.error(`[fruitback] rate limit unavailable: ${error.message}`);
@@ -437,10 +422,10 @@ async function postBatch(
   const attributed: Note[] = [];
   let channel: Channel = 'script';
   let account = false;
-  for (const seed of seeds) {
-    const identity = await attributionFor(request, route.policy, seed.reporter);
+  for (const note of notes) {
+    const identity = await attributionFor(request, route.policy, note.reporter);
     if (!identity.ok) return json(401, { error: identity.error, reason: identity.reason }, corsHeaders);
-    attributed.push({ ...seed, ...optionalReporter(identity.reporter) });
+    attributed.push({ ...note, ...optionalReporter(identity.reporter) });
     channel = identity.channel;
     account = identity.account;
   }
@@ -453,9 +438,9 @@ async function postBatch(
 
   // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
   const known = await Promise.all(
-    attributed.map(async (seed) => {
+    attributed.map(async (note) => {
       try {
-        const kept = await kv.get(sentKey(clientId, seed.id));
+        const kept = await kv.get(sentKey(clientId, note.id));
 
         return kept === undefined ? undefined : (JSON.parse(kept) as CreatedIssue);
       } catch {
@@ -464,10 +449,10 @@ async function postBatch(
       }
     }),
   );
-  // A seed that is not kept yet is taken for this request. One that another request holds is not
+  // A note that is not kept yet is taken for this request. One that another request holds is not
   // sent from here: it is answered as not kept, and the next attempt reads what became of it.
   const held = await Promise.all(
-    attributed.map((seed, index) => (known[index] === undefined ? hold(kv, clientId, seed.id) : false)),
+    attributed.map((note, index) => (known[index] === undefined ? hold(kv, clientId, note.id) : false)),
   );
   const fresh = attributed.filter((_, index) => held[index]);
 
@@ -478,31 +463,31 @@ async function postBatch(
     }
   } catch (error) {
     if (!(error instanceof StoreError)) {
-      // An error nobody expected answers `500`. The seeds are given back first: the next attempt
+      // An error nobody expected answers `500`. The notes are given back first: the next attempt
       // must not wait for the hold to end.
-      await Promise.all(fresh.map((seed) => release(kv, clientId, seed.id)));
+      await Promise.all(fresh.map((note) => release(kv, clientId, note.id)));
       throw error;
     }
-    // Nothing of this attempt was kept. A seed of an earlier one still answers its issue.
+    // Nothing of this attempt was kept. A note of an earlier one still answers its issue.
     planted = fresh.map(() => ({ error: 'store-unavailable' }) as const);
   }
 
   let next = 0;
-  const results = attributed.map((seed, index) => {
+  const results = attributed.map((note, index) => {
     const issue = known[index];
-    if (issue !== undefined) return { id: seed.id, issue };
+    if (issue !== undefined) return { id: note.id, issue };
     const answer: BatchAnswer = held[index] ? (planted[next++] as BatchAnswer) : { error: 'store-unavailable' };
 
-    return { id: seed.id, ...answer };
+    return { id: note.id, ...answer };
   });
   await Promise.all(
     results.flatMap((result, index) => (held[index] && 'error' in result ? [release(kv, clientId, result.id)] : [])),
   );
 
-  // WARNING: a `Kv` that does not take this write loses the ten minutes, not the note. The seed is
+  // WARNING: a `Kv` that does not take this write loses the ten minutes, not the note. The note is
   // kept and answered; only its trace is missing. Its hold is not given back, so a second attempt in
   // the next minute is answered « not kept » and plants nothing. After that minute, a widget that
-  // sends the whole batch again would plant it twice: a widget sends again only the seeds that were
+  // sends the whole batch again would plant it twice: a widget sends again only the notes that were
   // answered as not kept. The memory `Kv` of this process does not refuse a write.
   await Promise.all(
     results.flatMap((result) =>
@@ -515,17 +500,17 @@ async function postBatch(
   // FRU-237: the notes this request planted. One kept by an earlier attempt is in the index already.
   const workspace = route.client?.workspace;
   if (workspace !== undefined && clientId !== undefined) {
-    const entries = attributed.flatMap((seed, index) => {
+    const entries = attributed.flatMap((note, index) => {
       const result = results[index];
       const issue = result !== undefined && 'issue' in result ? result.issue : undefined;
 
-      return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, seed, channel, target, issue)] : [];
+      return held[index] && issue !== undefined ? [noteEntry(workspace, clientId, note, channel, target, issue)] : [];
     });
     await indexed(noteIndex, (index) => index.record(entries, Date.now()));
   }
   await invalidatePages(
     kv,
-    attributed.filter((_, index) => 'issue' in (results[index] as object)).map((seed) => seed.page.url),
+    attributed.filter((_, index) => 'issue' in (results[index] as object)).map((note) => note.page.url),
   );
 
   // A guest gets no reference of the tracker (FRU-250).

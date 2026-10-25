@@ -59,10 +59,10 @@ test('a note sent after a navigation goes to the page where it was written', asy
     (request) => request.method() === 'POST' && request.url().startsWith(`${WORKER_ORIGIN}/feedback`),
   );
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  const seed = (await posted).postDataJSON() as { page: { url: string; path: string }; anchor: { text?: string } };
-  expect(new URL(seed.page.url).pathname).toBe('/');
-  expect(seed.page.path).toBe('/');
-  expect(new URL(seed.page.url).searchParams.get('case')).toBe(testCase);
+  const sent = (await posted).postDataJSON() as { page: { url: string; path: string }; anchor: { text?: string } };
+  expect(new URL(sent.page.url).pathname).toBe('/');
+  expect(sent.page.path).toBe('/');
+  expect(new URL(sent.page.url).searchParams.get('case')).toBe(testCase);
   await expect(composer).toBeHidden({ timeout: 10_000 });
 
   // Not on the page the reporter went to.

@@ -6,7 +6,6 @@ import { readFileSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
 import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
-import { type Note, toNoteV3 } from '@fruitback/shared';
 import { noteFixture } from '@fruitback/shared/note.fixture';
 import { deliverPending, handleRequest } from './app.ts';
 import { CONSOLE, type World as Env, callOn as call, memberOf, signInTo, worlds } from './console-world.fixture.ts';
@@ -113,9 +112,9 @@ async function receiving(env: Env, world: World, body: Record<string, unknown> =
 }
 
 function note(site: string, text = 'The price should say per month.') {
-  const seed = noteFixture();
+  const base = noteFixture();
 
-  return { ...seed, note: text, page: { ...seed.page, url: `${SITE}/pricing` }, client: { id: site } };
+  return { ...base, text, page: { ...base.page, url: `${SITE}/pricing` }, client: { id: site } };
 }
 
 /** A receiver that keeps what it gets and answers what a test tells it to. */
@@ -246,21 +245,20 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
     assert.equal(sent.url, TARGET);
     const body = JSON.parse(sent.body) as Record<string, unknown>;
     assert.deepEqual(
-      { ...body, seed: undefined, note: undefined },
+      { ...body, note: undefined },
       {
-        version: 1,
+        version: 2,
         event: 'note.created',
         workspace: world.workspace.id,
         site: { id: world.site.id, origin: SITE },
         identifier,
-        seed: undefined,
         note: undefined,
       },
     );
-    assert.equal((body.seed as { note: string }).note, 'The price should say per month.');
-    // FRU-378: the same note in the shape of fruitback.note, and `version` stays at 1.
-    assert.deepEqual(body.note, JSON.parse(JSON.stringify(toNoteV3(body.seed as Note))));
+    // FRU-378: the note under `note`, as `fruitback.note` v3, and under no other key.
+    assert.equal((body.note as { kind: string; text: string }).kind, 'fruitback.note');
     assert.equal((body.note as { text: string }).text, 'The price should say per month.');
+    assert.deepEqual(Object.keys(body).sort(), ['event', 'identifier', 'note', 'site', 'version', 'workspace']);
     assert.equal(sent.headers['Content-Type'], 'application/json');
     assert.equal(sent.headers[TIMESTAMP_HEADER], String(LATER_MS / 1_000));
     assert.match(sent.headers[DELIVERY_HEADER] ?? '', /^dlv_/);
@@ -991,7 +989,7 @@ describe('the contract a receiver is written against (FRU-122)', () => {
       Object.keys(shown),
       Object.keys(
         JSON.parse(
-          deliveryBody({ workspace: 'w', site: { id: 's' }, identifier: 'FB-1', seed: noteFixture() }),
+          deliveryBody({ workspace: 'w', site: { id: 's' }, identifier: 'FB-1', note: noteFixture() }),
         ) as object,
       ),
     );
@@ -1133,15 +1131,15 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
   const LEGACY = `shot_${'e'.repeat(32)}`;
   const body = (workspace: string) =>
     JSON.stringify({
-      version: 1,
+      version: 2,
       event: 'note.created',
       workspace,
       site: { id: 's' },
       identifier: 'FB-1',
-      seed: { ...noteFixture({ id: 'sd_waiting' }), screenshot: { url: `https://w.test/screenshot/${LEGACY}` } },
+      note: { ...noteFixture({ id: 'sd_waiting' }), screenshot: { url: `https://w.test/screenshot/${LEGACY}` } },
     });
 
-  it('carries the picture that its seed names, while the migration keeps it, and gives it to its note', async () => {
+  it('carries the picture that its note names, while the migration keeps it, and gives it to its note', async () => {
     const attachments = createMemoryAttachmentStore();
     const now = Date.now();
     await attachments.put({
@@ -1164,11 +1162,9 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
 
     assert.deepEqual(signed.files, [LEGACY]);
     const sent = JSON.parse(signed.body) as { attachments: { name: string; url: string }[] };
-    // A body queued before FRU-378 goes as it was queued: no `note` is added to it.
-    assert.equal('note' in sent, false);
     assert.equal(sent.attachments[0]?.name, 'screenshot.png');
     assert.ok(verifiesSignedRead(SECRETS_KEY, LEGACY, new URL(sent.attachments[0]?.url ?? '').searchParams, now));
-    assert.equal((await attachments.get(LEGACY, now))?.seed, undefined, 'an attempt changes nothing of a file');
+    assert.equal((await attachments.get(LEGACY, now))?.note, undefined, 'an attempt changes nothing of a file');
     assert.equal((await attachments.get(LEGACY, now))?.expiresAt, now + 60_000);
     // A failed attempt is followed by another: the picture, taken by this note, is carried again.
     const again = await withSignedFiles(body('ws_acme'), {
@@ -1220,7 +1216,7 @@ describe('a delivery of before FRU-331, with its picture (arbitration of 2026-10
       expiresAt: now + 60_000,
       beforeTransit: true,
     });
-    // The seed still names its picture, and the queue lists it: `legacyAttachment` took it.
+    // The note still names its picture, and the queue lists it: `legacyAttachment` took it.
     const listed = JSON.stringify({
       ...(JSON.parse(body('ws_acme')) as object),
       attachments: [{ id: LEGACY, name: 'screenshot.png', type: 'image/png', size: 2 }],
@@ -1291,7 +1287,7 @@ describe('a file of a delivery whose attempt fails (FRU-331)', () => {
     await pass(down.send, t0);
     assert.equal(urls(down.got).length, 1, 'the failed attempt carried the file');
     assert.equal(attachments.all()[0]?.expiresAt, end, 'a failed attempt changes nothing of the file');
-    assert.equal(attachments.all()[0]?.seed, 'sd_2f8c1a90', 'still the file of its note');
+    assert.equal(attachments.all()[0]?.note, 'sd_2f8c1a90', 'still the file of its note');
 
     const t1 = t0 + 61_000;
     const up = receiver();
@@ -1318,7 +1314,7 @@ describe('a delivery that arrived, with a store of files that does not answer (F
       workspace: world.workspace.id,
       site: { id: 's' },
       identifier: 'FB-1',
-      seed: noteFixture(),
+      note: noteFixture(),
       attachments: [{ id: `att_${'1'.repeat(32)}`, name: 'a.png', type: 'image/png', size: 2 }],
     });
     const files = createMemoryAttachmentStore();
@@ -1332,7 +1328,7 @@ describe('a delivery that arrived, with a store of files that does not answer (F
       content: new Uint8Array([1, 2]),
       createdAt: 0,
       expiresAt: Date.now() + 60_000,
-      seed: 'sd_2f8c1a90',
+      note: 'sd_2f8c1a90',
     });
     const failing = {
       ...files,

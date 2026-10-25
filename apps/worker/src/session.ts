@@ -28,7 +28,7 @@ import { ACCOUNT_SESSION_WITH_WORKSPACE, END_SESSIONS_OF_NOBODY } from './messag
 
 /** Who a session speaks for. The worker's word, taken from the pairing the operator created. */
 export type SessionIdentity = {
-  /** Stable id for the person. Becomes `sub` on the access token, and `reporter.id` on a seed. */
+  /** Stable id for the person. Becomes `sub` on the access token, and `reporter.id` on a note. */
   subject: string;
   name?: string;
   email?: string;
@@ -50,7 +50,7 @@ export type SessionIdentity = {
 /**
  * What a session needs to persist, and the reason it is an interface rather than a table.
  *
- * It is deliberately **not** `NoteStore`. Seeds go wherever the team already tracks issues — Linear,
+ * It is deliberately **not** `NoteStore`. Notes go wherever the team already tracks issues — Linear,
  * GitHub, a file — and none of those is a place to keep credentials. A Linear-backed worker still
  * needs its sessions on a disk it owns. So this has its own implementation, its own file and its own
  * environment variable, the way FRU-33 made every connector validate its own.

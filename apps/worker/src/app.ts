@@ -141,10 +141,10 @@ async function notesOfReader(
     const authors = await noteIndex.authors(
       workspace,
       site,
-      issues.map((issue) => issue.seed.id),
+      issues.map((issue) => issue.note.id),
     );
 
-    return new Set([...authors].flatMap(([seed, author]) => (author === account ? [seed] : [])));
+    return new Set([...authors].flatMap(([note, author]) => (author === account ? [note] : [])));
   } catch (error) {
     console.error(
       `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
@@ -819,7 +819,7 @@ async function endedSession(
 
 /**
  * FRU-123: a member chose where the note goes. The name is in the query, and the body stays the
- * seed: the relay of the extension carries a query and no other header. Absent, the note goes to
+ * note: the relay of the extension carries a query and no other header. Absent, the note goes to
  * the first place of the site. `null`: a name the site does not have, or a caller who may not see
  * the tracker. Both get the same answer, and nothing is written. For a batch, the place is the one
  * of all its notes.

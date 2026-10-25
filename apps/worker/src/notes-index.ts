@@ -66,7 +66,7 @@ export type Place = { kind: 'fruitback' } | { kind: 'connector'; connector: stri
 export type NoteEntry = {
   workspace: string;
   site: string;
-  seed: Note;
+  note: Note;
   channel: Channel;
   author: { kind: AuthorKind; account?: string };
   place: Place;
@@ -119,7 +119,7 @@ export type NoteIndex = {
   undelivered(workspace: string): Promise<Map<string, number>>;
   /**
    * Removes the rows of these notes, and answers what they held. `notes`: the notes `forget` deleted
-   * from the worker's store, each by its reference **and** the id the widget gave it. `seeds`: notes
+   * from the worker's store, each by its reference **and** the id the widget gave it. `notes`: notes
    * that went to a tracker, by the id the widget gave them, which their issue carries (FRU-237).
    * `dryRun` removes nothing and answers the same rows.
    *
@@ -138,7 +138,7 @@ export type NoteIndex = {
    * of a visitor, of a token of the site, or of an account that is gone is absent. What decides who
    * may confirm or reopen a note, and which notes are a reader's own (`mine`).
    */
-  authors(workspace: string, site: string, seeds: readonly string[]): Promise<Map<string, string>>;
+  authors(workspace: string, site: string, notes: readonly string[]): Promise<Map<string, string>>;
   /**
    * The notes of each site of a workspace that `account` left, that the team marked done, and that
    * the person did not confirm yet (FRU-295): « fixes to check ». Only notes whose last read said that
@@ -147,14 +147,14 @@ export type NoteIndex = {
    */
   toCheck(workspace: string, account: string): Promise<Map<string, number>>;
   /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
-  deliveryOf(workspace: string, site: string, seed: string): Promise<{ connector: string; id: string } | undefined>;
+  deliveryOf(workspace: string, site: string, note: string): Promise<{ connector: string; id: string } | undefined>;
 };
 
 /** The smallest and the largest page of `list`, and the page when none is asked. */
 export const PAGE_SIZES = { min: 8, max: 50, default: 25 } as const;
 
 /** Where a page starts: after this note, in the order of `list`. */
-export type NoteCursor = { at: number; site: string; seed: string };
+export type NoteCursor = { at: number; site: string; note: string };
 
 /** What `list` filters on. Each field narrows; an absent one does not. */
 export type NoteQuery = {
@@ -192,7 +192,7 @@ export const SEARCHED_WITHOUT_TRACKER = ['excerpt', 'page', 'site', 'stage'] as 
 /** A note of a page of `list`: the row of the index, with what the workspace knows of it now. */
 export type ListedNote = {
   site: string;
-  seed: string;
+  note: string;
   pageUrl: string;
   excerpt: string;
   stage: string;
@@ -212,7 +212,7 @@ export type ListedNote = {
   /** Its delivery that did not arrive, when it went to a receiving connector. */
   delivery?: { id: string; attempts: number; nextAt?: number; lastStatus?: number };
   /**
-   * Its status, for a note the worker keeps (FRU-384): the key of the worker's store, as `seeds` holds
+   * Its status, for a note the worker keeps (FRU-384): the key of the worker's store, as `notes` holds
    * it now, `null` for the built-in status of its stage. Absent: a note in a tracker, whose status is
    * the tracker's.
    */
@@ -231,12 +231,12 @@ export type NoteList = {
   next?: NoteCursor;
 };
 
-export type ForgetIndex = { notes: readonly { identifier: string; seed: string }[] } | { seeds: readonly string[] };
+export type ForgetIndex = { notes: readonly { identifier: string; note: string }[] } | { ids: readonly string[] };
 
 /** A row of the index, as `forget` lists it to an operator. */
 export type IndexedNote = {
   site: string;
-  seed: string;
+  note: string;
   pageUrl: string;
   excerpt: string;
   reference?: string;
@@ -244,9 +244,9 @@ export type IndexedNote = {
 };
 
 /** The author of a note, from what the worker verified when it took it. */
-export function authorOf(seed: Note, session: boolean): { kind: AuthorKind; account?: string } {
-  if (seed.reporter?.verified !== true) return { kind: 'visitor' };
-  if (session && seed.reporter.id !== undefined) return { kind: 'member', account: seed.reporter.id };
+export function authorOf(note: Note, session: boolean): { kind: AuthorKind; account?: string } {
+  if (note.reporter?.verified !== true) return { kind: 'visitor' };
+  if (session && note.reporter.id !== undefined) return { kind: 'member', account: note.reporter.id };
 
   return { kind: 'site' };
 }

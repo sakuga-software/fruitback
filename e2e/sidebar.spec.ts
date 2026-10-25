@@ -125,13 +125,13 @@ async function statesOfTheMockUp(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/feedback?**`, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     const response = await route.fetch();
-    const body = (await response.json()) as { issues: { stage: string; stateName: string; seed: { note: string } }[] };
+    const body = (await response.json()) as { issues: { stage: string; stateName: string; note: { text: string } }[] };
     for (const issue of body.issues) {
-      const state = EIGHT[Number(/^Note (\d) of eight$/.exec(issue.seed.note)?.[1] ?? 1) - 1] ?? EIGHT[0];
+      const state = EIGHT[Number(/^Note (\d) of eight$/.exec(issue.note.text)?.[1] ?? 1) - 1] ?? EIGHT[0];
       [issue.stage, issue.stateName] = state;
     }
     // In the order they were written, whatever the order of the store.
-    body.issues.sort((one, other) => one.seed.note.localeCompare(other.seed.note));
+    body.issues.sort((one, other) => one.note.text.localeCompare(other.note.text));
     await route.fulfill({ response, json: body });
   });
 }

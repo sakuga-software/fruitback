@@ -7,7 +7,7 @@ import type { SessionIdentity } from './session.ts';
  */
 
 /**
- * A row is parsed, never trusted — the same rule the seed store follows, and for the same reason.
+ * A row is parsed, never trusted — the same rule the note store follows, and for the same reason.
  *
  * An operator can edit a row, and a restore can be older than the code. A cast describes the row to
  * TypeScript and checks nothing. In a SQLite file, `TEXT` affinity narrows what can actually arrive —

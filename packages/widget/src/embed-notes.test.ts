@@ -23,13 +23,13 @@ const MINE = noteIssueFixture({
   stage: 'todo',
   mine: true,
   comments: [{ id: 'c0', body: 'Planned.', createdAt: '2026-10-19T16:00:00.000Z', author: 'Marc' }],
-  seed: noteFixture({ id: 'seed-1', note: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
+  note: noteFixture({ id: 'note-1', text: 'Could the title mention Bordeaux?', anchor: ANCHOR }),
 });
 const CLOSED = noteIssueFixture({
   id: 'issue_2',
   identifier: 'FB-2',
   stage: 'closed',
-  seed: noteFixture({ id: 'seed-2', note: 'An old one.', anchor: ANCHOR, reporter: { name: 'Léa' } }),
+  note: noteFixture({ id: 'note-2', text: 'An old one.', anchor: ANCHOR, reporter: { name: 'Léa' } }),
 });
 
 const cleanup: (() => void)[] = [];
@@ -85,14 +85,14 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     const notes = widget.pageNotes();
 
     assert.deepEqual(notes?.[0], {
-      id: 'seed-1',
+      id: 'note-1',
       number: 1,
       stage: 'todo',
       // The word of the store, which the side panel writes in place of the stage's (FRU-370).
       stateName: MINE.stateName,
       note: 'Could the title mention Bordeaux?',
       mine: true,
-      createdAt: MINE.seed.createdAt,
+      createdAt: MINE.note.createdAt,
       updatedAt: MINE.updatedAt,
       replies: [{ author: 'Marc', body: 'Planned.', createdAt: '2026-10-19T16:00:00.000Z' }],
       canReply: true,
@@ -101,8 +101,8 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.deepEqual(
       notes?.map((note) => [note.id, note.number, note.author]),
       [
-        ['seed-1', 1, undefined],
-        ['seed-2', 2, 'Léa'],
+        ['note-1', 1, undefined],
+        ['note-2', 2, 'Léa'],
       ],
     );
     assert.equal(requests.length, reads, 'the list cost a request');
@@ -159,7 +159,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     (shadowOf(page).querySelector('[name="stage-closed"]') as HTMLInputElement).click();
     assert.deepEqual(
       widget.pageNotes()?.map((note) => note.id),
-      ['seed-1'],
+      ['note-1'],
     );
     assert.deepEqual(changes.at(-1), { kind: 'list' });
   });
@@ -172,7 +172,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
       const widget = widgetOn(mounted(), { transport: worker(read).transport, ...options });
       await widget.refresh();
       assert.equal(widget.pageNotes()?.[0]?.canReply, false, JSON.stringify([read, options]));
-      assert.equal(await widget.replyTo('seed-1', 'Hi'), 'refused');
+      assert.equal(await widget.replyTo('note-1', 'Hi'), 'refused');
     }
   });
 
@@ -183,15 +183,15 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     widget.watchNotes((change) => changes.push(change));
     await widget.refresh();
 
-    assert.equal(widget.focusNote('seed-1'), true);
+    assert.equal(widget.focusNote('note-1'), true);
     assert.notEqual(shadowOf(page).querySelector('[role="dialog"]'), null, 'no thread opened');
-    assert.deepEqual(changes.at(-1), { kind: 'open', id: 'seed-1' });
+    assert.deepEqual(changes.at(-1), { kind: 'open', id: 'note-1' });
     assert.equal(widget.focusNote('nobody'), false);
 
     // A click on a pin says it too.
-    widget.focusNote('seed-1');
+    widget.focusNote('note-1');
     (shadowOf(page).querySelectorAll('.fruitback-pin-badge')[1] as HTMLElement).click();
-    assert.deepEqual(changes.at(-1), { kind: 'open', id: 'seed-2' });
+    assert.deepEqual(changes.at(-1), { kind: 'open', id: 'note-2' });
   });
 
   it('marks the pin of the row open in the list, and keeps it marked across a read', async () => {
@@ -203,12 +203,12 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
         .filter((pin) => pin.dataset.fruitbackMarked !== undefined)
         .map((pin) => pin.querySelector('.fruitback-pin-badge')?.textContent?.trim());
 
-    assert.equal(widget.markNote('seed-2'), true);
+    assert.equal(widget.markNote('note-2'), true);
     assert.deepEqual(marked(), ['2']);
     // A note with no pin here: said, and no pin marked (raised in review).
     assert.equal(widget.markNote('nobody'), false);
     assert.deepEqual(marked(), []);
-    widget.markNote('seed-2');
+    widget.markNote('note-2');
     await widget.refresh();
     assert.deepEqual(marked(), ['2'], 'a read lost the mark');
     widget.markNote(undefined);
@@ -230,7 +230,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     assert.equal(hidden(), true, 'a read shows no pin again');
     assert.equal(widget.pageNotes()?.length, 2, 'the notes are still read');
     // The switch of the list of the page (FRU-308): the pin of an open thread is not hidden.
-    widget.focusNote('seed-1');
+    widget.focusNote('note-1');
     assert.ok(shadowOf(page).querySelector('.fruitback-pin[data-fruitback-open]'));
     widget.showPins(true);
     assert.equal(hidden(), false);
@@ -241,7 +241,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
       const page = mounted();
       const widget = widgetOn(page, { transport: worker({}).transport, ...options });
       await widget.refresh();
-      widget.focusNote('seed-1');
+      widget.focusNote('note-1');
       const text = () => shadowOf(page).querySelector('.fruitback-thread-selector')?.textContent ?? null;
 
       return { widget, text };
@@ -264,12 +264,12 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     await widget.refresh();
     const reads = requests.filter((request) => request.method === 'GET').length;
 
-    assert.equal(await widget.replyTo('seed-1', '  Merci  '), 'sent');
+    assert.equal(await widget.replyTo('note-1', '  Merci  '), 'sent');
     const posted = requests.find((request) => request.method === 'POST') as TransportRequest;
     assert.equal(posted.url, `${ENDPOINT}/feedback/issue_1/replies?client=acme`);
     assert.equal(JSON.parse(posted.body ?? '{}').body, 'Merci');
     assert.equal(requests.filter((request) => request.method === 'GET').length, reads + 1, 'no read after the reply');
-    assert.equal(await widget.replyTo('seed-1', '   '), 'refused');
+    assert.equal(await widget.replyTo('note-1', '   '), 'refused');
     assert.equal(await widget.replyTo('nobody', 'Hi'), 'refused');
   });
 
@@ -281,7 +281,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     ] as const) {
       const widget = widgetOn(mounted(), { transport: worker({ canReply: true }, status).transport });
       await widget.refresh();
-      assert.equal(await widget.replyTo('seed-1', 'Hi'), outcome);
+      assert.equal(await widget.replyTo('note-1', 'Hi'), outcome);
     }
   });
 
@@ -307,7 +307,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     await widget.refresh();
     const reads = requests.filter((request) => request.method === 'GET').length;
 
-    assert.equal(await widget.checkNote('seed-1', 'wrong'), 'sent');
+    assert.equal(await widget.checkNote('note-1', 'wrong'), 'sent');
     const posted = requests.find((request) => request.method === 'POST') as TransportRequest;
     assert.equal(posted.url, `${ENDPOINT}/feedback/issue_1/check?client=acme`);
     assert.deepEqual(JSON.parse(posted.body ?? '{}'), { url: 'https://preview.acme.test/pricing', verdict: 'wrong' });
@@ -323,7 +323,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
     const widget = widgetOn(mounted(), { transport });
     await widget.refresh();
 
-    assert.equal(await widget.checkNote('seed-1', 'fixed'), 'retry');
+    assert.equal(await widget.checkNote('note-1', 'fixed'), 'retry');
   });
 
   it('says why a verdict did not go, and reads nothing then', async () => {
@@ -338,7 +338,7 @@ describe('the notes of the page for a list outside it (FRU-299)', () => {
       const widget = widgetOn(mounted(), { transport });
       await widget.refresh();
       const reads = requests.filter((request) => request.method === 'GET').length;
-      assert.equal(await widget.checkNote('seed-1', 'fixed'), outcome, String(status));
+      assert.equal(await widget.checkNote('note-1', 'fixed'), outcome, String(status));
       assert.equal(requests.filter((request) => request.method === 'GET').length, reads, String(status));
     }
   });

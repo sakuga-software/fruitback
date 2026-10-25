@@ -11,7 +11,7 @@ import type { NoteSource } from '@fruitback/shared';
  * to the DOM node under a `__reactFiber$…` key, and a dev build keeps the JSX location on it. Both
  * are internals — undocumented, absent from production builds, and gone from `_debugSource` in
  * React 19 — so this reads them defensively and returns `undefined` at the first surprise rather
- * than guessing. A seed with no `source` is a perfectly good seed; a seed pointing at the wrong file
+ * than guessing. A note with no `source` is a perfectly good note; a note pointing at the wrong file
  * is a bug someone chases for an hour.
  */
 

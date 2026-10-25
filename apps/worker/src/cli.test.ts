@@ -21,7 +21,7 @@ async function storeWithAlice(): Promise<NoteStore> {
   databases.push(database);
   const store = createPostgresNoteStore(database);
   await store.create(
-    noteFixture({ note: 'Le bouton ne répond pas', reporter: { name: 'Alice', email: 'alice@example.com' } }),
+    noteFixture({ text: 'Le bouton ne répond pas', reporter: { name: 'Alice', email: 'alice@example.com' } }),
     undefined,
     { showComments: true, identitySecret: undefined, read: 'public', write: 'public', locale: 'en' },
   );
@@ -74,22 +74,20 @@ describe('node server.mjs forget (FRU-85)', () => {
     assert.equal(parseForgetArgs([]).ok, false);
   });
 
-  it('takes --note, and --seed its name of before FRU-378, as one selector (FRU-378)', () => {
-    const both = { ok: true, args: { which: { seeds: ['sd_a', 'sd_b'] }, dryRun: true } };
-
-    assert.deepEqual(parseForgetArgs(['--note', 'sd_a', '--note', 'sd_b', '--dry-run']), both);
-    assert.deepEqual(parseForgetArgs(['--seed', 'sd_a', '--seed', 'sd_b', '--dry-run']), both);
-    assert.deepEqual(parseForgetArgs(['--note', 'sd_a', '--seed', 'sd_b', '--seed', 'sd_a', '--dry-run']), both);
+  it('takes --note, once or more, as one selector (FRU-378)', () => {
+    assert.deepEqual(parseForgetArgs(['--note', 'sd_a', '--note', 'sd_b', '--note', 'sd_a', '--dry-run']), {
+      ok: true,
+      args: { which: { ids: ['sd_a', 'sd_b'] }, dryRun: true },
+    });
     assert.equal(parseForgetArgs(['--note', 'sd_a', '--id', 'FB-2']).ok, false);
-    assert.equal(parseForgetArgs(['--seed', 'sd_a', '--email', 'alice@example.com']).ok, false);
   });
 
-  it('never reads a flag as the id of a note, under either name', () => {
-    for (const argv of [['--note', '--dry-run'], ['--seed', '--dry-run'], ['--note', '  '], ['--seed']]) {
+  it('never reads a flag as the id of a note', () => {
+    for (const argv of [['--note', '--dry-run'], ['--note', '  '], ['--note']]) {
       const parsed = parseForgetArgs(argv);
 
       assert.equal(parsed.ok, false, argv.join(' '));
-      assert.match(parsed.ok ? '' : parsed.error, new RegExp(`${argv[0]} needs a value$`));
+      assert.match(parsed.ok ? '' : parsed.error, /--note needs a value$/);
     }
   });
 
@@ -98,7 +96,6 @@ describe('node server.mjs forget (FRU-85)', () => {
 
     assert.match(parsed.ok ? '' : parsed.error, /--note <id> \[--note <id> \.\.\.\]/);
     assert.match(parsed.ok ? '' : parsed.error, /one of --email, --name, --id and --note is required$/);
-    assert.doesNotMatch(parsed.ok ? '' : parsed.error, /--seed/);
   });
 
   it('refuses an identifier that this store does not write', () => {

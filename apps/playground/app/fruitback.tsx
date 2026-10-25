@@ -35,7 +35,7 @@ import { redeploy, removeCard } from './site-state';
  * - **It re-reads on navigation.** A pin belongs to a URL, and on a client-rendered app nothing else
  *   announces that the page changed.
  * - **`source` finally has something to read.** `getElementContext` walks the React fiber, so a note
- *   captured here carries the component and the file it came from — the half of a seed that had
+ *   captured here carries the component and the file it came from — the half of a note that had
  *   never been exercised end to end.
  */
 
@@ -172,7 +172,7 @@ export function Fruitback() {
   }, []);
 
   // A pin belongs to a page: a client-side navigation changes the canonical URL, so it changes which
-  // seeds belong on screen.
+  // notes belong on screen.
   useEffect(() => {
     const current = widget.current;
     if (current !== null) void current.refresh();
@@ -199,9 +199,9 @@ async function plant(
 ): Promise<string | null> {
   if (target === null) return null;
 
-  const seed = captureNote({
+  const built = captureNote({
     element: target.element,
-    note,
+    text: note,
     client: { id: CLIENT_ID, name: 'Playground' },
     // What the visitor typed about themselves, and no more. The worker stores it as self-declared
     // and strips any `verified` flag — an identity would need a signed token this playground has no
@@ -214,7 +214,7 @@ async function plant(
   const response = await fetch(`${WORKER_ORIGIN}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(seed),
+    body: JSON.stringify(built),
   });
 
   if (!response.ok) {

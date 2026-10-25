@@ -30,7 +30,7 @@ export type RelayTransportSeams = {
  * **`crypto.randomUUID` is secure-context only, and this script runs on `http://` too** — a staging
  * site on plain http is exactly the audience, and `registration.ts` registers there. Requiring it
  * would throw inside every call and leave team mode dead on those pages with nothing in a console
- * to explain it. `capture.ts` already carries this fallback for the seed id, and the same trap was
+ * to explain it. `capture.ts` already carries this fallback for the note id, and the same trap was
  * walked back into here. Raised in review.
  *
  * It only has to be unique among this page's own calls. The page shares the channel and can forge

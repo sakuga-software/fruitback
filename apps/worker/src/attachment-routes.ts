@@ -92,8 +92,8 @@ export async function handleAttachment(request: Request, pathname: string, seams
       return json(404, { error: 'not-found' });
     const found = await files.get(id, now);
     // A file that no note took is no file of a delivery. A picture of before FRU-331 (`shot_`) is
-    // named by the seed of its delivery, not taken: the signature of that delivery is its proof.
-    if (found === undefined || (found.seed === undefined && !isLegacyFileId(found.id)))
+    // named by the note of its delivery, not taken: the signature of that delivery is its proof.
+    if (found === undefined || (found.note === undefined && !isLegacyFileId(found.id)))
       return json(404, { error: 'not-found' });
 
     return new Response(found.content, {
@@ -191,7 +191,7 @@ export async function takeFiles(
   seams: NoteFileSeams,
   target: ClientConfig | undefined,
   workspace: string | undefined,
-  seed: string,
+  note: string,
   site: string | undefined,
   ids: readonly string[],
 ): Promise<
@@ -218,7 +218,7 @@ export async function takeFiles(
       file.workspace !== workspace ||
       // A picture of before FRU-250 names no site: its workspace and its sender decide.
       (file.site !== '' && file.site !== site) ||
-      (file.seed !== undefined && file.seed !== seed)
+      (file.note !== undefined && file.note !== note)
     );
   });
   if (gone.length > 0) return { ok: false, status: 410, body: { error: 'attachment-gone', ids: gone } };
@@ -230,7 +230,7 @@ export async function takeFiles(
     return { ok: false, status: 413, body: { error: 'payload-too-large', maxBytes: MAX_ATTACHMENT_BYTES_PER_NOTE } };
   }
 
-  const claimed = await files.claim(ids, seed, now);
+  const claimed = await files.claim(ids, note, now);
   // Another note took one between the read and the claim: none is sent, and the note is refused.
   if (claimed.length !== ids.length) {
     const kept = new Set(claimed.map((file) => file.id));
@@ -246,28 +246,28 @@ export async function takeFiles(
 }
 
 /**
- * The picture of before FRU-331 that a seed names, when it is still in transit and this note may take
+ * The picture of before FRU-331 that a note names, when it is still in transit and this note may take
  * it (its sender, its workspace, a store that takes files), or `undefined`. Never a refusal: a note
  * whose picture is gone goes without it, as it would have before. `notTaken: 'no-tracker'`: the
- * seed names a picture and the place of the note takes no file (a note kept in Fruitback, GitHub):
+ * note names a picture and the place of the note takes no file (a note kept in Fruitback, GitHub):
  * the answer says why the picture is not joined, as `canAttach: false` says it on a read.
  */
 export async function legacyAttachment(
   seams: NoteFileSeams,
   target: ClientConfig | undefined,
   workspace: string | undefined,
-  seed: Note,
+  note: Note,
   named: readonly string[],
 ): Promise<{ id?: string; notTaken?: 'no-tracker' } | undefined> {
   const { files, store, writer } = seams;
-  const id = legacyFileOf(seed);
+  const id = legacyFileOf(note);
   if (id === undefined || named.includes(id) || named.length >= MAX_ATTACHMENTS_PER_NOTE) return undefined;
   if (!(await takesAttachments(store, target))) return { notTaken: 'no-tracker' };
   if (files === undefined || writer === undefined || workspace === undefined) return undefined;
   const found = await files.get(id, Date.now());
   if (found === undefined || found.workspace !== workspace) return undefined;
-  if (found.seed !== undefined && found.seed !== seed.id) return undefined;
-  const account = await writer(workspace, seed.client?.id);
+  if (found.note !== undefined && found.note !== note.id) return undefined;
+  const account = await writer(workspace, note.client?.id);
 
   return account === found.account ? { id } : undefined;
 }

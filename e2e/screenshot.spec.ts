@@ -65,13 +65,13 @@ async function storedScreenshot(page: import('@playwright/test').Page) {
   return page.evaluate(async (origin) => {
     const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-    const { issues } = (await response.json()) as { issues: { seed: { screenshot?: unknown } }[] };
+    const { issues } = (await response.json()) as { issues: { note: { screenshot?: unknown } }[] };
 
-    return issues[0]?.seed.screenshot;
+    return issues[0]?.note.screenshot;
   }, WORKER_ORIGIN);
 }
 
-test('a picture reaches the seed when the host can take one', async ({ page }) => {
+test('a picture reaches the note when the host can take one', async ({ page }) => {
   await page.goto('/?widget=off&case=shot-ok');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'ok');
@@ -106,9 +106,9 @@ test('no picture leaves the page until the box of the composer is ticked, and th
     page.evaluate(async (origin) => {
       const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-      const { issues } = (await response.json()) as { issues: { seed: { note: string; screenshot?: unknown } }[] };
+      const { issues } = (await response.json()) as { issues: { note: { text: string; screenshot?: unknown } }[] };
 
-      return Object.fromEntries(issues.map((issue) => [issue.seed.note, issue.seed.screenshot ?? null]));
+      return Object.fromEntries(issues.map((issue) => [issue.note.text, issue.note.screenshot ?? null]));
     }, WORKER_ORIGIN);
 
   await open();
@@ -166,7 +166,7 @@ test('a capture that throws costs the picture, never the note', async ({ page })
 });
 
 test('a host that returns nothing leaves the field out entirely', async ({ page }) => {
-  // `undefined` is a refusal, not an empty picture: the seed round-trip forbids a key nobody gave.
+  // `undefined` is a refusal, not an empty picture: the note round-trip forbids a key nobody gave.
   await page.goto('/?widget=off&case=shot-nothing');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountWith(page, 'nothing');

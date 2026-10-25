@@ -108,7 +108,7 @@ export type FruitbackOptions = {
   /**
    * Take a picture of the element the note is about, and return where it now lives (FRU-6).
    *
-   * A seam rather than a bundled library, for two reasons. The seed contract stores a **URL**, so
+   * A seam rather than a bundled library, for two reasons. The note contract stores a **URL**, so
    * something has to host the image, and that is the embedder's storage — they already have some and
    * we would otherwise have to broker an upload with no authentication in front of it. And the only
    * serious way to rasterise a DOM node weighs more than this whole widget: bundling it would undo
@@ -336,7 +336,7 @@ export type PageCounts = Record<NoteStage, number>;
 
 /** A note of the page, as `pageNotes` gives it (FRU-299). Plain data: it crosses a `postMessage`. */
 export type PageNote = {
-  /** The id `focusNote` and `replyTo` take: the id of the seed. */
+  /** The id `focusNote` and `replyTo` take: the id of the note. */
   id: string;
   /** The number its pin carries. */
   number?: number;
@@ -555,10 +555,11 @@ export function init(options: FruitbackOptions): Fruitback {
       }
     }
   };
-  // The notes kept for later, per tab (FRU-124). Next to the config, under its key.
+  // The notes kept for later, per tab (FRU-124). Next to the config, under its key. `notes`, not the
+  // `drafts` of before FRU-378: a draft of before holds a payload that no reader takes now, and is left.
   const drafts = createDraftStore({
     storage: sessionStorageOf(view),
-    key: `${options.configKey ?? 'fruitback:config'}:drafts`,
+    key: `${options.configKey ?? 'fruitback:config'}:notes`,
   });
   /** What the last read answered. The drafts of this page are drawn beside it. */
   let readIssues: NoteIssue[] = [];
@@ -570,7 +571,7 @@ export function init(options: FruitbackOptions): Fruitback {
       ...issues,
       ...drafts
         .list()
-        .filter((draft) => draft.seed.page.url === here)
+        .filter((draft) => draft.note.page.url === here)
         .map((draft) => draftIssue(draft)),
     ]);
   };
@@ -701,7 +702,7 @@ export function init(options: FruitbackOptions): Fruitback {
     if (id === undefined || readState !== 'read') return;
     if (!composer.element.hidden || host.capturing()) return;
 
-    const issue = readIssues.find((each) => each.seed.id === id || each.id === id || each.identifier === id);
+    const issue = readIssues.find((each) => each.note.id === id || each.id === id || each.identifier === id);
     droppingFragment = true;
     try {
       const { pathname, search, hash } = view.location;
@@ -717,7 +718,7 @@ export function init(options: FruitbackOptions): Fruitback {
     const resolution = overlay.resolutions().find((each) => each.issue === issue);
     if (resolution !== undefined && placementOf(resolution) === 'detached') sidebar.open();
     // `false` for a note this page does not draw: one of another page, or of a stage the reporter hid.
-    overlay.select(issue.seed.id);
+    overlay.select(issue.note.id);
   }
 
   /**
@@ -817,9 +818,9 @@ export function init(options: FruitbackOptions): Fruitback {
       onKeep: async (note, reporter, chosen) => {
         const destination = destinationToSend(destinations.get(), chosen);
         const about = typingPlace;
-        const made = await noteFor({ note, target, place, reporter, config: config.get(), options });
+        const made = await noteFor({ text: note, target, place, reporter, config: config.get(), options });
         if (made === undefined) return 'retry';
-        drafts.add({ seed: made.seed, ...(destination === undefined ? {} : { destination }) });
+        drafts.add({ note: made.note, ...(destination === undefined ? {} : { destination }) });
         // A draft now: it is in the list, and its text is no longer only being written.
         if (about !== undefined) typing.remove(about);
 
@@ -830,7 +831,7 @@ export function init(options: FruitbackOptions): Fruitback {
       const destination = destinationToSend(destinations.get(), chosen);
       // The element this note is about, as it was sent: the composer may stand on another by the answer.
       const about = typingPlace;
-      let seedId: string | undefined;
+      let noteId: string | undefined;
       const planted = await plant({
         note,
         target,
@@ -840,7 +841,7 @@ export function init(options: FruitbackOptions): Fruitback {
         attachments,
         config: config.get(),
         options,
-        onNote: (id) => (seedId = id),
+        onNote: (id) => (noteId = id),
       });
       if (typeof planted !== 'string' && about !== undefined) typing.remove(about);
       if (typeof planted === 'string') {
@@ -858,7 +859,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
       // The card of a sent note says what the read gave back for it (FRU-305): its identifier, the
       // way to it when the reader may open it, and the number of its pin.
-      const shown = overlay.resolutions().find((entry) => entry.issue.seed.id === seedId);
+      const shown = overlay.resolutions().find((entry) => entry.issue.note.id === noteId);
       if (shown === undefined) return planted;
 
       return {
@@ -1056,16 +1057,16 @@ export function init(options: FruitbackOptions): Fruitback {
       return entries()
         .filter(({ issue }) => !config.get().hiddenStages.includes(issue.stage))
         .map(({ issue, placement, number, status }) => ({
-          id: issue.seed.id,
+          id: issue.note.id,
           ...(number === undefined ? {} : { number }),
           stage: issue.stage,
           // The read is cast, not parsed: only a word is passed on.
           ...(typeof issue.stateName === 'string' && issue.stateName !== '' ? { stateName: issue.stateName } : {}),
           ...(status === undefined ? {} : { status }),
-          note: issue.seed.note,
-          ...(issue.seed.reporter?.name === undefined ? {} : { author: issue.seed.reporter.name }),
+          note: issue.note.text,
+          ...(issue.note.reporter?.name === undefined ? {} : { author: issue.note.reporter.name }),
           ...(issue.mine === true ? { mine: true as const } : {}),
-          createdAt: issue.seed.createdAt,
+          createdAt: issue.note.createdAt,
           updatedAt: issue.updatedAt,
           // A reply written from a page reads as the thread shows it: its name, and its text unquoted.
           replies: (issue.comments ?? []).map((comment) => {
@@ -1095,7 +1096,7 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     moveDock: (position) => host.moveDock(position),
     async replyTo(id, body) {
-      const issue = readIssues.find((each) => each.seed.id === id);
+      const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {
         return 'refused';
       }
@@ -1113,7 +1114,7 @@ export function init(options: FruitbackOptions): Fruitback {
       return 'sent';
     },
     async checkNote(id, verdict) {
-      const issue = readIssues.find((each) => each.seed.id === id);
+      const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined) return 'refused';
       const sent = await sendCheck(options, view, issue, verdict).catch((): ReplyFailure => 'retry');
       if (sent !== 'sent') return sent;
@@ -1169,7 +1170,7 @@ export function init(options: FruitbackOptions): Fruitback {
   };
 }
 
-/** The element of a note on the page of now, as a seed would anchor it (FRU-311). */
+/** The element of a note on the page of now, as a note would anchor it (FRU-311). */
 function typingPlaceOf(element: Element): TypingPlace | undefined {
   const view = element.ownerDocument.defaultView;
   if (view === null) return undefined;
@@ -1317,27 +1318,27 @@ export async function plant({
   destination?: string | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
-  /** The id of the seed about to be sent, so the caller finds its pin after the read (FRU-305). */
+  /** The id of the note about to be sent, so the caller finds its pin after the read (FRU-305). */
   onNote?: (id: string) => void;
   /** The ids in transit of the files of the note (FRU-332). */
   attachments?: readonly string[];
 }): Promise<true | SentWithoutPicture | SendFailure> {
-  const made = await noteFor({ note, target, place, reporter, config, options });
+  const made = await noteFor({ text: note, target, place, reporter, config, options });
   if (made === undefined) return 'retry';
-  const { seed, missedPicture } = made;
-  onNote?.(seed.id);
+  const { note: built, missedPicture } = made;
+  onNote?.(built.id);
 
   // Asked for per write rather than once at init: a short-lived token that expired mid-session would
   // otherwise turn every later note into a 401.
   const token = await options.identityToken?.();
 
   const response = await transportFor(options)({
-    // The choice is in the query and nowhere else. The body stays the seed, and the relay of the
+    // The choice is in the query and nowhere else. The body stays the note, and the relay of the
     // extension carries a query, and no header but the two below.
     url: feedbackUrl(options, destination, attachments),
     method: 'POST',
     headers: writeHeaders(token),
-    body: JSON.stringify(seed),
+    body: JSON.stringify(built),
   });
 
   if (!response.ok) return failureOf(response);
@@ -1346,29 +1347,29 @@ export async function plant({
 }
 
 /**
- * The seed of a note, as the click and the page give it now: sent at once, or kept for later
- * (FRU-124). `undefined` when there is no element to anchor it to.
+ * A note, as the click and the page give it now: sent at once, or kept for later (FRU-124).
+ * `undefined` when there is no element to anchor it to.
  */
 async function noteFor({
-  note,
+  text,
   target,
   place,
   reporter,
   config,
   options,
 }: {
-  note: string;
+  text: string;
   target: CaptureTarget | null;
   place?: CapturedPlace | undefined;
   reporter: NoteReporter | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
-}): Promise<{ seed: Note; missedPicture: boolean } | undefined> {
+}): Promise<{ note: Note; missedPicture: boolean } | undefined> {
   if (target === null) return undefined;
   const picture = stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined;
-  const seed = captureNote({
+  const note = captureNote({
     element: target.element,
-    note,
+    text,
     client: { id: options.clientId },
     source: target.source,
     reporter,
@@ -1377,12 +1378,12 @@ async function noteFor({
     ...optionalScreenshot(picture === 'missed' ? undefined : picture),
   });
 
-  return { seed, missedPicture: picture === 'missed' };
+  return { note, missedPicture: picture === 'missed' };
 }
 
 /**
- * `?destination=` carries the choice, and nothing else does: the body stays the seed (FRU-123). The
- * files of the note travel the same way, as `?attachments=` (FRU-332): their ids are no part of a seed.
+ * `?destination=` carries the choice, and nothing else does: the body stays the note (FRU-123). The
+ * files of the note travel the same way, as `?attachments=` (FRU-332): their ids are no part of a note.
  */
 function feedbackUrl(
   options: FruitbackOptions,
@@ -1522,7 +1523,7 @@ function suggestedName(name: string | undefined): string | undefined {
   return trimmed === undefined || trimmed === '' ? undefined : trimmed;
 }
 
-/** Never the token in the body: the seed is stored verbatim in a Linear description (FRU-9). */
+/** Never the token in the body: the note is stored verbatim in a Linear description (FRU-9). */
 function writeHeaders(token: string | undefined): Record<string, string> {
   return { 'Content-Type': 'application/json', ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}) };
 }
@@ -1532,13 +1533,13 @@ const DRAFT_PREFIX = 'draft:';
 
 function draftIssue(draft: Draft): NoteIssue {
   return {
-    id: `${DRAFT_PREFIX}${draft.seed.id}`,
-    identifier: draft.seed.id,
+    id: `${DRAFT_PREFIX}${draft.note.id}`,
+    identifier: draft.note.id,
     title: '',
     stage: 'new',
     stateName: '',
-    updatedAt: draft.seed.createdAt,
-    seed: draft.seed,
+    updatedAt: draft.note.createdAt,
+    note: draft.note,
   };
 }
 
@@ -1579,7 +1580,7 @@ export async function sendDrafts({
         url: feedbackUrl(options, first.destination),
         method: 'POST',
         headers: writeHeaders(token),
-        body: offer === undefined ? JSON.stringify(first.seed) : batchBody(request),
+        body: offer === undefined ? JSON.stringify(first.note) : batchBody(request),
       });
     } catch {
       return { kept, failure: 'retry' };
@@ -1587,11 +1588,11 @@ export async function sendDrafts({
 
     if (offer === undefined) {
       if (!response.ok) return { kept, failure: failureOf(response) };
-      kept.push(first.seed.id);
+      kept.push(first.note.id);
       continue;
     }
 
-    const ids = request.map((draft) => draft.seed.id);
+    const ids = request.map((draft) => draft.note.id);
     if (response.ok && response.status !== 207) {
       // Every note was kept: that is what a success that is not a `207` says. Not read from the
       // body: an answer the widget cannot read would leave notes the worker holds in the drafts, and
@@ -1708,7 +1709,7 @@ function stillThere(element: Element, place: CapturedPlace | undefined): boolean
  * Every way this fails is ordinary: a canvas tainted by a cross-origin image, a font that will not
  * load, storage refusing the upload, a browser that ran out of memory on a long page. None of them
  * is a reason to lose what someone just wrote — the note is the feedback and the image is a
- * convenience — so this returns `undefined` and the seed goes without one.
+ * convenience — so this returns `undefined` and the note goes without one.
  */
 async function screenshotFor(
   element: Element,

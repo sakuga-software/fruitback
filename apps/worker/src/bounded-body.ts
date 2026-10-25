@@ -3,7 +3,7 @@
  * routes; the routes of the organization plugin read their body with it too (FRU-149).
  */
 
-/** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
+/** A note with long words and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
 export const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
@@ -19,7 +19,7 @@ export async function readBoundedText(request: Request): Promise<string | null> 
   return body === null ? null : new TextDecoder().decode(body);
 }
 
-/** The bytes of the body, or `null` over `maxBytes`. The cap of a picture is not the cap of a seed (FRU-44). */
+/** The bytes of the body, or `null` over `maxBytes`. The cap of a picture is not the cap of a note (FRU-44). */
 export async function readBoundedBytes(request: Request, maxBytes: number): Promise<Uint8Array | null> {
   const declared = Number(request.headers.get('Content-Length') ?? '');
   if (Number.isFinite(declared) && declared > maxBytes) return null;

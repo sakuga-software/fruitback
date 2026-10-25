@@ -109,7 +109,7 @@ async function stored(database: Awaited<ReturnType<typeof opening>>) {
   const settings = await rowsOf(database, 'SELECT id, settings FROM connectors ORDER BY id');
 
   return {
-    seeds: await column('SELECT stage FROM seeds WHERE created_at < 10 ORDER BY created_at'),
+    notes: await column('SELECT stage FROM seeds WHERE created_at < 10 ORDER BY created_at'),
     own: (
       await rowsOf(database, `SELECT site_id, key, stage FROM statuses WHERE source = 'own' ORDER BY site_id, key`)
     ).map((row) => `${row.site_id} ${row.key} ${row.stage}`),
@@ -134,7 +134,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, BEFORE_NOTE_NAMES);
 
       const after = await stored(database);
-      assert.deepEqual(after.seeds, [...NEW, 'blue']);
+      assert.deepEqual(after.notes, [...NEW, 'blue']);
       assert.deepEqual(after.index, [...NEW, 'blue']);
       // Ordered by key: st_composted, st_green, st_ripe, st_ripening, st_seeded.
       assert.deepEqual(after.statuses, ['closed', 'todo', 'done', 'progress', 'new']);
@@ -181,7 +181,7 @@ for (const { label, open, skip } of DATABASES) {
       for (const statement of REVERSE_SQL) await rowsOf(database, statement);
 
       const back = await stored(database);
-      assert.deepEqual(back.seeds, before.seeds);
+      assert.deepEqual(back.notes, before.notes);
       assert.deepEqual(back.index, before.index);
       assert.deepEqual(back.statuses, before.statuses);
       assert.deepEqual(back.own, before.own);

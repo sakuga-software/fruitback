@@ -117,12 +117,12 @@ function withSettings(store: NoteStore, settings: ConnectorSettings): NoteStore 
 
   return {
     ...noReply,
-    create: (seed, client, policy, files) => store.create(seed, client, quiet(policy), files),
+    create: (note, client, policy, files) => store.create(note, client, quiet(policy), files),
     ...(store.createBatch === undefined
       ? {}
       : {
-          createBatch: (seeds, client, policy) =>
-            (store.createBatch as NonNullable<NoteStore['createBatch']>)(seeds, client, quiet(policy)),
+          createBatch: (notes, client, policy) =>
+            (store.createBatch as NonNullable<NoteStore['createBatch']>)(notes, client, quiet(policy)),
         }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
   };
@@ -150,8 +150,8 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
     // FRU-331: the files of a note travel with its delivery, by the addresses of short life that each
     // attempt signs (`deliverDue`). The worker's own store takes none: the files never stay with it.
     attachments: true,
-    async create(seed, client, policy, files = []) {
-      const created = await own.create(seed, client, policy);
+    async create(note, client, policy, files = []) {
+      const created = await own.create(note, client, policy);
       const ids = files.map((file) => file.id);
       try {
         await accounts.enqueueDelivery(
@@ -159,11 +159,11 @@ function receivingStore(own: NoteStore, accounts: AccountStore, connector: strin
           deliveryBody({
             workspace: client?.workspace ?? '',
             site: {
-              id: seed.client?.id ?? '',
+              id: note.client?.id ?? '',
               ...(client?.origins?.[0] === undefined ? {} : { origin: client.origins[0] }),
             },
             identifier: created.identifier,
-            seed,
+            note,
             ...(files.length === 0
               ? {}
               : {
@@ -233,7 +233,7 @@ export function createConnectorStores(
       // that would still bring some sends the note alone, with no file said to wait (raised in review).
       const { attachments: _files, ...noFiles } = receiving;
 
-      return { ...noFiles, create: (seed, client, policy) => receiving.create(seed, client, policy) };
+      return { ...noFiles, create: (note, client, policy) => receiving.create(note, client, policy) };
     }
 
     const store = await TRACKERS[kept.kind](
@@ -260,11 +260,11 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     // The connector is in the key: two sites of one team in two workspaces must not share an entry.
     scope: (client) =>
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,
-    create: async (seed, client, policy, files) => (await pick(client)).create(seed, client, policy, files),
+    create: async (note, client, policy, files) => (await pick(client)).create(note, client, policy, files),
     // FRU-331: the store of the site says whether it takes files. The worker's own store takes none.
     attachmentsFor: async (client) => takesAttachments(await pick(client), client),
     // The store of the client decides how a batch is written: under a parent, or one note at a time.
-    createBatch: async (seeds, client, policy, memory) => createAll(await pick(client), seeds, client, policy, memory),
+    createBatch: async (notes, client, policy, memory) => createAll(await pick(client), notes, client, policy, memory),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),
     ...(base.forget === undefined ? {} : { forget: base.forget }),
     repliesFor: async (client) => takesReplies(await pick(client), client),

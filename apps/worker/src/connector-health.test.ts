@@ -98,11 +98,11 @@ async function acme(env: World) {
   await accounts.setDestination(workspace.id, site.id, { connector, teamId: 'team_design' });
 
   const write = () => {
-    const seed = noteFixture();
+    const note = noteFixture();
 
     return call(env, 'POST', '/feedback', {
       origin: SITE,
-      body: { ...seed, page: { ...seed.page, url: PAGE }, client: { id: site.id } },
+      body: { ...note, page: { ...note.page, url: PAGE }, client: { id: site.id } },
     });
   };
   const read = () => call(env, 'GET', `/feedback?url=${encodeURIComponent(PAGE)}&client=${site.id}`, { origin: SITE });

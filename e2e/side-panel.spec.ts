@@ -789,8 +789,8 @@ test('a new search during « Show more » draws no page of the words of before (
     `(() => {
       const real = window.fetch.bind(window);
       window.__asked = [];
-      const note = (seed, excerpt) => ({
-        seed,
+      const note = (note, excerpt) => ({
+        note,
         excerpt,
         page: { url: 'http://localhost:5177/?case=elsewhere', path: '/?case=elsewhere' },
         stage: 'new',
@@ -868,10 +868,10 @@ test('a row of the panel wears the colour and the name of the status its pin wea
     async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
       const response = await route.fetch();
-      const body = (await response.json()) as { issues: { id: string; stage: string; seed: { note: string } }[] };
+      const body = (await response.json()) as { issues: { id: string; stage: string; note: { text: string } }[] };
       const statuses: Record<string, string>[] = [];
       const issues = body.issues.map((issue) => {
-        const chosen = notes.find((each) => each.note === issue.seed.note);
+        const chosen = notes.find((each) => each.note === issue.note.text);
         if (chosen === undefined) return issue;
         statuses.push({ key: `e2e:${issue.id}`, name: chosen.name, stage: issue.stage, color: chosen.color });
 

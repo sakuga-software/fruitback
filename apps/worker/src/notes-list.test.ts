@@ -16,7 +16,7 @@ const BASE = Date.parse('2026-10-01T00:00:00.000Z');
 
 type Planted = {
   site: string;
-  seed: string;
+  id: string;
   note: string;
   url: string;
   origin: string;
@@ -94,15 +94,15 @@ async function sixtyNotes() {
     const reference = i % 2 === 0 ? `ACM-${100 + i}` : `FB-${i}`;
     const author = i % 6 === 0 ? bob.id : undefined;
     const at = BASE + Math.floor(i / 2) * 1_000;
-    const seed = noteFixture({
+    const note = noteFixture({
       id: `sd_${String(i).padStart(2, '0')}`,
-      note: words,
+      text: words,
       page: { url, path: `/page-${i % 4}` },
     });
     const entry: NoteEntry = {
       workspace,
       site: site.id,
-      seed,
+      note,
       channel: i % 3 === 0 ? 'extension' : 'script',
       author: author === undefined ? { kind: 'visitor' } : { kind: 'member', account: author },
       place,
@@ -112,7 +112,7 @@ async function sixtyNotes() {
     await index.record([entry], at);
     planted.push({
       site: site.id,
-      seed: seed.id,
+      id: note.id,
       note: words,
       url,
       origin: site.origin,
@@ -133,7 +133,7 @@ async function sixtyNotes() {
       {
         workspace: other,
         site: otherSite.id,
-        seed: noteFixture({ id: 'sd_other', note: 'The checkout of another workspace' }),
+        note: noteFixture({ id: 'sd_other', text: 'The checkout of another workspace' }),
         channel: 'script',
         author: { kind: 'visitor' },
         place: { kind: 'fruitback' },
@@ -149,10 +149,10 @@ async function sixtyNotes() {
 
 /** The planted notes, newest first, in the order of the list. */
 function ordered(planted: readonly Planted[]): Planted[] {
-  // By date, then by site and by seed, in their bytes (`COLLATE "C"`), as the list orders them.
+  // By date, then by site and by note, in their bytes (`COLLATE "C"`), as the list orders them.
   const bytes = (a: string, b: string) => Buffer.compare(Buffer.from(b), Buffer.from(a));
 
-  return [...planted].sort((a, b) => b.at - a.at || bytes(a.site, b.site) || bytes(a.seed, b.seed));
+  return [...planted].sort((a, b) => b.at - a.at || bytes(a.site, b.site) || bytes(a.id, b.id));
 }
 
 async function listOf(world: World, workspace: string, token: string, query = ''): Promise<Answer> {
@@ -203,7 +203,7 @@ describe('the notes of a workspace (FRU-244)', () => {
       answer.notes.map((note) => note.id),
       ordered(planted)
         .slice(0, 25)
-        .map((note) => noteIdOf(note.site, note.seed)),
+        .map((note) => noteIdOf(note.site, note.id)),
     );
     assert.equal(answer.total, 60);
     assert.deepEqual(answer.counts, { all: 60, byPlace: { [linear.id]: 30, [rest.id]: 30 }, undelivered: 0 });
@@ -213,7 +213,7 @@ describe('the notes of a workspace (FRU-244)', () => {
     const first = answer.notes[0];
     const newest = ordered(planted)[0] as Planted;
     assert.deepEqual(first, {
-      id: noteIdOf(newest.site, newest.seed),
+      id: noteIdOf(newest.site, newest.id),
       excerpt: newest.note,
       page: { url: newest.url, host: new URL(newest.url).host, path: new URL(newest.url).pathname },
       site: { id: newest.site },
@@ -239,7 +239,7 @@ describe('the notes of a workspace (FRU-244)', () => {
           {
             workspace,
             site: (sites[0] as { id: string }).id,
-            seed: noteFixture({ id, note: 'Late' }),
+            note: noteFixture({ id, text: 'Late' }),
             channel: 'script',
             author: { kind: 'visitor' },
             place: { kind: 'fruitback' },
@@ -263,8 +263,8 @@ describe('the notes of a workspace (FRU-244)', () => {
     assert.equal(new Set(ids).size, ids.length, 'no note twice');
     const expected = ordered([
       ...planted,
-      { site: (sites[0] as { id: string }).id, seed: 'sd_older', at: BASE + 5_500 } as Planted,
-    ]).map((note) => noteIdOf(note.site, note.seed));
+      { site: (sites[0] as { id: string }).id, id: 'sd_older', at: BASE + 5_500 } as Planted,
+    ]).map((note) => noteIdOf(note.site, note.id));
     assert.deepEqual(ids, expected, 'every note, in order, the late older one too');
   });
 
@@ -293,7 +293,7 @@ describe('the notes of a workspace (FRU-244)', () => {
       const expected = ordered(planted.filter(keeps));
       assert.deepEqual(
         answer.notes.map((note) => note.id),
-        expected.map((note) => noteIdOf(note.site, note.seed)),
+        expected.map((note) => noteIdOf(note.site, note.id)),
         query,
       );
       assert.equal(answer.total, expected.length, `${query}: total`);
@@ -311,7 +311,7 @@ describe('the notes of a workspace (FRU-244)', () => {
     const his = await listOf(world, workspace, bob.token, '?mine=1&limit=50');
     assert.deepEqual(
       his.notes.map((note) => note.id),
-      ordered(planted.filter((note) => note.author === bob.id)).map((note) => noteIdOf(note.site, note.seed)),
+      ordered(planted.filter((note) => note.author === bob.id)).map((note) => noteIdOf(note.site, note.id)),
     );
     assert.ok(his.notes.length > 0);
     assert.ok(his.notes.every((note) => note.author.kind === 'you' && note.author.name === 'Bob Martin'));
@@ -342,7 +342,7 @@ describe('the notes of a workspace (FRU-244)', () => {
     assert.equal((await listOf(world, workspace, alice.token, '?limit=8')).notes.length, 8);
     assert.equal((await listOf(world, workspace, alice.token, '?limit=50')).notes.length, 50);
     assert.equal(
-      (await listOf(world, workspace, alice.token, `?cursor=${cursorOf({ at: BASE, site: '', seed: '' })}`)).notes
+      (await listOf(world, workspace, alice.token, `?cursor=${cursorOf({ at: BASE, site: '', note: '' })}`)).notes
         .length,
       0,
     );
@@ -414,13 +414,13 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
         workspace,
         site: { id: note.site },
         identifier: note.reference,
-        seed: noteFixture({ id: note.seed }),
+        note: noteFixture({ id: note.id }),
       }),
       BASE,
     );
     // A delivery the worker gave up: no next attempt.
     await rowsOf(world.database, `UPDATE deliveries SET next_at = NULL, attempts = 6, last_status = 503`);
-    const id = noteIdOf(note.site, note.seed);
+    const id = noteIdOf(note.site, note.id);
     const read = async () =>
       (await listOf(world, workspace, alice.token, `?place=${rest.id}&limit=50`)).notes.find((n) => n.id === id);
 
@@ -436,12 +436,9 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
     const other = planted.find((planted) => planted.place !== rest.id) as Planted;
     assert.equal(
       (
-        await callOn(
-          world,
-          'POST',
-          `/console/workspaces/${workspace}/notes/${noteIdOf(other.site, other.seed)}/retry`,
-          { token: alice.token },
-        )
+        await callOn(world, 'POST', `/console/workspaces/${workspace}/notes/${noteIdOf(other.site, other.id)}/retry`, {
+          token: alice.token,
+        })
       ).status,
       404,
       'a note with no delivery',
@@ -474,7 +471,7 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
         workspace,
         site: { id: note.site },
         identifier: note.reference,
-        seed: noteFixture({ id: note.seed }),
+        note: noteFixture({ id: note.id }),
       }),
       BASE,
     );
@@ -484,7 +481,7 @@ describe('a note that did not arrive, and « Send again » (FRU-244)', () => {
     const answer = await callOn(
       world,
       'POST',
-      `/console/workspaces/${other}/notes/${noteIdOf(note.site, note.seed)}/retry`,
+      `/console/workspaces/${other}/notes/${noteIdOf(note.site, note.id)}/retry`,
       {
         token: zed.token,
       },

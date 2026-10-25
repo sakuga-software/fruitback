@@ -169,18 +169,18 @@ test.describe('the extension asks, the console approves, in a browser (FRU-238)'
     expect(sites.body.account).toBe(true);
     const [listed] = sites.body.sites as { id: string; origin: string }[];
     expect(listed?.origin).toBe(PLAYGROUND_ORIGIN);
-    const seed = {
-      kind: 'fruitback.seed',
-      v: 2,
+    const written = {
+      kind: 'fruitback.note',
+      v: 3,
       id: 'sd_ana_first',
       createdAt: new Date().toISOString(),
-      note: 'The button is too small on a phone.',
+      text: 'The button is too small on a phone.',
       page: { url: `${PLAYGROUND_ORIGIN}/pricing`, path: '/pricing' },
       viewport: { width: 1440, height: 900 },
       anchor: { selector: 'main > button', tag: 'button', bounds: { xPct: 40, yPct: 60, wPct: 12, hPct: 4 } },
     };
     const note = await fromExtension(extension.worker, `${api}/feedback`, {
-      body: { ...seed, client: { id: listed?.id } },
+      body: { ...written, client: { id: listed?.id } },
       token: accessToken,
     });
     expect(note.status).toBe(201);
@@ -190,8 +190,8 @@ test.describe('the extension asks, the console approves, in a browser (FRU-238)'
       { token: accessToken },
     );
     expect(read.status).toBe(200);
-    const [issue] = read.body.issues as { seed: { reporter?: { id?: string; verified?: boolean } } }[];
-    expect(issue?.seed.reporter).toMatchObject({ id: account, verified: true });
+    const [issue] = read.body.issues as { note: { reporter?: { id?: string; verified?: boolean } } }[];
+    expect(issue?.note.reporter).toMatchObject({ id: account, verified: true });
     // The control: without the token, the site of the members reads nothing.
     expect(
       (

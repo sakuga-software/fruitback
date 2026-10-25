@@ -243,7 +243,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     translator: t,
     statusOf: (issue) => STATUSES.get(issue),
     onSelect: (issue) => {
-      const entry = placed.find((candidate) => candidate.issue.seed.id === issue.seed.id);
+      const entry = placed.find((candidate) => candidate.issue.note.id === issue.note.id);
       if (entry !== undefined) openThread(entry);
     },
   });
@@ -318,7 +318,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       color: pinColor(entry.issue),
       state: stateLabel(entry.issue, t),
       identifier: entry.issue.url === undefined ? undefined : entry.issue.identifier,
-      note: entry.issue.seed.note.trim() || entry.issue.identifier,
+      note: entry.issue.note.text.trim() || entry.issue.identifier,
       hint: t.text(by === 'keyboard' ? 'pin.previewKey' : 'pin.previewClick'),
     });
     container.append(node);
@@ -508,7 +508,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // page that moved on. The next `render` re-resolves it properly; until then it degrades here.
     const element = entry.resolution.element;
     const attached = element !== null && element.isConnected;
-    const rect = attached ? documentRect(element) : boundsToPixels(entry.issue.seed.anchor.bounds, document);
+    const rect = attached ? documentRect(element) : boundsToPixels(entry.issue.note.anchor.bounds, document);
 
     entry.pin.classList.toggle('fruitback-pin-orphan', !attached);
     entry.pin.classList.toggle('fruitback-pin-uncertain', !attached || !entry.resolution.confident);
@@ -563,7 +563,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const open = placed.find((entry) => entry.pin.dataset.fruitbackOpen === '');
 
     for (const entry of placed) {
-      entry.resolution = resolveAnchor(entry.issue.seed.anchor, { document });
+      entry.resolution = resolveAnchor(entry.issue.note.anchor, { document });
       applyResolution(entry.pin, entry.issue, entry.resolution, t);
       place(entry);
     }
@@ -681,9 +681,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     placed = source
       .filter((issue) => options.shouldShow?.(issue) ?? true)
       .map((issue) => {
-        const resolution = resolveAnchor(issue.seed.anchor, { document });
+        const resolution = resolveAnchor(issue.note.anchor, { document });
         const pin = buildPin(document, issue, resolution, t);
-        if (marked !== undefined && issue.seed.id === marked) pin.dataset.fruitbackMarked = '';
+        if (marked !== undefined && issue.note.id === marked) pin.dataset.fruitbackMarked = '';
         const entry = { issue, resolution, pin };
 
         const badge = pin.querySelector<HTMLElement>('.fruitback-pin-badge');
@@ -722,7 +722,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     observeAnchors();
     listOrphans();
     if (homed !== undefined) {
-      const entry = placed.find((candidate) => candidate.issue.seed.id === homed);
+      const entry = placed.find((candidate) => candidate.issue.note.id === homed);
       if (entry === undefined) closeThread(false);
       else {
         entry.pin.dataset.fruitbackOpen = '';
@@ -735,7 +735,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // Focus in a thread kept in the list stays there: `reopenThread` gave it back.
     if (refocus !== undefined && !(homed !== undefined && thread !== null && refocus.id === homed)) {
       const badge = placed
-        .find((entry) => entry.issue.seed.id === refocus.id)
+        .find((entry) => entry.issue.note.id === refocus.id)
         ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
       (refocus.inList ? (orphans.entry(refocus.id) ?? badge) : badge)?.focus();
     }
@@ -763,7 +763,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     const entry = placed.find((candidate) => candidate.pin.contains(active));
 
-    return entry === undefined ? undefined : { id: entry.issue.seed.id, inList: false };
+    return entry === undefined ? undefined : { id: entry.issue.note.id, inList: false };
   }
 
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
@@ -785,7 +785,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   /** Shows the end of a reply in the thread of its note, if that thread is open now. */
   const replySettled = (issue: NoteIssue, answer: NoteComment | ReplyFailure): void => {
     const entry = placed.find((candidate) => candidate.issue.id === issue.id);
-    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.seed.id) return;
+    if (entry === undefined || thread?.dataset.fruitbackThread !== issue.note.id) return;
     // A read may have drawn the note again since: the reply goes on the issue that is on screen too.
     if (typeof answer !== 'string' && !(entry.issue.comments ?? []).some((each) => each.id === answer.id)) {
       entry.issue.comments = [...(entry.issue.comments ?? []), answer];
@@ -954,9 +954,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     refilter,
     resolutions,
     threadOpen: () => thread !== null,
-    openId: () => placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined)?.issue.seed.id,
+    openId: () => placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined)?.issue.note.id,
     below(id) {
-      const entry = placed.find((candidate) => candidate.issue.seed.id === id);
+      const entry = placed.find((candidate) => candidate.issue.note.id === id);
       if (entry === undefined || entry.resolution.element === null || view === null) return false;
 
       // The top of its frame, in document coordinates, against the bottom edge of the window.
@@ -966,7 +966,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       marked = id;
       let found = false;
       for (const entry of placed) {
-        if (id !== undefined && entry.issue.seed.id === id) {
+        if (id !== undefined && entry.issue.note.id === id) {
           entry.pin.dataset.fruitbackMarked = '';
           found = true;
         } else delete entry.pin.dataset.fruitbackMarked;
@@ -984,7 +984,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       if (open !== undefined && thread !== null) reopenThread(open);
     },
     select(id, home) {
-      const entry = placed.find((candidate) => candidate.issue.seed.id === id);
+      const entry = placed.find((candidate) => candidate.issue.note.id === id);
       if (entry === undefined) return false;
       // The element when the page still has it, the pin otherwise: a detached note has only its pin.
       // No smooth scroll: it is an animation, and nothing here reads `prefers-reduced-motion`.
@@ -1048,7 +1048,7 @@ function buildPin(document: Document, issue: NoteIssue, resolution: AnchorResolu
   // or the text colour of its status (FRU-370).
   if (!DRAFTS.has(issue))
     pin.style.setProperty('--fruitback-pin-on-color', statusPaint(issue, STATUSES.get(issue)).ink);
-  pin.dataset.fruitbackPin = issue.seed.id;
+  pin.dataset.fruitbackPin = issue.note.id;
   if (DRAFTS.has(issue)) pin.dataset.fruitbackDraft = '';
   pin.dataset.fruitbackStage = issue.stage;
   const status = STATUSES.get(issue);
@@ -1111,7 +1111,7 @@ function applyResolution(pin: HTMLElement, issue: NoteIssue, resolution: AnchorR
 }
 
 function summarise(issue: NoteIssue): string {
-  const firstLine = issue.seed.note
+  const firstLine = issue.note.text
     .split('\n')
     .find((line) => line.trim().length > 0)
     ?.trim();
@@ -1210,8 +1210,8 @@ function initialOf(name: string): string {
  */
 function sourceBlock(document: Document, issue: NoteIssue, showSelector: boolean): HTMLElement[] {
   if (!showSelector) return [];
-  const source = issue.seed.source;
-  const selector = issue.seed.anchor.selector;
+  const source = issue.note.source;
+  const selector = issue.note.anchor.selector;
   const line = source?.line === undefined ? '' : `:${source.line}`;
   const file = source?.file === undefined ? undefined : `${source.file}${line}`;
   const component = source?.component?.trim() ? `<${source.component.trim()}>` : undefined;
@@ -1256,7 +1256,7 @@ function buildThread(
 ): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
-  thread.dataset.fruitbackThread = issue.seed.id;
+  thread.dataset.fruitbackThread = issue.note.id;
   thread.setAttribute('role', 'dialog');
   thread.setAttribute(
     'aria-label',
@@ -1266,7 +1266,7 @@ function buildThread(
   );
   thread.style.setProperty('--fruitback-pin-color', pinColor(issue));
 
-  const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
+  const reporter = issue.note.reporter?.name ?? issue.note.reporter?.email ?? t.text('thread.anonymous');
 
   // The drop of the pin, small, in front of the word of the state: the colour is never alone.
   const drop = document.createElement('span');
@@ -1301,8 +1301,8 @@ function buildThread(
   thread.append(
     head,
     element(document, 'div', 'fruitback-thread-body', [
-      element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
-      byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
+      element(document, 'p', 'fruitback-thread-note', issue.note.text || t.text('thread.noNote')),
+      byline(document, 'p', 'fruitback-thread-meta', reporter, issue.note.createdAt, t),
       ...sourceBlock(document, issue, showSelector),
       ...attachmentsLine(document, issue, t),
       // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
@@ -1370,7 +1370,7 @@ function replyForm(document: Document, issue: NoteIssue, t: Translator, reply: R
   field.className = 'fruitback-thread-reply-field';
   field.rows = 1;
   field.setAttribute('aria-label', t.text('reply.label'));
-  const author = issue.seed.reporter?.name;
+  const author = issue.note.reporter?.name;
   field.placeholder =
     author === undefined ? t.text('reply.placeholderAnonymous') : t.text('reply.placeholder', { name: author });
   field.value = reply.texts.get(issue.id) ?? '';

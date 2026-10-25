@@ -12,8 +12,8 @@ import { type NoteAnchor, noteAnchorSchema } from '@fruitback/shared';
  * a reload and a navigation in the tab, goes with the tab, and two tabs do not write over each other.
  * A storage that refuses keeps the text in memory for the page.
  *
- * The anchor is the one a seed carries (`captureAnchor`), so the element is found again the way a pin
- * is. No seed is built here: the picture and the place are taken when the note is sent.
+ * The anchor is the one a note carries (`captureAnchor`), so the element is found again the way a pin
+ * is. No note is built here: the picture and the place are taken when the note is sent.
  */
 export type Typing = {
   /** The canonical address of the page (`canonicalizePageUrl`). */
@@ -100,7 +100,7 @@ function readStored(storage: Storage | null, key: string): Typing[] {
       const { page, anchor, text, at } = each as Record<string, unknown>;
       if (typeof page !== 'string' || typeof text !== 'string' || typeof at !== 'number') return [];
       // The anchor goes to `resolveAnchor`, which reads its bounds and its path: it is read with the
-      // schema of the seed, so an entry a person edited, or one an older build wrote, costs itself
+      // schema of the note, so an entry a person edited, or one an older build wrote, costs itself
       // and not the mount.
       const read = noteAnchorSchema.safeParse(anchor);
       if (!read.success) return [];

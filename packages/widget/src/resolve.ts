@@ -40,7 +40,7 @@ export type AnchorResolution = {
    *
    * This is the field that matters most on a page that changed. Delete a card from a grid and its
    * neighbour slides into the vacated slot with the same tag, the same text and the same box — no
-   * signal a seed stores can separate them, so `domPath` and `bounds` will both land on the
+   * signal a note stores can separate them, so `domPath` and `bounds` will both land on the
    * neighbour, confidently and wrongly. Refusing to answer at all would throw away the cases where
    * position is exactly right, so the answer is given *with its provenance*: the overlay draws an
    * unconfident pin differently and says so in the thread, and nobody is asked to believe a pin that

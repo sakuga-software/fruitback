@@ -245,10 +245,10 @@ describe('the files of a note, in Linear (FRU-331)', () => {
   });
 
   it('reads back the attachments that Fruitback made, by name and address, and not the others', () => {
-    const seed = noteFixture();
+    const note = noteFixture();
     const issue = toNoteIssue(
       {
-        ...storedIssueFromNote(seed),
+        ...storedIssueFromNote(note),
         attachments: {
           nodes: [
             { title: 'capture.png', url: 'https://uploads.linear.app/a/capture.png', subtitle: ATTACHMENT_SUBTITLE },
@@ -256,11 +256,11 @@ describe('the files of a note, in Linear (FRU-331)', () => {
           ],
         },
       },
-      seed.page.url,
+      note.page.url,
     );
 
     assert.deepEqual(issue?.attachments, [{ name: 'capture.png', url: 'https://uploads.linear.app/a/capture.png' }]);
-    assert.equal('attachments' in (toNoteIssue(storedIssueFromNote(seed), seed.page.url) ?? {}), false);
+    assert.equal('attachments' in (toNoteIssue(storedIssueFromNote(note), note.page.url) ?? {}), false);
   });
 });
 
@@ -277,7 +277,7 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
   const config = { apiKey: 'lin_api_test', teamId: 'team_1', projectId: undefined };
 
   it('finds the files of Fruitback behind more than ten other attachments of the issue', async () => {
-    const seed = noteFixture();
+    const note = noteFixture();
     const links = Array.from({ length: 12 }, (_, index) => ({
       title: `PR #${index + 1}`,
       url: `https://github.com/acme/app/pull/${index + 1}`,
@@ -288,11 +288,11 @@ describe('the files of a note, read back from Linear (FRU-348)', () => {
       { title: 'log.txt', url: 'https://uploads.linear.app/a/log.txt', subtitle: ATTACHMENT_SUBTITLE },
     ];
     const stub = installLinearStub({
-      storedIssues: [storedIssueFromNote(seed, { attachments: { nodes: [...links, ...ours] } })],
+      storedIssues: [storedIssueFromNote(note, { attachments: { nodes: [...links, ...ours] } })],
     });
 
     const [issue] = await createLinearStore(config).findForPage(
-      { url: seed.page.url, clientId: undefined },
+      { url: note.page.url, clientId: undefined },
       undefined,
       POLICY,
     );

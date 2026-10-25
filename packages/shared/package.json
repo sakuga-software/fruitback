@@ -21,8 +21,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./note.fixture": "./src/note.fixture.ts",
-    "./seed.fixture": "./src/seed.fixture.ts"
+    "./note.fixture": "./src/note.fixture.ts"
   },
   "publishConfig": {
     "main": "./dist/index.js",
@@ -35,10 +34,6 @@
       "./note.fixture": {
         "types": "./dist/note.fixture.d.ts",
         "import": "./dist/note.fixture.js"
-      },
-      "./seed.fixture": {
-        "types": "./dist/seed.fixture.d.ts",
-        "import": "./dist/seed.fixture.js"
       }
     },
     "access": "public"

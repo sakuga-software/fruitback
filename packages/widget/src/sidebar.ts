@@ -126,7 +126,7 @@ function matches(entry: SidebarEntry, query: string): boolean {
   const words = query.toLocaleLowerCase();
 
   return (
-    entry.issue.seed.note.toLocaleLowerCase().includes(words) ||
+    entry.issue.note.text.toLocaleLowerCase().includes(words) ||
     (entry.issue.identifier ?? '').toLocaleLowerCase().includes(words)
   );
 }
@@ -564,11 +564,11 @@ export function createSidebar(options: SidebarOptions): Sidebar {
         row.className = 'fruitback-sidebar-draft';
         const note = document.createElement('span');
         note.className = 'fruitback-sidebar-note';
-        note.textContent = excerpt(draft.seed.note) ?? t.text('thread.noNote');
+        note.textContent = excerpt(draft.note.text) ?? t.text('thread.noNote');
         // The page, because the drafts of a tab come from every page the reviewer read.
         const where = document.createElement('span');
         where.className = 'fruitback-sidebar-meta';
-        where.textContent = draft.seed.page.path;
+        where.textContent = draft.note.page.path;
         row.append(note, where);
 
         return row;
@@ -603,9 +603,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'fruitback-sidebar-item';
-    button.dataset.fruitbackNote = issue.seed.id;
-    if (issue.seed.id === current) button.setAttribute('aria-current', 'true');
-    button.addEventListener('click', () => showNote(issue.seed.id));
+    button.dataset.fruitbackNote = issue.note.id;
+    if (issue.note.id === current) button.setAttribute('aria-current', 'true');
+    button.addEventListener('click', () => showNote(issue.note.id));
 
     // The drop of its pin, with the number the pin carries: the eye goes from the row to the page.
     // For the eye only: the row says its status in words, and a screen reader has no pin to match.
@@ -633,17 +633,17 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       id.textContent = issue.identifier;
       top.append(id);
     }
-    const written = new Date(issue.seed.createdAt);
+    const written = new Date(issue.note.createdAt);
     const known = !Number.isNaN(written.getTime());
     const age = document.createElement('span');
     age.className = 'fruitback-sidebar-age';
-    age.textContent = known ? t.relative(written) : issue.seed.createdAt;
+    age.textContent = known ? t.relative(written) : issue.note.createdAt;
     if (known) age.title = t.date(written);
     top.append(age);
 
     const meta = document.createElement('span');
     meta.className = 'fruitback-sidebar-meta';
-    const who = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
+    const who = issue.note.reporter?.name ?? issue.note.reporter?.email ?? t.text('thread.anonymous');
     const replies = issue.comments?.length ?? 0;
     meta.textContent = [
       who,
@@ -653,14 +653,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     // Its own element: the page scrolls under the list, and only these words change then.
     const below = document.createElement('span');
     below.className = 'fruitback-sidebar-below';
-    below.dataset.fruitbackBelow = issue.seed.id;
+    below.dataset.fruitbackBelow = issue.note.id;
     below.textContent = ` · ${t.text('sidebar.below')}`;
-    below.hidden = options.below?.(issue.seed.id) !== true;
+    below.hidden = options.below?.(issue.note.id) !== true;
     meta.append(below);
 
     const body = document.createElement('span');
     body.className = 'fruitback-sidebar-body';
-    body.append(top, words(issue.seed.note, 'fruitback-sidebar-note'), meta);
+    body.append(top, words(issue.note.text, 'fruitback-sidebar-note'), meta);
     button.append(pin, body);
     row.append(button);
 
@@ -674,9 +674,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'fruitback-sidebar-lost';
-    button.dataset.fruitbackNote = issue.seed.id;
-    if (issue.seed.id === current) button.setAttribute('aria-current', 'true');
-    button.addEventListener('click', () => showNote(issue.seed.id));
+    button.dataset.fruitbackNote = issue.note.id;
+    if (issue.note.id === current) button.setAttribute('aria-current', 'true');
+    button.addEventListener('click', () => showNote(issue.note.id));
     const why = document.createElement('span');
     why.className = 'fruitback-sidebar-meta';
     why.textContent = [
@@ -684,7 +684,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       ...(issue.identifier ? [issue.identifier] : []),
       t.text('sidebar.unplacedWhy'),
     ].join(' · ');
-    button.append(words(issue.seed.note, 'fruitback-sidebar-lost-note'), why);
+    button.append(words(issue.note.text, 'fruitback-sidebar-lost-note'), why);
     row.append(button);
 
     return row;

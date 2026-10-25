@@ -5,7 +5,7 @@ import { canonicalizePageUrl, type NoteEnv, type NotePage, type NoteViewport } f
  *
  * `url` goes through `canonicalizePageUrl` here rather than being sent raw. The worker re-does it —
  * it cannot trust a client — but doing it on this side too means the widget queries the read path
- * with the same key the seed was stored under, instead of asking for a URL nobody planted anything
+ * with the same key the note was stored under, instead of asking for a URL nobody planted anything
  * on.
  */
 
@@ -74,7 +74,7 @@ export function captureViewport(view: Window): NoteViewport {
 
 /**
  * The "it works on my machine" fields. Deliberately thin: the widget runs on client sites, and a
- * seed is a Linear issue anyone on the workspace can read, so this collects what helps reproduce a
+ * note is a Linear issue anyone on the workspace can read, so this collects what helps reproduce a
  * visual bug and nothing that identifies a person.
  */
 export function captureEnv(view: Window): NoteEnv {

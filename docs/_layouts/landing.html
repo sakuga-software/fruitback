@@ -515,12 +515,12 @@
               ><code>POST https://hooks.acme.dev/fruitback
 X-Fruitback-Signature: sha256=…
 {
-  "version": 1,
+  "version": 2,
   "event": "note.created",
   "site": { "id": "site_81c2…", "origin": "https://staging.acme.dev" },
   "identifier": "FB-12",
-  "seed": {
-    "note": "Hard to see until you hover it.",
+  "note": {
+    "text": "Hard to see until you hover it.",
     "page": { "url": "https://staging.acme.dev/blends" },
     "anchor": { "selector": "div.card:nth-child(2) > button.add" },
     "source": {

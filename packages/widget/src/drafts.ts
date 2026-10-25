@@ -5,7 +5,7 @@ import { type Destination, destinationToSend } from './destinations.ts';
  * The notes kept for later, not sent yet (FRU-124).
  *
  * A reviewer goes through a page, or through several, and sends the notes together. Each one is a
- * whole seed, built at the moment it was written: the element, the place and the picture are those
+ * whole note, built at the moment it was written: the element, the place and the picture are those
  * of that moment, and the worker plants it as it would have planted it then.
  *
  * **`sessionStorage`, per tab**, as the ticket decided. The drafts outlive a reload and a navigation
@@ -13,11 +13,11 @@ import { type Destination, destinationToSend } from './destinations.ts';
  * that were never sent would stay on a shared machine, readable by every script of the origin, and
  * two tabs would write over each other.
  *
- * The picture is not a problem of size here: a seed holds the address of a picture the host already
+ * The picture is not a problem of size here: a note holds the address of a picture the host already
  * uploaded, not the picture.
  */
 export type Draft = {
-  seed: Note;
+  note: Note;
   /** The opaque id of the place a member chose, when it is not the first one (FRU-123). */
   destination?: string;
 };
@@ -56,12 +56,12 @@ export function createDraftStore(options: DraftStoreOptions): DraftStore {
   return {
     list: () => drafts,
     add(draft) {
-      set([...drafts.filter((each) => each.seed.id !== draft.seed.id), draft]);
+      set([...drafts.filter((each) => each.note.id !== draft.note.id), draft]);
     },
     remove(ids) {
       const gone = new Set(ids);
-      if (!drafts.some((draft) => gone.has(draft.seed.id))) return;
-      set(drafts.filter((draft) => !gone.has(draft.seed.id)));
+      if (!drafts.some((draft) => gone.has(draft.note.id))) return;
+      set(drafts.filter((draft) => !gone.has(draft.note.id)));
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -73,8 +73,8 @@ export function createDraftStore(options: DraftStoreOptions): DraftStore {
 
 /**
  * Tolerant, like `readStored` of the config: a value a human can edit in devtools costs the drafts it
- * spoils, and nothing else. Every seed goes through `parseNote`, because the worker refuses a batch
- * whole for one thing that is not a seed.
+ * spoils, and nothing else. Every note goes through `parseNote`, because the worker refuses a batch
+ * whole for one thing that is not a note.
  */
 function readStored(storage: Storage | null, key: string): Draft[] {
   if (storage === null) return [];
@@ -87,11 +87,11 @@ function readStored(storage: Storage | null, key: string): Draft[] {
 
     return parsed.flatMap((each: unknown) => {
       if (typeof each !== 'object' || each === null) return [];
-      const { seed, destination } = each as { seed?: unknown; destination?: unknown };
-      const read = parseNote(seed);
+      const { note, destination } = each as { note?: unknown; destination?: unknown };
+      const read = parseNote(note);
       if (!read.ok) return [];
 
-      return [{ seed: read.note, ...(typeof destination === 'string' ? { destination } : {}) }];
+      return [{ note: read.note, ...(typeof destination === 'string' ? { destination } : {}) }];
     });
   } catch {
     return [];
@@ -116,10 +116,10 @@ export function sessionStorageOf(view: Window | null): Storage | null {
  * the second try of a single note (`destinationToSend`).
  */
 export function withPlacesOfNow(drafts: readonly Draft[], offered: readonly Destination[]): Draft[] {
-  return drafts.map(({ seed, destination }) => {
+  return drafts.map(({ note, destination }) => {
     const now = destinationToSend(offered, destination);
 
-    return now === undefined ? { seed } : { seed, destination: now };
+    return now === undefined ? { note } : { note, destination: now };
   });
 }
 
@@ -142,7 +142,7 @@ export function offeredBatch(value: unknown): BatchOffer | undefined {
  * the worker takes, and as many bytes: the cap of the body does not move for a batch, and ten long
  * notes go over it. A draft heavier than the cap alone goes alone, and its `413` keeps it.
  *
- * With no offer, one note for each request, and the body is the seed and not an array: a worker that
+ * With no offer, one note for each request, and the body is the note and not an array: a worker that
  * offers no batch never receives one.
  */
 export function cutIntoRequests(drafts: readonly Draft[], offer: BatchOffer | undefined): Draft[][] {
@@ -171,7 +171,7 @@ export function cutIntoRequests(drafts: readonly Draft[], offer: BatchOffer | un
 
 /** The body of a batch, as it goes on the wire. */
 export function batchBody(drafts: readonly Draft[]): string {
-  return JSON.stringify(drafts.map((draft) => draft.seed));
+  return JSON.stringify(drafts.map((draft) => draft.note));
 }
 
 function bodyBytes(drafts: readonly Draft[]): number {

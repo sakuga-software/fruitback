@@ -110,7 +110,7 @@ export async function handleSessionRoutes(request: Request, pathname: string, se
     return await handleSession(request, pathname, served, context, cors.headers);
   } catch (error) {
     // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
-    // seed path's outage rather than as a bare `500`, so the extension can tell "retry later" from
+    // note path's outage rather than as a bare `500`, so the extension can tell "retry later" from
     // "this request was wrong" — and so the answer carries the CORS headers it needs to read it.
     if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
     throw error;

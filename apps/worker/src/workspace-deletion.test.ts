@@ -51,9 +51,9 @@ function watchOutside(): void {
 }
 
 function noteOn(site: string, id: string): Note {
-  const seed = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
+  const note = noteFixture({ id, page: { url: PAGE, path: '/pricing' } });
 
-  return { ...seed, client: { id: site, name: 'Acme' } };
+  return { ...note, client: { id: site, name: 'Acme' } };
 }
 
 /** The access token of a session of the extension for one workspace. */

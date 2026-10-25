@@ -11,7 +11,7 @@ import {
   parseNoteFromDescription,
   teamWords,
 } from './markdown-description.ts';
-import { NOTE_KIND, NOTE_VERSION, SEED_VERSION, type NoteSource } from './note.ts';
+import { NOTE_KIND, NOTE_VERSION, type NoteSource } from './note.ts';
 import { minimalNoteFixture, noteFixture } from './note.fixture.ts';
 
 /** Rebuild the description the way a tracker's editor or a human might have left it. */
@@ -43,7 +43,7 @@ describe('buildIssueDescription', () => {
     const note = noteFixture();
     const description = buildIssueDescription(note);
 
-    assert.ok(description.indexOf(note.note) < description.indexOf(NOTE_BLOCK_CAPTION));
+    assert.ok(description.indexOf(note.text) < description.indexOf(NOTE_BLOCK_CAPTION));
     assert.ok(description.includes('**Component** · `CheckoutCta` — `src/components/checkout-cta.tsx:42`'));
     assert.ok(description.includes('**Viewport** · 1440×900 @2×'));
     assert.ok(description.includes('**Reported by** · Anonymous'));
@@ -129,47 +129,39 @@ describe('parseNoteFromDescription', () => {
   });
 
   it('surfaces a newer payload instead of pretending there is none', () => {
-    const newer = JSON.stringify({ ...note, v: SEED_VERSION + 1 }, null, 2);
+    const newer = JSON.stringify({ ...note, v: NOTE_VERSION + 1 }, null, 2);
 
     assert.deepEqual(parseNoteFromDescription(withNoteBlock(`\`\`\`json\n${newer}\n\`\`\``)), {
       ok: false,
       reason: 'unsupported-version',
-      version: SEED_VERSION + 1,
+      version: NOTE_VERSION + 1,
     });
   });
 });
 
-describe('parseNoteFromDescription, both kinds (FRU-378)', () => {
+describe('the block of a note (FRU-378)', () => {
   const note = noteFixture();
-  const { kind: _kind, v: _v, note: text, ...rest } = note;
-  const version3 = JSON.stringify({ kind: NOTE_KIND, v: NOTE_VERSION, ...rest, text }, null, 2);
 
-  it('reads an issue written with fruitback.seed, as every issue already in a tracker is', () => {
-    assert.equal(JSON.parse(buildNoteBlock(note).split('\n').slice(1, -1).join('\n')).kind, 'fruitback.seed');
-    assert.deepEqual(parseNoteFromDescription(buildIssueDescription(note)), { ok: true, note });
-  });
+  it('writes the kind and the version of a note, and its words in text', () => {
+    const block = JSON.parse(buildNoteBlock(note).split('\n').slice(1, -1).join('\n')) as Record<string, unknown>;
 
-  it('reads an issue written with fruitback.note as the same note', () => {
-    assert.deepEqual(parseNoteFromDescription(withNoteBlock(`\`\`\`json\n${version3}\n\`\`\``)), { ok: true, note });
-  });
-
-  it('writes a note it read from fruitback.note back as the issue of fruitback.seed', () => {
-    const read = parsedNote(withNoteBlock(`\`\`\`json\n${version3}\n\`\`\``));
-
-    assert.equal(buildIssueDescription(read), buildIssueDescription(note));
+    assert.equal(block.kind, NOTE_KIND);
+    assert.equal(block.v, NOTE_VERSION);
+    assert.equal(block.text, note.text);
+    assert.equal('note' in block, false);
   });
 });
 
 describe('buildIssueTitle', () => {
   it('uses the first line the visitor wrote', () => {
-    const note = noteFixture({ note: '  \n  Le CTA est trop petit\n\nEt le contraste est faible.' });
+    const note = noteFixture({ text: '  \n  Le CTA est trop petit\n\nEt le contraste est faible.' });
 
     assert.equal(buildIssueTitle(note), 'Le CTA est trop petit');
   });
 
   it('truncates on a word boundary', () => {
     const note = noteFixture({
-      note: 'Le bouton de commande est vraiment beaucoup trop petit sur les écrans de téléphone',
+      text: 'Le bouton de commande est vraiment beaucoup trop petit sur les écrans de téléphone',
     });
 
     const title = buildIssueTitle(note, { maxLength: 40 });
@@ -187,21 +179,21 @@ describe('buildIssueTitle', () => {
 
 describe('the bounds of a cut title', () => {
   it('keeps a title of exactly the limit whole, and cuts one character more', () => {
-    const note = noteFixture({ note: 'abcdefghij' });
+    const note = noteFixture({ text: 'abcdefghij' });
 
     assert.equal(buildIssueTitle(note, { maxLength: 10 }), 'abcdefghij');
-    assert.equal(buildIssueTitle(noteFixture({ note: 'abcdefghijk' }), { maxLength: 10 }), 'abcdefghi…');
+    assert.equal(buildIssueTitle(noteFixture({ text: 'abcdefghijk' }), { maxLength: 10 }), 'abcdefghi…');
   });
 
   it('breaks on the last space only when it lies past 60 % of the limit', () => {
     // With a limit of 10, the space must sit after index 6. At index 6, breaking there would eat
     // too much of the title, so the cut is hard.
-    assert.equal(buildIssueTitle(noteFixture({ note: 'abcdefg hijklmnop' }), { maxLength: 10 }), 'abcdefg…');
-    assert.equal(buildIssueTitle(noteFixture({ note: 'abcdef ghijklmnop' }), { maxLength: 10 }), 'abcdef gh…');
+    assert.equal(buildIssueTitle(noteFixture({ text: 'abcdefg hijklmnop' }), { maxLength: 10 }), 'abcdefg…');
+    assert.equal(buildIssueTitle(noteFixture({ text: 'abcdef ghijklmnop' }), { maxLength: 10 }), 'abcdef gh…');
   });
 
   it('cuts at 80 characters by default', () => {
-    const title = buildIssueTitle(noteFixture({ note: 'x'.repeat(200) }));
+    const title = buildIssueTitle(noteFixture({ text: 'x'.repeat(200) }));
 
     assert.equal(title, `${'x'.repeat(79)}…`);
   });
@@ -317,7 +309,7 @@ describe('the language of a description (FRU-39)', () => {
   });
 
   it('writes the prose in the team locale, and the caption with it', () => {
-    const description = buildIssueDescription(noteFixture({ note: 'Le CTA est trop petit' }), { locale: 'fr' });
+    const description = buildIssueDescription(noteFixture({ text: 'Le CTA est trop petit' }), { locale: 'fr' });
 
     assert.match(description, /\*\*Page\*\* · \[/);
     assert.match(description, /\*\*Élément\*\*/);
@@ -328,7 +320,7 @@ describe('the language of a description (FRU-39)', () => {
   });
 
   it('never translates the note, nor the name the reporter typed', () => {
-    const note = noteFixture({ note: 'The call to action is too small', reporter: { name: 'Alice Smith' } });
+    const note = noteFixture({ text: 'The call to action is too small', reporter: { name: 'Alice Smith' } });
 
     const description = buildIssueDescription(note, { locale: 'fr' });
 
@@ -366,26 +358,26 @@ describe('the language of a description (FRU-39)', () => {
 
 describe('the sections of a description, exactly (FRU-377)', () => {
   it('trims the note, joins the lines of the metadata, and leaves out an empty note', () => {
-    const note = minimalNoteFixture({ note: '\n  Le bouton déborde.  \n' });
+    const note = minimalNoteFixture({ text: '\n  Le bouton déborde.  \n' });
     const metadata = buildIssueMetadata(note).join('\n');
     const tail = `${metadata}\n\n${NOTE_BLOCK_CAPTION}\n\n${buildNoteBlock(note)}\n`;
 
     assert.equal(buildIssueDescription(note), `Le bouton déborde.\n\n${tail}`);
     assert.equal(
-      buildIssueDescription({ ...note, note: '   ' }),
-      tail.replace(buildNoteBlock(note), buildNoteBlock({ ...note, note: '   ' })),
+      buildIssueDescription({ ...note, text: '   ' }),
+      tail.replace(buildNoteBlock(note), buildNoteBlock({ ...note, text: '   ' })),
     );
   });
 });
 
 describe('a title, word by word (FRU-377)', () => {
   it('makes one space of each run of white space in the note', () => {
-    assert.equal(buildIssueTitle(minimalNoteFixture({ note: 'Le  bouton\t\tdéborde' })), 'Le bouton déborde');
+    assert.equal(buildIssueTitle(minimalNoteFixture({ text: 'Le  bouton\t\tdéborde' })), 'Le bouton déborde');
   });
 
   it('leaves no space before the ellipsis when it cuts without a word break', () => {
     // The space at 3 is not past 60 % of 5, so the cut keeps it, and the end of the cut is trimmed.
-    assert.equal(buildIssueTitle(minimalNoteFixture({ note: 'abc defg' }), { maxLength: 5 }), 'abc…');
+    assert.equal(buildIssueTitle(minimalNoteFixture({ text: 'abc defg' }), { maxLength: 5 }), 'abc…');
   });
 });
 
@@ -427,19 +419,19 @@ describe('the fences of a description (FRU-377)', () => {
   });
 
   it('answers the first note it can read, whatever a later block holds', () => {
-    const newer = ['```json', JSON.stringify({ ...note, v: SEED_VERSION + 1 }), '```'].join('\n');
+    const newer = ['```json', JSON.stringify({ ...note, v: NOTE_VERSION + 1 }), '```'].join('\n');
 
     assert.deepEqual(parsedNote(`${noteBlock}\n\n${newer}`), note);
   });
 
   it('keeps a real failure over a later block that is not a note', () => {
-    const newer = ['```json', JSON.stringify({ ...note, v: SEED_VERSION + 1 }), '```'].join('\n');
+    const newer = ['```json', JSON.stringify({ ...note, v: NOTE_VERSION + 1 }), '```'].join('\n');
     const unrelated = ['```json', '{ "unrelated": true }', '```'].join('\n');
 
     assert.deepEqual(parseNoteFromDescription(`${newer}\n\n${unrelated}`), {
       ok: false,
       reason: 'unsupported-version',
-      version: SEED_VERSION + 1,
+      version: NOTE_VERSION + 1,
     });
   });
 });

@@ -14,7 +14,7 @@ first publish made it expensive.
   chose for its site may travel as **data** in the read envelope (`statuses`): the schema holds the
   field, never a value. See [statuses.md](statuses.md).
 - **A status belongs to a stage, and the stage wins** (FRU-364). `statuses` and `status` are
-  read-envelope fields, so `SEED_VERSION` does not move. `offeredStatuses` reads the list
+  read-envelope fields, so `NOTE_VERSION` does not move. `offeredStatuses` reads the list
   tolerantly and keeps only `#rrggbb` colours; `statusOf` gives an issue its status only when that
   status has the issue's stage, so a widget that reads only `stage` draws what one that reads the
   status draws.
@@ -22,39 +22,37 @@ first publish made it expensive.
   `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
   the field is absent. GitHub reports `new`, `done` and `closed`. A read-envelope field, so
-  `SEED_VERSION` does not move.
+  `NOTE_VERSION` does not move.
 - **A read says `identified: true` to a reader whose token the worker verified** (FRU-112), and
   leaves the field out for everybody else. Only `true` is the word of the worker. It says that a note
   of this reader would be signed by the worker, never who the reader is. A read-envelope field too.
-- **A note was a « seed » until FRU-378, and a reader takes both kinds for good.** `parseNote`
-  reads `fruitback.seed` up to `SEED_VERSION` (2), which every issue already in a tracker holds, and
-  `fruitback.note` at `NOTE_VERSION` (3), whose words are in `text` rather than `note`; it answers
-  both in the shape of version 2. The writers still write `fruitback.seed`: they move once every
-  reader takes the new kind. The names of before (`Seed`, `parseSeed`, `seed.fixture`…) are aliases
-  in `deprecated.ts`, which FRU-446 removes.
-- **The wire says `note` next to `seed`** (FRU-378). Each issue of `GET /feedback` and each REST
-  delivery carry the note twice: `seed` as before, and `note` in the shape of `fruitback.note` v3
-  (`toNoteV3`). `note` is added to each answer, never kept in the cache of the reads. `GET
-  /session/notes` gives the id of each note in `note` and in `seed`. A refused note is
-  `invalid-note`. FRU-446 removes `seed` from the wire once no client reads it.
+- **A note is `fruitback.note` at version 3, and nothing else reads as one** (FRU-378, decided by
+  Mathieu on 2026-10-25). The words of the reporter are in `text`. `parseNote` reads that kind and
+  version only: a payload of another kind is `not-found`, a newer version `unsupported-version`. The
+  payloads of before are rewritten once by `rewrite-notes` of the worker, which holds the only reader
+  of them (`apps/worker/src/rewrite-notes.ts`, removed by FRU-449). `@fruitback/shared` 0.4.0
+  exports no name of before.
+- **The wire says `note`, and only `note`** (FRU-378). Each issue of `GET /feedback`, each row of
+  `GET /session/notes` and each REST delivery (version 2) carry the note under `note`. A refused
+  note is `invalid-note`. An answer of the read cache of before is under another prefix of the `Kv`
+  (`read-v3`), where no reader looks.
 - **An issue says `checked: { by, at }` and `mine: true`** (FRU-294): `checked` on a done note whose
   newest verdict in its replies is « looks fixed », `mine` to the reader who left the note. Both
-  optional, both read-envelope fields: `SEED_VERSION` does not move.
+  optional, both read-envelope fields: `NOTE_VERSION` does not move.
 
 ### The reasons, and the history
 
 `packages/shared` is the contract both ends depend on. Treat changes to it as breaking.
 
-- A **note** is one pin: `note`, `page`, `viewport`, `anchor`, plus optional `source` (react-grab),
+- A **note** is one pin: `text`, `page`, `viewport`, `anchor`, plus optional `source` (react-grab),
   `client`, `reporter`, `env`, `screenshot`.
-- **The round-trip is the invariant**: `parseNoteFromDescription(buildIssueDescription(seed))` must
-  return exactly `seed`. Two rules protect it — **no schema default values**, and no field the
+- **The round-trip is the invariant**: `parseNoteFromDescription(buildIssueDescription(note))` must
+  return exactly `note`. Two rules protect it — **no schema default values**, and no field the
   widget cannot rebuild from what is stored. Adding a default is the easy way to break this
   silently; test:`adds no field the caller did not provide` is there to catch it.
 - **Bump `NOTE_VERSION`** when the payload shape changes — it is `3` since FRU-378 named the kind
-  `fruitback.note`. `SEED_VERSION` stays at `2`, where FRU-9 left it when it added
-  `reporter.verified`: no writer makes a new version of `fruitback.seed`. Readers accept older
-  versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
+  `fruitback.note`. Readers refuse a newer version (`unsupported-version`) rather than silently
+  drop fields; a version before 3 is `invalid`, since no writer of this kind made one.
 - **`parseNote*` never throws.** It returns `{ ok: false, reason }` — the input is a Linear
   description a human may have edited.
 - `canonicalizePageUrl` is the page identity: fragment and tracking params dropped, remaining params
@@ -62,7 +60,7 @@ first publish made it expensive.
   what makes the Linear `description: { contains: … }` filter work.
 - Pin colour comes from a `NoteStage`, and the widget never stores a status of its own — it renders
   the one the store reports.
-- **The contract holds the vocabulary and no fixed value a human reads** (FRU-24). `SEED_STAGE_STYLES` used
+- **The contract holds the vocabulary and no fixed value a human reads** (FRU-24). The stage styles used
   to sit in `shared` carrying an `emoji`, a `label` and a `color` per stage — a published type nobody
   downstream could change, holding three decisions that were never the contract's:
   - `color` was already dead, moved to the widget's `--fruitback-stage-*` tokens by FRU-35 and read
@@ -88,7 +86,7 @@ first publish made it expensive.
 - **The two layers are what makes a translated description possible** (FRU-39). The prose on top is
   written for the team that triages, in the worker's `FRUITBACK_TEAM_LOCALE`; the JSON block under it
   is the widget's, and no language reaches it. So
-  `parseNoteFromDescription(buildIssueDescription(seed, { locale })) === seed` holds in every
+  `parseNoteFromDescription(buildIssueDescription(note, { locale })) === note` holds in every
   language, and the round-trip test runs over several. **That is a constraint to hold rather than a
   fact to lean on**: a translated key in the block, or a parser that looked for the caption, would
   break it in silence. The reporter's own words — the note, the name they typed — are never
@@ -117,7 +115,7 @@ first publish made it expensive.
 - **A connector may report only some stages, and the read says which** (FRU-32). GitHub has two issue
   states and a reason on a close, which gives three stages. `NoteStore.stages` is sent as `stages` on
   every `GET /feedback`, and the settings panel offers a box only for those. It is part of the read
-  envelope, not of the note, so `SEED_VERSION` does not move. `offeredStages` is tolerant like
+  envelope, not of the note, so `NOTE_VERSION` does not move. `offeredStages` is tolerant like
   `parseNote*`: a missing, malformed or empty list means every stage, which is what a worker from
   before the field sends. The vocabulary stays five stages; a connector narrows what it uses, and
   never adds one.

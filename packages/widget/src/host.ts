@@ -166,7 +166,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   button.type = 'button';
   button.className = 'fruitback-launch';
   button.dataset.fruitbackHostLaunch = '';
-  // The seed the button plants, as the shape the page will then show — not as an emoji (FRU-36).
+  // The note the button plants, as the shape the page will then show — not as an emoji (FRU-36).
   // The label lives in its own span so that setting it never removes the icon, and so the button's
   // accessible name stays exactly the label: the SVG is aria-hidden and contributes no text.
   const launchLabel = document.createElement('span');
@@ -282,7 +282,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    */
   let sources = new WeakMap<Element, Promise<NoteSource | undefined>>();
 
-  // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
+  // A note with no `source` is a perfectly good note, so a rejecting engine costs the metadata and
   // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
   // floor and leave an unhandled rejection behind — the reporter's note lost to a missing filename.
   function sourceOf(element: Element): Promise<NoteSource | undefined> {

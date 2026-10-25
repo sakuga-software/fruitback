@@ -31,11 +31,11 @@ beforeEach(async () => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-function seeds(count: number, from = 0): Note[] {
+function notes(count: number, from = 0): Note[] {
   return Array.from({ length: count }, (_, index) =>
     noteFixture({
       id: `sd_parent_${from + index}`,
-      note: `Note ${from + index + 1}`,
+      text: `Note ${from + index + 1}`,
       page: { url: PAGE, path: '/pricing', title: 'Pricing' },
     }),
   );
@@ -115,7 +115,7 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const linear = installLinear();
     linear.refuses = () => true;
 
-    const sent = await send(seeds(2), createMemoryKv());
+    const sent = await send(notes(2), createMemoryKv());
 
     assert.equal(sent.status, 502);
     assert.equal(parents(linear).length, 1);
@@ -126,10 +126,10 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const linear = installLinear();
     const kv = createMemoryKv();
     linear.refuses = () => true;
-    assert.equal((await send(seeds(2), kv)).status, 502);
+    assert.equal((await send(notes(2), kv)).status, 502);
 
     linear.refuses = () => false;
-    const again = await send(seeds(2), kv);
+    const again = await send(notes(2), kv);
 
     assert.equal(again.status, 201, await again.clone().text());
     assert.equal(parents(linear).length, 1, 'the second attempt wrote a second parent');
@@ -143,9 +143,9 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const linear = installLinear();
     const kv = createMemoryKv();
     linear.refuses = () => true;
-    await send(seeds(2), kv);
+    await send(notes(2), kv);
     linear.refuses = () => false;
-    await send(seeds(2), kv);
+    await send(notes(2), kv);
 
     assert.deepEqual(linear.others, []);
   });
@@ -155,10 +155,10 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const kv = createMemoryKv();
     // The first note is kept, then Linear refuses the second.
     linear.refuses = (nth) => nth === 2;
-    assert.equal((await send(seeds(2), kv)).status, 207);
+    assert.equal((await send(notes(2), kv)).status, 207);
 
     // The widget sends again the note that was not kept, alone.
-    const again = await send(seeds(1, 1), kv);
+    const again = await send(notes(1, 1), kv);
 
     assert.equal(again.status, 201, await again.clone().text());
     assert.equal(parents(linear).length, 1, 'the note sent again got a parent of its own');
@@ -169,13 +169,13 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const linear = installLinear();
     const kv = createMemoryKv();
     linear.refuses = () => true;
-    assert.equal((await send(seeds(2), kv)).status, 502);
+    assert.equal((await send(notes(2), kv)).status, 502);
     // The team deleted the empty parent: Linear refuses every sub-issue of it, and takes the others.
     linear.refuses = () => false;
     linear.gone.add('issue_1');
-    assert.equal((await send(seeds(2), kv)).status, 502);
+    assert.equal((await send(notes(2), kv)).status, 502);
 
-    const third = await send(seeds(2), kv);
+    const third = await send(notes(2), kv);
 
     assert.equal(third.status, 201, await third.clone().text());
     assert.deepEqual(
@@ -188,11 +188,11 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     const linear = installLinear();
     const kv = createMemoryKv();
     linear.refuses = () => true;
-    await send(seeds(2), kv);
+    await send(notes(2), kv);
     linear.refuses = () => false;
 
     // Other notes, in the same minutes: they are no part of the first batch.
-    const other = await send(seeds(2, 10), kv);
+    const other = await send(notes(2, 10), kv);
 
     assert.equal(other.status, 201);
     assert.equal(parents(linear).length, 2);
@@ -212,7 +212,7 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
         key.includes('batch-parent') ? Promise.reject(new Error('no answer')) : memory.set(key, value, ttl),
     };
 
-    const sent = await send(seeds(2), kv);
+    const sent = await send(notes(2), kv);
 
     assert.equal(sent.status, 201, await sent.clone().text());
     assert.equal(children(linear).length, 2);

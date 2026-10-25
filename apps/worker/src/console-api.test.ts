@@ -145,11 +145,11 @@ describe('from a link in a mailbox to a note on the page (FRU-99, FRU-100)', () 
     assert.equal(paired.status, 200);
     const session = (await paired.json()) as { accessToken: string };
 
-    const seed = noteFixture();
+    const note = noteFixture();
     const written = await call(env, 'POST', '/feedback', {
       origin: SITE,
       token: session.accessToken,
-      body: { ...seed, page: { ...seed.page, url: `${SITE}/pricing` }, client: { id: site.id } },
+      body: { ...note, page: { ...note.page, url: `${SITE}/pricing` }, client: { id: site.id } },
     });
     assert.equal(written.status, 201, await written.clone().text());
 
@@ -158,11 +158,11 @@ describe('from a link in a mailbox to a note on the page (FRU-99, FRU-100)', () 
       token: session.accessToken,
     });
     assert.equal(read.status, 200);
-    const issues = ((await read.json()) as { issues: { seed: { reporter?: { id?: string; verified?: boolean } } }[] })
+    const issues = ((await read.json()) as { issues: { note: { reporter?: { id?: string; verified?: boolean } } }[] })
       .issues;
     assert.equal(issues.length, 1);
     assert.deepEqual(
-      { id: issues[0]?.seed.reporter?.id, verified: issues[0]?.seed.reporter?.verified },
+      { id: issues[0]?.note.reporter?.id, verified: issues[0]?.note.reporter?.verified },
       { id: alice.id, verified: true },
     );
 

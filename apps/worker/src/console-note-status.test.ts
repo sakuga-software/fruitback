@@ -80,14 +80,14 @@ async function aNote(options: { rest?: boolean } = {}) {
     ? (await world.accounts.addConnector(workspace, { kind: 'rest', label: 'hooks.acme.dev', sealed: 'x' })).id
     : undefined;
   if (rest !== undefined) await world.accounts.setDestination(workspace, site, { connector: rest });
-  const seed = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
+  const note = noteFixture({ id: 'sd_1', page: { url: PAGE, path: '/pricing' }, client: { id: site, name: 'Acme' } });
   const extension = await sessionOf(world, bob.id, workspace);
   const planted = await answerOf(
     await callOn(
       world,
       'POST',
       '/feedback',
-      { origin: ORIGIN, body: seed, headers: { Authorization: `Bearer ${extension}` } },
+      { origin: ORIGIN, body: note, headers: { Authorization: `Bearer ${extension}` } },
       { store },
     ),
   );
@@ -270,7 +270,7 @@ describe('the status of a note, chosen in the console (FRU-384)', () => {
           {
             workspace,
             site,
-            seed: noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
+            note: noteFixture({ id: 'sd_2', page: { url: PAGE, path: '/pricing' } }),
             channel: 'extension',
             author: { kind: 'member', account: alice.id },
             place: { kind: 'connector', connector: connector.id },

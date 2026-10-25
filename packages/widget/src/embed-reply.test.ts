@@ -14,7 +14,7 @@ const ENDPOINT = 'https://worker.test';
 const ISSUE = noteIssueFixture({
   id: 'issue_42',
   comments: [],
-  seed: noteFixture({
+  note: noteFixture({
     anchor: {
       selector: '[data-testid="cta"]',
       tag: 'button',

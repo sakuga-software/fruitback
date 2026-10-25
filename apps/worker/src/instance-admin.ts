@@ -399,7 +399,7 @@ export const ADMIN_NOTES_SEARCHED = ['excerpt', 'page', 'site', 'workspace', 'st
 export type AdminNote = {
   workspace: WorkspaceName;
   site: { id: string; origin: string };
-  seed: string;
+  note: string;
   pageUrl: string;
   excerpt: string;
   text?: string;
@@ -697,7 +697,7 @@ function placeView(place: AdminNote['place']) {
 
 function adminNoteView(note: AdminNote) {
   return {
-    id: noteIdOf(note.site.id, note.seed),
+    id: noteIdOf(note.site.id, note.note),
     workspace: note.workspace,
     site: note.site,
     page: pageOf(note.pageUrl),

@@ -5,14 +5,14 @@ import { CLIENT_MAP_EMPTY, CLIENT_MAP_NOT_JSON, READ_CHOSEN_IN_CONSOLE_NOTICE, p
 /**
  * One worker, several client sites (FRU-15).
  *
- * Until now every seed landed in the same team and the same project, whoever sent it, and a read
+ * Until now every note landed in the same team and the same project, whoever sent it, and a read
  * with no `client` parameter answered with **everything on that URL** — which on a shared worker is
  * one client reading another's feedback. This is the map that fixes both: a `clientId` decides where
  * an issue is created and what a read is allowed to see.
  *
  * Two things it is honest about.
  *
- * **`clientId` is still client-asserted.** The seed says who it is, and nothing yet proves it —
+ * **`clientId` is still client-asserted.** The note says who it is, and nothing yet proves it —
  * FRU-9 is where a signed token makes that a claim worth trusting. So `origins` here is not
  * decoration: binding a client to the sites it may be embedded on turns "I am acme" into something
  * the worker can check against the browser's own `Origin`, which is the same trust level CORS
@@ -333,7 +333,7 @@ export type ResolveClientOptions = {
  * One normalisation, and the normalised value is what flows on.
  *
  * Trimming only for the map lookup was not enough, and the way it failed is worth keeping in mind:
- * routing succeeded on a padded id while the **label** written to Linear kept the spaces, so a seed
+ * routing succeeded on a padded id while the **label** written to Linear kept the spaces, so a note
  * posted as `'  acme  '` landed in the right team under `fruitback:  acme  ` and the client's own
  * clean read — filtering on `fruitback:acme` — found nothing. Authorised at both ends, invisible in
  * between. The id has to be normalised before it is used for anything: the route, the label, and the

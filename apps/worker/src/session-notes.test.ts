@@ -22,7 +22,6 @@ const LONG = `The add button is almost invisible until you hover it, and ${'nobo
 type Answer = {
   notes: {
     note: string;
-    seed: string;
     excerpt: string;
     page: { url: string; path: string };
     stage: string;
@@ -105,14 +104,14 @@ async function acme() {
     i: number,
     path: string,
     stage: NoteStage,
-    note: string,
+    text: string,
     author?: string,
   ) => {
-    const seed = noteFixture({ id: `sd_${on.site}_${i}`, note, page: { url: `${on.origin}${path}`, path } });
+    const note = noteFixture({ id: `sd_${on.site}_${i}`, text, page: { url: `${on.origin}${path}`, path } });
     const entry: NoteEntry = {
       workspace: on.workspace,
       site: on.site,
-      seed,
+      note,
       channel: 'extension',
       author: author === undefined ? { kind: 'visitor' } : { kind: 'member', account: author },
       place: { kind: 'connector', connector: linear.id },
@@ -152,7 +151,7 @@ describe('the notes of a whole site, in GET /session/notes (FRU-306)', () => {
       answer.notes.map((note) => note.page.path),
       ['/subscriptions', '/subscriptions', '/cart', '/cart', '/', '/'],
     );
-    const long = answer.notes.find((note) => note.seed === `sd_${shop.id}_1`);
+    const long = answer.notes.find((note) => note.note === `sd_${shop.id}_1`);
     assert.ok(long !== undefined);
     assert.ok(long.excerpt.length <= 64, 'an excerpt, never the text');
     assert.ok(!JSON.stringify(answer).includes('nobody can tell it is clickable'));
@@ -170,11 +169,8 @@ describe('the notes of a whole site, in GET /session/notes (FRU-306)', () => {
         'page',
         'reference',
         'referenceUrl',
-        'seed',
         'stage',
       ]);
-      // FRU-378: the id under its name, and under `seed` for the extension 0.3.0.
-      assert.equal(note.note, note.seed);
     }
     // The member reads it too, with the same session kind.
     assert.equal((await read(world, (await sessionOf(world, bob)).accessToken, `?site=${shop.id}`)).total, 6);
