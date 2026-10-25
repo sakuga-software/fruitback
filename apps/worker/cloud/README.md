@@ -464,7 +464,7 @@ cannot send a note. `$PG` and `$WORKER` are as in Switch 1.
 
 4. **The copy.** The same command, without `--dry-run`. Check:
    - the command exits 0, the two lines say `same`, and the last one says `copied`;
-   - `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT count(*), max(id) FROM seeds'`
+   - `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT count(*), max(id) FROM notes'`
      gives the count of the file;
    - the digests of `fb.db*` are the ones of step 2.
 5. **The environment.** `FRUITBACK_STORE=postgres`; remove `FRUITBACK_SQLITE_PATH`. Nothing else.
@@ -506,7 +506,7 @@ written, with `docker kill` and `docker run` in place of `docker service scale` 
 `--no-client <the site>`:
 
 - the dry run exited 0, said `same` twice, « 3 note(s) of no client go to « site_drill » » and
-  « The next note would be FB-4 », and left `seeds` empty;
+  « The next note would be FB-4 », and left `notes` empty;
 - the copy exited 0 and said `copied`; a third run said that PostgreSQL already holds exactly
   these notes, and exited 0;
 - the digests of `fb.db`, `fb.db-wal` and `fb.db-shm` were the same after the three runs;
