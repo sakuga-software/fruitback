@@ -32,6 +32,7 @@ import { clientOf } from './accounts.ts';
 import { SUSPENSION_REASON_LENGTH } from './instance-admin.ts';
 import { MAX_LISTED_REPOSITORIES } from './github-connector.ts';
 import { SUSPENDED_ERROR, SUSPENDED_STATUS } from './workspace-suspension.ts';
+import { LOGO_TYPES, MAX_LOGO_BYTES, MAX_LOGO_SIDE } from './workspace-logo.ts';
 import { handleRequest } from './app.ts';
 import { beforePostgres } from './before-postgres.fixture.ts';
 
@@ -174,6 +175,17 @@ describe('SECURITY.md states what the code does', () => {
     for (const sentence of [
       `The reason is one line of ${SUSPENSION_REASON_LENGTH} characters at most`,
       `refused with \`${SUSPENDED_STATUS} ${SUSPENDED_ERROR}\``,
+    ]) {
+      assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
+    }
+  });
+
+  it('quotes the types, the bytes and the pixels of the logo of a workspace (FRU-428)', () => {
+    const loose = SECURITY.replace(/\s+/g, ' ');
+    assert.deepEqual([...LOGO_TYPES], ['image/png', 'image/jpeg', 'image/webp']);
+    for (const sentence of [
+      `a PNG, a JPEG or a WebP of ${MAX_LOGO_BYTES / 1_024} KB at most, and no SVG`,
+      `a size of ${MAX_LOGO_SIDE} pixels at most on each side`,
     ]) {
       assert.ok(loose.includes(sentence), `SECURITY.md does not say: ${sentence}`);
     }

@@ -38,7 +38,7 @@ describe('the console API (FRU-99)', () => {
     const after = (await (await call(env, 'GET', '/console/me', { token: alice.token })).json()) as {
       workspaces: unknown[];
     };
-    assert.deepEqual(after.workspaces, [{ id, name: 'Sakuga studio', role: 'owner', suspended: false }]);
+    assert.deepEqual(after.workspaces, [{ id, name: 'Sakuga studio', role: 'owner', logo: null, suspended: false }]);
   });
 
   it('refuses a workspace with no name, or a name nobody can read on one line', async () => {

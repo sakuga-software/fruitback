@@ -61,7 +61,7 @@ describe('renaming a workspace (FRU-236)', () => {
     ] as const) {
       const answer = await rename(people[role].token, name);
       assert.equal(answer.status, 200, role);
-      assert.deepEqual(await answer.json(), { id, name, role }, role);
+      assert.deepEqual(await answer.json(), { id, name, role, logo: null }, role);
       // At once, for everybody of the workspace: nothing keeps the name of before.
       for (const reader of Object.values(people)) assert.equal((await namesOf(env, reader.token))[id], name, role);
     }
