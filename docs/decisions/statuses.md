@@ -41,10 +41,10 @@ Measured on `main` at a00f5d57, 2026-10-21.
 
 | Where                                          | What it does                                                                                                                                                                                        |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/issue.ts`                 | `SEED_STAGES`, `DEFAULT_SEED_STAGE`, `offeredStages`. `SeedIssue` carries `stage` (a strict enum of five) and `stateName` (the word of the store, already shown by the widget).                     |
+| `packages/shared/src/issue.ts`                 | `NOTE_STAGES`, `DEFAULT_NOTE_STAGE`, `offeredStages`. `NoteIssue` carries `stage` (a strict enum of five) and `stateName` (the word of the store, already shown by the widget).                     |
 | `packages/widget/src/theme.ts`                 | One token per stage, `--fruitback-stage-*`, and three foreground tokens `--fruitback-color-on-stage-*` (FRU-334). A host may set them.                                                              |
 | `packages/widget/src/overlay.ts`               | `pinColor` is `stageToken(issue.stage)`. `stateLabel` is `stateName`, or the word of the catalog for the stage.                                                                                     |
-| `packages/widget/src/embed.ts`                 | Reads `GET /feedback` with a cast, not with `seedIssueSchema`: an unknown field is ignored. An unknown `stage` would draw a pin with no colour.                                                     |
+| `packages/widget/src/embed.ts`                 | Reads `GET /feedback` with a cast, not with `noteIssueSchema`: an unknown field is ignored. An unknown `stage` would draw a pin with no colour.                                                     |
 | `apps/worker/src/linear.ts`                    | Reads `state { id name type }`, maps the type to a stage, and applies the exceptions by state id (FRU-102). `listLinearStates` reads `id name type position`, not `color`.                          |
 | `apps/worker/src/accounts.ts`                  | `ConnectorSettings = { showComments, stages }`, in the JSON column `connectors.settings`. At most 200 exceptions, refused whole on one bad entry.                                                   |
 | `apps/worker/src/console-api.ts`               | `GET /connectors/<id>/states` and `POST /connectors/<id>/settings`, `manage-workspace`, Linear only.                                                                                                |
@@ -92,16 +92,16 @@ Two optional fields, both in the read envelope. Built in `packages/shared/src/is
 
 ```ts
 // GET /feedback, next to `stages`: read with offeredStatuses(body.statuses)
-statuses?: SeedStatus[];   // seedStatusSchema
-type SeedStatus = {
+statuses?: NoteStatus[];   // noteStatusSchema
+type NoteStatus = {
   key: string;             // 1 to 200 characters, unique in this answer: `<source>:<key>`
   name: string;            // what the team or the tracker calls it; empty means the catalog word
-  stage: SeedStage;
+  stage: NoteStage;
   color?: string;          // STATUS_COLOR, #rrggbb; absent means the token of the stage
   textColor?: string;      // STATUS_COLOR; only with `color`
 };
 
-// on each SeedIssue (seedIssueSchema)
+// on each NoteIssue (noteIssueSchema)
 status?: string;           // a key of `statuses`; statusOf(issue, statuses) resolves it
 ```
 
@@ -121,9 +121,9 @@ status?: string;           // a key of `statuses`; statusOf(issue, statuses) res
 - **`statusOf(issue, statuses)`** gives the status of an issue, or `undefined` to draw its stage:
   when `status` is absent, names no entry, or names an entry of another stage.
 - **`status` on an issue is strict** (1 to 200 characters), like `url`. Only the worker parses an
-  issue with `seedIssueSchema`, and it parses the ones it builds. The widget reads the answer with a
+  issue with `noteIssueSchema`, and it parses the ones it builds. The widget reads the answer with a
   cast, so the tolerance it needs is in the two readers above.
-- **`SEED_VERSION` stays at 2.** Nothing changes in the seed or in the description block, so the
+- **`SEED_VERSION` stays at 2.** Nothing changes in the note or in the description block, so the
   round trip is untouched.
 
 **This amends one rule of [contract.md](contract.md):** « the contract holds no colour » (FRU-24).
@@ -358,7 +358,7 @@ Routes under `/console/workspaces/<id>/sites/<site>/statuses`, all `manage-sites
 - **The whole write is `setNoteStatus` of the accounts store**, one transaction with the site held
   for update, as the statuses routes of FRU-366: the note of the index, its author, the status, then
   `seeds` and the index. The console's routes already write `seeds` this way (`putSiteStatus`,
-  `removeSiteStatus`); the route of the extension goes through the seed store because it serves a
+  `removeSiteStatus`); the route of the extension goes through the note store because it serves a
   routed store per site.
 - **A status the site no longer has is `409 status-changed`**, not `400 unknown-status`: the console
   offers only what the list read, so a key it sends that is gone was removed in between.

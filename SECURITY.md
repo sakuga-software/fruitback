@@ -125,21 +125,21 @@ Anything a browser posts carrying `verified` has it stripped before storage, wha
 The flag is set only after an HS256 token verifies against the client's key. Without a token, a name
 and an address are a claim by whoever was on the page, and they are stored as one.
 
-### A seed is stored in the clear, in your database or your tracker
+### A note is stored in the clear, in your database or your tracker
 
-The whole seed — note, page URL, selector, the reporter's name and address — is
+The whole note — its text, page URL, selector, the reporter's name and address — is
 stored as it arrived, and **where** depends on the connector:
 
-| Store      | Where a seed lands                                                                              | Who can read it                                                                                                      |
+| Store      | Where a note lands                                                                              | Who can read it                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `linear`   | verbatim in an issue description                                                                | anyone with access to that workspace                                                                                 |
 | `postgres` | `JSON.stringify(seed)` in the `seed` column of the table `seeds`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
 | `github`   | verbatim in an issue body                                                                       | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
-`Authorization` header and never in the seed. On PostgreSQL the database and its dumps are the
+`Authorization` header and never in the note. On PostgreSQL the database and its dumps are the
 boundary, and they deserve the care a database of personal data deserves. (A SQLite file kept the
-seeds of a worker of before FRU-225: `migrate-to-postgres` copies it, and the file and its backups
+notes of a worker of before FRU-225: `migrate-to-postgres` copies it, and the file and its backups
 stay personal data until they are deleted.)
 
 **On PostgreSQL one database holds the notes of every workspace** (FRU-218), in the clear, beside
@@ -860,7 +860,7 @@ A comment coming back from the tracker is rendered as `textContent`, never as ma
 written by anyone who can comment on the issue, displayed inside a client's page.
 
 The widget bundles no rasteriser. If you supply `captureScreenshot`, the image lands in **your**
-storage and the seed holds a URL; whether that URL is public is your decision, not the widget's. The
+storage and the note holds a URL; whether that URL is public is your decision, not the widget's. The
 files that a note carries through the worker are another path: see _The files of a note, in transit_.
 
 ### The identity verifier is hand-written
@@ -1387,7 +1387,7 @@ sets the list in the console, and a note goes to the first place unless a member
   worker from what the tracker answers when an admin sets the list, never from the request. The one
   exception is a repository of GitHub (FRU-359): its label is its name, `owner/name` in lower case,
   which the worker reads strictly from the request. GitHub is asked when a note goes, not here.
-- **A member chooses with `POST /feedback?destination=<id>`.** The body stays the seed. An id the
+- **A member chooses with `POST /feedback?destination=<id>`.** The body stays the note. An id the
   site does not have, and a caller who may not see the tracker, both get `403
   destination-not-allowed`, and nothing is written, in the first place either.
 - **What says that a caller is a person of the workspace is the worker key, never a claim.** A site
@@ -2165,7 +2165,7 @@ Each one waits in the database of the worker until the tracker has it, and no lo
   over https, to the address the workspace connected.
   test:`answers 404 to a signature that ended, that is not this one, or to a file no note took`.
 - **The pictures of before FRU-331** end 7 days after the migration, which deletes none; the sweep
-  removes them then. Until then a waiting delivery whose seed names one carries it by a signed
+  removes them then. Until then a waiting delivery whose note names one carries it by a signed
   address, and a note of before sent again by its sender goes with it; nothing else reads them.
 - **Who reads a file after: the people of the tracker.** A read of the page says the names of the
   files of a note and the address the tracker gave each, for the readers of the note; a guest reads

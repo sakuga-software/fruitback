@@ -35,7 +35,7 @@ for trying the widget, not the product: build features in `packages/widget`.
 
 |                      |                                                                                |
 | -------------------- | ------------------------------------------------------------------------------ |
-| `packages/shared`    | the seed contract, shared by the browser and the server                        |
+| `packages/shared`    | the note contract, shared by the browser and the server                        |
 | `packages/widget`    | everything that runs in the browser                                            |
 | `packages/fruitback` | the package a client installs; it re-exports the two above and defines nothing |
 | `packages/element`   | the widget as a custom element, `<fruitback-widget>`                           |
@@ -138,24 +138,25 @@ None of these can be guessed from the code, and most of them have broken somethi
 `packages/shared` is the contract between the widget and the worker, and every published version of the
 widget depends on it. Treat a change there as breaking until you have shown it is not.
 
-- **A seed survives the round trip.** `parseSeedFromDescription(buildIssueDescription(seed))` returns
-  exactly `seed`. So a schema has no default values, and a seed holds no field the widget cannot rebuild
+- **A note survives the round trip.** `parseNoteFromDescription(buildIssueDescription(seed))` returns
+  exactly `seed`. So a schema has no default values, and a note holds no field the widget cannot rebuild
   from what is stored.
-- **If the shape of a seed changes, bump `SEED_VERSION`.** Readers accept older versions and refuse
-  newer ones, instead of silently dropping the fields they do not know.
-- **A field of the read answer is not a field of the seed.** `GET /feedback` adds `url` and `stages` to the
-  answer, and `url` and `comments` to each issue. They are not stored in the seed, so they do not change
-  `SEED_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
-  `seed.page.url` is not one of them: it is part of the seed.
-- **The parsers never throw.** A seed is read back from an issue description a person can edit, so
-  `parseSeed*` returns `{ ok: false, reason }`.
+- **If the shape of a note changes, bump `NOTE_VERSION`.** `SEED_VERSION` stays at 2 for good: no
+  writer makes a new version of `fruitback.seed`. Readers accept older versions and refuse newer ones,
+  instead of silently dropping the fields they do not know.
+- **A field of the read answer is not a field of the note.** `GET /feedback` adds `url` and `stages` to the
+  answer, and `url` and `comments` to each issue. They are not stored in the note, so they do not change
+  `NOTE_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
+  `seed.page.url` is not one of them: it is part of the note.
+- **The parsers never throw.** A note is read back from an issue description a person can edit, so
+  `parseNote*` returns `{ ok: false, reason }`.
 
 ## Adding a connector
 
-A connector puts seeds in a store. Linear, PostgreSQL and GitHub Issues exist, and a new one is the
+A connector puts notes in a store. Linear, PostgreSQL and GitHub Issues exist, and a new one is the
 contribution we expect most often.
 
-1. Implement `SeedStore` from [`apps/worker/src/store.ts`](apps/worker/src/store.ts). `findForPage` says
+1. Implement `NoteStore` from [`apps/worker/src/store.ts`](apps/worker/src/store.ts). `findForPage` says
    what to return, not how: filter the way your store can, then compare `seed.page.url` exactly.
 2. Declare it with `defineStore`, and add one entry to `STORE_SPECS` in `stores.ts`. Name your
    environment variables in `envNames`, so that a boot error names the variable an operator sets.
@@ -166,14 +167,14 @@ contribution we expect most often.
    then offers only those.
 5. When the service fails, throw `StoreError`: the worker answers `502 store-unavailable`, and the widget
    keeps the note. Parse every row the service returns; never trust it.
-6. Add your store to `apps/worker/src/store-conformance.test.ts`, the suite every store passes: a seed
+6. Add your store to `apps/worker/src/store-conformance.test.ts`, the suite every store passes: a note
    read back unchanged, a page kept apart from the same page with a query string, one client kept from
    another, a client routed to the tenant its configuration names, an unknown state drawn as `new`,
    replies oldest first and capped, and an error, an unreadable answer or an unreachable provider
    answered as `502 store-unavailable`. A remote store runs against a double of the service that keeps
    what it receives.
 7. Add a row to the two store tables of [docs/self-hosting.md](docs/self-hosting.md), and to the store
-   table of [SECURITY.md](SECURITY.md): where a seed lands, and who can read it there.
+   table of [SECURITY.md](SECURITY.md): where a note lands, and who can read it there.
 
 [docs/decisions/worker.md](docs/decisions/worker.md) says what the SQLite connector (gone since FRU-226)
 and the GitHub connector changed in the interface, and why.

@@ -296,7 +296,7 @@ immutable.
   `.env.example` repeats each one beside its variable.
 - **An old SQLite deployment keeps its data in an anonymous volume.** The image declared
   `VOLUME /data` until FRU-226, and the old file mounted nothing there. The new named volume starts empty, so the
-  upgrade section copies each database out with `.backup` and back in with `.restore`: the seeds,
+  upgrade section copies each database out with `.backup` and back in with `.restore`: the notes,
   and the sessions when `FRUITBACK_SESSION_PATH` was set. Tested on a stand-in for the old file with
   sessions on: the pin and the pairing code were both back after the restore.
 - **The `docker run` example sets `TRUSTED_PROXY_HOPS=0`.** It publishes the port directly, like the

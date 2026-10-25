@@ -11,7 +11,8 @@ _The decisions_ at the end, and the rules below follow them.
 - **The five stages are `new`, `todo`, `progress`, `done` and `closed`** (FRU-355). One lowercase word
   each: the words of the labels of FRU-334, and the keys the console kit already used.
 - **Only the names changed.** Five stages, the same order, the same meaning, the same colours.
-  `stage` is still the name of the field, and `seed` the name of a note's payload (decision 2).
+  `stage` is still the name of the field. A note's payload, `seed` then, was renamed
+  apart, by FRU-378 (decision 2): it is `Note` now.
 - **The old names are gone everywhere, at once, with no compatibility** (decisions 3 and 4). No
   reader maps an old name, the worker translates nothing, the read carries no version, and no CSS
   token keeps an alias. An old name is now what any unknown stage is.

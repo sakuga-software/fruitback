@@ -4,7 +4,7 @@
 
 ## Contract and security
 
-- [ ] This changes `packages/shared`. The description says how, and `SEED_VERSION` is bumped if a seed changes shape.
+- [ ] This changes `packages/shared`. The description says how, and `NOTE_VERSION` is bumped if a note changes shape (`SEED_VERSION` stays at 2).
 - [ ] This changes the threat model, and `SECURITY.md` says so.
 
 ## Test plan

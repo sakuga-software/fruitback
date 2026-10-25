@@ -9,7 +9,7 @@ removes it from anything a browser sends.
 token with, and the note is refused.** The option exists for a site that already knows who its
 visitor is: its backend mints a short-lived **HS256 JWT** (`sub`, an `exp`, and optionally `name` and
 `email`) and hands it to the widget, which sends it in the `Authorization` header and never inside the
-seed. This is what it looks like, for the day a site of the console gets a key:
+note. This is what it looks like, for the day a site of the console gets a key:
 
 ```ts
 init({

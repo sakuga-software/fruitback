@@ -1,10 +1,10 @@
 name: New connector
-description: Propose a store for the seeds, beside Linear, PostgreSQL and GitHub Issues.
+description: Propose a store for the notes, beside Linear, PostgreSQL and GitHub Issues.
 body:
   - type: markdown
     attributes:
       value: |
-        A connector implements `SeedStore` from `apps/worker/src/store.ts`. CONTRIBUTING.md lists what a connector pull request must contain. The questions below are the ones that decided the shape of the existing connectors.
+        A connector implements `NoteStore` from `apps/worker/src/store.ts`. CONTRIBUTING.md lists what a connector pull request must contain. The questions below are the ones that decided the shape of the existing connectors.
   - type: input
     id: store
     attributes:
@@ -15,7 +15,7 @@ body:
   - type: textarea
     id: find
     attributes:
-      label: How it finds the seeds of one page
+      label: How it finds the notes of one page
       description: A server-side filter, a search, a query, or a walk through everything. The connector compares `seed.page.url` exactly after that, so say how close the filter gets.
     validations:
       required: true
@@ -30,7 +30,7 @@ body:
     id: comments
     attributes:
       label: The team's replies
-      description: Can the store return comments on a seed, oldest first?
+      description: Can the store return comments on a note, oldest first?
   - type: textarea
     id: credentials
     attributes:
@@ -41,8 +41,8 @@ body:
   - type: textarea
     id: exposure
     attributes:
-      label: Where a seed lands, and who can read it there
-      description: A seed holds the note, the page URL and the reporter's name and address. This row goes into the store table of SECURITY.md.
+      label: Where a note lands, and who can read it there
+      description: A note holds its text, the page URL and the reporter's name and address. This row goes into the store table of SECURITY.md.
     validations:
       required: true
   - type: textarea

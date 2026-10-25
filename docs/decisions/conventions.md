@@ -272,7 +272,7 @@ Node 25.8.1, two workers)
 
 ### The rules, in short
 
-- **StrykerJS mutates the seed contract and the core of the worker** (FRU-172). The seed contract
+- **StrykerJS mutates the note contract and the core of the worker** (FRU-172). The note contract
   with its `tap` runner, which drives `node --test`; the worker with its `vitest` runner and the
   coverage of each test (FRU-346, below). The scope is the `mutate` list of `packages/shared/stryker.config.json`
   and of `apps/worker/stryker.config.json`. `mutation.test.ts` fails on a file of

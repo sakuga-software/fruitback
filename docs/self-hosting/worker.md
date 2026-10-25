@@ -4,8 +4,8 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 
 | Route                            | Status                                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST /feedback`                 | plants a seed in the configured store, answers `201` with the issue: `id`, `identifier`, and `url` when the store has a page to open |
-| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, state, stage                                                                                   |
+| `POST /feedback`                 | plants a note in the configured store, answers `201` with the issue: `id`, `identifier`, and `url` when the store has a page to open |
+| `GET /feedback?url=…[&client=…]` | the notes of that page: anchor, note, state, stage                                                                                   |
 | `OPTIONS /feedback`              | CORS preflight, never reaches the store                                                                                              |
 | `GET /health`                    | `200` when the configuration is valid, `503` naming what is wrong when it is not                                                     |
 
@@ -53,7 +53,7 @@ be created is dropped and the feedback still goes through — losing a label is 
 losing the client's note is a bug.
 
 The read path is one Linear query, narrowed server-side by the `fruitback` label, the per-client
-label and `description contains <canonical url>`. `contains` being a substring match, the seed's own
+label and `description contains <canonical url>`. `contains` being a substring match, the note's own
 `page.url` is re-checked exactly, or `/pricing` would return the pins of `/pricing?tab=annual`.
 Answers are cached for 15 s: the same page opened by a room full of reviewers costs one call against
 the Linear quota, and a failed call is never cached.

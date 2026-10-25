@@ -153,7 +153,7 @@ first half of the move**: the files land on the volume of the new file, and
 copies them into the database. The blocks below were measured before FRU-225; the last command of the
 second one starts a worker that refuses to serve until `.env` has the lines that section names.
 
-**If the old deployment kept SQLite seeds or extension sessions under `/data`, copy them out first.**
+**If the old deployment kept SQLite notes or extension sessions under `/data`, copy them out first.**
 The old file mounted no volume, so `/data` was an anonymous volume that the image of before declared. The new
 file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
 gone. The old volume is not deleted, but nothing mounts it.

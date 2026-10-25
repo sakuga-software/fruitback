@@ -34,7 +34,7 @@ still why the Linear connector looks the way it does.
 widget (client site)            worker (proxy)              the store (here, linear)
 ──────────────────              ──────────────              ──────
 react-grab picker      ──POST──▶ create issue      ──────▶  issue + labels
-comment popover                  (server-side token)        description = seed
+comment popover                  (server-side token)        description = note
 pin overlay            ◀──GET─── query by label+URL ◀─────  status, comments
 ```
 
@@ -63,16 +63,16 @@ account. Threads and assignees still belong to the store, and so does the stage 
 tracker. Each site has its own statuses on top of the five stages, set in the console (FRU-352): the
 console lists the notes, and a tracker you already run stays the place to triage them. The sentence that stood here said "no
 dashboard and no user accounts", and before FRU-26 "no database, no session store" as well. Each
-outlived itself in turn: a file of the worker's own for the seeds (FRU-31) and another for the
+outlived itself in turn: a file of the worker's own for the notes (FRU-31) and another for the
 sessions (FRU-42), then the accounts (FRU-141), then PostgreSQL for all of it.
 
-## The seed
+## The note
 
-A **seed** is one piece of feedback planted on an element. **Where** it is stored is the connector's
+A **note** is one piece of feedback planted on an element. **Where** it is stored is the connector's
 business: `linear` puts it as a JSON block inside the issue description, under a human-readable
 summary, `github` puts the same block in the issue body, and `postgres` puts it in a column. The two
 decisions below were made for the Linear connector, and they are what the markdown codec exists for.
-The GitHub connector uses the same codec, and finds a page's seeds by label instead of by
+The GitHub connector uses the same codec, and finds a page's notes by label instead of by
 `description contains`: see _GitHub Issues, and the stages it cannot say_ in
 [decisions/worker.md](https://github.com/sakuga-software/fruitback/blob/main/docs/decisions/worker.md).
 
@@ -80,12 +80,12 @@ Two decisions worth knowing:
 
 **Why the description and not a Linear custom field** — it is portable (no workspace admin setup,
 survives an export) and Linear can filter on it server-side with
-`description: { contains: <canonical url> }`, which is how "the seeds of this page" is fetched
+`description: { contains: <canonical url> }`, which is how "the notes of this page" is fetched
 without walking every issue. The cost is that a human can corrupt the block, so the parser is
 deliberately tolerant: it accepts any fenced block, with or without a language tag, backticks or
 tildes, CRLF, even an unterminated fence, and finds ours by its `kind` field.
 
-**Why the anchor is redundant** — a selector breaks the moment the site is redeployed. Every seed
+**Why the anchor is redundant** — a selector breaks the moment the site is redeployed. Every note
 therefore carries several independent ways to find the element again (`selector`, test id, text
 excerpt, `domPath`, and bounds as a share of the document). When none of them resolve, the pin
 becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
@@ -114,7 +114,7 @@ See [`packages/shared/src/note.ts`](https://github.com/sakuga-software/fruitback
 ## Layout
 
 ```
-packages/shared    the seed contract: schema, markdown codec, round-trip   ✅
+packages/shared    the note contract: schema, markdown codec, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to the store  ✅
 apps/console       the console: sign-in, workspaces, sites                 ✅
 packages/widget    capture + overlay + Shadow DOM host + popover          ✅
