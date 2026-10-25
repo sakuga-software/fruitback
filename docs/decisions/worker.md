@@ -4297,6 +4297,10 @@ at version 3, and no reader takes the payload of before.
   writes one: a rewritten issue leaves the search, and would move the pages under the reader.
 - **It can run twice**, and `--dry-run` lists without writing. A failure of one issue is said, the
   others go on, and the command ends with code 1.
+- **A row is written only if it still holds what was read** (`WHERE id AND payload` in
+  `rewrite-notes-postgres.ts`, review of #605): the worker runs while the command does, and a row
+  that it wrote in between is left as it wrote it, and not counted. test:`leaves a row that another
+  worker wrote between the read and the write, and does not count it`.
 - **The read cache changed its prefix** (`read-v3` in `cache.ts`): an answer of before, with the
   issues of before, is never served to a widget of now. The widget keeps its drafts under a new key
   of `sessionStorage`, for the same reason.

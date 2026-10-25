@@ -16,6 +16,7 @@ import { createPgliteDatabase } from './postgres.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
 import { migrate } from './postgres-migrate.ts';
+import { rewriteRows } from './postgres-stores.ts';
 import {
   LEGACY_KIND,
   fromLegacy,
@@ -208,6 +209,31 @@ describe('rewrite-notes on a database (FRU-378)', () => {
       'notes kept by the worker: 0 rewritten, of 2',
       'deliveries in the queue: 0 rewritten, of 1',
     ]);
+  });
+
+  it('leaves a row that another worker wrote between the read and the write, and does not count it', async () => {
+    const { database } = await filled();
+    const written = JSON.stringify(noteFixture({ id: 'sd_old', text: 'Written by a worker still running' }));
+    let racing: Promise<unknown> | undefined;
+
+    const counts = await rewriteRows(database, {
+      payload: rewritePayload,
+      // Called once the rows are read and before any is written: the update of the other worker lands
+      // in between, as the database runs its statements in the order they came.
+      body: (text) => {
+        racing ??= rowsOf(
+          database,
+          `UPDATE notes SET payload = '${written.replaceAll("'", "''")}' WHERE payload LIKE '%${LEGACY_KIND}%'`,
+        );
+
+        return rewriteDeliveryBody(text);
+      },
+      dryRun: false,
+    });
+    await racing;
+
+    assert.deepEqual(counts, { notes: { rewritten: 0, of: 2 }, deliveries: { rewritten: 1, of: 1 } });
+    assert.equal((await payloads(database))[0], written);
   });
 });
 

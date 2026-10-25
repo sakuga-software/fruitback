@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Database } from './postgres.ts';
 import { migrate } from './postgres-migrate.ts';
 import { connectors, deliveries, notes } from './postgres-schema.ts';
@@ -28,7 +28,7 @@ export async function rewriteRows(
   const keptNow = kept.flatMap((row) => {
     const next = payload(row.payload);
 
-    return next === undefined ? [] : [{ id: row.id, payload: next }];
+    return next === undefined ? [] : [{ id: row.id, payload: next, before: row.payload }];
   });
   const queued = await database.run((db) =>
     db.select({ id: deliveries.id, body: deliveries.body }).from(deliveries).orderBy(asc(deliveries.id)),
@@ -36,23 +36,45 @@ export async function rewriteRows(
   const queuedNow = queued.flatMap((row) => {
     const next = body(row.body);
 
-    return next === undefined ? [] : [{ id: row.id, body: next }];
+    return next === undefined ? [] : [{ id: row.id, body: next, before: row.body }];
   });
 
-  if (!dryRun) {
-    // One statement for each row: a run that stops leaves rows of now and rows of before, and the next
-    // run takes the rows of before only.
-    for (const row of keptNow) {
-      await database.run((db) => db.update(notes).set({ payload: row.payload }).where(eq(notes.id, row.id)));
-    }
-    for (const row of queuedNow) {
-      await database.run((db) => db.update(deliveries).set({ body: row.body }).where(eq(deliveries.id, row.id)));
-    }
+  if (dryRun) {
+    return {
+      notes: { rewritten: keptNow.length, of: kept.length },
+      deliveries: { rewritten: queuedNow.length, of: queued.length },
+    };
+  }
+
+  // One statement for each row, outside a transaction: a run that stops leaves rows of now and rows of
+  // before, and the next run takes the rows of before only. Each update holds the text it read, so a row
+  // that a worker still running wrote again since is left as that worker wrote it, and is not counted.
+  let notesRewritten = 0;
+  for (const row of keptNow) {
+    const done = await database.run((db) =>
+      db
+        .update(notes)
+        .set({ payload: row.payload })
+        .where(and(eq(notes.id, row.id), eq(notes.payload, row.before)))
+        .returning({ id: notes.id }),
+    );
+    notesRewritten += done.length;
+  }
+  let deliveriesRewritten = 0;
+  for (const row of queuedNow) {
+    const done = await database.run((db) =>
+      db
+        .update(deliveries)
+        .set({ body: row.body })
+        .where(and(eq(deliveries.id, row.id), eq(deliveries.body, row.before)))
+        .returning({ id: deliveries.id }),
+    );
+    deliveriesRewritten += done.length;
   }
 
   return {
-    notes: { rewritten: keptNow.length, of: kept.length },
-    deliveries: { rewritten: queuedNow.length, of: queued.length },
+    notes: { rewritten: notesRewritten, of: kept.length },
+    deliveries: { rewritten: deliveriesRewritten, of: queued.length },
   };
 }
 

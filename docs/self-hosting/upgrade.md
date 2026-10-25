@@ -88,6 +88,12 @@ answer of `GET /session/notes` and needs 0.4.0; a receiver of the REST connector
 1 receives version 2 (`docs/rest-connector.md`); `node server.mjs forget` takes `--note`, and
 `migrate-to-postgres` takes `--notes`.
 
+**The widget 0.3.0 and the worker 0.4.0 do not work together**: the widget cannot send a note
+(`invalid-note`) and draws no pin. Update the worker, the widget and the extension at the same time.
+The widget 0.4.0 keeps the notes saved for later under a new key of `sessionStorage`, so **the drafts
+that the widget 0.3.0 kept in an open tab are lost** (Mathieu's decision of 2026-10-25: no reader of
+the payload of before in the widget). A draft lives only as long as its tab.
+
 ## Upgrading a worker that has no database (FRU-225)
 
 A worker with no `FRUITBACK_DATABASE_URL` stops at the upgrade: `/health` answers `503`, every other
