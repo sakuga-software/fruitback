@@ -60,6 +60,7 @@ import { OWN_SOURCE, isBuiltIn, originOf, readSiteStatus } from './site-statuses
 import { invalidatePages } from './note-helpers.ts';
 import { DEFAULT_NOTE_STAGE, MAX_STATUSES, NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { StoreError } from './store.ts';
+import { pairsByCode } from './pair-page.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 import { memberSuspensionView, refusedWhileSuspended } from './workspace-suspension.ts';
 import { handleLogo } from './workspace-logo.ts';
@@ -1247,6 +1248,8 @@ export async function handleConsoleApi(
   }
 
   if (rest === '/connect') {
+    // The console of the Cloud opens `/connect` and asks for no code (FRU-313, FRU-325).
+    if (!pairsByCode(context.publicUrl)) return json(404, { error: 'not-found' }, headers);
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('read-feedback')) return forbidden();
 

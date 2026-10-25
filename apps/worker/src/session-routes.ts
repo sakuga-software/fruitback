@@ -5,7 +5,7 @@ import type { CorsDecision } from './cors.ts';
 import { type WorkerConfig, hasSessions } from './env.ts';
 import type { Kv } from './kv.ts';
 import type { NoteIndex } from './notes-index.ts';
-import { pairPage } from './pair-page.ts';
+import { pairPage, pairsByCode } from './pair-page.ts';
 import type { RequestContext, Served } from './request-context.ts';
 import {
   type SessionIdentity,
@@ -47,6 +47,7 @@ export async function handlePairing(request: Request, served: Served, context: R
   if (context.sessionStore === undefined && !hasSessions(served)) {
     return json(404, { error: 'not-found' });
   }
+  if (!pairsByCode(served.publicUrl)) return json(404, { error: 'not-found' });
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' });
 
   return pairPage();
@@ -151,6 +152,8 @@ async function handleSession(
   if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
 
   if (pathname === '/session/pair') {
+    // The Cloud pairs no extension by a code (FRU-325). A session paired before still refreshes.
+    if (!pairsByCode(config.publicUrl)) return json(404, { error: 'not-found' }, headers);
     const code = typeof body.code === 'string' ? body.code : undefined;
     if (code === undefined) return json(400, { error: 'invalid-body' }, headers);
 

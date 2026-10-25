@@ -1016,6 +1016,12 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
 
 ### The rules, in short
 
+- **The Cloud pairs nothing by a code** (FRU-325). `pairsByCode` of `pair-page.ts` reads the host of
+  `FRUITBACK_PUBLIC_URL`: at `api.fruitback.com`, the mint of the console, `GET /pair` and
+  `POST /session/pair` answer `404`, and the `pair` command prints no code. The refresh of a session
+  paired before is unchanged. The host is the one of `CLOUD_API_HOST` in the console, and a test reads
+  both: the two must not drift. A flag would need one more variable in Dokploy for one host.
+
 - **Two values, and only one is a secret.** `request` is public (it is in the address of the console);
   `claim` is the secret of the extension, and the one thing that opens a session. Both are stored as
   digests, in `connect_requests`. A route never takes the one for the other: `isRequestId` and

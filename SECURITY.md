@@ -591,11 +591,16 @@ host of the worker the console calls (`connectsBySignIn`, `api.fruitback.com`). 
 
 - **A self-hosted console still opens `<worker>/pair#<code>`**, minted by
   `POST /console/workspaces/<id>/connect`. The extension of the store signs in to the Cloud alone, so
-  a pairing is the one way it gets a session of another worker. That route and `GET /pair` stay on
-  every worker, the Cloud's included: a Cloud console no longer calls the route, but nothing on the
-  worker refuses it there yet.
-- **A session that was paired before stays valid**: `POST /session/pair` and the refresh of a paired
-  session are unchanged, and nothing is revoked. Such a session ends as before, when its refresh
+  a pairing is the one way it gets a session of another worker.
+- **The worker of the Cloud pairs nothing by a code** (FRU-325). If the host of `FRUITBACK_PUBLIC_URL`
+  is `api.fruitback.com` (`pairsByCode` of `pair-page.ts`, the host the console reads too), then
+  `POST /console/workspaces/<id>/connect`, `GET /pair` and `POST /session/pair` answer `404`, as on
+  a worker with no sessions, and the `pair` command of the container prints no code. A code made
+  before is not spent there either. test:`spends no code there, even a code that is valid`, and its
+  control on a worker of another host. On 2026-10-25 the Cloud kept two codes, both spent on
+  2026-10-12, and one live session that a code opened.
+- **A session that was paired before stays valid**: the refresh of a paired session is unchanged, on
+  the Cloud too, and nothing is revoked. test:`still refreshes a session that was paired before`. Such a session ends as before, when its refresh
   token is revoked, when the person leaves the workspace (`stillOfTheWorkspace`), or when it is
   not refreshed for 30 days. The popup still shows it as « Paired as ».
 
@@ -1860,7 +1865,7 @@ test:`refuses POST connect to the token of an extension, in another workspace an
 one test for each other route.
 
 `POST /console/workspaces/<id>/connect` mints a pairing code for the person, in that workspace
-(FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
+(FRU-100), except on the Cloud, where it answers `404` (FRU-325). The console puts it after the `#` of the worker's pairing page, and the extension spends it
 as it spends a code an operator minted. **A guest's session reaches the sites shared with them
 only** (FRU-250): its token names the workspace, and every route that answers a thing of one site
 reads the role and the sites of the person at the request (below, « The guest of one site »).
