@@ -6,6 +6,7 @@ import {
   type Workspace,
   callUntilAnswered,
   knownMe,
+  logoSource,
   onWorkspaceSuspended,
   saveLanguage,
 } from '../api';
@@ -28,9 +29,11 @@ export type WorkspaceContext = {
   workspace: Workspace;
   /** The worker renamed the workspace (FRU-414): the rail shows the new name at once. */
   renamed: (workspace: Workspace) => void;
+  /** The worker kept a new logo, or removed it (FRU-428): the rail shows it at once. */
+  logoChanged: (logo: string | null) => void;
 };
 
-type Read = Omit<WorkspaceContext, 'renamed'>;
+type Read = Omit<WorkspaceContext, 'renamed' | 'logoChanged'>;
 
 export function useWorkspace(): WorkspaceContext {
   return useOutletContext<WorkspaceContext>();
@@ -117,16 +120,20 @@ export default function WorkspaceFrame() {
   if (context === undefined || context.workspace.id !== id)
     return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
+  /** Writes `change` in the workspace on screen, and asks `/console/me` again for the tab to keep it. */
+  const changed = (change: Partial<Pick<Workspace, 'name' | 'logo'>>) => {
+    const id = context.workspace.id;
+    const apply = (each: Workspace) => (each.id === id ? { ...each, ...change } : each);
+    setContext({
+      me: { ...context.me, workspaces: context.me.workspaces.map(apply) },
+      workspace: apply(context.workspace),
+    });
+    askAgain((count) => count + 1);
+  };
   const outlet: WorkspaceContext = {
     ...context,
-    renamed: (workspace) => {
-      const name = (each: Workspace) => (each.id === workspace.id ? { ...each, name: workspace.name } : each);
-      setContext({
-        me: { ...context.me, workspaces: context.me.workspaces.map(name) },
-        workspace: name(context.workspace),
-      });
-      askAgain((count) => count + 1);
-    },
+    renamed: (workspace) => changed({ name: workspace.name }),
+    logoChanged: (logo) => changed({ logo }),
   };
 
   const sections = SECTIONS.filter((section) => section.built);
@@ -315,12 +322,7 @@ export function Rail({
   useLocale();
   const name = (
     <>
-      <span
-        aria-hidden="true"
-        className="flex h-[32px] w-[32px] flex-none items-center justify-center rounded-field bg-page text-small leading-auto font-bold text-ink"
-      >
-        {workspace.name.trim().charAt(0).toUpperCase()}
-      </span>
+      <WorkspaceMark workspace={workspace} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body leading-auto font-semibold">{workspace.name}</span>
         <span className="block text-tiny text-rail-muted">{t('Cloud workspace')}</span>
@@ -381,6 +383,38 @@ export function Rail({
         <RailNav label={t('Instance')} entries={[{ to: '/admin', label: t('Administration'), current: false }]} />
       ) : null}
     </RailFrame>
+  );
+}
+
+/**
+ * The mark of a workspace: its logo (FRU-428), or the initial of its name when it has none, or when
+ * its logo does not load. The logo is drawn whole in its square, whatever its pixels: the worker
+ * resizes nothing. Decorative: the name is beside it.
+ */
+export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; size?: 32 | 64 }) {
+  const source = logoSource(workspace);
+  // The address of the logo that did not load: another address (a new logo) is tried again.
+  const [broken, setBroken] = useState<string | undefined>();
+  const box = size === 64 ? 'h-[64px] w-[64px] text-section' : 'h-[32px] w-[32px] text-small';
+  if (source !== undefined && source !== broken)
+    return (
+      <img
+        src={source}
+        alt=""
+        width={size}
+        height={size}
+        onError={() => setBroken(source)}
+        className={`${box} flex-none rounded-field bg-page object-contain`}
+      />
+    );
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`${box} flex flex-none items-center justify-center rounded-field bg-page leading-auto font-bold text-ink`}
+    >
+      {workspace.name.trim().charAt(0).toUpperCase()}
+    </span>
   );
 }
 

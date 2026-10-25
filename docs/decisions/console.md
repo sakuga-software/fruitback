@@ -323,8 +323,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the name is a link to `/w/<id>/settings`, `aria-current` there; with several, the menu of the
   workspaces ends with « Workspace settings », in a group of its own under a rule that chooses nothing
   (`after` of `Menu`). The screen renames the workspace for an owner or an admin (FRU-236), and the
-  rail shows the new name at once; another role reads the name, locked. **No logo**: a workspace has
-  none in the worker, and no route keeps one. The settings are no section of the rail, and
+  rail shows the new name at once; another role reads the name, locked. **The logo** (FRU-428):
+  `WorkspaceMark` draws it at 32 px in the rail and 64 px on the settings (`object-contain`, the
+  worker resizes nothing), and the initial of the name when there is none or it does not load. An
+  owner or an admin sends it (`FilePick` of the kit), replaces it and removes it in one press, with
+  no confirmation: it is sent again as easily. The console refuses a type that is not PNG, JPEG or
+  WebP, and a file over 512 KB, before it sends anything (`workspace-logo.ts`), and says each
+  refusal of the worker. `e2e/console-workspace-logo.spec.ts` holds it. The settings are no section of the rail, and
   `frame.test.ts` names them as the one screen of a workspace that is not. **At 900 px and under the sections are one row
   that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
   document is 547 px wide). An edge of the row that hides a section fades, and the section on
