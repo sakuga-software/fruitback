@@ -24,6 +24,8 @@ import {
   scopeOf,
 } from '../../../tools/mutation/scope.ts';
 import { apart, git } from './git.fixture.ts';
+import base from '../vitest.config.ts';
+import mutation, { mutationOrder } from '../vitest.mutation.config.ts';
 
 /**
  * The mutation job, and the line its score may not go under (FRU-172).
@@ -388,14 +390,63 @@ describe('the configuration of the mutation job', () => {
     assert.equal(testRunner, 'vitest');
     assert.deepEqual(
       vitest,
-      { configFile: 'vitest.config.ts', related: false },
+      { configFile: 'vitest.mutation.config.ts', related: false },
       'a test is left out of the mutation run of the worker',
+    );
+    // The configuration of the mutation run changes the order of the tests, and nothing else.
+    const { sequence, ...rest } = mutation.test ?? {};
+    assert.deepEqual(rest, base.test, 'the mutation run of the worker runs other tests, or runs them otherwise');
+    assert.ok(
+      sequence?.sequencer !== undefined,
+      'the mutation run of the worker runs its tests in the order of vitest',
     );
     assert.match(
       config,
       /^ {4}include: \['src\/\*\*\/\*\.test\.ts'\],$/m,
       'a test is left out of the mutation run of the worker',
     );
+  });
+
+  /**
+   * vitest runs the largest test files first. Under StrykerJS a mutant then ran the route tests on
+   * PGlite before the unit test that kills it: 87.7 tests a mutant on `cache.ts`, and 4.5 in this
+   * order (FRU-451).
+   */
+  it('runs the test of the mutated file first, then the other test files, smallest first', () => {
+    const files = [
+      { path: 'src/app.test.ts', size: 90_000 },
+      { path: 'src/cors.test.ts', size: 9_000 },
+      { path: 'src/cache.test.ts', size: 12_000 },
+      { path: 'src/batch.test.ts', size: 9_000 },
+    ];
+
+    assert.deepEqual(mutationOrder(files, 'src/cache.ts'), [
+      'src/cache.test.ts',
+      'src/batch.test.ts',
+      'src/cors.test.ts',
+      'src/app.test.ts',
+    ]);
+    // With no file named, or a file with no test of its name, the smallest first.
+    assert.deepEqual(mutationOrder(files, undefined), mutationOrder(files, 'src/kv.ts'));
+    assert.deepEqual(mutationOrder(files, undefined), [
+      'src/batch.test.ts',
+      'src/cors.test.ts',
+      'src/cache.test.ts',
+      'src/app.test.ts',
+    ]);
+  });
+
+  /**
+   * The order reads the file of the job from `MUTATE`, the variable that gives it to `--mutate`.
+   */
+  it('gives StrykerJS the file of the job in MUTATE', () => {
+    const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
+      jobs: { mutation: { steps: { name?: string; run?: string; env?: Record<string, string> }[] } };
+    };
+    const mutate = jobs.mutation.steps.find((step) => step.name === 'Mutate');
+
+    assert.equal(mutate?.env?.MUTATE, '${{ matrix.file }}');
+    assert.match(String(mutate?.run), /--mutate "\$MUTATE"/);
   });
 
   /**
