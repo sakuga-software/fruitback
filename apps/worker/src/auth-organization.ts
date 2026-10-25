@@ -402,9 +402,13 @@ export async function handleOrganizationRoutes(
     workspace ??
     (path === '/organization/accept-invitation' ? await workspaceOfInvitation(auth, read.input) : undefined);
   const call: Call = { request, path, rule, input: read.input, workspace, changed, auth, mine };
+  // FRU-450: a refusal of an invitation may give it the primary address of the person for the call
+  // (`asPrimaryAddress`): it runs alone in the workspace of its invitation too, as an acceptance does.
+  const locked =
+    changed ?? (path === '/organization/reject-invitation' ? await workspaceOfInvitation(auth, read.input) : undefined);
 
-  return changed !== undefined && rule.method === 'POST'
-    ? oneAtATime(changed, () => answerOrganizationCall(call, context, headers))
+  return locked !== undefined && rule.method === 'POST'
+    ? oneAtATime(locked, () => answerOrganizationCall(call, context, headers))
     : answerOrganizationCall(call, context, headers);
 }
 

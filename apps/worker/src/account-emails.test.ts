@@ -608,6 +608,18 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         { email: 'alice@home.example', status: 'accepted' },
       ]);
       assert.deepEqual(await theirs(), []);
+
+      // A refusal of another invitation sent there, while an acceptance of the same workspace runs:
+      // they run one after the other, and the invitation keeps its address.
+      const again = await invite('alice@home.example');
+      const [declined] = await Promise.all([
+        worker.call(`${ORG}/reject-invitation`, { body: { invitationId: again }, headers: { Cookie: alice.cookie } }),
+        worker.call(`${ORG}/accept-invitation`, { body: { invitationId: toHome }, headers: { Cookie: alice.cookie } }),
+      ]);
+      assert.equal(declined?.status, 200, await declined?.clone().text());
+      assert.deepEqual(await rowsOf(worker.database, `SELECT email, status FROM invitation WHERE id = '${again}'`), [
+        { email: 'alice@home.example', status: 'rejected' },
+      ]);
     });
   });
 }
