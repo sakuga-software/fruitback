@@ -162,7 +162,7 @@ and their replies move with one command, and **a pin keeps its number**.
 
 4. Nothing to change in `.env`: step 1 of the section above set `FRUITBACK_STORE=postgres` and
    emptied the variables of before. The notes of the file are of the kind of before 0.4.0: make the
-   copy with the image of 0.4.0, and run `rewrite-notes` there (see
+   copy with the image of 0.4.0, and run `rewrite-notes` there. A later image refuses the file (see
    [Upgrading a worker of before 0.4.0](#upgrading-a-worker-of-before-040-fru-378)).
 5. **Each reviewer pairs the extension again, once**: `pair` writes its code in the database now.
    A session of a worker that had no accounts names no member of a workspace, and is not copied.

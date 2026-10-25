@@ -390,7 +390,7 @@ for (const subject of SUBJECTS) {
         assert.deepEqual(await counts(database), { notes: 0, comments: 0 });
       });
 
-      it('refuses a file of another version, a column it does not know, a date it cannot keep, and a client the file does not name', async () => {
+      it('refuses a file of another version, a column it does not know, a date it cannot keep, a note of before 0.4.0, and a client the file does not name', async () => {
         const cases: [string, (file: DatabaseSync) => void, Map<string | null, string>, RegExp][] = [
           [
             'another version',
@@ -409,6 +409,16 @@ for (const subject of SUBJECTS) {
             (file) => file.exec(`UPDATE seeds SET updated_at = '2026-09-01 08:00:00' WHERE id = 2`),
             NO_RENAME,
             /the row 2 of seeds holds a date that the database would not give back as it is written/,
+          ],
+          [
+            // FRU-449: no worker after 0.4.0 reads the kind of before, and rewrite-notes is gone.
+            'a note of before 0.4.0',
+            (file) =>
+              file.exec(
+                `UPDATE seeds SET seed = json_set(seed, '$.kind', 'fruitback.seed', '$.v', 2) WHERE id IN (2, 3)`,
+              ),
+            NO_RENAME,
+            /2 note\(s\) of the file \(row 2, 3\) are not a note that this worker reads, the kind of before 0\.4\.0: copy this file with the worker 0\.4\.0, and run rewrite-notes there/,
           ],
           [
             'a client',

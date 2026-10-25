@@ -1724,7 +1724,8 @@ removes its own SQL file, snapshot and entry, and generates again.
   (test:`goes on after the largest number the file ever gave, a deleted note included`).
 - **The note is copied byte for byte**, from the column of the file into `notes.payload`: a note of
   that file is of the kind of before FRU-378, which no worker after 0.4.0 reads: the copy and
-  `rewrite-notes` run on 0.4.0 (`docs/self-hosting/upgrade.md`). `--client` and `--no-client` change the column `client_id`
+  `rewrite-notes` run on 0.4.0 (`docs/self-hosting/upgrade.md`). After it, a file that holds a note
+  that `parseNote` does not read is refused, with its rows (FRU-449, review of #612). `--client` and `--no-client` change the column `client_id`
   and nothing inside the text, whose `client.id` stays the one of before: no read compares the two.
 - **A date must come back as it is written.** The file holds ISO text and the database
   milliseconds. A row whose date does not is refused, with its number: the digest compares the
