@@ -32,6 +32,43 @@ crontab of the user `mheos`. This runbook said `/root/fruitback/` before: that f
 in use. The dumps taken by hand before each switch are in dated folders there, for example
 `switch1-20261012/` and `switch1bis-20261016/`.
 
+## Probes and logs (FRU-390)
+
+**Two probes, in Uptime Kuma** (`uptime.sakuga.dev`, the container `uptime-kuma` on the same host),
+each minute, with the notification « Uptime Alert »:
+
+| Monitor             | Address                                                                                  | Green when                           |
+| ------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------ |
+| `api.fruitback.com` | `https://api.fruitback.com/health`                                                       | `200`                                |
+| `worker`            | `https://api.fruitback.com/feedback?client=site_nobody&url=https%3A%2F%2Fexample.com%2F` | `400`, and the body `unknown-client` |
+
+**`/health` does not read the database**: it stays green when PostgreSQL is stopped (FRU-183). The
+second probe is the one that says the worker reads it. On each request the worker reads its sites in
+the database, with no cache (`withSites`, then `clientMap`), and a client that does not exist answers
+`400 unknown-client`. If the database does not answer, the same request gets `502 store-unavailable`,
+and the probe goes red. Its expected code is `400`, not `200`: a monitor left on `200-299` is red
+while all is well.
+
+Each monitor tries 3 more times, one minute apart, before it alerts: the alert comes about 4 minutes
+after the failure. **Not tried:** a stop of the database, and the alert it sends. The red of the
+second probe on a stopped database is read in the code, not measured.
+
+Uptime Kuma runs on the host it watches. If the whole host is down, it says nothing. The rule
+`HostSilent` of the monitoring of the host (`/home/mheos/monitoring/README.md`) covers that case.
+
+**The logs** are in Loki, read in Grafana (`grafana.sakuga.dev`, « Explore », the Loki source):
+
+```logql
+{project="Fruitback", app="worker"}
+{project="Fruitback", app="console"}
+{project="Fruitback", app="postgres"}
+```
+
+The Alloy collector of the host sets `project`, `app` and `env` from the name of the Swarm service, by
+a regular expression on `fruitback-cloud-(worker|console|postgres)-<suffix>`. If Dokploy recreates an
+application, the suffix changes, and the expression still matches it. `{swarm_service="…"}` reads the
+same lines with the full name of the service.
+
 ## What is backed up
 
 The data is in PostgreSQL: its dump, and how to restore it, are in « The database » below. **03:00,
