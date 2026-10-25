@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, type SeedEnv, type SeedPage, type SeedViewport } from '@fruitback/shared';
+import { canonicalizePageUrl, type NoteEnv, type NotePage, type NoteViewport } from '@fruitback/shared';
 
 /**
  * The context around the pin: which page, seen how.
@@ -9,9 +9,9 @@ import { canonicalizePageUrl, type SeedEnv, type SeedPage, type SeedViewport } f
  * on.
  */
 
-export function capturePage(view: Window): SeedPage {
+export function capturePage(view: Window): NotePage {
   const url = canonicalizePageUrl(view.location.href);
-  const page: SeedPage = { url, path: new URL(url).pathname };
+  const page: NotePage = { url, path: new URL(url).pathname };
 
   const title = view.document.title.trim();
   if (title.length > 0) page.title = title;
@@ -62,8 +62,8 @@ export function withoutLinkedNote(hash: string): string {
  * `innerWidth`/`innerHeight`, not `screen`: what matters when re-reading a note is how much of the
  * page the reporter could actually see.
  */
-export function captureViewport(view: Window): SeedViewport {
-  const viewport: SeedViewport = { width: view.innerWidth, height: view.innerHeight };
+export function captureViewport(view: Window): NoteViewport {
+  const viewport: NoteViewport = { width: view.innerWidth, height: view.innerHeight };
 
   // Kept even at 1 — it is an observation, not a default, and the screenshot work (FRU-6) needs it
   // to read a capture taken on a retina screen.
@@ -77,9 +77,9 @@ export function captureViewport(view: Window): SeedViewport {
  * seed is a Linear issue anyone on the workspace can read, so this collects what helps reproduce a
  * visual bug and nothing that identifies a person.
  */
-export function captureEnv(view: Window): SeedEnv {
+export function captureEnv(view: Window): NoteEnv {
   const navigator = view.navigator;
-  const env: SeedEnv = {};
+  const env: NoteEnv = {};
 
   if (navigator.userAgent) env.userAgent = navigator.userAgent;
   if (navigator.language) env.locale = navigator.language;

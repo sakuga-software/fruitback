@@ -1,5 +1,5 @@
 import { type DockPosition, parseDockPosition } from './dock-position.ts';
-import type { SeedSource } from '@fruitback/shared';
+import type { NoteSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
 import { componentOf } from './capture.ts';
 import { isStableClass, isStableId } from './selector.ts';
@@ -30,8 +30,8 @@ import { type Translator, createTranslator, languageOf } from './messages.ts';
 
 export type CaptureTarget = {
   element: Element;
-  /** From react-grab, when the build kept the metadata. Goes straight into `captureSeed`. */
-  source: SeedSource | undefined;
+  /** From react-grab, when the build kept the metadata. Goes straight into `captureNote`. */
+  source: NoteSource | undefined;
 };
 
 export type CaptureHostOptions = {
@@ -43,7 +43,7 @@ export type CaptureHostOptions = {
    * the component. `init` passes the head of the composer, so the two follow « Show CSS selectors »
    * together when the host asks for it.
    */
-  nameOf?: (element: Element, source: SeedSource | undefined) => string;
+  nameOf?: (element: Element, source: NoteSource | undefined) => string;
   /** The reporter picked an element. The note UI is the caller's business (FRU-4). */
   onSelect: (target: CaptureTarget) => void;
   /** Label on the floating button. Wins over the translated one: a host's label is the host's word. */
@@ -280,12 +280,12 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    * What the engine said of each element, asked once. The pointer crosses an element many times, and
    * the choice asks for the same answer. Emptied at each start: a page hot-reloads between two notes.
    */
-  let sources = new WeakMap<Element, Promise<SeedSource | undefined>>();
+  let sources = new WeakMap<Element, Promise<NoteSource | undefined>>();
 
   // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
   // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
   // floor and leave an unhandled rejection behind — the reporter's note lost to a missing filename.
-  function sourceOf(element: Element): Promise<SeedSource | undefined> {
+  function sourceOf(element: Element): Promise<NoteSource | undefined> {
     let source = sources.get(element);
     if (source === undefined) {
       try {
@@ -733,7 +733,7 @@ export function shortSelector(element: Element): string {
  * write it (FRU-303, FRU-305): « button.add · <AddToCart> », the short selector alone when the page
  * gives no component. The component is the one the note will carry: see `componentOf`.
  */
-export function aboutTarget(element: Element, source: SeedSource | undefined): string {
+export function aboutTarget(element: Element, source: NoteSource | undefined): string {
   const selector = shortSelector(element);
   const component = componentOf(element, source)?.trim() ?? '';
 
@@ -745,7 +745,7 @@ export function aboutTarget(element: Element, source: SeedSource | undefined): s
  * component, « Commander · <AddToCart> ». The component alone when the element says nothing, and the
  * tag when the page gives neither.
  */
-export function plainHead(element: Element, source: SeedSource | undefined): string {
+export function plainHead(element: Element, source: NoteSource | undefined): string {
   const name = readableName(element);
   const component = componentOf(element, source)?.trim() ?? '';
   const parts = [name, component === '' ? '' : `<${component}>`].filter((part) => part !== '');

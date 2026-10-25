@@ -1,4 +1,4 @@
-import { MAX_STATUSES, MIN_TEXT_CONTRAST, SEED_STAGES, STATUS_COLOR, contrastRatio } from '@fruitback/shared';
+import { MAX_STATUSES, MIN_TEXT_CONTRAST, NOTE_STAGES, STATUS_COLOR, contrastRatio } from '@fruitback/shared';
 import type { Stage } from './api';
 
 /**
@@ -143,7 +143,7 @@ export function statusesOf(
 
 /** The statuses of a source when the worker keeps no row: the built-in five, GitHub's four, Linear's states. */
 function defaultsOf(kind: ListKind, source: string, states: readonly TrackerState[]): ScreenStatus[] {
-  if (kind === 'own') return SEED_STAGES.map((stage, rank) => blank(source, stage, stage, rank, true));
+  if (kind === 'own') return NOTE_STAGES.map((stage, rank) => blank(source, stage, stage, rank, true));
   if (kind === 'github') return GITHUB_STATES.map((state, rank) => blank(source, state.key, state.stage, rank, false));
 
   return states.map((state, rank) => ({
@@ -205,7 +205,7 @@ const KEY = /^[A-Za-z0-9_:-]{1,64}$/;
  * `taken`, never the key of a built-in status. A name with no such letter gets a key of its own.
  */
 export function keyFor(name: string, taken: Iterable<string>, random: () => number = Math.random): string {
-  const used = new Set([...taken, ...SEED_STAGES]);
+  const used = new Set([...taken, ...NOTE_STAGES]);
   const base =
     name
       .normalize('NFKD')

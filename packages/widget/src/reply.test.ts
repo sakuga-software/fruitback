@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedComment, SeedIssue } from '@fruitback/shared';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import type { NoteComment, NoteIssue } from '@fruitback/shared';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { type Overlay, type ReplyFailure, type ReplySeam, createOverlay } from './overlay.ts';
 import { type MountedPage, keyboardEventCtor, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
@@ -25,10 +25,10 @@ function mounted(): MountedPage {
   return page;
 }
 
-function anIssue(overrides: Parameters<typeof seedIssueFixture>[0] = {}): SeedIssue {
-  return seedIssueFixture({
+function anIssue(overrides: Parameters<typeof noteIssueFixture>[0] = {}): NoteIssue {
+  return noteIssueFixture({
     comments: [],
-    seed: seedFixture({
+    seed: noteFixture({
       reporter: { name: 'Camille' },
       anchor: {
         selector: '[data-testid="cta"]',
@@ -43,7 +43,7 @@ function anIssue(overrides: Parameters<typeof seedIssueFixture>[0] = {}): SeedIs
 
 /** A seam whose answers a case gives one at a time. */
 function answered(allowed = true) {
-  const pending: ((answer: SeedComment | ReplyFailure) => void)[] = [];
+  const pending: ((answer: NoteComment | ReplyFailure) => void)[] = [];
   const sent: { issue: string; body: string }[] = [];
   const seam: ReplySeam = {
     allowed: () => allowed,
@@ -54,12 +54,12 @@ function answered(allowed = true) {
     },
   };
 
-  return { seam, sent, answer: (value: SeedComment | ReplyFailure) => pending.shift()?.(value) };
+  return { seam, sent, answer: (value: NoteComment | ReplyFailure) => pending.shift()?.(value) };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function open(page: MountedPage, issue: SeedIssue, seam?: ReplySeam, isDraft?: (issue: SeedIssue) => boolean) {
+function open(page: MountedPage, issue: NoteIssue, seam?: ReplySeam, isDraft?: (issue: NoteIssue) => boolean) {
   overlay = createOverlay({
     document: page.document,
     ...(seam === undefined ? {} : { reply: seam }),

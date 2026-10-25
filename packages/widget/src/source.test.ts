@@ -111,7 +111,7 @@ describe('readReactSource', () => {
 
   it('stops at the root, which React marks with a null owner rather than by omission', () => {
     // The shape a real React tree ends in. A walk that only stops on `undefined` dereferences this
-    // and throws out of `captureSeed` — which is how a click stopped planting anything at all.
+    // and throws out of `captureNote` — which is how a click stopped planting anything at all.
     const button = mountButton();
     attachFiber(button, { type: 'button', _debugOwner: { type: 'div', _debugOwner: null } });
 

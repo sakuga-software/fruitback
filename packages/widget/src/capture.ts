@@ -1,13 +1,13 @@
 import {
-  createSeed,
-  type Seed,
-  type SeedAnchor,
-  type SeedClient,
-  type SeedPage,
-  type SeedReporter,
-  type SeedScreenshot,
-  type SeedSource,
-  type SeedViewport,
+  createNote,
+  type Note,
+  type NoteAnchor,
+  type NoteClient,
+  type NotePage,
+  type NoteReporter,
+  type NoteScreenshot,
+  type NoteSource,
+  type NoteViewport,
 } from '@fruitback/shared';
 import { captureAnchor } from './anchor.ts';
 import { captureEnv, capturePage, captureViewport } from './page.ts';
@@ -16,28 +16,28 @@ import { readReactSource } from './source.ts';
 /**
  * One click plus one note, assembled into the payload the worker stores.
  *
- * This is the only place the widget builds a seed, and it goes through `createSeed`, so an anchor
+ * This is the only place the widget builds a seed, and it goes through `createNote`, so an anchor
  * that came out malformed fails here — in the reporter's browser, with a message — rather than as a
  * `400 invalid-seed` after the note was typed.
  */
 
-export type CaptureSeedOptions = {
+export type CaptureNoteOptions = {
   /** The element the reporter clicked. */
   element: Element;
   note: string;
   /** Defaults to the element's own window. Passed explicitly when capturing inside an iframe. */
   view?: Window;
-  client?: SeedClient;
+  client?: NoteClient;
   /** Client-asserted and unverified until FRU-9 — the worker treats it as a claim, not identity. */
-  reporter?: SeedReporter;
-  screenshot?: SeedScreenshot;
+  reporter?: NoteReporter;
+  screenshot?: NoteScreenshot;
   /**
    * What react-grab resolved for this element. Wins over the fiber fallback in `source.ts`
    * **field by field**, rather than wholesale: on a design system react-grab gets the file and the
    * line right while dropping the component name (see `engine.ts`), and the fallback is exactly what
    * knows the name. Taking either one entire would throw away the half the other got right.
    */
-  source?: SeedSource;
+  source?: NoteSource;
   /**
    * Send the user agent, the language and the platform of the reporter with the note. Off by default
    * (FRU-84): a reporter who does nothing is anonymous, and these three narrow down who they are.
@@ -58,13 +58,13 @@ export type CaptureSeedOptions = {
 
 /** The part of a seed that says where the note is: the page, how it was seen, the element. */
 export type CapturedPlace = {
-  page: SeedPage;
-  viewport: SeedViewport;
-  anchor: SeedAnchor;
-  source?: SeedSource;
+  page: NotePage;
+  viewport: NoteViewport;
+  anchor: NoteAnchor;
+  source?: NoteSource;
 };
 
-export function capturePlace(element: Element, options: { view?: Window; source?: SeedSource } = {}): CapturedPlace {
+export function capturePlace(element: Element, options: { view?: Window; source?: NoteSource } = {}): CapturedPlace {
   const view = viewOf(element, options.view);
 
   return {
@@ -78,13 +78,13 @@ export function capturePlace(element: Element, options: { view?: Window; source?
   };
 }
 
-export function captureSeed(options: CaptureSeedOptions): Seed {
+export function captureNote(options: CaptureNoteOptions): Note {
   const { element, note, includeEnv = false } = options;
   const view = viewOf(element, options.view);
   const place = options.place ?? capturePlace(element, { view, ...optional('source', options.source) });
 
   const seed = {
-    id: options.id ?? newSeedId(view),
+    id: options.id ?? newNoteId(view),
     createdAt: options.createdAt ?? new Date().toISOString(),
     note,
     ...place,
@@ -94,13 +94,13 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
     ...optional('screenshot', options.screenshot),
   };
 
-  return createSeed(seed);
+  return createNote(seed);
 }
 
 function viewOf(element: Element, view: Window | undefined): Window {
   const found = view ?? element.ownerDocument.defaultView;
   if (found === null) {
-    throw new Error('captureSeed: the element belongs to a document with no window');
+    throw new Error('captureNote: the element belongs to a document with no window');
   }
 
   return found;
@@ -118,9 +118,9 @@ const SOURCE_FIELDS = ['component', 'file', 'line', 'column'] as const;
  * there is nothing for it to add once the engine has answered in full.
  */
 function mergeSource(
-  engine: SeedSource | undefined,
-  readFallback: () => SeedSource | undefined,
-): SeedSource | undefined {
+  engine: NoteSource | undefined,
+  readFallback: () => NoteSource | undefined,
+): NoteSource | undefined {
   if (engine !== undefined && SOURCE_FIELDS.every((field) => engine[field] !== undefined)) return engine;
 
   const fallback = readFallback();
@@ -137,7 +137,7 @@ function mergeSource(
  * walk's when the engine has none. The frame of a capture writes it (FRU-258), and it must be the
  * name `mergeSource` gives the seed, or the reporter reads one name and sends another.
  */
-export function componentOf(element: Element, engine: SeedSource | undefined): string | undefined {
+export function componentOf(element: Element, engine: NoteSource | undefined): string | undefined {
   return mergeSource(engine, () => readReactSource(element))?.component;
 }
 
@@ -155,12 +155,12 @@ function optional<K extends string, T>(key: K, value: T | undefined): Partial<Re
  * retry and keys the pin across reloads. `randomUUID` needs a secure context, which a staging site
  * on http does not have, hence the fallback.
  */
-function newSeedId(view: Window): string {
-  return `sd_${randomHex(view, SEED_ID_HEX_LENGTH)}`;
+function newNoteId(view: Window): string {
+  return `sd_${randomHex(view, NOTE_ID_HEX_LENGTH)}`;
 }
 
 /** Twelve hex characters — 48 bits, and the same shape whichever branch below produced it. */
-const SEED_ID_HEX_LENGTH = 12;
+const NOTE_ID_HEX_LENGTH = 12;
 
 function randomHex(view: Window, length: number): string {
   const crypto = view.crypto;

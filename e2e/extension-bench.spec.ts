@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { type Bench, startBench } from './bench.ts';
-import { mountTheSiteWidget, readSeeds } from './extension.ts';
+import { mountTheSiteWidget, readNoteIssues } from './extension.ts';
 
 /**
  * The bench of the extension, driven as an agent drives it (FRU-426): team mode on a site that
@@ -22,7 +22,7 @@ test('the bench sends a note in team mode, with a capture after the click on the
   const site = await bench.openSite(`ext-bench-${test.info().retry}-${test.info().repeatEachIndex}`);
 
   // Team mode: the page alone reads nothing on this site, so a pin read back came through the relay.
-  expect((await readSeeds(site, bench.worker)).status).toBe(401);
+  expect((await readNoteIssues(site, bench.worker)).status).toBe(401);
   await expect(site.getByRole('button', { name: 'Team feedback' })).toBeVisible();
 
   test.info().annotations.push({ type: 'gesture', description: bench.gesture });

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_VERSION, buildIssueDescription, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
-import { captureSeed } from './capture.ts';
+import { SEED_VERSION, buildIssueDescription, canonicalizePageUrl, parseNoteFromDescription } from '@fruitback/shared';
+import { captureNote } from './capture.ts';
 import { mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 const CREATED_AT = '2026-08-09T09:15:00.000Z';
@@ -18,11 +18,11 @@ function mountPricingPage(url = 'https://preview.acme.test/pricing?tab=annual') 
   return page;
 }
 
-describe('captureSeed', () => {
+describe('captureNote', () => {
   it('builds the payload the worker stores', () => {
     const page = mountPricingPage();
 
-    const seed = captureSeed({
+    const seed = captureNote({
       element: page.query('button'),
       note: 'Le bouton “Commander” est trop petit sur mobile.',
       client: { id: 'acme', name: 'Acme' },
@@ -55,21 +55,21 @@ describe('captureSeed', () => {
     // The invariant the whole product rests on: what the widget captures is what it reads back.
     const page = mountPricingPage();
 
-    const seed = captureSeed({
+    const seed = captureNote({
       element: page.query('button'),
       note: 'Trop petit sur mobile',
       id: 'sd_round',
       createdAt: CREATED_AT,
     });
 
-    assert.deepEqual(parseSeedFromDescription(buildIssueDescription(seed)), { ok: true, seed });
+    assert.deepEqual(parseNoteFromDescription(buildIssueDescription(seed)), { ok: true, note: seed });
   });
 
   it('canonicalizes the page URL, so the pin is planted where the read path looks for it', () => {
     const raw = 'https://preview.acme.test/pricing/?utm_source=ads&tab=annual#cta';
     const page = mountPricingPage(raw);
 
-    const seed = captureSeed({ element: page.query('button'), note: '', id: 'sd_url', createdAt: CREATED_AT });
+    const seed = captureNote({ element: page.query('button'), note: '', id: 'sd_url', createdAt: CREATED_AT });
 
     assert.equal(seed.page.url, canonicalizePageUrl(raw));
     assert.equal(seed.page.url, 'https://preview.acme.test/pricing?tab=annual');
@@ -79,7 +79,7 @@ describe('captureSeed', () => {
     // Adding a default here is the easy way to break the round trip without noticing.
     const page = mountPricingPage();
 
-    const seed = captureSeed({
+    const seed = captureNote({
       element: page.query('button'),
       note: 'Rien de plus',
       id: 'sd_bare',
@@ -93,7 +93,7 @@ describe('captureSeed', () => {
   it('sends no environment unless it is asked to (FRU-84)', () => {
     const page = mountPricingPage();
 
-    const seed = captureSeed({ element: page.query('button'), note: '', id: 'sd_quiet', createdAt: CREATED_AT });
+    const seed = captureNote({ element: page.query('button'), note: '', id: 'sd_quiet', createdAt: CREATED_AT });
 
     assert.equal('env' in seed, false);
   });
@@ -101,7 +101,7 @@ describe('captureSeed', () => {
   it('collects the environment when it is allowed to', () => {
     const page = mountPricingPage();
 
-    const seed = captureSeed({
+    const seed = captureNote({
       element: page.query('button'),
       note: '',
       id: 'sd_env',
@@ -117,7 +117,7 @@ describe('captureSeed', () => {
     const page = mountPricingPage();
     const source = { component: 'CheckoutCta', file: 'src/components/checkout-cta.tsx', line: 42 };
 
-    const seed = captureSeed({
+    const seed = captureNote({
       element: page.query('button'),
       note: '',
       source,
@@ -132,8 +132,8 @@ describe('captureSeed', () => {
     const page = mountPricingPage();
     const element = page.query('button');
 
-    const first = captureSeed({ element, note: '' });
-    const second = captureSeed({ element, note: '' });
+    const first = captureNote({ element, note: '' });
+    const second = captureNote({ element, note: '' });
 
     assert.match(first.id, /^sd_[0-9a-f]{12}$/);
     assert.notEqual(first.id, second.id);
@@ -146,7 +146,7 @@ describe('captureSeed', () => {
     Object.defineProperty(page.view, 'crypto', { value: undefined, configurable: true });
 
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      const seed = captureSeed({ element: page.query('button'), note: '', view: page.view });
+      const seed = captureNote({ element: page.query('button'), note: '', view: page.view });
 
       assert.match(seed.id, /^sd_[0-9a-f]{12}$/);
     }
@@ -156,6 +156,6 @@ describe('captureSeed', () => {
     const page = mountPricingPage();
     const orphan = page.document.implementation.createHTMLDocument().createElement('button');
 
-    assert.throws(() => captureSeed({ element: orphan, note: 'nulle part' }), /no window/);
+    assert.throws(() => captureNote({ element: orphan, note: 'nulle part' }), /no window/);
   });
 });

@@ -1,4 +1,4 @@
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 import { holdFocus } from './focus.ts';
@@ -52,13 +52,13 @@ export type ConfigPanel = {
  * comes from the worker, and a stored copy would outlive a change of store.
  */
 export type OfferedStages = {
-  get(): readonly SeedStage[];
-  set(stages: readonly SeedStage[]): void;
+  get(): readonly NoteStage[];
+  set(stages: readonly NoteStage[]): void;
   subscribe(listener: () => void): () => void;
 };
 
 export function createOfferedStages(): OfferedStages {
-  let current: readonly SeedStage[] = SEED_STAGES;
+  let current: readonly NoteStage[] = NOTE_STAGES;
   const listeners = new Set<() => void>();
 
   return {
@@ -94,9 +94,9 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
   const stages = document.createElement('div');
   stages.className = 'fruitback-config-stages';
-  const stageInputs = new Map<SeedStage, HTMLInputElement>();
-  const stageLabels = new Map<SeedStage, HTMLLabelElement>();
-  for (const stage of SEED_STAGES) {
+  const stageInputs = new Map<NoteStage, HTMLInputElement>();
+  const stageLabels = new Map<NoteStage, HTMLLabelElement>();
+  for (const stage of NOTE_STAGES) {
     // A chip for each status (FRU-305): the drop of its colour and its name. The box stays, out of
     // sight and in the order of the keyboard.
     const { input, label } = checkbox(document, `stage-${stage}`, t.stage(stage), 'chip');
@@ -247,13 +247,13 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
   /** The first stage that has a box, or the close button when the worker reports no stage. */
   function firstControl(): HTMLElement {
-    const stage = SEED_STAGES.find((candidate) => stageLabels.get(candidate)?.hidden === false);
+    const stage = NOTE_STAGES.find((candidate) => stageLabels.get(candidate)?.hidden === false);
 
     return (stage !== undefined ? stageInputs.get(stage) : undefined) ?? close;
   }
 
-  function hiddenFromInputs(): SeedStage[] {
-    return SEED_STAGES.filter((stage) => stageInputs.get(stage)?.checked === false);
+  function hiddenFromInputs(): NoteStage[] {
+    return NOTE_STAGES.filter((stage) => stageInputs.get(stage)?.checked === false);
   }
 
   for (const input of stageInputs.values()) {
@@ -269,7 +269,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
       if (hideResolved.checked) hidden.add(stage);
       else hidden.delete(stage);
     }
-    store.set({ hiddenStages: SEED_STAGES.filter((stage) => hidden.has(stage)) });
+    store.set({ hiddenStages: NOTE_STAGES.filter((stage) => hidden.has(stage)) });
   });
 
   screenshot.addEventListener('change', () => store.set({ screenshot: screenshot.checked }));

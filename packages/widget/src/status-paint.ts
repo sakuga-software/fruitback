@@ -1,4 +1,4 @@
-import { STATUS_COLOR, readableTextColor, type SeedIssue, type SeedStatus } from '@fruitback/shared';
+import { STATUS_COLOR, readableTextColor, type NoteIssue, type NoteStatus } from '@fruitback/shared';
 import type { Translator } from './messages.ts';
 import { onStageToken, stageToken } from './theme.ts';
 
@@ -26,7 +26,7 @@ export type StatusPaint = { fill: string; ink: string };
  * **A colour reaches `style.setProperty` only as `#rrggbb`.** `offeredStatuses` already drops any other,
  * and this checks again, so no caller can pass `var(…)` or `url(…)` into a style.
  */
-export function statusPaint(issue: Pick<SeedIssue, 'stage'>, status: SeedStatus | undefined): StatusPaint {
+export function statusPaint(issue: Pick<NoteIssue, 'stage'>, status: NoteStatus | undefined): StatusPaint {
   const color = status?.color;
   if (color === undefined || !STATUS_COLOR.test(color)) {
     return { fill: stageToken(issue.stage), ink: onStageToken(issue.stage) };
@@ -45,8 +45,8 @@ export function statusPaint(issue: Pick<SeedIssue, 'stage'>, status: SeedStatus 
  * catalog for its stage. `||` and not `??`: an empty name means the catalog word (FRU-114, FRU-364).
  */
 export function statusLabel(
-  issue: Pick<SeedIssue, 'stage' | 'stateName'>,
-  status: SeedStatus | undefined,
+  issue: Pick<NoteIssue, 'stage' | 'stateName'>,
+  status: NoteStatus | undefined,
   t: Translator,
 ): string {
   return status?.name || issue.stateName || t.stage(issue.stage);

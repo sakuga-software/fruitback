@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import { init } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -11,10 +11,10 @@ import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fix
  */
 
 const ENDPOINT = 'https://worker.test';
-const ISSUE = seedIssueFixture({
+const ISSUE = noteIssueFixture({
   id: 'issue_42',
   comments: [],
-  seed: seedFixture({
+  seed: noteFixture({
     anchor: {
       selector: '[data-testid="cta"]',
       tag: 'button',

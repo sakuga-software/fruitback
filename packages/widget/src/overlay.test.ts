@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
-import type { SeedIssue } from '@fruitback/shared';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
+import type { NoteIssue } from '@fruitback/shared';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { createTranslator } from './messages.ts';
 import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -35,9 +35,9 @@ function mountWithCta(): MountedPage {
 }
 
 /** The seed the fixture plants, re-pointed at the button this page actually has. */
-function issueOnCta(overrides: Parameters<typeof seedIssueFixture>[0] = {}) {
-  return seedIssueFixture({
-    seed: seedFixture({
+function issueOnCta(overrides: Parameters<typeof noteIssueFixture>[0] = {}) {
+  return noteIssueFixture({
+    seed: noteFixture({
       anchor: {
         selector: '[data-testid="checkout-cta"]',
         tag: 'button',
@@ -184,7 +184,7 @@ describe('createOverlay', () => {
     const hidden = new Set<string>();
     overlay = createOverlay({ document: page.document, shouldShow: (issue) => !hidden.has(issue.id) });
     const note = (n: number, stage: 'new' | 'progress' | 'done') =>
-      seedIssueFixture({
+      noteIssueFixture({
         id: `issue_${n}`,
         stage,
         seed: { ...issueOnCta().seed, id: `sd_${n}`, note: `Note text ${n}` },
@@ -253,7 +253,7 @@ describe('createOverlay', () => {
 
     overlay.render([
       issueOnCta({
-        seed: seedFixture({
+        seed: noteFixture({
           anchor: { selector: '#gone', tag: 'button', bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 } },
         }),
       }),
@@ -334,14 +334,14 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
 
     const onCta = (n: number) =>
-      seedIssueFixture({
+      noteIssueFixture({
         id: `issue_${n}`,
         identifier: `SKG-${n}`,
         seed: { ...issueOnCta().seed, id: `sd_cta_${n}`, note: `Note ${n}` },
       });
-    const aside = seedIssueFixture({
+    const aside = noteIssueFixture({
       id: 'issue_aside',
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_aside',
         anchor: { selector: '#aside', tag: 'p', text: 'À côté', bounds: { xPct: 40, yPct: 20, wPct: 10, hPct: 2 } },
       }),
@@ -378,9 +378,9 @@ describe('createOverlay', () => {
     setRect(page.query('#thin'), { left: 500, top: 300, width: 10, height: 20 });
     overlay = createOverlay({ document: page.document });
     const on = (id: string, selector: string, tag: string) =>
-      seedIssueFixture({
+      noteIssueFixture({
         id: `issue_${id}`,
-        seed: seedFixture({ id, anchor: { selector, tag, bounds: { xPct: 1, yPct: 1, wPct: 1, hPct: 1 } } }),
+        seed: noteFixture({ id, anchor: { selector, tag, bounds: { xPct: 1, yPct: 1, wPct: 1, hPct: 1 } } }),
       });
     overlay.render([on('sd_top', '#top', 'p'), on('sd_thin', '#thin', 'i')]);
     const tip = (id: string) => {
@@ -671,7 +671,7 @@ describe('createOverlay', () => {
   });
 
   it('shows the selector when asked, then the component and the file, and the selector alone without them (FRU-256, FRU-304, FRU-349)', () => {
-    const lineFor = (source: SeedIssue['seed']['source']) => {
+    const lineFor = (source: NoteIssue['seed']['source']) => {
       const page = mountWithCta();
       const issue = issueOnCta();
       const { source: _dropped, ...seed } = issue.seed;
@@ -832,7 +832,7 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     const onScreen = issueOnCta();
     const gone = issueOnCta({
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_gone',
         anchor: { selector: '#nowhere', tag: 'button', bounds: { xPct: 90, yPct: 90, wPct: 2, hPct: 1 } },
       }),
@@ -1328,8 +1328,8 @@ describe('the reading direction and the dates (FRU-38)', () => {
 
 describe('the detached notes', () => {
   const orphanIssue = (note: string) =>
-    seedIssueFixture({
-      seed: seedFixture({
+    noteIssueFixture({
+      seed: noteFixture({
         note,
         anchor: {
           selector: '#gone-for-good',
@@ -1372,8 +1372,8 @@ describe('the detached notes', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([
-      seedIssueFixture({
-        seed: seedFixture({
+      noteIssueFixture({
+        seed: noteFixture({
           anchor: {
             selector: '#not-here',
             tag: 'button',
@@ -1440,8 +1440,8 @@ describe('the detached list is the widget’s own DOM', () => {
     let resolves = 0;
     overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
     overlay.render([
-      seedIssueFixture({
-        seed: seedFixture({
+      noteIssueFixture({
+        seed: noteFixture({
           anchor: {
             selector: '#gone-for-good',
             tag: 'textarea',
@@ -1527,8 +1527,8 @@ describe('the thread and the keyboard (FRU-51)', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([
-      seedIssueFixture({
-        seed: seedFixture({
+      noteIssueFixture({
+        seed: noteFixture({
           id: 'sd_gone',
           note: 'Disparu',
           anchor: {
@@ -1558,8 +1558,8 @@ describe('the thread and the keyboard (FRU-51)', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([
-      seedIssueFixture({
-        seed: seedFixture({
+      noteIssueFixture({
+        seed: noteFixture({
           id: 'sd_gone',
           note: 'Disparu',
           anchor: {
@@ -1587,8 +1587,8 @@ describe('the thread and the keyboard (FRU-51)', () => {
   it('keeps focus on the detached-note entry across a render, for its thread and for the entry itself', () => {
     const page = mountWithCta();
     const detached = (id: string, note: string) =>
-      seedIssueFixture({
-        seed: seedFixture({
+      noteIssueFixture({
+        seed: noteFixture({
           id,
           note,
           anchor: {

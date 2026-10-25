@@ -1,4 +1,4 @@
-import { type Seed, parseSeed } from '@fruitback/shared';
+import { type Note, parseNote } from '@fruitback/shared';
 import { type Destination, destinationToSend } from './destinations.ts';
 
 /**
@@ -17,7 +17,7 @@ import { type Destination, destinationToSend } from './destinations.ts';
  * uploaded, not the picture.
  */
 export type Draft = {
-  seed: Seed;
+  seed: Note;
   /** The opaque id of the place a member chose, when it is not the first one (FRU-123). */
   destination?: string;
 };
@@ -73,7 +73,7 @@ export function createDraftStore(options: DraftStoreOptions): DraftStore {
 
 /**
  * Tolerant, like `readStored` of the config: a value a human can edit in devtools costs the drafts it
- * spoils, and nothing else. Every seed goes through `parseSeed`, because the worker refuses a batch
+ * spoils, and nothing else. Every seed goes through `parseNote`, because the worker refuses a batch
  * whole for one thing that is not a seed.
  */
 function readStored(storage: Storage | null, key: string): Draft[] {
@@ -88,10 +88,10 @@ function readStored(storage: Storage | null, key: string): Draft[] {
     return parsed.flatMap((each: unknown) => {
       if (typeof each !== 'object' || each === null) return [];
       const { seed, destination } = each as { seed?: unknown; destination?: unknown };
-      const read = parseSeed(seed);
+      const read = parseNote(seed);
       if (!read.ok) return [];
 
-      return [{ seed: read.seed, ...(typeof destination === 'string' ? { destination } : {}) }];
+      return [{ seed: read.note, ...(typeof destination === 'string' ? { destination } : {}) }];
     });
   } catch {
     return [];

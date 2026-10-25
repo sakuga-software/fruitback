@@ -175,7 +175,7 @@ export async function mountTheSiteWidget(page: Page, endpoint: string): Promise<
 /**
  * The bare playground, on a page URL of its own.
  *
- * The parameters are in canonical order, so `seedsOn` can read the stored seeds with the raw URL.
+ * The parameters are in canonical order, so `notesOn` can read the stored seeds with the raw URL.
  */
 export async function openBareSite(page: Page, testCase: string): Promise<void> {
   await page.goto(`/?case=${caseOf(testCase)}&widget=off`);
@@ -309,19 +309,19 @@ export async function pairFromPopup(extension: LoadedExtension, site: Page, code
   await popup.close();
 }
 
-type StoredSeed = { note: string; source?: Record<string, unknown>; reporter?: Record<string, unknown> };
+type StoredNote = { note: string; source?: Record<string, unknown>; reporter?: Record<string, unknown> };
 
 /** A read of the seeds of a page, from this process, so the page makes no call of its own. */
-export function readSeeds(page: Page, origin: string, accessToken?: string): Promise<Response> {
+export function readNoteIssues(page: Page, origin: string, accessToken?: string): Promise<Response> {
   return fetch(`${origin}/feedback?url=${encodeURIComponent(page.url())}&client=playground`, {
     headers: accessToken === undefined ? {} : { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-export async function seedsOn(page: Page, origin = WORKER_ORIGIN, accessToken?: string): Promise<StoredSeed[]> {
-  const response = await readSeeds(page, origin, accessToken);
+export async function notesOn(page: Page, origin = WORKER_ORIGIN, accessToken?: string): Promise<StoredNote[]> {
+  const response = await readNoteIssues(page, origin, accessToken);
   expect(response.status).toBe(200);
-  const { issues } = (await response.json()) as { issues: { seed: StoredSeed }[] };
+  const { issues } = (await response.json()) as { issues: { seed: StoredNote }[] };
 
   return issues.map((issue) => issue.seed);
 }

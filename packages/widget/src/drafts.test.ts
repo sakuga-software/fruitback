@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedFixture } from '@fruitback/shared/seed.fixture';
+import { noteFixture } from '@fruitback/shared/note.fixture';
 import { type Draft, batchBody, createDraftStore, cutIntoRequests, offeredBatch, withPlacesOfNow } from './drafts.ts';
 
 /** A `Storage` with nothing behind it, and a switch that makes it refuse writes like a full quota. */
@@ -25,7 +25,7 @@ function memoryStorage(): Storage & { refuse: boolean } {
 }
 
 const draft = (id: string, more: Partial<Draft> = {}, note = `Note ${id}`): Draft => ({
-  seed: seedFixture({ id, note }),
+  seed: noteFixture({ id, note }),
   ...more,
 });
 
@@ -68,7 +68,7 @@ describe('the drafts of a tab (FRU-124)', () => {
       height: 80,
     };
     createDraftStore({ storage, key: 'k' }).add({
-      seed: seedFixture({ id: 'sd_a', note: 'With a picture', screenshot }),
+      seed: noteFixture({ id: 'sd_a', note: 'With a picture', screenshot }),
     });
 
     const [kept] = createDraftStore({ storage, key: 'k' }).list();
@@ -96,7 +96,7 @@ describe('the drafts of a tab (FRU-124)', () => {
     const storage = memoryStorage();
     storage.setItem(
       'k',
-      JSON.stringify([{ seed: seedFixture({ id: 'sd_good' }) }, { seed: { kind: 'nope' } }, 'text', null]),
+      JSON.stringify([{ seed: noteFixture({ id: 'sd_good' }) }, { seed: { kind: 'nope' } }, 'text', null]),
     );
     assert.deepEqual(
       createDraftStore({ storage, key: 'k' })

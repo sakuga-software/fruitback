@@ -13,7 +13,7 @@ export const WORKER_ORIGIN = 'http://localhost:8788';
  *
  * The harness these drive is the playground's, not the product's — the real capture UI is FRU-3/493
  * and the real re-anchoring is FRU-11. What the specs actually assert through it is the pipeline
- * underneath: `captureSeed`, `POST /feedback`, `GET /feedback`.
+ * underneath: `captureNote`, `POST /feedback`, `GET /feedback`.
  */
 
 /**
@@ -151,18 +151,18 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
  * fragment or a tracking parameter has to canonicalize here, or it will look up a key nothing was
  * stored under.
  */
-type StoredSeed = {
+type StoredNote = {
   note: string;
   source?: Record<string, unknown>;
   reporter?: Record<string, unknown>;
   env?: Record<string, unknown>;
 };
 
-export async function storedSeeds(page: Page): Promise<StoredSeed[]> {
+export async function storedNotes(page: Page): Promise<StoredNote[]> {
   return page.evaluate(async (origin) => {
     const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-    const { issues } = (await response.json()) as { issues: { seed: StoredSeed }[] };
+    const { issues } = (await response.json()) as { issues: { seed: StoredNote }[] };
 
     return issues.map((issue) => issue.seed);
   }, WORKER_ORIGIN);

@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENTS_PER_NOTE, type SeedReporter } from '@fruitback/shared';
+import { MAX_ATTACHMENTS_PER_NOTE, type NoteReporter } from '@fruitback/shared';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
@@ -97,7 +97,7 @@ export type ComposerOptions = {
    */
   onSubmit: (
     note: string,
-    reporter?: SeedReporter,
+    reporter?: NoteReporter,
     destination?: string,
     /** The ids in transit of the files of the note (FRU-332), in their order. Empty: none. */
     attachments?: readonly string[],
@@ -141,7 +141,7 @@ export type ComposerOptions = {
     offered(): boolean;
     onKeep: (
       note: string,
-      reporter?: SeedReporter,
+      reporter?: NoteReporter,
       destination?: string,
     ) => Promise<true | SendFailure | SentWithoutPicture>;
   };
@@ -823,7 +823,7 @@ export function createComposer(options: ComposerOptions): Composer {
    * an empty one is absent rather than an empty string — the seed round-trip forbids a field nobody
    * provided. One field, and no e-mail (FRU-91): an address is not needed to read a note.
    */
-  function reporterFromFields(): SeedReporter | undefined {
+  function reporterFromFields(): NoteReporter | undefined {
     const typed = asksForName ? typedName() : undefined;
 
     return typed === undefined ? undefined : { name: typed };

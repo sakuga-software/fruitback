@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGES, type SeedComment } from '@fruitback/shared';
-import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { NOTE_STAGES, type NoteComment } from '@fruitback/shared';
+import { noteFixture, noteIssueFixture } from '@fruitback/shared/note.fixture';
 import {
   BUNDLED_CATALOGS,
   ENGLISH,
@@ -120,7 +120,7 @@ describe('createTranslator', () => {
   it('names every stage the contract has', () => {
     const t = createTranslator();
 
-    for (const stage of SEED_STAGES) assert.equal(t.stage(stage), ENGLISH[`stage.${stage}`]);
+    for (const stage of NOTE_STAGES) assert.equal(t.stage(stage), ENGLISH[`stage.${stage}`]);
   });
 
   it('formats a date in the locale the reader asked for', () => {
@@ -278,7 +278,7 @@ describe('every word the widget shows', () => {
     // The first issue is drawn as a note kept for later, not sent (FRU-124).
     let draftIssue: unknown;
     // Each reply waits for the answer that the case gives it (FRU-257).
-    const replyAnswers: ((answer: SeedComment | ReplyFailure) => void)[] = [];
+    const replyAnswers: ((answer: NoteComment | ReplyFailure) => void)[] = [];
     const overlay = createOverlay({
       document: page.document,
       host: host.root,
@@ -289,13 +289,13 @@ describe('every word the widget shows', () => {
     });
     cleanup.push(() => overlay.destroy());
 
-    const found = seedIssueFixture({
+    const found = noteIssueFixture({
       identifier: 'ID-1',
       stateName: '',
       comments: [],
       // FRU-332: the files of the note, in its tracker. The thread says how many, and links the ticket.
       attachments: [{ name: 'FILE ONE', url: 'https://tracker.test/file' }],
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_found',
         note: 'NOTE ONE',
         // A name, so that its field of reply names the author (FRU-257).
@@ -308,11 +308,11 @@ describe('every word the widget shows', () => {
         },
       }),
     });
-    const detached = seedIssueFixture({
+    const detached = noteIssueFixture({
       identifier: 'ID-2',
       stateName: '',
       comments: [{ id: 'c1', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_gone',
         note: 'NOTE TWO',
         anchor: {
@@ -324,12 +324,12 @@ describe('every word the widget shows', () => {
       }),
     });
     // Found by nothing but its box, so it is placed and marked unsure. No note, so the thread says so.
-    const placedByPosition = seedIssueFixture({
+    const placedByPosition = noteIssueFixture({
       identifier: 'ID-3',
       stateName: '',
       // One reply, so its row of the list says how many (FRU-259).
       comments: [{ id: 'c2', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
-      seed: seedFixture({
+      seed: noteFixture({
         id: 'sd_near',
         note: '',
         anchor: {
@@ -340,7 +340,7 @@ describe('every word the widget shows', () => {
         },
       }),
     });
-    const kept = seedIssueFixture({ id: 'draft:sd_kept', seed: seedFixture({ id: 'sd_kept', note: 'NOTE KEPT' }) });
+    const kept = noteIssueFixture({ id: 'draft:sd_kept', seed: noteFixture({ id: 'sd_kept', note: 'NOTE KEPT' }) });
     draftIssue = kept;
     overlay.render([found, detached, placedByPosition, kept]);
 
@@ -587,8 +587,8 @@ describe('every word the widget shows', () => {
 
     // The copied text is not in the DOM. `export.test.ts` checks its words; here it only has to
     // show every key, so the list below stays complete.
-    const signed = seedIssueFixture({
-      seed: seedFixture({
+    const signed = noteIssueFixture({
+      seed: noteFixture({
         reporter: { name: 'Alice' },
         source: { component: 'Button', file: 'site.tsx', line: 4 },
         screenshot: { url: 'https://cdn.test/shot.png' },

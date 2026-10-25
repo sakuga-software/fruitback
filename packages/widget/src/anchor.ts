@@ -1,4 +1,4 @@
-import { type SeedAnchor, type SeedBounds, TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
+import { type NoteAnchor, type NoteBounds, TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
 import { buildDomPath, buildSelector } from './selector.ts';
 
 /**
@@ -14,12 +14,12 @@ import { buildDomPath, buildSelector } from './selector.ts';
  */
 
 /** Attributes worth matching on when the selector misses, in the shape the seed schema expects. */
-type AnchorAttrs = NonNullable<SeedAnchor['attrs']>;
+type AnchorAttrs = NonNullable<NoteAnchor['attrs']>;
 
 const TEST_ID_ATTRIBUTES = ['data-testid', 'data-test-id', 'data-test', 'data-qa', 'data-cy'];
 
-export function captureAnchor(element: Element): SeedAnchor {
-  const anchor: SeedAnchor = {
+export function captureAnchor(element: Element): NoteAnchor {
+  const anchor: NoteAnchor = {
     selector: buildSelector(element),
     domPath: buildDomPath(element),
     tag: element.localName,
@@ -87,7 +87,7 @@ function readAttrs(element: Element): AnchorAttrs | undefined {
  * match the reporter's, and would move on every scroll. Document-relative percentages survive both,
  * and are what lets an orphaned pin still be drawn roughly where its element used to be.
  */
-export function captureBounds(element: Element): SeedBounds {
+export function captureBounds(element: Element): NoteBounds {
   const document = element.ownerDocument;
   const view = document.defaultView;
   const rect = element.getBoundingClientRect();

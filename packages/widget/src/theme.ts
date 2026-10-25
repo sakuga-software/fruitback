@@ -1,4 +1,4 @@
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { NOTE_STAGES, type NoteStage } from '@fruitback/shared';
 
 /**
  * The widget's design tokens, and the only thing a host may change about how it looks (FRU-35).
@@ -121,7 +121,7 @@ export type ThemeToken = (typeof THEME_TOKENS)[number];
 export type FruitbackTheme = Partial<Record<ThemeToken, string>>;
 
 /** The stage a pin is at, as the token that colours it. Used by the overlay and the panel. */
-export function stageToken(stage: SeedStage): string {
+export function stageToken(stage: NoteStage): string {
   return `var(--fruitback-stage-${stage})`;
 }
 
@@ -132,7 +132,7 @@ export function stageToken(stage: SeedStage): string {
  * are light fills, written black. Done and closed have no token of their own and fall back to the
  * shared `color-on-stage`, white, so a host that set that one token keeps what it set.
  */
-export function onStageToken(stage: SeedStage): string {
+export function onStageToken(stage: NoteStage): string {
   return `var(--fruitback-color-on-stage-${stage}, var(--fruitback-color-on-stage))`;
 }
 
@@ -156,8 +156,8 @@ export function applyTheme(element: HTMLElement, theme: FruitbackTheme | undefin
 }
 
 /** Asserted by a test: a stage without a token would render a pin with no colour at all. */
-export function missingStageTokens(): SeedStage[] {
-  return SEED_STAGES.filter((stage) => !KNOWN.has(`stage-${stage}`));
+export function missingStageTokens(): NoteStage[] {
+  return NOTE_STAGES.filter((stage) => !KNOWN.has(`stage-${stage}`));
 }
 
 /**

@@ -1,4 +1,4 @@
-import { type SeedAnchor, seedAnchorSchema } from '@fruitback/shared';
+import { type NoteAnchor, noteAnchorSchema } from '@fruitback/shared';
 
 /**
  * The note somebody is writing, saved as they type (FRU-311).
@@ -18,14 +18,14 @@ import { type SeedAnchor, seedAnchorSchema } from '@fruitback/shared';
 export type Typing = {
   /** The canonical address of the page (`canonicalizePageUrl`). */
   page: string;
-  anchor: SeedAnchor;
+  anchor: NoteAnchor;
   text: string;
   /** When it was last written, in milliseconds. The latest of a page is the one that reopens. */
   at: number;
 };
 
 /** The element of a note, on its page. */
-export type TypingPlace = { page: string; anchor: SeedAnchor };
+export type TypingPlace = { page: string; anchor: NoteAnchor };
 
 export type TypingStore = {
   get(place: TypingPlace): Typing | undefined;
@@ -102,7 +102,7 @@ function readStored(storage: Storage | null, key: string): Typing[] {
       // The anchor goes to `resolveAnchor`, which reads its bounds and its path: it is read with the
       // schema of the seed, so an entry a person edited, or one an older build wrote, costs itself
       // and not the mount.
-      const read = seedAnchorSchema.safeParse(anchor);
+      const read = noteAnchorSchema.safeParse(anchor);
       if (!read.success) return [];
 
       return [{ page, anchor: read.data, text, at }];

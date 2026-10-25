@@ -5,7 +5,7 @@ import {
   mountTheSiteWidget,
   openBareSite,
   pairFromPopup,
-  readSeeds,
+  readNoteIssues,
   storedTokens,
   test,
 } from './extension.ts';
@@ -69,7 +69,7 @@ test('a capture of the page and one of an area go through the relay to the ticke
 
   // The double of the tracker holds the two files of the note, by their names.
   const access = (await storedTokens(extension.worker)).find((token) => token.area === 'session')?.value;
-  const read = await readSeeds(page, WORKER_ORIGIN, access);
+  const read = await readNoteIssues(page, WORKER_ORIGIN, access);
   const { issues } = (await read.json()) as { issues: { seed: { note: string }; attachments?: { name: string }[] }[] };
   const note = issues.find((issue) => issue.seed.note === 'Deux captures');
   expect(note?.attachments?.map((file) => file.name)).toEqual(['page.png', 'area.png']);

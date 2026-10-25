@@ -1,11 +1,11 @@
-import { SEED_ANCHOR_STRATEGIES, type SeedAnchor, type SeedAnchorStrategy, type SeedBounds } from '@fruitback/shared';
+import { NOTE_ANCHOR_STRATEGIES, type NoteAnchor, type NoteAnchorStrategy, type NoteBounds } from '@fruitback/shared';
 import { readTextExcerpt } from './anchor.ts';
 
 /**
  * Finding the element again, on a page that has been redeployed since the note was written.
  *
  * The anchor carries five independent claims about one element, and this walks them in the order
- * `SEED_ANCHOR_STRATEGIES` declares: **selector → testId → text → domPath → bounds**. That order is
+ * `NOTE_ANCHOR_STRATEGIES` declares: **selector → testId → text → domPath → bounds**. That order is
  * the contract's, not this file's, and it puts `text` ahead of `domPath` on purpose — see below.
  *
  * The rule that matters more than the order: **a claim is only accepted if it is unique, and a claim
@@ -34,7 +34,7 @@ export type AnchorResolution = {
   /** The element the pin belongs on, or `null` when nothing could be trusted. */
   element: Element | null;
   /** What found it — `orphan` when nothing did. Rendered onto the pin, and worth logging. */
-  strategy: SeedAnchorStrategy | 'orphan';
+  strategy: NoteAnchorStrategy | 'orphan';
   /**
    * Whether what found it was an **identity** or merely a **position**.
    *
@@ -50,19 +50,19 @@ export type AnchorResolution = {
 };
 
 /** The claims that say *which element*, as opposed to *which spot on the page*. */
-const IDENTITY_STRATEGIES: readonly SeedAnchorStrategy[] = ['selector', 'testId', 'text'];
+const IDENTITY_STRATEGIES: readonly NoteAnchorStrategy[] = ['selector', 'testId', 'text'];
 
 export type ResolveOptions = {
   /** Defaults to the ambient document; the widget passes its own when it runs inside an iframe. */
   document?: Document;
 };
 
-export function resolveAnchor(anchor: SeedAnchor, options: ResolveOptions = {}): AnchorResolution {
+export function resolveAnchor(anchor: NoteAnchor, options: ResolveOptions = {}): AnchorResolution {
   const root = options.document ?? globalThis.document;
 
   // Iterated from the contract rather than copied out of it: the order is `packages/shared`'s to
   // decide, and a list repeated here would drift the first time one is added or renamed.
-  for (const strategy of SEED_ANCHOR_STRATEGIES) {
+  for (const strategy of NOTE_ANCHOR_STRATEGIES) {
     const element = FINDERS[strategy](anchor, root);
     if (element !== null) return { element, strategy, confident: IDENTITY_STRATEGIES.includes(strategy) };
   }
@@ -70,9 +70,9 @@ export function resolveAnchor(anchor: SeedAnchor, options: ResolveOptions = {}):
   return { element: null, strategy: 'orphan', confident: false };
 }
 
-type Finder = (anchor: SeedAnchor, root: Document) => Element | null;
+type Finder = (anchor: NoteAnchor, root: Document) => Element | null;
 
-const FINDERS: Record<SeedAnchorStrategy, Finder> = {
+const FINDERS: Record<NoteAnchorStrategy, Finder> = {
   /** The selector the capture judged most durable. Identity-bearing, so uniqueness is enough. */
   selector: (anchor, root) => onlyMatch(root, anchor.selector, anchor),
 
@@ -159,7 +159,7 @@ function queryAll(root: Document, selector: string): Element[] {
 }
 
 /** A selector is only an answer when it matches exactly one element, of the tag we captured. */
-function onlyMatch(root: Document, selector: string, anchor: SeedAnchor): Element | null {
+function onlyMatch(root: Document, selector: string, anchor: NoteAnchor): Element | null {
   try {
     const found = root.querySelectorAll(selector);
     if (found.length !== 1) return null;
@@ -178,7 +178,7 @@ function onlyMatch(root: Document, selector: string, anchor: SeedAnchor): Elemen
  * The element's current box, in the same document-relative percentages the anchor stored — which is
  * what makes the two comparable across a different window size.
  */
-export function boxOf(element: Element): SeedBounds {
+export function boxOf(element: Element): NoteBounds {
   const document = element.ownerDocument;
   const view = document.defaultView;
   const rect = element.getBoundingClientRect();
@@ -201,7 +201,7 @@ export function boxOf(element: Element): SeedBounds {
  * Not centre distance: a small element inside a big one shares a centre with it, and "the pin is on
  * the card rather than on the button" is exactly the mistake this is here to avoid.
  */
-export function overlap(a: SeedBounds, b: SeedBounds): number {
+export function overlap(a: NoteBounds, b: NoteBounds): number {
   const left = Math.max(a.xPct, b.xPct);
   const top = Math.max(a.yPct, b.yPct);
   const right = Math.min(a.xPct + a.wPct, b.xPct + b.wPct);

@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedStage } from '@fruitback/shared';
+import type { NoteStage } from '@fruitback/shared';
 import { type ConfigPanel, createConfigPanel, createOfferedStages } from './panel.ts';
 import { createConfigStore, type WidgetConfig } from './config.ts';
 import { type MountedPage, mountPage } from './dom.fixture.ts';
@@ -238,9 +238,9 @@ describe('copying the feedback as text (FRU-109)', () => {
 });
 
 describe('the stages a store can report (FRU-32)', () => {
-  const GITHUB: SeedStage[] = ['new', 'done', 'closed'];
+  const GITHUB: NoteStage[] = ['new', 'done', 'closed'];
 
-  function mountOffering(stages: SeedStage[], defaults: WidgetConfig = DEFAULTS) {
+  function mountOffering(stages: NoteStage[], defaults: WidgetConfig = DEFAULTS) {
     const page: MountedPage = mountPage('<main></main>');
     const store = createConfigStore({ defaults, storage: null });
     const offered = createOfferedStages();

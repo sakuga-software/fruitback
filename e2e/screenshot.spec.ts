@@ -196,7 +196,7 @@ test('the setting is not offered when the host cannot take a picture', async ({ 
 });
 
 test('a capture with no URL is refused rather than stored', async ({ page }) => {
-  // `SeedScreenshot` leaves `url` optional — the field was speculative before anything filled it —
+  // `NoteScreenshot` leaves `url` optional — the field was speculative before anything filled it —
   // so the seam requires it in TypeScript and checks it at runtime, because this package ships to
   // JavaScript too. A screenshot with no URL is a row in a Linear issue that opens nothing.
   await page.goto('/?widget=off&case=shot-urlless');
