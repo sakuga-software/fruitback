@@ -79,6 +79,30 @@ test.describe('the rail', () => {
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
   });
+
+  test('an answer of an older read does not undo the answer of a newer one', async ({ page }) => {
+    // What the next reads answer, in order; once they are spent, the browser of Edge.
+    const next: { browsers: unknown[]; slow: boolean }[] = [];
+    await stubWorker(page, {
+      answer: (pathname, route) => {
+        if (pathname !== '/console/me/browsers') return undefined;
+        const { browsers, slow } = next.shift() ?? { browsers: [PC], slow: false };
+        if (!slow) return route.fulfill({ json: { browsers } });
+
+        return new Promise((resolve) => setTimeout(resolve, 1_500)).then(() => route.fulfill({ json: { browsers } }));
+      },
+    });
+    await page.goto(`${CONSOLE}/w/w1/sites`);
+    const rail = page.locator('aside.kit-rail');
+    await expect(rail.getByText('Extension connected · Edge on Windows')).toBeVisible();
+    // The tab is shown twice: the first read is slow and says « none », the second is quick.
+    next.push({ browsers: [], slow: true }, { browsers: [MAC], slow: false });
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+    await page.waitForTimeout(2_000);
+    await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+  });
 });
 
 test.describe('step 3 of the setup', () => {
@@ -244,6 +268,32 @@ test.describe('/connect', () => {
     await expect(page.locator('main h1')).toHaveText('Connect this browser');
     // The reads are answered: the page had what it needed to decide.
     await page.waitForTimeout(300);
+    await expect(page.locator('main h1')).toHaveText('Connect this browser');
+  });
+
+  test('a late answer does not turn the steps into « already connected » under the eyes of the person', async ({
+    page,
+  }) => {
+    await page.route(`${WORKER_ORIGIN}/**`, async (route) => {
+      const { pathname } = new URL(route.request().url());
+      if (pathname !== '/console/me/browsers' && pathname !== '/console/sessions') {
+        return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
+      }
+      // Slower than the two seconds the page waits for its reads.
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+
+      return pathname === '/console/me/browsers'
+        ? route.fulfill({ json: { browsers: [MAC] } })
+        : route.fulfill({
+            json: {
+              sessions: [{ id: 'cs1', createdAt: AT, lastUsedAt: AT, current: true, browser: 'Chrome on macOS' }],
+            },
+          });
+    });
+    await page.goto(`${CONSOLE}/connect`);
+    await expect(page.locator('main h1')).toHaveText('Connect this browser');
+    // The answers come three seconds after the page opened, after the steps were shown: they stay.
+    await page.waitForTimeout(3_500);
     await expect(page.locator('main h1')).toHaveText('Connect this browser');
   });
 

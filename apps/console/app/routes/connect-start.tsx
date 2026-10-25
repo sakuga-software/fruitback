@@ -24,7 +24,13 @@ import { useLocale } from '../use-locale';
  * console cannot see the extension: « this browser » is a browser of the extension whose label
  * (« Chrome on macOS ») is the label of the session of the console in this tab. Another computer
  * with the same browser and system reads the same, so the three steps stay one press away.
+ *
+ * The page says « Loading… » while it reads, for `DECIDE_MS` at most: the steps never turn into « This
+ * browser is already connected » under the eyes of the person. An answer after that changes nothing.
  */
+/** How long `/connect` waits for its reads before it shows the steps. */
+const DECIDE_MS = 2_000;
+
 export default function ConnectStart() {
   useLocale();
   const navigate = useNavigate();
@@ -40,21 +46,29 @@ export default function ConnectStart() {
     [navigate],
   );
 
-  const [already, setAlready] = useState<ExtensionBrowser | undefined>();
+  // `undefined` while the page reads; `null` when this browser is not seen connected.
+  const [already, setAlready] = useState<ExtensionBrowser | null | undefined>();
   const [steps, setSteps] = useState(false);
   useEffect(() => {
-    let stopped = false;
+    let decided = false;
+    const decide = (browser: ExtensionBrowser | null) => {
+      if (decided) return;
+      decided = true;
+      setAlready(browser);
+    };
+    const late = setTimeout(() => decide(null), DECIDE_MS);
     // Signed out, both reads are refused, and the page shows the steps: `quiet` ends no session.
     void Promise.all([extensionBrowsers({ quiet: true }), consoleSessions({ quiet: true })])
       .then(([browsers, sessions]) => {
-        if (stopped || !browsers.ok || !sessions.ok) return;
+        if (!browsers.ok || !sessions.ok) return decide(null);
         const here = sessions.data.find((session) => session.current)?.browser;
-        setAlready(sameAsThisBrowser(browsers.data, here));
+        decide(sameAsThisBrowser(browsers.data, here) ?? null);
       })
-      .catch(() => undefined);
+      .catch(() => decide(null));
 
     return () => {
-      stopped = true;
+      decided = true;
+      clearTimeout(late);
     };
   }, []);
 
@@ -67,7 +81,17 @@ export default function ConnectStart() {
     };
   });
 
-  if (already !== undefined && !steps) {
+  if (already === undefined) {
+    return (
+      <EntryPage width="wide">
+        <p role="status" className="text-small text-muted">
+          {t('Loading…')}
+        </p>
+      </EntryPage>
+    );
+  }
+
+  if (already !== null && !steps) {
     return (
       <EntryPage width="wide">
         <div className="mb-2.5">

@@ -51,10 +51,13 @@ export function useConnectedExtension(): ExtensionBrowser | undefined {
   const [connected, setConnected] = useState<ExtensionBrowser | undefined>();
   useEffect(() => {
     let stopped = false;
+    // Reads can overlap when the tab is shown again and again: only the answer of the last one counts.
+    let asked = 0;
     const read = async () => {
+      const mine = (asked += 1);
       // A read that fails changes nothing: the screen keeps what it shows.
       const answer = await extensionBrowsers({ quiet: true }).catch((): undefined => undefined);
-      if (stopped || answer?.ok !== true) return;
+      if (stopped || mine !== asked || answer?.ok !== true) return;
       setConnected(lastUsed(answer.data));
     };
     const shown = () => {
