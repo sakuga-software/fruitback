@@ -400,16 +400,44 @@ function siteRow(
     here ? t('Shows the note on this page') : t('Opens {path} in a new tab', { path: note.page.path }),
   );
   row.append(head);
+  // FRU-434: « Show on the page », as the table of the notes of the console has it. The page of the
+  // tab scrolls to the note; another page opens in a new tab, on the note (`#fruitback-note=`).
+  const links = make(document, 'div', 'site-row-links');
+  if (here) {
+    const show = make(document, 'button', 'site-row-ref', t('Show on the page'));
+    show.type = 'button';
+    show.addEventListener('click', () => handlers.onSiteNote(note));
+    links.append(show);
+  } else {
+    const show = make(document, 'a', 'site-row-ref', t('Show on the page'));
+    show.href = noteLink(note.page.url, note.seed);
+    show.target = '_blank';
+    // The page of the note gets no handle on the panel, and no address of the extension.
+    show.rel = 'noreferrer';
+    show.setAttribute('aria-description', t('Opens {path} in a new tab', { path: note.page.path }));
+    links.append(show);
+  }
   if (note.reference !== undefined && note.referenceUrl !== undefined) {
-    const links = make(document, 'div', 'site-row-links');
     const open = make(document, 'a', 'site-row-ref', t('Open {reference} →', { reference: note.reference }));
     open.href = note.referenceUrl;
     open.target = '_blank';
     // `noreferrer` holds `noopener`: the tracker gets no handle on the panel.
     open.rel = 'noreferrer';
     links.append(open);
-    row.append(links);
   }
+  row.append(links);
 
   return row;
+}
+
+/**
+ * The address that opens a note on its page (FRU-253): `#fruitback-note=<id>`, after the fragment of
+ * the site when it has one, as the widget reads it (`linkedNote`).
+ */
+export function noteLink(url: string, id: string): string {
+  const part = `fruitback-note=${encodeURIComponent(id)}`;
+  const at = url.indexOf('#');
+  if (at === -1) return `${url}#${part}`;
+
+  return at === url.length - 1 ? `${url}${part}` : `${url}&${part}`;
 }

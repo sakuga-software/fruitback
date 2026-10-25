@@ -686,6 +686,84 @@ test('« Search and options »: the search, « Whole site » over three pages, t
   await expect(tab.locator('[data-fruitback-pin]').first()).toBeVisible({ timeout: 10_000 });
 });
 
+/** A click on « Show on the page » of the row of the whole site whose note matches `text` (FRU-434). */
+function clickShowOnPage(page: Page, text: RegExp): Promise<{ tag: string; href: string | null } | null> {
+  return inPanel(
+    page,
+    `(() => {
+      const pattern = new RegExp(${JSON.stringify(text.source)});
+      const row = [...document.querySelectorAll('.site-row')].find((each) => pattern.test(each.querySelector('.panel-row-note')?.textContent ?? ''));
+      const link = [...(row?.querySelectorAll('.site-row-ref') ?? [])].find((each) => /^(Show on the page|Voir sur la page)$/.test(each.textContent));
+      if (link === undefined) return null;
+      const said = { tag: link.tagName, href: link.getAttribute('href') };
+      link.click();
+      return said;
+    })()`,
+  );
+}
+
+test('« Show on the page » of a row of the whole site: another page opens in a new tab on the note, the page of the tab scrolls to it (FRU-434)', async ({
+  extension,
+}) => {
+  test.slow();
+  await paired(extension);
+  const tag = `zl${Date.now().toString(36)}`;
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'side-panel-link-a');
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: /^(Turn on|Activer)$/ }).click();
+  await expect(page.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(page, '[data-testid="card-espresso"] .add', `Link ${tag} here`);
+  const other = await extension.context.newPage();
+  await openBareSite(other, 'side-panel-link-b');
+  await expect(other.locator('[data-fruitback-host-launch]')).toBeVisible();
+  await plantOn(other, '[data-testid="card-mocha"] .add', `Link ${tag} elsewhere`);
+  await other.close();
+  await page.bringToFront();
+
+  const again = await openPopup(extension, page);
+  await again
+    .getByRole('button', { name: /^(Show all notes in a sidebar|Voir toutes les notes dans un panneau)$/ })
+    .click();
+  await expect.poll(async () => (await panelRows(page).catch(() => ({ rows: [] }))).rows.length).toBeGreaterThan(0);
+  expect(await clickPanel(page, 'button.panel-search')).toBe(true);
+  expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);
+  await search(page, tag);
+  await expect.poll(async () => (await searchRows(page)).length, { timeout: 15_000 }).toBe(2);
+
+  // The page of the tab: a button, and the thread of the note opens there, with no new tab.
+  const pages = extension.context.pages().length;
+  const here = await clickShowOnPage(page, / here$/);
+  expect(here).toEqual({ tag: 'BUTTON', href: null });
+  await expect(page.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText(`Link ${tag} here`, {
+    timeout: 10_000,
+  });
+  expect(extension.context.pages().length).toBe(pages);
+  await page.keyboard.press('Escape');
+  // The row of the page of the tab closes the options and opens its own row, as before (FRU-307).
+  await expect
+    .poll(() =>
+      inPanel<string | null>(page, `document.querySelector('button.panel-search')?.getAttribute('aria-expanded')`),
+    )
+    .toBe('false');
+  expect(await clickPanel(page, 'button.panel-search')).toBe(true);
+  expect(await clickPanel(page, '.search-scope [role="tab"][data-tab="site"]')).toBe(true);
+  await search(page, tag);
+  await expect.poll(async () => (await searchRows(page)).length, { timeout: 15_000 }).toBe(2);
+
+  // Another page: a link to it, on the note, in a new tab; the tab of the reader stays where it is.
+  const opened = extension.context.waitForEvent('page');
+  const elsewhere = await clickShowOnPage(page, /elsewhere/);
+  expect(elsewhere?.tag).toBe('A');
+  expect(elsewhere?.href).toMatch(/side-panel-link-b.*#fruitback-note=/);
+  const tab = await opened;
+  await expect(tab).toHaveURL(/side-panel-link-b/);
+  await expect(tab.getByRole('dialog', { name: /^(Note|Feedback) / })).toContainText(`Link ${tag} elsewhere`, {
+    timeout: 20_000,
+  });
+  expect(page.url()).toMatch(/side-panel-link-a/);
+});
+
 test('a new search during « Show more » draws no page of the words of before (FRU-307, review of #419)', async ({
   extension,
 }) => {
