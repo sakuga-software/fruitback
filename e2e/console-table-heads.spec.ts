@@ -4,8 +4,9 @@ import { sideScroll, stubWorker } from './console-workspace.ts';
 /**
  * The heads of a table of the console are one line each (FRU-401): at 1024 and 1280 px « Sur la page
  * avec », « Les notes vont vers » and « Dernière note » broke on two lines in the table of the Sites
- * screen. That screen is a grid of cards since FRU-408: its terms are measured there, in French,
- * whose words are the longest, and the rule of the kit on the table that `/kit` mounts. The worker
+ * screen. That screen is a grid of cards since FRU-408, and since FRU-432 the terms of a card are for a
+ * screen reader only: what its foot shows is measured there, in French, whose words are the longest,
+ * and the rule of the kit on the table that `/kit` mounts. The worker
  * is answered by stubs; the sample data is of nobody.
  */
 const CONSOLE = 'http://localhost:5178';
@@ -53,18 +54,22 @@ function linesOf(page: Page, selector: string): Promise<{ text: string; lines: n
 }
 
 for (const width of [1024, 1280, 1440, 390]) {
-  test(`every term of a card of sites is one line at ${width} px, in French`, async ({ page }) => {
+  test(`the foot of a card of sites is one line at ${width} px, in French`, async ({ page }) => {
     await stubWorker(page, { locale: 'fr', sites: SITES });
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`${CONSOLE}/w/w1/sites`);
     await expect(page.getByRole('list', { name: 'Sites' }).locator('li[data-site]').first()).toBeVisible();
 
-    const terms = await linesOf(page, 'main li[data-site] dt');
-    // The control: the terms of the tracker are there, so the three of them are measured.
-    expect(terms.map(({ text }) => text)).toEqual(
-      expect.arrayContaining(['Sur la page avec', 'Les notes vont vers', 'Dernière note']),
-    );
-    expect(terms.filter(({ lines }) => lines !== 1)).toEqual([]);
+    // Since FRU-432 the terms are for a screen reader only: the place and the moment say what they
+    // are to the eye. « Sur la page avec » is on the page of the site.
+    const terms = page.locator('main li[data-site] dt');
+    await expect(terms).toHaveText(['Les notes vont vers', 'Dernière note', 'Les notes vont vers', 'Dernière note']);
+    for (const term of await terms.all()) await expect(term).toHaveClass(/\bsr-only\b/);
+    // What the eye reads in the foot is one line each: the place and its detail, and when the last
+    // note came.
+    const read = await linesOf(page, 'main li[data-site] dd > span.block, main li[data-site] dd.tabular-nums');
+    expect(read.map(({ text }) => text)).toHaveLength(6);
+    expect(read.filter(({ lines }) => lines !== 1)).toEqual([]);
     expect(await sideScroll(page)).toBe(0);
   });
 }

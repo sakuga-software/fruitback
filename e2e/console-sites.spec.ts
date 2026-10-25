@@ -876,6 +876,8 @@ test('a member installs and changes nothing; a guest does not read where the not
   );
   await open(page);
   // The notes of the sites shared with a guest are theirs to count; where they go is not.
+  // The terms are for a screen reader only since FRU-432, but they are still the terms of the card:
+  // a guest has « Last note » and no « Notes go to ».
   await expect(card(page, 'staging.acme.dev').locator('dt')).toHaveText(['Last note']);
   await expect(card(page, 'staging.acme.dev').getByRole('img', { name: /^12 notes/ })).toBeVisible();
   await expect(page.getByText('Kept in Fruitback')).toHaveCount(0);
