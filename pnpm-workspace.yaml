@@ -12,6 +12,9 @@ overrides:
   # 0.18.20, which `pnpm audit --prod` reports: better-auth names drizzle-kit as a peer, so pnpm counts
   # it with the production dependencies of the worker. Read it again when drizzle-kit changes.
   'drizzle-kit>@esbuild-kit/esm-loader': '-'
+  # nx 23.3 and 24.0 pin undici 7.29.0, which has CVE-2026-109869, CVE-2026-19534 and CVE-2026-84961.
+  # Remove this line when an nx release depends on undici 7.30.1 or later.
+  'nx>undici': 7.30.1
 
 catalog:
   '@electric-sql/pglite': 0.5.11
