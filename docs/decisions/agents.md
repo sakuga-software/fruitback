@@ -10,10 +10,12 @@ open (_What is still to decide_).
 
 ### The rules, in short
 
-- **The team starts the agent, never the reviewer and never a rule.** A reviewer is a client of the
-  team: a note never leaves for an agent because somebody wrote it.
-- **The agent pulls; the worker pushes nothing.** No webhook, no queue, no model called by
-  Fruitback. Fruitback holds no key of a model provider and sends nothing by itself.
+- **The team starts the agent, never the reviewer.** A reviewer is a client of the team. A rule of the
+  team can start one for a new note (decision 4), but only on a note that a known person wrote, or
+  that a person of the team moved on.
+- **The agent pulls what it reads.** The worker only says « a note is there » to an address that the
+  team chose, from the queue of deliveries of the REST connector. No model is called by Fruitback,
+  and Fruitback holds no key of a model provider.
 - **The agent talks to a remote MCP server in the worker**, `/mcp`, over Streamable HTTP. A session
   of an agent that runs elsewhere (a cloud agent, CI, a scheduled task) reaches it with no browser and
   nobody to approve it (decision 1).
@@ -91,14 +93,39 @@ with no key, nothing leaves.
 
 - **A button « send to the AI » in the widget.** It puts a key of a model, or the address of an
   agent, in the page of a client.
-- **A webhook from the worker.** Set aside for the same reason as for a status (FRU-87): one
-  container, nothing that pushes.
+- **A webhook of its own for the agents.** The trigger reuses the queue of deliveries of the REST
+  connector (FRU-132), which already signs, tries again and says what failed: no second queue.
 - **Fruitback calling a model itself.** One more key to hold, a bill, and one more processor in the
   notice of every integrator.
 - **A local MCP package in stdio, on the connect flow.** It reuses the session of a person, but a
   person approves each session with a word: no session can start elsewhere with nobody there.
 - **Only the agent of the tracker.** It works today with Linear and GitHub, but a note that the worker
   keeps has no tracker, and a tracker does not give the note whole.
+
+## Starting an agent on a note
+
+### The rules, in short
+
+- **A trigger of a site, made in the console, calls an address that the team gives** when a note
+  arrives. The address starts the agent: a `repository_dispatch` of GitHub that runs Claude Code, a
+  cloud agent, a receiver of the team. The agent then reads the note by `/mcp`, with its key.
+- **The call is a delivery of the REST connector** (`docs/rest-connector.md`): signed, tried again,
+  shown in the console when it fails. It carries the id of the note and its site, not its text: the
+  agent reads the text by `/mcp`, so a key decides what it reads, and nothing leaves twice.
+- **Guard 1, by default: a verified note only.** A note of a member or of a reviewer who signed in
+  starts the agent. A note of a visitor on a site that reads `public` does not: anybody writes it. The
+  other choice of the team is « when a person of the team moves the note to To do ».
+- **Guard 2, written in `docs/agents.md`: the agent opens a pull request for review**, and never
+  pushes to a branch that deploys. Fruitback cannot hold that rule: the agent and its rights are the
+  team's. The worker can, and does, keep the key of the agent to the notes of its sites.
+- **Off by default**, like a key: a site with no trigger calls nothing.
+
+### What exists today
+
+- The REST connector (FRU-132) posts `note.created`, signed, with the whole note, to the address of a
+  workspace. A receiver of the team can start an agent with it today, with no other change.
+- The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code
+  on it today. The Linear connector makes a ticket that a team can give to an agent of Linear.
 
 ## The decisions
 
@@ -108,6 +135,8 @@ On 2026-10-26 Mathieu answered:
    MCP server with an agent key, then OAuth. Not a local package on the connect flow.
 2. **Replies and statuses from v1**, not read only.
 3. **This page and the tickets first**, no code in FRU-110.
+4. **An agent can start when a note arrives** (« on pourra spawn un agent quand on fait une note ? » :
+   yes), with the two guards of _Starting an agent on a note_.
 
 ## What is still to decide
 
@@ -134,4 +163,5 @@ Each one has a recommendation; the tickets follow it until Mathieu says otherwis
 | [Worker][Shared] The write tools: a reply said to be from an agent (`by: 'agent'`, a changeset), a status, the limit per key, the writes written down                                                  | M    |
 | [Widget] A reply of an agent shows as one                                                                                                                                                              | S    |
 | [Docs] `docs/agents.md` (connect Claude Code and a cloud agent), `docs/privacy.md` and the notice, `SECURITY.md`                                                                                       | S    |
+| [Worker][Console] A trigger of a site: on a verified note, or on « To do », a signed call to an address, on the queue of the REST connector; mockup first                                              | M    |
 | v2 — [Worker] OAuth for MCP, for a connector of claude.ai                                                                                                                                              | L    |
