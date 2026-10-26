@@ -270,8 +270,9 @@ the store. So:
 - The keys are secrets of the GitHub environment `stores`, and not of the repository. The job
   `submit` reads them only after a person of the environment approves the run, and only after the
   job that calls `ci.yml` passed on that commit.
-- A run that does not come from a `v*` tag (a release published on GitHub, or a start by hand on a
-  tag) only checks the keys (`--dry-run`): it uploads nothing.
+- A release published on GitHub runs on its tag `v*`: after the approval, it sends the archives to
+  the stores. A run on any other ref (a start by hand on a branch, or a release whose tag does not
+  start with `v`) only checks the keys (`--dry-run`): it uploads nothing.
 - The Chrome Web Store publishes nothing by itself. `STAGED_PUBLISH` keeps the reviewed version
   until somebody presses « Publish » in the dashboard.
 - Give the service account access to this one publisher only. If a key leaks, delete it in Google
@@ -286,7 +287,9 @@ and only for these conditions, which each package names as its trusted publisher
 - the repository `sakuga-software/fruitback`, the workflow `release-npm.yml`, the environment `npm`;
 - the job `publish` reaches that environment only after a person of the environment approves the
   run, and only after the job that calls `ci.yml` passed on that commit;
-- a run that does not come from a `v*` tag only packs (`--dry-run`): it publishes nothing.
+- a release published on GitHub runs on its tag `v*` and publishes after the approval; a run on any
+  other ref (a start by hand on a branch, or a release whose tag does not start with `v`) only packs
+  (`--dry-run`): it publishes nothing.
 
 So who can publish is who can publish a release on GitHub, which takes the right to write to the
 repository, as a pushed tag did, **and** approve the environment `npm`. A tag pushed alone starts

@@ -110,8 +110,8 @@ it changes who is shown the feedback and never who may fetch it.
   job of an environment as a job that publishes. **Chrome uses the API v2 with a service account,
   and `STAGED_PUBLISH`**: the reviewed version waits for « Publish » in the dashboard. The variable
   `CHROME_PUBLISH_TYPE` = `DEFAULT_PUBLISH` publishes after the review. **Firefox goes to the
-  `listed` channel**, with the archive of the sources. **A run from `workflow_dispatch` is a
-  `--dry-run`**: it asks each store for a token with its keys, and uploads nothing. On a check, a
+  `listed` channel**, with the archive of the sources. **A run on a branch, or on a tag that does not
+  start with `v`, is a `--dry-run`**: it asks each store for a token with its keys, and uploads nothing. On a check, a
   store with no keys is left out with a warning. **On a tag, a store with no keys fails the job**,
   because a release that reached one store and not the other would pass in silence. The steps of a
   release, and the keys to make once, are in « Releasing the extension » at the end of this page.

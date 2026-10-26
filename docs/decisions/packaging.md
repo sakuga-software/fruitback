@@ -93,8 +93,9 @@ is asserted.
 
 ### The rules, in short
 
-- **A `v*` tag publishes the five packages**, from `release-npm.yml`: the job `ci` calls `ci.yml` on
-  the tagged commit, `package` packs the five with pnpm, and `publish` sends the tarballs to npm in the
+- **A release published on GitHub, with a tag `v*`, publishes the five packages**, from
+  `release-npm.yml`. The trigger has no filter of the tag: each job that publishes checks
+  `refs/tags/v`. The job `ci` calls `ci.yml` on the tagged commit, `package` packs the five with pnpm, and `publish` sends the tarballs to npm in the
   order of their dependencies, in the environment `npm`, after a person approves. The same tag starts
   the release of the extension and of the image: one version for everything.
 - **pnpm packs, npm publishes.** `pnpm pack` writes the version of each `workspace:*` dependency into
