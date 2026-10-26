@@ -511,15 +511,22 @@ async function createBatchParent(
 }
 
 /**
+ * What Linear answers to a sub-issue whose `parentId` names no issue: a parent deleted for good, or an
+ * id that never existed. Measured on a real Linear on 2026-10-26 (FRU-195): HTTP 200, `INPUT_ERROR`.
+ * A parent that is archived or in the trash still takes sub-issues.
+ */
+const PARENT_GONE = 'Entity not found in validateAccess: parentId';
+
+/**
  * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each note, in order. A
  * parent that Linear refuses throws, and nothing is written. A sub-issue that it refuses is answered
  * as such, and the next ones are still sent: each one is a note somebody wrote.
  *
  * **A parent whose sub-issues were all refused is kept, and used again** (FRU-195). The worker never
  * archives or changes an issue in the workspace of a team: it remembers the parent, and the next
- * attempt for the same notes writes its sub-issues under it and writes no second parent. A parent
- * that was used again and still kept no note is forgotten: it may be one the team deleted, and a
- * worker that held on to it would refuse the notes for as long as it remembered.
+ * attempt for the same notes writes its sub-issues under it and writes no second parent. The parent
+ * is forgotten only when Linear says that it is gone (`PARENT_GONE`): a worker that held on to it
+ * would refuse the notes for as long as it remembered. A rate limit or an outage keeps it.
  */
 export async function createNoteBatch(
   config: LinearConfig,
@@ -536,10 +543,12 @@ export async function createNoteBatch(
   await memory?.keepParent(parentId);
 
   const answers: BatchAnswer[] = [];
+  let parentGone = false;
   for (const note of notes) {
     try {
       answers.push({ issue: await createNoteIssue(config, routing, note, locale, parentId) });
     } catch (error) {
+      if (error instanceof StoreError && error.message.includes(PARENT_GONE)) parentGone = true;
       // WARNING: nothing is thrown from here. The parent exists, and the notes before this one are
       // kept: an error that left this loop would answer `500`, lose their answers, and the next
       // attempt would write a second parent. An error that is not Linear's is said in the log.
@@ -547,7 +556,7 @@ export async function createNoteBatch(
       answers.push({ error: 'store-unavailable' });
     }
   }
-  if (remembered !== undefined && answers.every((answer) => 'error' in answer)) await memory?.forgetParent();
+  if (parentGone) await memory?.forgetParent();
 
   return answers;
 }

@@ -14,7 +14,8 @@ import { beforePostgres } from './before-postgres.fixture.ts';
  *
  * The parent is kept, and the next attempt for the same notes writes its sub-issues under it: a team
  * gets one parent for a batch, not one for each attempt. Nothing in the workspace of the team is
- * archived or changed. The Linear here is a double: nothing of this was measured on a real one.
+ * archived or changed. The Linear here is a double. It answers a parent that is gone as a real Linear
+ * did on 2026-10-26: HTTP 200, `INPUT_ERROR`, « Entity not found in validateAccess: parentId ».
  */
 
 const ORIGIN = 'https://preview.acme.test';
@@ -61,7 +62,10 @@ type Linear = {
   asked: Input[];
   /** Every operation that is not a read of labels or an `issueCreate`. */
   others: string[];
-  /** Whether it refuses a sub-issue: `nth` counts the sub-issues it was asked, from one. */
+  /**
+   * Whether it refuses a sub-issue for a reason that passes, as a rate limit: `nth` counts the
+   * sub-issues it was asked, from one.
+   */
   refuses: (nth: number) => boolean;
   /** The parents it refuses a sub-issue of, as a parent that the team deleted. */
   gone: Set<string>;
@@ -91,8 +95,18 @@ function installLinear(): Linear {
 
     const input = variables.input as Input;
     linear.asked.push({ title: input.title, ...(input.parentId === undefined ? {} : { parentId: input.parentId }) });
-    if (input.parentId !== undefined && (linear.refuses(++subIssues) || linear.gone.has(input.parentId))) {
-      return answer({ errors: [{ message: 'Linear refuses this sub-issue' }] });
+    if (input.parentId !== undefined && linear.gone.has(input.parentId)) {
+      return answer({
+        errors: [
+          {
+            message: 'Entity not found in validateAccess: parentId',
+            extensions: { type: 'invalid input', code: 'INPUT_ERROR', statusCode: 400, userError: true },
+          },
+        ],
+      });
+    }
+    if (input.parentId !== undefined && linear.refuses(++subIssues)) {
+      return answer({ errors: [{ message: 'Rate limit exceeded', extensions: { code: 'RATELIMITED' } }] });
     }
     const id = `issue_${linear.kept.length + 1}`;
     linear.kept.push({ id, title: input.title, ...(input.parentId === undefined ? {} : { parentId: input.parentId }) });
@@ -181,6 +195,25 @@ describe('a batch whose parent Linear took and whose sub-issues it refused (FRU-
     assert.deepEqual(
       children(linear).map((issue) => issue.parentId),
       ['issue_2', 'issue_2'],
+    );
+  });
+
+  it('keeps a parent used again when Linear refuses its sub-issues for a reason that passes', async () => {
+    const linear = installLinear();
+    const kv = createMemoryKv();
+    linear.refuses = () => true;
+    assert.equal((await send(notes(2), kv)).status, 502);
+    // A second attempt in a rate limit: the parent is there, and Linear refuses again.
+    assert.equal((await send(notes(2), kv)).status, 502);
+
+    linear.refuses = () => false;
+    const third = await send(notes(2), kv);
+
+    assert.equal(third.status, 201, await third.clone().text());
+    assert.equal(parents(linear).length, 1, 'a rate limit made the worker write a second parent');
+    assert.deepEqual(
+      children(linear).map((issue) => issue.parentId),
+      ['issue_1', 'issue_1'],
     );
   });
 
