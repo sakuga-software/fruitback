@@ -1,11 +1,14 @@
 name: Release npm
 
 # The five packages of `packages/*` go to npm from the tag of a release (FRU-28), with a provenance
-# attestation that ties each tarball to the commit and the run that built it. The same `v*` tag also
+# attestation that ties each tarball to the commit and the run that built it. The same release also
 # starts `release-extension.yml` and `release-image.yml`: one version for everything.
+#
+# A release published on GitHub starts the three, and not a pushed tag: a person creates the release
+# and its tag `vx.y.z` in one step, in the interface of GitHub. A tag pushed alone starts nothing.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` asks for more, and only for an OIDC token.
@@ -56,7 +59,7 @@ jobs:
       # npm refuses a version it already has, and keeps a number that was published once for ever. A
       # tag that names another version than the packages would publish a number nobody chose.
       - name: The tag and the five packages name the same version
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -86,7 +89,7 @@ jobs:
           retention-days: 7
 
   # Sends the tarballs of `package` to npm. The environment `npm` gives the job its token only after a
-  # person approves the run. WARNING: a run that does not come from a tag only packs and checks
+  # person approves the run. WARNING: a run that does not come from a tag `v*` only packs and checks
   # (`--dry-run`): it publishes nothing.
   publish:
     name: publish to npm
@@ -128,7 +131,7 @@ jobs:
       # `release-npm.yml` of this repository, in the environment `npm`. See `packaging.md`.
       - name: Publish the tarballs
         env:
-          FROM_A_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          FROM_A_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           set -euo pipefail
           for prefix in fruitback-shared fruitback-widget fruitback-element fruitback-react fruitback; do

@@ -67,7 +67,7 @@ it changes who is shown the feedback and never who may fetch it.
   live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
   in the build generates them, so the guard is what keeps the committed files honest: it fails on a
   missing size, on a file of another size, and on a canvas that holds no drawing.
-- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (FRU-77).
+- **The archives a store takes are built by `release-extension.yml`, on a published release `v*`** (FRU-77).
   `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox — the second writes a **sources** archive
   beside it, which AMO asks for whenever the submitted file was built. The tag and
   `apps/extension/package.json` must name the same version, and the job fails when they do not: a
@@ -110,8 +110,8 @@ it changes who is shown the feedback and never who may fetch it.
   job of an environment as a job that publishes. **Chrome uses the API v2 with a service account,
   and `STAGED_PUBLISH`**: the reviewed version waits for « Publish » in the dashboard. The variable
   `CHROME_PUBLISH_TYPE` = `DEFAULT_PUBLISH` publishes after the review. **Firefox goes to the
-  `listed` channel**, with the archive of the sources. **A run from `workflow_dispatch` is a
-  `--dry-run`**: it asks each store for a token with its keys, and uploads nothing. On a check, a
+  `listed` channel**, with the archive of the sources. **A run on a branch, or on a tag that does not
+  start with `v`, is a `--dry-run`**: it asks each store for a token with its keys, and uploads nothing. On a check, a
   store with no keys is left out with a warning. **On a tag, a store with no keys fails the job**,
   because a release that reached one store and not the other would pass in silence. The steps of a
   release, and the keys to make once, are in « Releasing the extension » at the end of this page.
@@ -2250,7 +2250,7 @@ The job `submit` reads these from the GitHub environment `stores` (**Settings �
 
 1. Raise `version` in `apps/extension/package.json`. A store refuses a version that is not higher
    than its last one.
-2. Merge, then push the tag `v<version>` on that commit.
+2. Merge, then publish a release `v<version>` on GitHub, with a new tag on that commit (`packaging.md`).
 3. `ci`, `package` and `attach to the release` run. Then `submit` waits for the approval: check the
    archives on the release, then approve.
 4. Google and Mozilla review the version. Google keeps a reviewed version until somebody presses

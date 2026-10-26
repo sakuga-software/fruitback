@@ -3,10 +3,10 @@ name: Release extension
 # The archives a store takes, built from the tag rather than from somebody's machine (FRU-77).
 # Its own workflow, and not a job of `release-image.yml`: that one builds a container for two
 # architectures, this one builds two browser archives, and neither has a reason to wait for the
-# other.
+# other. A published release starts it: `release-npm.yml` says why a release, and not a pushed tag.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` may write, and only on a tag (FRU-70).
@@ -60,7 +60,7 @@ jobs:
       # is not higher than the last one. A tag that says something else would publish a number nobody
       # chose, so the two are compared here rather than discovered on the store.
       - name: The tag and the manifest name the same version
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -93,7 +93,7 @@ jobs:
   publish:
     name: attach to the release
     needs: [ci, package]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The only permission to write in this workflow, on the only job that needs one.
@@ -116,8 +116,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # The release may exist already: `release-image.yml` runs on the same tag, and a person can
-          # have written the notes first.
+          # A published release starts this run, and it exists. A run started by hand on a tag has none.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" archives/*.zip --clobber
           else
@@ -126,8 +125,8 @@ jobs:
 
   # Hands the archives of `package` to the Chrome Web Store and to AMO (FRU-329). It writes nothing to
   # GitHub, but it holds the keys of the stores. The environment `stores` gives them to the job only
-  # after a person approves the run. WARNING: a run that does not come from a tag only checks the keys
-  # (`--dry-run`): it uploads nothing and submits nothing.
+  # after a person approves the run. WARNING: a run that does not come from a tag `v*` only checks the
+  # keys (`--dry-run`): it uploads nothing and submits nothing.
   submit:
     name: submit to the stores
     needs: [ci, package]
@@ -163,7 +162,7 @@ jobs:
 
       - name: Submit the archives
         env:
-          FROM_A_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          FROM_A_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
           CHROME_API_VERSION: v2
           CHROME_EXTENSION_ID: ${{ vars.CHROME_EXTENSION_ID }}
           CHROME_PUBLISHER_ID: ${{ vars.CHROME_PUBLISHER_ID }}

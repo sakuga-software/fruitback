@@ -25,7 +25,7 @@ Please do not open a public issue for a vulnerability once the repository is pub
 
 Since `0.3.0`, the five packages of `packages/*` (`fruitback`, `@fruitback/shared`, `@fruitback/widget`,
 `@fruitback/element`, `@fruitback/react`) are on npm, beside the worker image on GHCR. `release-npm.yml`
-publishes them from a `v*` tag, after `ci.yml` passed on that commit and a person approved the run. Each
+publishes them from a release published on GitHub (its tag `v*`), after `ci.yml` passed on that commit and a person approved the run. Each
 tarball carries a provenance attestation that names the commit and the run that built it: `npm audit
 signatures` checks it. A version on npm is never replaced: a fix is a new version. **Only the latest
 version gets a fix.**
@@ -270,7 +270,9 @@ the store. So:
 - The keys are secrets of the GitHub environment `stores`, and not of the repository. The job
   `submit` reads them only after a person of the environment approves the run, and only after the
   job that calls `ci.yml` passed on that commit.
-- A run that does not come from a `v*` tag only checks the keys (`--dry-run`): it uploads nothing.
+- A release published on GitHub runs on its tag `v*`: after the approval, it sends the archives to
+  the stores. A run on any other ref (a start by hand on a branch, or a release whose tag does not
+  start with `v`) only checks the keys (`--dry-run`): it uploads nothing.
 - The Chrome Web Store publishes nothing by itself. `STAGED_PUBLISH` keeps the reviewed version
   until somebody presses « Publish » in the dashboard.
 - Give the service account access to this one publisher only. If a key leaks, delete it in Google
@@ -285,9 +287,13 @@ and only for these conditions, which each package names as its trusted publisher
 - the repository `sakuga-software/fruitback`, the workflow `release-npm.yml`, the environment `npm`;
 - the job `publish` reaches that environment only after a person of the environment approves the
   run, and only after the job that calls `ci.yml` passed on that commit;
-- a run that does not come from a `v*` tag only packs (`--dry-run`): it publishes nothing.
+- a release published on GitHub runs on its tag `v*` and publishes after the approval; a run on any
+  other ref (a start by hand on a branch, or a release whose tag does not start with `v`) only packs
+  (`--dry-run`): it publishes nothing.
 
-So who can publish is who can push a `v*` tag **and** approve the environment `npm`. A person of the
+So who can publish is who can publish a release on GitHub, which takes the right to write to the
+repository, as a pushed tag did, **and** approve the environment `npm`. A tag pushed alone starts
+nothing since the release trigger. A person of the
 org `@fruitback` on npm can still publish by hand, with their own two-factor authentication.
 
 ### The rate limit is counted in the database

@@ -42,7 +42,7 @@ immutable.
 - **The build stage is pinned to `--platform=$BUILDPLATFORM`.** It produces one bundled JavaScript
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
   nothing. Only the runtime stage is emulated.
-- **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`, and
+- **`latest` moves on a published release `v*` and never on a merge to `main`**; `main` publishes `edge`, and
   `sha-<commit>` is written with it. **No tag is immutable**, `sha-<commit>` included — a tag names a
   commit, only a digest names a build.
 - **The runtime stage holds no npm** (FRU-79). The base image carries npm, npx and corepack, the
@@ -86,7 +86,7 @@ immutable.
   there is `apk add sqlite`.
 - **`linux/arm64` is not a nicety.** A Raspberry Pi and an ARM VPS are ordinary self-hosting, and an
   amd64-only image excludes them with an error that reads like a broken download.
-- **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`. A
+- **`latest` moves on a published release `v*` and never on a merge to `main`**; `main` publishes `edge`. A
   `latest` that followed every merge takes away the one thing a tag is for. `sha-<commit>` is
   written with `edge`, which is what a bisect or an incident needs. Two kinds of commit have none:
   see below.
