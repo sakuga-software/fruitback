@@ -5,10 +5,13 @@ name: Release image
 # a multi-platform build cannot be loaded at all. The two must stay apart.
 #
 # Apart, but not independent (FRU-172): `publish` needs `ci`, which calls ci.yml on this commit.
+# A published release moves `latest` (its tag is `vx.y.z`): `release-npm.yml` says why a release, and
+# not a pushed tag.
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` gets the permissions that write to the registry and sign

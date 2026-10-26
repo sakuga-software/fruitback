@@ -3,10 +3,10 @@ name: Release extension
 # The archives a store takes, built from the tag rather than from somebody's machine (FRU-77).
 # Its own workflow, and not a job of `release-image.yml`: that one builds a container for two
 # architectures, this one builds two browser archives, and neither has a reason to wait for the
-# other.
+# other. A published release starts it: `release-npm.yml` says why a release, and not a pushed tag.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` may write, and only on a tag (FRU-70).
@@ -116,13 +116,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # The release may exist already: `release-image.yml` runs on the same tag, and a person can
-          # have written the notes first.
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" archives/*.zip --clobber
-          else
-            gh release create "$TAG" --generate-notes --verify-tag archives/*.zip
-          fi
+          # The release started this run, so it exists.
+          gh release upload "$TAG" archives/*.zip --clobber
 
   # Hands the archives of `package` to the Chrome Web Store and to AMO (FRU-329). It writes nothing to
   # GitHub, but it holds the keys of the stores. The environment `stores` gives them to the job only

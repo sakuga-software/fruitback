@@ -9,4 +9,4 @@ pnpm changeset --empty  # a change that a consumer cannot see: a test, a comment
 
 The sentence goes into the `CHANGELOG.md` of each package. Write it for somebody who installs the package, not for the reviewer.
 
-All the packages and the apps have one version (`fixed` in `config.json`). A release is a pull request `chore: version x.y.z` that runs `pnpm changeset version`, then a `vx.y.z` tag on its merge commit: see [docs/decisions/packaging.md](../docs/decisions/packaging.md).
+All the packages and the apps have one version (`fixed` in `config.json`). A release is a pull request `chore: version x.y.z` that runs `pnpm changeset version`, then a release `vx.y.z` published on GitHub, which makes its tag on the merge commit: see [docs/decisions/packaging.md](../docs/decisions/packaging.md).

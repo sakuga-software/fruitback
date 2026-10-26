@@ -1,11 +1,14 @@
 name: Release npm
 
 # The five packages of `packages/*` go to npm from the tag of a release (FRU-28), with a provenance
-# attestation that ties each tarball to the commit and the run that built it. The same `v*` tag also
+# attestation that ties each tarball to the commit and the run that built it. The same release also
 # starts `release-extension.yml` and `release-image.yml`: one version for everything.
+#
+# A release published on GitHub starts the three, and not a pushed tag: a person creates the release
+# and its tag `vx.y.z` in one step, in the interface of GitHub. A tag pushed alone starts nothing.
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` asks for more, and only for an OIDC token.

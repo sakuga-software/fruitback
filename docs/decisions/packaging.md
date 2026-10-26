@@ -117,7 +117,10 @@ is asserted.
   private packages versioned and never tagged). The tag of a release is the version of the extension,
   and the stores and npm compare it with their manifests. A release is a pull request
   `chore: version x.y.z` that runs `pnpm changeset version`, which writes each `CHANGELOG.md`; then a
-  tag `vx.y.z` on its merge commit.
+  release `vx.y.z` published on GitHub. « Draft a new release », a new tag `vx.y.z` on the merge
+  commit, « Generate release notes », « Publish release »: the release makes the tag, and starts
+  `release-npm.yml`, `release-extension.yml` and `release-image.yml` (`release: published`). A tag
+  pushed alone starts nothing.
 
 ### A new package on npm
 
@@ -133,7 +136,7 @@ npm trust github @fruitback/<name> --file release-npm.yml --repository sakuga-so
   --environment npm --allow-publish
 ```
 
-The trusted publisher must publish within 2 days, or npm forgets it: push the tag before then. Since
+The trusted publisher must publish within 2 days, or npm forgets it: publish the release before then. Since
 `0.3.0`, `@sakuga-software/boo` is published the same way.
 
 ### The reasons, and what is not done

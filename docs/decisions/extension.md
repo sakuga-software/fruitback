@@ -67,7 +67,7 @@ it changes who is shown the feedback and never who may fetch it.
   live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
   in the build generates them, so the guard is what keeps the committed files honest: it fails on a
   missing size, on a file of another size, and on a canvas that holds no drawing.
-- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (FRU-77).
+- **The archives a store takes are built by `release-extension.yml`, on a published release `v*`** (FRU-77).
   `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox â€” the second writes a **sources** archive
   beside it, which AMO asks for whenever the submitted file was built. The tag and
   `apps/extension/package.json` must name the same version, and the job fails when they do not: a
@@ -2250,7 +2250,7 @@ The job `submit` reads these from the GitHub environment `stores` (**Settings â†
 
 1. Raise `version` in `apps/extension/package.json`. A store refuses a version that is not higher
    than its last one.
-2. Merge, then push the tag `v<version>` on that commit.
+2. Merge, then publish a release `v<version>` on GitHub, with a new tag on that commit (`packaging.md`).
 3. `ci`, `package` and `attach to the release` run. Then `submit` waits for the approval: check the
    archives on the release, then approve.
 4. Google and Mozilla review the version. Google keeps a reviewed version until somebody presses
