@@ -116,8 +116,12 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          # The release started this run, so it exists.
-          gh release upload "$TAG" archives/*.zip --clobber
+          # A published release starts this run, and it exists. A run started by hand on a tag has none.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" archives/*.zip --clobber
+          else
+            gh release create "$TAG" --generate-notes --verify-tag archives/*.zip
+          fi
 
   # Hands the archives of `package` to the Chrome Web Store and to AMO (FRU-329). It writes nothing to
   # GitHub, but it holds the keys of the stores. The environment `stores` gives them to the job only
