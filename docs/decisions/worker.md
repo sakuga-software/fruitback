@@ -336,13 +336,19 @@ degradation the ticket asked to have written down rather than discovered.
   attempt for one of those notes writes its sub-issues under it: one parent for a batch, not one for
   each attempt. The note of a `207` that is sent again goes under the same parent too. **The worker
   archives nothing and changes nothing in the workspace of a team**: it calls `issueCreate` and no
-  other mutation of an issue, so this asks no permission more than a batch did. A parent that was
-  used again and still kept no note is forgotten, and the attempt after it writes a new one: it may
-  be a parent the team deleted, and holding on to it would refuse the notes for ten minutes. A `Kv`
-  that does not answer costs a second parent, never a note. **Not measured on a real Linear**: that
-  a sub-issue takes a `parentId`, and what Linear answers for a parent that is gone, are read in
-  its schema and held by a double (`batch-parent.test.ts`). An empty parent that nobody sends again
+  other mutation of an issue, so this asks no permission more than a batch did. **The parent is
+  forgotten only when Linear says it is gone** (`PARENT_GONE` of `linear.ts`), and the attempt after
+  it writes a new one: holding on to it would refuse the notes for ten minutes. A rate limit, an
+  outage or another refusal keeps it, and the next attempt still writes no second parent. A `Kv`
+  that does not answer costs a second parent, never a note. An empty parent that nobody sends again
   stays: the team deletes it.
+- **Measured on a real Linear on 2026-10-26** (FRU-195, a team of essays, every issue removed
+  after). A batch of two notes made a parent and two sub-issues, whose `parent` reads back as it.
+  A sub-issue refused (a label that does not exist) left the parent with no child. A parent
+  **archived** or **in the trash** still takes a sub-issue. A parent **deleted for good**, or an id
+  that never existed, answers HTTP 200 with `INPUT_ERROR` and « Entity not found in
+  validateAccess: parentId »: that sentence is `PARENT_GONE`. A team that the key may not reach
+  answers « Entity not found: Team » the same way. Not provoked: a rate limit of Linear.
 - Not done: the delivery of an address that receives (FRU-122) does not carry the id of its batch.
 
 ## Who may read a pin
