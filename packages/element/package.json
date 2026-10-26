@@ -1,6 +1,6 @@
 {
   "name": "@fruitback/element",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The Fruitback widget as a custom element: <fruitback-widget endpoint client-id>.",
   "homepage": "https://github.com/sakuga-software/fruitback#readme",
   "bugs": "https://github.com/sakuga-software/fruitback/issues",
