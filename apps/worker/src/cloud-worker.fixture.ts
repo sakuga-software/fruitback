@@ -8,7 +8,7 @@ import { createMemoryKv } from './kv.ts';
 import { createPostgresInstanceAdmin } from './instance-admin-postgres.ts';
 import { createPostgresKv } from './kv-postgres.ts';
 import type { MailMessage } from './mail.ts';
-import { databaseOn, newPglite } from './pglite.fixture.ts';
+import { databaseOn, startPglite } from './pglite.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
 
@@ -28,7 +28,9 @@ export async function cloudWorker(options: {
   /** `false`: a worker that sends no e-mail, whose first administrator gets a link another way (FRU-221). */
   mail?: boolean;
 }) {
-  const instance = newPglite();
+  // From the data folder of `initdb` on disk: each spec starts a worker, and `initdb` costs 1.5 to
+  // 2.5 s of CPU each time on a loaded machine (measured). The first worker writes the file.
+  const instance = await startPglite();
   const database = await databaseOn(instance);
   await migrate(database);
   const env: WorkerEnv = {
