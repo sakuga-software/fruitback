@@ -50,11 +50,37 @@ test.describe('the rail', () => {
     await stubWorker(page, { answer: browsersAnswer([MAC, PC]) });
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const rail = page.locator('aside.kit-rail');
-    await expect(rail.getByText('Extension connected · Edge on Windows')).toBeVisible();
+    await expect(rail.getByTitle('Edge on Windows')).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Install the extension (beta)' })).toHaveCount(0);
     const another = rail.getByRole('link', { name: 'Connect another browser' });
     await expect(another).toHaveAttribute('href', STORE);
     await expect(another).toHaveAttribute('target', '_blank');
+  });
+
+  test('says it on two lines that do not wrap, the browser cut with « … » when it is long (FRU-456)', async ({
+    page,
+  }) => {
+    const LONG = { ...MAC, browser: 'Chrome on macOS Sequoia, the laptop of the studio downstairs' };
+    for (const [browsers, locale] of [
+      [[MAC], 'en'],
+      [[LONG], 'fr'],
+    ] as const) {
+      await page.addInitScript((each) => localStorage.setItem('fruitback:locale', each), locale);
+      await stubWorker(page, { locale, answer: browsersAnswer(browsers) });
+      await page.goto(`${CONSOLE}/w/w1/sites`);
+      const rail = page.locator('aside.kit-rail');
+      const said = rail.getByText(locale === 'fr' ? 'Extension connectée' : 'Extension connected', { exact: true });
+      const browser = rail.getByTitle(browsers[0].browser);
+      await expect(said).toBeVisible();
+      await expect(browser).toBeVisible();
+      // One line each: as high as one line of the rail, and the browser inside the rail.
+      for (const line of [said, browser]) {
+        const box = await line.boundingBox();
+        expect(box?.height, await line.textContent()).toBeLessThan(24);
+      }
+      const shown = await browser.evaluate((node) => ({ cut: node.scrollWidth > node.clientWidth }));
+      expect(shown.cut).toBe(browsers[0] === LONG);
+    }
   });
 
   test('offers to install the extension when no browser is connected', async ({ page }) => {
@@ -77,7 +103,7 @@ test.describe('the rail', () => {
     // The person connects the extension in another tab, and comes back.
     browsers = [MAC];
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+    await expect(rail.getByTitle('Chrome on macOS')).toBeVisible();
   });
 
   test('an answer of an older read does not undo the answer of a newer one', async ({ page }) => {
@@ -94,14 +120,14 @@ test.describe('the rail', () => {
     });
     await page.goto(`${CONSOLE}/w/w1/sites`);
     const rail = page.locator('aside.kit-rail');
-    await expect(rail.getByText('Extension connected · Edge on Windows')).toBeVisible();
+    await expect(rail.getByTitle('Edge on Windows')).toBeVisible();
     // The tab is shown twice: the first read is slow and says « none », the second is quick.
     next.push({ browsers: [], slow: true }, { browsers: [MAC], slow: false });
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+    await expect(rail.getByTitle('Chrome on macOS')).toBeVisible();
     await page.waitForTimeout(2_000);
-    await expect(rail.getByText('Extension connected · Chrome on macOS')).toBeVisible();
+    await expect(rail.getByTitle('Chrome on macOS')).toBeVisible();
   });
 });
 

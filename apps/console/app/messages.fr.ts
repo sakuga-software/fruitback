@@ -755,6 +755,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Install the extension (beta)': 'Installer l’extension (bêta)',
   // The extension is already connected to the account (FRU-441).
   'Extension connected · {browser}': 'Extension connectée · {browser}',
+  'Extension connected': 'Extension connectée',
   'Connect another browser': 'Connecter un autre navigateur',
   'Your extension shows the notes on the sites of {workspace} and lets you leave yours.':
     'Votre extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',

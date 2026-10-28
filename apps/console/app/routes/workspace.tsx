@@ -290,10 +290,18 @@ export function RailFrame({
 
           // The line of the extension and its link read as one entry: 6 px apart, 14 px from the next.
           return (
-            <div key={link.href} className="flex flex-col gap-[6px]">
-              <p className="flex items-center gap-[8px] text-small leading-auto text-white">
-                <span aria-hidden="true" className="kit-drop bg-status-done" data-size="9" />
-                {link.status}
+            <div key={link.href} className="flex min-w-0 flex-col gap-[6px]">
+              <p className="flex min-w-0 flex-col gap-[2px] text-small leading-auto">
+                <span className="flex items-center gap-[8px] whitespace-nowrap text-white">
+                  <span aria-hidden="true" className="kit-drop flex-none bg-status-done" data-size="9" />
+                  {link.status}
+                </span>
+                {link.detail === undefined ? null : (
+                  // A long name ends with « … »; the whole of it is in the title.
+                  <span title={link.detail} className="truncate pl-[17px] text-rail-text">
+                    {link.detail}
+                  </span>
+                )}
               </p>
               {anchor}
             </div>
@@ -418,8 +426,11 @@ export function WorkspaceMark({ workspace, size = 32 }: { workspace: Workspace; 
   );
 }
 
-/** A link at the foot of a rail, which opens a new tab. `status`: a line above it, which is no link. */
-export type RailLink = { href: string; label: string; status?: string };
+/**
+ * A link at the foot of a rail, which opens a new tab. `status`: a line above it, which is no link;
+ * `detail` under it, the browser of the extension (FRU-456).
+ */
+export type RailLink = { href: string; label: string; status?: string; detail?: string };
 
 /**
  * The way to the browser extension, at the foot of both rails (FRU-406). Chrome and Edge go to the
@@ -438,7 +449,10 @@ export function useExtensionLink(): RailLink {
   return {
     href: BY_SIGN_IN ? CONNECT_PAGE : install,
     label: t('Connect another browser'),
-    status: t('Extension connected · {browser}', { browser: connected.browser }),
+    // Two lines, each on one line (FRU-456): « Extension connected · Chrome on macOS » wrapped in the
+    // rail, between « connected · » and the browser.
+    status: t('Extension connected'),
+    detail: connected.browser,
   };
 }
 
