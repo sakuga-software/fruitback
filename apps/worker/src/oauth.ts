@@ -17,7 +17,8 @@ import { digest } from './session.ts';
  *   of authorization of `/mcp`, and `/.well-known/oauth-authorization-server` (RFC 8414) gives its
  *   routes. `/mcp` answers `401` with `WWW-Authenticate` to a request with no valid token.
  * - **Registration** (RFC 7591) is open, and bounded: `REGISTRATIONS_PER_ADDRESS` an hour per
- *   address, `MAX_OAUTH_CLIENTS` that nobody approved, deleted after `UNAPPROVED_CLIENT_MS`.
+ *   address, `MAX_OAUTH_CLIENTS` that nobody approved (the oldest go first), deleted after
+ *   `UNAPPROVED_CLIENT_MS`.
  * - **The code**: PKCE with S256 only, a `redirect_uri` compared byte for byte, `CODE_SECONDS` of
  *   life, one use. A code used twice revokes the connection it made (OAuth 2.1, 4.1.3).
  * - **The tokens** are opaque and kept as digests: access `ACCESS_SECONDS`, refresh
@@ -336,8 +337,7 @@ async function register(
     ...(secret === undefined ? {} : { secretHash: await digest(secret) }),
     createdAt: now,
   };
-  const written = await context.accounts.registerOAuthClient(client, now - UNAPPROVED_CLIENT_MS);
-  if (written === 'too-many') return oauthError(503, 'temporarily_unavailable', 'Too many clients wait.', headers);
+  await context.accounts.registerOAuthClient(client, now - UNAPPROVED_CLIENT_MS);
 
   return json(
     201,

@@ -145,7 +145,7 @@ export type SharedSite = { id: string; origin: string };
 /** How many agent keys one workspace holds (FRU-461). A connection of OAuth counts as one (FRU-467). */
 export const MAX_AGENT_KEYS = 20;
 
-/** How many clients of OAuth that nobody approved yet the instance holds (FRU-467). */
+/** How many clients of OAuth that nobody approved yet the instance holds (FRU-467); the oldest go first. */
 export const MAX_OAUTH_CLIENTS = 1000;
 
 /**
@@ -573,9 +573,10 @@ export type AccountStore = {
   agentKeyById(key: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
   /**
    * Writes a client of OAuth (FRU-467), after deleting the clients that nobody approved and that
-   * registered before `staleBefore`. `too-many`: the instance holds `MAX_OAUTH_CLIENTS` such clients.
+   * registered before `staleBefore`. The instance holds `MAX_OAUTH_CLIENTS` such clients at most: past
+   * that, the oldest goes, and the new one is written.
    */
-  registerOAuthClient(client: OAuthClient, staleBefore: number): Promise<OAuthClient | 'too-many'>;
+  registerOAuthClient(client: OAuthClient, staleBefore: number): Promise<OAuthClient>;
   /** The client of OAuth of this id, or `undefined`. */
   oauthClient(id: string): Promise<OAuthClient | undefined>;
   /** Writes tokens of a connection of OAuth. Nothing for a key that is gone. */

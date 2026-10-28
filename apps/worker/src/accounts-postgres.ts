@@ -1154,8 +1154,15 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         );
         // A client that nobody approved, and that is old, goes: a registration costs a row for a day.
         await tx.delete(oauth_clients).where(and(lt(oauth_clients.created_at, staleBefore), unapproved));
-        const [held] = await tx.select({ count: count() }).from(oauth_clients).where(unapproved);
-        if ((held?.count ?? 0) >= MAX_OAUTH_CLIENTS) return 'too-many';
+        // Full, the oldest that nobody approved goes, and never a refusal: a flood from many addresses
+        // pushes out other clients that wait, and never blocks the next one (raised in review of #662).
+        const overflow = tx
+          .select({ id: oauth_clients.id })
+          .from(oauth_clients)
+          .where(unapproved)
+          .orderBy(desc(oauth_clients.created_at), desc(oauth_clients.id))
+          .offset(MAX_OAUTH_CLIENTS - 1);
+        await tx.delete(oauth_clients).where(inArray(oauth_clients.id, overflow));
         await tx.insert(oauth_clients).values({
           id: client.id,
           name: client.name,

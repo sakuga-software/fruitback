@@ -6,6 +6,7 @@ import {
   DEFAULT_CONNECTOR_SETTINGS,
   AGENT_KEY_USE_STEP_MS,
   MAX_AGENT_KEYS,
+  MAX_OAUTH_CLIENTS,
   type NewAgentKey,
   type Workspace,
   destinationId,
@@ -1170,6 +1171,35 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.oauthClient('fbo_forgotten'), undefined);
     assert.notEqual(await store.oauthClient('fbo_approved'), undefined);
     assert.notEqual(await store.oauthClient('fbo_new'), undefined);
+  });
+
+  it('holds 1000 clients of OAuth that nobody approved: the oldest goes, and a new one is always written', async (store) => {
+    assert.equal(MAX_OAUTH_CLIENTS, 1000, 'the name of this case, and SECURITY.md, say 1000');
+    const { alice, workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const client = (id: string, createdAt: number) => ({
+      id,
+      name: id,
+      redirectUris: ['https://claude.ai/cb'],
+      host: 'claude.ai',
+      createdAt,
+    });
+    // The approved one is the oldest: it stays whatever the count.
+    await store.registerOAuthClient(client('fbo_approved', 1), 0);
+    const { keyHash: _none, ...withoutDigest } = agentKey(alice.id, [site.id]);
+    assert.ok(
+      typeof (await store.createAgentKey(workspace.id, { ...withoutDigest, clientId: 'fbo_approved' })) === 'object',
+    );
+    for (let index = 0; index < MAX_OAUTH_CLIENTS; index += 1) {
+      await store.registerOAuthClient(client(`fbo_flood_${index}`, 10 + index), 0);
+    }
+    assert.notEqual(await store.oauthClient('fbo_flood_0'), undefined);
+
+    assert.deepEqual(await store.registerOAuthClient(client('fbo_claude', 10_000), 0), client('fbo_claude', 10_000));
+    assert.notEqual(await store.oauthClient('fbo_claude'), undefined);
+    assert.equal(await store.oauthClient('fbo_flood_0'), undefined, 'the oldest that nobody approved went');
+    assert.notEqual(await store.oauthClient('fbo_flood_1'), undefined);
+    assert.notEqual(await store.oauthClient('fbo_approved'), undefined);
   });
 
   it('writes no agent key that names a site of another workspace', async (store) => {

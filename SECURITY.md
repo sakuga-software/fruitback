@@ -2579,7 +2579,11 @@ of the console.
   test:`ends the connection when the member who approved it is suspended, as a key`.
 - **A flood of registrations.** Registration is open, as claude.ai needs: 10 an hour from one
   address, beside the limit of every route. A client that nobody approved is deleted after a day, and
-  the instance holds 1,000 such clients at most (`503` beyond). A client that asks for a secret
+  the instance holds 1,000 such clients at most: past that, **the oldest that nobody approved goes, and
+  the new one is written**, never refused. A flood from many addresses can push out a client that waits
+  for its person (its connector registers again), but cannot keep claude.ai from registering, nor touch
+  a client that a person approved.
+  test:`holds 1000 clients of OAuth that nobody approved: the oldest goes, and a new one is always written`. A client that asks for a secret
   (`client_secret_basic` or `client_secret_post`) gets one, once, kept as a digest; a public client
   (`none`) has PKCE alone, as OAuth 2.1 allows.
   test:`registers 10 clients an hour from one address, and deletes the stale ones nobody approved`,

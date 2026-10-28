@@ -69,6 +69,14 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'holds 1000 clients of OAuth that nobody approved: the oldest goes, and a new one is always written',
+    by: 'lets the clients that nobody approved grow with no end',
+    replace: {
+      from: 'await tx.delete(oauth_clients).where(inArray(oauth_clients.id, overflow));',
+      to: '',
+    },
+  },
+  {
     breaks: 'writes no agent key that names a site of another workspace',
     by: 'writes a key whatever the sites it names',
     replace: { from: "if (found.length !== named.length) return 'unknown-site';", to: '' },
