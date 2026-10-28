@@ -17,5 +17,6 @@ export * from './page.ts';
 export * from './panel.ts';
 export * from './resolve.ts';
 export * from './selector.ts';
+export * from './site-notes.ts';
 export * from './source.ts';
 export * from './transport.ts';
