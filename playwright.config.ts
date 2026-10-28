@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { filesOfShard } from './e2e/shards.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './e2e/worker-sessions.ts';
 
 /**
@@ -17,15 +18,22 @@ const PLAYGROUND = 'http://localhost:5177';
 /** The dev port, not the container's 8080 — see `DEFAULT_WORKER_ORIGIN`. */
 const WORKER = 'http://localhost:8788';
 
+/** Workers of one run. Locally, one: the machine runs other work too. */
+const WORKERS = process.env.CI ? 4 : 1;
+
 export default defineConfig({
   testDir: './e2e',
+  // One part of the suite on CI, chosen by the duration of its files and not by the count of its
+  // tests (`e2e/shards.ts`). Not `--shard`: it gave one part twice the time of another.
+  ...(process.env.E2E_SHARD === undefined
+    ? {}
+    : { testMatch: filesOfShard(process.env.E2E_SHARD, 'e2e').map((file) => `**/e2e/${file}`) }),
   // Runs after the servers are up and before the first spec: see `warm-up.ts` for what it absorbs.
   globalSetup: './e2e/warm-up.ts',
   // The worker's fake Linear is one process-wide store, so the specs share state. They stay apart by
   // capturing on a different page URL each — the note's page identity — rather than by locking. So
   // files run side by side on CI (FRU-268); the tests of one file still run in order, in one worker.
-  // Locally, one: the machine runs other work too.
-  workers: process.env.CI ? 4 : 1,
+  workers: WORKERS,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

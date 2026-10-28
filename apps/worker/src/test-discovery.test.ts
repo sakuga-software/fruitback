@@ -95,8 +95,14 @@ function playwrightDirectory(config: string): string {
   const directory = /\btestDir: '\.\/([^']+)'/.exec(config)?.[1];
   assert.ok(directory !== undefined, 'playwright.config.ts no longer names its testDir as a literal');
   // With one of these, Playwright no longer reads every `*.spec.*` and `*.test.*` of that directory,
-  // and rule 1 must learn what it reads.
-  assert.doesNotMatch(config, /\btest(?:Match|Ignore)\b/, 'playwright.config.ts filters its specs: update this guard');
+  // and rule 1 must learn what it reads. One is known: the part of the suite that a job of CI runs
+  // (`e2e/shards.ts`), and `ci-e2e-shards.test.ts` holds every spec file in exactly one part.
+  const unfiltered = config.replace(/\btestMatch: filesOfShard\(/g, '');
+  assert.doesNotMatch(
+    unfiltered,
+    /\btest(?:Match|Ignore)\b/,
+    'playwright.config.ts filters its specs: update this guard',
+  );
 
   return directory;
 }
@@ -288,6 +294,10 @@ describe('each test file is run (FRU-174)', () => {
     assert.equal(playwrightDirectory("export default defineConfig({\n  testDir: './e2e',\n});"), 'e2e');
     assert.throws(() => playwrightDirectory("export default defineConfig({ testDir: './e2e', testMatch: /x/ });"));
     assert.throws(() => playwrightDirectory("export default defineConfig({ testDir: './e2e', testIgnore: /x/ });"));
+    // The parts of CI, and only them: another filter beside them is refused.
+    const parts = "testDir: './e2e', ...(shard ? { testMatch: filesOfShard(shard, 'e2e', 4) } : {})";
+    assert.equal(playwrightDirectory(parts), 'e2e');
+    assert.throws(() => playwrightDirectory(`${parts}, testIgnore: /x/`));
     assert.throws(() => playwrightDirectory('export default defineConfig({ testDir: DIRECTORY });'));
   });
 });
