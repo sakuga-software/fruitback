@@ -11,7 +11,7 @@ import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
 import { createMemoryStore } from './linear-memory.ts';
-import { type NoteStore, StoreError, takesReplies } from './store.ts';
+import { type NoteStore, StoreError, takesEdits, takesReplies } from './store.ts';
 
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
 const opened = worlds();
@@ -516,6 +516,35 @@ describe('the sites that take a reply, by where their notes go (FRU-257)', () =>
         connector,
       );
     }
+  });
+});
+
+describe('which store edits a note (FRU-475)', () => {
+  const accounts = {
+    sealedKey: async (connector: string) =>
+      connector === 'con_rest' || connector === 'con_linear'
+        ? {
+            kind: connector === 'con_rest' ? 'rest' : 'linear',
+            sealed: seal('lin_api_a_key_of_the_test', SECRETS_KEY),
+            workspaceId: 'ws_a',
+            settings: DEFAULT_CONNECTOR_SETTINGS,
+          }
+        : undefined,
+    enqueueDelivery: async () => 'dlv_1',
+  } as unknown as AccountStore;
+  // The worker's own store, which edits.
+  const own: NoteStore = { ...createMemoryStore(), edit: async () => undefined };
+  const routed = createRoutedStore(own, createConnectorStores(accounts, SECRETS_KEY));
+  const site = (connector?: string) =>
+    ({ workspace: 'ws_a', ...(connector === undefined ? {} : { connector }) }) as ClientConfig;
+
+  it('the worker’s own store, for a site with no destination', async () => {
+    assert.equal(await takesEdits(routed, site()), true);
+  });
+
+  it('never a tracker, nor an address that already has the note as it was sent, though it keeps the notes', async () => {
+    assert.equal(await takesEdits(routed, site('con_linear')), false);
+    assert.equal(await takesEdits(routed, site('con_rest')), false);
   });
 });
 

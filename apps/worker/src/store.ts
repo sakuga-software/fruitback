@@ -181,6 +181,20 @@ export type NoteStore = {
   /** Whether the store of this client takes a status, for a store that routes by client. */
   statusesFor?(client: ClientConfig | undefined): Promise<boolean>;
   /**
+   * Replaces the text of a note (FRU-475), and writes a marked reply under it (`editText`), in one
+   * transaction. Only while the note is `new`: `not-new` when it moved since the caller read it, and
+   * nothing is written. The answer is the note as it is now. `undefined`: this store holds no such
+   * note for this client. Absent: the text of a note is its tracker's, and is not edited here.
+   */
+  edit?(
+    target: ReplyTarget,
+    edit: NewEdit,
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+  ): Promise<{ note: Note; comment: NoteComment } | 'not-new' | undefined>;
+  /** Whether the store of this client takes an edit, for a store that routes by client. */
+  editsFor?(client: ClientConfig | undefined): Promise<boolean>;
+  /**
    * The states of the tracker where this client's notes are (FRU-368), each with the stage the store
    * gives it: what the statuses of a site list for that source. Absent: the store has no states of
    * its own to say (the worker's store, GitHub, an address). It throws `StoreError` when the tracker
@@ -224,6 +238,9 @@ export type ReplyAuthor =
 /** The note a reply goes under: the `id` of its issue, and the client whose note it must be. */
 export type ReplyTarget = { issue: string; clientId: string | undefined };
 
+/** A new text for a note (FRU-475). Only its author gives one: the route refuses everybody else. */
+export type NewEdit = { text: string; author: Extract<ReplyAuthor, { kind: 'member' }> };
+
 /** A reply to write: what somebody typed, and who they are. */
 export type NewReply = { body: string; author: ReplyAuthor };
 
@@ -240,6 +257,11 @@ export async function takesReplies(store: NoteStore, client: ClientConfig | unde
 /** Whether a store sets the status of a note for this client (FRU-367): only the worker's own store does. */
 export async function takesStatuses(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
   return store.statusesFor === undefined ? store.setStatus !== undefined : store.statusesFor(client);
+}
+
+/** Whether a store edits the text of a note for this client (FRU-475): only the worker's own store does. */
+export async function takesEdits(store: NoteStore, client: ClientConfig | undefined): Promise<boolean> {
+  return store.editsFor === undefined ? store.edit !== undefined : store.editsFor(client);
 }
 
 /**

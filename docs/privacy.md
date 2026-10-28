@@ -141,6 +141,14 @@ quoted. « Still wrong » also moves the note back in the tracker. The worker ke
 verdict: a read finds it in the replies. The index of the notes keeps nothing new; it already keeps
 the account of the member who left a note, and that is what says who may give a verdict.
 
+### A note edited by its author (FRU-475)
+
+The person who left a note can change its text while nobody of the team has moved it, on a note the
+worker keeps. The new text replaces the old one in the database: **the worker keeps no copy of the
+text of before**. A reply under the note says who edited it and when, with no text. The excerpt of
+the index of the notes is written again from the new text. A note sent to a tracker or to an address
+cannot be edited, so nothing is sent to them again.
+
 ### What the worker keeps besides the note
 
 - **No access log.** The worker writes to its output at boot, on a configuration problem and on a

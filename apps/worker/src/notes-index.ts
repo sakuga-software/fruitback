@@ -98,7 +98,7 @@ export type NoteIndex = {
   record(entries: readonly NoteEntry[], now: number): Promise<void>;
   /**
    * What a read of one page of a site learned (FRU-237): the stage of each note as its store answers
-   * it now. A note of the site that the index does not hold yet, planted before it, is written with
+   * it now, and the excerpt of its text, which its author can edit (FRU-475). A note of the site that the index does not hold yet, planted before it, is written with
    * what the read says and nothing else: no way, and a visitor for anyone the site did not verify.
    */
   refresh(

@@ -6,7 +6,15 @@ import { type GithubApp, createGithubConnectorStore, openInstallation } from './
 import { type StageExceptions, createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
 import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
-import { type NoteStore, StoreError, takesAttachments, takesChecks, takesStatuses, takesReplies } from './store.ts';
+import {
+  type NoteStore,
+  StoreError,
+  takesAttachments,
+  takesChecks,
+  takesEdits,
+  takesStatuses,
+  takesReplies,
+} from './store.ts';
 
 /**
  * The store of a request on a worker whose workspaces connect their own trackers (FRU-121).
@@ -142,8 +150,9 @@ export type ConnectorStores = (connector: string, workspace: string | undefined,
  */
 function receivingStore(own: NoteStore, accounts: AccountStore, connector: string, now: () => number): NoteStore {
   // An address only receives: it sends no reply back, so a site of it takes none (FRU-257), and no
-  // verdict (FRU-294).
-  const { reply: _reply, check: _check, ...noReply } = own;
+  // verdict (FRU-294). No edit either (FRU-475): the address has the note as it was sent, and an
+  // edit here would make the two say different things.
+  const { reply: _reply, check: _check, edit: _edit, editsFor: _editsFor, ...noReply } = own;
 
   return {
     ...noReply,
@@ -271,6 +280,8 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
     checksFor: async (client) => takesChecks(await pick(client), client),
     // FRU-367: only the worker's own store sets the status of a note; a tracker keeps its own.
     statusesFor: async (client) => takesStatuses(await pick(client), client),
+    // FRU-475: only the worker's own store edits a note; a tracker and an address keep what they got.
+    editsFor: async (client) => takesEdits(await pick(client), client),
     // FRU-368: the states of the tracker of the client, for the statuses of its site.
     trackerStatesFor: async (client) => {
       const store = await pick(client);
@@ -294,6 +305,12 @@ export function createRoutedStore(base: NoteStore, connectors: ConnectorStores):
       if (store.setStatus === undefined) throw new StoreError('The store of this site takes no status');
 
       return store.setStatus(target, status, client);
+    },
+    async edit(target, edit, client, policy) {
+      const store = await pick(client);
+      if (store.edit === undefined) throw new StoreError('The store of this site takes no edit');
+
+      return store.edit(target, edit, client, policy);
     },
   };
 }

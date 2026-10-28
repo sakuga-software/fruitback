@@ -134,6 +134,18 @@ export const FRENCH: Catalog = {
   'reply.failed': 'Pas envoyée — le texte est gardé, réessayez',
   'reply.failedWait': 'Trop de réponses en ce moment. Le texte est gardé : renvoyez-la dans une minute.',
   'reply.failedSignedOut': 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-la.',
+  'edit.open': 'Modifier',
+  'edit.openLabel': 'Modifier votre note',
+  'edit.label': 'Votre note',
+  'edit.save': 'Enregistrer',
+  'edit.cancel': 'Annuler',
+  'edit.saving': 'Enregistrement…',
+  'edit.saved': 'Enregistrée',
+  'edit.failed': 'Pas enregistrée — le texte est gardé, réessayez',
+  'edit.failedWait': 'Trop de demandes en ce moment. Le texte est gardé : enregistrez-la dans une minute.',
+  'edit.failedSignedOut': 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis enregistrez-la.',
+  'edit.refused':
+    'Cette note ne peut plus être modifiée : l’équipe l’a prise en charge. Le texte est gardé ici ; envoyez-le en réponse.',
   'thread.anonymous': 'Anonyme',
   'thread.orphan': 'Élément introuvable — position approximative.',
   'thread.uncertain':

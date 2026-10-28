@@ -194,7 +194,7 @@ export function widgetIdOf(text: string): string {
   return typeof id === 'string' ? id : '';
 }
 
-function readJson(text: string): unknown {
+export function readJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {

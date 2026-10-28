@@ -30,6 +30,7 @@ import {
   StoreError,
   takesAttachments,
   takesChecks,
+  takesEdits,
   takesReplies,
 } from './store.ts';
 import { attachmentStoreFor } from './worker-stores.ts';
@@ -111,12 +112,17 @@ export async function getFeedback(
     // FRU-294: the notes of this reader, and the confirmation of each note done. Never in the cached
     // answer: `mine` is the reader's.
     const own = await notesOfReader(request, config, route.policy, route.client?.workspace, clientId, all, noteIndex);
+    // FRU-475: the reader may edit a note of theirs that is still `new`, where the worker keeps it,
+    // on a site with one place. The route decides again; this only says where to offer it.
+    const editsHere = own.size > 0 && places.length < 2 && (await takesEdits(store, route.client));
     const issues: NoteIssue[] = all.map((issue) => {
       const checked = issue.stage === 'done' ? checkedOf(issue.comments) : undefined;
+      const mine = own.has(issue.note.id);
       const marked = {
         ...issue,
         ...(checked === undefined ? {} : { checked }),
-        ...(own.has(issue.note.id) ? { mine: true as const } : {}),
+        ...(mine ? { mine: true as const } : {}),
+        ...(mine && editsHere && issue.stage === 'new' ? { editable: true as const } : {}),
       };
 
       return hidden ? withoutTrackerStatus(withoutTracker(marked, issue.note.id)) : marked;

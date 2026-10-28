@@ -99,12 +99,14 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
               confirmed: !verdicts || issue.comments === undefined ? null : checkedOf(issue.comments) !== undefined,
             })),
           )
-          // A note it holds: the stage, and when the tracker said it. Nothing else of the row moves,
-          // and a read with no replies leaves the verdict as the last read with replies said it.
+          // A note it holds: the stage, and when the tracker said it, and the excerpt of its text,
+          // which its author can edit (FRU-475). Nothing else of the row moves, and a read with no
+          // replies leaves the verdict as the last read with replies said it.
           .onConflictDoUpdate({
             target: [note_index.site_id, note_index.note_id],
             set: {
               stage: sql`excluded.stage`,
+              excerpt: sql`excluded.excerpt`,
               checked_at: sql`excluded.checked_at`,
               // Where no verdict can be given, none is kept: the note is no fix to check.
               confirmed: verdicts ? sql`coalesce(excluded.confirmed, ${note_index.confirmed})` : sql`NULL`,
