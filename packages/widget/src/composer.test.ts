@@ -637,6 +637,56 @@ describe('createComposer', () => {
     );
   });
 
+  it('follows an element that moves against the document at a scroll, and not one that moves with it (FRU-457)', () => {
+    const page = mountPage('<main><a id="fixed">Administration</a><p id="prose">Du texte</p></main>', {
+      width: 1_000,
+      height: 1_000,
+    });
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    const opened = createComposer({ document: page.document, host, onSubmit: async () => true });
+    composer = opened;
+    opened.element.getBoundingClientRect = () => ({ height: 240 }) as DOMRect;
+    const top = () => opened.element.style.getPropertyValue('--fruitback-composer-top');
+    // `rect` is in the window, as `getBoundingClientRect` answers.
+    const at = (element: Element, rect: { top: number }) =>
+      Object.defineProperty(element, 'getBoundingClientRect', {
+        value: () => ({ left: 20, right: 140, top: rect.top, bottom: rect.top + 30 }),
+        configurable: true,
+      });
+    const scroll = (y: number) => {
+      Object.defineProperty(page.view, 'scrollY', { value: y, configurable: true });
+      page.document.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('scroll'));
+    };
+
+    // A link of a fixed sidebar: 400 px from the top of the window, at any scroll.
+    const fixed = page.query('#fixed');
+    at(fixed, { top: 400 });
+    opened.open(fixed);
+    // 400 − 40 − 240, above the link.
+    assert.equal(top(), '120px');
+    scroll(300);
+    assert.equal(top(), '420px', 'the composer left a link that stays in the window');
+
+    // A paragraph of the document: the window moves over it, and the composer stays with it.
+    opened.close();
+    scroll(0);
+    const prose = page.query('#prose');
+    const where = { top: 600 };
+    at(prose, where);
+    opened.open(prose);
+    assert.equal(top(), '320px');
+    where.top = 300;
+    scroll(300);
+    assert.equal(top(), '320px', 'the composer slid along the window');
+
+    // Closed, it follows nothing.
+    opened.close();
+    at(fixed, { top: 400 });
+    scroll(500);
+    assert.equal(top(), '320px');
+  });
+
   it('opens above its element, 40 px over its top, and below when there is no room above (FRU-258)', () => {
     const placed = (anchor: { left: number; top: number; bottom: number; right: number }, scrollY = 0) => {
       const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });

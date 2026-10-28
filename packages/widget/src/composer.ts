@@ -1,5 +1,6 @@
 import { MAX_ATTACHMENTS_PER_NOTE, type NoteReporter } from '@fruitback/shared';
 import type { Destination } from './destinations.ts';
+import { isElement } from './dom.ts';
 import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
@@ -246,13 +247,20 @@ export type DestinationChoice = {
   remember(id: string): void;
 };
 
+/** The edges of an element, in document coordinates. */
+export type ElementBox = { left: number; top: number; bottom: number; right: number };
+
 export type Composer = {
   /**
    * `about` is what the note points at, written in the head in mono (FRU-305):
    * « button.add · <AddToCart> ». `name` is what a person reads for the element (FRU-258): the head
    * gives it as its title, for the eye that does not read selectors. Either can be left out.
+   *
+   * `anchor` is the element, or its edges in document coordinates. Given the element, the composer
+   * follows it when it moves against the document: a fixed sidebar at a scroll, a row in a box that
+   * scrolls (FRU-457).
    */
-  open(anchor: { left: number; top: number; bottom: number; right: number }, about?: string, name?: string): void;
+  open(anchor: Element | ElementBox, about?: string, name?: string): void;
   close(): void;
   state(): ComposerState;
   /**
@@ -725,11 +733,10 @@ export function createComposer(options: ComposerOptions): Composer {
     picture.checked = offered && options.picture?.get() === true;
   }
 
-  function open(
-    anchor: { left: number; top: number; bottom: number; right: number },
-    subject = '',
-    readable = '',
-  ): void {
+  function open(target: Element | ElementBox, subject = '', readable = ''): void {
+    following = isElement(target) ? target : null;
+    const anchor = isElement(target) ? boxOf(target) : target;
+    placedAt = anchor;
     if (closing !== 0) {
       view?.clearTimeout(closing);
       closing = 0;
@@ -778,6 +785,34 @@ export function createComposer(options: ComposerOptions): Composer {
     place(anchor);
     field.focus();
   }
+
+  /** The element the open composer follows, and its edges where the composer was placed last. */
+  let following: Element | null = null;
+  let placedAt: ElementBox | undefined;
+
+  function boxOf(element: Element): ElementBox {
+    const rect = element.getBoundingClientRect();
+    const x = view?.scrollX ?? 0;
+    const y = view?.scrollY ?? 0;
+
+    return { left: rect.left + x, top: rect.top + y, bottom: rect.bottom + y, right: rect.right + x };
+  }
+
+  /**
+   * Placed again when its element moved against the document (FRU-457). An element that moves with
+   * the document keeps the composer where it is: a scroll does not slide it along the window.
+   */
+  function follow(): void {
+    if (root.hidden || following === null) return;
+    const now = boxOf(following);
+    if (placedAt !== undefined && Math.abs(now.left - placedAt.left) < 1 && Math.abs(now.top - placedAt.top) < 1)
+      return;
+    placedAt = now;
+    place(now);
+  }
+  // Capture phase: a scroll event does not bubble, and a box of the page that scrolls must count too.
+  view?.addEventListener('scroll', follow, { passive: true, capture: true });
+  view?.addEventListener('resize', follow, { passive: true });
 
   /**
    * Above the element it belongs to, 40 px over its top, as the mock-up draws it (FRU-258): the frame
@@ -1116,6 +1151,8 @@ export function createComposer(options: ComposerOptions): Composer {
       if (closing !== 0) view?.clearTimeout(closing);
       document.removeEventListener('click', onDocumentClick, true);
       document.removeEventListener('click', onMenuOutside, true);
+      view?.removeEventListener('scroll', follow, true);
+      view?.removeEventListener('resize', follow);
       focus.destroy();
       stopFollowingPlaces?.();
       stopFollowingOffer?.();

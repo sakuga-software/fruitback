@@ -479,17 +479,7 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
-      const rect = selected.element.getBoundingClientRect();
-      composer.open(
-        {
-          left: rect.left + view.scrollX,
-          top: rect.top + view.scrollY,
-          bottom: rect.bottom + view.scrollY,
-          right: rect.right + view.scrollX,
-        },
-        headOf(selected.element, selected.source),
-        readableName(selected.element),
-      );
+      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element));
     },
   });
 
