@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fruitback, the agents of a workspace (FRU-462)</title>
+<style>
+:root{--ink:#18181b;--ink-soft:#52525b;--muted:#6b6b74;--page:#fff;--subtle:#fafafa;--chip:#f4f4f5;--line:#e4e4e7;--control:#8a8a93;--accent:#dd2c27;--accent-strong:#b91c1c;--done:#15803d;--rail:#18181b;--rail-active:#27272a;--rail-text:#d4d4d8;--rail-muted:#a1a1aa}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e9ec;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-wrap:anywhere}
+button{white-space:nowrap;font:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+button svg{width:16px;height:16px}
+.board-head{padding:40px 48px 8px;max-width:1200px}
+.board-head h1{font-size:28px;margin:0 0 8px}
+.board-head p{font-size:15px;line-height:1.5;color:var(--ink-soft);margin:0 0 8px}
+.toc{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 48px 24px;font-size:14px}
+.frame{padding:24px 48px 40px}
+.f-title{font-size:18px;margin:0 0 8px}
+.notes{margin:0 0 14px;padding-left:20px;max-width:1100px;font-size:14px;line-height:1.5;color:var(--ink-soft)}
+.f-box{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.06);border-radius:4px;overflow:hidden}
+code,.snippet,.secret{font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.focus{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)}
+.app{display:flex;min-height:900px;background:#fff}
+.rail{flex:0 0 248px;background:var(--rail);color:#fff;padding:16px 12px;display:flex;flex-direction:column;gap:20px}
+.rail .ws{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;color:#fff;text-decoration:none}
+.rail .ws[aria-current]{background:var(--rail-active)}
+.ws-i{width:32px;height:32px;border-radius:8px;background:#fff;color:var(--ink);display:grid;place-items:center;font-weight:700;font-size:14px;flex:none}
+.ws b{display:block;font-size:15px}.ws small{display:block;font-size:12px;color:var(--rail-muted)}
+.rail nav{display:flex;flex-direction:column;gap:2px}
+.rail nav a{display:flex;align-items:center;min-height:40px;padding:0 12px;border-radius:10px;color:var(--rail-text);font-size:15px;text-decoration:none;white-space:nowrap}
+.w390{flex-direction:column;min-height:0}
+.w390 .rail{flex:none;padding:10px 12px;gap:6px}
+.w390 .rail nav{flex-direction:row;overflow:hidden}
+.main-wrap{flex:1;min-width:0}
+main{padding:32px clamp(16px,4vw,48px) 72px}
+.w390 main{padding:20px 16px 48px}
+.crumbs{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
+.crumbs a{color:var(--ink);font-weight:600;text-underline-offset:3px}
+.pg-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 24px;margin-bottom:24px}
+.pg-head h1{margin:0 0 6px;font-size:28px;line-height:1.15;letter-spacing:-.02em}
+.lead{margin:0;font-size:16px;line-height:1.5;color:var(--muted);max-width:760px}
+.lead a,.actions a{color:var(--ink);font-weight:600;text-underline-offset:3px}
+.b-accent{height:44px;padding:0 22px;border:0;border-radius:6px;background:var(--accent);color:#fff;font-size:14px;font-weight:600}
+.b-accent.pill{border-radius:999px}
+.b-accent[aria-disabled]{opacity:.45;cursor:default}
+.b-danger{height:44px;padding:0 18px;border:0;border-radius:6px;background:var(--accent-strong);color:#fff;font-size:14px;font-weight:600}
+.b-wide{height:44px;padding:0 16px;border:1px solid var(--control);border-radius:6px;background:#fff;color:var(--ink);font-size:14px;font-weight:600;text-decoration:none}
+.b-wide.sm,.b-ghost.sm{height:36px;padding:0 12px}
+.b-wide.pressed{background:var(--chip)}
+.b-wide.link{display:inline-flex;align-items:center}
+.b-ghost{height:44px;padding:0 12px;border:0;border-radius:6px;background:transparent;color:var(--ink);font-size:14px;font-weight:600}
+.b-ghost.danger{color:var(--accent-strong)}
+.callout{display:flex;gap:10px;align-items:flex-start;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--subtle);margin:0 0 20px;max-width:900px;font-size:15px;line-height:1.5}
+.callout p{margin:0}
+.callout svg{flex:none;width:20px;height:20px;margin-top:2px;color:var(--accent-strong)}
+.k-head,.k-row{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(150px,1fr) minmax(200px,1.3fr) 130px 160px 190px;gap:12px;align-items:center}
+.k-head{padding:0 20px 8px;font-size:13px;font-weight:600;color:var(--muted)}
+.k-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.k-row{padding:14px 20px;border-bottom:1px solid var(--line);font-size:14px;line-height:1.45}
+.k-row:last-child{border-bottom:0}
+.k-row small{display:block;font-size:13px;color:var(--muted)}
+.k-row b{font-size:15px}
+.host{display:block}
+.c-actions{display:flex;justify-content:flex-end;gap:6px}
+.lbl-m{display:none}
+.soon{display:inline-flex;gap:6px;align-items:center;color:var(--accent-strong);font-weight:600}
+.soon svg{width:16px;height:16px}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink-soft);font-size:13px;font-weight:600}
+.foot{font-size:13px;color:var(--muted);margin:10px 0 0}
+.writes{grid-column:1/-1;margin:8px 0 2px;padding:16px 18px;border-radius:10px;background:var(--subtle);border:1px solid var(--line)}
+.writes h3{margin:0 0 10px;font-size:15px}
+.writes ol{list-style:none;margin:0;padding:0}
+.writes li{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(140px,1fr) 120px 110px;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.writes li:first-child{border-top:0}
+.w-when{color:var(--muted);text-align:right}
+.writes .hint,.hint{font-size:13px;color:var(--muted);margin:10px 0 0;line-height:1.5}
+.writes .empty{margin:0;font-size:14px;color:var(--muted)}
+.card{border:1px solid var(--line);border-radius:14px;padding:24px 28px;margin:0 0 24px;max-width:760px}
+.card h2{margin:0 0 16px;font-size:18px;display:flex;align-items:center;gap:8px}
+.card h2 svg{width:20px;height:20px;color:var(--done)}
+.card h3{margin:22px 0 4px;font-size:15px}
+.field{border:0;padding:0;margin:0 0 18px}
+.field label,.field legend{display:block;font-size:14px;font-weight:600;margin-bottom:6px;padding:0}
+.field input:not([type]),.field input[inputmode]{height:44px;width:100%;max-width:420px;border:1px solid var(--control);border-radius:8px;padding:0 12px;font:inherit;font-size:15px}
+.field.bad input:not([type]){border-color:var(--accent-strong)}
+.err{margin:6px 0 0;font-size:13px;color:var(--accent-strong);font-weight:600}
+.checks{display:flex;flex-direction:column;gap:2px}
+.check,.radio{display:flex;gap:10px;align-items:flex-start;min-height:44px;padding:8px 0;font-size:15px;cursor:pointer}
+.check input,.radio input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--ink);flex:none}
+.check .host{display:inline;font-weight:600;margin-right:8px}
+.check small{color:var(--muted);font-size:13px}
+.radio span,.check.strong span{display:block}
+.radio small,.check.strong small{display:block;font-size:13px;color:var(--muted);line-height:1.5}
+.check.strong{padding:14px 16px;border:1px solid var(--line);border-radius:10px;margin:0 0 18px;max-width:640px}
+.days-row{display:flex;gap:10px;align-items:center}
+.days-row input{max-width:96px!important}
+.actions{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:14px}
+.actions.end{justify-content:flex-end}
+.strong-p{font-size:15px;font-weight:600;margin:0 0 10px}
+.secret-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.secret{flex:1 1 320px;padding:12px 14px;border-radius:6px;background:var(--chip);word-break:break-all;line-height:1.4}
+.snippet{margin:8px 0 0;padding:14px 16px;border-radius:8px;background:var(--rail);color:#f4f4f5;overflow-x:auto;white-space:pre;line-height:1.5}
+.scrim{position:absolute;inset:0;background:rgba(24,24,27,.45);display:grid;place-items:center}
+.dialog{background:#fff;border-radius:14px;padding:24px 28px;max-width:480px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.dialog h2{margin:0 0 10px;font-size:18px}
+.dialog p{margin:0 0 6px;font-size:15px;line-height:1.5;color:var(--ink-soft)}
+.empty-card{border:1px dashed var(--control);border-radius:14px;padding:40px 32px;max-width:760px;background:var(--subtle)}
+.empty-card h2{margin:0 0 6px;font-size:18px}.empty-card p{margin:0 0 18px;font-size:15px;line-height:1.5;color:var(--muted)}
+.set-sec{max-width:640px;padding-top:24px}
+.set-sec h2{font-size:18px;margin:0 0 10px}.set-sec p{font-size:15px;line-height:1.5;margin:0 0 10px}
+.w390 .k-head{display:none}
+.w390 .k-row{grid-template-columns:1fr;gap:6px;padding:16px}
+.w390 .lbl-m{display:inline-block;width:110px;flex:none;font-size:13px;color:var(--muted)}
+.w390 .c-sites,.w390 .c-rights,.w390 .c-last,.w390 .c-ends{display:flex}
+.w390 .c-actions{justify-content:flex-start;margin-top:6px}
+.w390 .c-actions .sm{height:44px}
+.w390 .writes li{grid-template-columns:1fr;gap:2px}
+.w390 .w-when{text-align:left}
+.w390 .card{padding:18px 16px}
+.w390 .pg-head .b-accent{width:100%;justify-content:center}
+table.texts{border-collapse:collapse;font-size:14px;line-height:1.45;background:#fff;max-width:1200px}
+table.texts td,table.texts th{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+.qa{max-width:1100px;font-size:15px;line-height:1.55}
+.qa li{margin-bottom:10px}
+</style>
+</head>
+<body>
+<header class="board-head">
+  <h1>The agents of a workspace (FRU-462)</h1>
+  <p>Board of the console screen where the owner and the admins of a workspace make an agent key (shown once, with the line for Claude Code), list the keys with their last use and their end, see what each key wrote, and revoke one. The routes are those of FRU-461, FRU-464 and the last use of FRU-462 (<code>/console/workspaces/&lt;id&gt;/agent-keys</code>). Drawn on the tokens of the console (design/README.md). Frames at 1440 px are in English, frames at 390 px in French; every sentence of both is in the table at the end.</p>
+  <p>Generated by <code>tools/build.mjs</code>: edit the script, not this file. A frame is a picture: its buttons do nothing. The key on the board is made up.</p>
+</header>
+<nav class="toc" aria-label="Frames"><a href="#a">A · The list: a key in use, one that ends in 5 days, one that ended</a><a href="#b">B · « New key »: the form</a><a href="#c">C · The form refused: no name, no site</a><a href="#d">D · The key, shown once, with the line for Claude Code</a><a href="#e">E · The writes of a key</a><a href="#f">F · Revoke, asked once more</a><a href="#g">G · No key yet</a><a href="#i">I · The section « Agents » of the workspace settings (owner, admin)</a><a href="#j">J · 390 px, French: the list</a><a href="#k">K · 390 px, French: the key shown once</a><a href="#l">L · 390 px, French: the form</a><a href="#m">E2 · 390 px, French: a key that wrote nothing</a><a href="#decisions">Decisions</a><a href="#texts">Texts, EN and FR</a></nav>
+<section class="frame" id="a">
+  <h2 class="f-title">A · The list: a key in use, one that ends in 5 days, one that ended</h2>
+  <ul class="notes"><li>The page is /w/:workspace/settings/agents, reached from the section « Agents » of the workspace settings (frame I). It is no entry of the rail: the rail holds the five sections of the mockup, and the keys are a matter of the owner and the admins.</li><li>Each row: the name and the day it was made; its sites; what it can do and whether it reads only the notes of known people; its last use (ago() of the console, « Never used »); its end. Oldest first, as the worker answers.</li><li>7 days or less before its end, the row says « Ends in N days » in the strong accent with a triangle, and one line above the list says what to do. An ended key stays listed (the worker keeps it) with the chip « Ended », until somebody revokes it.</li><li>The foot says how many of the 20 keys of a workspace are made.</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill">New key</button>
+      </header>
+      <div class="callout warn" role="status"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><p>« Nightly triage » ends in 5 days. Its agent stops then: make a new key, give it to the agent, then revoke this one.</p></div><div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="b">
+  <h2 class="f-title">B · « New key »: the form</h2>
+  <ul class="notes"><li>The form opens above the list, in place of nothing: the list does not move under the pointer. « New key » takes focus to « Name ».</li><li>Sites: a box per site of the workspace, with who reads its notes, so the switch below reads in context. Past 20 ticked, the others are disabled.</li><li>Rights: two choices, read by default. Lives for: a number, 90 by default, and the day it ends, computed as it is typed.</li><li>« Only the notes of known people » is ticked by default (decision 7 of agents.md). It is asked for every key: the sites of a key can change who reads them later.</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill" aria-disabled="true">New key</button>
+      </header>
+      <section class="card form" aria-labelledby="new-key-title">
+    <h2 id="new-key-title">New agent key</h2>
+    <div class="field">
+      <label for="kn">Name</label>
+      <input id="kn" value="Claude on CI" >
+      <p class="hint">Its replies are signed with it, beside « Agent ».</p>
+    </div>
+    <fieldset class="field">
+      <legend>Sites</legend>
+      <div class="checks"><label class="check"><input type="checkbox" checked><span class="host">shop.acme.dev</span><small>Members read its notes</small></label><label class="check"><input type="checkbox" checked><span class="host">blog.acme.dev</span><small>Members read its notes</small></label><label class="check"><input type="checkbox"><span class="host">docs.acme.dev</span><small>Everyone reads its notes</small></label></div>
+      <p class="hint">The key reads nothing of another site. 20 at most.</p>
+    </fieldset>
+    <fieldset class="field">
+      <legend>What the agent can do</legend>
+      <label class="radio"><input type="radio" name="r"><span><b>Read the notes</b><small>Their text, page, element, component, file and line, picture, replies and status.</small></span></label>
+      <label class="radio"><input type="radio" name="r" checked><span><b>Read, reply and set a status</b><small>A reply says it is from an agent. A status is set only on a note that Fruitback keeps.</small></span></label>
+    </fieldset>
+    <div class="field days">
+      <label for="kd">Lives for</label>
+      <span class="days-row"><input id="kd" inputmode="numeric" value="90"><span>days</span></span>
+      <p class="hint">Ends on 26 Jan 2027. From 1 to 365 days: no key lives with no end.</p>
+    </div>
+    <label class="check strong"><input type="checkbox" checked><span><b>Only the notes of known people</b><small>On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Untick it only knowing that.</small></span></label>
+    <div class="actions"><button type="button" class="b-accent">Make the key</button><button type="button" class="b-ghost">Cancel</button></div>
+  </section><div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="c">
+  <h2 class="f-title">C · The form refused: no name, no site</h2>
+  <ul class="notes"><li>A press with no name or no site sends nothing: each field says what it needs, and focus goes to the first one (the kit: Field with error, aria-invalid). Nothing typed is cleared.</li><li>A refusal of the worker (400 unknown-site: a site went meanwhile; 409 too-many-keys; 409 workspace-suspended) is said under the form, with what typed kept.</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill" aria-disabled="true">New key</button>
+      </header>
+      <section class="card form" aria-labelledby="new-key-title">
+    <h2 id="new-key-title">New agent key</h2>
+    <div class="field bad">
+      <label for="kn">Name</label>
+      <input id="kn" value="" aria-invalid="true" class="focus">
+      <p class="err">Give the key a name.</p>
+    </div>
+    <fieldset class="field bad">
+      <legend>Sites</legend>
+      <div class="checks"><label class="check"><input type="checkbox"><span class="host">shop.acme.dev</span><small>Members read its notes</small></label><label class="check"><input type="checkbox"><span class="host">blog.acme.dev</span><small>Members read its notes</small></label><label class="check"><input type="checkbox"><span class="host">docs.acme.dev</span><small>Everyone reads its notes</small></label></div>
+      <p class="err">Choose at least one site.</p>
+    </fieldset>
+    <fieldset class="field">
+      <legend>What the agent can do</legend>
+      <label class="radio"><input type="radio" name="r"><span><b>Read the notes</b><small>Their text, page, element, component, file and line, picture, replies and status.</small></span></label>
+      <label class="radio"><input type="radio" name="r" checked><span><b>Read, reply and set a status</b><small>A reply says it is from an agent. A status is set only on a note that Fruitback keeps.</small></span></label>
+    </fieldset>
+    <div class="field days">
+      <label for="kd">Lives for</label>
+      <span class="days-row"><input id="kd" inputmode="numeric" value="90"><span>days</span></span>
+      <p class="hint">Ends on 26 Jan 2027. From 1 to 365 days: no key lives with no end.</p>
+    </div>
+    <label class="check strong"><input type="checkbox" checked><span><b>Only the notes of known people</b><small>On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Untick it only knowing that.</small></span></label>
+    <div class="actions"><button type="button" class="b-accent">Make the key</button><button type="button" class="b-ghost">Cancel</button></div>
+  </section><div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="d">
+  <h2 class="f-title">D · The key, shown once, with the line for Claude Code</h2>
+  <ul class="notes"><li>The answer of POST is the one place the key is. It is shown in a card above the list, which already holds the new row, until « I kept it ». It is kept in no storage: leaving the page loses it, and the card says why it matters.</li><li>The line to copy is the one of docs/agents.md, with the address of this worker and the key in it: one copy and Claude Code is connected. « Copy the key » and « Copy the line » say « Copied »; a browser that refuses the copy gets the sentence of the REST connector: select it by hand.</li><li>The link leads to docs/agents.md, « Connect an agent that runs elsewhere ».</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill" aria-disabled="true">New key</button>
+      </header>
+      <section class="card once" aria-labelledby="once-title">
+    <h2 id="once-title"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>« Claude on CI » is made</h2>
+    <p class="strong-p">Copy the key now: Fruitback shows it only once, and keeps only its digest.</p>
+    <div class="secret-row"><code class="secret">fbk_Q2xhdWRlIG9uIENJIG1hZGUgb24gMjggT2N0b2Jlcg9x</code><button type="button" class="b-wide"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Copied</button></div>
+    <h3>Connect Claude Code</h3>
+    <p class="hint">Run this line where Claude Code runs. It holds the key: paste it nowhere else.</p>
+    <pre class="snippet" tabindex="0">claude mcp add --transport http fruitback https://api.fruitback.com/mcp \
+  --header &quot;Authorization: Bearer fbk_Q2xhdWRlIG9uIENJIG1hZGUgb24gMjggT2N0b2Jlcg9x&quot;</pre>
+    <div class="actions"><button type="button" class="b-wide">Copy the line</button><a href="#">Another agent, in CI or in the cloud</a></div>
+    <div class="actions end"><button type="button" class="b-accent">I kept it</button></div>
+  </section><div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="e">
+  <h2 class="f-title">E · The writes of a key</h2>
+  <ul class="notes"><li>« Writes » unfolds what the key wrote under its row (aria-expanded), read when it opens: GET …/agent-keys/&lt;id>/writes, newest first. Each write: what (a reply, or the status set), the site, the id of the note (what get_feedback takes), when.</li><li>The console has no page for one note: the id is no link. At 100 writes (the bound of the worker) the foot says that only the last 100 are listed.</li><li>A key that wrote nothing says so (frame E2, 390 px).</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill">New key</button>
+      </header>
+      <div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row is-open">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm pressed" aria-expanded="true">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    <div class="writes" role="region" aria-label="Writes of Claude on CI">
+  <h3>What this key wrote</h3>
+  <ol>
+    <li><span class="w-what">Replied to a note</span><span class="host">shop.acme.dev</span><code>sd_8f2k1x</code><span class="w-when">12 min ago</span></li>
+    <li><span class="w-what">Set the status to « Done »</span><span class="host">shop.acme.dev</span><code>sd_8f2k1x</code><span class="w-when">12 min ago</span></li>
+    <li><span class="w-what">Set the status to « In progress »</span><span class="host">blog.acme.dev</span><code>sd_3jq90a</code><span class="w-when">2 h ago</span></li>
+    <li><span class="w-what">Replied to a note</span><span class="host">blog.acme.dev</span><code>sd_3jq90a</code><span class="w-when">Yesterday</span></li>
+  </ol>
+  <p class="hint">A reply shows in the thread of its note as « Agent », beside the name of the key. A status can be set back on the page of the note.</p>
+</div>
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="f">
+  <h2 class="f-title">F · Revoke, asked once more</h2>
+  <ul class="notes"><li>The confirmation of the kit (confirm.tsx). Once revoked, the row goes, focus goes to « New key », and a status line says « « Claude on CI » is revoked. ».</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        <button type="button" class="b-accent pill">New key</button>
+      </header>
+      <div class="k-head" aria-hidden="true"><span>Key</span><span>Sites</span><span>Can</span><span>Last used</span><span>Ends</span><span></span></div>
+  <ul class="k-list" aria-label="Agent keys"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Made on 28 Oct</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read, reply and set a status<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>12 min ago</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span>26 Jan 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Made on 3 Aug</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Every note, a visitor’s too</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span>Yesterday</span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Ends in 5 days</span><small>2 Nov</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Made on 22 Jul</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Can</span><span>Read the notes<small>Notes of known people only</small></span></div>
+    <div class="c-last"><span class="lbl-m">Last used</span><span><span class="muted">Never used</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Ends</span><span><span class="chip">Ended</span><small>On 20 Oct</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Writes<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Revoke</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 of 20 keys.</p>
+    </main></div>
+  </div><div class="scrim"><div class="dialog" role="alertdialog" aria-labelledby="dt" aria-describedby="dd">
+  <h2 id="dt">Revoke « Claude on CI »?</h2>
+  <p id="dd">An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.</p>
+  <div class="actions end"><button type="button" class="b-ghost">Cancel</button><button type="button" class="b-danger">Revoke the key</button></div>
+</div></div></div>
+</section>
+<section class="frame" id="g">
+  <h2 class="f-title">G · No key yet</h2>
+  <ul class="notes"><li>The empty state of the kit. With no site in the workspace, « New key » is replaced by « Add a site first », a link to Sites.</li><li>At 20 keys, « New key » is disabled and the foot says « A workspace holds 20 keys at most. Revoke one to make another. ».</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+    <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="#">Workspace settings</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours. <a href="#">Connect an AI agent</a></p>
+        </div>
+        
+      </header>
+      <div class="empty-card">
+  <h2>No agent key yet</h2>
+  <p>Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.</p>
+  <button type="button" class="b-accent pill">New key</button>
+</div>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="i">
+  <h2 class="f-title">I · The section « Agents » of the workspace settings (owner, admin)</h2>
+  <ul class="notes"><li>A member or a guest reads the section with « Only an owner or an admin of the workspace manages its agent keys. », and no link. The page itself says the same sentence to them, and asks nothing of the worker (which answers 403).</li></ul>
+  <div class="f-box" style="width:1440px;position:relative"><div class="app w1440">
+  <aside class="rail">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Cloud workspace</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connectors</a><a href="#">Members</a><a href="#">My account</a></nav>
+  </aside>
+  <div class="main-wrap"><main>
+    <header class="pg-head"><div><h1>Workspace settings</h1><p class="lead">Settings that every member of Acme sees.</p></div></header>
+    <section class="set-sec"><h2>Name</h2><p class="muted">…</p></section>
+    <section class="set-sec"><h2>Logo</h2><p class="muted">…</p></section>
+    <section class="set-sec"><h2>Agents</h2>
+      <p>Keys that let an AI agent of your team read the notes of some sites, and reply to them.</p>
+      <p><a class="b-wide link" href="#">Manage the agent keys</a> <span class="muted">3 keys</span></p>
+    </section>
+  </main></div>
+</div></div>
+</section>
+<section class="frame" id="j">
+  <h2 class="f-title">J · 390 px, French: the list</h2>
+  <ul class="notes"><li>Each row becomes a card: the name, then each value under its label. Nothing scrolls sideways.</li></ul>
+  <div class="f-box" style="width:390px;position:relative"><div class="app w390">
+    <aside class="rail rail-row">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Workspace Cloud</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connecteurs</a><a href="#">Membres</a><a href="#">Mon compte</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="#">Réglages du workspace</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre. <a href="#">Connecter un agent IA</a></p>
+        </div>
+        <button type="button" class="b-accent pill">Nouvelle clé</button>
+      </header>
+      <div class="callout warn" role="status"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><p>« Nightly triage » prend fin dans 5 jours. Son agent s’arrête alors : créez une nouvelle clé, donnez-la à l’agent, puis révoquez celle-ci.</p></div><div class="k-head" aria-hidden="true"><span>Clé</span><span>Sites</span><span>Peut</span><span>Dernier usage</span><span>Fin</span><span></span></div>
+  <ul class="k-list" aria-label="Clés d’agent"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Créée le 28 oct.</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Peut</span><span>Lire, répondre et changer un statut<small>Notes de personnes connues seulement</small></span></div>
+    <div class="c-last"><span class="lbl-m">Dernier usage</span><span>il y a 12 min</span></div>
+    <div class="c-ends"><span class="lbl-m">Fin</span><span>26 janv. 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Révoquer</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Nightly triage</b><small>Créée le 3 août</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Peut</span><span>Lire les notes<small>Toutes les notes, celles des visiteurs aussi</small></span></div>
+    <div class="c-last"><span class="lbl-m">Dernier usage</span><span>Hier</span></div>
+    <div class="c-ends"><span class="lbl-m">Fin</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Prend fin dans 5 jours</span><small>2 nov.</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Révoquer</button>
+    </div>
+    
+  </li><li class="k-row">
+    <div class="c-name"><b>Old reader</b><small>Créée le 22 juil.</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Peut</span><span>Lire les notes<small>Notes de personnes connues seulement</small></span></div>
+    <div class="c-last"><span class="lbl-m">Dernier usage</span><span><span class="muted">Jamais utilisée</span></span></div>
+    <div class="c-ends"><span class="lbl-m">Fin</span><span><span class="chip">Terminée</span><small>Le 20 oct.</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Révoquer</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">3 clés sur 20.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="k">
+  <h2 class="f-title">K · 390 px, French: the key shown once</h2>
+  <ul class="notes"><li>The line breaks where it can; its box scrolls sideways alone, with focus.</li></ul>
+  <div class="f-box" style="width:390px;position:relative"><div class="app w390">
+    <aside class="rail rail-row">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Workspace Cloud</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connecteurs</a><a href="#">Membres</a><a href="#">Mon compte</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="#">Réglages du workspace</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre. <a href="#">Connecter un agent IA</a></p>
+        </div>
+        <button type="button" class="b-accent pill" aria-disabled="true">Nouvelle clé</button>
+      </header>
+      <section class="card once" aria-labelledby="once-title">
+    <h2 id="once-title"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>« Claude on CI » est créée</h2>
+    <p class="strong-p">Copiez la clé maintenant : Fruitback ne la montre qu’une fois, et n’en garde que l’empreinte.</p>
+    <div class="secret-row"><code class="secret">fbk_Q2xhdWRlIG9uIENJIG1hZGUgb24gMjggT2N0b2Jlcg9x</code><button type="button" class="b-wide">Copier la clé</button></div>
+    <h3>Connecter Claude Code</h3>
+    <p class="hint">Lancez cette ligne là où tourne Claude Code. Elle contient la clé : ne la collez nulle part ailleurs.</p>
+    <pre class="snippet" tabindex="0">claude mcp add --transport http fruitback https://api.fruitback.com/mcp \
+  --header &quot;Authorization: Bearer fbk_Q2xhdWRlIG9uIENJIG1hZGUgb24gMjggT2N0b2Jlcg9x&quot;</pre>
+    <div class="actions"><button type="button" class="b-wide">Copier la ligne</button><a href="#">Un autre agent, en CI ou dans le cloud</a></div>
+    <div class="actions end"><button type="button" class="b-accent">Je l’ai gardée</button></div>
+  </section><div class="k-head" aria-hidden="true"><span>Clé</span><span>Sites</span><span>Peut</span><span>Dernier usage</span><span>Fin</span><span></span></div>
+  <ul class="k-list" aria-label="Clés d’agent"><li class="k-row">
+    <div class="c-name"><b>Claude on CI</b><small>Créée le 28 oct.</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">shop.acme.dev</span><span class="host">blog.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Peut</span><span>Lire, répondre et changer un statut<small>Notes de personnes connues seulement</small></span></div>
+    <div class="c-last"><span class="lbl-m">Dernier usage</span><span>il y a 12 min</span></div>
+    <div class="c-ends"><span class="lbl-m">Fin</span><span>26 janv. 2027</span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm" aria-expanded="false">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Révoquer</button>
+    </div>
+    
+  </li></ul>
+  <p class="foot">1 clés sur 20.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="l">
+  <h2 class="f-title">L · 390 px, French: the form</h2>
+  
+  <div class="f-box" style="width:390px;position:relative"><div class="app w390">
+    <aside class="rail rail-row">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Workspace Cloud</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connecteurs</a><a href="#">Membres</a><a href="#">Mon compte</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="#">Réglages du workspace</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre. <a href="#">Connecter un agent IA</a></p>
+        </div>
+        <button type="button" class="b-accent pill" aria-disabled="true">Nouvelle clé</button>
+      </header>
+      <section class="card form" aria-labelledby="new-key-title">
+    <h2 id="new-key-title">Nouvelle clé d’agent</h2>
+    <div class="field">
+      <label for="kn">Nom</label>
+      <input id="kn" value="Claude on CI" >
+      <p class="hint">Ses réponses sont signées de ce nom, à côté de « Agent ».</p>
+    </div>
+    <fieldset class="field">
+      <legend>Sites</legend>
+      <div class="checks"><label class="check"><input type="checkbox" checked><span class="host">shop.acme.dev</span><small>Les membres lisent ses notes</small></label><label class="check"><input type="checkbox" checked><span class="host">blog.acme.dev</span><small>Les membres lisent ses notes</small></label><label class="check"><input type="checkbox"><span class="host">docs.acme.dev</span><small>Tout le monde lit ses notes</small></label></div>
+      <p class="hint">La clé ne lit rien d’un autre site. 20 au plus.</p>
+    </fieldset>
+    <fieldset class="field">
+      <legend>Ce que l’agent peut faire</legend>
+      <label class="radio"><input type="radio" name="r"><span><b>Lire les notes</b><small>Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.</small></span></label>
+      <label class="radio"><input type="radio" name="r" checked><span><b>Lire, répondre et changer un statut</b><small>Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.</small></span></label>
+    </fieldset>
+    <div class="field days">
+      <label for="kd">Dure</label>
+      <span class="days-row"><input id="kd" inputmode="numeric" value="90"><span>jours</span></span>
+      <p class="hint">Prend fin le 26 janv. 2027. De 1 à 365 jours : aucune clé ne vit sans fin.</p>
+    </div>
+    <label class="check strong"><input type="checkbox" checked><span><b>Seulement les notes de personnes connues</b><small>Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Décochez-la en le sachant.</small></span></label>
+    <div class="actions"><button type="button" class="b-accent">Créer la clé</button><button type="button" class="b-ghost">Annuler</button></div>
+  </section>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="m">
+  <h2 class="f-title">E2 · 390 px, French: a key that wrote nothing</h2>
+  
+  <div class="f-box" style="width:390px;position:relative"><div class="app w390">
+    <aside class="rail rail-row">
+    <a href="#" class="ws" aria-current="page"><span class="ws-i">A</span><span><b>Acme</b><small>Workspace Cloud</small></span></a>
+    <nav aria-label="Workspace"><a href="#">Sites</a><a href="#">Notes</a><a href="#">Connecteurs</a><a href="#">Membres</a><a href="#">Mon compte</a></nav>
+  </aside>
+    <div class="main-wrap"><main>
+      <nav class="crumbs" aria-label="Fil d’Ariane"><a href="#">Réglages du workspace</a><span aria-hidden="true">›</span><span>Agents</span></nav>
+      <header class="pg-head">
+        <div>
+          <h1>Agents</h1>
+          <p class="lead">Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre. <a href="#">Connecter un agent IA</a></p>
+        </div>
+        <button type="button" class="b-accent pill">Nouvelle clé</button>
+      </header>
+      <div class="k-head" aria-hidden="true"><span>Clé</span><span>Sites</span><span>Peut</span><span>Dernier usage</span><span>Fin</span><span></span></div>
+  <ul class="k-list" aria-label="Clés d’agent"><li class="k-row is-open">
+    <div class="c-name"><b>Nightly triage</b><small>Créée le 3 août</small></div>
+    <div class="c-sites"><span class="lbl-m">Sites</span><span><span class="host">docs.acme.dev</span></span></div>
+    <div class="c-rights"><span class="lbl-m">Peut</span><span>Lire les notes<small>Toutes les notes, celles des visiteurs aussi</small></span></div>
+    <div class="c-last"><span class="lbl-m">Dernier usage</span><span>Hier</span></div>
+    <div class="c-ends"><span class="lbl-m">Fin</span><span><span class="soon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Prend fin dans 5 jours</span><small>2 nov.</small></span></div>
+    <div class="c-actions">
+      <button type="button" class="b-wide sm pressed" aria-expanded="true">Écritures<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="b-ghost sm danger">Révoquer</button>
+    </div>
+    <div class="writes" role="region" aria-label="Écritures de Nightly triage">
+  <h3>Ce que cette clé a écrit</h3>
+  <p class="empty">Cette clé n’a encore rien écrit. Une clé qui ne fait que lire n’écrit jamais.</p>
+</div>
+  </li></ul>
+  <p class="foot">1 clés sur 20.</p>
+    </main></div>
+  </div></div>
+</section>
+<section class="frame" id="decisions"><h2 class="f-title">Decisions of the board (fru-agents, 2026-10-28)</h2>
+<p class="notes">The orchestrator asked the agent to decide the choices of the screen itself and to write them down. Each one can be changed by Mathieu.</p>
+<ol class="qa">
+<li><b>Where the screen lives.</b> A page of its own, <code>/w/:workspace/settings/agents</code>, with the crumbs « Workspace settings › Agents », reached from a section « Agents » of the settings. Not a section of the rail: the rail holds the five of the mockup, and only the owner and the admins may make a key (decision 5 of agents.md). A section inside the settings page would put a list, a form and a log under the logo.</li>
+<li><b>The key is shown once, in a card above the list,</b> until « I kept it ». It is held in the state of the screen only, never in a storage of the browser. The card says it is the only time, as the REST connector says it of its secret.</li>
+<li><b>The line for Claude Code holds the key and the address of this worker</b>, as docs/agents.md writes it: one copy connects. A second button copies the key alone, for a runner's secrets. The link goes to the part of the guide for an agent that runs elsewhere.</li>
+<li><b>No edit of a key.</b> The worker has no route for it, and a key that changes what it reaches under a running agent is a surprise. To change its sites or its rights: make another, give it to the agent, revoke the first.</li>
+<li><b>The end.</b> A number of days (90 by default, 1 to 365) and the day it gives, written as it is typed. No « never »: decision 8.</li>
+<li><b>The warning 7 days before</b> is said in words in the row (« Ends in 5 days », the strong accent and a triangle: the colour is never alone) and in one line above the list, which says what to do. No new token: the console has no amber.</li>
+<li><b>An ended key stays listed</b>, with « Ended » and its day, since the worker keeps it; « Revoke » removes it.</li>
+<li><b>« Only the notes of known people » is asked for every key</b>, ticked, even when none of its sites is read by everyone today: who reads a site can change after the key is made.</li>
+<li><b>The writes unfold under their row</b>, read when they open. This is a list of rows, not the grid of cards where FRU-433 refused a panel between two rows. The note is named by its id, with no link: the console has no page of one note, and the id is what <code>get_feedback</code> takes.</li>
+<li><b>The last use</b> is the one the worker keeps to the minute (PR of the worker of FRU-462), shown with <code>ago()</code> of the console, and « Never used » for a key no agent used.</li>
+<li><b>Who made a key is not shown.</b> The worker answers an account id; the name would need the members, a second read, for a column the owner and the admins rarely need. Left for later.</li>
+<li><b>A member or a guest</b> reads the section of the settings with a sentence and no link; the page says the same sentence and asks nothing of the worker.</li>
+</ol></section>
+<section class="frame" id="texts"><h2 class="f-title">Texts, EN and FR</h2>
+<p class="notes">Every sentence of the board. The English is the key of <code>t()</code>, the French goes to <code>messages.fr.ts</code>. A name the team typed is shown as typed.</p>
+<table class="texts"><thead><tr><th>English</th><th>Français</th></tr></thead><tbody><tr><td>« Nightly triage » ends in 5 days. Its agent stops then: make a new key, give it to the agent, then revoke this one.</td><td>« Nightly triage » prend fin dans 5 jours. Son agent s’arrête alors : créez une nouvelle clé, donnez-la à l’agent, puis révoquez celle-ci.</td></tr><tr><td>28 Oct</td><td>28 oct.</td></tr><tr><td>12 min ago</td><td>il y a 12 min</td></tr><tr><td>26 Jan 2027</td><td>26 janv. 2027</td></tr><tr><td>3 Aug</td><td>3 août</td></tr><tr><td>Yesterday</td><td>Hier</td></tr><tr><td>2 Nov</td><td>2 nov.</td></tr><tr><td>22 Jul</td><td>22 juil.</td></tr><tr><td>20 Oct</td><td>20 oct.</td></tr><tr><td>Key</td><td>Clé</td></tr><tr><td>Sites</td><td>Sites</td></tr><tr><td>Can</td><td>Peut</td></tr><tr><td>Last used</td><td>Dernier usage</td></tr><tr><td>Ends</td><td>Fin</td></tr><tr><td>Agent keys</td><td>Clés d’agent</td></tr><tr><td>Made on {day}</td><td>Créée le {day}</td></tr><tr><td>Read, reply and set a status</td><td>Lire, répondre et changer un statut</td></tr><tr><td>Notes of known people only</td><td>Notes de personnes connues seulement</td></tr><tr><td>Writes</td><td>Écritures</td></tr><tr><td>Revoke</td><td>Révoquer</td></tr><tr><td>Read the notes</td><td>Lire les notes</td></tr><tr><td>Every note, a visitor’s too</td><td>Toutes les notes, celles des visiteurs aussi</td></tr><tr><td>Ends in {count} days</td><td>Prend fin dans {count} jours</td></tr><tr><td>Never used</td><td>Jamais utilisée</td></tr><tr><td>Ended</td><td>Terminée</td></tr><tr><td>On {day}</td><td>Le {day}</td></tr><tr><td>{count} of 20 keys.</td><td>{count} clés sur 20.</td></tr><tr><td>Notes</td><td>Notes</td></tr><tr><td>Connectors</td><td>Connecteurs</td></tr><tr><td>Members</td><td>Membres</td></tr><tr><td>My account</td><td>Mon compte</td></tr><tr><td>Cloud workspace</td><td>Workspace Cloud</td></tr><tr><td>Workspace</td><td>Workspace</td></tr><tr><td>Breadcrumb</td><td>Fil d’Ariane</td></tr><tr><td>Workspace settings</td><td>Réglages du workspace</td></tr><tr><td>Agents</td><td>Agents</td></tr><tr><td>A key lets an AI agent of your team read the notes of some sites through the MCP server of Fruitback, and reply to them when you allow it. Fruitback calls no model: the agent is yours.</td><td>Une clé permet à un agent IA de votre équipe de lire les notes de certains sites par le serveur MCP de Fruitback, et d’y répondre si vous l’autorisez. Fruitback n’appelle aucun modèle : l’agent est le vôtre.</td></tr><tr><td>Connect an AI agent</td><td>Connecter un agent IA</td></tr><tr><td>New key</td><td>Nouvelle clé</td></tr><tr><td>New agent key</td><td>Nouvelle clé d’agent</td></tr><tr><td>Name</td><td>Nom</td></tr><tr><td>Its replies are signed with it, beside « Agent ».</td><td>Ses réponses sont signées de ce nom, à côté de « Agent ».</td></tr><tr><td>Members read its notes</td><td>Les membres lisent ses notes</td></tr><tr><td>Everyone reads its notes</td><td>Tout le monde lit ses notes</td></tr><tr><td>The key reads nothing of another site. 20 at most.</td><td>La clé ne lit rien d’un autre site. 20 au plus.</td></tr><tr><td>What the agent can do</td><td>Ce que l’agent peut faire</td></tr><tr><td>Their text, page, element, component, file and line, picture, replies and status.</td><td>Leur texte, page, élément, composant, fichier et ligne, capture, réponses et statut.</td></tr><tr><td>A reply says it is from an agent. A status is set only on a note that Fruitback keeps.</td><td>Une réponse dit qu’elle vient d’un agent. Un statut ne change que sur une note que garde Fruitback.</td></tr><tr><td>Lives for</td><td>Dure</td></tr><tr><td>days</td><td>jours</td></tr><tr><td>Ends on {day}. From 1 to 365 days: no key lives with no end.</td><td>Prend fin le {day}. De 1 à 365 jours : aucune clé ne vit sans fin.</td></tr><tr><td>Only the notes of known people</td><td>Seulement les notes de personnes connues</td></tr><tr><td>On a site that everyone reads, the agent does not see a note of a visitor: anybody can write one, and an agent can obey its text. Untick it only knowing that.</td><td>Sur un site que tout le monde lit, l’agent ne voit pas la note d’un visiteur : n’importe qui peut en écrire une, et un agent peut obéir à son texte. Décochez-la en le sachant.</td></tr><tr><td>Make the key</td><td>Créer la clé</td></tr><tr><td>Cancel</td><td>Annuler</td></tr><tr><td>Give the key a name.</td><td>Donnez un nom à la clé.</td></tr><tr><td>Choose at least one site.</td><td>Choisissez au moins un site.</td></tr><tr><td>« {name} » is made</td><td>« {name} » est créée</td></tr><tr><td>Copy the key now: Fruitback shows it only once, and keeps only its digest.</td><td>Copiez la clé maintenant : Fruitback ne la montre qu’une fois, et n’en garde que l’empreinte.</td></tr><tr><td>Copied</td><td>Copiée</td></tr><tr><td>Connect Claude Code</td><td>Connecter Claude Code</td></tr><tr><td>Run this line where Claude Code runs. It holds the key: paste it nowhere else.</td><td>Lancez cette ligne là où tourne Claude Code. Elle contient la clé : ne la collez nulle part ailleurs.</td></tr><tr><td>Copy the line</td><td>Copier la ligne</td></tr><tr><td>Another agent, in CI or in the cloud</td><td>Un autre agent, en CI ou dans le cloud</td></tr><tr><td>I kept it</td><td>Je l’ai gardée</td></tr><tr><td>Writes of {name}</td><td>Écritures de {name}</td></tr><tr><td>What this key wrote</td><td>Ce que cette clé a écrit</td></tr><tr><td>Replied to a note</td><td>A répondu à une note</td></tr><tr><td>Done</td><td>Terminé</td></tr><tr><td>Set the status to « {status} »</td><td>A passé le statut à « {status} »</td></tr><tr><td>In progress</td><td>En cours</td></tr><tr><td>2 h ago</td><td>il y a 2 h</td></tr><tr><td>A reply shows in the thread of its note as « Agent », beside the name of the key. A status can be set back on the page of the note.</td><td>Une réponse apparaît dans le fil de sa note avec « Agent », à côté du nom de la clé. Un statut se remet sur la page de la note.</td></tr><tr><td>Revoke « {name} »?</td><td>Révoquer « {name} » ?</td></tr><tr><td>An agent that uses this key is refused from its next request, and the key never works again. What it wrote stays in the threads of the notes.</td><td>Un agent qui utilise cette clé est refusé dès sa prochaine requête, et la clé ne marche plus jamais. Ce qu’elle a écrit reste dans les fils des notes.</td></tr><tr><td>Revoke the key</td><td>Révoquer la clé</td></tr><tr><td>No agent key yet</td><td>Aucune clé d’agent</td></tr><tr><td>Make one for each agent: Claude Code on a laptop, a job of your CI, a cloud agent. Revoking one stops that agent alone.</td><td>Créez-en une par agent : Claude Code sur un portable, un job de votre CI, un agent dans le cloud. En révoquer une n’arrête que cet agent.</td></tr><tr><td>Settings that every member of {name} sees.</td><td>Les réglages que voit chaque membre de {name}.</td></tr><tr><td>Logo</td><td>Logo</td></tr><tr><td>Keys that let an AI agent of your team read the notes of some sites, and reply to them.</td><td>Les clés qui permettent à un agent IA de votre équipe de lire les notes de certains sites, et d’y répondre.</td></tr><tr><td>Manage the agent keys</td><td>Gérer les clés d’agent</td></tr><tr><td>{count} keys</td><td>{count} clés</td></tr><tr><td>Copy the key</td><td>Copier la clé</td></tr><tr><td>This key wrote nothing yet. A key that only reads never writes.</td><td>Cette clé n’a encore rien écrit. Une clé qui ne fait que lire n’écrit jamais.</td></tr></tbody></table>
+</section>
+</body>
+</html>

@@ -44,6 +44,18 @@ The orchestrator validated it on 2026-10-21 with its eleven recommendations; the
 (`apps/console/app/routes/site-statuses.tsx`) follows it, the Linear part (frames H and N) since
 FRU-368, except the grip of frame A: the order is the two buttons alone.
 
+## The agents of a workspace (FRU-462, 2026-10-28)
+
+`agents/agents.html` is the board of the screen « Agents » of a workspace (FRU-462,
+[agents.md](../docs/decisions/agents.md)): the list of the agent keys with their last use and their
+end, the warning 7 days before, the form of a new key and its refusals, the key shown once with the
+line for Claude Code, the writes of a key, the revocation, the empty state, the section of the
+workspace settings that leads there, and 390 px. Frames at 1440 px are in English, at 390 px in
+French, and the board ends with its decisions and every text in both languages. It is drawn on the
+tokens of the console below. `tools/build.mjs` writes it (edit the script, not the HTML); `shots/`
+holds a picture of each frame. The agent fru-agents decided its choices, as the orchestrator asked;
+the screen (`apps/console/app/routes/agents.tsx`) follows it.
+
 ## The export of 2026-10-07
 
 `fruitback-design-export.html` is the export of the Claude Design project « Application overlay
