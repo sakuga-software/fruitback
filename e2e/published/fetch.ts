@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
+import { checkDigest, checkInstalled } from './checks.ts';
 
 /**
  * Fetch what the people who use Fruitback have now (FRU-460): the last published npm packages and
@@ -49,14 +49,10 @@ async function release(version: string | undefined): Promise<Release> {
  * any of it runs. Raised in review.
  */
 async function downloadChecked(asset: Release['assets'][number], to: string): Promise<void> {
-  if (asset.digest === null || !asset.digest.startsWith('sha256:')) {
-    throw new Error(`GitHub gives no SHA-256 for ${asset.name}: ${asset.digest}`);
-  }
   const answer = await fetch(asset.browser_download_url);
   if (!answer.ok) throw new Error(`${asset.browser_download_url}: ${answer.status}`);
   const bytes = Buffer.from(await answer.arrayBuffer());
-  const found = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-  if (found !== asset.digest) throw new Error(`${asset.name} is ${found}, and GitHub says ${asset.digest}`);
+  checkDigest(asset.name, bytes, asset.digest);
   fs.writeFileSync(to, bytes);
 }
 
@@ -128,8 +124,7 @@ const installed = Object.fromEntries(
     ).version,
   ]),
 );
-const mixed = Object.entries(installed).filter(([, version]) => version !== npmVersion);
-if (mixed.length > 0) throw new Error(`npm ${npmVersion} was asked for, and installed ${JSON.stringify(installed)}`);
+checkInstalled(npmVersion, installed);
 
 fs.writeFileSync(
   path.join(PUBLISHED, 'versions.json'),
