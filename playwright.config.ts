@@ -103,5 +103,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: { VITE_FRUITBACK_API: WORKER },
     },
+    {
+      // The development server of the console, for the specs of `/kit`, `/kit/entry` and `/kit/frame`
+      // alone: those pages are not in a build (`kit-route.test.ts`). The other specs never load it.
+      command: 'pnpm --filter @fruitback/console exec react-router dev --port 5179',
+      url: 'http://localhost:5179',
+      reuseExistingServer: !process.env.CI,
+      env: { VITE_FRUITBACK_API: WORKER },
+    },
   ],
 });
