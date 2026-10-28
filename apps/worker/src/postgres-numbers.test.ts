@@ -104,6 +104,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
        VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO agent_key_sites (key_id, site_id) VALUES ('agk_1', 'site_acme')`);
+  // A write of that key (FRU-464).
+  await rowsOf(
+    database,
+    `INSERT INTO agent_writes (id, workspace_id, key_id, key_name, site_id, note_id, action, status, at)
+       VALUES ('agw_1', 'ws_acme', 'agk_1', 'CI', 'site_acme', 'sd_1', 'reply', NULL, 1)`,
+  );
   // A request of the extension, answered and claimed (FRU-238).
   await rowsOf(
     database,
@@ -159,7 +165,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the forty-four BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the forty-five BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -167,6 +173,7 @@ it('knows the forty-four BIGINT columns of the worker, and that better-auth has 
     'admin_reads.at',
     'agent_keys.created_at',
     'agent_keys.expires_at',
+    'agent_writes.at',
     'connect_requests.answered_at',
     'connect_requests.claimed_at',
     'connect_requests.created_at',

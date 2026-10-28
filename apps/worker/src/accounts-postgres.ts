@@ -29,7 +29,9 @@ import {
 } from './account-rows.ts';
 import {
   type AccountStore,
+  AGENT_WRITES_LISTED,
   type AgentKey,
+  type AgentWrite,
   type Connector,
   MAX_AGENT_KEYS,
   DEFAULT_CONNECTOR_SETTINGS,
@@ -48,6 +50,7 @@ import {
   account_emails,
   agent_key_sites,
   agent_keys,
+  agent_writes,
   connectors,
   deliveries,
   domains,
@@ -1015,6 +1018,43 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return gone.length > 0;
+    },
+
+    async recordAgentWrite(workspace, write) {
+      await run((db) =>
+        db.insert(agent_writes).values({
+          id: newId('agw'),
+          workspace_id: workspace,
+          key_id: write.key,
+          key_name: write.keyName,
+          site_id: write.site,
+          note_id: write.note,
+          action: write.action,
+          status: write.status ?? null,
+          at: write.at,
+        }),
+      );
+    },
+
+    async agentWrites(workspace, key) {
+      const rows = await run((db) =>
+        db
+          .select()
+          .from(agent_writes)
+          .where(and(eq(agent_writes.workspace_id, workspace), eq(agent_writes.key_id, key)))
+          .orderBy(desc(agent_writes.at), desc(agent_writes.id))
+          .limit(AGENT_WRITES_LISTED),
+      );
+
+      return rows.map((row): AgentWrite => ({
+        key: row.key_id,
+        keyName: row.key_name,
+        site: row.site_id,
+        note: row.note_id,
+        action: row.action === 'status' ? 'status' : 'reply',
+        ...(row.status === null ? {} : { status: row.status }),
+        at: row.at,
+      }));
     },
 
     async agentKeyOf(keyHash) {

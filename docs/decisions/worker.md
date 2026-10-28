@@ -1516,7 +1516,7 @@ Read on drizzle-orm 0.45.4 and drizzle-kit 0.31.11, the versions of the catalogu
   store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
   2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the forty-four BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the forty-five BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -3145,7 +3145,7 @@ workspace too: the reason is free text, « impayé » for example.
 - **Why a table of its own, and not two columns of `organization`.** The ticket offered columns on
   `organization`. That table is of better-auth, and two tests hold it: `auth-schema.test.ts` compares
   its columns with the ones that better-auth makes, and
-  test:`knows the forty-four BIGINT columns of the worker, and that better-auth has none` says that
+  test:`knows the forty-five BIGINT columns of the worker, and that better-auth has none` says that
   better-auth reads no `BIGINT`, on a pool with no parser of ours. A `suspended_at` there breaks
   both, or is not a `BIGINT`. A row of the worker keeps the convention, cascades with the workspace,
   and makes « changed » one statement.
@@ -4467,3 +4467,26 @@ framing; `SECURITY.md` says what is protected.
 - **`feedback_as_text` writes the text of `feedbackText`**, in English, with no placement: the worker
   has no page to find a note on. A whole site is its newest `MAX_TEXT_NOTES` notes, one block a
   page, and `truncated: true` past them.
+
+## The write tools of `/mcp` (FRU-464)
+
+### The rules, in short
+
+- **`reply_to_feedback` and `set_feedback_status` are given to a key whose grant says `write`**:
+  the key has the right, and its member has `manage-sites` now. Any other key does not list them, and
+  `tools/call` answers `-32602`, as for a tool that does not exist.
+- **A reply goes through `store.reply` with the author `{ kind: 'agent', name }`**, the name of the
+  key. `replyText` writes `**<name>** via Fruitback · agent` (the same word in each language), and
+  `readPage` gives every comment whose first line is exactly that `by: 'agent'` (`markedAgent`). The
+  first line only, anchored: what a person typed is quoted under the line of the worker.
+- **A status follows `postStatus`**: a key of the site's own statuses (`own:<key>`), a hidden one
+  refused, a note in a tracker answers `statuses-not-taken`, then the index is refreshed.
+- **The limit is per key**, `AGENT_WRITE_LIMIT` a minute, in its own counter of the `Kv`
+  (`fruitback:rate:agent:`), counted once the write is one the store would take.
+- **Each write that the store took goes in `agent_writes`** (migration `0035`): the key by its id
+  and its name, with no foreign key, so a revoked key keeps its log. A log that fails is said in the
+  log of the worker and never answered to the agent: the write is in the store, and an error would
+  have the agent write it a second time. `GET
+  /console/workspaces/<id>/agent-keys/<key>/writes` answers it to `manage-workspace`.
+- **The store of the tools is `watchedStore`**, as for the routes of the page: a call through a
+  connector is noted on that connector.

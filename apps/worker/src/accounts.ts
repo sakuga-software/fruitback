@@ -167,6 +167,20 @@ export type AgentKey = {
   expiresAt: number;
 };
 
+/** One write of an agent key (FRU-464). `status`: the status it set, for `action: 'status'`. */
+export type AgentWrite = {
+  key: string;
+  keyName: string;
+  site: string;
+  note: string;
+  action: 'reply' | 'status';
+  status?: string;
+  at: number;
+};
+
+/** How many writes of one key the log answers, the newest first. */
+export const AGENT_WRITES_LISTED = 100;
+
 /** A key to write: its digest, never the key. */
 export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites'> & {
   keyHash: string;
@@ -495,6 +509,10 @@ export type AccountStore = {
    * An expired key is answered: `agent-keys.ts` refuses it.
    */
   agentKeyOf(keyHash: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
+  /** Writes one write of an agent key in the log of its workspace (FRU-464). */
+  recordAgentWrite(workspace: string, write: AgentWrite): Promise<void>;
+  /** The writes of one key of a workspace, the newest first, `AGENT_WRITES_LISTED` at most. */
+  agentWrites(workspace: string, key: string): Promise<AgentWrite[]>;
   /**
    * The address of every person who owns a workspace, each once (FRU-221). Empty: the instance has
    * no owner yet. A role that is not one of the four is no role, as for `role`.

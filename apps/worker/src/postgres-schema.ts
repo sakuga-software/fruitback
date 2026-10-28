@@ -369,6 +369,35 @@ export const agent_keys = pgTable(
   ],
 );
 
+/**
+ * What each agent key wrote (FRU-464): a reply or a status, on which note, and when. The key is named
+ * by its id and its name, with no foreign key: a revoked key is deleted, and its writes stay in the
+ * log of the workspace until the workspace goes.
+ */
+export const agent_writes = pgTable(
+  'agent_writes',
+  {
+    id: text('id').notNull(),
+    workspace_id: text('workspace_id').notNull(),
+    key_id: text('key_id').notNull(),
+    key_name: text('key_name').notNull(),
+    site_id: text('site_id').notNull(),
+    note_id: text('note_id').notNull(),
+    action: text('action').notNull(),
+    status: text('status'),
+    at: instant('at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'agent_writes_pkey', columns: [table.id] }),
+    foreignKey({
+      name: 'agent_writes_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    index('agent_writes_by_key').on(table.workspace_id, table.key_id, table.at),
+  ],
+);
+
 /** The sites an agent key names. A site that goes takes its rows: the key reaches nothing of it. */
 export const agent_key_sites = pgTable(
   'agent_key_sites',

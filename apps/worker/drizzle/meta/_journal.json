@@ -246,6 +246,13 @@
       "when": 1793179938899,
       "tag": "0034_agent_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793182086905,
+      "tag": "0035_agent_writes",
+      "breakpoints": true
     }
   ]
 }

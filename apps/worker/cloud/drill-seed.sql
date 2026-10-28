@@ -108,6 +108,9 @@ INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_on
 INSERT INTO agent_key_sites (key_id, site_id) VALUES
   ('agk_drill1', 'site_drill1'),
   ('agk_drill1', 'site_drill2');
+-- A write of that key (FRU-464).
+INSERT INTO agent_writes (id, workspace_id, key_id, key_name, site_id, note_id, action, status, at) VALUES
+  ('agw_drill1', 'ws_drill1', 'agk_drill1', 'Claude on CI', 'site_drill1', 'sd_drill1', 'status', 'own:done', 1);
 
 -- The picture of a note (FRU-44): the first bytes of a PNG, enough for a row that the drill compares.
 INSERT INTO screenshots (id, workspace_id, account_id, site_id, content, width, height, created_at) VALUES

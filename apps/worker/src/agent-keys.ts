@@ -147,6 +147,8 @@ export type AgentKeysContext = {
  * - `POST /agent-keys` `{ name, sites, rights: 'read' | 'write', days?, verifiedOnly? }`: `201` with the
  *   key in `secret`, the one time the worker answers it. `verifiedOnly` is `true` when absent.
  * - `DELETE /agent-keys/<id>`: `204`, or `404` for a key that is not of this workspace.
+ * - `GET /agent-keys/<id>/writes`: what the key wrote through `/mcp` (FRU-464), the newest first. The
+ *   log of a revoked key stays, until its workspace goes.
  */
 export async function handleAgentKeys(
   rest: string,
@@ -155,8 +157,16 @@ export async function handleAgentKeys(
 ): Promise<Response | undefined> {
   const { accounts, workspace, json, headers } = context;
   const one = /^\/agent-keys\/([A-Za-z0-9_-]+)$/.exec(rest);
-  if (rest !== '/agent-keys' && one === null) return undefined;
+  const writes = /^\/agent-keys\/([A-Za-z0-9_-]+)\/writes$/.exec(rest);
+  if (rest !== '/agent-keys' && one === null && writes === null) return undefined;
   if (!context.manages) return context.forbidden();
+
+  if (writes !== null) {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    const listed = await accounts.agentWrites(workspace, writes[1] as string);
+
+    return json(200, { writes: listed.map((write) => ({ ...write, at: new Date(write.at).toISOString() })) }, headers);
+  }
 
   if (one !== null) {
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);

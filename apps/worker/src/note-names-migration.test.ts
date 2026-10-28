@@ -125,7 +125,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, migrationsThrough('0029_connector_name'));
       for (const statement of BEFORE) await rowsOf(database, statement);
 
-      await migrate(database);
+      await migrate(database, migrationsThrough('0030_note_names'));
 
       assert.deepEqual(await names(database), AFTER_NAMES);
       assert.deepEqual(await seedNames(database), []);
@@ -147,7 +147,7 @@ for (const { label, open, skip } of DATABASES) {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0029_connector_name'));
       for (const statement of BEFORE) await rowsOf(database, statement);
-      await migrate(database);
+      await migrate(database, migrationsThrough('0030_note_names'));
 
       const [note] = await rowsOf(
         database,
@@ -173,7 +173,7 @@ for (const { label, open, skip } of DATABASES) {
       const database = await opening(open);
       await migrate(database, migrationsThrough('0029_connector_name'));
       for (const statement of BEFORE) await rowsOf(database, statement);
-      await migrate(database);
+      await migrate(database, migrationsThrough('0030_note_names'));
       const once = { names: await names(database), rows: await rows(database) };
 
       const file = readFileSync(new URL('../drizzle/0030_note_names.sql', import.meta.url), 'utf8');
@@ -187,7 +187,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, migrationsThrough('0029_connector_name'));
       for (const statement of BEFORE) await rowsOf(database, statement);
       const before = await names(database);
-      await migrate(database);
+      await migrate(database, migrationsThrough('0030_note_names'));
 
       for (const statement of REVERSE_SQL) await rowsOf(database, statement);
 
