@@ -135,6 +135,24 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
     ]);
   });
 
+  it('keeps the new excerpt when a read that started before the edit refreshes the index after it', async () => {
+    const { world, store, workspace, site, tokens, note } = await aNote();
+    // What a read of the page held before the edit: the note with its text of before.
+    const before = (
+      await store.findForPage({ url: PAGE, clientId: site }, undefined, { showComments: true } as never)
+    )[0];
+    assert.ok(before !== undefined);
+
+    assert.equal((await edit(world, site, note, 'The new words', tokens.bob, store)).status, 200);
+    // That read ends after the edit, and writes what it learned in the index.
+    const { createPostgresNoteIndex } = await import('./notes-index-postgres.ts');
+    await createPostgresNoteIndex(world.database).refresh(workspace, site, { kind: 'fruitback' }, [before], Date.now());
+
+    assert.deepEqual(await rowsOf(world.database, `SELECT excerpt FROM note_index WHERE site_id = '${site}'`), [
+      { excerpt: 'The new words' },
+    ]);
+  });
+
   it('is offered to its author only: no other member, and no role that manages the sites', async () => {
     const { world, store, site, tokens } = await aNote();
 
@@ -214,6 +232,29 @@ describe('the text of a note, edited by the person who left it (FRU-475)', () =>
       status: 403,
       body: { error: 'edits-not-taken' },
     });
+  });
+
+  it('refuses a site with two places before it reads the note, and offers no edit there', async () => {
+    const { world, store, workspace, site, tokens, note } = await aNote();
+    const one = await world.accounts.addConnector(workspace, { kind: 'rest', label: 'one.acme.test', sealed: 'x' });
+    const two = await world.accounts.addConnector(workspace, { kind: 'rest', label: 'two.acme.test', sealed: 'x' });
+    assert.ok(await world.accounts.setDestinations(workspace, site, [{ connector: one.id }, { connector: two.id }]));
+    let reads = 0;
+    const counted: NoteStore = {
+      ...store,
+      findForPage: (...args) => {
+        reads += 1;
+
+        return store.findForPage(...args);
+      },
+    };
+
+    assert.deepEqual(await edit(world, site, note, 'Changed', tokens.bob, counted), {
+      status: 403,
+      body: { error: 'edits-not-taken' },
+    });
+    assert.equal(reads, 0);
+    assert.deepEqual(await textOfRow(world), ['The price is wrong']);
   });
 
   it('answers 404 for a note that is not on the page of the request', async () => {

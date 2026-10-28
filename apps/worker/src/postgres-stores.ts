@@ -232,6 +232,7 @@ export function postgresNoteIndex(url: string, schema: string): NoteIndex {
   return later(async () => (await import('./notes-index-postgres.ts')).createPostgresNoteIndex(database), {
     record: true,
     refresh: true,
+    reword: true,
     summary: true,
     undelivered: true,
     forget: true,

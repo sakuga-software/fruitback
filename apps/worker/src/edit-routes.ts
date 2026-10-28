@@ -3,11 +3,11 @@ import type { AccountStore } from './accounts.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { normalizeClientId } from './clients.ts';
 import { type Kv, KvError } from './kv.ts';
-import { canonicalizeRequestedPage, indexed, invalidatePages, placeOf, routingFailure } from './note-helpers.ts';
+import { canonicalizeRequestedPage, indexed, invalidatePages, routingFailure } from './note-helpers.ts';
 import type { NoteIndex } from './notes-index.ts';
 import { indexedAuthorOf } from './reply-routes.ts';
 import type { CallerChecks, RequestContext, Served } from './request-context.ts';
-import { type NoteStore, StoreError, takesChecks, takesEdits } from './store.ts';
+import { type NoteStore, StoreError, takesEdits } from './store.ts';
 
 /** `POST /feedback/<id>/text`: the text of a note, edited by the person who left it (FRU-475). */
 export const EDIT_PATH = /^\/feedback\/([A-Za-z0-9_-]{1,100})\/text$/;
@@ -118,17 +118,7 @@ export async function postEdit(
     if (answer === 'not-new') return json(409, { error: 'not-new' }, corsHeaders);
     await invalidatePages(kv, [url]);
     // The excerpt of the console and of the extension follows the text (FRU-244).
-    const verdicts = route.policy.showComments && (await takesChecks(store, target));
-    await indexed(context.noteIndex, (index) =>
-      index.refresh(
-        workspace,
-        clientId,
-        placeOf(target),
-        [{ ...found, note: answer.note, comments: [...(found.comments ?? []), answer.comment] }],
-        Date.now(),
-        { verdicts },
-      ),
-    );
+    await indexed(context.noteIndex, (index) => index.reword(workspace, clientId, found.note.id, answer.note.text));
 
     return json(
       200,

@@ -3432,8 +3432,10 @@ safest, 2026-10-28):
 - **`editable: true` is added after the cache**, as `mine`: on a note of the reader, still `new`, on a
   site with one place whose store takes an edit. The route decides again; the flag only says where to
   offer it.
-- **The index follows the text.** `refresh` writes the excerpt of the note again with its stage, so
-  the list of the console shows the new words after the edit, and after any read.
+- **The index follows the text.** The route writes the excerpt again with `NoteIndex.reword`, so
+  the list of the console shows the new words at once. `refresh` never writes an excerpt: a read
+  that started before the edit would put the text of before back (balanced review of #661)
+  (test:`keeps the new excerpt when a read that started before the edit refreshes the index after it`).
 
 ## Where the notes go, and the fixes to check, in `GET /session/sites` (FRU-295)
 

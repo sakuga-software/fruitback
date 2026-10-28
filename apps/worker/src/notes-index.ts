@@ -98,7 +98,7 @@ export type NoteIndex = {
   record(entries: readonly NoteEntry[], now: number): Promise<void>;
   /**
    * What a read of one page of a site learned (FRU-237): the stage of each note as its store answers
-   * it now, and the excerpt of its text, which its author can edit (FRU-475). A note of the site that the index does not hold yet, planted before it, is written with
+   * it now. A note of the site that the index does not hold yet, planted before it, is written with
    * what the read says and nothing else: no way, and a visitor for anyone the site did not verify.
    */
   refresh(
@@ -114,6 +114,12 @@ export type NoteIndex = {
      */
     options?: { verdicts?: boolean },
   ): Promise<void>;
+  /**
+   * Writes the excerpt of one note again, from the text its author just gave it (FRU-475). Only the
+   * route of the edit calls it: `refresh` never writes an excerpt, so a read that started before the
+   * edit cannot put the text of before back. A note the index does not hold is left absent.
+   */
+  reword(workspace: string, site: string, note: string, text: string): Promise<void>;
   /** The notes of each site of a workspace that has some. A site with none is absent. */
   summary(workspace: string): Promise<Map<string, SiteNotes>>;
   /**
