@@ -10,6 +10,11 @@ import { sideScroll, stubWorker } from './console-workspace.ts';
  * is answered by stubs; the sample data is of nobody.
  */
 const CONSOLE = 'http://localhost:5178';
+/**
+ * The development server of the console, for `/kit` alone: a build has no `/kit` (`kit-route.test.ts`),
+ * and the specs serve the console built on 5178 (FRU-473, `playwright.config.ts`).
+ */
+const KIT = 'http://localhost:5179';
 
 const LINEAR = { connector: 'c1', teamId: 't1', label: 'Linear · Acme web' };
 const NOTES = { new: 3, todo: 2, progress: 4, done: 2, closed: 1 };
@@ -77,7 +82,7 @@ for (const width of [1024, 1280, 1440, 390]) {
 test('every head of a table of the kit is one line, at 390 px too', async ({ page }) => {
   await stubWorker(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${CONSOLE}/kit`);
+  await page.goto(`${KIT}/kit`);
   const heads = page.getByRole('region', { name: 'Members' }).locator('thead th');
   await expect(heads.first()).toBeVisible();
 

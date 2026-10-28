@@ -322,14 +322,21 @@ test('in the panel, a list of the repositories that failed keeps the warning, sa
 }) => {
   const worker = await workerWith(page);
   worker.places = [{ connector: 'g1', teamId: 'acme/docs' }];
-  // Every read fails: a development build runs the effect twice.
-  worker.silentReads = 2;
+  // Every read fails until « Try again »: a development build runs the effect twice, a build once
+  // (FRU-473), so no count of reads holds for both.
+  worker.silentReads = Number.POSITIVE_INFINITY;
   await openGithub(page);
   await expect(
     panel(page).getByText('GitHub did not answer with the repositories of this installation.'),
   ).toBeVisible();
   await expect(panel(page).locator('[data-public]')).toHaveText(PUBLIC_DOCS);
+  // The panel reads only when it opens and on « Try again » (`reads` in `connector-github.tsx`). The
+  // read that answers must be the one of the press: a read of the opening that came late would hide
+  // a « Try again » that reads nothing (raised in review).
+  const before = worker.listed;
+  worker.silentReads = 0;
   await panel(page).getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect.poll(() => worker.listed).toBe(before + 1);
   await expect(panel(page).getByText('GitHub did not answer with the repositories of this installation.')).toHaveCount(
     0,
   );

@@ -16,6 +16,7 @@ import { chromium } from '@playwright/test';
  *
  * Deliberately not a production build. The suite runs against `dev` because `source` carries the
  * component name and the file it came from, and both come from React's dev-only fiber metadata.
+ * The console is built and served as static files (FRU-473): only its `/kit` is on a dev server.
  */
 export default async function warmUp(): Promise<void> {
   const browser = await chromium.launch();
@@ -27,9 +28,9 @@ export default async function warmUp(): Promise<void> {
     // them — so wait past it instead of racing it.
     await page.waitForTimeout(1500);
     await page.goto('http://localhost:5177/checkout', { waitUntil: 'networkidle', timeout: 60_000 });
-    // The console is a second Vite server with its own optimizer. With several workers, the first
-    // specs of the console start at the same moment, so it is loaded here too (FRU-268).
-    await page.goto('http://localhost:5178/setup', { waitUntil: 'networkidle', timeout: 90_000 });
+    // The development server of the console serves `/kit` alone (FRU-473), with its own optimizer.
+    // With several workers, the specs of the kit can start at the same moment (FRU-268).
+    await page.goto('http://localhost:5179/kit', { waitUntil: 'networkidle', timeout: 90_000 });
     await page.waitForTimeout(1500);
   } finally {
     await browser.close();
