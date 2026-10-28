@@ -29,6 +29,7 @@ import {
 } from './account-rows.ts';
 import {
   type AccountStore,
+  AGENT_KEY_USE_STEP_MS,
   AGENT_WRITES_LISTED,
   type AgentKey,
   type AgentWrite,
@@ -362,6 +363,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       createdBy: row.created_by,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
+      ...(row.last_used_at === null ? {} : { lastUsedAt: row.last_used_at }),
     }));
   };
 
@@ -1084,6 +1086,21 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       return { key, reach: role === 'guest' ? { role, sites: shared } : { role, sites: 'every' } };
     },
 
+    async markAgentKeyUsed(key, at) {
+      // One statement, which writes nothing while the use kept is recent: most requests change no row.
+      await run((db) =>
+        db
+          .update(agent_keys)
+          .set({ last_used_at: at })
+          .where(
+            and(
+              eq(agent_keys.id, key),
+              or(isNull(agent_keys.last_used_at), lte(agent_keys.last_used_at, at - AGENT_KEY_USE_STEP_MS)),
+            ),
+          ),
+      );
+    },
+
     async addSite(workspace, { origin, visibility, writers }) {
       // Adding the same address twice is the same site, with the visibility asked for last. It keeps
       // the destinations it had, so the statement that writes it reads them too. It keeps who writes
@@ -1151,6 +1168,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return sitesFrom(rows);
+    },
+
+    async setSiteVisibility(workspace, site, visibility) {
+      const rows = await run((db) =>
+        db
+          .update(sites)
+          .set({ visibility })
+          .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))
+          .returning({ id: sites.id }),
+      );
+
+      return rows.length === 1;
     },
 
     async removeSite(workspace, site) {

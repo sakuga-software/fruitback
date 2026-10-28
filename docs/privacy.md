@@ -401,7 +401,8 @@ Firefox shows this list itself only from Firefox 140, the extension asks for Fir
 Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.
 
 - `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
-  reporter hid and the screenshot switch. The reporter's name too, **only if the reporter ticked
+  reporter hid, the screenshot switch, and the corner of the dock once the reporter chose one in the
+  settings (FRU-472). The reporter's name too, **only if the reporter ticked
   « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.

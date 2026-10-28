@@ -33,7 +33,7 @@ export type PendingAdd = {
 
 export type PendingSettings = {
   visibility?: 'members' | 'everyone';
-  place?: { connector: string; teamId?: string; projectId?: string; label: string } | null;
+  place?: { connector: string; teamId?: string; projectId?: string } | null;
 };
 
 export type PendingSite = { pattern: string; at: number } & ({ site: SiteConfig } | { add: PendingAdd });
@@ -81,15 +81,14 @@ function parseSettings(value: unknown): PendingSettings | undefined {
   if (place === null) chosen = null;
   else if (place !== undefined) {
     if (typeof place !== 'object') return undefined;
-    const { connector, teamId, projectId, label } = place as Record<string, unknown>;
-    if (!text(connector) || !text(label)) return undefined;
+    const { connector, teamId, projectId } = place as Record<string, unknown>;
+    if (!text(connector)) return undefined;
     if (teamId !== undefined && !text(teamId)) return undefined;
     if (projectId !== undefined && !text(projectId)) return undefined;
     chosen = {
       connector,
       ...(teamId === undefined ? {} : { teamId }),
       ...(projectId === undefined ? {} : { projectId }),
-      label,
     };
   }
 

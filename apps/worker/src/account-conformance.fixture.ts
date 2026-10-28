@@ -4,6 +4,7 @@ import {
   type Account,
   type AccountStore,
   DEFAULT_CONNECTOR_SETTINGS,
+  AGENT_KEY_USE_STEP_MS,
   MAX_AGENT_KEYS,
   type NewAgentKey,
   type Workspace,
@@ -235,6 +236,22 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.clientMap(), {
       [first.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'public', write: 'public' },
     });
+  });
+
+  it('changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)', async (store) => {
+    const { workspace } = await world(store);
+    const other = (await otherWorld(store)).workspace;
+    const made = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'everyone'), true);
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((site) => [site.id, site.visibility]),
+      [[made.id, 'everyone']],
+    );
+    assert.equal(await store.setSiteVisibility(other.id, made.id, 'members'), false);
+    assert.equal(await store.removeSite(workspace.id, made.id), true);
+    assert.equal(await store.setSiteVisibility(workspace.id, made.id, 'members'), false);
+    assert.deepEqual(await store.sites(workspace.id), []);
   });
 
   it('makes a new site « Members only » when nobody chose, and keeps who writes on a site added again (FRU-330)', async (store) => {
@@ -1110,6 +1127,29 @@ export function accountCases(it: Declare<AccountStore>): void {
 
     await store.deleteWorkspace(workspace.id);
     assert.equal(await store.agentKeyOf('digest-of-the-key'), undefined);
+  });
+
+  it('notes the last use of an agent key, at most once a step, and of that key only (FRU-462)', async (store) => {
+    const { alice, workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const used = await store.createAgentKey(workspace.id, agentKey(alice.id, [site.id]));
+    const other = await store.createAgentKey(workspace.id, { ...agentKey(alice.id, [site.id]), keyHash: 'other' });
+    assert.ok(typeof used === 'object' && typeof other === 'object');
+    assert.equal(used.lastUsedAt, undefined);
+    // Both keys have one instant of creation: each is read by its id, not by its place in the list.
+    const lastUses = async () => {
+      const keys = await store.agentKeys(workspace.id);
+
+      return [used.id, other.id].map((id) => keys.find((key) => key.id === id)?.lastUsedAt);
+    };
+
+    await store.markAgentKeyUsed(used.id, 1_000_000);
+    assert.deepEqual(await lastUses(), [1_000_000, undefined]);
+    await store.markAgentKeyUsed(used.id, 1_000_000 + AGENT_KEY_USE_STEP_MS - 1);
+    assert.deepEqual(await lastUses(), [1_000_000, undefined], 'a use within the step writes nothing');
+    await store.markAgentKeyUsed(used.id, 1_000_000 + AGENT_KEY_USE_STEP_MS);
+    assert.deepEqual(await lastUses(), [1_000_000 + AGENT_KEY_USE_STEP_MS, undefined]);
+    assert.equal((await store.agentKeyOf('digest-of-the-key'))?.key.lastUsedAt, 1_000_000 + AGENT_KEY_USE_STEP_MS);
   });
 }
 

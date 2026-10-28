@@ -382,6 +382,43 @@ describe('createCaptureHost', () => {
     assert.equal(highlight.style.display, 'none');
   });
 
+  it('measures the frame again at a scroll, so it stays on an element that does not move (FRU-457)', () => {
+    // A link of a fixed sidebar: a scroll of the page leaves it where it is in the window, so it
+    // moves against the document, where the frame is drawn.
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const box = { left: 10, top: 20, width: 100, height: 30 };
+    const engine: CaptureEngine = { ...fakeEngine(page, () => page.query('#cta')), boundsOf: () => box };
+    host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
+    const highlight = host.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    const scroll = (y: number) => {
+      Object.defineProperty(page.view, 'scrollY', { value: y, configurable: true });
+      page.document.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('scroll'));
+    };
+
+    // In a capture, on the element under the pointer.
+    host.start();
+    moveOver(page);
+    assert.equal(highlight.style.top, '15px');
+    scroll(400);
+    assert.equal(highlight.style.top, '415px');
+
+    // Held under an open composer, on the element that was chosen.
+    host.stop();
+    host.hold(page.query('#cta'));
+    scroll(250);
+    assert.equal(highlight.style.top, '265px');
+
+    // An element the page took away: the frame stays where it was.
+    page.query('#cta').remove();
+    scroll(100);
+    assert.equal(highlight.style.top, '265px', 'the frame followed an element that is gone');
+
+    // Let go: a scroll brings no frame back.
+    host.release();
+    scroll(0);
+    assert.equal(highlight.style.display, 'none');
+  });
+
   it('gives the frame back to the held element when a capture started over it stops', async () => {
     // The composer is open on an element, and the reporter presses the launch button again, then
     // stops: the frame must be where it was, not gone under an open composer.

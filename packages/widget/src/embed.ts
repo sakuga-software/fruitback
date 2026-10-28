@@ -1,4 +1,4 @@
-import type { DockPosition } from './dock-position.ts';
+import { type DockPosition, parseDockPosition } from './dock-position.ts';
 import {
   canonicalizePageUrl,
   offeredStages,
@@ -419,6 +419,14 @@ export function init(options: FruitbackOptions): Fruitback {
     ...(options.configKey !== undefined ? { key: options.configKey } : {}),
   });
 
+  /**
+   * The corner the host gave (FRU-443), and the one the dock stands in (FRU-472): the reporter's
+   * choice in the settings, or else the host's. A `moveDock` of the host is a newer word than the
+   * stored choice, so it forgets it.
+   */
+  let hostPosition = parseDockPosition(options.position);
+  const dockPosition = (): DockPosition | undefined => config.get().position ?? hostPosition;
+
   let target: CaptureTarget | null = null;
   let place: CapturedPlace | undefined;
   /** The element the composer is open on, on its page: where its text is saved (FRU-311). */
@@ -449,7 +457,7 @@ export function init(options: FruitbackOptions): Fruitback {
     ...(options.selectorInHead === 'with-selectors' ? { nameOf: headOf } : {}),
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
-    ...(options.position !== undefined ? { position: options.position } : {}),
+    ...(dockPosition() !== undefined ? { position: dockPosition() } : {}),
     onConfigure: () => panel.toggle(),
     onList: () => sidebar.toggle(),
     onSelect: (selected) => {
@@ -479,17 +487,7 @@ export function init(options: FruitbackOptions): Fruitback {
       restoredOn = canonicalizePageUrl(view.location.href);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
       host.hold(selected.element);
-      const rect = selected.element.getBoundingClientRect();
-      composer.open(
-        {
-          left: rect.left + view.scrollX,
-          top: rect.top + view.scrollY,
-          bottom: rect.bottom + view.scrollY,
-          right: rect.right + view.scrollX,
-        },
-        headOf(selected.element, selected.source),
-        readableName(selected.element),
-      );
+      composer.open(selected.element, headOf(selected.element, selected.source), readableName(selected.element));
     },
   });
 
@@ -957,6 +955,8 @@ export function init(options: FruitbackOptions): Fruitback {
     stages,
     exportText: asText,
     screenshotSupported: options.captureScreenshot !== undefined,
+    // Left out, the dock stands at the bottom, at the end of the line (FRU-38).
+    dockCorner: () => hostPosition ?? (translator.direction === 'rtl' ? 'bottom-left' : 'bottom-right'),
   });
 
   // A note kept, or sent: the pins of the page and the list say it at once, with no request.
@@ -968,6 +968,8 @@ export function init(options: FruitbackOptions): Fruitback {
 
   // A preference change redraws from the issues already held, so it costs no request.
   const unsubscribe = config.subscribe(() => {
+    // The corner the reporter chose in the settings (FRU-472): the same move as `moveDock`.
+    host.moveDock(dockPosition());
     overlay.refilter();
     sidebar.refresh();
     tellNotes({ kind: 'list' });
@@ -1094,7 +1096,13 @@ export function init(options: FruitbackOptions): Fruitback {
       selectorsShown = shown;
       overlay.showSelectors(shown);
     },
-    moveDock: (position) => host.moveDock(position),
+    moveDock: (position) => {
+      hostPosition = parseDockPosition(position);
+      // The host's newer word beats the corner the reporter chose before (FRU-472). The store says
+      // it to its listeners, which move the dock; with no choice stored, it moves here.
+      if (config.get().position !== undefined) config.set({ position: undefined });
+      else host.moveDock(hostPosition);
+    },
     async replyTo(id, body) {
       const issue = readIssues.find((each) => each.note.id === id);
       if (issue === undefined || options.replies === false || !readerIdentity.canReply || body.trim() === '') {

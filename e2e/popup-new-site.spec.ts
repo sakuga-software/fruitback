@@ -87,12 +87,24 @@ async function signedIn(extension: LoadedExtension, page: Page, request: string)
 /** The list of an account, and the add, in the shape of the worker (#310). */
 async function sitesRoute(
   context: BrowserContext,
-  workspaces: { id: string; name: string; role: string; canAddSite: boolean; places?: unknown[] }[],
+  workspaces: { id: string; name: string; role: string; canAddSite: boolean; sources?: unknown[] }[],
 ) {
   const sites: Record<string, unknown>[] = [];
   const posted: { body: unknown; authorization: string | null }[] = [];
   // FRU-453: the settings chosen on the screen, written after the add.
   const settings: unknown[] = [];
+  // FRU-453: the teams of the Linear of a workspace, as the worker reads them from Linear.
+  await context.route(`${CLOUD}/session/sites/places?*`, (route) =>
+    route.fulfill({
+      json: {
+        kind: 'linear',
+        teams: [
+          { id: 'team_1', name: 'Northwind', key: 'NOR', projects: [{ id: 'proj_1', name: 'Website' }] },
+          { id: 'team_2', name: 'Support', key: 'SUP', projects: [] },
+        ],
+      },
+    }),
+  );
   await context.route(`${CLOUD}/session/sites/settings`, async (route) => {
     const body = route.request().postDataJSON() as { workspace: string; site: string; visibility?: string };
     settings.push(body);
@@ -158,10 +170,10 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
 }) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site');
-  const NORTHWIND = { connector: 'conn_1', teamId: 'team_1', label: 'Linear · Northwind' };
+  const LINEAR = { id: 'conn_1', kind: 'linear', label: 'Linear · Acme' };
   const { posted, settings } = await sitesRoute(extension.context, [
-    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, places: [] },
-    { id: 'ws_2', name: 'Northwind', role: 'admin', canAddSite: true, places: [NORTHWIND] },
+    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, sources: [] },
+    { id: 'ws_2', name: 'Northwind', role: 'admin', canAddSite: true, sources: [LINEAR] },
     { id: 'ws_3', name: 'Lumen', role: 'guest', canAddSite: false },
   ]);
   await signedIn(extension, page, 'req_add_1');
@@ -187,9 +199,13 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
   await clean(popup, 'the popup on a site of no workspace');
 
   await list.selectOption('ws_2');
-  // The places follow the workspace chosen.
-  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)', 'Linear · Northwind']);
-  await where.selectOption({ label: 'Linear · Northwind' });
+  // The providers follow the workspace chosen; then a team, then a project of it.
+  await expect(where.locator('option')).toHaveText(['Fruitback (no tracker)', 'Linear · Acme']);
+  await where.selectOption('conn_1');
+  const team = popup.getByRole('combobox', { name: 'Team' });
+  await expect(team.locator('option')).toHaveText(['Choose a team…', 'Northwind (NOR)', 'Support (SUP)']);
+  await team.selectOption('team_1');
+  await popup.getByRole('combobox', { name: 'Project' }).selectOption('proj_1');
   await who.selectOption('everyone');
   await popup.getByRole('button', { name: 'Turn on' }).click();
 
@@ -228,7 +244,7 @@ test('a site of no workspace: added to one and turned on, in one click, then scr
       workspace: 'ws_2',
       site: 'site_1',
       visibility: 'everyone',
-      place: { connector: 'conn_1', teamId: 'team_1' },
+      place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' },
     },
   ]);
   const rules = await extension.worker.evaluate(async () => (await chrome.storage.local.get('sites')).sites);
@@ -376,7 +392,7 @@ test('a site whose add the prompt cut short is added and turned on when the popu
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site-cut-short');
   const { posted, settings } = await sitesRoute(extension.context, [
-    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, places: [] },
+    { id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true, sources: [] },
   ]);
   await signedIn(extension, page, 'req_add_7');
   await extension.worker.evaluate(

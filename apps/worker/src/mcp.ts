@@ -40,6 +40,8 @@ export type McpContext = {
   grantOf(key: string): Promise<AgentGrant | undefined>;
   /** Whether the workspace of a grant is suspended (FRU-282). */
   suspended(workspace: string): Promise<boolean>;
+  /** Notes that the key of a grant opened a request (FRU-462). It never refuses the request. */
+  used(grant: AgentGrant): Promise<void>;
   /** The tools that this grant may call. */
   tools(grant: AgentGrant): McpTool[];
 };
@@ -93,6 +95,8 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   if (typeof message !== 'object' || message === null || Array.isArray(message)) {
     return failure(null, INVALID_REQUEST, 'One JSON-RPC message per request', 400);
   }
+  // A request the server takes counts as a use of its key (FRU-462); one it refuses above does not.
+  await context.used(grant);
   const { id, method, params } = message as { id?: unknown; method?: unknown; params?: unknown };
   // A notification, or an answer of the client: nothing to answer.
   if (id === undefined) return new Response(null, { status: 202 });

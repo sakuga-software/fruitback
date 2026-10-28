@@ -539,6 +539,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   options change while it is open, and its list then stops following what is typed. A `Select`
   changes its options only while it is closed. `e2e/console-site-places.spec.ts` holds the search,
   the cross, the pages and the place sent.
+  **A team of Linear, then one of its projects, in two lists** (FRU-458, Mathieu). The first list
+  offers each team, never a project: « Web (WEB) · 4 projects · private ». A team adds nothing; it
+  opens a second list under « Team Web », with its own search and pages: the whole team first, then
+  its projects under the kind of their status in Linear (Started, Planned, Backlog, Paused, Completed,
+  Canceled, then those with no status), each with the name its workspace gave the status
+  (« Site · In Progress »). « Choose another team » goes back. A team is offered while one of its
+  places is free. The worker reads every page of the teams (50 at a time) and of the projects of each
+  team (`listLinearTeams`, at most 20 pages of each list): before, a project after the 50th of its
+  team was neither offered nor accepted in a list. A page of 50 teams and not 100: Linear prices a
+  query by the nodes it may return, and the status of each project doubles them. The answer of
+  `GET …/connectors/<id>/teams` gains `private` and `status`, both optional: a console of before
+  ignores them.
 - **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
   (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
   browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one

@@ -126,6 +126,37 @@ describe('the place a member last chose (FRU-123)', () => {
   });
 });
 
+describe('the corner a reporter chose for the dock (FRU-472)', () => {
+  it('is absent until somebody chooses, kept for the next store of this site, and forgotten on request', () => {
+    const storage = fakeStorage();
+    const store = createConfigStore({ defaults: DEFAULTS, storage });
+    assert.equal('position' in store.get(), false);
+
+    store.set({ position: 'top-left' });
+    assert.equal(createConfigStore({ defaults: DEFAULTS, storage }).get().position, 'top-left');
+
+    store.set({ hiddenStages: ['done'] });
+    assert.equal(store.get().position, 'top-left', 'another preference erased the corner');
+
+    store.set({ position: undefined });
+    assert.equal('position' in store.get(), false);
+    assert.equal((storage.getItem(CONFIG_STORAGE_KEY) ?? '').includes('top-left'), false);
+  });
+
+  it('reads a stored corner like the rest: one of the four, or nothing', () => {
+    const read = (position: unknown) =>
+      createConfigStore({
+        defaults: DEFAULTS,
+        storage: fakeStorage({ [CONFIG_STORAGE_KEY]: JSON.stringify({ position }) }),
+      }).get().position;
+
+    assert.equal(read('bottom-left'), 'bottom-left');
+    assert.equal(read('middle'), undefined);
+    assert.equal(read(3), undefined);
+    assert.equal(read(['top-left']), undefined);
+  });
+});
+
 describe('createConfigStore', () => {
   it('starts from the defaults when nothing was ever stored', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });

@@ -351,6 +351,8 @@ export const agent_keys = pgTable(
     created_by: text('created_by').notNull(),
     created_at: instant('created_at').notNull(),
     expires_at: instant('expires_at').notNull(),
+    /** When the key last opened a request of `/mcp` (FRU-462), to the minute; `null`: never. */
+    last_used_at: instant('last_used_at'),
   },
   (table) => [
     primaryKey({ name: 'agent_keys_pkey', columns: [table.id] }),

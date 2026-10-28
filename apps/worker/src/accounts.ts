@@ -165,7 +165,15 @@ export type AgentKey = {
   createdBy: string;
   createdAt: number;
   expiresAt: number;
+  /** When the key last opened a request of `/mcp` (FRU-462), to `AGENT_KEY_USE_STEP_MS`. Absent: never. */
+  lastUsedAt?: number;
 };
+
+/**
+ * How stale the last use of a key may be. A request writes the use only when the one kept is older:
+ * an agent that calls `/mcp` ten times a second writes it once a minute.
+ */
+export const AGENT_KEY_USE_STEP_MS = 60_000;
 
 /** One write of an agent key (FRU-464). `status`: the status it set, for `action: 'status'`. */
 export type AgentWrite = {
@@ -182,7 +190,7 @@ export type AgentWrite = {
 export const AGENT_WRITES_LISTED = 100;
 
 /** A key to write: its digest, never the key. */
-export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites'> & {
+export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites' | 'lastUsedAt'> & {
   keyHash: string;
   sites: readonly string[];
 };
@@ -509,6 +517,8 @@ export type AccountStore = {
    * An expired key is answered: `agent-keys.ts` refuses it.
    */
   agentKeyOf(keyHash: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
+  /** Notes that a key opened a request at `at`, unless its last use is less than `AGENT_KEY_USE_STEP_MS` older. */
+  markAgentKeyUsed(key: string, at: number): Promise<void>;
   /** Writes one write of an agent key in the log of its workspace (FRU-464). */
   recordAgentWrite(workspace: string, write: AgentWrite): Promise<void>;
   /** The writes of one key of a workspace, the newest first, `AGENT_WRITES_LISTED` at most. */
@@ -533,6 +543,11 @@ export type AccountStore = {
   addSite(workspace: string, site: { origin: string; visibility: Visibility; writers?: Writers }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
+  /**
+   * Who reads the notes of a site that exists (FRU-453). `false` when the site is not of this
+   * workspace, or is gone: nothing is made, where `addSite` would make the site again.
+   */
+  setSiteVisibility(workspace: string, site: string, visibility: Visibility): Promise<boolean>;
   /**
    * The statuses of a site (FRU-366), ordered by `position`, then source and key. `undefined` when the
    * site is not of this workspace.

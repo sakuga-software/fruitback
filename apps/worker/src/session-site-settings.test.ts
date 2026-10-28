@@ -1,17 +1,64 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'vitest';
+import { afterEach, describe, it, vi } from 'vitest';
 import { CONSOLE, type World, memberOf, signInTo, workspaceIn, worlds } from './console-world.fixture.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPairing, digest, redeemPairing } from './session.ts';
-import { placesOf } from './session-site-settings.ts';
 
 /**
- * `POST /session/sites/settings` (FRU-453): the popup changes who sees the notes of a site and where
- * they go, on the screen that turns it on. Through `handleRequest`, on PostgreSQL (PGlite). Each
- * guard of `session-site-settings.ts` has a test here that fails without it.
+ * `POST /session/sites/settings` and `GET /session/sites/places` (FRU-453): the popup changes who sees
+ * the notes of a site and where they go, a provider, a team, a project, on the screen that turns it
+ * on. Through `handleRequest`, on PostgreSQL (PGlite), with a Linear that answers here. Each guard of
+ * `session-site-settings.ts` has a test here that fails without it.
  */
 
-const world = worlds();
+const LINEAR_KEY = 'lin_api_the_key_of_acme';
+/** How the Linear of the suite answers now. */
+const linearState = { down: false };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  linearState.down = false;
+});
+
+/** Linear with two teams: Design, with its project Site, and Support with none. */
+function linear(): void {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+    if (linearState.down) return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
+    const { query } = JSON.parse(String(init?.body)) as { query: string };
+    if (!/FruitbackTeams/.test(query)) return Response.json({ data: {} });
+
+    return Response.json({
+      data: {
+        viewer: { name: 'Camille' },
+        organization: { name: 'Acme' },
+        teams: {
+          nodes: [
+            {
+              id: 'team_design',
+              name: 'Design',
+              key: 'DES',
+              private: false,
+              projects: {
+                nodes: [{ id: 'proj_site', name: 'Site', status: { name: 'In Progress', type: 'started' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+            {
+              id: 'team_support',
+              name: 'Support',
+              key: 'SUP',
+              projects: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+    });
+  });
+}
+
+const opened = worlds();
+const world = () => opened({ env: { FRUITBACK_SECRETS_KEY: 'another-secret-that-opens-the-connectors' } });
 
 /**
  * A request through the worker of the world, with its stores of connection: the cookie of the
@@ -98,16 +145,26 @@ function set(env: World, token: string | undefined, body: unknown, more: { origi
   });
 }
 
-/** Acme with two sites: the first sends to « REST API · Hook », the second to nowhere. */
-async function withPlaces(env: World) {
+function places(env: World, token: string, workspace: string, connector: string, origin: string = EXTENSION) {
+  return callOn(env, 'GET', `/session/sites/places?workspace=${workspace}&connector=${connector}`, { origin, token });
+}
+
+/** Acme with two sites, a Linear and an address. The first site sends to the address. */
+async function withSources(env: World) {
+  linear();
   const world = await acme(env);
   const first = await env.accounts.addSite(world.id, { origin: SITE, visibility: 'members' });
   const second = await env.accounts.addSite(world.id, { origin: 'https://other.client.fr', visibility: 'members' });
   const hook = await env.accounts.addConnector(world.id, { kind: 'rest', label: 'Hook', sealed: 'sealed-1' });
-  const place = { connector: hook.id, label: 'REST API · Hook' };
-  assert.ok(await env.accounts.setDestinations(world.id, first.id, [place]));
+  const added = await callOn(env, 'POST', `/console/workspaces/${world.id}/connectors`, {
+    token: world.people.owner.token,
+    body: { kind: 'linear', apiKey: LINEAR_KEY },
+  });
+  assert.equal(added.status, 201, await added.clone().text());
+  const lin = ((await added.json()) as { id: string }).id;
+  assert.ok(await env.accounts.setDestinations(world.id, first.id, [{ connector: hook.id, label: 'REST API · Hook' }]));
 
-  return { ...world, first, second, hook, place };
+  return { ...world, first, second, hook, lin };
 }
 
 async function siteIn(env: World, workspace: string, id: string) {
@@ -118,9 +175,9 @@ async function siteIn(env: World, workspace: string, id: string) {
 }
 
 describe('who sees the notes and where they go, set from the popup (FRU-453)', () => {
-  it('lists the places of the workspace to who manages its sites, and to nobody else', async () => {
+  it('lists the sources of the workspace and where each site sends, to who manages its sites only', async () => {
     const env = await world();
-    const { id, people, place } = await withPlaces(env);
+    const { id, people, hook, lin, first, second } = await withSources(env);
 
     for (const role of ['owner', 'admin', 'member', 'guest'] as const) {
       const answer = await callOn(env, 'GET', '/session/sites', {
@@ -128,88 +185,179 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
         token: await accountToken(env, people[role]),
       });
       assert.equal(answer.status, 200, role);
-      const { workspaces } = (await answer.json()) as { workspaces: { id: string; places?: unknown }[] };
-      const acmeEntry = workspaces.find((each) => each.id === id);
-      if (role === 'owner' || role === 'admin') assert.deepEqual(acmeEntry?.places, [place], role);
-      else assert.equal(acmeEntry?.places, undefined, role);
+      const listed = (await answer.json()) as {
+        workspaces: { id: string; sources?: unknown }[];
+        sites: { id: string; place?: unknown }[];
+      };
+      const acmeEntry = listed.workspaces.find((each) => each.id === id);
+      if (role === 'owner' || role === 'admin') {
+        assert.deepEqual(
+          acmeEntry?.sources,
+          [
+            { id: hook.id, kind: 'rest', label: 'Hook' },
+            { id: lin, kind: 'linear', label: 'Linear · Camille' },
+          ],
+          role,
+        );
+        assert.deepEqual(listed.sites.find((each) => each.id === first.id)?.place, { connector: hook.id });
+        assert.equal(listed.sites.find((each) => each.id === second.id)?.place, null);
+      } else {
+        assert.equal(acmeEntry?.sources, undefined, role);
+        assert.equal(listed.sites.find((each) => each.id === first.id)?.place, undefined, role);
+      }
     }
   });
 
-  it('sets the visibility and the place of a site, for the owner and an admin', async () => {
+  it('answers the teams of a Linear with their projects, and nothing to choose for an address', async () => {
     const env = await world();
-    const { id, people, second, place } = await withPlaces(env);
+    const { id, people, hook, lin, evil, mallory } = await withSources(env);
+    const token = await accountToken(env, people.admin);
 
-    for (const role of ['owner', 'admin'] as const) {
-      const token = await accountToken(env, people[role]);
-      const answer = await set(env, token, { workspace: id, site: second.id, visibility: 'everyone', place });
-      assert.equal(answer.status, 200, await answer.clone().text());
-      assert.deepEqual(await answer.json(), {
-        site: {
-          id: second.id,
-          origin: 'https://other.client.fr',
-          visibility: 'everyone',
-          workspace: id,
-          destination: { label: 'REST API · Hook' },
-        },
-      });
-      const stored = await siteIn(env, id, second.id);
-      assert.equal(stored.visibility, 'everyone');
-      assert.deepEqual(
-        stored.destinations.map((each) => each.connector),
-        [place.connector],
-      );
-
-      // Back to « Fruitback » and « Members only ».
-      const back = await set(env, token, { workspace: id, site: second.id, visibility: 'members', place: null });
-      assert.equal(back.status, 200);
-      const again = await siteIn(env, id, second.id);
-      assert.equal(again.visibility, 'members');
-      assert.deepEqual(again.destinations, []);
-    }
+    const teams = await places(env, token, id, lin);
+    assert.equal(teams.status, 200, await teams.clone().text());
+    const offer = (await teams.json()) as { kind: string; teams: { id: string; projects: { id: string }[] }[] };
+    assert.equal(offer.kind, 'linear');
+    assert.deepEqual(
+      offer.teams.map((team) => [team.id, team.projects.map((project) => project.id)]),
+      [
+        ['team_design', ['proj_site']],
+        ['team_support', []],
+      ],
+    );
+    assert.deepEqual(await (await places(env, token, id, hook.id)).json(), { kind: 'rest' });
+    // A connector named under another workspace, a member, a page, a Linear that does not answer.
+    assert.equal((await places(env, await accountToken(env, mallory), evil, lin)).status, 404);
+    assert.equal((await places(env, token, id, 'conn_none')).status, 404);
+    assert.equal((await places(env, await accountToken(env, people.member), id, lin)).status, 403);
+    assert.equal((await places(env, token, id, lin, 'https://evil.example')).status, 403);
+    linearState.down = true;
+    assert.equal((await places(env, token, id, lin)).status, 502);
   });
 
-  it('keeps the label the worker wrote, never the one of the body, and refuses a place no site sends to', async () => {
+  it('sets a team and a project of Linear, with the words Linear answers, and the visibility', async () => {
     const env = await world();
-    const { id, people, second, hook } = await withPlaces(env);
+    const { id, people, second, lin } = await withSources(env);
     const token = await accountToken(env, people.owner);
 
     const answer = await set(env, token, {
       workspace: id,
       site: second.id,
-      place: { connector: hook.id, label: 'Somewhere else' },
+      visibility: 'everyone',
+      place: { connector: lin, teamId: 'team_design', projectId: 'proj_site', label: 'Somewhere else' },
     });
-    assert.equal(answer.status, 200);
-    assert.equal((await siteIn(env, id, second.id)).destinations[0]?.label, 'REST API · Hook');
+    assert.equal(answer.status, 200, await answer.clone().text());
+    assert.deepEqual(await answer.json(), {
+      site: {
+        id: second.id,
+        origin: 'https://other.client.fr',
+        visibility: 'everyone',
+        workspace: id,
+        destination: { label: 'Linear · Design · Site' },
+      },
+    });
+    const stored = await siteIn(env, id, second.id);
+    assert.equal(stored.visibility, 'everyone');
+    assert.deepEqual(
+      stored.destinations.map(({ connector, teamId, projectId, label }) => ({ connector, teamId, projectId, label })),
+      [{ connector: lin, teamId: 'team_design', projectId: 'proj_site', label: 'Linear · Design · Site' }],
+    );
 
-    const other = await env.accounts.addConnector(id, { kind: 'rest', label: 'Unused', sealed: 'sealed-2' });
-    const unused = await set(env, token, { workspace: id, site: second.id, place: { connector: other.id } });
-    assert.equal(unused.status, 400);
-    assert.deepEqual(await unused.json(), { error: 'invalid-place' });
-    // A bad place changes no visibility either.
-    const both = await set(env, token, {
+    // The team alone, then back to « Fruitback » and « Members only ».
+    assert.equal(
+      (await set(env, token, { workspace: id, site: second.id, place: { connector: lin, teamId: 'team_support' } }))
+        .status,
+      200,
+    );
+    assert.equal((await siteIn(env, id, second.id)).destinations[0]?.label, 'Linear · Support');
+    assert.equal(
+      (await set(env, token, { workspace: id, site: second.id, visibility: 'members', place: null })).status,
+      200,
+    );
+    const back = await siteIn(env, id, second.id);
+    assert.equal(back.visibility, 'members');
+    assert.deepEqual(back.destinations, []);
+  });
+
+  it('refuses a place the key does not reach, and changes nothing when Linear does not answer', async () => {
+    const env = await world();
+    const { id, people, second, lin, hook } = await withSources(env);
+    const token = await accountToken(env, people.owner);
+
+    for (const place of [
+      { connector: lin, teamId: 'team_none' },
+      { connector: lin, teamId: 'team_design', projectId: 'proj_none' },
+      { connector: lin },
+      { connector: hook.id, teamId: 'team_design' },
+      { connector: 'conn_none' },
+    ]) {
+      const refused = await set(env, token, { workspace: id, site: second.id, visibility: 'everyone', place });
+      assert.equal(refused.status, 400, JSON.stringify(place));
+      assert.deepEqual(await refused.json(), { error: 'invalid-place' });
+    }
+    linearState.down = true;
+    const down = await set(env, token, {
       workspace: id,
       site: second.id,
       visibility: 'everyone',
-      place: { connector: other.id },
+      place: { connector: lin, teamId: 'team_design' },
     });
-    assert.equal(both.status, 400);
-    assert.equal((await siteIn(env, id, second.id)).visibility, 'members');
+    assert.equal(down.status, 502);
+    const kept = await siteIn(env, id, second.id);
+    assert.equal(kept.visibility, 'members');
+    assert.deepEqual(kept.destinations, []);
   });
 
-  it('puts the chosen place first and keeps the others, and does not empty a site of two places', async () => {
+  it('refuses a connector of another workspace', async () => {
     const env = await world();
-    const { id, people, first, place } = await withPlaces(env);
+    const { id, people, second, evil } = await withSources(env);
+    const theirs = await env.accounts.addConnector(evil, { kind: 'rest', label: 'Theirs', sealed: 'sealed-9' });
+
+    const answer = await set(env, await accountToken(env, people.owner), {
+      workspace: id,
+      site: second.id,
+      place: { connector: theirs.id },
+    });
+    assert.equal(answer.status, 400);
+    assert.deepEqual((await siteIn(env, id, second.id)).destinations, []);
+  });
+
+  it('replaces the default place and keeps the others, and does not empty a site of two places', async () => {
+    const env = await world();
+    const { id, people, first, hook, lin } = await withSources(env);
     const token = await accountToken(env, people.owner);
     const other = await env.accounts.addConnector(id, { kind: 'rest', label: 'Second', sealed: 'sealed-2' });
-    const second = { connector: other.id, label: 'REST API · Second' };
-    assert.ok(await env.accounts.setDestinations(id, first.id, [place, second]));
-
-    assert.equal((await set(env, token, { workspace: id, site: first.id, place: second })).status, 200);
-    assert.deepEqual(
-      (await siteIn(env, id, first.id)).destinations.map((each) => each.connector),
-      [other.id, place.connector],
+    assert.ok(
+      await env.accounts.setDestinations(id, first.id, [
+        { connector: hook.id, label: 'REST API · Hook' },
+        { connector: other.id, label: 'REST API · Second' },
+      ]),
     );
 
+    assert.equal(
+      (await set(env, token, { workspace: id, site: first.id, place: { connector: lin, teamId: 'team_design' } }))
+        .status,
+      200,
+    );
+    assert.deepEqual(
+      (await siteIn(env, id, first.id)).destinations.map((each) => each.connector),
+      [lin, other.id],
+    );
+    // The second place chosen as the default: it is not there twice.
+    assert.equal(
+      (await set(env, token, { workspace: id, site: first.id, place: { connector: other.id } })).status,
+      200,
+    );
+    assert.deepEqual(
+      (await siteIn(env, id, first.id)).destinations.map((each) => each.connector),
+      [other.id],
+    );
+
+    assert.ok(
+      await env.accounts.setDestinations(id, first.id, [
+        { connector: hook.id, label: 'REST API · Hook' },
+        { connector: other.id, label: 'REST API · Second' },
+      ]),
+    );
     const emptied = await set(env, token, { workspace: id, site: first.id, place: null });
     assert.equal(emptied.status, 409);
     assert.equal((await siteIn(env, id, first.id)).destinations.length, 2);
@@ -217,7 +365,7 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
 
   it('is refused to a member and a guest, and answered « not found » outside the workspace', async () => {
     const env = await world();
-    const { id, evil, mallory, people, second } = await withPlaces(env);
+    const { id, evil, mallory, people, second } = await withSources(env);
 
     for (const role of ['member', 'guest'] as const) {
       const answer = await set(env, await accountToken(env, people[role]), {
@@ -233,7 +381,6 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
         .status,
       404,
     );
-    // The site of Acme, named under Evil: Alice is no member there.
     assert.equal(
       (
         await set(env, await accountToken(env, people.owner), {
@@ -244,7 +391,6 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
       ).status,
       404,
     );
-    // Mallory names her own workspace and a site of Acme: not a site of hers.
     assert.equal(
       (await set(env, await accountToken(env, mallory), { workspace: evil, site: second.id, visibility: 'everyone' }))
         .status,
@@ -255,7 +401,7 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
 
   it('reads the role at each call: a person removed between two calls changes nothing more', async () => {
     const env = await world();
-    const { id, people, second } = await withPlaces(env);
+    const { id, people, second } = await withSources(env);
     const token = await accountToken(env, people.admin);
 
     assert.equal((await set(env, token, { workspace: id, site: second.id, visibility: 'everyone' })).status, 200);
@@ -269,7 +415,7 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
 
   it('changes nothing after a log out: the write reads the session again', async () => {
     const env = await world();
-    const { id, people, second } = await withPlaces(env);
+    const { id, people, second } = await withSources(env);
     const session = await connect(env, people.owner);
     assert.equal(
       (await set(env, session.accessToken, { workspace: id, site: second.id, visibility: 'everyone' })).status,
@@ -288,9 +434,9 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
     assert.equal((await siteIn(env, id, second.id)).visibility, 'everyone');
   });
 
-  it('takes a session of an account from an extension only, and a POST only', async () => {
+  it('takes a session of an account from an extension only, and the method of each route only', async () => {
     const env = await world();
-    const { id, people, second } = await withPlaces(env);
+    const { id, people, second, lin } = await withSources(env);
     const body = { workspace: id, site: second.id, visibility: 'everyone' };
 
     const { code } = await createPairing(env.sessions, { subject: people.owner.id, workspace: id });
@@ -299,46 +445,29 @@ describe('who sees the notes and where they go, set from the popup (FRU-453)', (
     const pairing = await set(env, paired.session.accessToken, body);
     assert.equal(pairing.status, 403);
     assert.deepEqual(await pairing.json(), { error: 'account-required' });
+    assert.equal((await places(env, paired.session.accessToken, id, lin)).status, 403);
     assert.equal((await set(env, undefined, body)).status, 401);
 
     const token = await accountToken(env, people.owner);
-    const page = await set(env, token, body, { origin: 'https://evil.example' });
-    assert.equal(page.status, 403);
-    const read = await callOn(env, 'GET', '/session/sites/settings', { origin: EXTENSION, token });
-    assert.equal(read.status, 405);
+    assert.equal((await set(env, token, body, { origin: 'https://evil.example' })).status, 403);
+    assert.equal((await callOn(env, 'GET', '/session/sites/settings', { origin: EXTENSION, token })).status, 405);
+    assert.equal(
+      (
+        await callOn(env, 'POST', `/session/sites/places?workspace=${id}&connector=${lin}`, {
+          origin: EXTENSION,
+          token,
+        })
+      ).status,
+      405,
+    );
     for (const bad of [
       { workspace: id, site: second.id },
       { workspace: id, site: second.id, visibility: 'all' },
+      { workspace: id, site: second.id, place: 'x' },
       'x',
     ]) {
       assert.equal((await set(env, token, bad)).status, 400, JSON.stringify(bad));
     }
     assert.equal((await siteIn(env, id, second.id)).visibility, 'members');
-  });
-});
-
-describe('placesOf (FRU-453)', () => {
-  it('lists each labelled place once, in the order of the sites', () => {
-    const site = (destinations: { connector: string; teamId?: string; label?: string }[]) => ({
-      id: 's',
-      workspaceId: 'w',
-      origin: 'https://a.test',
-      visibility: 'members' as const,
-      writers: 'members' as const,
-      destinations,
-    });
-    assert.deepEqual(
-      placesOf([
-        site([{ connector: 'c1', teamId: 't', label: 'Linear · T' }, { connector: 'c2' }]),
-        site([
-          { connector: 'c1', teamId: 't', label: 'Linear · T' },
-          { connector: 'c3', label: 'REST API · C' },
-        ]),
-      ] as never),
-      [
-        { connector: 'c1', teamId: 't', label: 'Linear · T' },
-        { connector: 'c3', label: 'REST API · C' },
-      ],
-    );
   });
 });

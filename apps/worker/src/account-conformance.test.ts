@@ -81,6 +81,19 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'notes the last use of an agent key, at most once a step, and of that key only (FRU-462)',
+    by: 'writes the last use at each request',
+    replace: {
+      from: 'or(isNull(agent_keys.last_used_at), lte(agent_keys.last_used_at, at - AGENT_KEY_USE_STEP_MS)),',
+      to: '',
+    },
+  },
+  {
+    breaks: 'notes the last use of an agent key, at most once a step, and of that key only (FRU-462)',
+    by: 'writes the last use of every key',
+    replace: { from: '              eq(agent_keys.id, key),\n              or(', to: '              or(' },
+  },
+  {
     breaks: 'makes one account of two providers that prove the same address',
     by: 'makes an account for each provider',
     wrap: (real) => ({
@@ -236,6 +249,27 @@ const VIOLATIONS: Violation<AccountStore>[] = [
         },
       };
     },
+  },
+  {
+    breaks: 'changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)',
+    by: 'changes the visibility of a site of another workspace',
+    replace: {
+      after: 'async setSiteVisibility(',
+      from: '.where(and(eq(sites.workspace_id, workspace), eq(sites.id, site)))',
+      to: '.where(eq(sites.id, site))',
+    },
+  },
+  {
+    breaks: 'changes who reads a site that exists, and makes no site that is gone or of another workspace (FRU-453)',
+    by: 'makes the site again, as an add of its address would',
+    wrap: (real) => ({
+      ...real,
+      async setSiteVisibility() {
+        await real.addSite('gone', { origin: 'https://acme.dev', visibility: 'members' }).catch(() => undefined);
+
+        return true;
+      },
+    }),
   },
   {
     breaks: 'lists the sites and the connectors of a workspace oldest first',

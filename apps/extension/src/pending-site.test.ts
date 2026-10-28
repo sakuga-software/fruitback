@@ -149,7 +149,7 @@ describe('a site of no workspace, added when the access arrives (FRU-454)', () =
   const INTENT: PendingAdd = {
     endpoint: 'https://api.fruitback.test',
     workspace: { id: 'ws_1', name: 'Sakuga' },
-    settings: { visibility: 'everyone', place: { connector: 'conn_1', teamId: 'team_1', label: 'Linear · Northwind' } },
+    settings: { visibility: 'everyone', place: { connector: 'conn_1', teamId: 'team_1', projectId: 'proj_1' } },
   };
   const ENTRY: SiteConfig = {
     endpoint: 'https://api.fruitback.test',
@@ -216,7 +216,7 @@ describe('a site of no workspace, added when the access arrives (FRU-454)', () =
       { ...INTENT, endpoint: 3 },
       { ...INTENT, workspace: { name: 'x' } },
       { ...INTENT, settings: { visibility: 'all' } },
-      { ...INTENT, settings: { place: { connector: 'c' } } },
+      { ...INTENT, settings: { place: { teamId: 'team_1' } } },
     ]) {
       assert.equal(parsePending({ pattern: ORIGIN, add, at }), undefined, JSON.stringify(add));
     }
