@@ -2464,9 +2464,13 @@ agent key (FRU-461) through `POST /mcp`, the Streamable
 HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, `feedback_as_text`.
 
 - **No valid key, no route.** No key, a key of another shape, a revoked or expired key, a key whose
-  member left or was suspended, and a key of a suspended workspace: `404`, as a path that does not
-  exist. A worker with no database has no key, and answers `404` too.
-  test:`answers 404 with no key, a key it does not know, an expired one and one of a suspended workspace`.
+  member left or was suspended, and a key of a suspended workspace: `401` with
+  `WWW-Authenticate: Bearer resource_metadata="…"` where OAuth is on (FRU-467, below), so that a client
+  finds where to get a token, and `error="invalid_token"` when a key or a token was presented. The
+  answer is the same for each, so a caller learns nothing of which. Where OAuth is off, `404`, as a
+  path that does not exist; a worker with no database has no key, and answers `404` too.
+  test:`answers 401 with no key, a key it does not know, an expired one and one of a suspended workspace`,
+  test:`answers 404 at /mcp, as before, when OAuth is off`.
 - **No browser.** A request with an `Origin` is refused (`403`): a page cannot call `/mcp` with a key
   it read somewhere, and the transport asks a server to refuse the origins it does not expect.
   `GET` answers `405`: the server opens no stream and keeps no session.
@@ -2500,6 +2504,95 @@ HTTP transport of MCP. Three tools, all reads: `list_feedback`, `get_feedback`, 
   owner and the admins read it at `GET /console/workspaces/<id>/agent-keys/<key>/writes`, the
   newest 100. The log of a revoked key stays until its workspace goes.
   test:`stops a key after 30 writes in a minute, and keeps the log of a revoked key`.
+
+### OAuth for `/mcp`, for a connector of claude.ai (FRU-467)
+
+A client that connects from a page (a connector of claude.ai, an MCP client) gets a token for `/mcp`
+by OAuth 2.1, as the authorization of MCP (2025-06-18) asks, in place of an agent key pasted by hand.
+`apps/worker/src/oauth.ts` is the server; `docs/decisions/agents.md`, « OAuth for MCP », gives the
+choices. **A connection is an agent key with no secret**, tied to its client: everything above of a
+key holds for it (one workspace, its sites, its rights, its end, its member read again at each
+request, the log of its writes, the revocation in « Agents »). It is on when the worker has accounts,
+`FRUITBACK_PUBLIC_URL` with no path and `FRUITBACK_CONSOLE_URL`; otherwise every route below answers
+`404`.
+
+The routes: `/.well-known/oauth-protected-resource` (also with `/mcp` after it, RFC 9728) and
+`/.well-known/oauth-authorization-server` (RFC 8414), `POST /oauth/register` (RFC 7591),
+`GET /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke` (RFC 7009). They take no cookie,
+and any origin may read them. The person approves at `/console/oauth/requests/<id>`, under the cookie
+of the console.
+
+**The threats, and what stands against each:**
+
+- **A code sent to an address of an attacker.** A client registers its `redirect_uri`s, 5 at most,
+  each `https` (or `http` on `localhost`, `127.0.0.1`, `[::1]`), with no fragment and no user, all on
+  one host. `/oauth/authorize` compares the one it is given **byte for byte** with them: no prefix, no
+  other path, no other case. Before that check passes, nothing goes back to any address: the worker
+  answers a page of `400`, so it is no open redirector.
+  test:`never sends a browser to an address the client did not register: a page says why`,
+  test:`refuses an address that is not https, a fragment, two hosts, and a method it does not know`.
+- **A code that leaks** (a log, a history, a header `Referer`). **PKCE with S256 is required**; a
+  request with no challenge, or with `plain`, goes back with `invalid_request`. A code lives 60
+  seconds, is kept as a digest, and turns into tokens only with its verifier, from the client it was
+  given to, with the same `redirect_uri`. A code presented twice was seen by somebody else: the second
+  exchange is refused, and **the connection it made is revoked**, with the tokens of the first.
+  test:`refuses a code with another verifier, another address, another client, or after its minute`,
+  test:`revokes the connection when its code is used twice`.
+- **A forged answer (CSRF on the client, mix-up).** The worker gives back the `state` of the client
+  untouched, and adds `iss` (RFC 9207), its own origin, to every answer that goes back, so that a
+  client with several servers knows which one answered. Checking `state` is the client's.
+- **A forged approval (CSRF on the console).** The consent page approves with the cookie of the
+  console, and a `POST` comes from the origin of the console only, as `/connect`. The answer names the
+  account the page showed: another account signed in since is refused (`409`). A request is answered
+  once, approved or denied, and lives 10 minutes. Signing in on the consent page leads back to the
+  question, never to an answer.
+  test:`shows the host of the client, its name, and the workspaces the person manages, with their sites`.
+- **A client that says it is another.** Anybody can register a client named « Claude ». The consent
+  page writes, in large, **the host of the `redirect_uri`**, the one place the code can go, and the
+  name the client gave in small, as its own words. A person who reads `claude.ai` approves a client
+  whose codes go to `claude.ai` only.
+- **A connection that reaches too much.** It reaches one workspace, chosen on the consent page among
+  those where the person is an owner or an admin (`manage-workspace`, as for a key; a member or a
+  guest cannot approve: `403`), only the sites ticked, and only `read` unless the person chose
+  `write` **and** the client asked the scope `write`. `verifiedOnly` is on by default, as for a key.
+  The token says the scope granted. A token is for `/mcp` of this worker only: a `resource` (RFC 8707)
+  that names another answers `invalid_target`.
+  test:`gives an access token that reads only the sites the person chose, with the rights chosen`.
+- **A token that leaks.** Every token is 32 random bytes after a prefix (`fba_` access, `fbr_`
+  refresh, `fbc_` code, `fbs_` the secret of a client), so that a scanner of secrets finds one; the
+  worker keeps the SHA-256 digest of each, never the token. An access token lives **one hour**; a
+  refresh token **30 days**, and neither outlives its connection (90 days by default, 365 at most).
+  `/mcp` takes a token in the header `Authorization` only, never in an address, and refuses a request
+  of a browser (`403`).
+- **A refresh token that is copied.** A refresh token is spent once, in one statement, and replaced
+  by a new pair. **A spent refresh token presented again revokes the connection**: either the client
+  or the thief holds a copy, and the worker cannot tell which (OAuth 2.1, 4.3.1). A refresh token
+  turns into tokens only for the client it was given to.
+  test:`turns a refresh token once into a new pair, and revokes the connection when a spent one comes back`,
+  test:`refuses a refresh token of another client, and an access token that ended`.
+- **A connection that should end.** « Revoke » in « Agents » deletes it, and its tokens with it (a
+  foreign key in cascade): `/mcp` answers `401` to its next request, and its refresh token turns into
+  nothing. So does `POST /oauth/revoke` with one of its tokens, from its own client only. Its member
+  removed or suspended: it reaches nothing, as a key.
+  test:`ends every token when the person revokes the connection in « Agents »`,
+  test:`revokes the connection by RFC 7009, for the client that holds the token only`,
+  test:`ends the connection when the member who approved it is suspended, as a key`.
+- **A flood of registrations.** Registration is open, as claude.ai needs: 10 an hour from one
+  address, beside the limit of every route. A client that nobody approved is deleted after a day, and
+  the instance holds 1,000 such clients at most (`503` beyond). A client that asks for a secret
+  (`client_secret_basic` or `client_secret_post`) gets one, once, kept as a digest; a public client
+  (`none`) has PKCE alone, as OAuth 2.1 allows.
+  test:`registers 10 clients an hour from one address, and deletes the stale ones nobody approved`,
+  test:`asks a confidential client for its secret, in the form or in Basic`.
+- **The worker fetches nothing a client names.** The « Client ID Metadata Document » of the version
+  2025-11-25 of MCP would have the worker fetch an address given by anybody (a request forged on the
+  server); it is not taken. Registration is by RFC 7591 only.
+- **What it does not protect**: whoever holds a valid access token reads what the connection reaches
+  for up to an hour after a revocation of the refresh token alone, but not after « Revoke » or a
+  replay, which delete the access tokens too. The client (claude.ai) holds the tokens on its side, and
+  the model it runs reads the notes: what it does with them is the team's, as for a key
+  (`docs/agents.md`). A connection whose code was never exchanged stays in « Agents » as never used,
+  with no token, until it is revoked or ends.
 
 ### The administrator of the instance (FRU-261)
 

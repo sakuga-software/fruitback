@@ -142,8 +142,11 @@ export function readableSites<T extends { id: string }>(sites: readonly T[], rea
 /** A site as the invitations and the members name it (FRU-250): its id and its address. */
 export type SharedSite = { id: string; origin: string };
 
-/** How many agent keys one workspace holds (FRU-461). */
+/** How many agent keys one workspace holds (FRU-461). A connection of OAuth counts as one (FRU-467). */
 export const MAX_AGENT_KEYS = 20;
+
+/** How many clients of OAuth that nobody approved yet the instance holds (FRU-467). */
+export const MAX_OAUTH_CLIENTS = 1000;
 
 /**
  * An agent key of a workspace (FRU-461), as the store reads it: never the key, which the worker does
@@ -167,6 +170,32 @@ export type AgentKey = {
   expiresAt: number;
   /** When the key last opened a request of `/mcp` (FRU-462), to `AGENT_KEY_USE_STEP_MS`. Absent: never. */
   lastUsedAt?: number;
+  /** The client of a connection of OAuth (FRU-467). Absent: a key made in the console, with a secret. */
+  client?: { id: string; name: string; host: string };
+};
+
+/**
+ * A client of OAuth that registered itself (FRU-467, `oauth.ts`). `host` is the one host of all its
+ * `redirectUris`: the name a person reads on the consent page. `secretHash`: the digest of its secret,
+ * for a client that asked for one.
+ */
+export type OAuthClient = {
+  id: string;
+  name: string;
+  redirectUris: string[];
+  host: string;
+  secretHash?: string;
+  createdAt: number;
+};
+
+/** A token of a connection of OAuth, as the store reads it: its key, its kind, its end, its spending. */
+export type OAuthToken = {
+  keyId: string;
+  workspace: string;
+  clientId: string;
+  kind: 'access' | 'refresh';
+  expiresAt: number;
+  usedAt?: number;
 };
 
 /**
@@ -190,9 +219,12 @@ export type AgentWrite = {
 export const AGENT_WRITES_LISTED = 100;
 
 /** A key to write: its digest, never the key. */
-export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites' | 'lastUsedAt'> & {
-  keyHash: string;
+export type NewAgentKey = Omit<AgentKey, 'id' | 'workspaceId' | 'sites' | 'lastUsedAt' | 'client'> & {
+  /** The digest of the secret of a key; absent for a connection of OAuth, which has none. */
+  keyHash?: string;
   sites: readonly string[];
+  /** The client of OAuth of a connection (FRU-467). */
+  clientId?: string;
 };
 
 /**
@@ -537,6 +569,29 @@ export type AccountStore = {
    * An expired key is answered: `agent-keys.ts` refuses it.
    */
   agentKeyOf(keyHash: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
+  /** As `agentKeyOf`, for the key of this id: the connection of an OAuth token (FRU-467). */
+  agentKeyById(key: string): Promise<{ key: AgentKey; reach: Reach } | undefined>;
+  /**
+   * Writes a client of OAuth (FRU-467), after deleting the clients that nobody approved and that
+   * registered before `staleBefore`. `too-many`: the instance holds `MAX_OAUTH_CLIENTS` such clients.
+   */
+  registerOAuthClient(client: OAuthClient, staleBefore: number): Promise<OAuthClient | 'too-many'>;
+  /** The client of OAuth of this id, or `undefined`. */
+  oauthClient(id: string): Promise<OAuthClient | undefined>;
+  /** Writes tokens of a connection of OAuth. Nothing for a key that is gone. */
+  addOAuthTokens(
+    key: string,
+    tokens: { hash: string; kind: 'access' | 'refresh'; expiresAt: number }[],
+  ): Promise<boolean>;
+  /** The token of this digest, or `undefined`. */
+  oauthToken(hash: string): Promise<OAuthToken | undefined>;
+  /**
+   * Spends a refresh token at `now`, once: `true` the first time, `false` when it was spent already
+   * or does not exist. One statement, so two refreshes at once spend it once.
+   */
+  spendRefreshToken(hash: string, now: number): Promise<boolean>;
+  /** Deletes a connection, or a key, by its id alone, with its tokens: `false` when there was none. */
+  dropAgentKey(key: string): Promise<boolean>;
   /** Notes that a key opened a request at `at`, unless its last use is less than `AGENT_KEY_USE_STEP_MS` older. */
   markAgentKeyUsed(key: string, at: number): Promise<void>;
   /** Writes one write of an agent key in the log of its workspace (FRU-464). */

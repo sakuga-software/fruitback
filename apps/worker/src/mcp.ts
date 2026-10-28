@@ -7,7 +7,10 @@ import { readBearerToken } from './identity.ts';
  * Streamable HTTP transport of MCP, for an agent with an agent key (FRU-461).
  *
  * - **No valid key, no route.** A request with no key, a key of another shape, a revoked or expired
- *   key, or a key of a suspended workspace answers `404`, as a path that does not exist.
+ *   key, or a key of a suspended workspace answers `404`, as a path that does not exist. With OAuth on
+ *   (FRU-467, `oauth.ts`), it answers `401` with `WWW-Authenticate`, which names the metadata of this
+ *   resource: that is how a client finds where to get a token (RFC 9728). A token or a key presented
+ *   and refused adds `error="invalid_token"`, so that a client refreshes its token.
  * - **No browser.** A request that carries an `Origin` is refused (`403`): an agent sends none, and
  *   the transport asks a server to refuse the origins it does not expect.
  * - **One answer for each request, in JSON.** The server opens no stream and keeps no session: `GET`
@@ -44,6 +47,8 @@ export type McpContext = {
   used(grant: AgentGrant): Promise<void>;
   /** The tools that this grant may call. */
   tools(grant: AgentGrant): McpTool[];
+  /** With OAuth on (FRU-467): the address of the metadata of this resource. */
+  resourceMetadata?: string;
 };
 
 /** The version of the tools of this server: it changes when a tool changes what it takes or answers. */
@@ -75,7 +80,10 @@ export async function handleMcp(request: Request, context: McpContext): Promise<
   const key = readBearerToken(request.headers.get('Authorization'));
   const grant = key === undefined ? undefined : await context.grantOf(key);
   if (grant === undefined || (await context.suspended(grant.workspace))) {
-    return answer(404, { error: 'not-found' });
+    if (context.resourceMetadata === undefined) return answer(404, { error: 'not-found' });
+    const challenge = `Bearer resource_metadata="${context.resourceMetadata}"${key === undefined ? '' : ', error="invalid_token"'}`;
+
+    return answer(401, { error: 'unauthorized' }, { 'WWW-Authenticate': challenge });
   }
   if (request.method !== 'POST') return answer(405, { error: 'method-not-allowed' }, { Allow: 'POST' });
 

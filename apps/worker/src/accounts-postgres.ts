@@ -13,6 +13,7 @@ import {
   ne,
   notExists,
   or,
+  type SQL,
   sql,
 } from 'drizzle-orm';
 import {
@@ -36,6 +37,9 @@ import {
   type AgentWrite,
   type Connector,
   MAX_AGENT_KEYS,
+  MAX_OAUTH_CLIENTS,
+  type OAuthClient,
+  type Reach,
   DEFAULT_CONNECTOR_SETTINGS,
   DEFAULT_WRITERS,
   type SharedSite,
@@ -61,6 +65,8 @@ import {
   last_seen,
   note_index,
   notes,
+  oauth_clients,
+  oauth_tokens,
   site_destinations,
   site_shares,
   sites,
@@ -150,6 +156,21 @@ const DOMAIN = {
 const ACCOUNT = { id: user.id, email: user.email, name: user.name, locale: user.locale, banned: user.banned };
 
 /** The account of the row is not suspended (FRU-281): `banned` of `user` is not true. */
+/** A row of `oauth_clients` as the store answers it (FRU-467). Its host is that of its first address. */
+function oauthClientOf(row: typeof oauth_clients.$inferSelect): OAuthClient {
+  const parsed: unknown = JSON.parse(row.redirect_uris);
+  const redirectUris = Array.isArray(parsed) ? parsed.filter((each): each is string => typeof each === 'string') : [];
+
+  return {
+    id: row.id,
+    name: row.name,
+    redirectUris,
+    host: redirectUris[0] === undefined ? '' : new URL(redirectUris[0]).host,
+    ...(row.secret_hash === null ? {} : { secretHash: row.secret_hash }),
+    createdAt: row.created_at,
+  };
+}
+
 const NOT_SUSPENDED = or(isNull(user.banned), eq(user.banned, false));
 
 /** The sites of these rows in the order of the rows, each with its destinations in that order. */
@@ -355,18 +376,61 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         .orderBy(sites.created_at, sites.id),
     );
 
-    return rows.map((row) => ({
-      id: row.id,
-      workspaceId: row.workspace_id,
-      name: row.name,
-      sites: named.filter((each) => each.key === row.id).map(({ id, origin }) => ({ id, origin })),
-      write: row.can_write,
-      verifiedOnly: row.verified_only,
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      expiresAt: row.expires_at,
-      ...(row.last_used_at === null ? {} : { lastUsedAt: row.last_used_at }),
-    }));
+    const clientIds = [...new Set(rows.flatMap((row) => (row.client_id === null ? [] : [row.client_id])))];
+    const clients =
+      clientIds.length === 0
+        ? []
+        : await run((db) => db.select().from(oauth_clients).where(inArray(oauth_clients.id, clientIds)));
+
+    return rows.map((row) => {
+      const client = clients.find((each) => each.id === row.client_id);
+
+      return {
+        id: row.id,
+        workspaceId: row.workspace_id,
+        name: row.name,
+        sites: named.filter((each) => each.key === row.id).map(({ id, origin }) => ({ id, origin })),
+        write: row.can_write,
+        verifiedOnly: row.verified_only,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        ...(row.last_used_at === null ? {} : { lastUsedAt: row.last_used_at }),
+        ...(client === undefined
+          ? {}
+          : { client: { id: client.id, name: client.name, host: oauthClientOf(client).host } }),
+      };
+    });
+  };
+
+  /**
+   * The agent key that `which` selects, and its member as `reach` reads them, in one statement. A key
+   * with no member is no key.
+   */
+  const keyAndReach = async (which: SQL): Promise<{ key: AgentKey; reach: Reach } | undefined> => {
+    const rows = await run((db) =>
+      db
+        .select({ key: agent_keys, role: member.role, shared: site_shares.site_id })
+        .from(agent_keys)
+        .innerJoin(
+          member,
+          and(eq(member.organizationId, agent_keys.workspace_id), eq(member.userId, agent_keys.created_by)),
+        )
+        .innerJoin(user, eq(user.id, member.userId))
+        .leftJoin(
+          site_shares,
+          and(eq(site_shares.workspace_id, member.organizationId), eq(site_shares.account_id, member.userId)),
+        )
+        .where(and(which, NOT_SUSPENDED)),
+    );
+    const first = rows[0];
+    const role = roleOf(first?.role);
+    if (first === undefined || role === undefined) return undefined;
+    const [key] = await withKeySites([first.key]);
+    if (key === undefined) return undefined;
+    const shared = rows.flatMap((row) => (row.shared === null ? [] : [row.shared]));
+
+    return { key, reach: role === 'guest' ? { role, sites: shared } : { role, sites: 'every' } };
   };
 
   /** The calls of the trigger of a site that wait in the queue of its address (FRU-468). */
@@ -992,7 +1056,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
           id,
           workspace_id: workspace,
           name: key.name,
-          key_hash: key.keyHash,
+          key_hash: key.keyHash ?? null,
+          client_id: key.clientId ?? null,
           can_write: key.write,
           verified_only: key.verifiedOnly,
           created_by: key.createdBy,
@@ -1077,31 +1142,98 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       }));
     },
 
-    async agentKeyOf(keyHash) {
-      // One statement: the key, and its member as `reach` reads them. A key with no member is no key.
-      const rows = await run((db) =>
-        db
-          .select({ key: agent_keys, role: member.role, shared: site_shares.site_id })
-          .from(agent_keys)
-          .innerJoin(
-            member,
-            and(eq(member.organizationId, agent_keys.workspace_id), eq(member.userId, agent_keys.created_by)),
-          )
-          .innerJoin(user, eq(user.id, member.userId))
-          .leftJoin(
-            site_shares,
-            and(eq(site_shares.workspace_id, member.organizationId), eq(site_shares.account_id, member.userId)),
-          )
-          .where(and(eq(agent_keys.key_hash, keyHash), NOT_SUSPENDED)),
-      );
-      const first = rows[0];
-      const role = roleOf(first?.role);
-      if (first === undefined || role === undefined) return undefined;
-      const [key] = await withKeySites([first.key]);
-      if (key === undefined) return undefined;
-      const shared = rows.flatMap((row) => (row.shared === null ? [] : [row.shared]));
+    agentKeyOf: (keyHash) => keyAndReach(eq(agent_keys.key_hash, keyHash)),
 
-      return { key, reach: role === 'guest' ? { role, sites: shared } : { role, sites: 'every' } };
+    agentKeyById: (key) => keyAndReach(eq(agent_keys.id, key)),
+
+    async registerOAuthClient(client, staleBefore) {
+      return transaction(async (tx) => {
+        // A client with no connection: nobody approved it, or its connections were all revoked.
+        const unapproved = notExists(
+          tx.select({ id: agent_keys.id }).from(agent_keys).where(eq(agent_keys.client_id, oauth_clients.id)),
+        );
+        // A client that nobody approved, and that is old, goes: a registration costs a row for a day.
+        await tx.delete(oauth_clients).where(and(lt(oauth_clients.created_at, staleBefore), unapproved));
+        const [held] = await tx.select({ count: count() }).from(oauth_clients).where(unapproved);
+        if ((held?.count ?? 0) >= MAX_OAUTH_CLIENTS) return 'too-many';
+        await tx.insert(oauth_clients).values({
+          id: client.id,
+          name: client.name,
+          redirect_uris: JSON.stringify(client.redirectUris),
+          secret_hash: client.secretHash ?? null,
+          created_at: client.createdAt,
+        });
+
+        return client;
+      });
+    },
+
+    async oauthClient(id) {
+      const [row] = await run((db) => db.select().from(oauth_clients).where(eq(oauth_clients.id, id)));
+
+      return row === undefined ? undefined : oauthClientOf(row);
+    },
+
+    async addOAuthTokens(key, tokens) {
+      return transaction(async (tx) => {
+        const [held] = await tx
+          .select({ id: agent_keys.id })
+          .from(agent_keys)
+          .where(eq(agent_keys.id, key))
+          .for('update');
+        if (held === undefined) return false;
+        await tx.insert(oauth_tokens).values(
+          tokens.map((token) => ({
+            token_hash: token.hash,
+            kind: token.kind,
+            key_id: key,
+            expires_at: token.expiresAt,
+          })),
+        );
+
+        return true;
+      });
+    },
+
+    async oauthToken(hash) {
+      const [row] = await run((db) =>
+        db
+          .select({ token: oauth_tokens, workspace: agent_keys.workspace_id, client: agent_keys.client_id })
+          .from(oauth_tokens)
+          .innerJoin(agent_keys, eq(agent_keys.id, oauth_tokens.key_id))
+          .where(eq(oauth_tokens.token_hash, hash)),
+      );
+      if (row === undefined || row.client === null) return undefined;
+      const kind = row.token.kind === 'refresh' ? 'refresh' : 'access';
+
+      return {
+        keyId: row.token.key_id,
+        workspace: row.workspace,
+        clientId: row.client,
+        kind,
+        expiresAt: row.token.expires_at,
+        ...(row.token.used_at === null ? {} : { usedAt: row.token.used_at }),
+      };
+    },
+
+    async spendRefreshToken(hash, now) {
+      const spent = await run((db) =>
+        db
+          .update(oauth_tokens)
+          .set({ used_at: now })
+          .where(and(eq(oauth_tokens.token_hash, hash), eq(oauth_tokens.kind, 'refresh'), isNull(oauth_tokens.used_at)))
+          .returning({ hash: oauth_tokens.token_hash }),
+      );
+
+      return spent.length > 0;
+    },
+
+    async dropAgentKey(key) {
+      const gone = await run((db) =>
+        db.delete(agent_keys).where(eq(agent_keys.id, key)).returning({ id: agent_keys.id }),
+      );
+
+      return gone.length > 0;
     },
 
     async markAgentKeyUsed(key, at) {

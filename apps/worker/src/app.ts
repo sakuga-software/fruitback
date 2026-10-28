@@ -30,7 +30,8 @@ import { CHECK_PATH, REPLY_PATH, STATUS_PATH, postCheck, postReply, postStatus }
 import { EDIT_PATH, postEdit } from './edit-routes.ts';
 import { getFeedback, postFeedback } from './feedback-routes.ts';
 import { MCP_PATH, handleMcp } from './mcp.ts';
-import { resolveAgentKey } from './agent-keys.ts';
+import { KEY_PREFIX, resolveAgentKey } from './agent-keys.ts';
+import { handleOAuth, isOAuthRoute, issuerOf, resolveAccessToken, resourceMetadataUrl } from './oauth.ts';
 import { agentTools } from './agent-tools.ts';
 import type { SessionIdentity } from './session.ts';
 import { type RequestContext, type Served, type Verified, withSites } from './request-context.ts';
@@ -314,7 +315,10 @@ async function routed(
   // The console's routes answer the console and no site, with the cookie of its session (FRU-98).
   const consoleRoute = hasAccounts(served) && isConsoleRoute(pathname);
   const chosen = (): CorsDecision => (consoleRoute ? consoleCors(request, served) : extension());
-  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : chosen();
+  // FRU-467: the routes of OAuth take no cookie, and a client in a page reads them (RFC 8414, 7591).
+  const oauthRoute = isOAuthRoute(pathname);
+  const routeCors = (): CorsDecision => (oauthRoute ? openCors(request) : chosen());
+  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : routeCors();
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -352,6 +356,22 @@ async function routed(
 
   if (!allowed) {
     return json(429, { error: 'rate-limited' }, cors.headers);
+  }
+
+  if (oauthRoute) {
+    const issuer = issuerOf(served.publicUrl);
+    if (accounts === undefined || issuer === undefined || served.consoleUrl === undefined) {
+      return json(404, { error: 'not-found' }, cors.headers);
+    }
+
+    return (
+      (await handleOAuth(
+        request,
+        pathname,
+        { accounts, kv, issuer, consoleUrl: served.consoleUrl, clientIp: context.clientIp },
+        cors.headers,
+      )) ?? json(404, { error: 'not-found' }, cors.headers)
+    );
   }
 
   if (consoleRoute && accounts !== undefined) {
@@ -402,8 +422,15 @@ async function routed(
   if (pathname === MCP_PATH) {
     if (accounts === undefined) return json(404, { error: 'not-found' }, cors.headers);
 
+    const issuer = served.consoleUrl === undefined ? undefined : issuerOf(served.publicUrl);
+
     return handleMcp(request, {
-      grantOf: (key) => resolveAgentKey(accounts, key, Date.now()),
+      // An agent key of the console (FRU-461), or an access token of OAuth (FRU-467).
+      grantOf: (key) =>
+        key.startsWith(KEY_PREFIX)
+          ? resolveAgentKey(accounts, key, Date.now())
+          : resolveAccessToken(accounts, key, Date.now()),
+      ...(issuer === undefined ? {} : { resourceMetadata: resourceMetadataUrl(issuer) }),
       suspended: async (workspace) => (await accounts.suspension(workspace)) !== undefined,
       // The last use of a key is what the console shows (FRU-462): a failure to write it refuses nothing.
       used: (grant) =>

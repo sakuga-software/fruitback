@@ -1102,6 +1102,76 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.agentKeyOf('digest-of-another-key'), undefined);
   });
 
+  // --- Connections of OAuth (FRU-467)
+
+  it('keeps a connection of OAuth as a key with no digest, its client, and tokens that go with it', async (store) => {
+    const { alice, workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const client = {
+      id: 'fbo_client',
+      name: 'Claude',
+      redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      host: 'claude.ai',
+      createdAt: 1,
+    };
+    assert.deepEqual(await store.registerOAuthClient(client, 0), client);
+    assert.deepEqual(await store.oauthClient('fbo_client'), client);
+    const { keyHash: _none, ...withoutDigest } = agentKey(alice.id, [site.id]);
+    const made = await store.createAgentKey(workspace.id, { ...withoutDigest, clientId: client.id });
+    assert.ok(typeof made === 'object');
+    const [listed] = await store.agentKeys(workspace.id);
+    assert.deepEqual(listed?.client, { id: 'fbo_client', name: 'Claude', host: 'claude.ai' });
+    assert.equal((await store.agentKeyById(made.id))?.key.id, made.id);
+
+    assert.equal(
+      await store.addOAuthTokens(made.id, [
+        { hash: 'digest-of-an-access', kind: 'access', expiresAt: 10 },
+        { hash: 'digest-of-a-refresh', kind: 'refresh', expiresAt: 20 },
+      ]),
+      true,
+    );
+    assert.deepEqual(await store.oauthToken('digest-of-a-refresh'), {
+      keyId: made.id,
+      workspace: workspace.id,
+      clientId: 'fbo_client',
+      kind: 'refresh',
+      expiresAt: 20,
+    });
+    // Spent once: two refreshes at once spend it once.
+    assert.equal(await store.spendRefreshToken('digest-of-a-refresh', 5), true);
+    assert.equal(await store.spendRefreshToken('digest-of-a-refresh', 6), false);
+    assert.equal((await store.oauthToken('digest-of-a-refresh'))?.usedAt, 5);
+    assert.equal(await store.spendRefreshToken('digest-of-an-access', 6), false, 'an access token is never spent');
+
+    assert.equal(await store.dropAgentKey(made.id), true);
+    assert.equal(await store.oauthToken('digest-of-an-access'), undefined);
+    assert.equal(await store.addOAuthTokens(made.id, [{ hash: 'late', kind: 'access', expiresAt: 10 }]), false);
+    assert.equal(await store.dropAgentKey(made.id), false);
+  });
+
+  it('deletes the clients of OAuth that nobody approved once they are stale, and keeps the others', async (store) => {
+    const { alice, workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const client = (id: string, createdAt: number) => ({
+      id,
+      name: id,
+      redirectUris: ['https://claude.ai/cb'],
+      host: 'claude.ai',
+      createdAt,
+    });
+    await store.registerOAuthClient(client('fbo_approved', 1), 0);
+    await store.registerOAuthClient(client('fbo_forgotten', 1), 0);
+    const { keyHash: _none, ...withoutDigest } = agentKey(alice.id, [site.id]);
+    assert.ok(
+      typeof (await store.createAgentKey(workspace.id, { ...withoutDigest, clientId: 'fbo_approved' })) === 'object',
+    );
+
+    await store.registerOAuthClient(client('fbo_new', 100), 50);
+    assert.equal(await store.oauthClient('fbo_forgotten'), undefined);
+    assert.notEqual(await store.oauthClient('fbo_approved'), undefined);
+    assert.notEqual(await store.oauthClient('fbo_new'), undefined);
+  });
+
   it('writes no agent key that names a site of another workspace', async (store) => {
     const { alice, workspace } = await world(store);
     const { workspace: other } = await otherWorld(store);

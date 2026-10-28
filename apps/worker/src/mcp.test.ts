@@ -126,24 +126,25 @@ function notesOf(answer: Rpc): any[] {
 }
 
 describe('the transport of /mcp (FRU-463)', () => {
-  it('answers 404 with no key, a key it does not know, an expired one and one of a suspended workspace', async () => {
+  it('answers 401 with no key, a key it does not know, an expired one and one of a suspended workspace', async () => {
     const { world, workspace, shop, key } = await acme();
     const good = await key({ sites: [shop.id] });
 
     assert.equal((await rpc(world, good, 'ping')).status, 200);
+    // OAuth is on in this world (FRU-467): a refusal names where to get a token, and never says which.
     for (const presented of [undefined, 'fbk_' + 'A'.repeat(43), 'not-a-key']) {
       const answer = await rpc(world, presented, 'ping');
-      assert.equal(answer.status, 404, String(presented));
-      assert.deepEqual(answer.body, { error: 'not-found' });
+      assert.equal(answer.status, 401, String(presented));
+      assert.deepEqual(answer.body, { error: 'unauthorized' });
     }
 
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = 1`);
-    assert.equal((await rpc(world, good, 'ping')).status, 404, 'expired');
+    assert.equal((await rpc(world, good, 'ping')).status, 401, 'expired');
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = ${Date.now() + 86_400_000}`);
     assert.equal((await rpc(world, good, 'ping')).status, 200);
 
     await rowsOf(world.database, `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${workspace}', 1)`);
-    assert.equal((await rpc(world, good, 'ping')).status, 404, 'suspended');
+    assert.equal((await rpc(world, good, 'ping')).status, 401, 'suspended');
   });
 
   it('notes the last use of a key once a minute, and not on a request it refuses (FRU-462)', async () => {
@@ -190,10 +191,10 @@ describe('the transport of /mcp (FRU-463)', () => {
     assert.equal((await rpc(world, good, '', {}, { raw: [{ jsonrpc: '2.0', id: 1, method: 'ping' }] })).status, 400);
     assert.equal(await kept(), 1);
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = 2`);
-    assert.equal((await rpc(world, good, 'ping')).status, 404);
+    assert.equal((await rpc(world, good, 'ping')).status, 401);
     await rowsOf(world.database, `UPDATE agent_keys SET expires_at = ${Date.now() + 86_400_000}`);
     await rowsOf(world.database, `INSERT INTO workspace_suspensions (workspace_id, since) VALUES ('${workspace}', 1)`);
-    assert.equal((await rpc(world, good, 'ping')).status, 404);
+    assert.equal((await rpc(world, good, 'ping')).status, 401);
     assert.equal(await kept(), 1);
   });
 

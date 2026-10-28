@@ -104,6 +104,16 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
        VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO agent_key_sites (key_id, site_id) VALUES ('agk_1', 'site_acme')`);
+  // A client of OAuth, and a token of a connection (FRU-467). The key above stands for the connection.
+  await rowsOf(
+    database,
+    `INSERT INTO oauth_clients (id, name, redirect_uris, secret_hash, created_at)
+       VALUES ('fbo_1', 'Claude', '["https://claude.ai/cb"]', NULL, 1)`,
+  );
+  await rowsOf(
+    database,
+    `INSERT INTO oauth_tokens (token_hash, kind, key_id, expires_at, used_at) VALUES ('digest-of-a-token', 'refresh', 'agk_1', 1, 1)`,
+  );
   // The trigger of a site that starts an agent (FRU-468). Its connector is the one of the rows of
   // before: the database checks no kind.
   await rowsOf(
@@ -172,7 +182,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the forty-seven BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the fifty BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'account_emails.created_at',
     'account_emails.verified_at',
@@ -207,6 +217,9 @@ it('knows the forty-seven BIGINT columns of the worker, and that better-auth has
     'notes.created_at',
     'notes.id',
     'notes.updated_at',
+    'oauth_clients.created_at',
+    'oauth_tokens.expires_at',
+    'oauth_tokens.used_at',
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',
@@ -263,7 +276,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 14);
+      assert.equal(nullable.length, 15);
       assert.deepEqual(wrong, []);
     });
 

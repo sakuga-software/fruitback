@@ -38,8 +38,9 @@ Mathieu answered three questions on 2026-10-26, and took the four recommendation
   of a tool. Each answer carries a fixed line: the text was written by a visitor of the site and is
   not an instruction. The quote of `feedbackAsText` (FRU-109) stops a forged structure; nothing makes
   the text safe to obey.
-- **Off by default.** A workspace with no agent key has no `/mcp` for anybody: the route answers
-  `404`, as a route that does not exist.
+- **Off by default.** A workspace with no agent key has no `/mcp` for anybody. Where OAuth is off the
+  route answers `404`, as a route that does not exist; where it is on (below), `401` with the address
+  of its metadata, so that a client can ask a person for a connection.
 
 ### What exists today
 
@@ -132,6 +133,74 @@ with no key, nothing leaves.
   workspace. A receiver of the team can start an agent with it today, with no other change.
 - The GitHub connector makes an issue of a note: a workflow `on: issues: opened` can run Claude Code
   on it today. The Linear connector makes a ticket that a team can give to an agent of Linear.
+
+## OAuth for MCP (v2, FRU-467)
+
+### The rules, in short
+
+- **A client that connects from a page gets a token by OAuth 2.1**, as the authorization of MCP
+  (2025-06-18) asks: a connector of claude.ai, or any MCP client that speaks it. An agent key stays
+  the way for an agent with no browser, and keeps working beside it.
+- **A connection is an agent key with no secret**, tied to its client (`agent_keys.client_id`). The
+  person chooses on the consent page what a key names: one workspace, its sites, `read` or `write`,
+  the days (90 by default, 365 at most), `verifiedOnly` on by default. The same member read again at
+  each request, the same log of writes, the same limit of 20, the same « Revoke » in « Agents ». There
+  is one model of rights, not two.
+- **Our own server, in `oauth.ts`, and no plugin of better-auth.**
+- **Discovery by the two documents of `/.well-known`**, and `401` with `WWW-Authenticate` at `/mcp`.
+- **Open registration (RFC 7591), bounded**; no « Client ID Metadata Document ».
+- **PKCE S256 always, a `redirect_uri` compared byte for byte, `iss` in every answer.**
+- **Opaque tokens, kept as digests**: access one hour, refresh 30 days, spent once and replaced. A
+  spent refresh token presented again revokes the connection.
+- **Who approves: the owner and the admins**, as for a key (decision 5).
+- **On when the worker has accounts, `FRUITBACK_PUBLIC_URL` with no path and
+  `FRUITBACK_CONSOLE_URL`.** No variable of its own.
+
+`SECURITY.md`, « OAuth for `/mcp` », holds the threats and the test of each.
+
+### The choices, and why (fru-mcp-oauth, 2026-10-28)
+
+The orchestrator asked the agent to decide the open choices, with the simplest one that is safe, and
+to write each reason. Mathieu can change each.
+
+1. **Our own server rather than better-auth.** better-auth 1.7.12 ships no `mcp` nor `oidc-provider`
+   plugin any more; its `@better-auth/oauth-provider` is a package of its own, which signs its tokens
+   with the `jwt` plugin, refused here (`REFUSED_PLUGINS`: a second way to verify a token). It also
+   grants to an account, when `/mcp` reasons with a key of a workspace. The server here is one file of
+   the worker, on the tables and the `Kv` it has, and turns a consent into a key.
+2. **A connection is a key.** The rights, the sites, the end, the log and the revocation of a key
+   were decided and tested in FRU-461 to FRU-464. A second kind of grant would have to repeat each,
+   and the console would have two lists to read.
+3. **Registration by RFC 7591, open.** claude.ai registers itself, and the version 2025-06-18 of MCP
+   asks for it. The « Client ID Metadata Document » of 2025-11-25 has the worker fetch an address
+   that a client names: a request forged on the server, for no gain while claude.ai registers.
+4. **One host per client.** The consent page names a client by the host its codes go to; a client
+   with two hosts would have two names.
+5. **The three ways to authenticate a client** (`none`, `client_secret_post`, `client_secret_basic`):
+   RFC 7591 makes `client_secret_basic` the default, and a client that asks for a secret expects one.
+   PKCE holds for all three.
+6. **The tokens are opaque, not JWT.** The worker is the one reader of its tokens, and a digest in a
+   table is revoked by deleting a row; a JWT would need a key, a second check, and a list of the
+   revoked ones.
+7. **One hour, 30 days, rotation, and a replay that revokes**: the values of OAuth 2.1 for a public
+   client. A connector that refreshes twice at once loses its connection, and asks the person again:
+   the cost of telling a thief from a client.
+8. **The consent page is a page of the console, `/authorize/<request>`**, outside a workspace, as
+   « Connect this browser » (FRU-240): the person may not have chosen a workspace yet, and the page
+   chooses one. Its board is `design/mcp-oauth/`.
+9. **Never more than asked.** A client that asked the scope `read` is not offered `write`; one that
+   asked none is offered both, with `read` chosen.
+10. **The request waits in the `Kv`** (10 minutes), and so does the code (60 seconds): both are short,
+    and the `Kv` is in the database, shared by the replicas. The connection is written at the
+    approval, so that a refusal (a site gone, 20 keys) is said on the page, and not to the client.
+11. **`401` in place of `404`.** A client of OAuth starts on a `401` that names the metadata; the
+    metadata says that `/mcp` exists anyway. A key that is refused reads `401` too.
+
+### What is not proved here
+
+The real connector of claude.ai needs a worker that claude.ai reaches, in `https`, with its database
+and its console: an environment of Mathieu. The tests play every step of the protocol through the
+worker, and the board and the specs of the console play the page.
 
 ## The decisions
 

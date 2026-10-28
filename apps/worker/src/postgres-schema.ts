@@ -373,11 +373,37 @@ export const site_shares = pgTable(
 );
 
 /**
+ * The clients of OAuth that registered themselves (FRU-467, RFC 7591): a connector of claude.ai, an
+ * MCP client. `oauth.ts` says what a client may ask. A client is public unless it asked for a secret:
+ * then `secret_hash` is the SHA-256 digest of that secret, and never the secret. `redirect_uris` is a
+ * JSON array of the addresses a code may go to, compared byte for byte. A client that no person
+ * approved is deleted `UNAPPROVED_CLIENT_MS` after its registration.
+ */
+export const oauth_clients = pgTable(
+  'oauth_clients',
+  {
+    id: text('id').notNull(),
+    name: text('name').notNull(),
+    redirect_uris: text('redirect_uris').notNull(),
+    secret_hash: text('secret_hash'),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'oauth_clients_pkey', columns: [table.id] }),
+    index('oauth_clients_by_creation').on(table.created_at),
+  ],
+);
+
+/**
  * The agent keys of a workspace (FRU-461): `agent-keys.ts` says what a key reaches. The worker keeps
  * the SHA-256 digest of the key only, as it keeps a refresh token. A revoked key is deleted.
  *
  * `created_by` is the member who made the key. Their account that goes takes the key with it.
  * `verified_only`: on a site that everyone reads, the key reads only the notes of a known person.
+ *
+ * A connection of OAuth is a key too (FRU-467): `client_id` names its client, and `key_hash` is
+ * `null`, because it has no secret of its own: its tokens are in `oauth_tokens`. A client that goes
+ * takes its connections with it.
  */
 export const agent_keys = pgTable(
   'agent_keys',
@@ -385,7 +411,7 @@ export const agent_keys = pgTable(
     id: text('id').notNull(),
     workspace_id: text('workspace_id').notNull(),
     name: text('name').notNull(),
-    key_hash: text('key_hash').notNull(),
+    key_hash: text('key_hash'),
     can_write: boolean('can_write').notNull(),
     verified_only: boolean('verified_only').notNull(),
     created_by: text('created_by').notNull(),
@@ -393,6 +419,8 @@ export const agent_keys = pgTable(
     expires_at: instant('expires_at').notNull(),
     /** When the key last opened a request of `/mcp` (FRU-462), to the minute; `null`: never. */
     last_used_at: instant('last_used_at'),
+    /** The client of OAuth of a connection (FRU-467); `null` for a key made in the console. */
+    client_id: text('client_id'),
   },
   (table) => [
     primaryKey({ name: 'agent_keys_pkey', columns: [table.id] }),
@@ -407,7 +435,39 @@ export const agent_keys = pgTable(
       columns: [table.created_by],
       foreignColumns: [user.id],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'agent_keys_client_id_fkey',
+      columns: [table.client_id],
+      foreignColumns: [oauth_clients.id],
+    }).onDelete('cascade'),
     index('agent_keys_by_workspace').on(table.workspace_id),
+    index('agent_keys_by_client').on(table.client_id),
+  ],
+);
+
+/**
+ * The tokens of a connection of OAuth (FRU-467): `access` lives an hour, `refresh` until it is spent
+ * or ends. Each is the SHA-256 digest of the token, never the token. `used_at` is when a refresh token
+ * was spent: it is kept until it ends, so that the same token presented again is seen, and revokes
+ * the connection. A key that goes takes its tokens with it.
+ */
+export const oauth_tokens = pgTable(
+  'oauth_tokens',
+  {
+    token_hash: text('token_hash').notNull(),
+    kind: text('kind').notNull(),
+    key_id: text('key_id').notNull(),
+    expires_at: instant('expires_at').notNull(),
+    used_at: instant('used_at'),
+  },
+  (table) => [
+    primaryKey({ name: 'oauth_tokens_pkey', columns: [table.token_hash] }),
+    foreignKey({
+      name: 'oauth_tokens_key_id_fkey',
+      columns: [table.key_id],
+      foreignColumns: [agent_keys.id],
+    }).onDelete('cascade'),
+    index('oauth_tokens_by_key').on(table.key_id),
   ],
 );
 
