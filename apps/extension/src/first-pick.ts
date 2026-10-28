@@ -50,3 +50,29 @@ export async function pickWhenReady(
 
   return false;
 }
+
+/**
+ * The first activation as « Turn on <site> » runs it, after the site is written and its tab opened.
+ * It never rejects: a storage that fails (quota, no storage) leaves the site on, and the welcome page
+ * must not say « could not turn the site on ». The failure goes to `log`, and no choice opens.
+ */
+export async function pickOnFirstActivation(
+  area: FirstPickArea,
+  origin: string,
+  ask: () => Promise<TabCommandAnswer>,
+  options: { log?: (error: unknown) => void; pick?: typeof pickWhenReady } = {},
+): Promise<boolean> {
+  const {
+    log = (error) => console.error('[fruitback] could not read the first activation', error),
+    pick = pickWhenReady,
+  } = options;
+  try {
+    if (!(await firstActivation(area, origin))) return false;
+  } catch (error) {
+    log(error);
+
+    return false;
+  }
+
+  return pick(ask);
+}

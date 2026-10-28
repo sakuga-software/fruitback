@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FIRST_PICK_KEY, type FirstPickArea, firstActivation, pickWhenReady } from './first-pick.ts';
+import {
+  FIRST_PICK_KEY,
+  type FirstPickArea,
+  firstActivation,
+  pickOnFirstActivation,
+  pickWhenReady,
+} from './first-pick.ts';
 import type { TabCommandAnswer } from './tab-command.ts';
 
 function area(initial: Record<string, unknown> = {}): FirstPickArea & { items: Record<string, unknown> } {
@@ -65,5 +71,43 @@ describe('the first activation of a site opens the choice of an element (FRU-485
     );
     assert.equal(picked, false);
     assert.equal(asked, 5);
+  });
+
+  it('a storage that fails leaves the site on: no rejection, a log, and no choice', async () => {
+    const failing: FirstPickArea = {
+      get: async () => {
+        throw new Error('QUOTA_BYTES quota exceeded');
+      },
+      set: async () => {},
+    };
+    const logged: unknown[] = [];
+    let picks = 0;
+    const picked = await pickOnFirstActivation(failing, 'https://acme.dev', async () => ({ done: true }), {
+      log: (error) => void logged.push(error),
+      pick: async () => {
+        picks += 1;
+
+        return true;
+      },
+    });
+    assert.equal(picked, false);
+    assert.equal(picks, 0);
+    assert.equal(logged.length, 1);
+  });
+
+  it('a first activation picks, and a second one does not', async () => {
+    const stored = area();
+    let picks = 0;
+    const pick = async () => {
+      picks += 1;
+
+      return true;
+    };
+    assert.equal(await pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: true }), { pick }), true);
+    assert.equal(
+      await pickOnFirstActivation(stored, 'https://acme.dev', async () => ({ done: true }), { pick }),
+      false,
+    );
+    assert.equal(picks, 1);
   });
 });

@@ -5,7 +5,7 @@ import { storedLanguage } from '../../src/language.ts';
 import { type ConnectState, forgetConnect, pollConnect, startConnect } from '../../src/connect.ts';
 import { type CloudSeams, type Offer, cloudEntry, sitesOf } from '../../src/cloud.ts';
 import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
-import { firstActivation, pickWhenReady } from '../../src/first-pick.ts';
+import { pickOnFirstActivation } from '../../src/first-pick.ts';
 import { cloudEndpoint } from '../../src/popup-state.ts';
 import { signInStop } from '../../src/popup-view.ts';
 import { matchPatternFor } from '../../src/registration.ts';
@@ -124,9 +124,12 @@ function turnOn(origin: string): void {
     await writeSite(offer.pattern, cloudEntry(offer));
     const opened = await browser.tabs.create({ url: origin });
     // FRU-485: the first activation opens the choice of an element, once the widget is there.
-    if (opened.id !== undefined && (await firstActivation(browser.storage.local, offer.pattern))) {
+    // It never rejects: the site is on, whatever the storage of the first activation does.
+    if (opened.id !== undefined) {
       const tab = opened.id;
-      void pickWhenReady(async () => parseAnswer(await browser.tabs.sendMessage(tab, tabCommand('leave-feedback'))));
+      void pickOnFirstActivation(browser.storage.local, offer.pattern, async () =>
+        parseAnswer(await browser.tabs.sendMessage(tab, tabCommand('leave-feedback'))),
+      );
     }
     await show();
   })().catch((error: unknown) => {
