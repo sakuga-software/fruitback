@@ -135,7 +135,10 @@ test('a first user goes from the setup to a first note (FRU-481)', async ({ exte
   const popup = await openPopup(extension, site);
   await popup.screenshot({ path: test.info().outputPath('05-popup-signed-out.png') });
   const connectOpens = context.waitForEvent('page', { predicate: (page) => page.url().includes('/connect') });
-  await popup.getByRole('button', { name: 'Sign in with email' }).click();
+  // The control of the dead end: on a site, the same locator finds the one button.
+  const signIn = popup.getByRole('button', { name: 'Sign in with email' });
+  await expect(signIn).toHaveCount(1);
+  await signIn.click();
   did('popup', 'click « Sign in with email »: the console opens in a tab');
   const connect = await connectOpens;
   await connect.waitForLoadState();
