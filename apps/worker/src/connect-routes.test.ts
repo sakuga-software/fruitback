@@ -245,11 +245,11 @@ for (const { label, open, skip } of MIGRATED_DATABASES) {
         },
       );
       assert.deepEqual(
-        (onScreen.workspaces as { id: string }[]).toSorted((a, b) => a.id.localeCompare(b.id)),
+        (onScreen.workspaces as { id: string }[]).toSorted((a, b) => a.id.localeCompare(b.id, 'en')),
         [
           { id: acme.id, name: 'acme', role: 'owner' },
           { id: globex.id, name: 'globex', role: 'guest' },
-        ].toSorted((a, b) => a.id.localeCompare(b.id)),
+        ].toSorted((a, b) => a.id.localeCompare(b.id, 'en')),
       );
 
       const approved = await approves(worker, alice, asked.request, { word: asked.word, account: alice.id });

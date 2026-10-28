@@ -280,7 +280,10 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
 
       return issue === undefined
         ? json(404, { message: 'Not Found' })
-        : json(200, onPage([...issue.replies].sort((left, right) => left.created_at.localeCompare(right.created_at))));
+        : json(
+            200,
+            onPage([...issue.replies].sort((left, right) => left.created_at.localeCompare(right.created_at, 'en'))),
+          );
     }
 
     return json(404, { message: 'Not Found' });

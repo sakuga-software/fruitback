@@ -22,7 +22,11 @@ import { NOTE_STAGES, type Note, type NoteIssue, type NoteStage } from '@fruitba
 /** How many characters of the text the index keeps. One constant, and `notes-index.test.ts` holds it. */
 export const EXCERPT_LENGTH = 64;
 
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+/**
+ * A grapheme is one in every language: Unicode gives the rule (UAX #29), and CLDR tailors it for none.
+ * The locale is named so that the excerpt never depends on the one of the process (FRU-344).
+ */
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
 /**
  * The first characters of a note, for a person to tell one note from another.
