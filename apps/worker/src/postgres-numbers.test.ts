@@ -100,8 +100,8 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   // An agent key, and a site it names (FRU-461).
   await rowsOf(
     database,
-    `INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, created_by, created_at, expires_at)
-       VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, 'acc_alice', 1, 1)`,
+    `INSERT INTO agent_keys (id, workspace_id, name, key_hash, can_write, verified_only, created_by, created_at, expires_at)
+       VALUES ('agk_1', 'ws_acme', 'CI', 'digest-of-a-key', false, true, 'acc_alice', 1, 1)`,
   );
   await rowsOf(database, `INSERT INTO agent_key_sites (key_id, site_id) VALUES ('agk_1', 'site_acme')`);
   // A request of the extension, answered and claimed (FRU-238).

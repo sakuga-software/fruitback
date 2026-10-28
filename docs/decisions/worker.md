@@ -4421,6 +4421,9 @@ The identity of an agent with no browser, for the remote MCP server of FRU-463.
   `site_shares`: a site that goes leaves its keys. A key whose creator's account goes, goes too.
 - **`createAgentKey` holds the row of the workspace** before it counts its keys: two keys made at
   once count each other, and the workspace never holds more than `MAX_AGENT_KEYS`.
+- **`verifiedOnly` is a field of the key, `true` unless the request says `false`.** It is read
+  with the grant, and FRU-463 applies it on a site that everyone reads. A tool argument would let
+  the agent turn it off; decision 7 gives that choice to the team.
 - **A key ends.** `DEFAULT_KEY_DAYS` (90) unless the request says `days`, 1 to `MAX_KEY_DAYS` (365).
   `days: null` is refused, not read as the default: decision 4 says no key lives with no end.
 

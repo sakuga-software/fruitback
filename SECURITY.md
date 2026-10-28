@@ -2364,6 +2364,11 @@ session, the `Origin` of the console for a write, `404` for a workspace somebody
   manage the sites (`manage-sites`).
   test:`reaches nothing once its member is removed, or their account is suspended`,
   test:`writes no more once its member is a member, and reads only the sites shared once they are a guest`.
+- **On a site that everyone reads, a key reads only the notes of a known person by default**
+  (`verifiedOnly`, decision 7 of `agents.md`): a member, or a reviewer the site's identity
+  verified. Anybody writes the other notes, and an agent can obey their text. The owner or an admin
+  turns it off at the creation of the key, knowing it; an agent cannot turn it off. `/mcp` (FRU-463)
+  applies it.
 - **A key ends.** It lives 90 days unless its creator chooses from 1 to 365 days; no key lives with
   no end. At its date it reaches nothing. A revocation deletes it at once.
   test:`ends at its date, and not before`.

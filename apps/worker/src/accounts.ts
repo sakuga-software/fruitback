@@ -156,6 +156,11 @@ export type AgentKey = {
   name: string;
   sites: SharedSite[];
   write: boolean;
+  /**
+   * On a site that everyone reads, the key reads only the notes of a known person: decision 7 of
+   * `agents.md`. The team turns it off at the creation of the key, knowing it.
+   */
+  verifiedOnly: boolean;
   /** The account of the member who made the key. */
   createdBy: string;
   createdAt: number;

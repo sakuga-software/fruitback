@@ -1119,6 +1119,7 @@ function agentKey(account: string, sites: readonly string[]): NewAgentKey {
     name: 'Claude on CI',
     sites,
     write: true,
+    verifiedOnly: true,
     createdBy: account,
     keyHash: 'digest-of-the-key',
     createdAt: 1_000,

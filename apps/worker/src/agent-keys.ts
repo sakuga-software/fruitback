@@ -59,6 +59,8 @@ export type AgentGrant = {
   role: Role;
   sites: string[];
   write: boolean;
+  /** On a site that everyone reads, only the notes of a known person. */
+  verifiedOnly: boolean;
 };
 
 /**
@@ -89,6 +91,7 @@ function grantOf(key: AgentKey, reach: Reach): AgentGrant | undefined {
     role: reach.role,
     sites,
     write: key.write && can(reach.role, 'manage-sites'),
+    verifiedOnly: key.verifiedOnly,
   };
 }
 
@@ -99,6 +102,7 @@ function keyView(key: AgentKey): Record<string, unknown> {
     name: key.name,
     sites: key.sites,
     rights: key.write ? 'write' : 'read',
+    verifiedOnly: key.verifiedOnly,
     createdBy: key.createdBy,
     createdAt: new Date(key.createdAt).toISOString(),
     expiresAt: new Date(key.expiresAt).toISOString(),
@@ -140,8 +144,8 @@ export type AgentKeysContext = {
  * `/agent-keys` of a workspace, which `handleConsoleApi` sends here, or `undefined` for another path.
  *
  * - `GET /agent-keys`: the keys of the workspace.
- * - `POST /agent-keys` `{ name, sites, rights: 'read' | 'write', days? }`: `201` with the key in
- *   `secret`, the one time the worker answers it.
+ * - `POST /agent-keys` `{ name, sites, rights: 'read' | 'write', days?, verifiedOnly? }`: `201` with the
+ *   key in `secret`, the one time the worker answers it. `verifiedOnly` is `true` when absent.
  * - `DELETE /agent-keys/<id>`: `204`, or `404` for a key that is not of this workspace.
  */
 export async function handleAgentKeys(
@@ -174,12 +178,15 @@ export async function handleAgentKeys(
   if (body?.rights !== 'read' && body?.rights !== 'write') return json(400, { error: 'invalid-rights' }, headers);
   const days = daysOf(body?.days);
   if (days === undefined) return json(400, { error: 'invalid-days', max: MAX_KEY_DAYS }, headers);
+  const verifiedOnly = body.verifiedOnly === undefined ? true : body.verifiedOnly;
+  if (typeof verifiedOnly !== 'boolean') return json(400, { error: 'invalid-verified-only' }, headers);
 
   const secret = newAgentKey();
   const made = await accounts.createAgentKey(workspace, {
     name,
     sites,
     write: body.rights === 'write',
+    verifiedOnly,
     createdBy: context.account,
     keyHash: await digest(secret),
     createdAt: context.now,

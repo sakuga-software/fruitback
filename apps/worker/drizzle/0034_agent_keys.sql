@@ -10,6 +10,7 @@ CREATE TABLE "agent_keys" (
 	"name" text NOT NULL,
 	"key_hash" text NOT NULL,
 	"can_write" boolean NOT NULL,
+	"verified_only" boolean NOT NULL,
 	"created_by" text NOT NULL,
 	"created_at" bigint NOT NULL,
 	"expires_at" bigint NOT NULL,

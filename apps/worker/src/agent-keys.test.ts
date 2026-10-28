@@ -15,6 +15,7 @@ type KeyView = {
   name: string;
   sites: { id: string; origin: string }[];
   rights: 'read' | 'write';
+  verifiedOnly: boolean;
   createdBy: string;
   createdAt: string;
   expiresAt: string;
@@ -90,6 +91,7 @@ describe('the agent keys of a workspace, in the console (FRU-461)', () => {
     assert.match(key.secret, /^fbk_[A-Za-z0-9_-]{43}$/);
     assert.equal(key.name, 'Claude on CI');
     assert.equal(key.rights, 'write');
+    assert.equal(key.verifiedOnly, true, 'a key reads only the notes of a known person unless it says otherwise');
     assert.equal(key.createdBy, people.owner.id);
     assert.deepEqual(
       key.sites.map((site) => site.origin),
@@ -100,10 +102,11 @@ describe('the agent keys of a workspace, in the console (FRU-461)', () => {
     assert.ok(Date.parse(key.createdAt) >= before - 1_000);
 
     const byAdmin = await made(
-      await make(people.admin.token, { name: 'Reader', sites: [shop], rights: 'read', days: 7 }),
+      await make(people.admin.token, { name: 'Reader', sites: [shop], rights: 'read', days: 7, verifiedOnly: false }),
     );
     assert.equal(Date.parse(byAdmin.expiresAt) - Date.parse(byAdmin.createdAt), 7 * DAY_MS);
     assert.notEqual(byAdmin.secret, key.secret);
+    assert.equal(byAdmin.verifiedOnly, false);
 
     const listed = await list();
     assert.deepEqual(
@@ -168,6 +171,8 @@ describe('the agent keys of a workspace, in the console (FRU-461)', () => {
     const { people, shop, evilSite, make, list } = await acme(env);
     const good = { name: 'CI', sites: [shop], rights: 'read' };
     const tooMany = Array.from({ length: MAX_KEY_SITES + 1 }, (_, index) => `site_${index}`);
+    // At the bound the list is read, and its sites are then looked for in the workspace.
+    const atTheBound = tooMany.slice(1);
 
     for (const [body, error] of [
       [{ ...good, name: '   ' }, 'invalid-name'],
@@ -176,12 +181,18 @@ describe('the agent keys of a workspace, in the console (FRU-461)', () => {
       [{ ...good, sites: shop }, 'invalid-sites'],
       [{ ...good, sites: [42] }, 'invalid-sites'],
       [{ ...good, sites: tooMany }, 'invalid-sites'],
+      [{ ...good, sites: ['a site'] }, 'invalid-sites'],
+      [{ ...good, sites: ['s'.repeat(65)] }, 'invalid-sites'],
       [{ ...good, rights: 'admin' }, 'invalid-rights'],
       [{ ...good, rights: undefined }, 'invalid-rights'],
       [{ ...good, days: 0 }, 'invalid-days'],
       [{ ...good, days: MAX_KEY_DAYS + 1 }, 'invalid-days'],
       [{ ...good, days: 1.5 }, 'invalid-days'],
       [{ ...good, days: null }, 'invalid-days'],
+      [{ ...good, verifiedOnly: 'no' }, 'invalid-verified-only'],
+      [{ ...good, verifiedOnly: null }, 'invalid-verified-only'],
+      [{ ...good, sites: atTheBound }, 'unknown-site'],
+      [{ ...good, sites: ['s'.repeat(64)] }, 'unknown-site'],
       [{ ...good, sites: [shop, evilSite] }, 'unknown-site'],
       [{ ...good, sites: ['site_none'] }, 'unknown-site'],
     ] as const) {
@@ -193,6 +204,25 @@ describe('the agent keys of a workspace, in the console (FRU-461)', () => {
 
     const longest = await made(await make(people.owner.token, { ...good, days: MAX_KEY_DAYS }));
     assert.equal(Date.parse(longest.expiresAt) - Date.parse(longest.createdAt), MAX_KEY_DAYS * DAY_MS);
+  });
+
+  it('answers 405 to a method that no route of the keys takes', async () => {
+    const env = await world();
+    const { id, people, shop, make } = await acme(env);
+    const key = await made(await make(people.owner.token, { name: 'CI', sites: [shop], rights: 'read' }));
+
+    for (const [method, path] of [
+      ['PUT', `/console/workspaces/${id}/agent-keys`],
+      ['DELETE', `/console/workspaces/${id}/agent-keys`],
+      ['GET', `/console/workspaces/${id}/agent-keys/${key.id}`],
+      ['POST', `/console/workspaces/${id}/agent-keys/${key.id}`],
+    ] as const) {
+      const answer = await callOn(env, method, path, {
+        token: people.owner.token,
+        ...(method === 'GET' ? {} : { body: {} }),
+      });
+      assert.equal(answer.status, 405, `${method} ${path}`);
+    }
   });
 
   it(`holds ${MAX_AGENT_KEYS} keys in a workspace, and answers 409 past them`, async () => {
@@ -264,6 +294,7 @@ describe('what an agent key reaches, read at each request (FRU-461)', () => {
       role: 'owner',
       sites: [shop],
       write: true,
+      verifiedOnly: true,
     });
     for (const presented of [newAgentKey(), key.secret.slice(0, -1), `${key.secret}x`, '', key.secret.toUpperCase()]) {
       assert.equal(await resolveAgentKey(env.accounts, presented, Date.now()), undefined, presented);
@@ -352,6 +383,7 @@ describe('the grant of a key, from what the store answers (FRU-461)', () => {
       { id: 'site_b', origin: 'https://b.acme.dev' },
     ],
     write: true,
+    verifiedOnly: false,
     createdBy: 'acc_alice',
     createdAt: 0,
     expiresAt: 10,

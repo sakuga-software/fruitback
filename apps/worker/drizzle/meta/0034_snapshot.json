@@ -1,5 +1,5 @@
 {
-  "id": "836404cc-3ee8-487b-8e8e-f6983e68d834",
+  "id": "463a8605-ffab-48d0-9750-e4c031ebbe11",
   "prevId": "37b02a0e-0fc4-41a7-8b62-307c947ba5b6",
   "version": "7",
   "dialect": "postgresql",
@@ -478,6 +478,12 @@
         },
         "can_write": {
           "name": "can_write",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_only": {
+          "name": "verified_only",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true

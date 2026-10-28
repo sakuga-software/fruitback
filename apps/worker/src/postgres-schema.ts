@@ -337,6 +337,7 @@ export const site_shares = pgTable(
  * the SHA-256 digest of the key only, as it keeps a refresh token. A revoked key is deleted.
  *
  * `created_by` is the member who made the key. Their account that goes takes the key with it.
+ * `verified_only`: on a site that everyone reads, the key reads only the notes of a known person.
  */
 export const agent_keys = pgTable(
   'agent_keys',
@@ -346,6 +347,7 @@ export const agent_keys = pgTable(
     name: text('name').notNull(),
     key_hash: text('key_hash').notNull(),
     can_write: boolean('can_write').notNull(),
+    verified_only: boolean('verified_only').notNull(),
     created_by: text('created_by').notNull(),
     created_at: instant('created_at').notNull(),
     expires_at: instant('expires_at').notNull(),
