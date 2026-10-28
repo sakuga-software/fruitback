@@ -13,6 +13,11 @@ import { WORKER_ORIGIN } from './pin.ts';
  * The worker is answered by stubs, like `console-narrow.spec.ts`: this measures colours and boxes.
  */
 const CONSOLE = 'http://localhost:5178';
+/**
+ * The development server of the console, for `/kit` alone: a build has no `/kit` (`kit-route.test.ts`),
+ * and the specs serve the console built on 5178 (FRU-473, `playwright.config.ts`).
+ */
+const KIT = 'http://localhost:5179';
 /** `--muted` in app.css: the colour of a hint, which a problem must not have. */
 const MUTED = [107, 107, 116];
 
@@ -220,7 +225,7 @@ const STATUS_EDGE = 'rgb(138, 138, 147) 0px 0px 0px 1px';
 
 async function openKit(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => route.fulfill({ status: 204 }));
-  await page.goto(`${CONSOLE}/kit`);
+  await page.goto(`${KIT}/kit`);
   await expect(page.locator('[data-kit="notices"]')).toBeVisible();
 }
 
@@ -820,7 +825,7 @@ test("the logo and the frame of a page outside a workspace are the mockup's (FRU
   await expectStyle(onRail.locator('path').nth(0), 'logo of the rail, name', { fill: WHITE });
   await expectStyle(onRail.locator('path').nth(1), 'logo of the rail, drop', { fill: 'rgb(236, 91, 87)' });
 
-  await page.goto(`${CONSOLE}/kit/entry`);
+  await page.goto(`${KIT}/kit/entry`);
   const header = page.locator('header');
   await expectStyle(header, 'header', { borderBottomWidth: '1px', borderBottomColor: LINE, height: '65px' });
   // clamp(16px, 4vw, 32px) at 1440 px.

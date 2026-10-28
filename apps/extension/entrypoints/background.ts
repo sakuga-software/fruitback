@@ -22,6 +22,7 @@ import {
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
 import { createSiteNotesRelay } from '../src/site-notes-relay.ts';
+import { createPanelGate, openPanelForTab } from '../src/panel-request.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
 import { type CaptureArea, bytesOf, captureAnswerOf, createCapture, pixelsOf } from '../src/capture.ts';
 import { pollConnect } from '../src/connect.ts';
@@ -215,6 +216,9 @@ export default defineBackground(() => {
     warn: (reason) => console.warn('[fruitback] the relay answered 401, with no session:', reason),
   });
 
+  /** The button of the widget that shows every note opens the side panel (FRU-469): see `src/panel-request.ts`. */
+  const panelGate = createPanelGate();
+
   /** « All pages » of the widget the extension mounts (FRU-470): see `src/site-notes-relay.ts`. */
   const siteNotesRelay = createSiteNotesRelay({
     readSite,
@@ -332,6 +336,14 @@ export default defineBackground(() => {
         return false;
       }
       void capture(parsed.area, senderOrigin(sender), windowId).then((taken) => sendResponse(captureAnswerOf(taken)));
+
+      return true;
+    }
+    // FRU-469: the side panel, opened at once for the tab of the sender, before any `await`.
+    if (parsed?.kind === 'open-panel-request') {
+      void openPanelForTab(browser as unknown as PanelApis, sender.tab?.id, panelGate).then((opened) =>
+        sendResponse({ opened }),
+      );
 
       return true;
     }

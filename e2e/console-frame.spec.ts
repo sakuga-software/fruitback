@@ -22,6 +22,11 @@ import {
  * of the mockup, on macOS; the computed styles are read everywhere. The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
+/**
+ * The development server of the console, for `/kit` alone: a build has no `/kit` (`kit-route.test.ts`),
+ * and the specs serve the console built on 5178 (FRU-473, `playwright.config.ts`).
+ */
+const KIT = 'http://localhost:5179';
 
 const RAIL = '#18181b';
 const RAIL_ACTIVE = '#27272a';
@@ -45,7 +50,7 @@ async function openProbe(page: Page): Promise<void> {
   // The rail asks the worker which browsers of the extension are connected (FRU-441): with no worker,
   // the console says it cannot reach it, above the rail.
   await stubWorker(page);
-  await page.goto(`${CONSOLE}/kit/frame`);
+  await page.goto(`${KIT}/kit/frame`);
   await expect(sections(page)).toBeVisible();
 }
 
