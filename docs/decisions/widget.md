@@ -1696,8 +1696,15 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   it and the pins stay. `undefined` puts it back where it stands by default. The extension calls it
   when its reviewer changes the corner in its options (FRU-443), so a change never builds the widget
   again over a note being written.
-- **It is a choice of the host, not a preference of the reporter**: the config store of FRU-14 keeps
-  nothing of it.
+- **The reporter can move it too, from the settings (FRU-472)**: « Position », under « Pins shown »,
+  four radios drawn as the corners of a window, in the order of the window whatever the direction.
+  The choice is a preference of this browser on this site, `position` in the config store of FRU-14,
+  and it beats the `position` of `init`: it is the reporter's screen, and a dock that covers what
+  they review is theirs to move. **A later `moveDock` of the host forgets it**: the extension calls
+  `moveDock` when its reviewer changes the corner in its options, and that newer word must move the
+  dock on the page open now. The panel offers no corner when it has no `dockCorner`: a choice that
+  moves nothing is worse than none. The radios are 44 px tall, like a chip of a status.
 - `e2e/dock-position.spec.ts` measures the dock and the settings in the four corners, the default, a
   corner it does not know, a move over a note being written, and axe in the top left corner. Not
   measured: the list of the detached notes in a top corner (a rule of `orphans.ts`, read by no spec).
+  It also chooses a corner in the settings, and reloads to see the choice kept (FRU-472).
